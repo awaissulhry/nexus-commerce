@@ -51,12 +51,29 @@ export async function ordersRoutes(app: FastifyInstance) {
   app.get('/api/orders/stats', async (_request, reply) => {
     try {
       reply.header('Cache-Control', 'private, max-age=30')
-      const [total, pending, shipped, cancelled, delivered] = await Promise.all([
-        prisma.order.count(),
-        prisma.order.count({ where: { status: 'PENDING' } }),
-        prisma.order.count({ where: { status: 'SHIPPED' } }),
-        prisma.order.count({ where: { status: 'CANCELLED' } }),
-        prisma.order.count({ where: { status: 'DELIVERED' } }),
+      // OX.2 — counts mirror the Amazon-style status tabs:
+      //   Pending    → PENDING / AWAITING_PAYMENT
+      //   Unshipped  → PROCESSING / ON_HOLD (paid + ready or held)
+      //   Shipped    → SHIPPED / PARTIALLY_SHIPPED / DELIVERED
+      //   Cancelled  → CANCELLED / REFUNDED / RETURNED
+      //   NoInvoice  → marketplace=IT + status NOT IN (PENDING, CANCELLED, …)
+      //                AND fiscalInvoice IS NULL (Italian compliance gap)
+      const baseWhere = { deletedAt: null }
+      const [total, pending, unshipped, shipped, cancelled, delivered, noInvoice] = await Promise.all([
+        prisma.order.count({ where: baseWhere }),
+        prisma.order.count({ where: { ...baseWhere, status: { in: ['PENDING', 'AWAITING_PAYMENT'] } } }),
+        prisma.order.count({ where: { ...baseWhere, status: { in: ['PROCESSING', 'ON_HOLD'] } } }),
+        prisma.order.count({ where: { ...baseWhere, status: { in: ['SHIPPED', 'PARTIALLY_SHIPPED', 'DELIVERED'] } } }),
+        prisma.order.count({ where: { ...baseWhere, status: { in: ['CANCELLED', 'REFUNDED', 'RETURNED'] } } }),
+        prisma.order.count({ where: { ...baseWhere, status: 'DELIVERED' } }),
+        prisma.order.count({
+          where: {
+            ...baseWhere,
+            marketplace: 'IT',
+            status: { in: ['PROCESSING', 'SHIPPED', 'PARTIALLY_SHIPPED', 'DELIVERED'] },
+            fiscalInvoice: null,
+          },
+        }),
       ])
       // Find the most recently PLACED order (purchaseDate), not the
       // most recently INSERTED row. With backfilled data the last-
@@ -66,7 +83,7 @@ export async function ordersRoutes(app: FastifyInstance) {
         select: { createdAt: true, purchaseDate: true },
       })
       return {
-        total, pending, shipped, cancelled, delivered,
+        total, pending, unshipped, shipped, cancelled, delivered, noInvoice,
         lastOrderAt: last?.purchaseDate ?? last?.createdAt ?? null,
       }
     } catch (error: any) {
@@ -96,6 +113,9 @@ export async function ordersRoutes(app: FastifyInstance) {
       const hasReturn = q.hasReturn === 'true' ? true : q.hasReturn === 'false' ? false : null
       const hasRefund = q.hasRefund === 'true' ? true : q.hasRefund === 'false' ? false : null
       const reviewEligible = q.reviewEligible === 'true'
+      // OX.2: Italian "No Invoice Uploaded" tab — orders that should
+      // have a FiscalInvoice (paid + non-terminal) but don't.
+      const noInvoice = q.noInvoice === 'true'
 
       const sortBy = (q.sortBy ?? 'purchaseDate') as string
       const sortDir = (q.sortDir === 'asc' ? 'asc' : 'desc') as 'asc' | 'desc'
@@ -136,6 +156,14 @@ export async function ordersRoutes(app: FastifyInstance) {
           { reviewRequests: { none: {} } },
           { returns: { none: { status: { in: ['REQUESTED', 'AUTHORIZED', 'IN_TRANSIT', 'RECEIVED', 'INSPECTING'] } } } },
         ]
+      }
+      if (noInvoice) {
+        // OX.2 — Italian compliance: paid + non-terminal orders that
+        // never got a FiscalInvoice row issued. Mirrors the
+        // /api/orders/stats `noInvoice` aggregate.
+        where.marketplace = 'IT'
+        where.status = { in: ['PROCESSING', 'SHIPPED', 'PARTIALLY_SHIPPED', 'DELIVERED'] }
+        where.fiscalInvoice = null
       }
 
       // Order-by translation

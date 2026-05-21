@@ -9,7 +9,7 @@ import Link from 'next/link'
 import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import {
   ShoppingCart, RefreshCw, Star, User, DollarSign, Undo2, Download,
-  CheckCircle2, Truck, Package, Keyboard, Trash2, ArrowLeft,
+  Keyboard, Trash2, ArrowLeft,
 } from 'lucide-react'
 import PageHeader from '@/components/layout/PageHeader'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -18,12 +18,10 @@ import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
 import {
   AutoRefreshSelect,
   DensityToggle as SharedDensityToggle,
-  KpiStrip,
   FilterPopover,
   KeyboardShortcutsModal,
   type AutoRefreshInterval,
   type Density,
-  type KpiTileSpec,
   type FilterDimension,
   type ShortcutGroup,
 } from '@/app/_shared/grid-lens'
@@ -88,7 +86,16 @@ type Facets = {
   fulfillment: Array<{ value: string; count: number }>
 }
 
-type Stats = { total: number; pending: number; shipped: number; cancelled: number; delivered: number; lastOrderAt: string | null }
+type Stats = {
+  total: number
+  pending: number
+  unshipped: number
+  shipped: number
+  cancelled: number
+  delivered: number
+  noInvoice: number
+  lastOrderAt: string | null
+}
 
 // O.8e — column registry / status variant / channel + review tone
 // constants moved to ./_lib/columns and ./_lib/tone.
@@ -116,6 +123,8 @@ export default function OrdersWorkspace() {
   const reviewEligible = searchParams.get('reviewEligible') === 'true'
   const customerEmail = searchParams.get('customerEmail') ?? ''
   const showDeleted = searchParams.get('deleted') === 'true'
+  // OX.2 — Italian "No Invoice Uploaded" status-tab filter
+  const noInvoice = searchParams.get('noInvoice') === 'true'
 
   const [searchInput, setSearchInput] = useState(search)
   const [orders, setOrders] = useState<Order[]>([])
@@ -240,6 +249,7 @@ export default function OrdersWorkspace() {
       if (hasRefund) qs.set('hasRefund', hasRefund)
       if (reviewEligible) qs.set('reviewEligible', 'true')
       if (customerEmail) qs.set('customerEmail', customerEmail)
+      if (noInvoice) qs.set('noInvoice', 'true')
       qs.set('sortBy', sortBy)
       qs.set('sortDir', sortDir)
       if (showDeleted) qs.set('deleted', 'true')
@@ -254,7 +264,7 @@ export default function OrdersWorkspace() {
       setError(e?.message ?? 'Failed to load')
       setOrders([])
     } finally { setLoading(false) }
-  }, [page, pageSize, search, channelFilters.join(','), marketplaceFilters.join(','), statusFilters.join(','), fulfillmentFilters.join(','), reviewStatusFilters.join(','), hasReturn, hasRefund, reviewEligible, customerEmail, sortBy, sortDir, showDeleted])
+  }, [page, pageSize, search, channelFilters.join(','), marketplaceFilters.join(','), statusFilters.join(','), fulfillmentFilters.join(','), reviewStatusFilters.join(','), hasReturn, hasRefund, reviewEligible, customerEmail, noInvoice, sortBy, sortDir, showDeleted])
 
   const fetchStats = useCallback(async () => {
     try {
@@ -310,13 +320,13 @@ export default function OrdersWorkspace() {
     }
   }, [fetchOrders, fetchStats, fetchFacets])
 
-  useEffect(() => { setSelected(new Set()) }, [page, search, channelFilters.join(','), marketplaceFilters.join(','), statusFilters.join(','), fulfillmentFilters.join(','), hasReturn, hasRefund, reviewEligible])
+  useEffect(() => { setSelected(new Set()) }, [page, search, channelFilters.join(','), marketplaceFilters.join(','), statusFilters.join(','), fulfillmentFilters.join(','), hasReturn, hasRefund, reviewEligible, noInvoice])
 
   // O.14 — reset row focus on filter/search/page change so the cursor
   // doesn't point at a row that just scrolled off the page.
   useEffect(() => {
     setActiveRowIndex(-1)
-  }, [page, search, channelFilters.join(','), marketplaceFilters.join(','), statusFilters.join(','), fulfillmentFilters.join(','), reviewStatusFilters.join(','), hasReturn, hasRefund, reviewEligible, lens])
+  }, [page, search, channelFilters.join(','), marketplaceFilters.join(','), statusFilters.join(','), fulfillmentFilters.join(','), reviewStatusFilters.join(','), hasReturn, hasRefund, reviewEligible, noInvoice, lens])
 
   // O.14 — keyboard shortcuts on the Grid lens. Mirrors the canonical
   // pattern from /listings, /products, /fulfillment/returns:
@@ -590,43 +600,16 @@ export default function OrdersWorkspace() {
         <LensTabs current={lens} onChange={(next) => updateUrl({ lens: next === 'grid' ? undefined : next, page: undefined })} />
       </div>
 
-      {/* R.1 — KPI strip; clickable tiles filter the grid by status. */}
+      {/* OX.2 — Amazon-style status tabs. Replaces the previous KPI
+          tile strip; same data, denser tab metaphor matching Seller
+          Central. The "No Invoice" tab appears only on Italian
+          marketplace orders (compliance gap surface). */}
       {lens === 'grid' && stats && (
-        <KpiStrip
-          tiles={[
-            {
-              icon: ShoppingCart,
-              label: 'Total',
-              value: stats.total.toLocaleString(),
-              detail: 'across all statuses',
-              tone: 'slate',
-              onClick: () => updateUrl({ status: undefined, page: undefined }),
-            },
-            {
-              icon: Package,
-              label: 'Pending',
-              value: stats.pending.toLocaleString(),
-              detail: 'awaiting fulfillment',
-              tone: stats.pending > 0 ? 'amber' : 'slate',
-              onClick: () => updateUrl({ status: 'PENDING', page: undefined }),
-            },
-            {
-              icon: Truck,
-              label: 'Shipped',
-              value: stats.shipped.toLocaleString(),
-              detail: 'in transit',
-              tone: 'blue',
-              onClick: () => updateUrl({ status: 'SHIPPED', page: undefined }),
-            },
-            {
-              icon: CheckCircle2,
-              label: 'Delivered',
-              value: stats.delivered.toLocaleString(),
-              detail: 'completed',
-              tone: 'emerald',
-              onClick: () => updateUrl({ status: 'DELIVERED', page: undefined }),
-            },
-          ] satisfies KpiTileSpec[]}
+        <StatusTabs
+          stats={stats}
+          currentStatusFilters={statusFilters}
+          currentNoInvoice={noInvoice}
+          onSelect={(spec) => updateUrl({ status: spec.status, noInvoice: spec.noInvoice, page: undefined })}
         />
       )}
 
@@ -740,6 +723,118 @@ export default function OrdersWorkspace() {
           onClose={() => setShortcutsOpen(false)}
         />
       )}
+    </div>
+  )
+}
+
+/**
+ * OX.2 — Amazon-style status tab strip. Replaces the previous KPI tile
+ * filter. Each tab corresponds to a status-cluster (Pending grabs both
+ * PENDING + AWAITING_PAYMENT, etc.) so the user sees Amazon's mental
+ * model rather than our richer internal enum.
+ *
+ * The "No Invoice" tab is Italian-fiscal-only — it scopes to
+ * marketplace=IT + paid + no FiscalInvoice. Hidden when the count is
+ * zero so non-IT-heavy sellers don't see noise.
+ */
+type StatusTabSpec = { status: string | undefined; noInvoice: string | undefined }
+
+const STATUS_TAB_DEFS: Array<{
+  key: string
+  label: string
+  count: (s: Stats) => number
+  spec: StatusTabSpec
+  match: (statusFilters: string[], noInvoice: boolean) => boolean
+}> = [
+  {
+    key: 'all',
+    label: 'All',
+    count: (s) => s.total,
+    spec: { status: undefined, noInvoice: undefined },
+    match: (sf, ni) => sf.length === 0 && !ni,
+  },
+  {
+    key: 'pending',
+    label: 'Pending',
+    count: (s) => s.pending,
+    spec: { status: 'PENDING,AWAITING_PAYMENT', noInvoice: undefined },
+    match: (sf) => sf.join(',') === 'PENDING,AWAITING_PAYMENT' || (sf.length === 1 && sf[0] === 'PENDING'),
+  },
+  {
+    key: 'unshipped',
+    label: 'Unshipped',
+    count: (s) => s.unshipped,
+    spec: { status: 'PROCESSING,ON_HOLD', noInvoice: undefined },
+    match: (sf) => sf.join(',') === 'PROCESSING,ON_HOLD' || (sf.length === 1 && sf[0] === 'PROCESSING'),
+  },
+  {
+    key: 'shipped',
+    label: 'Shipped',
+    count: (s) => s.shipped,
+    spec: { status: 'SHIPPED,PARTIALLY_SHIPPED,DELIVERED', noInvoice: undefined },
+    match: (sf) =>
+      sf.join(',') === 'SHIPPED,PARTIALLY_SHIPPED,DELIVERED' || (sf.length === 1 && sf[0] === 'SHIPPED'),
+  },
+  {
+    key: 'cancelled',
+    label: 'Cancelled',
+    count: (s) => s.cancelled,
+    spec: { status: 'CANCELLED,REFUNDED,RETURNED', noInvoice: undefined },
+    match: (sf) =>
+      sf.join(',') === 'CANCELLED,REFUNDED,RETURNED' || (sf.length === 1 && sf[0] === 'CANCELLED'),
+  },
+  {
+    key: 'noInvoice',
+    label: 'No Invoice Uploaded',
+    count: (s) => s.noInvoice,
+    spec: { status: undefined, noInvoice: 'true' },
+    match: (_sf, ni) => ni,
+  },
+]
+
+function StatusTabs({
+  stats,
+  currentStatusFilters,
+  currentNoInvoice,
+  onSelect,
+}: {
+  stats: Stats
+  currentStatusFilters: string[]
+  currentNoInvoice: boolean
+  onSelect: (spec: StatusTabSpec) => void
+}) {
+  return (
+    <div className="border-b border-slate-200 dark:border-slate-700 overflow-x-auto [scrollbar-width:thin]">
+      <nav role="tablist" aria-label="Order status" className="inline-flex items-center gap-1 min-w-full">
+        {STATUS_TAB_DEFS.map((tab) => {
+          // Italian-fiscal-only tab — hide when this seller has no
+          // outstanding gaps. Default to showing for IT-heavy sellers.
+          if (tab.key === 'noInvoice' && stats.noInvoice === 0 && !currentNoInvoice) return null
+          const active = tab.match(currentStatusFilters, currentNoInvoice)
+          return (
+            <button
+              key={tab.key}
+              role="tab"
+              aria-selected={active}
+              onClick={() => onSelect(tab.spec)}
+              className={`relative px-3 py-2.5 text-sm font-medium whitespace-nowrap inline-flex items-center gap-1.5 transition-colors ${
+                active
+                  ? 'text-orange-600 dark:text-orange-400'
+                  : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100'
+              }`}
+            >
+              <span className="tabular-nums">{tab.count(stats).toLocaleString()}</span>
+              <span>{tab.label}</span>
+              {active && (
+                <span
+                  aria-hidden="true"
+                  className="absolute left-2 right-2 -bottom-px h-0.5 bg-orange-500 dark:bg-orange-400 rounded-t"
+                />
+              )}
+            </button>
+          )
+        })}
+      </nav>
     </div>
   )
 }
