@@ -15,7 +15,7 @@
 // refresh pulls the new row in.
 
 import { useCallback, useEffect, useState } from 'react'
-import { AlertCircle, CheckCircle2, Clock, Loader2, RefreshCw, RotateCw } from 'lucide-react'
+import { AlertCircle, CheckCircle2, Clock, Loader2, RefreshCw, RotateCw, Activity } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { cn } from '@/lib/utils'
 import { useTranslations } from '@/lib/i18n/use-translations'
@@ -39,6 +39,11 @@ interface Props {
   /** Filter to a single channel. Omit to show all three. */
   channel?: Channel
 }
+
+// IR.15 — pending statuses Amazon SP-API actually progresses through.
+// These rows get a "Refresh from Amazon" action so the operator can
+// pull fresh status on demand instead of waiting for the 30 s poll.
+const AMAZON_REFRESHABLE_STATUSES = new Set(['PENDING', 'SUBMITTING', 'IN_QUEUE', 'IN_PROGRESS'])
 
 const CHANNEL_LABEL: Record<Channel, string> = {
   AMAZON: 'Amazon', EBAY: 'eBay', SHOPIFY: 'Shopify',
@@ -99,6 +104,8 @@ export default function ImagePublishHistory({ productId, channel }: Props) {
   const [loadError, setLoadError] = useState<string | null>(null)
   const [retryingId, setRetryingId] = useState<string | null>(null)
   const [retryError, setRetryError] = useState<string | null>(null)
+  // IR.15 — manual "pull fresh status from Amazon" state.
+  const [refreshingId, setRefreshingId] = useState<string | null>(null)
 
   const fetchJobs = useCallback(async () => {
     setLoading(true)
@@ -116,6 +123,21 @@ export default function ImagePublishHistory({ productId, channel }: Props) {
   }, [productId])
 
   useEffect(() => { void fetchJobs() }, [fetchJobs])
+
+  async function refreshFromAmazon(jobId: string) {
+    setRefreshingId(jobId)
+    try {
+      // The existing endpoint polls SP-API and updates the job row.
+      // We just trigger it, then refresh the list to surface the
+      // new status. Errors are non-fatal — the operator can retry.
+      await beFetch(`/api/products/${productId}/amazon-images/feed-status/${jobId}`)
+      await fetchJobs()
+    } catch {
+      // Surface via fetchJobs's loadError path on next render
+    } finally {
+      setRefreshingId(null)
+    }
+  }
 
   async function retry(jobId: string) {
     setRetryingId(jobId)
@@ -223,6 +245,24 @@ export default function ImagePublishHistory({ productId, channel }: Props) {
                   </span>
                 )}
                 <span className="text-slate-400 ml-auto flex-shrink-0 tabular-nums">{elapsedTime(j.submittedAt)}</span>
+                {/* IR.15 — manual "Refresh from Amazon" for in-progress
+                    feed jobs. Replaces 30 s passive polling with
+                    operator-driven status pull. */}
+                {j.channel === 'AMAZON' && AMAZON_REFRESHABLE_STATUSES.has(j.status) && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => refreshFromAmazon(j.id)}
+                    disabled={refreshingId !== null}
+                    className="text-[10px] h-6 px-2 gap-1 flex-shrink-0"
+                    title={t('products.edit.images.history.refreshFromAmazon')}
+                  >
+                    {refreshingId === j.id
+                      ? <Loader2 className="w-3 h-3 animate-spin" />
+                      : <Activity className="w-3 h-3" />}
+                    {t('products.edit.images.history.refreshFromAmazonShort')}
+                  </Button>
+                )}
                 {canRetry && (
                   <Button
                     size="sm"

@@ -3843,6 +3843,8 @@
   "products.edit.images.history.noJobsChannel": "Nessun tentativo di pubblicazione su {channel}.",
   "products.edit.images.history.noCompletedJobs": "Nessun job completato",
   "products.edit.images.history.settledRatio": "{ok} ok / {total} completati",
+  "products.edit.images.history.refreshFromAmazon": "Recupera lo stato aggiornato del feed da Amazon SP-API",
+  "products.edit.images.history.refreshFromAmazonShort": "Aggiorna",
   "products.edit.images.preview.section": "Anteprima acquirente",
   "products.edit.images.preview.amazonHint": "Pagina dettagli Amazon come la vedrebbe un cliente",
   "products.edit.images.preview.ebayHint": "Card annuncio eBay come la vedrebbe un acquirente",
