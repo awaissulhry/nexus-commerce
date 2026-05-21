@@ -1576,20 +1576,37 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
   // window and write FinancialTransaction rows. Body: { start?, end?, daysBack? }
   // Defaults to yesterday if no range given. Safe to re-run (idempotent).
   fastify.post<{
-    Body?: { start?: string; end?: string; daysBack?: number }
+    Body?: { start?: string; end?: string; daysBack?: number; useV0?: boolean; marketplaceId?: string }
   }>('/financials/sync', async (request, reply) => {
-    const { syncFinancialEvents, syncYesterdayFinancialEvents } = await import('../services/amazon-financial-events.service.js')
+    const { syncFinancialEvents, syncYesterdayFinancialEvents, syncFinancialTransactions } = await import('../services/amazon-financial-events.service.js')
     try {
       const body = request.body ?? {}
+      // Default to the new /finances/2024-06-19/transactions endpoint.
+      // Pass useV0=true to fall back to the deprecated /finances/v0
+      // path (kept for back-compat with cron callers that haven't been
+      // migrated yet, but v0 returns 403 for re-authorized tokens).
+      const useV0 = body.useV0 === true
       let summary
       if (body.start && body.end) {
-        summary = await syncFinancialEvents(new Date(body.start), new Date(body.end))
+        const start = new Date(body.start)
+        const end = new Date(body.end)
+        summary = useV0
+          ? await syncFinancialEvents(start, end)
+          : await syncFinancialTransactions(start, end, body.marketplaceId)
       } else if (typeof body.daysBack === 'number') {
         const end = new Date()
         const start = new Date(end.getTime() - body.daysBack * 24 * 60 * 60 * 1000)
-        summary = await syncFinancialEvents(start, end)
+        summary = useV0
+          ? await syncFinancialEvents(start, end)
+          : await syncFinancialTransactions(start, end, body.marketplaceId)
       } else {
-        summary = await syncYesterdayFinancialEvents()
+        // Yesterday window
+        const end = new Date()
+        end.setHours(0, 0, 0, 0)
+        const start = new Date(end.getTime() - 24 * 60 * 60 * 1000)
+        summary = useV0
+          ? await syncYesterdayFinancialEvents()
+          : await syncFinancialTransactions(start, end, body.marketplaceId)
       }
       return { success: true, ...summary }
     } catch (err) {
