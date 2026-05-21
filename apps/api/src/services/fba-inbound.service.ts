@@ -482,20 +482,24 @@ export async function getInboundShipmentsBatch(args: {
     qs.set('QueryType', 'SHIPMENT')
     qs.set('ShipmentIdList', args.shipmentIdList.join(','))
   } else {
-    // HB.4 — when discovering historical shipments, pass
-    // LastUpdatedAfter to scope to the backfill window. Without it,
-    // SP-API defaults to the last 30 days only.
+    // HB.4 — discovery mode. SP-API requires ShipmentStatusList OR
+    // ShipmentIdList for every query, including DATE_RANGE. When a
+    // lastUpdatedAfter window is supplied, we pass BOTH so the filter
+    // is "all status × this date window". Without ShipmentStatusList
+    // the call returns 400 "At least one of ShipmentStatusList and
+    // ShipmentIdList must be provided".
+    const statuses = args.shipmentStatusList ?? [
+      'WORKING', 'READY_TO_SHIP', 'SHIPPED', 'IN_TRANSIT',
+      'DELIVERED', 'CHECKED_IN', 'RECEIVING', 'CLOSED',
+      'CANCELLED', 'DELETED', 'ERROR',
+    ]
+    qs.set('ShipmentStatusList', statuses.join(','))
     if (args.lastUpdatedAfter) {
       qs.set('QueryType', 'DATE_RANGE')
       qs.set('LastUpdatedAfter', args.lastUpdatedAfter)
       if (args.lastUpdatedBefore) qs.set('LastUpdatedBefore', args.lastUpdatedBefore)
     } else {
       qs.set('QueryType', 'SHIPMENT')
-      const statuses = args.shipmentStatusList ?? [
-        'WORKING', 'READY_TO_SHIP', 'SHIPPED', 'IN_TRANSIT',
-        'DELIVERED', 'CHECKED_IN', 'RECEIVING',
-      ]
-      qs.set('ShipmentStatusList', statuses.join(','))
     }
   }
 
