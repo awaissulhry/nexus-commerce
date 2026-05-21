@@ -520,6 +520,11 @@ export default function MasterPanel({
                   onDragOver={(e) => onDragOver(e, index)}
                   onDragLeave={onDragLeave}
                   onDrop={(e) => onDrop(e, index)}
+                  // IR.11.1 — content-visibility lets the browser skip
+                  // layout + paint for grid items scrolled offscreen.
+                  // ~250px is a safe estimate for our aspect-square cards
+                  // at the smallest viewport (250 wide × 250 tall + footer).
+                  style={{ contentVisibility: 'auto', containIntrinsicSize: '250px 350px' }}
                   className={cn(
                     'group relative rounded-xl border bg-slate-50 dark:bg-slate-800 overflow-hidden transition-all',
                     selectedIds.has(img.id)
@@ -538,7 +543,14 @@ export default function MasterPanel({
                     onClick={() => onOpenLightbox?.(img)}
                   >
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={img.url} alt={img.alt ?? img.type} className="w-full h-full object-contain" loading="lazy" />
+                    <img
+                      src={img.url}
+                      alt={img.alt ?? img.type}
+                      className="w-full h-full object-contain"
+                      loading={index < 4 ? 'eager' : 'lazy'}
+                      decoding="async"
+                      fetchPriority={index === 0 ? 'high' : index < 4 ? 'auto' : 'low'}
+                    />
 
                     {/* Selection checkbox — top-left */}
                     <button

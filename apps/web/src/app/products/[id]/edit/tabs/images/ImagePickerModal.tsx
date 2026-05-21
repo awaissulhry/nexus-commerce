@@ -80,6 +80,8 @@ export default function ImagePickerModal({ productId, masterImages, onSelect, on
                     src={img.url}
                     alt={img.alt ?? img.type}
                     className="w-full h-full object-contain group-hover:scale-105 transition-transform"
+                    loading="lazy"
+                    decoding="async"
                   />
                 </button>
               ))}

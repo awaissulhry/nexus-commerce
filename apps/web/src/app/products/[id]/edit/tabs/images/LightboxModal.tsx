@@ -273,6 +273,8 @@ export default function LightboxModal({
             src={image.url}
             alt={image.alt ?? ''}
             className="max-w-[calc(100vw-320px-4rem)] max-h-[calc(100vh-4rem)] object-contain"
+            decoding="async"
+            fetchPriority="high"
           />
         </div>
 

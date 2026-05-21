@@ -81,7 +81,7 @@ function AmazonDetail({ product, gallery }: { product: WorkspaceProduct; gallery
               title={`Image ${i + 1}`}
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={img.url} alt={img.alt ?? ''} className="w-full h-full object-contain" loading="lazy" />
+              <img src={img.url} alt={img.alt ?? ''} className="w-full h-full object-contain" loading="lazy" decoding="async" />
             </button>
           ))}
         </div>
@@ -89,7 +89,7 @@ function AmazonDetail({ product, gallery }: { product: WorkspaceProduct; gallery
         <div className="flex-1 aspect-square rounded border border-slate-200 dark:border-slate-700 bg-white overflow-hidden">
           {active ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={active.url} alt={active.alt ?? ''} className="w-full h-full object-contain" />
+            <img src={active.url} alt={active.alt ?? ''} className="w-full h-full object-contain" decoding="async" fetchPriority="high" />
           ) : (
             <div className="w-full h-full flex items-center justify-center text-xs text-slate-300">No images</div>
           )}
@@ -135,7 +135,7 @@ function EbayCard({ product, gallery }: { product: WorkspaceProduct; gallery: { 
         <div className="aspect-square rounded border border-slate-200 dark:border-slate-700 bg-white overflow-hidden">
           {active ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={active.url} alt={active.alt ?? ''} className="w-full h-full object-contain" />
+            <img src={active.url} alt={active.alt ?? ''} className="w-full h-full object-contain" decoding="async" fetchPriority="high" />
           ) : (
             <div className="w-full h-full flex items-center justify-center text-xs text-slate-300">No images</div>
           )}
@@ -152,7 +152,7 @@ function EbayCard({ product, gallery }: { product: WorkspaceProduct; gallery: { 
               )}
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={img.url} alt="" className="w-full h-full object-contain" loading="lazy" />
+              <img src={img.url} alt="" className="w-full h-full object-contain" loading="lazy" decoding="async" />
             </button>
           ))}
         </div>
@@ -210,7 +210,7 @@ function ShopifyPDP({
         <div className="aspect-[4/5] rounded border border-slate-200 dark:border-slate-700 bg-white overflow-hidden">
           {active ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={active.url} alt={active.alt ?? ''} className="w-full h-full object-contain" />
+            <img src={active.url} alt={active.alt ?? ''} className="w-full h-full object-contain" decoding="async" fetchPriority="high" />
           ) : (
             <div className="w-full h-full flex items-center justify-center text-xs text-slate-300">No images</div>
           )}
@@ -228,7 +228,7 @@ function ShopifyPDP({
               style={{ aspectRatio: '4/5' }}
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={img.url} alt="" className="w-full h-full object-contain" loading="lazy" />
+              <img src={img.url} alt="" className="w-full h-full object-contain" loading="lazy" decoding="async" />
             </button>
           ))}
         </div>

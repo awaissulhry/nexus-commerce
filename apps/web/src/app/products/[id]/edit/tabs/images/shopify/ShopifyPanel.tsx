@@ -358,7 +358,7 @@ export default function ShopifyPanel({
                 )}
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={item.url} alt={item.alt ?? ''} className="w-full h-full object-contain" loading="lazy" />
+                <img src={item.url} alt={item.alt ?? ''} className="w-full h-full object-contain" loading="lazy" decoding="async" />
 
                 {/* Featured / position badge */}
                 <div className={cn(
@@ -439,7 +439,7 @@ export default function ShopifyPanel({
                     )}
                   >
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={assignedImage.url} alt="" className="w-full h-full object-contain" loading="lazy" />
+                    <img src={assignedImage.url} alt="" className="w-full h-full object-contain" loading="lazy" decoding="async" />
                     {assignedImage.isPending && (
                       <div className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-amber-400" />
                     )}

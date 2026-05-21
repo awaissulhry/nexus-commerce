@@ -132,7 +132,7 @@ function SlotCell({
           onClick={() => (onLightbox ?? onClick)()}
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={cell.url} alt="" className="w-full h-full object-contain bg-white" loading="lazy" />
+          <img src={cell.url} alt="" className="w-full h-full object-contain bg-white" loading="lazy" decoding="async" />
 
           {/* Slot label */}
           <div className="absolute top-0.5 right-0.5 text-[8px] font-mono bg-black/50 text-white rounded px-0.5 leading-tight">

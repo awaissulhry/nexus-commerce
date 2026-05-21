@@ -314,6 +314,7 @@ export default function DamPickerModal({ productId, onClose, onImported }: Props
                     alt={item.label}
                     className="w-full h-full object-contain group-hover:scale-105 transition-transform"
                     loading="lazy"
+                    decoding="async"
                   />
                   {importingId === item.id && (
                     <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
