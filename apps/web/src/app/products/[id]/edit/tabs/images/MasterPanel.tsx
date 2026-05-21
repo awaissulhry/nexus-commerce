@@ -94,6 +94,15 @@ export default function MasterPanel({
   const [dropZoneActive, setDropZoneActive] = useState(false)
   // IM.8 — Bulk selection
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  // IR.11.2 — Track which images have finished loading so the
+  // skeleton placeholder fades out on completion.
+  const [loadedIds, setLoadedIds] = useState<Set<string>>(new Set())
+  const markLoaded = (id: string) => setLoadedIds((prev) => {
+    if (prev.has(id)) return prev
+    const next = new Set(prev)
+    next.add(id)
+    return next
+  })
   const dragIndexRef = useRef<number | null>(null)
   const newTypeRef = useRef<ImageType>('ALT')
 
@@ -542,14 +551,29 @@ export default function MasterPanel({
                     )}
                     onClick={() => onOpenLightbox?.(img)}
                   >
+                    {/* IR.11.2 — Skeleton placeholder shimmers under the
+                        image until onLoad fires. animate-pulse is
+                        cheap (compositor-only) and stops at the same
+                        moment the real bytes paint. */}
+                    {!loadedIds.has(img.id) && (
+                      <div
+                        aria-hidden="true"
+                        className="absolute inset-0 animate-pulse bg-gradient-to-br from-slate-100 via-slate-200 to-slate-100 dark:from-slate-800 dark:via-slate-700 dark:to-slate-800"
+                      />
+                    )}
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       src={img.url}
                       alt={img.alt ?? img.type}
-                      className="w-full h-full object-contain"
+                      className={cn(
+                        'relative w-full h-full object-contain transition-opacity duration-200',
+                        loadedIds.has(img.id) ? 'opacity-100' : 'opacity-0',
+                      )}
                       loading={index < 4 ? 'eager' : 'lazy'}
                       decoding="async"
                       fetchPriority={index === 0 ? 'high' : index < 4 ? 'auto' : 'low'}
+                      onLoad={() => markLoaded(img.id)}
+                      onError={() => markLoaded(img.id)}
                     />
 
                     {/* Selection checkbox — top-left */}
