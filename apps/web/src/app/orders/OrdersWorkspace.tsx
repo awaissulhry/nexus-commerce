@@ -9,7 +9,7 @@ import Link from 'next/link'
 import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import {
   ShoppingCart, RefreshCw, Star, User, DollarSign, Undo2, Download,
-  Keyboard, Trash2, ArrowLeft,
+  Keyboard, Trash2, ArrowLeft, ChevronDown,
 } from 'lucide-react'
 import PageHeader from '@/components/layout/PageHeader'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -125,6 +125,11 @@ export default function OrdersWorkspace() {
   const showDeleted = searchParams.get('deleted') === 'true'
   // OX.2 — Italian "No Invoice Uploaded" status-tab filter
   const noInvoice = searchParams.get('noInvoice') === 'true'
+  // OX.3 — Amazon-parity filter dimensions
+  const orderTypeFilters = searchParams.get('orderType')?.split(',').filter(Boolean) ?? []
+  const dateRangePreset = (searchParams.get('dateRange') ?? '') as '' | '24h' | '7d' | '30d' | '90d'
+  const dateFrom = searchParams.get('dateFrom') ?? ''
+  const dateTo = searchParams.get('dateTo') ?? ''
 
   const [searchInput, setSearchInput] = useState(search)
   const [orders, setOrders] = useState<Order[]>([])
@@ -250,6 +255,10 @@ export default function OrdersWorkspace() {
       if (reviewEligible) qs.set('reviewEligible', 'true')
       if (customerEmail) qs.set('customerEmail', customerEmail)
       if (noInvoice) qs.set('noInvoice', 'true')
+      if (orderTypeFilters.length) qs.set('orderType', orderTypeFilters.join(','))
+      if (dateRangePreset) qs.set('dateRange', dateRangePreset)
+      if (dateFrom) qs.set('dateFrom', dateFrom)
+      if (dateTo) qs.set('dateTo', dateTo)
       qs.set('sortBy', sortBy)
       qs.set('sortDir', sortDir)
       if (showDeleted) qs.set('deleted', 'true')
@@ -264,7 +273,7 @@ export default function OrdersWorkspace() {
       setError(e?.message ?? 'Failed to load')
       setOrders([])
     } finally { setLoading(false) }
-  }, [page, pageSize, search, channelFilters.join(','), marketplaceFilters.join(','), statusFilters.join(','), fulfillmentFilters.join(','), reviewStatusFilters.join(','), hasReturn, hasRefund, reviewEligible, customerEmail, noInvoice, sortBy, sortDir, showDeleted])
+  }, [page, pageSize, search, channelFilters.join(','), marketplaceFilters.join(','), statusFilters.join(','), fulfillmentFilters.join(','), reviewStatusFilters.join(','), hasReturn, hasRefund, reviewEligible, customerEmail, noInvoice, orderTypeFilters.join(','), dateRangePreset, dateFrom, dateTo, sortBy, sortDir, showDeleted])
 
   const fetchStats = useCallback(async () => {
     try {
@@ -397,12 +406,13 @@ export default function OrdersWorkspace() {
 
   const filterCount =
     channelFilters.length + marketplaceFilters.length + statusFilters.length +
-    fulfillmentFilters.length + reviewStatusFilters.length +
+    fulfillmentFilters.length + reviewStatusFilters.length + orderTypeFilters.length +
     (hasReturn ? 1 : 0) + (hasRefund ? 1 : 0) + (reviewEligible ? 1 : 0) + (customerEmail ? 1 : 0)
   // Secondary filter count — the dimensions hosted in the popover.
   // Channel + marketplace stay inline as preset chips for hot paths.
+  // Date range lives in its own toolbar dropdown, not counted here.
   const secondaryFilterCount =
-    statusFilters.length + fulfillmentFilters.length + reviewStatusFilters.length +
+    statusFilters.length + fulfillmentFilters.length + reviewStatusFilters.length + orderTypeFilters.length +
     (hasReturn ? 1 : 0) + (hasRefund ? 1 : 0) + (reviewEligible ? 1 : 0) + (customerEmail ? 1 : 0)
 
   const orderFilterDimensions: FilterDimension[] = [
@@ -416,6 +426,18 @@ export default function OrdersWorkspace() {
     },
     // OX.1: Fulfillment moved out of the secondary filter popover into
     // the prominent FulfilmentSegmentedControl above the lens tabs.
+    {
+      key: 'orderType',
+      label: 'Order type',
+      type: 'multi-select',
+      options: [
+        { value: 'STANDARD', label: 'Standard' },
+        { value: 'PRIME', label: 'Prime' },
+        { value: 'BUSINESS', label: 'Business' },
+      ],
+      values: orderTypeFilters,
+      onChange: (next) => updateUrl({ orderType: next.length > 0 ? next.join(',') : undefined, page: undefined }),
+    },
     {
       key: 'reviewStatus',
       label: 'Review status',
@@ -451,6 +473,7 @@ export default function OrdersWorkspace() {
     status: undefined,
     fulfillment: undefined,
     reviewStatus: undefined,
+    orderType: undefined,
     hasReturn: undefined,
     hasRefund: undefined,
     reviewEligible: undefined,
@@ -513,6 +536,11 @@ export default function OrdersWorkspace() {
                 if (hasRefund) filters.hasRefund = hasRefund
                 if (reviewEligible) filters.reviewEligible = 'true'
                 if (customerEmail) filters.customerEmail = customerEmail
+                if (noInvoice) filters.noInvoice = 'true'
+                if (orderTypeFilters.length) filters.orderType = orderTypeFilters
+                if (dateRangePreset) filters.dateRange = dateRangePreset
+                if (dateFrom) filters.dateFrom = dateFrom
+                if (dateTo) filters.dateTo = dateTo
                 if (sortBy !== 'purchaseDate') filters.sortBy = sortBy
                 if (sortDir !== 'desc') filters.sortDir = sortDir
                 if (pageSize !== 50) filters.pageSize = String(pageSize)
@@ -617,6 +645,12 @@ export default function OrdersWorkspace() {
           freshness, shortcuts. Sits just above the inline filter bar. */}
       {lens === 'grid' && (
         <div className="flex items-center gap-2 flex-wrap justify-end">
+          <DateRangePicker
+            preset={dateRangePreset}
+            dateFrom={dateFrom}
+            dateTo={dateTo}
+            onChange={(next) => updateUrl({ ...next, page: undefined })}
+          />
           <FilterPopover
             dimensions={orderFilterDimensions}
             onClearAll={clearSecondaryFilters}
@@ -722,6 +756,103 @@ export default function OrdersWorkspace() {
           groups={ORDERS_SHORTCUTS}
           onClose={() => setShortcutsOpen(false)}
         />
+      )}
+    </div>
+  )
+}
+
+/**
+ * OX.3 — date-range quick-pick. Amazon Seller Central shows a similar
+ * "Date Range: Last 30 days ▾" dropdown above the order list; this is
+ * our parity. Defaults to "All time" so historical data stays visible
+ * unless the operator narrows it.
+ */
+function DateRangePicker({
+  preset,
+  dateFrom,
+  dateTo,
+  onChange,
+}: {
+  preset: string
+  dateFrom: string
+  dateTo: string
+  onChange: (next: { dateRange?: string; dateFrom?: string; dateTo?: string }) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!open) return
+    const onDocClick = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', onDocClick)
+    return () => document.removeEventListener('mousedown', onDocClick)
+  }, [open])
+
+  const presets: Array<{ key: '' | '24h' | '7d' | '30d' | '90d'; label: string }> = [
+    { key: '', label: 'All time' },
+    { key: '24h', label: 'Last 24 hours' },
+    { key: '7d', label: 'Last 7 days' },
+    { key: '30d', label: 'Last 30 days' },
+    { key: '90d', label: 'Last 90 days' },
+  ]
+  const currentLabel =
+    dateFrom || dateTo
+      ? `Custom${dateFrom ? ` from ${dateFrom}` : ''}${dateTo ? ` to ${dateTo}` : ''}`
+      : presets.find((p) => p.key === preset)?.label ?? 'All time'
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded inline-flex items-center gap-1.5 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800"
+      >
+        <span className="text-slate-500 dark:text-slate-400">Date Range:</span>
+        <span className="font-medium text-slate-900 dark:text-slate-100">{currentLabel}</span>
+        <ChevronDown size={12} className={open ? 'rotate-180 transition-transform' : 'transition-transform'} />
+      </button>
+      {open && (
+        <div className="absolute right-0 top-full mt-1 z-30 w-72 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md shadow-lg p-2 space-y-1">
+          {presets.map((p) => {
+            const active = !dateFrom && !dateTo && preset === p.key
+            return (
+              <button
+                key={p.key || 'all'}
+                type="button"
+                onClick={() => {
+                  onChange({ dateRange: p.key || undefined, dateFrom: undefined, dateTo: undefined })
+                  setOpen(false)
+                }}
+                className={`w-full text-left px-2 py-1.5 rounded text-base ${
+                  active ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900' : 'hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200'
+                }`}
+              >
+                {p.label}
+              </button>
+            )
+          })}
+          <div className="pt-2 border-t border-slate-200 dark:border-slate-700 space-y-1.5">
+            <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold px-1">Custom</div>
+            <div className="flex items-center gap-1">
+              <input
+                type="date"
+                defaultValue={dateFrom}
+                onChange={(e) => onChange({ dateFrom: e.target.value || undefined, dateRange: undefined })}
+                className="flex-1 h-7 px-2 text-sm border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900"
+                aria-label="Start date"
+              />
+              <span className="text-slate-400">→</span>
+              <input
+                type="date"
+                defaultValue={dateTo}
+                onChange={(e) => onChange({ dateTo: e.target.value || undefined, dateRange: undefined })}
+                className="flex-1 h-7 px-2 text-sm border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900"
+                aria-label="End date"
+              />
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

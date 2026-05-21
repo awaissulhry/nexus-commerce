@@ -116,6 +116,28 @@ export async function ordersRoutes(app: FastifyInstance) {
       // OX.2: Italian "No Invoice Uploaded" tab — orders that should
       // have a FiscalInvoice (paid + non-terminal) but don't.
       const noInvoice = q.noInvoice === 'true'
+      // OX.3 — order-type filter. Values map to:
+      //   PRIME      → Order.isPrime = true
+      //   BUSINESS   → amazonMetadata.IsBusinessOrder = true
+      //   STANDARD   → not Prime AND not Business
+      // Multi-select OR within the dimension.
+      const orderTypes = csvParam(q.orderType)
+      // OX.3 — date-range preset. The API also accepts explicit
+      // dateFrom/dateTo; this is a shortcut: ?dateRange=24h|7d|30d|90d
+      // resolves to the equivalent dateFrom (dateTo defaults to now).
+      const dateRangePreset = (q.dateRange ?? '').toString().trim() as
+        | ''
+        | '24h'
+        | '7d'
+        | '30d'
+        | '90d'
+      let presetFrom: Date | null = null
+      switch (dateRangePreset) {
+        case '24h': presetFrom = new Date(Date.now() - 24 * 60 * 60 * 1000); break
+        case '7d': presetFrom = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000); break
+        case '30d': presetFrom = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000); break
+        case '90d': presetFrom = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000); break
+      }
 
       const sortBy = (q.sortBy ?? 'purchaseDate') as string
       const sortDir = (q.sortDir === 'asc' ? 'asc' : 'desc') as 'asc' | 'desc'
@@ -131,10 +153,33 @@ export async function ordersRoutes(app: FastifyInstance) {
       if (statuses && statuses.length) where.status = { in: statuses }
       if (fulfillment && fulfillment.length) where.fulfillmentMethod = { in: fulfillment }
       if (customerEmail) where.customerEmail = { contains: customerEmail, mode: 'insensitive' }
-      if (dateFrom || dateTo) {
+      // OX.3 — explicit dateFrom/dateTo wins, otherwise apply the preset.
+      const effectiveFrom = dateFrom ?? presetFrom
+      if (effectiveFrom || dateTo) {
         where.purchaseDate = {}
-        if (dateFrom) where.purchaseDate.gte = dateFrom
+        if (effectiveFrom) where.purchaseDate.gte = effectiveFrom
         if (dateTo) where.purchaseDate.lte = dateTo
+      }
+      // OX.3 — order-type filter. Multi-select OR within the dimension,
+      // ANDed with the rest of the WHERE clause. Standard = NOT Prime
+      // AND NOT Business (client-derived, no new index needed).
+      if (orderTypes && orderTypes.length) {
+        const typeClauses: any[] = []
+        for (const t of orderTypes) {
+          if (t === 'PRIME') typeClauses.push({ isPrime: true })
+          else if (t === 'BUSINESS') typeClauses.push({ amazonMetadata: { path: ['IsBusinessOrder'], equals: true } })
+          else if (t === 'STANDARD') {
+            typeClauses.push({
+              AND: [
+                { OR: [{ isPrime: false }, { isPrime: null }] },
+                { NOT: { amazonMetadata: { path: ['IsBusinessOrder'], equals: true } } },
+              ],
+            })
+          }
+        }
+        if (typeClauses.length > 0) {
+          where.AND = (where.AND ?? []).concat({ OR: typeClauses })
+        }
       }
       if (search) {
         where.OR = [
@@ -152,10 +197,12 @@ export async function ordersRoutes(app: FastifyInstance) {
       }
       if (reviewEligible) {
         where.deliveredAt = { not: null }
-        where.AND = [
+        // OX.3: concat instead of assign so other AND-clauses (orderType,
+        // noInvoice) can coexist.
+        where.AND = (where.AND ?? []).concat([
           { reviewRequests: { none: {} } },
           { returns: { none: { status: { in: ['REQUESTED', 'AUTHORIZED', 'IN_TRANSIT', 'RECEIVED', 'INSPECTING'] } } } },
-        ]
+        ])
       }
       if (noInvoice) {
         // OX.2 — Italian compliance: paid + non-terminal orders that
