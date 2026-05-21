@@ -412,18 +412,58 @@ export async function ordersRoutes(app: FastifyInstance) {
   })
 
   // ── GET /api/orders/facets — distinct channels, marketplaces, tags
-  app.get('/api/orders/facets', async (_request, reply) => {
+  // OX.16 follow-up: respects the same scope filters as /api/orders/stats
+  // (date range + channel + marketplace + fulfilment, EXCEPT each facet
+  // is computed without filtering on its own axis — so the FBM/FBA
+  // facet ignores ?fulfillment= and the marketplace facet ignores
+  // ?marketplace= — otherwise picking FBM would make FBA show 0).
+  app.get('/api/orders/facets', async (request, reply) => {
     try {
-      reply.header('Cache-Control', 'private, max-age=60')
-      const [channels, marketplaces, fulfillment] = await Promise.all([
-        prisma.order.groupBy({ by: ['channel'], _count: true }),
-        prisma.order.groupBy({ by: ['marketplace'], where: { marketplace: { not: null } }, _count: true }),
-        prisma.order.groupBy({ by: ['fulfillmentMethod'], where: { fulfillmentMethod: { not: null } }, _count: true }),
+      reply.header('Cache-Control', 'private, max-age=30')
+      const q = request.query as any
+      const channels = csvParam(q.channel)
+      const marketplaces = csvParam(q.marketplace)
+      const fulfillment = csvParam(q.fulfillment)
+      const dateFrom = q.dateFrom ? new Date(q.dateFrom) : null
+      const dateTo = q.dateTo ? new Date(q.dateTo) : null
+      const dateRangePreset = (q.dateRange ?? '').toString().trim() as
+        | '' | '24h' | '7d' | '30d' | '90d'
+      let presetFrom: Date | null = null
+      switch (dateRangePreset) {
+        case '24h': presetFrom = new Date(Date.now() - 24 * 60 * 60 * 1000); break
+        case '7d': presetFrom = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000); break
+        case '30d': presetFrom = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000); break
+        case '90d': presetFrom = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000); break
+      }
+      const effectiveFrom = dateFrom ?? presetFrom
+      const baseWhere: any = { deletedAt: null }
+      if (effectiveFrom || dateTo) {
+        baseWhere.purchaseDate = {}
+        if (effectiveFrom) baseWhere.purchaseDate.gte = effectiveFrom
+        if (dateTo) baseWhere.purchaseDate.lte = dateTo
+      }
+      // Per-axis WHERE: each facet is computed without its own axis
+      // applied — so picking FBM doesn't zero out FBA's count and
+      // operators can switch between them without losing visibility.
+      const channelWhere: any = { ...baseWhere }
+      if (marketplaces && marketplaces.length) channelWhere.marketplace = { in: marketplaces }
+      if (fulfillment && fulfillment.length) channelWhere.fulfillmentMethod = { in: fulfillment }
+      const marketplaceWhere: any = { ...baseWhere, marketplace: { not: null } }
+      if (channels && channels.length) marketplaceWhere.channel = { in: channels }
+      if (fulfillment && fulfillment.length) marketplaceWhere.fulfillmentMethod = { in: fulfillment }
+      const fulfillmentWhere: any = { ...baseWhere, fulfillmentMethod: { not: null } }
+      if (channels && channels.length) fulfillmentWhere.channel = { in: channels }
+      if (marketplaces && marketplaces.length) fulfillmentWhere.marketplace = { in: marketplaces }
+
+      const [channelGroups, marketplaceGroups, fulfillmentGroups] = await Promise.all([
+        prisma.order.groupBy({ by: ['channel'], where: channelWhere, _count: true }),
+        prisma.order.groupBy({ by: ['marketplace'], where: marketplaceWhere, _count: true }),
+        prisma.order.groupBy({ by: ['fulfillmentMethod'], where: fulfillmentWhere, _count: true }),
       ])
       return {
-        channels: channels.map((c) => ({ value: c.channel, count: c._count })),
-        marketplaces: marketplaces.filter((m) => m.marketplace).map((m) => ({ value: m.marketplace!, count: m._count })),
-        fulfillment: fulfillment.filter((f) => f.fulfillmentMethod).map((f) => ({ value: f.fulfillmentMethod!, count: f._count })),
+        channels: channelGroups.map((c) => ({ value: c.channel, count: c._count })),
+        marketplaces: marketplaceGroups.filter((m) => m.marketplace).map((m) => ({ value: m.marketplace!, count: m._count })),
+        fulfillment: fulfillmentGroups.filter((f) => f.fulfillmentMethod).map((f) => ({ value: f.fulfillmentMethod!, count: f._count })),
       }
     } catch (error: any) {
       return reply.status(500).send({ error: error.message })

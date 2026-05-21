@@ -319,10 +319,24 @@ export default function OrdersWorkspace() {
   }, [channelFilters.join(','), marketplaceFilters.join(','), fulfillmentFilters.join(','), dateRangePreset, dateFrom, dateTo])
   const fetchFacets = useCallback(async () => {
     try {
-      const res = await fetch(`${getBackendUrl()}/api/orders/facets`, { cache: 'no-store' })
+      // OX.16 follow-up — facets respect the same scope filters as
+      // stats (date range + cross-axis filter combos). Each facet
+      // axis is computed without its own dimension on the server so
+      // switching between FBM/FBA doesn't zero the other out.
+      const qs = new URLSearchParams()
+      if (channelFilters.length) qs.set('channel', channelFilters.join(','))
+      if (marketplaceFilters.length) qs.set('marketplace', marketplaceFilters.join(','))
+      if (fulfillmentFilters.length) qs.set('fulfillment', fulfillmentFilters.join(','))
+      if (dateRangePreset) qs.set('dateRange', dateRangePreset)
+      if (dateFrom) qs.set('dateFrom', dateFrom)
+      if (dateTo) qs.set('dateTo', dateTo)
+      const url = qs.toString()
+        ? `${getBackendUrl()}/api/orders/facets?${qs.toString()}`
+        : `${getBackendUrl()}/api/orders/facets`
+      const res = await fetch(url, { cache: 'no-store' })
       if (res.ok) setFacets(await res.json())
     } catch {}
-  }, [])
+  }, [channelFilters.join(','), marketplaceFilters.join(','), fulfillmentFilters.join(','), dateRangePreset, dateFrom, dateTo])
 
   useEffect(() => { if (lens === 'grid') fetchOrders() }, [lens, fetchOrders])
   useEffect(() => { fetchStats(); fetchFacets() }, [fetchStats, fetchFacets])
