@@ -1617,13 +1617,15 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
-  // POST /api/amazon/orders/backfill-zero-totals — OX.0 repair pass for
-  // orders that were ingested at €0.00 (Amazon withholds OrderTotal
-  // for PENDING orders, and a small number can age out of the sync
-  // cursor without ever picking up a price update). Uses SP-API
-  // getOrder (which returns OrderTotal for every status) per stale row.
-  // Body: { limit?: number } (default 100). Idempotent.
-  fastify.post<{ Body?: { limit?: number } }>(
+  // POST /api/amazon/orders/backfill-zero-totals — OX.0 + AR.1 repair
+  // pass for orders ingested at €0.00. SP-API ListOrders withholds
+  // OrderTotal for PENDING; getOrder returns it for ALL statuses.
+  // Body: { limit?: number, includePending?: boolean } (default 100,
+  // PENDING excluded). includePending=true repairs PENDING+€0 rows
+  // that landed before SA.2's eager getOrder went live — closes the
+  // Global Snapshot vs Amazon Seller Central sales gap immediately.
+  // Idempotent.
+  fastify.post<{ Body?: { limit?: number; includePending?: boolean } }>(
     '/orders/backfill-zero-totals',
     async (request, reply) => {
       if (!amazonOrdersService.isConfigured()) {
@@ -1635,6 +1637,7 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
       try {
         const result = await amazonOrdersService.backfillZeroTotals({
           limit: request.body?.limit,
+          includePending: request.body?.includePending === true,
         })
         return { success: true, ...result }
       } catch (error) {

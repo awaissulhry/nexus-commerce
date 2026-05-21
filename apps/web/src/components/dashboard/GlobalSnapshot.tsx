@@ -14,7 +14,7 @@
  * but the heavy table layout doesn't block this commit.
  */
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { ChevronDown, ChevronUp, ShoppingCart, Package, Mail, RefreshCw } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
@@ -150,6 +150,20 @@ export function GlobalSnapshot() {
     return () => clearInterval(t)
   }, [])
 
+  // AR.2 — keep fetchSnapshot fresh inside the SSE handler. The
+  // useEffect for SSE has empty deps (we only want one EventSource
+  // per mount), but the handler must always call the latest
+  // fetchSnapshot — otherwise it captures a stale closure over the
+  // initial `marketplace` and silently re-fetches with the wrong
+  // scope after the operator changes the dropdown.
+  const fetchSnapshotRef = useRef(fetchSnapshot)
+  useEffect(() => { fetchSnapshotRef.current = fetchSnapshot })
+  // AR.4 — keep current marketplace + data accessible to the SSE
+  // handler so optimistic increments can decide whether the new
+  // order falls inside the current scope.
+  const marketplaceRef = useRef(marketplace)
+  useEffect(() => { marketplaceRef.current = marketplace }, [marketplace])
+
   // GS.7 — SSE auto-refresh on order events. The /orders SSE bus
   // already broadcasts order.created/updated/cancelled — piggyback so
   // the snapshot's "Today so far" tile moves the instant a new order
@@ -159,10 +173,51 @@ export function GlobalSnapshot() {
     let es: EventSource | null = null
     try {
       es = new EventSource(`${getBackendUrl()}/api/orders/events`)
-      const handler = () => fetchSnapshot()
-      es.addEventListener('order.created', handler)
-      es.addEventListener('order.updated', handler)
-      es.addEventListener('order.cancelled', handler)
+      // AR.4 — optimistic update on order.created: bump tile total
+      // immediately, then reconcile with the server fetch ~50-200ms
+      // later. Only applies when the payload carries the price + the
+      // marketplace matches the current scope (avoid showing a spike
+      // when scope=IT and an order lands in DE).
+      const createHandler = (ev: MessageEvent) => {
+        try {
+          const payload = JSON.parse(ev.data) as {
+            type: string
+            marketplace?: string | null
+            totalPriceCents?: number
+            currencyCode?: string | null
+          }
+          const currentMarket = marketplaceRef.current
+          const matchesScope = !currentMarket || payload.marketplace === currentMarket
+          if (
+            matchesScope
+            && payload.totalPriceCents
+            && payload.totalPriceCents > 0
+            && (payload.currencyCode === 'EUR' || !payload.currencyCode)
+          ) {
+            setData((prev) => {
+              if (!prev) return prev
+              return {
+                ...prev,
+                sales: {
+                  ...prev.sales,
+                  total: {
+                    ...prev.sales.total,
+                    valueCents: prev.sales.total.valueCents + payload.totalPriceCents!,
+                    units: prev.sales.total.units + 1,
+                  },
+                },
+              }
+            })
+          }
+        } catch {
+          /* malformed payload — fall through to fetch */
+        }
+        fetchSnapshotRef.current()
+      }
+      const refreshOnly = () => fetchSnapshotRef.current()
+      es.addEventListener('order.created', createHandler)
+      es.addEventListener('order.updated', refreshOnly)
+      es.addEventListener('order.cancelled', refreshOnly)
     } catch {
       /* SSE unsupported — fall back to the 5s tick / manual refresh */
     }
@@ -238,12 +293,14 @@ export function GlobalSnapshot() {
           onToggle={() => onToggle('sales')}
         >
           <div className="space-y-1">
-            <div className="text-2xl font-bold tabular-nums text-slate-900 dark:text-slate-100 inline-flex items-baseline gap-2">
-              {formatEur(data.sales.total.valueCents)}
-              {data.sales.total.compareDeltaPct != null && (
-                <SalesDelta deltaPct={data.sales.total.compareDeltaPct} />
-              )}
-            </div>
+            <PulseOnChange value={data.sales.total.valueCents}>
+              <div className="text-2xl font-bold tabular-nums text-slate-900 dark:text-slate-100 inline-flex items-baseline gap-2">
+                {formatEur(data.sales.total.valueCents)}
+                {data.sales.total.compareDeltaPct != null && (
+                  <SalesDelta deltaPct={data.sales.total.compareDeltaPct} />
+                )}
+              </div>
+            </PulseOnChange>
             <div className="text-xs text-slate-500 dark:text-slate-400">
               {data.period.key === 'today' ? 'Today so far' : data.period.key}
               {' · '}
@@ -276,9 +333,11 @@ export function GlobalSnapshot() {
           onToggle={() => onToggle('openOrders')}
         >
           <div className="space-y-1.5">
-            <div className="text-2xl font-bold tabular-nums text-slate-900 dark:text-slate-100">
-              {data.openOrders.total}
-            </div>
+            <PulseOnChange value={data.openOrders.total}>
+              <div className="text-2xl font-bold tabular-nums text-slate-900 dark:text-slate-100">
+                {data.openOrders.total}
+              </div>
+            </PulseOnChange>
             <div className="text-xs text-slate-500 dark:text-slate-400">Total count</div>
             <ul className="text-xs pt-2 mt-2 border-t border-slate-200 dark:border-slate-700 space-y-0.5">
               <SubLine label="FBM unshipped" value={data.openOrders.fbmUnshipped} href="/orders?fulfillment=FBM&status=PROCESSING,ON_HOLD" />
@@ -331,6 +390,39 @@ function SalesDelta({ deltaPct }: { deltaPct: number }) {
       title={`Sales delta vs same day last week: ${rounded > 0 ? '+' : ''}${rounded}%`}
     >
       {sign} {Math.abs(rounded).toFixed(1)}%
+    </span>
+  )
+}
+
+/**
+ * AR.3 — visual pulse on number changes. Wraps a child whose visual
+ * representation should flash when its driving value changes. Emerald
+ * for up, rose for down. ~700ms fade so operators visibly see the
+ * snapshot is alive — no more "is this actually updating?" mystery.
+ *
+ * Tracks previous value via ref so first render doesn't trigger a
+ * pulse (we'd flash on every mount otherwise, which is noisy).
+ */
+function PulseOnChange({ value, children }: { value: number; children: React.ReactNode }) {
+  const [tone, setTone] = useState<'emerald' | 'rose' | null>(null)
+  const prevRef = useRef<number>(value)
+  useEffect(() => {
+    if (prevRef.current === value) return
+    const next = value > prevRef.current ? 'emerald' : 'rose'
+    prevRef.current = value
+    setTone(next)
+    const t = setTimeout(() => setTone(null), 700)
+    return () => clearTimeout(t)
+  }, [value])
+  const ring =
+    tone === 'emerald'
+      ? 'ring-2 ring-emerald-400 ring-offset-1 dark:ring-emerald-500 dark:ring-offset-slate-900 bg-emerald-50/40 dark:bg-emerald-950/30'
+      : tone === 'rose'
+      ? 'ring-2 ring-rose-400 ring-offset-1 dark:ring-rose-500 dark:ring-offset-slate-900 bg-rose-50/40 dark:bg-rose-950/30'
+      : ''
+  return (
+    <span className={`inline-block rounded transition-all duration-300 ${ring}`}>
+      {children}
     </span>
   )
 }

@@ -20,14 +20,19 @@ dotenv.config({ path: path.join(here, '..', '.env') })
 
 const BACKEND = process.env.NEXUS_API_URL ?? 'http://localhost:3001'
 const LIMIT = parseInt(process.env.LIMIT ?? '100', 10)
+// AR.1 — INCLUDE_PENDING=1 repairs PENDING+€0 rows so the Global
+// Snapshot total matches Amazon Seller Central without waiting for
+// each order to leave PENDING. Default false to preserve the
+// original OX.0 behavior (only stale non-PENDING zero rows).
+const INCLUDE_PENDING = process.env.INCLUDE_PENDING === '1'
 
-console.log(`[backfill-zero-totals] POST ${BACKEND}/api/amazon/orders/backfill-zero-totals (limit=${LIMIT})`)
+console.log(`[backfill-zero-totals] POST ${BACKEND}/api/amazon/orders/backfill-zero-totals (limit=${LIMIT}${INCLUDE_PENDING ? ', includePending=true' : ''})`)
 
 const start = Date.now()
 const res = await fetch(`${BACKEND}/api/amazon/orders/backfill-zero-totals`, {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({ limit: LIMIT }),
+  body: JSON.stringify({ limit: LIMIT, includePending: INCLUDE_PENDING }),
 }).catch((err) => {
   console.error('Network error:', err.message)
   process.exit(1)

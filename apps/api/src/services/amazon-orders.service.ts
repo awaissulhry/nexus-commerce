@@ -195,7 +195,9 @@ export class AmazonOrdersService {
    * Targets Amazon only — eBay + Shopify ingest their own totals and
    * don't suffer the same Pending-state withholding.
    */
-  async backfillZeroTotals(options: { limit?: number; olderThanDays?: number } = {}): Promise<{
+  async backfillZeroTotals(
+    options: { limit?: number; olderThanDays?: number; includePending?: boolean } = {},
+  ): Promise<{
     scanned: number
     repaired: number
     skipped: number
@@ -203,11 +205,20 @@ export class AmazonOrdersService {
     errors: Array<{ orderId: string; error: string }>
   }> {
     const limit = options.limit ?? 100
+    // AR.1 — includePending=true repairs the PENDING+€0 rows that
+    // landed before SA.2's eager getOrder went live. SA.2 fixes new
+    // PENDING ingests at upsert time; this backfill closes the gap
+    // for orders already in the DB. The Global Snapshot "sales today"
+    // total then matches Amazon Seller Central without waiting for
+    // each PENDING order to transition state.
+    const excludedStatuses = options.includePending
+      ? ['CANCELLED']
+      : ['PENDING', 'CANCELLED']
     const stale = await prisma.order.findMany({
       where: {
         channel: 'AMAZON',
         totalPrice: 0,
-        status: { notIn: ['PENDING', 'CANCELLED'] },
+        status: { notIn: excludedStatuses as any },
         deletedAt: null,
       },
       select: { id: true, channelOrderId: true },
@@ -484,6 +495,9 @@ export class AmazonOrdersService {
     void (async () => {
       try {
         const { publishOrderEvent } = await import('./order-events.service.js')
+        // AR.4 — enrich payload so subscribers can optimistically
+        // update tile totals without a server round-trip.
+        const totalPriceCents = Math.round(totalPrice * 100)
         publishOrderEvent(
           existing == null
             ? {
@@ -491,6 +505,10 @@ export class AmazonOrdersService {
                 orderId: order.id,
                 channel: 'AMAZON',
                 channelOrderId: raw.AmazonOrderId,
+                marketplace,
+                fulfillmentMethod,
+                totalPriceCents,
+                currencyCode,
                 ts: Date.now(),
               }
             : {
@@ -498,6 +516,7 @@ export class AmazonOrdersService {
                 orderId: order.id,
                 channel: 'AMAZON',
                 status,
+                marketplace,
                 ts: Date.now(),
               },
         )

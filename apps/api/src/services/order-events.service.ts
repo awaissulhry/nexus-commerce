@@ -20,9 +20,22 @@
 // invalidate your view."
 
 export type OrderEvent =
-  | { type: 'order.created'; orderId: string; channel: string; channelOrderId?: string; ts: number }
-  | { type: 'order.updated'; orderId: string; channel: string; status?: string; ts: number }
-  | { type: 'order.cancelled'; orderId: string; channel?: string; ts: number }
+  // AR.4 — order.created carries enough payload for the Global Snapshot
+  // to optimistically increment its tile total without waiting for the
+  // server fetch. fetchSnapshot still runs in background to reconcile.
+  | {
+      type: 'order.created'
+      orderId: string
+      channel: string
+      channelOrderId?: string
+      marketplace?: string | null
+      fulfillmentMethod?: string | null
+      totalPriceCents?: number
+      currencyCode?: string | null
+      ts: number
+    }
+  | { type: 'order.updated'; orderId: string; channel: string; status?: string; marketplace?: string | null; ts: number }
+  | { type: 'order.cancelled'; orderId: string; channel?: string; marketplace?: string | null; totalPriceCents?: number; ts: number }
   | { type: 'return.created'; returnId: string; orderId?: string | null; channel: string; ts: number }
   // AL.4 — fired when the nightly Amazon T+1 sales-report ingest
   // completes. Analytics surfaces that read from DailySalesAggregate
