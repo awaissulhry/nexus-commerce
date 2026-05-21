@@ -38,6 +38,7 @@ import { getBackendUrl } from '@/lib/backend-url'
 import { usePolledList } from '@/lib/sync/use-polled-list'
 import { NewPlanModal } from './NewPlanModal'
 import { PackingOptionsPicker } from './PackingOptionsPicker'
+import { PlacementOptionsPicker } from './PlacementOptionsPicker'
 
 interface Plan {
   id: string
@@ -284,26 +285,22 @@ function PlanActions({ plan, onAction }: { plan: Plan; onAction: () => void }) {
     return <PackingOptionsPicker planRowId={plan.id} onConfirmed={onAction} />
   }
 
+  // F.6.3: placement-options step. Same auto-mount pattern as packing —
+  // mounting triggers GET /placement-options which advances LIST →
+  // CONFIRM state transition server-side.
+  if (plan.currentStep === 'LIST_PLACEMENT' || plan.currentStep === 'CONFIRM_PLACEMENT') {
+    return <PlacementOptionsPicker planRowId={plan.id} onConfirmed={onAction} />
+  }
+
   // Remaining steps still use the legacy button + prompt() flow.
-  // F.6.3 replaces placement; F.6.4 replaces transport; F.6.5 polishes
-  // labels with a download UI.
+  // F.6.4 replaces transport; F.6.5 polishes labels with a download UI.
   const nextLabel =
-    plan.currentStep === 'LIST_PLACEMENT' ? 'Inspect placement options' :
-    plan.currentStep === 'CONFIRM_PLACEMENT' ? 'Pick placement option' :
     plan.currentStep === 'LIST_TRANSPORT' ? 'Inspect transport options' :
     plan.currentStep === 'CONFIRM_TRANSPORT' ? 'Confirm transport' :
     plan.currentStep === 'GET_LABELS' ? 'Fetch labels' : 'Continue'
 
   const handleNext = async () => {
-    if (plan.currentStep === 'LIST_PLACEMENT') {
-      const r = await callApi(`/api/fba/inbound/v2/${plan.id}/placement-options`)
-      toast.success(`Placement options: ${r?.placementOptions?.length ?? 0}`)
-    } else if (plan.currentStep === 'CONFIRM_PLACEMENT') {
-      const optId = prompt('placementOptionId to confirm?', '')
-      if (!optId) return
-      await callApi(`/api/fba/inbound/v2/${plan.id}/placement-options/${optId}/confirm`, { method: 'POST' })
-      toast.success('Placement confirmed; shipmentIds emitted')
-    } else if (plan.currentStep === 'LIST_TRANSPORT') {
+    if (plan.currentStep === 'LIST_TRANSPORT') {
       const shipmentId = plan.shipmentIds[0]
       if (!shipmentId) {
         toast.error('No shipmentIds yet')
