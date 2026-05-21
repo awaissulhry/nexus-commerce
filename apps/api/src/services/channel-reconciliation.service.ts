@@ -80,7 +80,9 @@ async function fetchChannelOrderTotals(
   let nextToken: string | undefined
   let pages = 0
 
-  while (pages < 50) {
+  // Cap at 5 pages = ~500 orders to stay inside Railway's HTTP gateway
+  // timeout. For high-volume sellers, reduce daysBack to fit.
+  while (pages < 5) {
     const params = new URLSearchParams(
       nextToken
         ? { NextToken: nextToken }
@@ -119,8 +121,10 @@ async function fetchChannelOrderTotals(
     pages++
     nextToken = data.payload?.NextToken
     if (!nextToken) break
-    // Throttle — getOrders is 0.0167 req/s
-    await new Promise((r) => setTimeout(r, 60_000))
+    // SP-API getOrders burst budget is 20 (refilled at 0.0167/s). For
+    // single-shot reconciliation we use a short pause and rely on the
+    // burst budget rather than waiting a full minute per page.
+    await new Promise((r) => setTimeout(r, 2_000))
   }
 
   return { orderCount, revenue, pages }
@@ -207,8 +211,8 @@ export async function reconcileAmazon(opts: {
     const totals = await fetchChannelOrderTotals(marketplaceId, from, to)
     channelOrders = totals.orderCount
     channelRevenue = totals.revenue
-    if (totals.pages >= 50) {
-      warnings.push('channel order pagination hit 50-page cap; numbers may be undercounted')
+    if (totals.pages >= 5) {
+      warnings.push('channel order pagination hit 5-page cap (~500 orders); use a shorter daysBack window for full coverage')
     }
   } catch (err) {
     warnings.push(`channel getOrders failed: ${err instanceof Error ? err.message : String(err)}`)
@@ -234,11 +238,15 @@ export async function reconcileAmazon(opts: {
   const dbOrderCount = dbOrders._count._all
   const dbRevenue = Number(dbOrders._sum.totalPrice ?? 0)
 
-  // FBA inventory in Nexus: read from Product.totalStock or StockLevel
+  // FBA inventory in Nexus: SUM(StockLevel.quantity) JOINed to StockLocation
+  // where code matches Amazon FBA pool (the code column carries the
+  // operator-facing identifier like 'AMAZON-EU-FBA').
   const dbInventory = await prisma.$queryRaw<Array<{ total: bigint }>>`
-    SELECT COALESCE(SUM("quantity"), 0)::bigint AS total
+    SELECT COALESCE(SUM(sl."quantity"), 0)::bigint AS total
     FROM "StockLevel" sl
-    WHERE sl."locationCode" LIKE 'AMAZON-EU-FBA%'
+    JOIN "StockLocation" loc ON loc.id = sl."locationId"
+    WHERE loc."type" = 'AMAZON_FBA'
+       OR loc."code" LIKE 'AMAZON-%FBA%'
   `
   const dbInventoryUnits = Number(dbInventory[0]?.total ?? 0)
 
