@@ -185,6 +185,10 @@ export interface FetchOrdersOptions {
   to?: Date
   limit?: number          // hard cap on total orders returned (default 1000)
   marketplaceId?: string  // defaults to env AMAZON_MARKETPLACE_ID
+  // MS.1 — pass multiple to fetch orders across markets in one SP-API
+  // call. Wins precedence over `marketplaceId` when set. Each returned
+  // order carries its own MarketplaceId for mapping back to country code.
+  marketplaceIds?: string[]
 }
 
 /** Rich product details aligned with the Prisma Product schema. */
@@ -907,16 +911,22 @@ export class AmazonService {
    */
   async fetchOrders(options: FetchOrdersOptions = {}): Promise<AmazonOrderRaw[]> {
     const sp = await this.getClient()
-    const marketplaceId =
-      options.marketplaceId ??
-      process.env.AMAZON_MARKETPLACE_ID ??
-      'APJ6JRA9NG5V4'
+    // MS.1 — multi-market support. `marketplaceIds` wins over single.
+    const marketplaceIds: string[] = (() => {
+      if (options.marketplaceIds && options.marketplaceIds.length > 0) return options.marketplaceIds
+      const single =
+        options.marketplaceId ??
+        process.env.AMAZON_MARKETPLACE_ID ??
+        'APJ6JRA9NG5V4'
+      return [single]
+    })()
+    const marketplaceId = marketplaceIds[0] // for pagination's NextToken query reuse
     const limit = options.limit ?? 1000
 
     // Build the query — exactly one of CreatedAfter / LastUpdatedAfter.
     // SP-API docs: at least one of CreatedAfter or LastUpdatedAfter is required.
     const query: Record<string, unknown> = {
-      MarketplaceIds: [marketplaceId],
+      MarketplaceIds: marketplaceIds,
       MaxResultsPerPage: 100, // SP-API max
     }
     // SP-API rejects CreatedBefore / LastUpdatedBefore values within ~2
@@ -945,7 +955,7 @@ export class AmazonService {
     while (true) {
       try {
         const callQuery: Record<string, unknown> = nextToken
-          ? { MarketplaceIds: [marketplaceId], NextToken: nextToken }
+          ? { MarketplaceIds: marketplaceIds, NextToken: nextToken }
           : query
 
         const res: any = await sp.callAPI({

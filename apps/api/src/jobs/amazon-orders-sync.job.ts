@@ -16,7 +16,7 @@
  */
 
 import cron from 'node-cron'
-import { amazonOrdersService } from '../services/amazon-orders.service.js'
+import { amazonOrdersService, getConfiguredMarketplaceIds } from '../services/amazon-orders.service.js'
 import { logger } from '../utils/logger.js'
 import { recordCronRun } from '../utils/cron-observability.js'
 
@@ -30,10 +30,15 @@ async function runOrdersPoll(): Promise<void> {
 
   try {
     await recordCronRun('amazon-orders-sync', async () => {
+      // MS.1 — sweep every configured marketplace in one SP-API call.
+      // SP-API getOrders accepts a MarketplaceIds array and returns
+      // the union, each order carrying its own MarketplaceId. Stays
+      // inside the 0.0167 req/s throttle (still one request per tick).
+      const marketplaceIds = getConfiguredMarketplaceIds()
       const latest = await amazonOrdersService.getLatestPurchaseDate()
       const summary = latest
-        ? await amazonOrdersService.syncNewOrders(latest)
-        : await amazonOrdersService.syncAllOrders({ daysBack: 30 })
+        ? await amazonOrdersService.syncNewOrders(latest, { marketplaceIds })
+        : await amazonOrdersService.syncAllOrders({ daysBack: 30, marketplaceIds })
 
       if (summary.ordersFailed > 0 || summary.itemsFailed > 0) {
         logger.warn('amazon-orders cron: completed with failures', {

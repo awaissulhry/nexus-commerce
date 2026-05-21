@@ -103,6 +103,7 @@ function pickCustomerEmail(order: AmazonOrderRaw): string {
 function mapMarketplaceCode(marketplaceId?: string): string | null {
   if (!marketplaceId) return null
   const map: Record<string, string> = {
+    // EU region
     APJ6JRA9NG5V4: 'IT',
     A1PA6795UKMFR9: 'DE',
     A13V1IB3VIYZZH: 'FR',
@@ -111,11 +112,50 @@ function mapMarketplaceCode(marketplaceId?: string): string | null {
     A1805IZSGTT6HS: 'NL',
     A2NODRKZP88ZB9: 'SE',
     A1C3SOZRARQ6R3: 'PL',
+    AMEN7PMS3EDWL: 'BE',
+    A28R8C7NBKEWEA: 'IE',
+    A33AVAJ2PDY3EV: 'TR',
+    A17E79C6D8DWNP: 'SA',
+    A2VIGQ35RCS4UG: 'AE',
+    // NA region (kept for completeness; only enable in env)
     ATVPDKIKX0DER: 'US',
     A2EUQ1WTGCTBG2: 'CA',
     A1AM78C64UM0Y8: 'MX',
   }
   return map[marketplaceId] ?? null
+}
+
+/**
+ * MS.1 — default marketplace IDs the EU cron sweeps when
+ * NEXUS_AMAZON_MARKETPLACE_IDS isn't set. SP-API ListOrders accepts
+ * multiple in one call (returns the union, each order carrying its
+ * own MarketplaceId), so one request covers all of them and stays
+ * inside the 0.0167 req/s throttle.
+ *
+ * The 11 EU markets Amazon supports under the EU SP-API region:
+ *   IT, DE, FR, ES, UK, NL, SE, PL, BE, IE, TR (+ SA, AE for ME).
+ */
+export const DEFAULT_EU_MARKETPLACE_IDS = [
+  'APJ6JRA9NG5V4', // IT
+  'A1PA6795UKMFR9', // DE
+  'A13V1IB3VIYZZH', // FR
+  'A1RKKUPIHCS9HS', // ES
+  'A1F83G8C2ARO7P', // UK
+  'A1805IZSGTT6HS', // NL
+  'A2NODRKZP88ZB9', // SE
+  'A1C3SOZRARQ6R3', // PL
+  'AMEN7PMS3EDWL', // BE
+  'A28R8C7NBKEWEA', // IE
+  'A33AVAJ2PDY3EV', // TR
+] as const
+
+export function getConfiguredMarketplaceIds(): string[] {
+  const env = process.env.NEXUS_AMAZON_MARKETPLACE_IDS
+  if (!env || !env.trim()) return [...DEFAULT_EU_MARKETPLACE_IDS]
+  return env
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
 }
 
 interface SyncSummary {
@@ -150,10 +190,10 @@ export class AmazonOrdersService {
    * route layer (POST /api/amazon/orders/sync `marketplaceIds[]`) so each
    * market gets its own SyncSummary.
    */
-  async syncAllOrders(options: { daysBack?: number; limit?: number; marketplaceId?: string } = {}): Promise<SyncSummary> {
+  async syncAllOrders(options: { daysBack?: number; limit?: number; marketplaceId?: string; marketplaceIds?: string[] } = {}): Promise<SyncSummary> {
     const daysBack = options.daysBack ?? 30
     return this.runSync(
-      { daysBack, limit: options.limit, marketplaceId: options.marketplaceId },
+      { daysBack, limit: options.limit, marketplaceId: options.marketplaceId, marketplaceIds: options.marketplaceIds },
       { mode: 'daysBack', value: String(daysBack) },
     )
   }
@@ -163,9 +203,9 @@ export class AmazonOrdersService {
    * Picks up status transitions on already-known orders (Pending → Shipped,
    * etc.) as well as newly-placed orders.
    */
-  async syncNewOrders(since: Date, options: { limit?: number; marketplaceId?: string } = {}): Promise<SyncSummary> {
+  async syncNewOrders(since: Date, options: { limit?: number; marketplaceId?: string; marketplaceIds?: string[] } = {}): Promise<SyncSummary> {
     return this.runSync(
-      { since, limit: options.limit, marketplaceId: options.marketplaceId },
+      { since, limit: options.limit, marketplaceId: options.marketplaceId, marketplaceIds: options.marketplaceIds },
       { mode: 'since', value: since.toISOString() },
     )
   }
@@ -177,9 +217,9 @@ export class AmazonOrdersService {
    * 30-day chunks. Idempotent: re-running the same window upserts on the
    * (channel, channelOrderId) unique constraint.
    */
-  async syncOrdersInRange(opts: { from: Date; to: Date; limit?: number; marketplaceId?: string }): Promise<SyncSummary> {
+  async syncOrdersInRange(opts: { from: Date; to: Date; limit?: number; marketplaceId?: string; marketplaceIds?: string[] }): Promise<SyncSummary> {
     return this.runSync(
-      { from: opts.from, to: opts.to, limit: opts.limit, marketplaceId: opts.marketplaceId },
+      { from: opts.from, to: opts.to, limit: opts.limit, marketplaceId: opts.marketplaceId, marketplaceIds: opts.marketplaceIds },
       { mode: 'range', value: `${opts.from.toISOString()}..${opts.to.toISOString()}` },
     )
   }
@@ -284,7 +324,7 @@ export class AmazonOrdersService {
   // ── internals ────────────────────────────────────────────────────────
 
   private async runSync(
-    fetchOpts: { since?: Date; daysBack?: number; from?: Date; to?: Date; limit?: number; marketplaceId?: string },
+    fetchOpts: { since?: Date; daysBack?: number; from?: Date; to?: Date; limit?: number; marketplaceId?: string; marketplaceIds?: string[] },
     cursor: { mode: 'since' | 'daysBack' | 'range'; value: string },
   ): Promise<SyncSummary> {
     const startedAt = new Date()
