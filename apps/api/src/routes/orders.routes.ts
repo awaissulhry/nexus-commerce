@@ -928,6 +928,104 @@ export async function ordersRoutes(app: FastifyInstance) {
     }
   })
 
+  // OX.12 — cross-channel buyer profile. Aggregates all orders we have
+  // for a given email across Amazon + eBay + Shopify so the drawer can
+  // show lifetime value, return rate, last contact, channel mix, and
+  // a recent-order list without doing N+1 reads on the client.
+  //
+  // Caveats:
+  //   - Amazon anonymises buyer emails (@marketplace.amazon.*) so the
+  //     cross-channel match only fires when the operator has a real
+  //     email (eBay/Shopify) or a stable Amazon alias for the same
+  //     buyer. We don't try to fuzz across aliases.
+  //   - currentOrderId is excluded from the "other orders" list when
+  //     supplied so the drawer doesn't duplicate the page the operator
+  //     is already viewing.
+  app.get('/api/orders/buyer-profile', async (request, reply) => {
+    try {
+      const q = request.query as { email?: string; excludeOrderId?: string }
+      const email = (q.email ?? '').trim()
+      if (!email) return reply.status(400).send({ error: 'email required' })
+      reply.header('Cache-Control', 'private, max-age=30')
+
+      const baseWhere = { customerEmail: email, deletedAt: null } as any
+
+      const [allOrders, returnsCount, refundedOrders, firstOrder, lastOrder] = await Promise.all([
+        prisma.order.findMany({
+          where: baseWhere,
+          select: {
+            id: true,
+            channel: true,
+            marketplace: true,
+            channelOrderId: true,
+            totalPrice: true,
+            currencyCode: true,
+            status: true,
+            purchaseDate: true,
+            createdAt: true,
+            customerName: true,
+          },
+          orderBy: { purchaseDate: 'desc' },
+          take: 50,
+        }),
+        prisma.return.count({ where: { order: baseWhere } }),
+        prisma.order.count({
+          where: {
+            ...baseWhere,
+            status: { in: ['REFUNDED', 'RETURNED'] },
+          },
+        }),
+        prisma.order.findFirst({
+          where: baseWhere,
+          orderBy: { purchaseDate: 'asc' },
+          select: { purchaseDate: true, createdAt: true },
+        }),
+        prisma.order.findFirst({
+          where: baseWhere,
+          orderBy: { purchaseDate: 'desc' },
+          select: { purchaseDate: true, createdAt: true },
+        }),
+      ])
+
+      const orderCount = allOrders.length
+      const ltv = allOrders.reduce((s, o) => s + Number(o.totalPrice ?? 0), 0)
+      const aov = orderCount > 0 ? ltv / orderCount : 0
+      const refundRate = orderCount > 0 ? refundedOrders / orderCount : 0
+      const channelBreakdown = allOrders.reduce(
+        (acc: Record<string, number>, o) => {
+          acc[o.channel] = (acc[o.channel] ?? 0) + 1
+          return acc
+        },
+        {},
+      )
+
+      const filteredOrders = q.excludeOrderId
+        ? allOrders.filter((o) => o.id !== q.excludeOrderId)
+        : allOrders
+
+      return {
+        email,
+        customerName: allOrders[0]?.customerName ?? null,
+        orderCount,
+        ltv,
+        aov,
+        refundedOrders,
+        refundRate,
+        returnsCount,
+        firstOrderAt: firstOrder?.purchaseDate ?? firstOrder?.createdAt ?? null,
+        lastOrderAt: lastOrder?.purchaseDate ?? lastOrder?.createdAt ?? null,
+        channels: channelBreakdown,
+        orders: filteredOrders.map((o) => ({
+          ...o,
+          totalPrice: Number(o.totalPrice),
+        })),
+      }
+    } catch (error: any) {
+      logger.error('[ORDERS API] buyer-profile failed', { message: error.message })
+      return reply.status(500).send({ error: error.message })
+    }
+  })
+
   // OX.5 — bulk-issue invoices. Loop selected IDs; for each, call
   // assignInvoiceNumber() which is idempotent (no-op if a FiscalInvoice
   // already exists). Returns per-order outcome so the UI can report

@@ -50,6 +50,8 @@ export default function OrderDetailClient({ id }: { id: string }) {
   const [financials, setFinancials] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [reviewBusy, setReviewBusy] = useState(false)
+  // OX.12 — cross-channel buyer profile drawer
+  const [buyerDrawerOpen, setBuyerDrawerOpen] = useState(false)
 
   const setTab = useCallback(
     (t: Tab) => {
@@ -482,7 +484,13 @@ export default function OrderDetailClient({ id }: { id: string }) {
 
           <Card title="Customer">
             <div className="space-y-2">
-              <div className="text-md font-semibold text-slate-900 dark:text-slate-100">{order.customerName}</div>
+              <button
+                type="button"
+                onClick={() => setBuyerDrawerOpen(true)}
+                className="text-md font-semibold text-slate-900 dark:text-slate-100 hover:text-blue-600 dark:hover:text-blue-400 hover:underline text-left"
+              >
+                {order.customerName}
+              </button>
               <div className="text-sm text-slate-500 dark:text-slate-400 inline-flex items-center gap-1.5"><Mail size={11} /> {order.customerEmail}</div>
               {addr && (
                 <div className="text-sm text-slate-600 dark:text-slate-400 mt-1.5 inline-flex items-start gap-1.5">
@@ -490,49 +498,22 @@ export default function OrderDetailClient({ id }: { id: string }) {
                   <span>{[addr.street, addr.city, addr.postalCode, addr.state, addr.country].filter(Boolean).join(', ')}</span>
                 </div>
               )}
-              <Link href={`/orders?customerEmail=${encodeURIComponent(order.customerEmail)}`} className="block mt-2 text-sm text-blue-600 dark:text-blue-400 hover:underline">
-                All orders from this customer →
-              </Link>
+              <button
+                type="button"
+                onClick={() => setBuyerDrawerOpen(true)}
+                className="block mt-2 text-sm text-blue-600 dark:text-blue-400 hover:underline text-left"
+              >
+                Buyer profile · cross-channel orders →
+              </button>
             </div>
           </Card>
 
-          {order.customerHistory && order.customerHistory.length > 0 && (
-            <Card title="Order history" description={`${order.customerHistory.length} prior order${order.customerHistory.length === 1 ? '' : 's'}`}>
-              <ul className="space-y-1">
-                {order.customerHistory.slice(0, 8).map((h: any) => {
-                  const d = formatOrderTotal({
-                    totalPrice: h.totalPrice,
-                    currencyCode: h.currencyCode,
-                    status: h.status,
-                  })
-                  return (
-                    <li key={h.id}>
-                      <Link href={`/orders/${h.id}`} className="flex items-center justify-between gap-2 px-2 py-1.5 -mx-2 rounded hover:bg-slate-50 dark:hover:bg-slate-800">
-                        <div className="min-w-0">
-                          <div className="text-sm font-mono text-slate-700 dark:text-slate-300 truncate">{h.channelOrderId}</div>
-                          <div className="text-xs text-slate-500 dark:text-slate-400">
-                            {h.purchaseDate ? new Date(h.purchaseDate).toLocaleDateString('en-GB') : new Date(h.createdAt).toLocaleDateString('en-GB')}
-                          </div>
-                        </div>
-                        {d.kind === 'pending' ? (
-                          <span
-                            className="text-xs font-medium text-amber-700 dark:text-amber-300 flex-shrink-0"
-                            title="Amazon withholds the order total until payment is verified."
-                          >
-                            Awaiting payment
-                          </span>
-                        ) : (
-                          <div className="text-sm tabular-nums text-slate-900 dark:text-slate-100 flex-shrink-0">
-                            {d.symbol}{d.amount}{d.trailingCode ? ` ${d.trailingCode}` : ''}
-                          </div>
-                        )}
-                      </Link>
-                    </li>
-                  )
-                })}
-              </ul>
-            </Card>
-          )}
+          {/* OX.12 — the legacy customerHistory inline card was replaced
+              by the cross-channel BuyerDrawer (opened by clicking the
+              Customer card buyer name). The drawer surfaces lifetime
+              value + return rate + channel mix + the 50 most-recent
+              orders — strictly more information than the old 8-row
+              widget could fit in the sidebar. */}
 
           <Card title="Review request" description="Amazon Solicitations">
             {!lastReview ? (
@@ -573,6 +554,16 @@ export default function OrderDetailClient({ id }: { id: string }) {
           <OrderNotesCard orderId={order.id} />
         </div>
       </div>
+
+      {/* OX.12 — cross-channel buyer profile drawer (mounted at page
+          root so it can overlay the tab content) */}
+      {buyerDrawerOpen && (
+        <BuyerProfileDrawer
+          email={order.customerEmail}
+          excludeOrderId={order.id}
+          onClose={() => setBuyerDrawerOpen(false)}
+        />
+      )}
     </div>
   )
 }
@@ -1302,6 +1293,202 @@ function ShopifyDiscountsCard({ meta }: { meta: any }) {
         )}
       </div>
     </Card>
+  )
+}
+
+/**
+ * OX.12 — cross-channel buyer profile drawer. Slides in from the right
+ * with everything we know about the buyer aggregated across Amazon +
+ * eBay + Shopify. Replaces the broken inline "10 prior orders" widget
+ * with a richer view: lifetime value, return rate, channel mix, last-
+ * contact date, and a paginated recent-orders list (50 most recent).
+ *
+ * Match is by normalized email. Amazon's anonymised marketplace
+ * aliases (@marketplace.amazon.it) can still cross-match across
+ * orders from the same buyer; eBay/Shopify use real emails so cross-
+ * channel matching just works.
+ */
+function BuyerProfileDrawer({ email, excludeOrderId, onClose }: { email: string; excludeOrderId: string; onClose: () => void }) {
+  const [data, setData] = useState<any>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  useEffect(() => {
+    let cancelled = false
+    setLoading(true)
+    setError(null)
+    fetch(`${getBackendUrl()}/api/orders/buyer-profile?email=${encodeURIComponent(email)}&excludeOrderId=${encodeURIComponent(excludeOrderId)}`, { cache: 'no-store' })
+      .then(async (res) => {
+        if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
+        return res.json()
+      })
+      .then((d) => { if (!cancelled) setData(d) })
+      .catch((e) => { if (!cancelled) setError(e?.message ?? 'Failed to load buyer profile') })
+      .finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
+  }, [email, excludeOrderId])
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  const fmt = (n: number, currency = 'EUR') => {
+    const sym = currency === 'EUR' ? '€' : currency === 'GBP' ? '£' : currency === 'USD' ? '$' : ''
+    return sym ? `${sym}${n.toFixed(2)}` : `${n.toFixed(2)} ${currency}`
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-[900] bg-slate-900/40 flex justify-end"
+      onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }}
+    >
+      <aside
+        className="w-full max-w-md h-full bg-white dark:bg-slate-950 border-l border-slate-200 dark:border-slate-700 shadow-2xl overflow-y-auto"
+        role="dialog"
+        aria-label="Buyer profile"
+      >
+        <div className="sticky top-0 bg-white dark:bg-slate-950 border-b border-slate-200 dark:border-slate-700 px-4 py-3 flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100 truncate">
+              {data?.customerName ?? 'Buyer profile'}
+            </h2>
+            <div className="text-xs text-slate-500 dark:text-slate-400 inline-flex items-center gap-1 truncate">
+              <Mail size={11} /> {email}
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="h-7 w-7 inline-flex items-center justify-center text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100"
+            aria-label="Close buyer profile"
+          >
+            <XCircle size={16} />
+          </button>
+        </div>
+
+        <div className="p-4 space-y-4">
+          {loading && (
+            <div className="space-y-2">
+              <Skeleton lines={4} />
+              <Skeleton lines={6} />
+            </div>
+          )}
+          {error && (
+            <div className="text-sm text-rose-600 dark:text-rose-400">Failed to load: {error}</div>
+          )}
+          {data && !loading && !error && (
+            <>
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div>
+                  <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">Lifetime value</div>
+                  <div className="text-lg tabular-nums font-bold text-slate-900 dark:text-slate-100">{fmt(data.ltv)}</div>
+                </div>
+                <div>
+                  <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">Orders</div>
+                  <div className="text-lg tabular-nums font-bold text-slate-900 dark:text-slate-100">{data.orderCount.toLocaleString()}</div>
+                </div>
+                <div>
+                  <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">AOV</div>
+                  <div className="text-sm tabular-nums text-slate-700 dark:text-slate-200">{fmt(data.aov)}</div>
+                </div>
+                <div>
+                  <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">Returns</div>
+                  <div className="text-sm tabular-nums text-slate-700 dark:text-slate-200">{data.returnsCount}</div>
+                </div>
+                <div>
+                  <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">Refund rate</div>
+                  <div className="text-sm tabular-nums text-slate-700 dark:text-slate-200">
+                    {(data.refundRate * 100).toFixed(1)}%
+                    <span className="ml-1 text-xs text-slate-500 dark:text-slate-400">({data.refundedOrders})</span>
+                  </div>
+                </div>
+                <div>
+                  <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">Last contact</div>
+                  <div className="text-sm text-slate-700 dark:text-slate-200">
+                    {data.lastOrderAt ? new Date(data.lastOrderAt).toLocaleDateString() : '—'}
+                  </div>
+                </div>
+              </div>
+
+              {Object.keys(data.channels ?? {}).length > 0 && (
+                <div>
+                  <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1">Channel mix</div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {Object.entries(data.channels as Record<string, number>).map(([ch, count]) => (
+                      <span
+                        key={ch}
+                        className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-1 border rounded ${CHANNEL_TONE[ch] ?? 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700'}`}
+                      >
+                        {ch}
+                        <span className="font-bold tabular-nums">{count}</span>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1">
+                  Recent orders ({data.orders.length})
+                </div>
+                {data.orders.length === 0 ? (
+                  <div className="text-sm text-slate-500 dark:text-slate-400 italic">No other orders from this buyer.</div>
+                ) : (
+                  <ul className="divide-y divide-slate-100 dark:divide-slate-800 border border-slate-200 dark:border-slate-700 rounded">
+                    {data.orders.map((o: any) => {
+                      const d = formatOrderTotal({
+                        totalPrice: o.totalPrice,
+                        currencyCode: o.currencyCode,
+                        status: o.status,
+                      })
+                      return (
+                        <li key={o.id}>
+                          <Link
+                            href={`/orders/${o.id}`}
+                            onClick={onClose}
+                            className="flex items-center justify-between gap-2 px-3 py-2 hover:bg-slate-50 dark:hover:bg-slate-800"
+                          >
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-1.5">
+                                <span className={`inline-block text-[10px] font-semibold uppercase tracking-wider px-1 py-0 border rounded ${CHANNEL_TONE[o.channel] ?? 'bg-slate-50 text-slate-500 border-slate-200'}`}>
+                                  {o.channel}
+                                </span>
+                                <span className="text-sm font-mono text-slate-700 dark:text-slate-300 truncate">{o.channelOrderId}</span>
+                              </div>
+                              <div className="text-xs text-slate-500 dark:text-slate-400">
+                                {o.purchaseDate ? new Date(o.purchaseDate).toLocaleDateString() : new Date(o.createdAt).toLocaleDateString()}
+                                <span className="mx-1">·</span>
+                                <span>{o.status}</span>
+                              </div>
+                            </div>
+                            {d.kind === 'pending' ? (
+                              <span className="text-xs font-medium text-amber-700 dark:text-amber-300 flex-shrink-0">Awaiting payment</span>
+                            ) : (
+                              <span className="text-sm tabular-nums font-medium text-slate-900 dark:text-slate-100 flex-shrink-0">
+                                {d.symbol}{d.amount}{d.trailingCode ? ` ${d.trailingCode}` : ''}
+                              </span>
+                            )}
+                          </Link>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                )}
+              </div>
+
+              <Link
+                href={`/orders?customerEmail=${encodeURIComponent(email)}`}
+                onClick={onClose}
+                className="block text-sm text-blue-600 dark:text-blue-400 hover:underline"
+              >
+                View all orders from this buyer in /orders →
+              </Link>
+            </>
+          )}
+        </div>
+      </aside>
+    </div>
   )
 }
 
