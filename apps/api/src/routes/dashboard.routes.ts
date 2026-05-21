@@ -269,28 +269,31 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
         previousItems,
       ] = await Promise.all([
         prisma.order.findMany({
-          where: { createdAt: { gte: from, lte: to } },
+          // Bucket by purchaseDate (when the order was placed) not createdAt
+          // (when our DB ingested the row). Backfilled orders have createdAt=
+          // today but purchaseDate spanning the real 24-month history.
+          where: { purchaseDate: { gte: from, lte: to } },
           select: {
             id: true,
             channel: true,
             totalPrice: true,
             currencyCode: true,
             status: true,
-            createdAt: true,
+            purchaseDate: true,
             amazonMetadata: true,
             ebayMetadata: true,
           },
         }),
         prisma.order.findMany({
-          where: { createdAt: { gte: prevFrom, lt: prevTo } },
+          where: { purchaseDate: { gte: prevFrom, lt: prevTo } },
           select: { totalPrice: true, currencyCode: true },
         }),
         prisma.orderItem.findMany({
-          where: { order: { createdAt: { gte: from, lte: to } } },
+          where: { order: { purchaseDate: { gte: from, lte: to } } },
           select: { quantity: true, productId: true, sku: true, price: true },
         }),
         prisma.orderItem.findMany({
-          where: { order: { createdAt: { gte: prevFrom, lt: prevTo } } },
+          where: { order: { purchaseDate: { gte: prevFrom, lt: prevTo } } },
           select: { quantity: true },
         }),
       ])
@@ -483,7 +486,7 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
           `SELECT o."channel"::text AS channel, COALESCE(SUM(oi."quantity"), 0)::bigint AS total
            FROM "OrderItem" oi
            JOIN "Order" o ON o.id = oi."orderId"
-           WHERE o."createdAt" >= $1 AND o."createdAt" <= $2
+           WHERE COALESCE(o."purchaseDate", o."createdAt") >= $1 AND COALESCE(o."purchaseDate", o."createdAt") <= $2
            GROUP BY o."channel"`,
           from,
           to,
@@ -785,7 +788,7 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
                SELECT 1 FROM "OrderItem" oi
                JOIN "Order" o ON o.id = oi."orderId"
                WHERE oi."productId" = p.id
-                 AND o."createdAt" >= $1
+                 AND COALESCE(o."purchaseDate", o."createdAt") >= $1
              )`,
           since90d,
         )
@@ -818,7 +821,7 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
                   COALESCE(SUM(oi."price" * oi."quantity"), 0)::float AS revenue
            FROM "OrderItem" oi
            JOIN "Order" o ON o.id = oi."orderId"
-           WHERE o."createdAt" >= $1 AND o."createdAt" <= $2
+           WHERE COALESCE(o."purchaseDate", o."createdAt") >= $1 AND COALESCE(o."purchaseDate", o."createdAt") <= $2
            GROUP BY oi."sku", oi."productId"
            ORDER BY revenue DESC
            LIMIT 10`,
@@ -875,19 +878,22 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
       let sparkRows: Array<{ d: string; revenue: number; orders: bigint }> = []
       let unitsRows: Array<{ d: string; units: bigint }> = []
       try {
+        // Sparkline buckets by purchaseDate (when the order was placed)
+        // not createdAt (when our DB ingested it). COALESCE keeps legacy
+        // rows without purchaseDate working.
         const groupExpr = sparkBucketIsHour
-          ? `to_char(date_trunc('hour', "createdAt"), 'YYYY-MM-DD"T"HH24')`
-          : `to_char(date_trunc('day',  "createdAt"), 'YYYY-MM-DD')`
+          ? `to_char(date_trunc('hour', COALESCE("purchaseDate", "createdAt")), 'YYYY-MM-DD"T"HH24')`
+          : `to_char(date_trunc('day',  COALESCE("purchaseDate", "createdAt")), 'YYYY-MM-DD')`
         const orderGroupExpr = sparkBucketIsHour
-          ? `to_char(date_trunc('hour', o."createdAt"), 'YYYY-MM-DD"T"HH24')`
-          : `to_char(date_trunc('day',  o."createdAt"), 'YYYY-MM-DD')`
+          ? `to_char(date_trunc('hour', COALESCE(o."purchaseDate", o."createdAt")), 'YYYY-MM-DD"T"HH24')`
+          : `to_char(date_trunc('day',  COALESCE(o."purchaseDate", o."createdAt")), 'YYYY-MM-DD')`
         ;[sparkRows, unitsRows] = (await Promise.all([
           prisma.$queryRawUnsafe(
             `SELECT ${groupExpr} AS d,
                     COALESCE(SUM("totalPrice"), 0)::float AS revenue,
                     COUNT(*)::bigint AS orders
              FROM "Order"
-             WHERE "createdAt" >= $1 AND "createdAt" <= $2
+             WHERE COALESCE("purchaseDate", "createdAt") >= $1 AND COALESCE("purchaseDate", "createdAt") <= $2
                AND COALESCE("currencyCode", 'EUR') = $3
              GROUP BY 1
              ORDER BY 1 ASC`,
@@ -900,7 +906,7 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
                     COALESCE(SUM(oi.quantity), 0)::bigint AS units
              FROM "OrderItem" oi
              JOIN "Order" o ON o.id = oi."orderId"
-             WHERE o."createdAt" >= $1 AND o."createdAt" <= $2
+             WHERE COALESCE(o."purchaseDate", o."createdAt") >= $1 AND COALESCE(o."purchaseDate", o."createdAt") <= $2
                AND COALESCE(o."currencyCode", 'EUR') = $3
              GROUP BY 1
              ORDER BY 1 ASC`,
@@ -929,8 +935,8 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
       // strictly faster at this scale and we already have the right
       // index on (createdAt, channel) implicit in postgres's btree.
       const channelGroupExpr = sparkBucketIsHour
-        ? `to_char(date_trunc('hour', "createdAt"), 'YYYY-MM-DD"T"HH24')`
-        : `to_char(date_trunc('day',  "createdAt"), 'YYYY-MM-DD')`
+        ? `to_char(date_trunc('hour', COALESCE("purchaseDate", "createdAt")), 'YYYY-MM-DD"T"HH24')`
+        : `to_char(date_trunc('day',  COALESCE("purchaseDate", "createdAt")), 'YYYY-MM-DD')`
       let channelSparkRows: Array<{
         d: string
         channel: string
@@ -942,7 +948,7 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
                   channel::text AS channel,
                   COALESCE(SUM("totalPrice"), 0)::float AS revenue
            FROM "Order"
-           WHERE "createdAt" >= $1 AND "createdAt" <= $2
+           WHERE COALESCE("purchaseDate", "createdAt") >= $1 AND COALESCE("purchaseDate", "createdAt") <= $2
              AND COALESCE("currencyCode", 'EUR') = $3
            GROUP BY 1, 2
            ORDER BY 1 ASC`,
@@ -1221,7 +1227,7 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
                 `SELECT COALESCE(SUM(oi.quantity), 0)::bigint AS u
                  FROM "OrderItem" oi
                  JOIN "Order" o ON o.id = oi."orderId"
-                 WHERE o."createdAt" >= $1 AND o."createdAt" <= $2
+                 WHERE COALESCE(o."purchaseDate", o."createdAt") >= $1 AND COALESCE(o."purchaseDate", o."createdAt") <= $2
                    AND COALESCE(o."currencyCode", 'EUR') = $3`,
                 pFrom,
                 pTo,
@@ -1277,12 +1283,14 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
       }> = []
       try {
         heatmapRows = (await prisma.$queryRawUnsafe(
+          // Heatmap of orders by day-of-week × hour-of-day in operator TZ.
+          // Use purchaseDate (when buyer placed) not createdAt (ingest time).
           `SELECT
-             ((EXTRACT(DOW FROM ("createdAt" AT TIME ZONE 'Europe/Rome'))::int + 6) % 7) AS dow,
-             EXTRACT(HOUR FROM ("createdAt" AT TIME ZONE 'Europe/Rome'))::int AS hour,
+             ((EXTRACT(DOW FROM (COALESCE("purchaseDate", "createdAt") AT TIME ZONE 'Europe/Rome'))::int + 6) % 7) AS dow,
+             EXTRACT(HOUR FROM (COALESCE("purchaseDate", "createdAt") AT TIME ZONE 'Europe/Rome'))::int AS hour,
              COALESCE(SUM("totalPrice"), 0)::float AS revenue
            FROM "Order"
-           WHERE "createdAt" >= $1 AND "createdAt" <= $2
+           WHERE COALESCE("purchaseDate", "createdAt") >= $1 AND COALESCE("purchaseDate", "createdAt") <= $2
              AND COALESCE("currencyCode", 'EUR') = $3
            GROUP BY 1, 2`,
           from,
@@ -1405,7 +1413,7 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
            FROM "OrderItem" oi
            JOIN "Order" o ON o.id = oi."orderId"
            LEFT JOIN "Product" p ON p.id = oi."productId"
-           WHERE o."createdAt" >= $1 AND o."createdAt" <= $2
+           WHERE COALESCE(o."purchaseDate", o."createdAt") >= $1 AND COALESCE(o."purchaseDate", o."createdAt") <= $2
              AND COALESCE(o."currencyCode", 'EUR') = $3`,
           from,
           to,
@@ -1438,7 +1446,7 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
           `SELECT COALESCE(SUM(oi."price" * oi."quantity" * oi."vatRate" / 100), 0)::float AS tax
            FROM "OrderItem" oi
            JOIN "Order" o ON o.id = oi."orderId"
-           WHERE o."createdAt" >= $1 AND o."createdAt" <= $2
+           WHERE COALESCE(o."purchaseDate", o."createdAt") >= $1 AND COALESCE(o."purchaseDate", o."createdAt") <= $2
              AND COALESCE(o."currencyCode", 'EUR') = $3
              AND oi."vatRate" IS NOT NULL`,
           from,
