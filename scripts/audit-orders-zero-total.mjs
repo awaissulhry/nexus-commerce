@@ -91,7 +91,23 @@ await run(
 )
 
 await run(
-  '4. PENDING-but-genuinely-old orders (likely abandoned)',
+  '4. Recovery potential — do stale rows have FinancialTransaction rows we could derive totalPrice from?',
+  `
+    SELECT o."channelOrderId",
+           o.status,
+           (SELECT count(*) FROM "FinancialTransaction" ft WHERE ft."orderId" = o.id) AS tx_count,
+           COALESCE((SELECT sum("grossRevenue") FROM "FinancialTransaction" ft WHERE ft."orderId" = o.id), 0) AS gross_sum
+      FROM "Order" o
+     WHERE o."totalPrice" = 0
+       AND o.status NOT IN ('PENDING', 'CANCELLED')
+       AND o."deletedAt" IS NULL
+     ORDER BY o."purchaseDate"
+     LIMIT 20;
+  `,
+)
+
+await run(
+  '5. PENDING-but-genuinely-old orders (likely abandoned)',
   `
     SELECT channel,
            marketplace,
