@@ -144,11 +144,16 @@ export class AmazonOrdersService {
    * Initial backfill — pulls every order with `CreatedAfter >= now - daysBack`.
    * Default 30 days. Bounded by `limit` (default 1000) so an unbounded
    * backfill can't pin the API process.
+   *
+   * M2: pass `marketplaceId` to scope to one Amazon marketplace; defaults
+   * to env AMAZON_MARKETPLACE_ID. Multi-market backfill is handled at the
+   * route layer (POST /api/amazon/orders/sync `marketplaceIds[]`) so each
+   * market gets its own SyncSummary.
    */
-  async syncAllOrders(options: { daysBack?: number; limit?: number } = {}): Promise<SyncSummary> {
+  async syncAllOrders(options: { daysBack?: number; limit?: number; marketplaceId?: string } = {}): Promise<SyncSummary> {
     const daysBack = options.daysBack ?? 30
     return this.runSync(
-      { daysBack, limit: options.limit },
+      { daysBack, limit: options.limit, marketplaceId: options.marketplaceId },
       { mode: 'daysBack', value: String(daysBack) },
     )
   }
@@ -158,9 +163,9 @@ export class AmazonOrdersService {
    * Picks up status transitions on already-known orders (Pending → Shipped,
    * etc.) as well as newly-placed orders.
    */
-  async syncNewOrders(since: Date, options: { limit?: number } = {}): Promise<SyncSummary> {
+  async syncNewOrders(since: Date, options: { limit?: number; marketplaceId?: string } = {}): Promise<SyncSummary> {
     return this.runSync(
-      { since, limit: options.limit },
+      { since, limit: options.limit, marketplaceId: options.marketplaceId },
       { mode: 'since', value: since.toISOString() },
     )
   }
@@ -172,9 +177,9 @@ export class AmazonOrdersService {
    * 30-day chunks. Idempotent: re-running the same window upserts on the
    * (channel, channelOrderId) unique constraint.
    */
-  async syncOrdersInRange(opts: { from: Date; to: Date; limit?: number }): Promise<SyncSummary> {
+  async syncOrdersInRange(opts: { from: Date; to: Date; limit?: number; marketplaceId?: string }): Promise<SyncSummary> {
     return this.runSync(
-      { from: opts.from, to: opts.to, limit: opts.limit },
+      { from: opts.from, to: opts.to, limit: opts.limit, marketplaceId: opts.marketplaceId },
       { mode: 'range', value: `${opts.from.toISOString()}..${opts.to.toISOString()}` },
     )
   }
@@ -268,7 +273,7 @@ export class AmazonOrdersService {
   // ── internals ────────────────────────────────────────────────────────
 
   private async runSync(
-    fetchOpts: { since?: Date; daysBack?: number; from?: Date; to?: Date; limit?: number },
+    fetchOpts: { since?: Date; daysBack?: number; from?: Date; to?: Date; limit?: number; marketplaceId?: string },
     cursor: { mode: 'since' | 'daysBack' | 'range'; value: string },
   ): Promise<SyncSummary> {
     const startedAt = new Date()

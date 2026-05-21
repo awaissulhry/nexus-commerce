@@ -1469,8 +1469,24 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
   // date, falling back to a 30-day backfill if no Amazon orders exist
   // yet. Mirrors the cron's auto-cursor behaviour so manual + cron
   // produce identical results.
+  //
+  // M2: accepts `marketplaceIds?: string[]` (SP-API ids) OR
+  // `marketplaceCodes?: string[]` (2-letter codes: IT/DE/FR/…). When
+  // either is provided, the route fans out one sync per marketplace
+  // sequentially (SP-API rate limits are per-account, parallel risks
+  // burst exhaustion) and returns a per-marketplace results array.
+  // When neither is provided, defaults to all `isParticipating=true`
+  // markets from the Marketplace table.
   fastify.post<{
-    Body?: { since?: string; daysBack?: number; from?: string; to?: string; limit?: number }
+    Body?: {
+      since?: string
+      daysBack?: number
+      from?: string
+      to?: string
+      limit?: number
+      marketplaceIds?: string[]
+      marketplaceCodes?: string[]
+    }
   }>('/orders/sync', async (request, reply) => {
     if (!amazonOrdersService.isConfigured()) {
       return reply.code(503).send({
@@ -1481,56 +1497,123 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     const body = request.body ?? {}
-    try {
-      let summary
-      if (body.from && body.to) {
-        // Historical-backfill mode — explicit window. Used by
-        // scripts/first-backfill.mjs to walk multi-month history in chunks.
-        const fromDate = new Date(body.from)
-        const toDate = new Date(body.to)
-        if (isNaN(fromDate.getTime()) || isNaN(toDate.getTime())) {
-          return reply.code(400).send({
-            success: false,
-            error: `Invalid 'from' or 'to' timestamp`,
-          })
-        }
-        summary = await amazonOrdersService.syncOrdersInRange({
-          from: fromDate,
-          to: toDate,
-          limit: body.limit,
-        })
-      } else if (body.since) {
-        const since = new Date(body.since)
-        if (isNaN(since.getTime())) {
-          return reply.code(400).send({
-            success: false,
-            error: `Invalid 'since' timestamp: ${body.since}`,
-          })
-        }
-        summary = await amazonOrdersService.syncNewOrders(since, { limit: body.limit })
-      } else if (typeof body.daysBack === 'number') {
-        summary = await amazonOrdersService.syncAllOrders({
-          daysBack: body.daysBack,
-          limit: body.limit,
-        })
-      } else {
-        // No explicit cursor — auto-detect.
-        const latest = await amazonOrdersService.getLatestPurchaseDate()
-        summary = latest
-          ? await amazonOrdersService.syncNewOrders(latest, { limit: body.limit })
-          : await amazonOrdersService.syncAllOrders({ limit: body.limit })
-      }
-      // The service catches SP-API fetch errors and stuffs them in
-      // summary.errors with orderId='FETCH'; surface that as success=false
-      // so callers don't silently treat a failed pull as a clean run.
-      const fetchFailed = summary.errors.some((e) => e.orderId === 'FETCH')
-      return { success: !fetchFailed, ...summary }
-    } catch (error) {
-      fastify.log.error({ err: error }, '[amazon/orders/sync] failed')
-      return reply.code(500).send({
-        success: false,
-        error: error instanceof Error ? error.message : String(error),
+
+    // M2 — resolve target marketplaces. Priority: explicit ids > codes
+    // mapped to ids > all isParticipating from the Marketplace table.
+    const { default: prisma } = await import('../db.js')
+    let targets: Array<{ id: string; code: string }> = []
+    if (body.marketplaceIds && body.marketplaceIds.length > 0) {
+      const rows = await prisma.marketplace.findMany({
+        where: {
+          channel: 'AMAZON',
+          marketplaceId: { in: body.marketplaceIds },
+        },
+        select: { code: true, marketplaceId: true },
       })
+      targets = rows
+        .filter((r): r is { code: string; marketplaceId: string } => Boolean(r.marketplaceId))
+        .map((r) => ({ id: r.marketplaceId, code: r.code }))
+    } else if (body.marketplaceCodes && body.marketplaceCodes.length > 0) {
+      const rows = await prisma.marketplace.findMany({
+        where: {
+          channel: 'AMAZON',
+          code: { in: body.marketplaceCodes.map((c) => c.toUpperCase()) },
+        },
+        select: { code: true, marketplaceId: true },
+      })
+      targets = rows
+        .filter((r): r is { code: string; marketplaceId: string } => Boolean(r.marketplaceId))
+        .map((r) => ({ id: r.marketplaceId, code: r.code }))
+    } else {
+      // Default: all participating Amazon markets (set by
+      // POST /api/amazon/participations/refresh in M1).
+      const { getParticipatingAmazonMarketplaceIds } = await import(
+        '../services/amazon-participations.service.js'
+      )
+      targets = await getParticipatingAmazonMarketplaceIds()
+      // Fallback: if no markets are flagged participating (M1 refresh
+      // never run), fall back to env default so this route stays
+      // backwards-compatible with the IT-only callers.
+      if (targets.length === 0) {
+        const envId = process.env.AMAZON_MARKETPLACE_ID
+        if (envId) {
+          targets = [{ id: envId, code: 'IT' }]
+        }
+      }
+    }
+
+    if (targets.length === 0) {
+      return reply.code(400).send({
+        success: false,
+        error: 'No target marketplaces resolved. Either pass marketplaceIds/marketplaceCodes in the body, or POST /api/amazon/participations/refresh first.',
+      })
+    }
+
+    const fromDate = body.from ? new Date(body.from) : null
+    const toDate = body.to ? new Date(body.to) : null
+    if ((body.from && fromDate && isNaN(fromDate.getTime())) || (body.to && toDate && isNaN(toDate.getTime()))) {
+      return reply.code(400).send({ success: false, error: `Invalid 'from' or 'to' timestamp` })
+    }
+    const sinceDate = body.since ? new Date(body.since) : null
+    if (body.since && sinceDate && isNaN(sinceDate.getTime())) {
+      return reply.code(400).send({ success: false, error: `Invalid 'since' timestamp: ${body.since}` })
+    }
+
+    // M2 — sequential fan-out. SP-API throttling is per-account, so
+    // parallel calls burn the burst budget without speeding anything up.
+    type MarketplaceResult = { marketplaceCode: string; marketplaceId: string; summary?: unknown; error?: string }
+    const results: MarketplaceResult[] = []
+    let anyFailure = false
+
+    for (const target of targets) {
+      try {
+        let summary
+        if (fromDate && toDate) {
+          summary = await amazonOrdersService.syncOrdersInRange({
+            from: fromDate, to: toDate, limit: body.limit, marketplaceId: target.id,
+          })
+        } else if (sinceDate) {
+          summary = await amazonOrdersService.syncNewOrders(sinceDate, { limit: body.limit, marketplaceId: target.id })
+        } else if (typeof body.daysBack === 'number') {
+          summary = await amazonOrdersService.syncAllOrders({
+            daysBack: body.daysBack, limit: body.limit, marketplaceId: target.id,
+          })
+        } else {
+          // No explicit cursor — for multi-market default, prefer
+          // explicit window. Auto-detect (latest purchaseDate) is only
+          // meaningful for the single-market path.
+          if (targets.length === 1) {
+            const latest = await amazonOrdersService.getLatestPurchaseDate()
+            summary = latest
+              ? await amazonOrdersService.syncNewOrders(latest, { limit: body.limit, marketplaceId: target.id })
+              : await amazonOrdersService.syncAllOrders({ limit: body.limit, marketplaceId: target.id })
+          } else {
+            // Multi-market without a cursor → default 30-day backfill
+            // per market (mirrors syncAllOrders default).
+            summary = await amazonOrdersService.syncAllOrders({ limit: body.limit, marketplaceId: target.id })
+          }
+        }
+        const fetchFailed = summary.errors.some((e) => e.orderId === 'FETCH')
+        if (fetchFailed) anyFailure = true
+        results.push({ marketplaceCode: target.code, marketplaceId: target.id, summary })
+      } catch (error) {
+        anyFailure = true
+        const errMsg = error instanceof Error ? error.message : String(error)
+        fastify.log.error({ err: error, marketplaceCode: target.code }, '[amazon/orders/sync] per-market failed')
+        results.push({ marketplaceCode: target.code, marketplaceId: target.id, error: errMsg })
+      }
+    }
+
+    // Single-market path returns the legacy shape (flat summary on the
+    // root object) so existing callers don't break. Multi-market always
+    // returns `results[]`.
+    if (targets.length === 1 && results[0]?.summary) {
+      return { success: !anyFailure, ...(results[0].summary as object) }
+    }
+    return {
+      success: !anyFailure,
+      marketplaceCount: targets.length,
+      results,
     }
   })
 
