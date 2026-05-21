@@ -661,84 +661,99 @@ export async function backfillFbaInboundShipments(args: {
     throw new Error('SP-API FBA inbound not configured (set AMAZON_LWA_* + AMAZON_MARKETPLACE_ID)')
   }
 
-  const lastUpdatedAfter = new Date(Date.now() - daysBack * 24 * 60 * 60 * 1000).toISOString()
-
-  let nextToken: string | undefined
+  // Amazon getShipments DATE_RANGE has a hard 30-day max window per
+  // request. Walk daysBack in 30-day chunks. Within each chunk,
+  // paginate via NextToken until exhausted.
+  const CHUNK_DAYS = 30
   let pages = 0
   let shipmentsFetched = 0
   let shipmentsUpserted = 0
   let shipmentsSkipped = 0
   let shipmentsFailed = 0
 
-  // Cap pages defensively. Each page returns up to ~50 shipments.
-  // 200 pages = ~10,000 shipments — more than any single seller's
-  // 24mo backfill.
-  const MAX_PAGES = 200
+  const nowMs = Date.now()
+  let chunkEndMs = nowMs
+  let remaining = daysBack
 
-  while (pages < MAX_PAGES) {
-    let batch: AmazonShipmentRow[] = []
-    try {
-      const result = await getInboundShipmentsBatch(
-        nextToken
-          ? { nextToken }
-          : { lastUpdatedAfter },
-      )
-      batch = result.shipments
-      nextToken = result.nextToken
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err)
-      errors.push(`page ${pages + 1}: ${msg}`)
-      logger.warn('fba-inbound: backfill page failed', { page: pages + 1, error: msg })
-      break
-    }
+  while (remaining > 0) {
+    const span = Math.min(CHUNK_DAYS, remaining)
+    const chunkStartMs = chunkEndMs - span * 24 * 60 * 60 * 1000
+    const lastUpdatedAfter = new Date(chunkStartMs).toISOString()
+    const lastUpdatedBefore = new Date(chunkEndMs).toISOString()
 
-    pages++
-    shipmentsFetched += batch.length
+    let nextToken: string | undefined
+    let chunkPages = 0
+    const CHUNK_MAX_PAGES = 50
 
-    for (const row of batch) {
+    while (chunkPages < CHUNK_MAX_PAGES) {
+      let batch: AmazonShipmentRow[] = []
       try {
-        const mappedStatus = mapAmazonShipmentStatusToLocal(row.ShipmentStatus)
-        const existing = await prisma.fBAShipment.findUnique({
-          where: { shipmentId: row.ShipmentId },
-          select: { id: true },
-        })
-        if (existing) {
-          await prisma.fBAShipment.update({
-            where: { id: existing.id },
-            data: {
-              name: row.ShipmentName ?? null,
-              status: mappedStatus,
-              destinationFC: row.DestinationFulfillmentCenterId ?? 'UNKNOWN',
-            },
-          })
-          shipmentsSkipped++
-        } else {
-          await prisma.fBAShipment.create({
-            data: {
-              shipmentId: row.ShipmentId,
-              name: row.ShipmentName ?? null,
-              status: mappedStatus,
-              destinationFC: row.DestinationFulfillmentCenterId ?? 'UNKNOWN',
-            },
-          })
-          shipmentsUpserted++
-        }
+        const result = await getInboundShipmentsBatch(
+          nextToken
+            ? { nextToken }
+            : { lastUpdatedAfter, lastUpdatedBefore },
+        )
+        batch = result.shipments
+        nextToken = result.nextToken
       } catch (err) {
-        shipmentsFailed++
         const msg = err instanceof Error ? err.message : String(err)
-        errors.push(`${row.ShipmentId}: ${msg.slice(0, 200)}`)
-        logger.warn('fba-inbound: backfill row upsert failed', {
-          shipmentId: row.ShipmentId,
+        errors.push(`[${lastUpdatedAfter.slice(0, 10)}..${lastUpdatedBefore.slice(0, 10)}] page ${chunkPages + 1}: ${msg.slice(0, 200)}`)
+        logger.warn('fba-inbound: backfill chunk page failed', {
+          chunk: `${lastUpdatedAfter}..${lastUpdatedBefore}`,
+          page: chunkPages + 1,
           error: msg,
         })
+        break
       }
+
+      chunkPages++
+      pages++
+      shipmentsFetched += batch.length
+
+      for (const row of batch) {
+        try {
+          const mappedStatus = mapAmazonShipmentStatusToLocal(row.ShipmentStatus)
+          const existing = await prisma.fBAShipment.findUnique({
+            where: { shipmentId: row.ShipmentId },
+            select: { id: true },
+          })
+          if (existing) {
+            await prisma.fBAShipment.update({
+              where: { id: existing.id },
+              data: {
+                name: row.ShipmentName ?? null,
+                status: mappedStatus,
+                destinationFC: row.DestinationFulfillmentCenterId ?? 'UNKNOWN',
+              },
+            })
+            shipmentsSkipped++
+          } else {
+            await prisma.fBAShipment.create({
+              data: {
+                shipmentId: row.ShipmentId,
+                name: row.ShipmentName ?? null,
+                status: mappedStatus,
+                destinationFC: row.DestinationFulfillmentCenterId ?? 'UNKNOWN',
+              },
+            })
+            shipmentsUpserted++
+          }
+        } catch (err) {
+          shipmentsFailed++
+          const msg = err instanceof Error ? err.message : String(err)
+          errors.push(`${row.ShipmentId}: ${msg.slice(0, 200)}`)
+        }
+      }
+
+      if (!nextToken) break
+      // SP-API throttle: getShipments is 2 req/s sustained, burst 30.
+      await new Promise((r) => setTimeout(r, 250))
     }
 
-    if (!nextToken) break
-
-    // SP-API throttle: getShipments is 2 req/s sustained, burst 30.
-    // 250ms pause between pages keeps us well under.
-    await new Promise((r) => setTimeout(r, 250))
+    // Move to next 30-day chunk back in time. Subtract 1ms to avoid
+    // overlap on the chunk boundary.
+    chunkEndMs = chunkStartMs - 1
+    remaining -= span
   }
 
   const durationMs = Date.now() - t0
