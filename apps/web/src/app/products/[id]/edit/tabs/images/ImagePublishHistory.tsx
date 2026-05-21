@@ -18,6 +18,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { AlertCircle, CheckCircle2, Clock, Loader2, RefreshCw, RotateCw } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { cn } from '@/lib/utils'
+import { useTranslations } from '@/lib/i18n/use-translations'
 import { beFetch } from './api'
 
 type Channel = 'AMAZON' | 'EBAY' | 'SHOPIFY'
@@ -92,6 +93,7 @@ function successRate(jobs: UnifiedJob[]): { ok: number; total: number; pct: numb
 }
 
 export default function ImagePublishHistory({ productId, channel }: Props) {
+  const { t } = useTranslations()
   const [jobs, setJobs] = useState<UnifiedJob[]>([])
   const [loading, setLoading] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -163,7 +165,9 @@ export default function ImagePublishHistory({ productId, channel }: Props) {
                 </span>
               </div>
               <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                {rate.total === 0 ? 'No completed jobs yet' : `${rate.ok} ok / ${rate.total} settled`}
+                {rate.total === 0
+                  ? t('products.edit.images.history.noCompletedJobs')
+                  : t('products.edit.images.history.settledRatio', { ok: rate.ok, total: rate.total })}
               </p>
             </div>
           )
@@ -173,7 +177,7 @@ export default function ImagePublishHistory({ productId, channel }: Props) {
       {/* Header row */}
       <div className="flex items-center gap-2">
         <h3 className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-          Recent jobs ({filtered.length})
+          {t('products.edit.images.history.recentJobs', { count: filtered.length })}
         </h3>
         <Button
           size="sm"
@@ -183,17 +187,19 @@ export default function ImagePublishHistory({ productId, channel }: Props) {
           className="ml-auto gap-1 text-[11px] h-6 px-2"
         >
           {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
-          Refresh
+          {t('products.edit.images.history.refresh')}
         </Button>
       </div>
 
       {loadError && <p className="text-[11px] text-red-600 dark:text-red-400">{loadError}</p>}
-      {retryError && <p className="text-[11px] text-red-600 dark:text-red-400">Retry: {retryError}</p>}
+      {retryError && <p className="text-[11px] text-red-600 dark:text-red-400">{t('products.edit.images.history.retry')}: {retryError}</p>}
 
       {/* Jobs list */}
       {filtered.length === 0 && !loading ? (
         <p className="text-xs text-slate-400 dark:text-slate-500 italic py-3">
-          No publish attempts {channel ? `to ${CHANNEL_LABEL[channel]}` : 'yet'}.
+          {channel
+            ? t('products.edit.images.history.noJobsChannel', { channel: CHANNEL_LABEL[channel] })
+            : t('products.edit.images.history.noJobsAll')}
         </p>
       ) : (
         <ul className="space-y-1">
@@ -228,7 +234,7 @@ export default function ImagePublishHistory({ productId, channel }: Props) {
                     {retryingId === j.id
                       ? <Loader2 className="w-3 h-3 animate-spin" />
                       : <RotateCw className="w-3 h-3" />}
-                    Retry
+                    {t('products.edit.images.history.retry')}
                   </Button>
                 )}
               </li>

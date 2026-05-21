@@ -16,6 +16,7 @@ import { Folder, ImageIcon, Loader2, Search, Tag as TagIcon, X } from 'lucide-re
 import { Button } from '@/components/ui/Button'
 import { cn } from '@/lib/utils'
 import { beFetch } from './api'
+import { useTranslations } from '@/lib/i18n/use-translations'
 import type { ProductImage } from './types'
 
 interface LibraryItem {
@@ -58,6 +59,7 @@ interface Props {
 }
 
 export default function DamPickerModal({ productId, onClose, onImported }: Props) {
+  const { t } = useTranslations()
   const [items, setItems] = useState<LibraryItem[]>([])
   const [search, setSearch] = useState('')
   const [folderId, setFolderId] = useState<string>('') // '' = any, 'unfiled' = none, else folder id
@@ -187,7 +189,7 @@ export default function DamPickerModal({ productId, onClose, onImported }: Props
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 dark:border-slate-700 flex-shrink-0 gap-3">
           <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-            Add from DAM library
+            {t('products.edit.images.dam.title')}
           </h2>
           <div className="flex-1 max-w-md relative">
             <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
@@ -195,7 +197,7 @@ export default function DamPickerModal({ productId, onClose, onImported }: Props
               type="search"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search by filename, label, tag…"
+              placeholder={t('products.edit.images.dam.search')}
               className="w-full text-sm border border-slate-200 dark:border-slate-700 rounded pl-7 pr-2 py-1.5 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-400"
             />
           </div>
@@ -219,8 +221,8 @@ export default function DamPickerModal({ productId, onClose, onImported }: Props
               onChange={(e) => setFolderId(e.target.value)}
               className="text-xs border border-slate-200 dark:border-slate-700 rounded px-1.5 py-1 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-400 max-w-[180px]"
             >
-              <option value="">Any folder</option>
-              <option value="unfiled">Unfiled</option>
+              <option value="">{t('products.edit.images.dam.anyFolder')}</option>
+              <option value="unfiled">{t('products.edit.images.dam.unfiled')}</option>
               {folders.map((f) => (
                 <option key={f.id} value={f.id}>
                   {f.name} ({f._count?.assets ?? 0})
@@ -259,7 +261,7 @@ export default function DamPickerModal({ productId, onClose, onImported }: Props
               onChange={(e) => setMissingAltOnly(e.target.checked)}
               className="rounded border-slate-300 dark:border-slate-600 text-blue-500 focus:ring-blue-400"
             />
-            Missing alt
+            {t('products.edit.images.dam.missingAlt')}
           </label>
 
           {hasActiveFilters && (
@@ -268,7 +270,7 @@ export default function DamPickerModal({ productId, onClose, onImported }: Props
               onClick={clearFilters}
               className="ml-auto text-[11px] text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-100 underline"
             >
-              Clear filters
+              {t('products.edit.images.dam.clearFilters')}
             </button>
           )}
         </div>
@@ -289,8 +291,8 @@ export default function DamPickerModal({ productId, onClose, onImported }: Props
           ) : items.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 text-slate-400">
               <ImageIcon className="w-10 h-10 mb-2 text-slate-300" />
-              <p className="text-sm">No assets match your search.</p>
-              <p className="text-xs mt-1">Upload assets in /marketing/content first.</p>
+              <p className="text-sm">{t('products.edit.images.dam.noMatch')}</p>
+              <p className="text-xs mt-1">{t('products.edit.images.dam.uploadFirst')}</p>
             </div>
           ) : (
             <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3">
@@ -330,10 +332,10 @@ export default function DamPickerModal({ productId, onClose, onImported }: Props
         {/* Footer */}
         <div className="flex items-center justify-between px-5 py-3 border-t border-slate-200 dark:border-slate-700 flex-shrink-0">
           <span className="text-xs text-slate-500 dark:text-slate-400">
-            Click an asset to import it as a master image. Cloudinary publicId is reused — no extra storage.
+            {t('products.edit.images.dam.clickToImport')}
           </span>
           <Button size="sm" variant="ghost" onClick={onClose} className="text-xs">
-            Done
+            {t('products.edit.images.dam.done')}
           </Button>
         </div>
       </div>

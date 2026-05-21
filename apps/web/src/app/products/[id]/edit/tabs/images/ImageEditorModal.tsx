@@ -24,15 +24,16 @@ import { Loader2, RotateCcw, RotateCw, FlipHorizontal2, FlipVertical2, X } from 
 import { Button } from '@/components/ui/Button'
 import { cn } from '@/lib/utils'
 import { beFetch } from './api'
+import { useTranslations } from '@/lib/i18n/use-translations'
 import type { ProductImage } from './types'
 
 type AspectMode = 'free' | 'square' | 'ebay' | 'shopify'
 
-const ASPECT: Record<AspectMode, { ratio: number | undefined; label: string; hint: string }> = {
-  free:    { ratio: undefined, label: 'Free',         hint: 'No constraint' },
-  square:  { ratio: 1,         label: '1:1 Amazon',   hint: 'Amazon main + most channels' },
-  ebay:    { ratio: 4 / 3,     label: '4:3 eBay',     hint: 'eBay gallery default' },
-  shopify: { ratio: 4 / 5,     label: '4:5 Shopify',  hint: 'Shopify product page portrait' },
+const ASPECT: Record<AspectMode, { ratio: number | undefined; key: string; hint: string }> = {
+  free:    { ratio: undefined, key: 'products.edit.images.editor.free',         hint: 'No constraint' },
+  square:  { ratio: 1,         key: 'products.edit.images.editor.aspectAmazon', hint: 'Amazon main + most channels' },
+  ebay:    { ratio: 4 / 3,     key: 'products.edit.images.editor.aspectEbay',   hint: 'eBay gallery default' },
+  shopify: { ratio: 4 / 5,     key: 'products.edit.images.editor.aspectShopify', hint: 'Shopify product page portrait' },
 }
 
 interface Props {
@@ -44,6 +45,7 @@ interface Props {
 }
 
 export default function ImageEditorModal({ productId, image, onClose, onSaved }: Props) {
+  const { t } = useTranslations()
   const [aspect, setAspect] = useState<AspectMode>('square')
   const [crop, setCrop] = useState<Crop>()
   const [saving, setSaving] = useState(false)
@@ -138,7 +140,7 @@ export default function ImageEditorModal({ productId, image, onClose, onSaved }:
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200 dark:border-slate-700 flex-shrink-0">
           <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-            Edit image
+            {t('products.edit.images.editor.title')}
             <span className="ml-2 text-xs font-mono text-slate-400">{image.type}</span>
           </h2>
           <button
@@ -154,7 +156,7 @@ export default function ImageEditorModal({ productId, image, onClose, onSaved }:
 
         {/* Aspect-ratio toolbar */}
         <div className="flex items-center gap-2 px-5 py-2.5 border-b border-slate-100 dark:border-slate-800 flex-wrap">
-          <span className="text-[10px] uppercase tracking-wide text-slate-500 dark:text-slate-400 mr-1">Crop</span>
+          <span className="text-[10px] uppercase tracking-wide text-slate-500 dark:text-slate-400 mr-1">{t('products.edit.images.editor.crop')}</span>
           {(Object.keys(ASPECT) as AspectMode[]).map((mode) => (
             <button
               key={mode}
@@ -169,13 +171,13 @@ export default function ImageEditorModal({ productId, image, onClose, onSaved }:
                   : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800',
               )}
             >
-              {ASPECT[mode].label}
+              {t(ASPECT[mode].key)}
             </button>
           ))}
 
           <span className="ml-auto" />
 
-          <span className="text-[10px] uppercase tracking-wide text-slate-500 dark:text-slate-400 mr-1">Quick</span>
+          <span className="text-[10px] uppercase tracking-wide text-slate-500 dark:text-slate-400 mr-1">{t('products.edit.images.editor.quick')}</span>
           <button
             type="button"
             onClick={() => quickRotate(-90)}
@@ -240,17 +242,17 @@ export default function ImageEditorModal({ productId, image, onClose, onSaved }:
               <span className="text-red-600 dark:text-red-400">{error}</span>
             ) : (
               <span>
-                Saving creates a new derivative — the source image isn't modified.
+                {t('products.edit.images.editor.saveCreatesDerivative')}
               </span>
             )}
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
             <Button size="sm" variant="ghost" onClick={onClose} disabled={saving} className="text-xs h-8">
-              Cancel
+              {t('products.edit.images.editor.cancel')}
             </Button>
             <Button size="sm" onClick={saveCrop} disabled={saving || !crop} className="text-xs h-8 gap-1.5">
               {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
-              Save crop
+              {t('products.edit.images.editor.saveCrop')}
             </Button>
           </div>
         </div>

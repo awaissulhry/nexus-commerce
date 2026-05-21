@@ -18,6 +18,7 @@ import { ChevronLeft, ChevronRight, Crop as CropIcon, FolderUp, Library, Loader2
 import { Button } from '@/components/ui/Button'
 import { cn } from '@/lib/utils'
 import { beFetch } from './api'
+import { useTranslations } from '@/lib/i18n/use-translations'
 import type { LightboxState } from './useLightbox'
 import type { ListingImage, ProductImage } from './types'
 
@@ -76,6 +77,7 @@ export default function LightboxModal({
   onClose,
   onNavigate,
 }: Props) {
+  const { t } = useTranslations()
   const { image, siblings } = state
 
   // IR.3.5 — inline edit state for alt + type on master images.
@@ -245,7 +247,7 @@ export default function LightboxModal({
       {/* Backdrop */}
       <button
         type="button"
-        aria-label="Close lightbox"
+        aria-label={t('products.edit.images.lightbox.close')}
         onClick={onClose}
         className="absolute inset-0 bg-black/85 backdrop-blur-sm"
       />
@@ -257,7 +259,7 @@ export default function LightboxModal({
           <button
             type="button"
             onClick={() => onNavigate('prev')}
-            aria-label="Previous image"
+            aria-label={t('products.edit.images.lightbox.prev')}
             className="absolute left-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors"
           >
             <ChevronLeft className="w-5 h-5" />
@@ -279,7 +281,7 @@ export default function LightboxModal({
           <button
             type="button"
             onClick={() => onNavigate('next')}
-            aria-label="Next image"
+            aria-label={t('products.edit.images.lightbox.next')}
             className="absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors"
           >
             <ChevronRight className="w-5 h-5" />
@@ -321,7 +323,7 @@ export default function LightboxModal({
           <button
             type="button"
             onClick={onClose}
-            aria-label="Close lightbox"
+            aria-label={t('products.edit.images.lightbox.close')}
             className="p-1 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
           >
             <X className="w-4 h-4" />
@@ -332,7 +334,7 @@ export default function LightboxModal({
         <div className="px-5 py-4 space-y-3 text-sm">
           {metaLines.length > 0 && (
             <div>
-              <h4 className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-1">Asset</h4>
+              <h4 className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-1">{t('products.edit.images.lightbox.assetSection')}</h4>
               <p className="font-mono text-xs text-slate-700 dark:text-slate-200">{metaLines.join(' · ')}</p>
             </div>
           )}
@@ -340,7 +342,7 @@ export default function LightboxModal({
           {image.kind === 'master' && !editing && (
             <div className="space-y-2">
               <div className="flex items-center justify-between gap-2">
-                <h4 className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Master attributes</h4>
+                <h4 className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{t('products.edit.images.lightbox.masterAttributes')}</h4>
                 <div className="flex items-center gap-2">
                   {onEditMaster && (
                     <button
@@ -352,7 +354,7 @@ export default function LightboxModal({
                       className="flex items-center gap-1 text-[11px] text-blue-600 dark:text-blue-400 hover:underline"
                       title="Crop, rotate, or flip — saves as a new derivative"
                     >
-                      <CropIcon className="w-3 h-3" /> Crop &amp; rotate
+                      <CropIcon className="w-3 h-3" /> {t('products.edit.images.lightbox.cropAndRotate')}
                     </button>
                   )}
                   <button
@@ -360,15 +362,15 @@ export default function LightboxModal({
                     onClick={() => setEditing(true)}
                     className="flex items-center gap-1 text-[11px] text-blue-600 dark:text-blue-400 hover:underline"
                   >
-                    <Pencil className="w-3 h-3" /> Edit
+                    <Pencil className="w-3 h-3" /> {t('products.edit.images.lightbox.edit')}
                   </button>
                 </div>
               </div>
               <dl className="text-xs grid grid-cols-[60px_1fr] gap-y-0.5 text-slate-700 dark:text-slate-200">
-                <dt className="text-slate-500 dark:text-slate-400">Type</dt>
+                <dt className="text-slate-500 dark:text-slate-400">{t('products.edit.images.lightbox.type')}</dt>
                 <dd>{image.type ?? '—'}</dd>
-                <dt className="text-slate-500 dark:text-slate-400">Alt</dt>
-                <dd className="break-words">{image.alt || <span className="text-slate-400 italic">not set</span>}</dd>
+                <dt className="text-slate-500 dark:text-slate-400">{t('products.edit.images.lightbox.alt')}</dt>
+                <dd className="break-words">{image.alt || <span className="text-slate-400 italic">{t('products.edit.images.lightbox.notSet')}</span>}</dd>
               </dl>
             </div>
           )}
@@ -424,7 +426,7 @@ export default function LightboxModal({
             return (
               <div className="space-y-2">
                 <div className="flex items-center justify-between gap-2">
-                  <h4 className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">AI quality check</h4>
+                  <h4 className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{t('products.edit.images.lightbox.aiCheck')}</h4>
                   <button
                     type="button"
                     onClick={analyze}
@@ -434,7 +436,7 @@ export default function LightboxModal({
                     {analyzing
                       ? <Loader2 className="w-3 h-3 animate-spin" />
                       : <Sparkles className="w-3 h-3" />}
-                    {analyzed ? 'Re-analyze' : 'Analyze'}
+                    {analyzed ? t('products.edit.images.lightbox.reanalyze') : t('products.edit.images.lightbox.analyze')}
                   </button>
                 </div>
 
@@ -444,23 +446,23 @@ export default function LightboxModal({
 
                 {!analyzed && !analyzing && !analyzeError && (
                   <p className="text-[11px] text-slate-400 dark:text-slate-500 italic">
-                    Click Analyze to run Gemini Vision and grade this image.
+                    {t('products.edit.images.lightbox.aiPrompt')}
                   </p>
                 )}
 
                 {failed && (
                   <p className="text-[11px] text-amber-600 dark:text-amber-400">
-                    Last run failed: {String(currentMaster?.aiNotes?.error ?? 'unknown error')}
+                    {t('products.edit.images.lightbox.aiLastFailed')} {String(currentMaster?.aiNotes?.error ?? 'unknown error')}
                   </p>
                 )}
 
                 {analyzed && !failed && ai && (
                   <dl className="text-xs grid grid-cols-[100px_1fr] gap-y-0.5 text-slate-700 dark:text-slate-200">
-                    <dt className="text-slate-500 dark:text-slate-400">White bg</dt>
+                    <dt className="text-slate-500 dark:text-slate-400">{t('products.edit.images.lightbox.aiWhiteBg')}</dt>
                     <dd className={cn(ai.aiHasWhiteBackground ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400')}>
-                      {ai.aiHasWhiteBackground ? '✓ yes' : '✗ no'}
+                      {ai.aiHasWhiteBackground ? t('products.edit.images.lightbox.aiYes') : t('products.edit.images.lightbox.aiNo')}
                     </dd>
-                    <dt className="text-slate-500 dark:text-slate-400">Frame fill</dt>
+                    <dt className="text-slate-500 dark:text-slate-400">{t('products.edit.images.lightbox.aiFrameFill')}</dt>
                     <dd className={cn(
                       (ai.aiFrameFillPct ?? 0) >= 85
                         ? 'text-emerald-600 dark:text-emerald-400'
@@ -468,13 +470,13 @@ export default function LightboxModal({
                           ? 'text-amber-600 dark:text-amber-400'
                           : 'text-red-600 dark:text-red-400',
                     )}>
-                      {ai.aiFrameFillPct ?? '—'}% {(ai.aiFrameFillPct ?? 0) < 85 && '(Amazon wants ≥ 85%)'}
+                      {ai.aiFrameFillPct ?? '—'}% {(ai.aiFrameFillPct ?? 0) < 85 && t('products.edit.images.lightbox.aiAmazonHint')}
                     </dd>
-                    <dt className="text-slate-500 dark:text-slate-400">Text overlay</dt>
+                    <dt className="text-slate-500 dark:text-slate-400">{t('products.edit.images.lightbox.aiTextOverlay')}</dt>
                     <dd className={cn(ai.aiHasTextOverlay ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400')}>
-                      {ai.aiHasTextOverlay ? '✗ detected' : '✓ none'}
+                      {ai.aiHasTextOverlay ? t('products.edit.images.lightbox.aiTextDetected') : t('products.edit.images.lightbox.aiTextNone')}
                     </dd>
-                    <dt className="text-slate-500 dark:text-slate-400">Centered</dt>
+                    <dt className="text-slate-500 dark:text-slate-400">{t('products.edit.images.lightbox.aiCentered')}</dt>
                     <dd className={cn(
                       (ai.aiOffCenterScore ?? 0) <= 0.15
                         ? 'text-emerald-600 dark:text-emerald-400'
@@ -486,9 +488,15 @@ export default function LightboxModal({
                         ? `${Math.round((1 - ai.aiOffCenterScore) * 100)}%`
                         : '—'}
                     </dd>
+                    {/* IR.10.4 — Italian-text overlay warning when re-using on non-IT marketplaces */}
+                    {ai.aiHasTextOverlay && (
+                      <dd className="col-span-2 mt-1 text-[11px] text-amber-700 dark:text-amber-300 italic">
+                        ⚠ {t('products.edit.images.lightbox.aiLocaleWarning')}
+                      </dd>
+                    )}
                     {ai.aiNotes?.rationale && (
                       <>
-                        <dt className="text-slate-500 dark:text-slate-400 col-span-2 mt-1">Rationale</dt>
+                        <dt className="text-slate-500 dark:text-slate-400 col-span-2 mt-1">{t('products.edit.images.lightbox.aiRationale')}</dt>
                         <dd className="text-[11px] text-slate-500 dark:text-slate-400 italic col-span-2">{ai.aiNotes.rationale}</dd>
                       </>
                     )}
@@ -503,8 +511,8 @@ export default function LightboxModal({
           {image.kind === 'master' && (
             <div className="space-y-2">
               <div className="flex items-center gap-2">
-                <h4 className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Auto-enhance</h4>
-                <span className="text-[10px] text-slate-400">creates a new derivative</span>
+                <h4 className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{t('products.edit.images.lightbox.autoEnhance')}</h4>
+                <span className="text-[10px] text-slate-400">{t('products.edit.images.lightbox.autoEnhanceHint')}</span>
               </div>
               {enhanceError && (
                 <p className="text-[11px] text-red-600 dark:text-red-400">{enhanceError}</p>
@@ -519,7 +527,7 @@ export default function LightboxModal({
                   {enhancing === 'AMAZON_MAIN'
                     ? <Loader2 className="w-3 h-3 animate-spin" />
                     : <Wand2 className="w-3 h-3" />}
-                  Amazon MAIN
+                  {t('products.edit.images.lightbox.autoEnhanceAmazon')}
                 </button>
                 <button
                   type="button"
@@ -530,7 +538,7 @@ export default function LightboxModal({
                   {enhancing === 'EBAY_MAIN'
                     ? <Loader2 className="w-3 h-3 animate-spin" />
                     : <Wand2 className="w-3 h-3" />}
-                  eBay main
+                  {t('products.edit.images.lightbox.autoEnhanceEbay')}
                 </button>
                 <button
                   type="button"
@@ -541,12 +549,11 @@ export default function LightboxModal({
                   {enhancing === 'SHOPIFY_PORTRAIT'
                     ? <Loader2 className="w-3 h-3 animate-spin" />
                     : <Wand2 className="w-3 h-3" />}
-                  Shopify 4:5
+                  {t('products.edit.images.lightbox.autoEnhanceShopify')}
                 </button>
               </div>
               <p className="text-[10px] text-slate-400 dark:text-slate-500">
-                Amazon: bg-removal + white pad to 1500×1500.
-                eBay / Shopify: white pad to the channel's preferred aspect.
+                {t('products.edit.images.lightbox.autoEnhanceDesc')}
               </p>
             </div>
           )}
@@ -556,7 +563,7 @@ export default function LightboxModal({
             const linkedAssetId = damLinks[image.id]
             return (
               <div className="space-y-2">
-                <h4 className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">DAM library</h4>
+                <h4 className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{t('products.edit.images.lightbox.damSection')}</h4>
                 {damError && (
                   <p className="text-[11px] text-red-600 dark:text-red-400">{damError}</p>
                 )}
@@ -564,7 +571,7 @@ export default function LightboxModal({
                   <div className="flex items-center justify-between text-xs">
                     <span className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400">
                       <Library className="w-3 h-3" />
-                      Linked
+                      {t('products.edit.images.lightbox.damLinked')}
                     </span>
                     <a
                       href={`/marketing/content?asset=${encodeURIComponent(linkedAssetId)}`}
@@ -572,7 +579,7 @@ export default function LightboxModal({
                       rel="noreferrer"
                       className="text-[11px] text-blue-600 dark:text-blue-400 hover:underline"
                     >
-                      Open in library ↗
+                      {t('products.edit.images.lightbox.damOpenInLibrary')}
                     </a>
                   </div>
                 ) : (
@@ -585,11 +592,11 @@ export default function LightboxModal({
                     {pushingDam
                       ? <Loader2 className="w-3 h-3 animate-spin" />
                       : <FolderUp className="w-3 h-3" />}
-                    Push to DAM library
+                    {t('products.edit.images.lightbox.damPush')}
                   </button>
                 )}
                 <p className="text-[10px] text-slate-400 dark:text-slate-500">
-                  Pushing shares this asset with /marketing/content via Cloudinary publicId — no re-upload.
+                  {t('products.edit.images.lightbox.damHint')}
                 </p>
               </div>
             )
@@ -713,7 +720,9 @@ export default function LightboxModal({
 
         {/* Footer keyboard hint */}
         <div className="mt-auto px-5 py-3 border-t border-slate-100 dark:border-slate-800 text-[10px] text-slate-400 dark:text-slate-500 font-mono">
-          Esc to close{hasSiblings ? ' · ← → to navigate' : ''}
+          {hasSiblings
+            ? t('products.edit.images.lightbox.escNavHint')
+            : t('products.edit.images.lightbox.escHint')}
         </div>
       </aside>
     </div>
