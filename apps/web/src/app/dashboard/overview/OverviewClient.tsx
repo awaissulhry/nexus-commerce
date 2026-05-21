@@ -28,6 +28,7 @@ import GoalsPanel from './_components/GoalsPanel'
 import HeatmapPanel from './_components/HeatmapPanel'
 import PredictivePanel from './_components/PredictivePanel'
 import OverviewSkeleton from './_components/OverviewSkeleton'
+import { GlobalSnapshot } from '@/components/dashboard/GlobalSnapshot'
 import CustomizeSheet, {
   TOGGLEABLE_WIDGETS,
   resolveWidgetOrder,
@@ -296,6 +297,12 @@ export default function OverviewClient() {
       />
 
       <div className="space-y-6">
+        {/* GS.6 — Global Snapshot strip at the top of the dashboard
+            so operators see Sales / Open Orders / Buyer Messages
+            before the deeper Command Center grid. Same component
+            mounted on /orders top (GS.2) — one source of truth. */}
+        <GlobalSnapshot />
+
         {/* DO.35 — first paint shows the section grid as
             shimmer-skeletons instead of a single spinner. The
             layout shape stays stable from the first byte; when

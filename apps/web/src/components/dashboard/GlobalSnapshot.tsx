@@ -284,31 +284,155 @@ function Sparkline({ data }: { data: Array<{ date: string; valueCents: number }>
   )
 }
 
-// GS.3 placeholder — full panel with period dropdown + Table/Graph
-// toggle + per-marketplace flagged table lands next phase.
+// GS.3 — Sales panel. Period dropdown, Table/Graph toggle, per-
+// marketplace flagged table grouped by region (Europe / Middle East /
+// etc.) with country names + sales + units columns. Re-fetches with
+// the panel's own period state so the tile keeps Today's number
+// stable while the panel can show 7d/30d/90d.
+const MARKETPLACE_FLAGS_GS: Record<string, string> = {
+  IT: '🇮🇹', DE: '🇩🇪', FR: '🇫🇷', ES: '🇪🇸', UK: '🇬🇧', GB: '🇬🇧',
+  NL: '🇳🇱', PL: '🇵🇱', SE: '🇸🇪', IE: '🇮🇪', BE: '🇧🇪', SA: '🇸🇦',
+  AE: '🇦🇪', TR: '🇹🇷', US: '🇺🇸', CA: '🇨🇦', JP: '🇯🇵', MX: '🇲🇽',
+}
+const MARKETPLACE_NAMES: Record<string, string> = {
+  IT: 'Italy', DE: 'Germany', FR: 'France', ES: 'Spain', UK: 'United Kingdom',
+  GB: 'United Kingdom', NL: 'Netherlands', PL: 'Poland', SE: 'Sweden',
+  IE: 'Ireland', BE: 'Belgium', TR: 'Turkey', AE: 'United Arab Emirates',
+  SA: 'Saudi Arabia', US: 'United States', CA: 'Canada', JP: 'Japan', MX: 'Mexico',
+}
+
+type PeriodKey = 'today' | 'yesterday' | '7d' | '30d' | '90d'
+const PERIOD_LABELS: Record<PeriodKey, string> = {
+  today: 'Today so far',
+  yesterday: 'Yesterday',
+  '7d': 'Last 7 days',
+  '30d': 'Last 30 days',
+  '90d': 'Last 90 days',
+}
+
 function SalesPanelPlaceholder({ data }: { data: Snapshot }) {
-  if (data.sales.byMarketplace.length === 0) {
-    return <div className="text-sm text-slate-500 dark:text-slate-400">No sales in this period.</div>
-  }
+  const [period, setPeriod] = useState<PeriodKey>('today')
+  const [view, setView] = useState<'table' | 'graph'>('table')
+  const [panelData, setPanelData] = useState<Snapshot>(data)
+  const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    if (period === 'today') {
+      setPanelData(data)
+      return
+    }
+    let cancelled = false
+    setLoading(true)
+    fetch(`${getBackendUrl()}/api/dashboard/global-snapshot?period=${period}`, { cache: 'no-store' })
+      .then(async (r) => {
+        if (!r.ok) throw new Error(`${r.status}`)
+        return r.json()
+      })
+      .then((d) => { if (!cancelled) setPanelData(d) })
+      .catch(() => { if (!cancelled) setPanelData(data) })
+      .finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
+  }, [period, data])
+
+  // Group rows by region for the table layout, with a synthetic
+  // region row containing the regional rollup that's collapsible.
+  const grouped = panelData.sales.byMarketplace.reduce<Record<string, SalesRow[]>>((acc, r) => {
+    ;(acc[r.region] = acc[r.region] ?? []).push(r)
+    return acc
+  }, {})
+  const regions = Object.keys(grouped)
+
   return (
-    <div className="space-y-2">
-      <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold">
-        Sales by marketplace ({data.period.key})
-      </div>
-      <table className="w-full text-sm">
-        <thead className="text-xs uppercase text-slate-500 dark:text-slate-400">
-          <tr><th className="text-left py-1">Marketplace</th><th className="text-right py-1">Revenue</th><th className="text-right py-1">Units</th></tr>
-        </thead>
-        <tbody>
-          {data.sales.byMarketplace.map((r) => (
-            <tr key={r.marketplace} className="border-t border-slate-200 dark:border-slate-700">
-              <td className="py-1 text-slate-700 dark:text-slate-300 font-mono">{r.marketplace}</td>
-              <td className="py-1 text-right tabular-nums text-slate-900 dark:text-slate-100">{formatEur(r.valueCents)}</td>
-              <td className="py-1 text-right tabular-nums text-slate-700 dark:text-slate-300">{r.units}</td>
-            </tr>
+    <div className="space-y-3">
+      <div className="flex items-center gap-2 flex-wrap">
+        <label className="text-xs uppercase tracking-wider text-slate-500 font-semibold">Period</label>
+        <select
+          value={period}
+          onChange={(e) => setPeriod(e.target.value as PeriodKey)}
+          className="h-7 px-2 text-sm border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900"
+        >
+          {(['today', 'yesterday', '7d', '30d', '90d'] as PeriodKey[]).map((p) => (
+            <option key={p} value={p}>{PERIOD_LABELS[p]}</option>
           ))}
-        </tbody>
-      </table>
+        </select>
+        <div className="inline-flex items-center bg-slate-100 dark:bg-slate-800 rounded p-0.5 ml-2">
+          {(['table', 'graph'] as const).map((v) => (
+            <button
+              key={v}
+              type="button"
+              onClick={() => setView(v)}
+              className={`h-6 px-2.5 text-xs font-medium rounded ${view === v ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-sm' : 'text-slate-600 dark:text-slate-400'}`}
+            >
+              {v.charAt(0).toUpperCase() + v.slice(1)}
+            </button>
+          ))}
+        </div>
+        {loading && <span className="text-xs text-slate-400">Loading…</span>}
+        <div className="ml-auto text-xs tabular-nums text-slate-500 dark:text-slate-400">
+          Total: <span className="text-slate-900 dark:text-slate-100 font-semibold">{formatEur(panelData.sales.total.valueCents)}</span>
+          {' · '}
+          <span className="text-slate-700 dark:text-slate-300">{panelData.sales.total.units} units</span>
+        </div>
+      </div>
+
+      {view === 'table' ? (
+        panelData.sales.byMarketplace.length === 0 ? (
+          <div className="text-sm text-slate-500 dark:text-slate-400 italic py-4 text-center">
+            No sales in this period.
+          </div>
+        ) : (
+          <div className="border border-slate-200 dark:border-slate-700 rounded overflow-hidden">
+            <table className="w-full text-sm">
+              <thead className="bg-slate-900 text-white dark:bg-slate-700">
+                <tr>
+                  <th className="text-left px-3 py-2 text-xs uppercase tracking-wider font-semibold">Stores</th>
+                  <th className="text-left px-3 py-2 text-xs uppercase tracking-wider font-semibold">Ordered product sales</th>
+                  <th className="text-left px-3 py-2 text-xs uppercase tracking-wider font-semibold">Units</th>
+                </tr>
+              </thead>
+              <tbody>
+                {regions.map((region) => {
+                  const rows = grouped[region]
+                  const regionTotal = rows.reduce((s, r) => s + r.valueCents, 0)
+                  const regionUnits = rows.reduce((s, r) => s + r.units, 0)
+                  return (
+                    <RegionGroup key={region} region={region} rowCount={rows.length}>
+                      <tr className="bg-slate-50 dark:bg-slate-900 font-semibold">
+                        <td className="px-3 py-1.5 text-slate-900 dark:text-slate-100">▾ {region}</td>
+                        <td className="px-3 py-1.5 text-slate-900 dark:text-slate-100 tabular-nums">{formatEur(regionTotal)}</td>
+                        <td className="px-3 py-1.5 text-slate-900 dark:text-slate-100 tabular-nums">{regionUnits}</td>
+                      </tr>
+                      {rows.map((r) => (
+                        <tr key={r.marketplace} className="border-t border-slate-100 dark:border-slate-800">
+                          <td className="px-3 py-1.5 text-slate-700 dark:text-slate-300">
+                            <span className="inline-flex items-center gap-2">
+                              <span aria-hidden="true">{MARKETPLACE_FLAGS_GS[r.marketplace] ?? '🏳️'}</span>
+                              <span>{MARKETPLACE_NAMES[r.marketplace] ?? r.marketplace}</span>
+                            </span>
+                          </td>
+                          <td className="px-3 py-1.5 text-blue-600 dark:text-blue-400 tabular-nums">
+                            <Link href={`/orders?marketplace=${encodeURIComponent(r.marketplace)}`} className="hover:underline">
+                              {formatEur(r.valueCents)}
+                            </Link>
+                          </td>
+                          <td className="px-3 py-1.5 text-blue-600 dark:text-blue-400 tabular-nums">
+                            <Link href={`/orders?marketplace=${encodeURIComponent(r.marketplace)}`} className="hover:underline">
+                              {r.units}
+                            </Link>
+                          </td>
+                        </tr>
+                      ))}
+                    </RegionGroup>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        )
+      ) : (
+        <SalesGraph data={panelData.sales.sparkline} />
+      )}
+
       <Link href="/insights/sales" className="inline-flex items-center text-sm text-blue-600 dark:text-blue-400 hover:underline">
         Go to Sales Dashboard →
       </Link>
@@ -316,41 +440,183 @@ function SalesPanelPlaceholder({ data }: { data: Snapshot }) {
   )
 }
 
-function OpenOrdersPanelPlaceholder({ data }: { data: Snapshot }) {
+function RegionGroup({ children }: { region: string; rowCount: number; children: React.ReactNode }) {
+  // Reserved for future collapse state; currently always-expanded so
+  // operators see every country immediately.
+  return <>{children}</>
+}
+
+function SalesGraph({ data }: { data: Array<{ date: string; valueCents: number }> }) {
+  const W = 600
+  const H = 200
+  const PAD = 30
+  const max = Math.max(1, ...data.map((d) => d.valueCents))
+  const xStep = (W - 2 * PAD) / Math.max(1, data.length - 1)
+  const yScale = (v: number) => H - PAD - (v / max) * (H - 2 * PAD)
+  const path = data.map((d, i) => `${i === 0 ? 'M' : 'L'} ${PAD + i * xStep} ${yScale(d.valueCents)}`).join(' ')
+  const fmtAxis = (cents: number) => {
+    if (cents >= 100000) return `€${Math.round(cents / 100000)}K`
+    if (cents >= 10000) return `€${Math.round(cents / 10000)}K`
+    return `€${(cents / 100).toFixed(0)}`
+  }
   return (
-    <div className="space-y-2">
-      <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold">Open orders breakdown</div>
-      <table className="w-full text-sm">
-        <thead className="text-xs uppercase text-slate-500 dark:text-slate-400">
-          <tr>
-            <th className="text-left py-1">Marketplace</th>
-            <th className="text-right py-1">FBM unshipped</th>
-            <th className="text-right py-1">FBM pending</th>
-            <th className="text-right py-1">FBA pending</th>
-          </tr>
-        </thead>
-        <tbody>
-          {data.openOrders.byMarketplace.map((r) => (
-            <tr key={r.marketplace} className="border-t border-slate-200 dark:border-slate-700">
-              <td className="py-1 text-slate-700 dark:text-slate-300 font-mono">{r.marketplace}</td>
-              <td className="py-1 text-right tabular-nums text-slate-900 dark:text-slate-100">{r.fbmUnshipped}</td>
-              <td className="py-1 text-right tabular-nums text-slate-900 dark:text-slate-100">{r.fbmPending}</td>
-              <td className="py-1 text-right tabular-nums text-slate-900 dark:text-slate-100">{r.fbaPending}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      <Link href="/orders" className="inline-flex items-center text-sm text-blue-600 dark:text-blue-400 hover:underline">
+    <div className="border border-slate-200 dark:border-slate-700 rounded p-3">
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto" aria-label="Sales sparkline">
+        <line x1={PAD} y1={H - PAD} x2={W - PAD} y2={H - PAD} className="stroke-slate-300 dark:stroke-slate-600" strokeWidth="1" />
+        <line x1={PAD} y1={PAD} x2={PAD} y2={H - PAD} className="stroke-slate-300 dark:stroke-slate-600" strokeWidth="1" />
+        <text x={PAD - 6} y={PAD + 4} textAnchor="end" className="fill-slate-500 dark:fill-slate-400 text-[10px]">{fmtAxis(max)}</text>
+        <text x={PAD - 6} y={H - PAD + 4} textAnchor="end" className="fill-slate-500 dark:fill-slate-400 text-[10px]">€0</text>
+        <path d={path} fill="none" strokeWidth="2" className="stroke-slate-900 dark:stroke-slate-100" />
+        {data.map((d, i) => (
+          <g key={d.date}>
+            <circle cx={PAD + i * xStep} cy={yScale(d.valueCents)} r="3" className="fill-white stroke-slate-900 dark:fill-slate-900 dark:stroke-slate-100" strokeWidth="1.5" />
+            <text x={PAD + i * xStep} y={H - PAD + 14} textAnchor="middle" className="fill-slate-500 dark:fill-slate-400 text-[10px]">{d.date.slice(8)}</text>
+          </g>
+        ))}
+      </svg>
+    </div>
+  )
+}
+
+// GS.4 — Open orders breakdown table. Per-marketplace rows grouped
+// by region (Europe / Middle East / etc.) with country flags + names.
+// Every cell is a drill-through link to /orders with marketplace +
+// fulfillment + status filters pre-applied.
+function OpenOrdersPanelPlaceholder({ data }: { data: Snapshot }) {
+  const grouped = data.openOrders.byMarketplace.reduce<Record<string, OpenOrdersRow[]>>((acc, r) => {
+    ;(acc[r.region] = acc[r.region] ?? []).push(r)
+    return acc
+  }, {})
+  const regions = Object.keys(grouped)
+
+  const cellLink = (
+    marketplace: string,
+    fulfillment: 'FBM' | 'FBA',
+    statuses: string,
+    value: number,
+  ) => {
+    if (value === 0) {
+      return <span className="text-slate-400 dark:text-slate-500 tabular-nums">0</span>
+    }
+    const params = new URLSearchParams({
+      marketplace,
+      fulfillment,
+      status: statuses,
+    })
+    return (
+      <Link
+        href={`/orders?${params.toString()}`}
+        className="text-blue-600 dark:text-blue-400 hover:underline tabular-nums font-semibold"
+      >
+        {value}
+      </Link>
+    )
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold">
+        Open orders breakdown
+      </div>
+      {data.openOrders.byMarketplace.length === 0 ? (
+        <div className="text-sm text-slate-500 dark:text-slate-400 italic py-4 text-center">
+          No open orders.
+        </div>
+      ) : (
+        <div className="border border-slate-200 dark:border-slate-700 rounded overflow-hidden">
+          <table className="w-full text-sm">
+            <thead className="bg-slate-900 text-white dark:bg-slate-700">
+              <tr>
+                <th className="text-left px-3 py-2 text-xs uppercase tracking-wider font-semibold">Stores</th>
+                <th className="text-left px-3 py-2 text-xs uppercase tracking-wider font-semibold">FBM unshipped</th>
+                <th className="text-left px-3 py-2 text-xs uppercase tracking-wider font-semibold">FBM pending</th>
+                <th className="text-left px-3 py-2 text-xs uppercase tracking-wider font-semibold">FBA pending</th>
+              </tr>
+            </thead>
+            <tbody>
+              {regions.map((region) => {
+                const rows = grouped[region]
+                const sumFbmU = rows.reduce((s, r) => s + r.fbmUnshipped, 0)
+                const sumFbmP = rows.reduce((s, r) => s + r.fbmPending, 0)
+                const sumFbaP = rows.reduce((s, r) => s + r.fbaPending, 0)
+                return (
+                  <RegionGroup key={region} region={region} rowCount={rows.length}>
+                    <tr className="bg-slate-50 dark:bg-slate-900 font-semibold">
+                      <td className="px-3 py-1.5 text-slate-900 dark:text-slate-100">▾ {region}</td>
+                      <td className="px-3 py-1.5 tabular-nums text-slate-900 dark:text-slate-100">{sumFbmU}</td>
+                      <td className="px-3 py-1.5 tabular-nums text-slate-900 dark:text-slate-100">{sumFbmP}</td>
+                      <td className="px-3 py-1.5 tabular-nums text-slate-900 dark:text-slate-100">{sumFbaP}</td>
+                    </tr>
+                    {rows.map((r) => (
+                      <tr key={r.marketplace} className="border-t border-slate-100 dark:border-slate-800">
+                        <td className="px-3 py-1.5 text-slate-700 dark:text-slate-300">
+                          <span className="inline-flex items-center gap-2">
+                            <span aria-hidden="true">{MARKETPLACE_FLAGS_GS[r.marketplace] ?? '🏳️'}</span>
+                            <span>{MARKETPLACE_NAMES[r.marketplace] ?? r.marketplace}</span>
+                          </span>
+                        </td>
+                        <td className="px-3 py-1.5">
+                          {cellLink(r.marketplace, 'FBM', 'PROCESSING,ON_HOLD', r.fbmUnshipped)}
+                        </td>
+                        <td className="px-3 py-1.5">
+                          {cellLink(r.marketplace, 'FBM', 'PENDING,AWAITING_PAYMENT', r.fbmPending)}
+                        </td>
+                        <td className="px-3 py-1.5">
+                          {cellLink(r.marketplace, 'FBA', 'PENDING,AWAITING_PAYMENT', r.fbaPending)}
+                        </td>
+                      </tr>
+                    ))}
+                  </RegionGroup>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <Link
+        href="/orders"
+        className="inline-flex items-center text-sm text-blue-600 dark:text-blue-400 hover:underline"
+      >
         Go to open orders →
       </Link>
     </div>
   )
 }
 
+// GS.5 — Buyer Messages placeholder. Full ingest would build a
+// BuyerMessage table + Messaging API cron + count tile + UI thread.
+// Out of scope for the snapshot rebuild; for now we surface the
+// Seller Central messaging inbox per marketplace so operators have
+// a one-click path to the canonical inbox.
 function MessagesPanelPlaceholder() {
+  const inboxes = [
+    { code: 'IT', label: 'Italy', tld: 'it' },
+    { code: 'DE', label: 'Germany', tld: 'de' },
+    { code: 'FR', label: 'France', tld: 'fr' },
+    { code: 'ES', label: 'Spain', tld: 'es' },
+    { code: 'UK', label: 'United Kingdom', tld: 'co.uk' },
+  ]
   return (
-    <div className="text-sm text-slate-600 dark:text-slate-400">
-      Buyer messages aren't ingested yet. Manage them in Seller Central until GS.5 wires the inbox.
+    <div className="space-y-3">
+      <div className="text-sm text-slate-600 dark:text-slate-400">
+        Buyer messages aren't ingested into Nexus yet. Open the Seller Central messaging
+        inbox for the marketplace you want to check:
+      </div>
+      <div className="flex items-center gap-2 flex-wrap">
+        {inboxes.map((m) => (
+          <a
+            key={m.code}
+            href={`https://sellercentral.amazon.${m.tld}/messaging/inbox`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="h-8 px-3 text-sm border border-slate-200 dark:border-slate-700 rounded inline-flex items-center gap-1.5 bg-white dark:bg-slate-950 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200"
+          >
+            <span aria-hidden="true">{MARKETPLACE_FLAGS_GS[m.code] ?? '🏳️'}</span>
+            <span>{m.label}</span>
+          </a>
+        ))}
+      </div>
     </div>
   )
 }
