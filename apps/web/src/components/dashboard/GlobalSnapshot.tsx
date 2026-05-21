@@ -387,7 +387,10 @@ export function GlobalSnapshot() {
                 </PulseOnChange>
               )
             })()}
-            <div className="text-xs text-slate-500 dark:text-slate-400">
+            <div
+              className="text-xs text-slate-500 dark:text-slate-400"
+              title="Gross sales (Amazon Seller Central 'Sales' semantic) — includes the original order amount even after cancellation or refund. Refunds appear as a separate financial line, not as negative sales."
+            >
               {data.period.key === 'today' ? 'Today so far' : data.period.key}
               {' · '}
               <span>{data.sales.total.units} units</span>

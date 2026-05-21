@@ -239,7 +239,10 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
           where: {
             deletedAt: null,
             channel: 'AMAZON',
-            status: { notIn: ['CANCELLED', 'REFUNDED', 'RETURNED'] as any },
+            // MS.6 — match Amazon's "Sales" semantic. Amazon's T+1
+            // GET_SALES_AND_TRAFFIC_REPORT also includes orders that
+            // were subsequently cancelled / refunded (Amazon shows
+            // refunds as a separate negative line on their report).
             purchaseDate: { gte: day, lt: dayEnd },
             currencyCode: 'EUR',
             ...(mkt ? { marketplace: mkt } : {}),
@@ -344,12 +347,17 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
         }
 
         // ── Sales aggregation ────────────────────────────────────────
-        // Exclude terminal-negative statuses (OX.17 semantics) so the
-        // snapshot number matches the "All" tab total.
+        // MS.6 — Amazon Seller Central "Sales" semantic. Amazon's tile
+        // counts the original ordered amount regardless of subsequent
+        // cancellation/refund (refunds appear as their own line in
+        // financials, not as negative sales). This is intentionally
+        // different from the /orders page which excludes
+        // CANCELLED/REFUNDED/RETURNED (OX.17) — that page is the
+        // operator's "what's actionable" view. The snapshot is the
+        // "what would Amazon show me on its home page" view.
         // SA.3 — optional marketplace scope merged into every WHERE.
         const salesWhere = {
           deletedAt: null,
-          status: { notIn: ['CANCELLED', 'REFUNDED', 'RETURNED'] as any },
           purchaseDate: { gte: from, lt: to },
           ...(marketplaceFilter ? { marketplace: marketplaceFilter } : {}),
         }
@@ -362,13 +370,13 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
 
         // Per-line units (each OrderItem.quantity summed per order's marketplace).
         // SA.3: marketplace filter applied via dynamic WHERE fragment.
+        // MS.6: no status exclusion — Amazon "Sales" semantic.
         const itemUnits = marketplaceFilter
           ? await prisma.$queryRaw<Array<{ marketplace: string | null; units: bigint }>>`
               SELECT o."marketplace", COALESCE(SUM(oi."quantity"), 0)::bigint AS units
                 FROM "Order" o
                 JOIN "OrderItem" oi ON oi."orderId" = o.id
                WHERE o."deletedAt" IS NULL
-                 AND o."status" NOT IN ('CANCELLED', 'REFUNDED', 'RETURNED')
                  AND o."purchaseDate" >= ${from}
                  AND o."purchaseDate" <  ${to}
                  AND o."marketplace" = ${marketplaceFilter}
@@ -379,7 +387,6 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
                 FROM "Order" o
                 JOIN "OrderItem" oi ON oi."orderId" = o.id
                WHERE o."deletedAt" IS NULL
-                 AND o."status" NOT IN ('CANCELLED', 'REFUNDED', 'RETURNED')
                  AND o."purchaseDate" >= ${from}
                  AND o."purchaseDate" <  ${to}
                GROUP BY o."marketplace"
@@ -392,13 +399,13 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
         // tile chart is consistent) — daily totals in primary currency.
         // SA.3: marketplace filter applied via dynamic WHERE fragment.
         const sparkStart = new Date(todayStart.getTime() - 6 * 24 * 60 * 60 * 1000)
+        // MS.6: no status exclusion — Amazon "Sales" semantic.
         const sparkRaw = marketplaceFilter
           ? await prisma.$queryRaw<Array<{ day: Date; cents: bigint }>>`
               SELECT date_trunc('day', o."purchaseDate" AT TIME ZONE 'Europe/Rome')::date AS day,
                      COALESCE(SUM(ROUND(o."totalPrice" * 100)), 0)::bigint AS cents
                 FROM "Order" o
                WHERE o."deletedAt" IS NULL
-                 AND o."status" NOT IN ('CANCELLED', 'REFUNDED', 'RETURNED')
                  AND o."purchaseDate" >= ${sparkStart}
                  AND o."currencyCode" = 'EUR'
                  AND o."marketplace" = ${marketplaceFilter}
@@ -410,7 +417,6 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
                      COALESCE(SUM(ROUND(o."totalPrice" * 100)), 0)::bigint AS cents
                 FROM "Order" o
                WHERE o."deletedAt" IS NULL
-                 AND o."status" NOT IN ('CANCELLED', 'REFUNDED', 'RETURNED')
                  AND o."purchaseDate" >= ${sparkStart}
                  AND o."currencyCode" = 'EUR'
                GROUP BY day
@@ -523,7 +529,7 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
           const prev = await prisma.order.aggregate({
             where: {
               deletedAt: null,
-              status: { notIn: ['CANCELLED', 'REFUNDED', 'RETURNED'] as any },
+              // MS.6 — gross sales semantic
               purchaseDate: { gte: prevFrom, lt: prevTo },
               currencyCode: 'EUR',
               ...(marketplaceFilter ? { marketplace: marketplaceFilter } : {}),
