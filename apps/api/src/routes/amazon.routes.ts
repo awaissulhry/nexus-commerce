@@ -1581,11 +1581,12 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
     const { syncFinancialEvents, syncYesterdayFinancialEvents, syncFinancialTransactions } = await import('../services/amazon-financial-events.service.js')
     try {
       const body = request.body ?? {}
-      // Default to the new /finances/2024-06-19/transactions endpoint.
-      // Pass useV0=true to fall back to the deprecated /finances/v0
-      // path (kept for back-compat with cron callers that haven't been
-      // migrated yet, but v0 returns 403 for re-authorized tokens).
-      const useV0 = body.useV0 === true
+      // Default to /finances/v0/financialEvents — the original endpoint
+      // with mature event-shape parsing (nested ShipmentItemList per order).
+      // The 2024-06-19/transactions endpoint is available via useNew=true
+      // but the parser hasn't been updated for Amazon's {payload: {...}}
+      // wrapper yet; v0 path is the reliable production default.
+      const useV0 = body.useV0 !== false
       let summary
       if (body.start && body.end) {
         const start = new Date(body.start)
