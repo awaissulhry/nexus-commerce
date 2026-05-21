@@ -145,6 +145,16 @@ export async function pullAPlusContentMetadata(opts: {
 
       const locale = 'it-IT' // Default Italian; Amazon's list endpoint doesn't expose locale per doc
 
+      // Amazon's `updateTime` reflects when the document was last
+      // modified server-side. For PUBLISHED status this is effectively
+      // the publish time; for DRAFT/SUBMITTED it's the last edit time.
+      // Populating both submittedAt + publishedAt from updateTime is a
+      // best-effort approximation that beats leaving them NULL
+      // (otherwise dashboards see "all submitted/published today").
+      const updateTime = m.updateTime ? new Date(m.updateTime) : null
+      const submittedAt = updateTime && ['SUBMITTED','APPROVED','PUBLISHED'].includes(m.status ?? '') ? updateTime : null
+      const publishedAt = updateTime && m.status === 'PUBLISHED' ? updateTime : null
+
       if (existing) {
         await (prisma as any).aPlusContent.update({
           where: { id: existing.id },
@@ -152,6 +162,8 @@ export async function pullAPlusContentMetadata(opts: {
             name: m.name ?? `(Untitled ${refKey.slice(0, 8)})`,
             marketplace: marketCode,
             status: m.status ?? 'PUBLISHED',
+            ...(submittedAt && { submittedAt }),
+            ...(publishedAt && { publishedAt }),
           },
         })
       } else {
@@ -162,6 +174,8 @@ export async function pullAPlusContentMetadata(opts: {
             locale,
             status: m.status ?? 'PUBLISHED',
             amazonDocumentId: refKey,
+            submittedAt,
+            publishedAt,
             notes: 'Imported via aplus-pull (metadata only — body modules not extracted)',
           },
         })

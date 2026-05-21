@@ -58,8 +58,11 @@ export async function ordersRoutes(app: FastifyInstance) {
         prisma.order.count({ where: { status: 'CANCELLED' } }),
         prisma.order.count({ where: { status: 'DELIVERED' } }),
       ])
+      // Find the most recently PLACED order (purchaseDate), not the
+      // most recently INSERTED row. With backfilled data the last-
+      // inserted row could carry any historical purchaseDate.
       const last = await prisma.order.findFirst({
-        orderBy: { createdAt: 'desc' },
+        orderBy: [{ purchaseDate: 'desc' }, { createdAt: 'desc' }],
         select: { createdAt: true, purchaseDate: true },
       })
       return {
@@ -281,10 +284,14 @@ export async function ordersRoutes(app: FastifyInstance) {
       })
       if (!order) return reply.status(404).send({ error: 'Order not found' })
 
-      // Customer history sidebar — last 10 orders from this email
+      // Customer history sidebar — last 10 orders from this email.
+      // OX.0: include currencyCode so the widget renders in the order's
+      // actual currency (not a hardcoded €) and so PENDING Amazon
+      // orders with totalPrice=0 can render as "Awaiting payment"
+      // rather than "€0.00".
       const history = await prisma.order.findMany({
         where: { customerEmail: order.customerEmail, id: { not: order.id } },
-        select: { id: true, channelOrderId: true, channel: true, totalPrice: true, status: true, purchaseDate: true, createdAt: true },
+        select: { id: true, channelOrderId: true, channel: true, totalPrice: true, currencyCode: true, status: true, purchaseDate: true, createdAt: true },
         orderBy: { purchaseDate: 'desc' },
         take: 10,
       })
