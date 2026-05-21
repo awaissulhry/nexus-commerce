@@ -445,6 +445,39 @@ ${saved.map(p => `<div class="card">
 
     return reply.type('text/html').send(html)
   })
+
+  // ── HB.1 — Amazon Ads 24-month backfill orchestrator ──────────────────
+  //
+  // POST /api/amazon-ads/backfill
+  //   body: { daysBack?: number, reportSets?: string[], adProducts?: string[] }
+  //
+  // Fires N report-creation jobs (N = ceil(daysBack/30) × profiles ×
+  // reportSets × adProducts) into the existing AmazonAdsReportJob queue.
+  // The poll + ingest crons drain the queue async over the next 30-90
+  // minutes (depends on Amazon Ads API processing time per report).
+  //
+  // Read-only against external state aside from creating async report
+  // requests at Amazon. Idempotent: re-running re-fires identical jobs
+  // (the existing dedup logic in createReportJob skips already-queued
+  // (profile, reportTypeId, startDate, endDate) tuples).
+  fastify.post<{
+    Body?: {
+      daysBack?: number
+      reportSets?: Array<'campaign' | 'searchTerm' | 'placement'>
+      adProducts?: Array<'SPONSORED_PRODUCTS' | 'SPONSORED_DISPLAY' | 'SPONSORED_BRANDS'>
+    }
+  }>('/amazon-ads/backfill', async (request, reply) => {
+    const { runAdsBackfill } = await import('../services/advertising/ads-backfill-orchestrator.service.js')
+    try {
+      const result = await runAdsBackfill(request.body ?? {})
+      return result
+    } catch (err) {
+      fastify.log.error({ err }, '[amazon-ads/backfill] failed')
+      return reply.code(500).send({
+        error: err instanceof Error ? err.message : String(err),
+      })
+    }
+  })
 }
 
 export default amazonAdsAuthRoutes
