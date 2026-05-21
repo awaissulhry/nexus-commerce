@@ -1501,10 +1501,16 @@ function BuyerProfileDrawer({ email, excludeOrderId, onClose }: { email: string;
  * operators can chase it externally.
  */
 function ManageFeedbackCard({ order }: { order: any }) {
-  const feedbackUrl =
-    order.channel === 'AMAZON' && order.marketplace
-      ? `https://sellercentral.amazon.${order.marketplace.toLowerCase()}/feedback-manager/index.html?orderId=${encodeURIComponent(order.channelOrderId)}`
-      : null
+  // OX.13 — channel-specific feedback deep-links. Shopify has no
+  // seller-feedback concept, so the card collapses to empty-state-only.
+  let feedbackUrl: string | null = null
+  let feedbackLabel = 'Open in Seller Central →'
+  if (order.channel === 'AMAZON' && order.marketplace) {
+    feedbackUrl = `https://sellercentral.amazon.${order.marketplace.toLowerCase()}/feedback-manager/index.html?orderId=${encodeURIComponent(order.channelOrderId)}`
+  } else if (order.channel === 'EBAY') {
+    feedbackUrl = `https://www.ebay.${order.marketplace?.toLowerCase() === 'uk' ? 'co.uk' : (order.marketplace?.toLowerCase() ?? 'com')}/fdbk/feedback_left_for_others`
+    feedbackLabel = 'Open in eBay Feedback →'
+  }
   return (
     <Card title="Manage Feedback">
       <div className="text-sm text-slate-600 dark:text-slate-400">
@@ -1517,7 +1523,7 @@ function ManageFeedbackCard({ order }: { order: any }) {
           rel="noopener noreferrer"
           className="mt-2 inline-flex items-center gap-1.5 text-sm text-blue-600 dark:text-blue-400 hover:underline"
         >
-          Open in Seller Central →
+          {feedbackLabel}
         </a>
       )}
     </Card>
@@ -1557,7 +1563,20 @@ function SalesProceedsCard({ order, financials }: { order: any; financials: any 
   // when shipping is rolled into totalPrice (Amazon's behaviour).
   const grandTotalVat = itemsTotalIncl > 0 ? (itemsVatTotal / itemsTotalIncl) * grandTotalIncl : 0
 
-  const paymentMethod = order.amazonMetadata?.PaymentMethod ?? 'Standard'
+  // OX.13 — cross-channel payment-method extraction. Each channel
+  // names this field differently in its metadata blob.
+  const paymentMethod =
+    order.channel === 'AMAZON'
+      ? order.amazonMetadata?.PaymentMethod ?? 'Standard'
+      : order.channel === 'EBAY'
+      ? order.ebayMetadata?.paymentSummary?.payments?.[0]?.paymentMethod
+        ?? order.ebayMetadata?.paymentMethod
+        ?? 'eBay payments'
+      : order.channel === 'SHOPIFY'
+      ? order.shopifyMetadata?.payment_gateway_names?.[0]
+        ?? order.shopifyMetadata?.gateway
+        ?? 'Shopify Payments'
+      : 'Standard'
   const symbol = order.currencyCode === 'EUR' || !order.currencyCode ? '€' : ''
   const fmt = (n: number) => `${symbol}${n.toFixed(2)}${order.currencyCode && order.currencyCode !== 'EUR' ? ` ${order.currencyCode}` : ''}`
 
@@ -2048,11 +2067,15 @@ function OrderSummaryTriptych({ order }: { order: any }) {
   const country: string | null = addr.CountryCode ?? addr.country ?? null
   const recipient: string | null = addr.Name ?? addr.name ?? order.customerName
 
-  // Contact Buyer deep-link — Amazon Seller Central messaging
+  // Contact Buyer deep-link per channel. eBay/Shopify don't expose
+  // per-order messaging URLs publicly, so we fall back to mailto for
+  // the buyer's actual email when available.
   const contactBuyerUrl =
     order.channel === 'AMAZON' && order.marketplace
       ? `https://sellercentral.amazon.${order.marketplace.toLowerCase()}/messaging/inbox?orderId=${encodeURIComponent(order.channelOrderId)}`
       : null
+  const contactBuyerLabel =
+    order.channel === 'AMAZON' ? 'Contact Buyer (Seller Central)' : 'Email buyer'
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -2119,7 +2142,7 @@ function OrderSummaryTriptych({ order }: { order: any }) {
               rel="noopener noreferrer"
               className="inline-flex items-center gap-1.5 text-blue-600 dark:text-blue-400 hover:underline"
             >
-              <Mail size={12} /> Contact Buyer
+              <Mail size={12} /> {contactBuyerLabel}
             </a>
           ) : (
             order.customerEmail && (
