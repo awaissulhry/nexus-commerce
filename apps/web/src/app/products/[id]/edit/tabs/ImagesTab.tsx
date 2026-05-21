@@ -25,6 +25,7 @@ import ShopifyPanel from './images/shopify/ShopifyPanel'
 import LightboxModal from './images/LightboxModal'
 import ImageEditorModal from './images/ImageEditorModal'
 import DamPickerModal from './images/DamPickerModal'
+import LifestyleGenerationModal from './images/LifestyleGenerationModal'
 import { fromListing, fromMaster, useLightbox } from './images/useLightbox'
 import type { LightboxImage } from './images/useLightbox'
 import type { ProductImage } from './images/types'
@@ -49,6 +50,7 @@ export default function ImagesTab({ product, discardSignal, onDirtyChange }: Pro
   const [toast, setToast] = useState<string | null>(null)
   const [editorImage, setEditorImage] = useState<ProductImage | null>(null)
   const [damPickerOpen, setDamPickerOpen] = useState(false)
+  const [lifestyleOpen, setLifestyleOpen] = useState(false)
   const lightbox = useLightbox()
   const { t } = useTranslations()
 
@@ -286,6 +288,7 @@ export default function ImagesTab({ product, discardSignal, onDirtyChange }: Pro
               onToast={showToast}
               onOpenLightbox={(img) => lightbox.open(fromMaster(img), master.map(fromMaster))}
               onOpenDamPicker={() => setDamPickerOpen(true)}
+              onOpenLifestyle={() => setLifestyleOpen(true)}
             />
           )}
           {activeChannel === 'amazon' && (
@@ -451,6 +454,19 @@ export default function ImagesTab({ product, discardSignal, onDirtyChange }: Pro
           onClose={() => setDamPickerOpen(false)}
           onImported={() => {
             showToast(t('products.edit.images.toasts.importedFromDam'))
+            void workspace.reload()
+          }}
+        />
+      )}
+
+      {/* ── Imagen lifestyle generation (IR.14) ────────────────────────── */}
+      {lifestyleOpen && (
+        <LifestyleGenerationModal
+          productId={product.id}
+          onClose={() => setLifestyleOpen(false)}
+          onGenerated={() => {
+            setLifestyleOpen(false)
+            showToast(t('products.edit.images.toasts.lifestyleGenerated'))
             void workspace.reload()
           }}
         />

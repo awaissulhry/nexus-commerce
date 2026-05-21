@@ -18,6 +18,7 @@ import {
   MoreHorizontal,
   Plus,
   Share2,
+  Sparkles,
   Square,
   Star,
   Trash2,
@@ -66,6 +67,8 @@ interface Props {
   onOpenLightbox?: (img: ProductImage) => void
   // IR.7.4 — open the DAM library picker.
   onOpenDamPicker?: () => void
+  // IR.14 — open the Imagen lifestyle generation modal.
+  onOpenLifestyle?: () => void
 }
 
 export default function MasterPanel({
@@ -76,6 +79,7 @@ export default function MasterPanel({
   onToast,
   onOpenLightbox,
   onOpenDamPicker,
+  onOpenLifestyle,
 }: Props) {
   const { t } = useTranslations()
   const [uploading, setUploading] = useState(false)
@@ -440,6 +444,19 @@ export default function MasterPanel({
               >
                 <Library className="w-3.5 h-3.5" />
                 {t('products.edit.images.masterPanel.fromLibrary')}
+              </Button>
+            )}
+            {onOpenLifestyle && (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="gap-1.5"
+                onClick={onOpenLifestyle}
+                disabled={uploading}
+                title={t('products.edit.images.lifestyle.buttonTooltip')}
+              >
+                <Sparkles className="w-3.5 h-3.5 text-purple-500" />
+                {t('products.edit.images.lifestyle.buttonLabel')}
               </Button>
             )}
             {product.isParent && images.length > 0 && (
