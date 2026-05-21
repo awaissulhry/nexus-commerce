@@ -1674,6 +1674,20 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // POST /api/amazon/aplus/sync — Phase 9 metadata reconciliation.
+  // Pulls all A+ Content documents from Amazon for the marketplace and
+  // upserts them into APlusContent. Body: { marketplaceId? }.
+  fastify.post<{ Body?: { marketplaceId?: string } }>('/aplus/sync', async (request, reply) => {
+    const { pullAPlusContentMetadata } = await import('../services/aplus-amazon-pull.service.js')
+    try {
+      const summary = await pullAPlusContentMetadata({ marketplaceId: request.body?.marketplaceId })
+      return { success: true, ...summary }
+    } catch (err) {
+      fastify.log.error({ err }, '[amazon/aplus/sync] failed')
+      return reply.code(500).send({ success: false, error: err instanceof Error ? err.message : String(err) })
+    }
+  })
+
   // GET /api/amazon/aplus/probe — Phase 9 reconciliation probe.
   // Calls GET /aplus/2020-11-01/contentDocuments to see if Amazon
   // has any A+ Content published for this seller. If 0, Phase 9 is
