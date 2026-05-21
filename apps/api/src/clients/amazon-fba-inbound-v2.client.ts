@@ -171,11 +171,33 @@ export async function getInboundOperation(
 
 // ── 3. listPackingOptions ────────────────────────────────────────────
 
+/** SP-API packing-option fee. Type is a coarse category; description is
+ *  optional human-readable text Amazon may supply (often empty). */
+export interface PackingOptionFee {
+  /** e.g. 'FBA_INBOUND_TRANSPORT', 'FBA_PREP' */
+  type?: string
+  value?: { amount: number; currencyCode: string }
+  description?: string
+  target?: string
+}
+
 export interface PackingOption {
   packingOptionId: string
+  /** 'OFFERED' | 'EXPIRED' | 'ACCEPTED' (string for forward-compat). */
   status: string
   expiration?: string
-  /** Subset; the SP-API response also carries packingGroups + packingFeatures + fees. */
+  /** F.6.2 — packing-group ids included in this option (SP-API supplies
+   *  them as a flat string[]). Each id can be drilled into via
+   *  GET /inboundPlans/{planId}/packingGroups/{packingGroupId}/items
+   *  for per-item composition; we surface the count + ids here. */
+  packingGroups?: string[]
+  /** F.6.2 — feature flags like 'INDIVIDUAL_BARCODE_REQUIRED',
+   *  'SHIP_FROM_ONE_LOCATION'. Forward-compat string[]. */
+  packingFeatures?: string[]
+  /** F.6.2 — array of fees (typically prep + inbound transport). The
+   *  operator picks based on the sum here vs the placement/transport
+   *  fees that come later. */
+  fees?: PackingOptionFee[]
 }
 
 export async function listPackingOptions(

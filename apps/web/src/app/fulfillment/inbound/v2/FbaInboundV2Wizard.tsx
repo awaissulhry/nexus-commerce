@@ -37,6 +37,7 @@ import { useToast } from '@/components/ui/Toast'
 import { getBackendUrl } from '@/lib/backend-url'
 import { usePolledList } from '@/lib/sync/use-polled-list'
 import { NewPlanModal } from './NewPlanModal'
+import { PackingOptionsPicker } from './PackingOptionsPicker'
 
 interface Plan {
   id: string
@@ -275,14 +276,18 @@ function PlanActions({ plan, onAction }: { plan: Plan; onAction: () => void }) {
     )
   }
 
-  // Per-step action button. The "list" steps fetch options + show a
-  // picker; the "confirm" steps are auto-fired here for v1 (operator
-  // would normally see the option list and pick one). For v1 simplicity
-  // we surface the inspect-and-pick flow as a single "Run next step"
-  // button that invokes the appropriate route.
+  // F.6.2: packing-options step renders a real card picker (replaces
+  // prompt() in v1). Mounting the picker auto-loads the SP-API
+  // options, which advances the LIST_PACKING → CONFIRM_PACKING
+  // transition for free.
+  if (plan.currentStep === 'LIST_PACKING' || plan.currentStep === 'CONFIRM_PACKING') {
+    return <PackingOptionsPicker planRowId={plan.id} onConfirmed={onAction} />
+  }
+
+  // Remaining steps still use the legacy button + prompt() flow.
+  // F.6.3 replaces placement; F.6.4 replaces transport; F.6.5 polishes
+  // labels with a download UI.
   const nextLabel =
-    plan.currentStep === 'LIST_PACKING' ? 'Inspect packing options' :
-    plan.currentStep === 'CONFIRM_PACKING' ? 'Pick packing option' :
     plan.currentStep === 'LIST_PLACEMENT' ? 'Inspect placement options' :
     plan.currentStep === 'CONFIRM_PLACEMENT' ? 'Pick placement option' :
     plan.currentStep === 'LIST_TRANSPORT' ? 'Inspect transport options' :
@@ -290,19 +295,7 @@ function PlanActions({ plan, onAction }: { plan: Plan; onAction: () => void }) {
     plan.currentStep === 'GET_LABELS' ? 'Fetch labels' : 'Continue'
 
   const handleNext = async () => {
-    if (plan.currentStep === 'LIST_PACKING') {
-      const r = await callApi(`/api/fba/inbound/v2/${plan.id}/packing-options`)
-      // For v1, auto-select the first option and show in toast.
-      const first = r?.packingOptions?.[0]?.packingOptionId
-      if (first) {
-        toast.success(`Packing options listed (${r.packingOptions.length}); first: ${first}. Click "Pick" to confirm.`)
-      }
-    } else if (plan.currentStep === 'CONFIRM_PACKING') {
-      const optId = prompt('packingOptionId to confirm?', '')
-      if (!optId) return
-      await callApi(`/api/fba/inbound/v2/${plan.id}/packing-options/${optId}/confirm`, { method: 'POST' })
-      toast.success('Packing confirmed')
-    } else if (plan.currentStep === 'LIST_PLACEMENT') {
+    if (plan.currentStep === 'LIST_PLACEMENT') {
       const r = await callApi(`/api/fba/inbound/v2/${plan.id}/placement-options`)
       toast.success(`Placement options: ${r?.placementOptions?.length ?? 0}`)
     } else if (plan.currentStep === 'CONFIRM_PLACEMENT') {
