@@ -212,9 +212,14 @@ async function handleChunk({ channel, domain, from, to, dryRun }) {
       }
     }
     case 'amazon-settlement': {
+      // Single-marketplace per call to stay inside Railway 30s timeout
+      // (per-marketplace iteration on the route side was the killer).
+      // Pass --marketplace flag to override; defaults to IT (APJ6JRA9NG5V4).
+      const marketplaceId = args.marketplace || 'APJ6JRA9NG5V4'
       const r = await postJson('/api/amazon/settlements/sync', {
         from: from.toISOString(),
         to: to.toISOString(),
+        marketplaceIds: [marketplaceId],
       })
       const t = r.totals ?? {}
       return {
