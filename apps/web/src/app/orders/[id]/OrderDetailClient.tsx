@@ -314,7 +314,7 @@ export default function OrderDetailClient({ id }: { id: string }) {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Main column */}
         <div className="lg:col-span-2 space-y-4">
-          {/* Header card — always visible regardless of tab */}
+          {/* Header card — channel + status + total at a glance */}
           <Card>
             <div className="flex items-start gap-3 flex-wrap">
               <div>
@@ -356,6 +356,14 @@ export default function OrderDetailClient({ id }: { id: string }) {
               </div>
             </div>
           </Card>
+
+          {/* OX.7 — three-card summary block matching Amazon Seller
+              Central's detail page layout. Stacks 1-up on narrow
+              viewports, 3-up on wider ones so Ship to + delivery
+              promise sit beside the order summary. */}
+          {tabParam === 'summary' && (
+            <OrderSummaryTriptych order={order} />
+          )}
 
           {/* AU.1 — Items live on Summary tab */}
           {tabParam === 'summary' && (
@@ -1380,5 +1388,192 @@ function ShopifyDiscountsCard({ meta }: { meta: any }) {
         )}
       </div>
     </Card>
+  )
+}
+
+/**
+ * OX.7 — three-card summary block matching Amazon Seller Central.
+ *
+ *   ┌─────────────────┬─────────────────┬───────────────────────┐
+ *   │ Order summary   │ Ship to         │ Shipping Service      │
+ *   │                 │                 │ for Delivery Promise  │
+ *   └─────────────────┴─────────────────┴───────────────────────┘
+ *
+ * Data sources:
+ *   • Order summary: Order.shipByDate, latestDeliveryDate, purchaseDate,
+ *     fulfillmentMethod, marketplace + amazonMetadata.ShipmentServiceLevelCategory
+ *   • Ship to: Order.shippingAddress JSON (name + street + city + postal
+ *     + country + phone). Contact-Buyer link deep-links to Seller Central
+ *     messaging for Amazon orders.
+ *   • Delivery Promise: first Shipment's carrierCode + serviceName, with
+ *     fallback to Amazon's promised ShipServiceLevel when nothing has
+ *     been booked yet.
+ */
+const OX7_MARKETPLACE_FLAGS: Record<string, string> = {
+  IT: '🇮🇹', DE: '🇩🇪', FR: '🇫🇷', ES: '🇪🇸', UK: '🇬🇧', GB: '🇬🇧',
+  NL: '🇳🇱', PL: '🇵🇱', SE: '🇸🇪', IE: '🇮🇪', BE: '🇧🇪', SA: '🇸🇦',
+  AE: '🇦🇪', TR: '🇹🇷', US: '🇺🇸', CA: '🇨🇦', JP: '🇯🇵',
+}
+
+function OrderSummaryTriptych({ order }: { order: any }) {
+  const addr = order.shippingAddress ?? {}
+  const meta = order.amazonMetadata ?? {}
+  const shipmentServiceLevel = meta.ShipmentServiceLevelCategory ?? meta.ShipServiceLevel ?? null
+  const firstShipment = order.shipments?.[0] ?? null
+  const marketplaceFlag = order.marketplace ? OX7_MARKETPLACE_FLAGS[order.marketplace] ?? '' : ''
+  const channelLabel =
+    order.channel === 'AMAZON' && order.marketplace
+      ? `Amazon.${order.marketplace.toLowerCase()}`
+      : order.channel.charAt(0) + order.channel.slice(1).toLowerCase()
+
+  const fmtDate = (d: string | null | undefined) =>
+    d ? new Date(d).toLocaleDateString(undefined, { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' }) : null
+  const fmtDateTime = (d: string | null | undefined) =>
+    d ? new Date(d).toLocaleString(undefined, { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : null
+
+  // Ship-by urgency tone (matches the list row)
+  let shipByTone = 'text-slate-700 dark:text-slate-200'
+  if (order.shipByDate && order.status !== 'SHIPPED' && order.status !== 'DELIVERED' && order.status !== 'CANCELLED') {
+    const remainingHours = (new Date(order.shipByDate).getTime() - Date.now()) / 3_600_000
+    if (remainingHours < 0) shipByTone = 'text-rose-600 dark:text-rose-400 font-semibold'
+    else if (remainingHours < 24) shipByTone = 'text-amber-600 dark:text-amber-400 font-semibold'
+  }
+
+  const phone: string | null = addr.phone ?? addr.Phone ?? null
+  const street: string | null = addr.AddressLine1 ?? addr.street ?? addr.address1 ?? null
+  const street2: string | null = addr.AddressLine2 ?? addr.street2 ?? addr.address2 ?? null
+  const city: string | null = addr.City ?? addr.city ?? null
+  const postal: string | null = addr.PostalCode ?? addr.postalCode ?? addr.zip ?? null
+  const state: string | null = addr.StateOrRegion ?? addr.state ?? addr.region ?? null
+  const country: string | null = addr.CountryCode ?? addr.country ?? null
+  const recipient: string | null = addr.Name ?? addr.name ?? order.customerName
+
+  // Contact Buyer deep-link — Amazon Seller Central messaging
+  const contactBuyerUrl =
+    order.channel === 'AMAZON' && order.marketplace
+      ? `https://sellercentral.amazon.${order.marketplace.toLowerCase()}/messaging/inbox?orderId=${encodeURIComponent(order.channelOrderId)}`
+      : null
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      {/* Order summary card */}
+      <Card title="Order summary">
+        <dl className="space-y-1.5 text-sm">
+          {order.shipByDate && (
+            <div className="flex items-baseline gap-2">
+              <dt className="w-24 shrink-0 text-slate-500 dark:text-slate-400">Ship by:</dt>
+              <dd className={shipByTone}>{fmtDate(order.shipByDate)}</dd>
+            </div>
+          )}
+          {order.latestDeliveryDate && (
+            <div className="flex items-baseline gap-2">
+              <dt className="w-24 shrink-0 text-slate-500 dark:text-slate-400">Deliver by:</dt>
+              <dd className="text-slate-700 dark:text-slate-200">{fmtDate(order.latestDeliveryDate)}</dd>
+            </div>
+          )}
+          <div className="flex items-baseline gap-2">
+            <dt className="w-24 shrink-0 text-slate-500 dark:text-slate-400">Purchase date:</dt>
+            <dd className="text-slate-700 dark:text-slate-200">{fmtDateTime(order.purchaseDate ?? order.createdAt)}</dd>
+          </div>
+          {shipmentServiceLevel && (
+            <div className="flex items-baseline gap-2">
+              <dt className="w-24 shrink-0 text-slate-500 dark:text-slate-400">Shipping:</dt>
+              <dd className="text-slate-700 dark:text-slate-200">{shipmentServiceLevel}</dd>
+            </div>
+          )}
+          {order.fulfillmentMethod && (
+            <div className="flex items-baseline gap-2">
+              <dt className="w-24 shrink-0 text-slate-500 dark:text-slate-400">Fulfilment:</dt>
+              <dd className="text-slate-700 dark:text-slate-200">
+                {order.fulfillmentMethod === 'FBA' ? 'Fulfilled by Amazon' : 'Seller fulfilled'}
+              </dd>
+            </div>
+          )}
+          <div className="flex items-baseline gap-2">
+            <dt className="w-24 shrink-0 text-slate-500 dark:text-slate-400">Sales channel:</dt>
+            <dd className="text-slate-700 dark:text-slate-200">
+              {channelLabel} {marketplaceFlag && <span aria-hidden="true">{marketplaceFlag}</span>}
+            </dd>
+          </div>
+        </dl>
+      </Card>
+
+      {/* Ship to card */}
+      <Card title="Ship to">
+        <div className="text-sm space-y-0.5">
+          {recipient && <div className="font-semibold text-slate-900 dark:text-slate-100">{recipient}</div>}
+          {street && <div className="text-slate-700 dark:text-slate-300">{street}</div>}
+          {street2 && <div className="text-slate-700 dark:text-slate-300">{street2}</div>}
+          {(city || state || postal) && (
+            <div className="text-slate-700 dark:text-slate-300">
+              {[city, state, postal].filter(Boolean).join(', ')}
+            </div>
+          )}
+          {country && <div className="text-slate-700 dark:text-slate-300">{country}</div>}
+        </div>
+        <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-700 space-y-1.5 text-sm">
+          {contactBuyerUrl ? (
+            <a
+              href={contactBuyerUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 text-blue-600 dark:text-blue-400 hover:underline"
+            >
+              <Mail size={12} /> Contact Buyer
+            </a>
+          ) : (
+            order.customerEmail && (
+              <a
+                href={`mailto:${order.customerEmail}`}
+                className="inline-flex items-center gap-1.5 text-blue-600 dark:text-blue-400 hover:underline"
+              >
+                <Mail size={12} /> {order.customerEmail}
+              </a>
+            )
+          )}
+          {phone && (
+            <div className="text-slate-700 dark:text-slate-200">
+              <span className="text-slate-500 dark:text-slate-400">Phone:</span>{' '}
+              <span className="font-mono">{phone}</span>
+            </div>
+          )}
+        </div>
+      </Card>
+
+      {/* Shipping Service for Delivery Promise card */}
+      <Card title="Shipping Service" description="Used to calculate Delivery Promise">
+        {firstShipment ? (
+          <dl className="space-y-1.5 text-sm">
+            <div className="flex items-baseline gap-2">
+              <dt className="w-20 shrink-0 text-slate-500 dark:text-slate-400">Carrier:</dt>
+              <dd className="text-slate-700 dark:text-slate-200">{firstShipment.carrierCode ?? '—'}</dd>
+            </div>
+            <div className="flex items-baseline gap-2">
+              <dt className="w-20 shrink-0 text-slate-500 dark:text-slate-400">Service:</dt>
+              <dd className="text-slate-700 dark:text-slate-200">{firstShipment.serviceName ?? firstShipment.serviceCode ?? '—'}</dd>
+            </div>
+            {firstShipment.trackingNumber && (
+              <div className="flex items-baseline gap-2">
+                <dt className="w-20 shrink-0 text-slate-500 dark:text-slate-400">Tracking:</dt>
+                <dd className="text-slate-700 dark:text-slate-200 font-mono break-all">{firstShipment.trackingNumber}</dd>
+              </div>
+            )}
+          </dl>
+        ) : shipmentServiceLevel ? (
+          <div className="text-sm text-slate-700 dark:text-slate-200 space-y-1">
+            <div>
+              <span className="text-slate-500 dark:text-slate-400">Promised:</span> {shipmentServiceLevel}
+            </div>
+            <div className="text-xs text-slate-500 dark:text-slate-400 italic">
+              No shipment booked yet — carrier will appear here once a parcel is created.
+            </div>
+          </div>
+        ) : (
+          <div className="text-sm text-slate-500 dark:text-slate-400 italic">
+            No shipment information available.
+          </div>
+        )}
+      </Card>
+    </div>
   )
 }
