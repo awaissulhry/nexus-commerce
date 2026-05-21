@@ -25,12 +25,37 @@ export interface ReconciliationReport {
   generatedAt: string
   marketplaceId: string
   marketplaceCode: string
+  /** I11 — native currency for this marketplace (e.g. IT=EUR, UK=GBP). */
+  currency: string
   window: { from: string; to: string; days: number }
   metrics: {
     orderCount: MetricCompare
     revenue: MetricCompare
     fbaInventoryUnits: MetricCompare
   }
+  warnings: string[]
+  durationMs: number
+}
+
+/** I11 — fan-out report across every active Amazon marketplace.
+ *  Each per-marketplace report stands alone in its native currency;
+ *  totals are intentionally NOT mixed across currencies. */
+export interface MultiMarketplaceReconciliationReport {
+  generatedAt: string
+  window: { from: string; to: string; days: number }
+  marketplaces: ReconciliationReport[]
+  /** I11 — currency cross-check: for each native currency, sum
+   *  of per-marketplace channel revenue, Nexus revenue, and drift.
+   *  If any drift is non-zero the operator has a per-marketplace
+   *  divergence to investigate. */
+  byCurrency: Array<{
+    currency: string
+    marketplaces: string[]
+    channelRevenue: number
+    nexusRevenue: number
+    drift: number
+    driftPct: number
+  }>
   warnings: string[]
   durationMs: number
 }
@@ -159,12 +184,15 @@ export async function reconcileAmazon(opts: {
   const from = new Date(to.getTime() - daysBack * 24 * 60 * 60 * 1000)
   const warnings: string[] = []
 
-  // Map marketplaceId → 2-letter code
+  // Map marketplaceId → 2-letter code + native currency.
+  // I11 — currency travels with the report so per-currency cross-checks
+  // can group correctly downstream (IT=EUR, UK=GBP, US=USD, etc.).
   const marketplaceRow = await prisma.marketplace.findFirst({
     where: { channel: 'AMAZON', marketplaceId },
-    select: { code: true },
+    select: { code: true, currency: true },
   })
   const marketplaceCode = marketplaceRow?.code ?? marketplaceId.slice(0, 6)
+  const currency = marketplaceRow?.currency ?? 'EUR'
 
   // ── Channel side (SP-API) ────────────────────────────────────────
   let channelOrders = 0
@@ -224,6 +252,7 @@ export async function reconcileAmazon(opts: {
     generatedAt: new Date().toISOString(),
     marketplaceId,
     marketplaceCode,
+    currency,
     window: {
       from: from.toISOString(),
       to: to.toISOString(),
@@ -262,4 +291,109 @@ export async function reconcileAmazon(opts: {
   })
 
   return report
+}
+
+/**
+ * I11 — fan out reconciliation across every active Amazon marketplace
+ * the operator is connected to.
+ *
+ * Per-marketplace reports are run sequentially (not in parallel) because
+ * SP-API rate limits are per-account and bursting all 5 markets at once
+ * burns the burst budget before any single one finishes. Each report
+ * runs to completion (warnings collected on failure rather than abort)
+ * so a single bad-credential marketplace doesn't poison the whole run.
+ *
+ * The byCurrency rollup groups marketplaces sharing a native currency
+ * (EU markets all = EUR, UK = GBP, US/MX/CA = USD/MXN/CAD individually)
+ * so the operator can verify that the EUR total drift across IT+DE+FR+
+ * ES+NL+SE+PL aligns with what they'd expect from per-marketplace
+ * Seller Central downloads.
+ */
+export async function reconcileAllAmazonMarketplaces(opts: {
+  daysBack?: number
+} = {}): Promise<MultiMarketplaceReconciliationReport> {
+  const t0 = Date.now()
+  const daysBack = opts.daysBack ?? 30
+  const to = new Date()
+  const from = new Date(to.getTime() - daysBack * 24 * 60 * 60 * 1000)
+  const warnings: string[] = []
+
+  // Pull active Amazon marketplaces. Operator may be connected to
+  // multiple (IT primary + DE/FR/ES/NL secondary, etc).
+  const marketplaces = await prisma.marketplace.findMany({
+    where: { channel: 'AMAZON', marketplaceId: { not: null } },
+    select: { marketplaceId: true, code: true, currency: true },
+    orderBy: { code: 'asc' },
+  })
+
+  const reports: ReconciliationReport[] = []
+  for (const mk of marketplaces) {
+    if (!mk.marketplaceId) continue
+    try {
+      const report = await reconcileAmazon({
+        marketplaceId: mk.marketplaceId,
+        daysBack,
+      })
+      reports.push(report)
+    } catch (err) {
+      warnings.push(
+        `marketplace ${mk.code ?? mk.marketplaceId} failed: ${err instanceof Error ? err.message : String(err)}`,
+      )
+    }
+  }
+
+  // I11 — per-currency cross-check. Sum per-marketplace channel + Nexus
+  // revenue within each native currency bucket; never mix currencies.
+  const currencyMap = new Map<
+    string,
+    { marketplaces: string[]; channelRevenue: number; nexusRevenue: number }
+  >()
+  for (const r of reports) {
+    const slot = currencyMap.get(r.currency) ?? {
+      marketplaces: [],
+      channelRevenue: 0,
+      nexusRevenue: 0,
+    }
+    slot.marketplaces.push(r.marketplaceCode)
+    slot.channelRevenue += Number(r.metrics.revenue.channel) || 0
+    slot.nexusRevenue += Number(r.metrics.revenue.nexus) || 0
+    currencyMap.set(r.currency, slot)
+  }
+  const byCurrency = [...currencyMap.entries()].map(([currency, slot]) => {
+    const drift = slot.nexusRevenue - slot.channelRevenue
+    const driftPct =
+      slot.channelRevenue === 0
+        ? slot.nexusRevenue === 0
+          ? 0
+          : 100
+        : (drift / slot.channelRevenue) * 100
+    return {
+      currency,
+      marketplaces: slot.marketplaces,
+      channelRevenue: Math.round(slot.channelRevenue * 100) / 100,
+      nexusRevenue: Math.round(slot.nexusRevenue * 100) / 100,
+      drift: Math.round(drift * 100) / 100,
+      driftPct: Math.round(driftPct * 100) / 100,
+    }
+  })
+
+  logger.info('[channel-reconciliation/all] complete', {
+    marketplaceCount: reports.length,
+    currencyCount: byCurrency.length,
+    warnings: warnings.length,
+    durationMs: Date.now() - t0,
+  })
+
+  return {
+    generatedAt: new Date().toISOString(),
+    window: {
+      from: from.toISOString(),
+      to: to.toISOString(),
+      days: daysBack,
+    },
+    marketplaces: reports,
+    byCurrency,
+    warnings,
+    durationMs: Date.now() - t0,
+  }
 }

@@ -1723,6 +1723,24 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // GET /api/amazon/reconciliation/all — I11 per-marketplace fan-out.
+  // Runs reconcileAmazon across every connected Amazon marketplace and
+  // groups revenue drift per native currency. Sequential (not parallel)
+  // to respect SP-API per-account rate limits. Daily run target for the
+  // operator's morning health check.
+  fastify.get<{ Querystring: { daysBack?: string } }>('/reconciliation/all', async (request, reply) => {
+    const { reconcileAllAmazonMarketplaces } = await import('../services/channel-reconciliation.service.js')
+    try {
+      const q = request.query
+      const daysBack = q.daysBack ? Math.min(180, Math.max(1, parseInt(q.daysBack, 10))) : 30
+      const report = await reconcileAllAmazonMarketplaces({ daysBack })
+      return report
+    } catch (err) {
+      fastify.log.error({ err }, '[amazon/reconciliation/all] failed')
+      return reply.code(500).send({ error: err instanceof Error ? err.message : String(err) })
+    }
+  })
+
   // POST /api/amazon/aplus/sync — Phase 9 metadata reconciliation.
   // Pulls all A+ Content documents from Amazon for the marketplace and
   // upserts them into APlusContent. Body: { marketplaceId? }.
