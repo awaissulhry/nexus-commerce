@@ -56,6 +56,8 @@ type Snapshot = {
       pending?: {
         count: number
         oldestAt: string | null
+        // SR.1 — estimated value from ChannelListing.price
+        estimateCents?: number
       }
     }
     sparkline: Array<{ date: string; valueCents: number }>
@@ -92,6 +94,39 @@ function freshness(iso: string): string {
 const EXPANDED_STORAGE_KEY = 'nexus.snapshot.expanded.v1'
 
 const MARKETPLACE_STORAGE_KEY = 'nexus.snapshot.marketplace.v1'
+const PERIOD_STORAGE_KEY = 'nexus.snapshot.period.v1'
+
+const VALID_PERIODS = ['today', 'yesterday', '7d', '30d', '90d'] as const
+type SnapshotPeriod = (typeof VALID_PERIODS)[number]
+
+const PERIOD_LABELS_TILE: Record<SnapshotPeriod, string> = {
+  today: 'Today',
+  yesterday: 'Yesterday',
+  '7d': 'Last 7 days',
+  '30d': 'Last 30 days',
+  '90d': 'Last 90 days',
+}
+
+/**
+ * SR.2 — derive default period from the parent page's filter when
+ * possible. On /orders, the toolbar's DateRangePicker writes
+ * ?dateRange=24h|7d|30d|90d. We pick that up so the snapshot stays
+ * in sync without operator effort. Custom date ranges (explicit
+ * dateFrom/dateTo) fall back to Today since the tile doesn't have a
+ * custom-date UI.
+ */
+function readInheritedPeriod(): SnapshotPeriod | null {
+  if (typeof window === 'undefined') return null
+  try {
+    const url = new URL(window.location.href)
+    const dr = url.searchParams.get('dateRange')
+    if (dr === '24h' || dr === 'today') return 'today'
+    if (dr === '7d') return '7d'
+    if (dr === '30d') return '30d'
+    if (dr === '90d') return '90d'
+  } catch {}
+  return null
+}
 
 export function GlobalSnapshot() {
   const [data, setData] = useState<Snapshot | null>(null)
@@ -106,6 +141,25 @@ export function GlobalSnapshot() {
       return null
     }
   })
+  // SR.2 — tile-level period. Order of precedence on first render:
+  //   1. Page URL (?dateRange= written by /orders DateRangePicker)
+  //   2. localStorage saved selection
+  //   3. 'today' default
+  const [period, setPeriodState] = useState<SnapshotPeriod>(() => {
+    if (typeof window === 'undefined') return 'today'
+    const inherited = readInheritedPeriod()
+    if (inherited) return inherited
+    try {
+      const raw = window.localStorage.getItem(PERIOD_STORAGE_KEY)
+      if (raw && (VALID_PERIODS as readonly string[]).includes(raw)) return raw as SnapshotPeriod
+    } catch {}
+    return 'today'
+  })
+  const setPeriod = (next: SnapshotPeriod) => {
+    setPeriodState(next)
+    try { window.localStorage.setItem(PERIOD_STORAGE_KEY, next) } catch {}
+  }
+
   // SA.3 — marketplace scope. Persists in localStorage so the
   // selection survives navigation between /orders top + /dashboard top.
   const [marketplace, setMarketplaceState] = useState<string | null>(() => {
@@ -127,7 +181,7 @@ export function GlobalSnapshot() {
 
   const fetchSnapshot = async () => {
     try {
-      const qs = new URLSearchParams({ period: 'today' })
+      const qs = new URLSearchParams({ period })
       if (marketplace) qs.set('marketplace', marketplace)
       const res = await fetch(`${getBackendUrl()}/api/dashboard/global-snapshot?${qs.toString()}`, {
         cache: 'no-store',
@@ -142,7 +196,7 @@ export function GlobalSnapshot() {
     }
   }
 
-  useEffect(() => { fetchSnapshot() }, [marketplace])
+  useEffect(() => { fetchSnapshot() }, [marketplace, period])
 
   // Re-tick the "Xs ago" label every 5s without re-fetching.
   useEffect(() => {
@@ -251,7 +305,18 @@ export function GlobalSnapshot() {
     <Card
       title="Global snapshot"
       action={
-        <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+        <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 flex-wrap">
+          {/* SR.2 — tile-level period dropdown */}
+          <select
+            value={period}
+            onChange={(e) => setPeriod(e.target.value as SnapshotPeriod)}
+            className="h-7 px-2 text-xs border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200"
+            title="Scope every tile to this period (Open Orders count stays right-now)"
+          >
+            {VALID_PERIODS.map((p) => (
+              <option key={p} value={p}>{PERIOD_LABELS_TILE[p]}</option>
+            ))}
+          </select>
           {/* SA.3 — marketplace scope dropdown */}
           {data.availableMarketplaces.length > 1 && (
             <select
@@ -293,14 +358,35 @@ export function GlobalSnapshot() {
           onToggle={() => onToggle('sales')}
         >
           <div className="space-y-1">
-            <PulseOnChange value={data.sales.total.valueCents}>
-              <div className="text-2xl font-bold tabular-nums text-slate-900 dark:text-slate-100 inline-flex items-baseline gap-2">
-                {formatEur(data.sales.total.valueCents)}
-                {data.sales.total.compareDeltaPct != null && (
-                  <SalesDelta deltaPct={data.sales.total.compareDeltaPct} />
-                )}
-              </div>
-            </PulseOnChange>
+            {/* SR.1 — combined headline matches Amazon Seller Central
+                when there's pending value to estimate. Asterisk + sub-
+                line explain the estimate. */}
+            {(() => {
+              const pending = data.sales.total.pending
+              const estCents = pending?.estimateCents ?? 0
+              const showCombined = pending && pending.count > 0 && estCents > 0
+              const headlineCents = showCombined
+                ? data.sales.total.valueCents + estCents
+                : data.sales.total.valueCents
+              return (
+                <PulseOnChange value={headlineCents}>
+                  <div className="text-2xl font-bold tabular-nums text-slate-900 dark:text-slate-100 inline-flex items-baseline gap-2">
+                    {formatEur(headlineCents)}
+                    {showCombined && (
+                      <span
+                        className="text-base text-amber-600 dark:text-amber-400"
+                        title="Includes an estimate for pending orders Amazon hasn't priced yet — see annotation below."
+                      >
+                        *
+                      </span>
+                    )}
+                    {data.sales.total.compareDeltaPct != null && (
+                      <SalesDelta deltaPct={data.sales.total.compareDeltaPct} />
+                    )}
+                  </div>
+                </PulseOnChange>
+              )
+            })()}
             <div className="text-xs text-slate-500 dark:text-slate-400">
               {data.period.key === 'today' ? 'Today so far' : data.period.key}
               {' · '}
@@ -309,17 +395,18 @@ export function GlobalSnapshot() {
                 <span className="ml-1 text-slate-400 dark:text-slate-500"> · {data.sales.total.compareLabel}</span>
               )}
             </div>
-            {/* SA.1 — Amazon-withheld PENDING orders in this window */}
+            {/* SA.1 + SR.1 — surface the pending estimate breakdown */}
             {data.sales.total.pending && data.sales.total.pending.count > 0 && (
               <div
                 className="text-xs text-amber-700 dark:text-amber-300 font-medium"
                 title={
                   data.sales.total.pending.oldestAt
-                    ? `Amazon withholds OrderTotal for PENDING orders until payment is verified. Oldest pending: ${new Date(data.sales.total.pending.oldestAt).toLocaleString()}. Real prices are fetched eagerly via SP-API getOrder; if Amazon still withholds, the total will update within minutes of the order leaving PENDING.`
+                    ? `Amazon withholds OrderTotal for PENDING orders even via SP-API getOrder. The estimate uses ChannelListing.price (falls back to Product.basePrice). Real values land within minutes of the order leaving PENDING. Oldest pending: ${new Date(data.sales.total.pending.oldestAt).toLocaleString()}.`
                     : 'Amazon withholds OrderTotal for PENDING orders.'
                 }
               >
-                + {data.sales.total.pending.count} pending verification
+                * includes ~{formatEur(data.sales.total.pending.estimateCents ?? 0)} estimated for{' '}
+                {data.sales.total.pending.count} pending verification
               </div>
             )}
             <Sparkline data={data.sales.sparkline} />

@@ -552,12 +552,74 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
             purchaseDate: { gte: from, lt: to },
             ...(marketplaceFilter ? { marketplace: marketplaceFilter } : {}),
           },
-          select: { purchaseDate: true },
+          select: {
+            id: true,
+            purchaseDate: true,
+            marketplace: true,
+            items: {
+              select: {
+                quantity: true,
+                productId: true,
+              },
+            },
+          },
           orderBy: { purchaseDate: 'asc' },
           take: 100,
         })
         const pendingCount = pendingInWindow.length
         const oldestPendingAt = pendingInWindow[0]?.purchaseDate?.toISOString() ?? null
+
+        // SR.1 — estimate the value of PENDING+€0 orders so the
+        // headline matches Amazon Seller Central's UI. Amazon withholds
+        // OrderTotal from SP-API for PENDING, but their internal UI
+        // knows the price. We approximate by looking up each item's
+        // ChannelListing price (per channel+marketplace) and summing
+        // qty × price. Falls back to Product.basePrice when no
+        // ChannelListing row exists for the marketplace.
+        let pendingEstimateCents = 0
+        const pendingEstimateBreakdown: Array<{ orderId: string; cents: number }> = []
+        if (pendingInWindow.length > 0) {
+          const productIds = Array.from(
+            new Set(
+              pendingInWindow.flatMap((o) =>
+                o.items.map((i) => i.productId).filter((p): p is string => !!p),
+              ),
+            ),
+          )
+          if (productIds.length > 0) {
+            const listings = await prisma.channelListing.findMany({
+              where: {
+                productId: { in: productIds },
+                channel: 'AMAZON',
+                marketplace: { in: ['IT', 'DE', 'FR', 'ES', 'UK', 'NL', 'PL', 'SE', 'BE', 'IE', 'TR', 'AE', 'SA', 'US', 'CA', 'JP'] },
+              },
+              select: { productId: true, marketplace: true, price: true, salePrice: true },
+            })
+            const products = await prisma.product.findMany({
+              where: { id: { in: productIds } },
+              select: { id: true, basePrice: true },
+            })
+            const basePriceByProduct = new Map(products.map((p) => [p.id, Number(p.basePrice)]))
+            const priceByPair = new Map<string, number>()
+            for (const l of listings) {
+              const eff = l.salePrice != null ? Number(l.salePrice) : l.price != null ? Number(l.price) : null
+              if (eff != null && eff > 0) {
+                priceByPair.set(`${l.productId}|${l.marketplace}`, eff)
+              }
+            }
+            for (const o of pendingInWindow) {
+              let orderCents = 0
+              for (const it of o.items) {
+                if (!it.productId) continue
+                const pairKey = `${it.productId}|${o.marketplace ?? 'DEFAULT'}`
+                const unit = priceByPair.get(pairKey) ?? basePriceByProduct.get(it.productId) ?? 0
+                orderCents += Math.round(unit * 100) * it.quantity
+              }
+              pendingEstimateCents += orderCents
+              if (orderCents > 0) pendingEstimateBreakdown.push({ orderId: o.id, cents: orderCents })
+            }
+          }
+        }
 
         // SA.3 — distinct list of marketplaces with order activity in
         // the rolling 90 days, so the UI dropdown can show only what
@@ -599,6 +661,10 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
               pending: {
                 count: pendingCount,
                 oldestAt: oldestPendingAt,
+                // SR.1 — estimated value of those PENDING orders from
+                // ChannelListing price (falls back to Product.basePrice).
+                // Lets the UI render Amazon-style combined headline.
+                estimateCents: pendingEstimateCents,
               },
             },
             sparkline,
