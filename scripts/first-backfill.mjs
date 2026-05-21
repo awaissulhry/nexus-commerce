@@ -256,9 +256,20 @@ async function handleChunk({ channel, domain, from, to, dryRun }) {
         cursor: to.toISOString(),
       }
     }
-    case 'amazon-returns':
+    case 'amazon-returns': {
+      const r = await postJson('/api/amazon/returns/sync', {
+        from: from.toISOString(),
+        to: to.toISOString(),
+      })
+      return {
+        fetched: (r.fbmRowsScanned ?? 0) + (r.fbaRowsScanned ?? 0),
+        upserted: (r.fbmCreated ?? 0) + (r.fbaCreated ?? 0),
+        failed: (r.fbmFailed ?? 0) + (r.fbaFailed ?? 0),
+        cursor: to.toISOString(),
+      }
+    }
     case 'ebay-returns':
-      throw new Error(`Returns handler not implemented (Phase 7).`)
+      throw new Error(`eBay returns handler not implemented (Phase 7 partial).`)
     default:
       throw new Error(`No handler for ${key}`)
   }

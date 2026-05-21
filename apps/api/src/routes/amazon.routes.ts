@@ -1674,6 +1674,39 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // POST /api/amazon/returns/sync — Phase 7 returns backfill. Body shape:
+  //   { from, to, marketplaceId? }  — explicit window
+  //   { hoursBack: N }              — default rolling window (matches cron)
+  fastify.post<{
+    Body?: { from?: string; to?: string; hoursBack?: number; marketplaceId?: string }
+  }>('/returns/sync', async (request, reply) => {
+    const { pollAmazonReturns } = await import('../services/amazon-returns/ingest.service.js')
+    try {
+      const body = request.body ?? {}
+      const opts: Parameters<typeof pollAmazonReturns>[0] = {}
+      if (body.marketplaceId) opts.marketplaceId = body.marketplaceId
+      if (body.from && body.to) {
+        const start = new Date(body.from)
+        let end = new Date(body.to)
+        if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+          return reply.code(400).send({ success: false, error: `Invalid 'from'/'to' timestamp` })
+        }
+        // Clamp end to now-3min (SP-API report quirks)
+        const minAgo = new Date(Date.now() - 180_000)
+        if (end > minAgo) end = minAgo
+        opts.dataStartTime = start
+        opts.dataEndTime = end
+      } else if (typeof body.hoursBack === 'number') {
+        opts.hoursBack = body.hoursBack
+      }
+      const result = await pollAmazonReturns(opts)
+      return { success: true, ...result }
+    } catch (err) {
+      fastify.log.error({ err }, '[amazon/returns/sync] failed')
+      return reply.code(500).send({ success: false, error: err instanceof Error ? err.message : String(err) })
+    }
+  })
+
   // GET /api/amazon/finance/probe — diagnostic. Probes 3 Finance + 2 Reports
   // endpoints using the current production refresh token and reports which
   // ones grant access. Used to determine whether Amazon's Finance role grant

@@ -226,6 +226,10 @@ export function parseAmazonReturnsTsv(body: string): AmazonReturnRow[] {
 export interface PollOptions {
   /** Hours back from now to request. Default 25 (overlap with hourly cron). */
   hoursBack?: number
+  /** Explicit window — used by historical backfill. When both are set,
+   *  overrides `hoursBack` for both FBM + FBA report requests. */
+  dataStartTime?: Date
+  dataEndTime?: Date
   /** Override marketplace id. Default `process.env.AMAZON_MARKETPLACE_ID` (IT). */
   marketplaceId?: string
   /** Pre-parsed rows (test harness path). When provided, the SP-API
@@ -253,8 +257,10 @@ export async function pollAmazonReturns(opts: PollOptions = {}): Promise<{
   const marketplaceId = opts.marketplaceId
     ?? process.env.AMAZON_MARKETPLACE_ID
     ?? 'APJ6JRA9NG5V4' // Italy default
-  const dataEndTime = new Date()
-  const dataStartTime = new Date(dataEndTime.getTime() - (opts.hoursBack ?? 25) * 3600_000)
+  // Explicit window > hoursBack > default 25h
+  const dataEndTime = opts.dataEndTime ?? new Date()
+  const dataStartTime = opts.dataStartTime
+    ?? new Date(dataEndTime.getTime() - (opts.hoursBack ?? 25) * 3600_000)
 
   // ── FBM path ─────────────────────────────────────────────────────
   let fbmRows: AmazonReturnRow[] = []
