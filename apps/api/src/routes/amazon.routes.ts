@@ -1650,6 +1650,71 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // GET /api/amazon/finance/probe — diagnostic. Probes 3 Finance + 2 Reports
+  // endpoints using the current production refresh token and reports which
+  // ones grant access. Used to determine whether Amazon's Finance role grant
+  // is partial (some endpoints work, others don't) or fully blocked.
+  fastify.get('/finance/probe', async () => {
+    const clientId = process.env.AMAZON_LWA_CLIENT_ID
+    const clientSecret = process.env.AMAZON_LWA_CLIENT_SECRET
+    const refreshToken = process.env.AMAZON_REFRESH_TOKEN
+    const marketplaceId = process.env.AMAZON_MARKETPLACE_ID ?? 'APJ6JRA9NG5V4'
+    const region = (process.env.AMAZON_REGION ?? 'eu') as string
+    const host = `sellingpartnerapi-${region}.amazon.com`
+
+    if (!clientId || !clientSecret || !refreshToken) {
+      return { error: 'creds missing' }
+    }
+
+    // Refresh LWA
+    const tokRes = await fetch('https://api.amazon.com/auth/o2/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        grant_type: 'refresh_token',
+        refresh_token: refreshToken,
+        client_id: clientId,
+        client_secret: clientSecret,
+      }).toString(),
+    })
+    if (!tokRes.ok) {
+      return { error: `LWA failed: ${await tokRes.text()}` }
+    }
+    const { access_token: accessToken } = await tokRes.json() as { access_token: string }
+
+    const since = new Date(Date.now() - 7 * 86400_000).toISOString()
+    const endpoints = [
+      { name: 'finance-v0-events',     path: `/finances/v0/financialEvents?PostedAfter=${since}&MaxResultsPerPage=10` },
+      { name: 'finance-v0-eventGroups', path: `/finances/v0/financialEventGroups?FinancialEventGroupStartedAfter=${since}&MaxResultsPerPage=10` },
+      { name: 'finance-2024-transactions', path: `/finances/2024-06-19/transactions?postedAfter=${since}&marketplaceId=${marketplaceId}` },
+      { name: 'reports-settlement-list', path: `/reports/2021-06-30/reports?reportTypes=GET_V2_SETTLEMENT_REPORT_DATA_FLAT_FILE_V2&pageSize=5` },
+      { name: 'reports-merchant-listings', path: `/reports/2021-06-30/reports?reportTypes=GET_MERCHANT_LISTINGS_ALL_DATA&pageSize=5` },
+    ]
+
+    const results: Array<{ name: string; status: number; ok: boolean; error?: string }> = []
+    for (const ep of endpoints) {
+      try {
+        const r = await fetch(`https://${host}${ep.path}`, {
+          headers: { 'x-amz-access-token': accessToken, 'Content-Type': 'application/json' },
+        })
+        const body = await r.text()
+        let errMsg: string | undefined
+        if (r.status !== 200) {
+          try {
+            const j = JSON.parse(body)
+            errMsg = j.errors?.[0]?.message ?? j.message ?? body.slice(0, 200)
+          } catch {
+            errMsg = body.slice(0, 200)
+          }
+        }
+        results.push({ name: ep.name, status: r.status, ok: r.status === 200, error: errMsg })
+      } catch (e) {
+        results.push({ name: ep.name, status: 0, ok: false, error: e instanceof Error ? e.message : String(e) })
+      }
+    }
+    return { tokenFingerprint: refreshToken.slice(-8), results }
+  })
+
   /**
    * GET /api/amazon/sp-api/health
    *
