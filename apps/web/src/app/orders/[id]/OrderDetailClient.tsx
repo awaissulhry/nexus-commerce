@@ -412,45 +412,15 @@ export default function OrderDetailClient({ id }: { id: string }) {
             <BuyShippingCard orderId={order.id} />
           )}
 
-          {/* AU.1 — Shipments on Fulfillment tab */}
+          {/* OX.9 — per-package sections on the Fulfillment tab.
+              Replaces the compact shipments list with one full Amazon-
+              style "Package N" panel per shipment. */}
           {tabParam === 'fulfillment' && order.shipments && order.shipments.length > 0 && (
-            <Card title="Shipments" description={`${order.shipments.length} shipment${order.shipments.length === 1 ? '' : 's'}`}>
-              <div className="space-y-2">
-                {order.shipments.map((s: any) => (
-                  <div key={s.id} className="border border-slate-200 dark:border-slate-700 rounded p-3 hover:bg-slate-50 dark:hover:bg-slate-800">
-                    <div className="flex items-center justify-between">
-                      <Link href={`/fulfillment/outbound?id=${s.id}`} className="flex-1 block">
-                        <div className="text-base font-semibold text-slate-900 dark:text-slate-100 inline-flex items-center gap-1.5">
-                          <Truck size={12} /> {s.carrierCode}
-                          {s.trackingNumber && <span className="font-mono text-blue-600 dark:text-blue-400">{s.trackingNumber}</span>}
-                        </div>
-                        <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                          {s.warehouse?.code ?? '—'} · {s.items.length} items
-                          {s.shippedAt && ` · shipped ${new Date(s.shippedAt).toLocaleDateString('en-GB')}`}
-                          {s.deliveredAt && ` · delivered ${new Date(s.deliveredAt).toLocaleDateString('en-GB')}`}
-                        </div>
-                      </Link>
-                      <div className="flex items-center gap-2 ml-2">
-                        {/* FU.2 — link to existing per-shipment pack-slip
-                            (O.37 in /fulfillment/outbound) so operators
-                            can print from /orders/[id] without bouncing. */}
-                        <a
-                          href={`${getBackendUrl()}/api/fulfillment/shipments/${s.id}/pack-slip.html`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          onClick={(e) => e.stopPropagation()}
-                          title="Pack slip (apre in nuova scheda)"
-                          className="text-sm text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 inline-flex items-center gap-1"
-                        >
-                          <ExternalLink size={11} /> Pack slip
-                        </a>
-                        <Badge variant="info" size="sm">{s.status.replace(/_/g, ' ')}</Badge>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </Card>
+            <div className="space-y-3">
+              {order.shipments.map((s: any, idx: number) => (
+                <PackageSection key={s.id} idx={idx} shipment={s} order={order} />
+              ))}
+            </div>
           )}
 
           {/* AU.1 — Returns on Fulfillment tab */}
@@ -1321,6 +1291,127 @@ function ShopifyDiscountsCard({ meta }: { meta: any }) {
           </div>
         )}
       </div>
+    </Card>
+  )
+}
+
+/**
+ * OX.9 — per-package section. One Amazon-style "Package N" panel per
+ * Shipment row, with per-parcel actions (Edit consignment + Print
+ * packing slip) and a per-package item table showing which SKUs from
+ * the order went in that physical parcel.
+ *
+ * Reuses the existing /fulfillment/shipments/:id/pack-slip endpoint
+ * for the per-package slip; Edit consignment deep-links to
+ * /fulfillment/outbound?id=... where the consignment editor lives.
+ */
+function PackageSection({ idx, shipment, order }: { idx: number; shipment: any; order: any }) {
+  // Map ShipmentItem.orderItemId back to OrderItem so we can show
+  // product names (SKUs alone are operator-hostile for long catalogs).
+  const orderItemsById = new Map<string, any>(
+    (order.items ?? []).map((it: any) => [it.id, it]),
+  )
+  const fmtDateTime = (d: string | null | undefined) =>
+    d ? new Date(d).toLocaleString(undefined, { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : null
+
+  const dispatchFrom = shipment.warehouse?.code ?? shipment.warehouse?.name ?? '—'
+  const totalUnits = (shipment.items ?? []).reduce((sum: number, i: any) => sum + (i.quantity ?? 0), 0)
+
+  return (
+    <Card title={`Package ${idx + 1}`} description={`${shipment.items?.length ?? 0} SKU${shipment.items?.length === 1 ? '' : 's'} · ${totalUnits} unit${totalUnits === 1 ? '' : 's'}`}>
+      {/* Per-parcel action bar — Amazon's "Action on parcel N" row */}
+      <div className="flex items-center gap-2 pb-3 mb-3 border-b border-slate-200 dark:border-slate-700 flex-wrap">
+        <span className="text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wider font-semibold">
+          Action on parcel {idx + 1}:
+        </span>
+        <Link
+          href={`/fulfillment/outbound?id=${shipment.id}`}
+          className="h-7 px-2.5 text-xs text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1"
+        >
+          Edit consignment
+        </Link>
+        <a
+          href={`${getBackendUrl()}/api/fulfillment/shipments/${shipment.id}/pack-slip.html`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="h-7 px-2.5 text-xs text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1"
+        >
+          Print packing slip
+        </a>
+        <div className="ml-auto">
+          <Badge variant="info" size="sm">{shipment.status?.replace(/_/g, ' ')}</Badge>
+        </div>
+      </div>
+
+      {/* Shipment metadata block */}
+      <dl className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-y-1.5 gap-x-4 text-sm mb-3">
+        <div className="flex items-baseline gap-2">
+          <dt className="text-slate-500 dark:text-slate-400">Ship date:</dt>
+          <dd className="text-slate-700 dark:text-slate-200">{fmtDateTime(shipment.shippedAt) ?? '—'}</dd>
+        </div>
+        <div className="flex items-baseline gap-2">
+          <dt className="text-slate-500 dark:text-slate-400">Shipping Carrier:</dt>
+          <dd className="text-slate-700 dark:text-slate-200">{shipment.carrierCode ?? '—'}</dd>
+        </div>
+        <div className="flex items-baseline gap-2">
+          <dt className="text-slate-500 dark:text-slate-400">Shipping service:</dt>
+          <dd className="text-slate-700 dark:text-slate-200">{shipment.serviceName ?? shipment.serviceCode ?? '—'}</dd>
+        </div>
+        <div className="flex items-baseline gap-2">
+          <dt className="text-slate-500 dark:text-slate-400">Tracking ID:</dt>
+          <dd className="text-slate-700 dark:text-slate-200 font-mono break-all">
+            {shipment.trackingUrl ? (
+              <a href={shipment.trackingUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline">
+                {shipment.trackingNumber ?? '—'}
+              </a>
+            ) : (
+              shipment.trackingNumber ?? '—'
+            )}
+          </dd>
+        </div>
+        <div className="flex items-baseline gap-2">
+          <dt className="text-slate-500 dark:text-slate-400">Dispatch from:</dt>
+          <dd className="text-slate-700 dark:text-slate-200 font-mono">{dispatchFrom}</dd>
+        </div>
+        {shipment.deliveredAt && (
+          <div className="flex items-baseline gap-2">
+            <dt className="text-slate-500 dark:text-slate-400">Delivered:</dt>
+            <dd className="text-slate-700 dark:text-slate-200">{fmtDateTime(shipment.deliveredAt)}</dd>
+          </div>
+        )}
+      </dl>
+
+      {/* Per-package item table */}
+      {shipment.items && shipment.items.length > 0 && (
+        <div className="border border-slate-200 dark:border-slate-700 rounded overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700">
+              <tr className="text-left text-xs uppercase tracking-wider text-slate-600 dark:text-slate-400 font-semibold">
+                <th className="px-3 py-2">Product name</th>
+                <th className="px-3 py-2 font-mono normal-case">SKU</th>
+                <th className="px-3 py-2 text-right">Quantity</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+              {shipment.items.map((si: any) => {
+                const oi = si.orderItemId ? orderItemsById.get(si.orderItemId) : null
+                const name = oi?.product?.name ?? null
+                return (
+                  <tr key={si.id} className="align-top">
+                    <td className="px-3 py-2 text-slate-700 dark:text-slate-300">
+                      {name ?? <span className="italic text-slate-500 dark:text-slate-400">{si.sku}</span>}
+                    </td>
+                    <td className="px-3 py-2 text-slate-500 dark:text-slate-400 font-mono">{si.sku}</td>
+                    <td className="px-3 py-2 text-right tabular-nums font-medium text-slate-900 dark:text-slate-100">
+                      {si.quantity}
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
     </Card>
   )
 }
