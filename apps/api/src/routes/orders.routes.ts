@@ -48,6 +48,51 @@ export async function ordersRoutes(app: FastifyInstance) {
   })
 
   // ── Stats (kept, lighter response shape) ─────────────────────────
+  // LS.3 — live-sync health probe for the freshness badge on /orders.
+  // Reports the most recent push-notification (SQS) timestamp + cron
+  // last-update + whether the SQS poll is gated ON. The UI uses this
+  // to render a green/amber/rose pill telling operators whether
+  // Amazon push is flowing.
+  app.get('/api/orders/sync-health', async (_request, reply) => {
+    try {
+      reply.header('Cache-Control', 'private, max-age=10')
+      const [lastPush, lastCron] = await Promise.all([
+        // Most recent SQS message persisted as a WebhookEvent. Only
+        // ORDER_CHANGE notifications land here today.
+        prisma.webhookEvent.findFirst({
+          where: { channel: 'AMAZON' },
+          orderBy: { createdAt: 'desc' },
+          select: { createdAt: true, eventType: true, isProcessed: true },
+        }),
+        // Best-effort cron heartbeat: latest Order.updatedAt for
+        // Amazon. The 15-min cron touches at least one row per run
+        // (the rolling cursor), so this is a reasonable proxy for
+        // "the polling pipeline is alive".
+        prisma.order.findFirst({
+          where: { channel: 'AMAZON' },
+          orderBy: { updatedAt: 'desc' },
+          select: { updatedAt: true },
+        }),
+      ])
+      return {
+        push: {
+          enabled: process.env.NEXUS_ENABLE_AMAZON_SQS_POLL === '1',
+          queueConfigured: !!process.env.AMAZON_SQS_QUEUE_URL,
+          lastEventAt: lastPush?.createdAt?.toISOString() ?? null,
+          lastEventType: lastPush?.eventType ?? null,
+        },
+        cron: {
+          enabled: process.env.NEXUS_ENABLE_AMAZON_ORDERS_CRON === '1',
+          lastUpdateAt: lastCron?.updatedAt?.toISOString() ?? null,
+        },
+        checkedAt: new Date().toISOString(),
+      }
+    } catch (error: any) {
+      logger.error('[ORDERS API] sync-health failed', { message: error.message })
+      return reply.status(500).send({ error: error.message })
+    }
+  })
+
   app.get('/api/orders/stats', async (request, reply) => {
     try {
       reply.header('Cache-Control', 'private, max-age=30')

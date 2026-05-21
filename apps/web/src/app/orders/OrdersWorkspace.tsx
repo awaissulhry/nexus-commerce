@@ -32,6 +32,7 @@ import { ReturnsLens } from './_lenses/ReturnsLens'
 import { ReviewsLens } from './_lenses/ReviewsLens'
 import { GridLens } from './_lenses/GridLens'
 import { FilterBar } from './_components/FilterBar'
+import { LiveSyncBadge } from './_components/LiveSyncBadge'
 import { BulkActionBar } from './_components/BulkActionBar'
 import { DEFAULT_VISIBLE } from './_lib/columns'
 import {
@@ -722,6 +723,7 @@ export default function OrdersWorkspace() {
             onChange={setAutoRefreshMin}
             onTick={() => { fetchOrders(); fetchStats(); fetchFacets() }}
           />
+          <LiveSyncBadge />
           <FreshnessIndicator
             lastFetchedAt={lastFetchedAt}
             onRefresh={() => fetchOrders()}
