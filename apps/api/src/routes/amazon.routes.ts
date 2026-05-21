@@ -1590,12 +1590,18 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
       let summary
       if (body.start && body.end) {
         const start = new Date(body.start)
-        const end = new Date(body.end)
+        let end = new Date(body.end)
+        // Same clamp as daysBack path — protects scaffold callers that pass
+        // T-23:59:59Z for "today" windows.
+        const minAgo = new Date(Date.now() - 180_000)
+        if (end > minAgo) end = minAgo
         summary = useV0
           ? await syncFinancialEvents(start, end)
           : await syncFinancialTransactions(start, end, body.marketplaceId)
       } else if (typeof body.daysBack === 'number') {
-        const end = new Date()
+        // Clamp `end` to now − 3 min (SP-API rejects PostedBefore within
+        // its ~2-min data-propagation window).
+        const end = new Date(Date.now() - 180_000)
         const start = new Date(end.getTime() - body.daysBack * 24 * 60 * 60 * 1000)
         summary = useV0
           ? await syncFinancialEvents(start, end)
