@@ -216,11 +216,15 @@ export default function OrdersWorkspace() {
     router.replace(`${pathname}?${next.toString()}`, { scroll: false })
   }, [savedViews, searchParams, pathname, router])
 
+  // OX.4 — bumped storage key from `orders.visibleColumns` to `.v2` so
+  // operators on the old column set get the Amazon-parity defaults
+  // automatically. They can still re-add the legacy cells via the
+  // column picker.
   const [visibleColumns, setVisibleColumns] = useState<string[]>(() => {
     if (typeof window === 'undefined') return DEFAULT_VISIBLE
-    try { const s = window.localStorage.getItem('orders.visibleColumns'); return s ? JSON.parse(s) : DEFAULT_VISIBLE } catch { return DEFAULT_VISIBLE }
+    try { const s = window.localStorage.getItem('orders.visibleColumns.v2'); return s ? JSON.parse(s) : DEFAULT_VISIBLE } catch { return DEFAULT_VISIBLE }
   })
-  useEffect(() => { try { window.localStorage.setItem('orders.visibleColumns', JSON.stringify(visibleColumns)) } catch {} }, [visibleColumns])
+  useEffect(() => { try { window.localStorage.setItem('orders.visibleColumns.v2', JSON.stringify(visibleColumns)) } catch {} }, [visibleColumns])
 
   const updateUrl = useCallback((patch: Record<string, string | undefined>) => {
     const next = new URLSearchParams(searchParams.toString())

@@ -234,7 +234,26 @@ export async function ordersRoutes(app: FastifyInstance) {
           skip: (page - 1) * pageSize,
           take: pageSize,
           include: {
-            items: { select: { id: true, sku: true, quantity: true, price: true, productId: true } },
+            // OX.4 — row needs first item's product name + ASIN +
+            // thumbnail. Include enough product fields to render the
+            // Amazon-style product cell without an N+1.
+            items: {
+              select: {
+                id: true,
+                sku: true,
+                quantity: true,
+                price: true,
+                productId: true,
+                product: {
+                  select: {
+                    id: true,
+                    name: true,
+                    amazonAsin: true,
+                    images: { select: { url: true }, take: 1, orderBy: { sortOrder: 'asc' } },
+                  },
+                },
+              },
+            },
             tags: { include: { tag: { select: { id: true, name: true, color: true } } } },
             reviewRequests: { select: { id: true, channel: true, status: true, sentAt: true, scheduledFor: true } },
             _count: { select: { items: true, shipments: true, returns: true, financialTransactions: true } },
@@ -275,36 +294,67 @@ export async function ordersRoutes(app: FastifyInstance) {
           if (hasRefund === false && hasRefundSet.has(o.id)) return false
           return true
         })
-        .map((o) => ({
-          id: o.id,
-          channel: o.channel,
-          marketplace: o.marketplace,
-          channelOrderId: o.channelOrderId,
-          status: o.status,
-          fulfillmentMethod: o.fulfillmentMethod,
-          totalPrice: Number(o.totalPrice),
-          currencyCode: o.currencyCode,
-          customerName: o.customerName,
-          customerEmail: o.customerEmail,
-          shippingAddress: o.shippingAddress,
-          purchaseDate: o.purchaseDate,
-          paidAt: o.paidAt,
-          shippedAt: o.shippedAt,
-          deliveredAt: o.deliveredAt,
-          cancelledAt: o.cancelledAt,
-          createdAt: o.createdAt,
-          updatedAt: o.updatedAt,
-          itemCount: o._count.items,
-          shipmentCount: o._count.shipments,
-          returnCount: o._count.returns,
-          financialTxCount: o._count.financialTransactions,
-          hasActiveReturn: activeReturns.has(o.id),
-          hasRefund: hasRefundSet.has(o.id),
-          customerOrderCount: customerOrderCountMap.get(o.customerEmail) ?? 1,
-          tags: o.tags.map((t: any) => t.tag),
-          reviewRequests: o.reviewRequests,
-          items: o.items.map((it) => ({ ...it, price: Number(it.price) })),
-        }))
+        .map((o) => {
+          // OX.4 — surface the first item's product on the row so the
+          // Amazon-style cell can render thumbnail + name + ASIN +
+          // line subtotal without an N+1 fetch.
+          const firstItem = o.items[0]
+          const firstProduct = firstItem?.product ?? null
+          const isBusinessOrder = !!(o.amazonMetadata as any)?.IsBusinessOrder
+          return {
+            id: o.id,
+            channel: o.channel,
+            marketplace: o.marketplace,
+            channelOrderId: o.channelOrderId,
+            status: o.status,
+            fulfillmentMethod: o.fulfillmentMethod,
+            totalPrice: Number(o.totalPrice),
+            currencyCode: o.currencyCode,
+            customerName: o.customerName,
+            customerEmail: o.customerEmail,
+            shippingAddress: o.shippingAddress,
+            purchaseDate: o.purchaseDate,
+            paidAt: o.paidAt,
+            shippedAt: o.shippedAt,
+            deliveredAt: o.deliveredAt,
+            cancelledAt: o.cancelledAt,
+            // OX.4 — Amazon ship-by + deliver-by promises (already in
+            // schema; was missing from the list payload).
+            shipByDate: o.shipByDate,
+            latestDeliveryDate: o.latestDeliveryDate,
+            isPrime: o.isPrime,
+            isBusinessOrder,
+            createdAt: o.createdAt,
+            updatedAt: o.updatedAt,
+            itemCount: o._count.items,
+            shipmentCount: o._count.shipments,
+            returnCount: o._count.returns,
+            financialTxCount: o._count.financialTransactions,
+            hasActiveReturn: activeReturns.has(o.id),
+            hasRefund: hasRefundSet.has(o.id),
+            customerOrderCount: customerOrderCountMap.get(o.customerEmail) ?? 1,
+            tags: o.tags.map((t: any) => t.tag),
+            reviewRequests: o.reviewRequests,
+            items: o.items.map((it) => ({
+              id: it.id,
+              sku: it.sku,
+              quantity: it.quantity,
+              price: Number(it.price),
+              productId: it.productId,
+            })),
+            firstItem: firstItem
+              ? {
+                  sku: firstItem.sku,
+                  quantity: firstItem.quantity,
+                  price: Number(firstItem.price),
+                  subtotal: Number(firstItem.price) * firstItem.quantity,
+                  productName: firstProduct?.name ?? null,
+                  amazonAsin: firstProduct?.amazonAsin ?? null,
+                  thumbnailUrl: firstProduct?.images?.[0]?.url ?? null,
+                }
+              : null,
+          }
+        })
 
       return {
         orders,

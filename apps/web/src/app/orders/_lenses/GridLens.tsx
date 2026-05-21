@@ -18,7 +18,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
-import { ChevronRight, ExternalLink, Settings2, ShoppingCart } from 'lucide-react'
+import { ChevronRight, ExternalLink, MoreHorizontal, Settings2, ShoppingCart } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { EmptyState } from '@/components/ui/EmptyState'
