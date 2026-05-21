@@ -185,6 +185,253 @@ function deltaPct(current: number, previous: number): number | null {
 }
 
 const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
+  /**
+   * GS.1 — Global Snapshot. Mirrors Amazon Seller Central's home-page
+   * "Sales · Open Orders · Buyer Messages" widget but with Nexus-better
+   * extras (multi-channel + Italian TZ + Italian fiscal awareness).
+   *
+   *   GET /api/dashboard/global-snapshot?period=today|yesterday|7d|30d|90d
+   *
+   * Returns:
+   *   {
+   *     period: {...},
+   *     sales: {
+   *       total:   { value, currency, units, deltaPct? },
+   *       sparkline: [{ date, valueCents }, ...] (7 days ending today),
+   *       byMarketplace: [{ marketplace, region, currency, valueCents, units }, ...]
+   *     },
+   *     openOrders: {
+   *       total, fbmUnshipped, fbmPending, fbaPending,
+   *       byMarketplace: [{ marketplace, region, fbmUnshipped, fbmPending, fbaPending }, ...]
+   *     },
+   *     lastUpdatedAt
+   *   }
+   *
+   * Sales are gross totalPrice (excludes cancelled/refunded/returned to
+   * match the OX.17 list semantics). Open Orders cluster by status the
+   * same way the /orders status tabs do.
+   *
+   * 30s cache. Italian operator timezone for "today" / "yesterday".
+   */
+  fastify.get<{ Querystring: { period?: string } }>(
+    '/dashboard/global-snapshot',
+    async (request, reply) => {
+      try {
+        reply.header('Cache-Control', 'private, max-age=30')
+        const period = (request.query.period ?? 'today') as
+          | 'today' | 'yesterday' | '7d' | '30d' | '90d'
+        const now = new Date()
+        const todayStart = zonedStartOfDay(now, OPERATOR_TIMEZONE)
+        let from: Date
+        let to: Date = now
+        switch (period) {
+          case 'yesterday':
+            from = new Date(todayStart.getTime() - 24 * 60 * 60 * 1000)
+            to = todayStart
+            break
+          case '7d':
+            from = new Date(todayStart.getTime() - 7 * 24 * 60 * 60 * 1000)
+            break
+          case '30d':
+            from = new Date(todayStart.getTime() - 30 * 24 * 60 * 60 * 1000)
+            break
+          case '90d':
+            from = new Date(todayStart.getTime() - 90 * 24 * 60 * 60 * 1000)
+            break
+          case 'today':
+          default:
+            from = todayStart
+        }
+
+        // Region grouping mirrors Amazon Seller Central's home-page
+        // table. The "marketplaces Xavia sells on" set lives in
+        // CLAUDE memory; we group by region for the panel UI.
+        const REGION: Record<string, string> = {
+          IT: 'Europe', DE: 'Europe', FR: 'Europe', ES: 'Europe', UK: 'Europe',
+          NL: 'Europe', SE: 'Europe', PL: 'Europe', BE: 'Europe', IE: 'Europe',
+          TR: 'Europe', AE: 'Middle East', SA: 'Middle East',
+          US: 'Americas', CA: 'Americas', MX: 'Americas',
+          JP: 'Asia',
+        }
+
+        // ── Sales aggregation ────────────────────────────────────────
+        // Exclude terminal-negative statuses (OX.17 semantics) so the
+        // snapshot number matches the "All" tab total.
+        const salesWhere = {
+          deletedAt: null,
+          status: { notIn: ['CANCELLED', 'REFUNDED', 'RETURNED'] as any },
+          purchaseDate: { gte: from, lt: to },
+        }
+        const salesByMarketplace = await prisma.order.groupBy({
+          by: ['marketplace', 'currencyCode'],
+          where: salesWhere,
+          _sum: { totalPrice: true },
+          _count: { _all: true },
+        })
+
+        // Per-line units (each OrderItem.quantity summed per order's marketplace).
+        const itemUnits = await prisma.$queryRaw<
+          Array<{ marketplace: string | null; units: bigint }>
+        >`
+          SELECT o."marketplace", COALESCE(SUM(oi."quantity"), 0)::bigint AS units
+            FROM "Order" o
+            JOIN "OrderItem" oi ON oi."orderId" = o.id
+           WHERE o."deletedAt" IS NULL
+             AND o."status" NOT IN ('CANCELLED', 'REFUNDED', 'RETURNED')
+             AND o."purchaseDate" >= ${from}
+             AND o."purchaseDate" <  ${to}
+           GROUP BY o."marketplace"
+        `
+        const unitsByMarketplace = new Map(
+          itemUnits.map((r) => [r.marketplace ?? 'UNKNOWN', Number(r.units)]),
+        )
+
+        // 7-day sparkline (always 7 days regardless of `period` so the
+        // tile chart is consistent) — daily totals in primary currency.
+        const sparkStart = new Date(todayStart.getTime() - 6 * 24 * 60 * 60 * 1000)
+        const sparkRaw = await prisma.$queryRaw<
+          Array<{ day: Date; cents: bigint }>
+        >`
+          SELECT date_trunc('day', o."purchaseDate" AT TIME ZONE 'Europe/Rome')::date AS day,
+                 COALESCE(SUM(ROUND(o."totalPrice" * 100)), 0)::bigint AS cents
+            FROM "Order" o
+           WHERE o."deletedAt" IS NULL
+             AND o."status" NOT IN ('CANCELLED', 'REFUNDED', 'RETURNED')
+             AND o."purchaseDate" >= ${sparkStart}
+             AND o."currencyCode" = 'EUR'
+           GROUP BY day
+           ORDER BY day ASC
+        `
+        const sparkMap = new Map(
+          sparkRaw.map((r) => [r.day.toISOString().slice(0, 10), Number(r.cents)]),
+        )
+        const sparkline: Array<{ date: string; valueCents: number }> = []
+        for (let i = 6; i >= 0; i--) {
+          const d = new Date(todayStart.getTime() - i * 24 * 60 * 60 * 1000)
+          const iso = d.toISOString().slice(0, 10)
+          sparkline.push({ date: iso, valueCents: sparkMap.get(iso) ?? 0 })
+        }
+
+        // ── Open Orders aggregation ─────────────────────────────────
+        // Cluster the same way the /orders status tabs do (OX.2):
+        //   FBM unshipped → PROCESSING/ON_HOLD on FBM rows
+        //   FBM pending   → PENDING/AWAITING_PAYMENT on FBM rows
+        //   FBA pending   → PENDING/AWAITING_PAYMENT on FBA rows
+        const openOrdersGroups = await prisma.order.groupBy({
+          by: ['marketplace', 'fulfillmentMethod', 'status'],
+          where: {
+            deletedAt: null,
+            status: {
+              in: ['PROCESSING', 'ON_HOLD', 'PENDING', 'AWAITING_PAYMENT'] as any,
+            },
+          },
+          _count: { _all: true },
+        })
+
+        type MarketStats = {
+          marketplace: string
+          region: string
+          fbmUnshipped: number
+          fbmPending: number
+          fbaPending: number
+        }
+        const openByMarket = new Map<string, MarketStats>()
+        const ensureMarket = (mkt: string): MarketStats => {
+          let existing = openByMarket.get(mkt)
+          if (!existing) {
+            existing = {
+              marketplace: mkt,
+              region: REGION[mkt] ?? 'Other',
+              fbmUnshipped: 0,
+              fbmPending: 0,
+              fbaPending: 0,
+            }
+            openByMarket.set(mkt, existing)
+          }
+          return existing
+        }
+        let openTotal = 0
+        let totalFbmUnshipped = 0
+        let totalFbmPending = 0
+        let totalFbaPending = 0
+        for (const g of openOrdersGroups) {
+          const mkt = g.marketplace ?? 'UNKNOWN'
+          const m = ensureMarket(mkt)
+          const count = g._count?._all ?? 0
+          const isFBA = g.fulfillmentMethod === 'FBA'
+          const isFBM = g.fulfillmentMethod === 'FBM'
+          const isUnshipped = g.status === 'PROCESSING' || g.status === 'ON_HOLD'
+          const isPending = g.status === 'PENDING' || g.status === 'AWAITING_PAYMENT'
+          if (isFBM && isUnshipped) { m.fbmUnshipped += count; totalFbmUnshipped += count }
+          if (isFBM && isPending) { m.fbmPending += count; totalFbmPending += count }
+          if (isFBA && isPending) { m.fbaPending += count; totalFbaPending += count }
+          openTotal += count
+        }
+
+        // ── Sales rollup per marketplace (EUR-normalized for the
+        // tile total; per-row preserves native currency). ─────────
+        type SalesRow = {
+          marketplace: string
+          region: string
+          currency: string
+          valueCents: number
+          units: number
+          orderCount: number
+        }
+        const salesRows: SalesRow[] = []
+        let salesTotalCents = 0
+        let salesUnitsTotal = 0
+        for (const g of salesByMarketplace) {
+          const mkt = g.marketplace ?? 'UNKNOWN'
+          const cents = Math.round(Number(g._sum?.totalPrice ?? 0) * 100)
+          salesRows.push({
+            marketplace: mkt,
+            region: REGION[mkt] ?? 'Other',
+            currency: g.currencyCode ?? 'EUR',
+            valueCents: cents,
+            units: unitsByMarketplace.get(mkt) ?? 0,
+            orderCount: g._count?._all ?? 0,
+          })
+          if (g.currencyCode === 'EUR' || !g.currencyCode) salesTotalCents += cents
+          salesUnitsTotal += unitsByMarketplace.get(mkt) ?? 0
+        }
+
+        return {
+          period: {
+            key: period,
+            from: from.toISOString(),
+            to: to.toISOString(),
+            timezone: OPERATOR_TIMEZONE,
+          },
+          sales: {
+            total: {
+              valueCents: salesTotalCents,
+              currency: 'EUR',
+              units: salesUnitsTotal,
+            },
+            sparkline,
+            byMarketplace: salesRows.sort((a, b) => b.valueCents - a.valueCents),
+          },
+          openOrders: {
+            total: openTotal,
+            fbmUnshipped: totalFbmUnshipped,
+            fbmPending: totalFbmPending,
+            fbaPending: totalFbaPending,
+            byMarketplace: [...openByMarket.values()].sort((a, b) => {
+              const sumA = a.fbmUnshipped + a.fbmPending + a.fbaPending
+              const sumB = b.fbmUnshipped + b.fbmPending + b.fbaPending
+              return sumB - sumA
+            }),
+          },
+          lastUpdatedAt: new Date().toISOString(),
+        }
+      } catch (error: any) {
+        fastify.log.error({ err: error }, '[dashboard/global-snapshot] failed')
+        return reply.status(500).send({ error: error?.message ?? String(error) })
+      }
+    },
+  )
+
   fastify.get<{
     Querystring: {
       window?: string
