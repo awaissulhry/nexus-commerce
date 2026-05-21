@@ -26,6 +26,7 @@ import { Skeleton } from '@/components/ui/Skeleton'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { ALL_COLUMNS, DEFAULT_VISIBLE, type OrderColumn } from '../_lib/columns'
 import { deepLinkForOrder } from '../_lib/deep-links'
+import { formatOrderTotal } from '../_lib/money'
 import {
   channelTone,
   REVIEW_STATUS_TONE,
@@ -488,16 +489,30 @@ function OrderCell({
           {o.itemCount}
         </span>
       )
-    case 'total':
+    case 'total': {
+      const display = formatOrderTotal({
+        totalPrice: o.totalPrice,
+        currencyCode: o.currencyCode,
+        status: o.status,
+      })
+      if (display.kind === 'pending') {
+        return (
+          <span
+            className="inline-flex items-center text-xs font-medium text-amber-700 dark:text-amber-300"
+            title="Amazon withholds the order total until payment is verified."
+          >
+            Awaiting payment
+          </span>
+        )
+      }
       return (
         <span className="text-md tabular-nums font-semibold text-slate-900 dark:text-slate-100">
-          {o.currencyCode === 'EUR' || !o.currencyCode ? '€' : ''}
-          {o.totalPrice.toFixed(2)}
-          {o.currencyCode && o.currencyCode !== 'EUR'
-            ? ` ${o.currencyCode}`
-            : ''}
+          {display.symbol}
+          {display.amount}
+          {display.trailingCode ? ` ${display.trailingCode}` : ''}
         </span>
       )
+    }
     case 'status':
       return (
         <Badge variant={STATUS_VARIANT[o.status] ?? 'default'} size="sm">

@@ -179,6 +179,66 @@ export class AmazonOrdersService {
     )
   }
 
+  /**
+   * OX.0 — backfill OrderTotal for orders that were ingested at €0.00
+   * but should have a real price (status NOT IN PENDING, CANCELLED).
+   *
+   * Calls SP-API `getOrder` per stale row (rate-limit-bounded by the
+   * client throttle). Idempotent: re-running only updates rows that
+   * still meet the stale criteria.
+   *
+   * Targets Amazon only — eBay + Shopify ingest their own totals and
+   * don't suffer the same Pending-state withholding.
+   */
+  async backfillZeroTotals(options: { limit?: number; olderThanDays?: number } = {}): Promise<{
+    scanned: number
+    repaired: number
+    skipped: number
+    failed: number
+    errors: Array<{ orderId: string; error: string }>
+  }> {
+    const limit = options.limit ?? 100
+    const stale = await prisma.order.findMany({
+      where: {
+        channel: 'AMAZON',
+        totalPrice: 0,
+        status: { notIn: ['PENDING', 'CANCELLED'] },
+        deletedAt: null,
+      },
+      select: { id: true, channelOrderId: true },
+      orderBy: { purchaseDate: 'asc' },
+      take: limit,
+    })
+    const result = { scanned: stale.length, repaired: 0, skipped: 0, failed: 0, errors: [] as Array<{ orderId: string; error: string }> }
+    for (const row of stale) {
+      try {
+        const raw = await amazonService.fetchOrderById(row.channelOrderId)
+        if (!raw || !raw.OrderTotal?.Amount) {
+          result.skipped += 1
+          continue
+        }
+        const amount = Number(raw.OrderTotal.Amount)
+        if (!Number.isFinite(amount) || amount === 0) {
+          result.skipped += 1
+          continue
+        }
+        await prisma.order.update({
+          where: { id: row.id },
+          data: {
+            totalPrice: amount,
+            currencyCode: raw.OrderTotal.CurrencyCode ?? 'EUR',
+          },
+        })
+        result.repaired += 1
+      } catch (e: any) {
+        result.failed += 1
+        result.errors.push({ orderId: row.channelOrderId, error: e?.message ?? String(e) })
+      }
+    }
+    logger.info('amazon-orders: backfillZeroTotals complete', result)
+    return result
+  }
+
   /** Find the most recent purchase date we already have for AMAZON.
    *  Used by the polling cron to derive `since` if no explicit cursor.
    *  Returns null if no Amazon orders exist (caller should fall back to backfill). */

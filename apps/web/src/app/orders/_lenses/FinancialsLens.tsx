@@ -16,6 +16,7 @@
 import Link from 'next/link'
 import { Card } from '@/components/ui/Card'
 import { useTranslations } from '@/lib/i18n/use-translations'
+import { formatOrderTotal } from '../_lib/money'
 import { channelTone } from '../_lib/tone'
 
 type FinancialsOrder = {
@@ -23,14 +24,20 @@ type FinancialsOrder = {
   channel: string
   channelOrderId: string
   totalPrice: number
+  currencyCode: string | null
+  status: string
   itemCount: number
 }
 
 export function FinancialsLens({ orders }: { orders: FinancialsOrder[] }) {
   const { t } = useTranslations()
+  // OX.0: page-total excludes PENDING-with-zero rows so Amazon's
+  // not-yet-priced orders don't drag the headline number to a misleading
+  // value. They re-enter the sum once SP-API fills OrderTotal in.
   const totals = orders.reduce(
     (acc, o) => {
-      acc.gross += o.totalPrice
+      const priced = !(o.totalPrice === 0 && o.status === 'PENDING')
+      if (priced) acc.gross += o.totalPrice
       return acc
     },
     { gross: 0 },
@@ -96,7 +103,21 @@ export function FinancialsLens({ orders }: { orders: FinancialsOrder[] }) {
                     </span>
                   </td>
                   <td className="px-3 py-2 text-right tabular-nums">
-                    €{o.totalPrice.toFixed(2)}
+                    {(() => {
+                      const d = formatOrderTotal({
+                        totalPrice: o.totalPrice,
+                        currencyCode: o.currencyCode,
+                        status: o.status,
+                      })
+                      if (d.kind === 'pending') {
+                        return (
+                          <span className="text-xs font-medium text-amber-700">
+                            Awaiting payment
+                          </span>
+                        )
+                      }
+                      return `${d.symbol}${d.amount}${d.trailingCode ? ` ${d.trailingCode}` : ''}`
+                    })()}
                   </td>
                   <td className="px-3 py-2 text-base text-slate-700">
                     <Link

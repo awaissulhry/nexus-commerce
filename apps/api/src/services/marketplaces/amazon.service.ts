@@ -981,6 +981,36 @@ export class AmazonService {
     }
   }
 
+  /**
+   * Fetch a single order by AmazonOrderId via SP-API `getOrder`.
+   *
+   * Unlike `getOrders` (ListOrders), this endpoint returns OrderTotal
+   * for orders in ALL statuses including Pending. Used by the OX.0
+   * stale-total backfill to repair orders that were ingested at €0.00
+   * and never picked up a subsequent ListOrders update.
+   *
+   * Returns null if Amazon reports the order does not exist (404),
+   * throws on other errors.
+   */
+  async fetchOrderById(amazonOrderId: string): Promise<AmazonOrderRaw | null> {
+    const sp = await this.getClient()
+    try {
+      const res: any = await sp.callAPI({
+        operation: 'getOrder',
+        endpoint: 'orders',
+        path: { orderId: amazonOrderId },
+      })
+      const payload = res?.payload ?? res
+      // SP-API returns the order object directly under payload for getOrder
+      return (payload ?? null) as AmazonOrderRaw | null
+    } catch (error: any) {
+      const msg = extractErrorMessage(error)
+      if (msg?.includes('NotFound') || error?.statusCode === 404) return null
+      console.error('[Amazon] fetchOrderById failed:', msg)
+      throw error
+    }
+  }
+
   /* ────────────────────────────────────────────────────────────── */
   /*  fetchFBAInventory                                             */
   /* ────────────────────────────────────────────────────────────── */

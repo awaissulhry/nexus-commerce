@@ -16,6 +16,7 @@ import { Skeleton } from '@/components/ui/Skeleton'
 import { useToast } from '@/components/ui/Toast'
 import { getBackendUrl } from '@/lib/backend-url'
 import { deepLinkForOrder } from '../_lib/deep-links'
+import { formatOrderTotal } from '../_lib/money'
 
 const CHANNEL_TONE: Record<string, string> = {
   AMAZON: 'bg-orange-50 dark:bg-orange-950/40 text-orange-700 dark:text-orange-300 border-orange-200 dark:border-orange-900',
@@ -286,7 +287,29 @@ export default function OrderDetailClient({ id }: { id: string }) {
               </div>
               <div className="ml-auto text-right">
                 <div className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">Total</div>
-                <div className="text-[24px] font-semibold tabular-nums text-slate-900 dark:text-slate-100">{order.currencyCode === 'EUR' || !order.currencyCode ? '€' : ''}{Number(order.totalPrice).toFixed(2)}{order.currencyCode && order.currencyCode !== 'EUR' ? ` ${order.currencyCode}` : ''}</div>
+                {(() => {
+                  const d = formatOrderTotal({
+                    totalPrice: order.totalPrice,
+                    currencyCode: order.currencyCode,
+                    status: order.status,
+                  })
+                  if (d.kind === 'pending') {
+                    return (
+                      <div
+                        className="inline-flex flex-col items-end"
+                        title="Amazon withholds the order total until payment is verified. The price will appear here once the order leaves Pending status."
+                      >
+                        <span className="text-base font-semibold text-amber-700 dark:text-amber-300">Awaiting payment</span>
+                        <span className="text-xs text-slate-500 dark:text-slate-400">verification</span>
+                      </div>
+                    )
+                  }
+                  return (
+                    <div className="text-[24px] font-semibold tabular-nums text-slate-900 dark:text-slate-100">
+                      {d.symbol}{d.amount}{d.trailingCode ? ` ${d.trailingCode}` : ''}
+                    </div>
+                  )
+                })()}
               </div>
             </div>
           </Card>
@@ -516,19 +539,37 @@ export default function OrderDetailClient({ id }: { id: string }) {
           {order.customerHistory && order.customerHistory.length > 0 && (
             <Card title="Order history" description={`${order.customerHistory.length} prior order${order.customerHistory.length === 1 ? '' : 's'}`}>
               <ul className="space-y-1">
-                {order.customerHistory.slice(0, 8).map((h: any) => (
-                  <li key={h.id}>
-                    <Link href={`/orders/${h.id}`} className="flex items-center justify-between gap-2 px-2 py-1.5 -mx-2 rounded hover:bg-slate-50 dark:hover:bg-slate-800">
-                      <div className="min-w-0">
-                        <div className="text-sm font-mono text-slate-700 dark:text-slate-300 truncate">{h.channelOrderId}</div>
-                        <div className="text-xs text-slate-500 dark:text-slate-400">
-                          {h.purchaseDate ? new Date(h.purchaseDate).toLocaleDateString('en-GB') : new Date(h.createdAt).toLocaleDateString('en-GB')}
+                {order.customerHistory.slice(0, 8).map((h: any) => {
+                  const d = formatOrderTotal({
+                    totalPrice: h.totalPrice,
+                    currencyCode: h.currencyCode,
+                    status: h.status,
+                  })
+                  return (
+                    <li key={h.id}>
+                      <Link href={`/orders/${h.id}`} className="flex items-center justify-between gap-2 px-2 py-1.5 -mx-2 rounded hover:bg-slate-50 dark:hover:bg-slate-800">
+                        <div className="min-w-0">
+                          <div className="text-sm font-mono text-slate-700 dark:text-slate-300 truncate">{h.channelOrderId}</div>
+                          <div className="text-xs text-slate-500 dark:text-slate-400">
+                            {h.purchaseDate ? new Date(h.purchaseDate).toLocaleDateString('en-GB') : new Date(h.createdAt).toLocaleDateString('en-GB')}
+                          </div>
                         </div>
-                      </div>
-                      <div className="text-sm tabular-nums text-slate-900 dark:text-slate-100 flex-shrink-0">€{Number(h.totalPrice).toFixed(2)}</div>
-                    </Link>
-                  </li>
-                ))}
+                        {d.kind === 'pending' ? (
+                          <span
+                            className="text-xs font-medium text-amber-700 dark:text-amber-300 flex-shrink-0"
+                            title="Amazon withholds the order total until payment is verified."
+                          >
+                            Awaiting payment
+                          </span>
+                        ) : (
+                          <div className="text-sm tabular-nums text-slate-900 dark:text-slate-100 flex-shrink-0">
+                            {d.symbol}{d.amount}{d.trailingCode ? ` ${d.trailingCode}` : ''}
+                          </div>
+                        )}
+                      </Link>
+                    </li>
+                  )
+                })}
               </ul>
             </Card>
           )}

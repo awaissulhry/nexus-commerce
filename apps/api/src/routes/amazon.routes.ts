@@ -1534,6 +1534,36 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // POST /api/amazon/orders/backfill-zero-totals — OX.0 repair pass for
+  // orders that were ingested at €0.00 (Amazon withholds OrderTotal
+  // for PENDING orders, and a small number can age out of the sync
+  // cursor without ever picking up a price update). Uses SP-API
+  // getOrder (which returns OrderTotal for every status) per stale row.
+  // Body: { limit?: number } (default 100). Idempotent.
+  fastify.post<{ Body?: { limit?: number } }>(
+    '/orders/backfill-zero-totals',
+    async (request, reply) => {
+      if (!amazonOrdersService.isConfigured()) {
+        return reply.code(503).send({
+          success: false,
+          error: 'Amazon SP-API credentials are not configured.',
+        })
+      }
+      try {
+        const result = await amazonOrdersService.backfillZeroTotals({
+          limit: request.body?.limit,
+        })
+        return { success: true, ...result }
+      } catch (error) {
+        fastify.log.error({ err: error }, '[amazon/orders/backfill-zero-totals] failed')
+        return reply.code(500).send({
+          success: false,
+          error: error instanceof Error ? error.message : String(error),
+        })
+      }
+    },
+  )
+
   // POST /api/amazon/inventory/sync — pull live FBA inventory from
   // SP-API getInventorySummaries into Product.totalStock. Two modes:
   //   - body { sellerSkus: [...] } → bounded refresh (max 50 SKUs)
