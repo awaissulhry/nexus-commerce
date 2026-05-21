@@ -34,7 +34,10 @@ import {
   type DeriveTransforms,
 } from '../services/cloudinary.service.js'
 import { analyzeProductImage } from '../services/ai/image-vision.service.js'
+import { generateLifestyleImage, type ImagenAspectRatio } from '../services/ai/image-generation.service.js'
 import { applyImagesToProducts } from '../services/images/bulk-apply.service.js'
+
+const VALID_ASPECT_RATIOS: ImagenAspectRatio[] = ['1:1', '3:4', '4:3', '9:16', '16:9']
 
 const VALID_PRESETS: AutoEnhancePreset[] = ['AMAZON_MAIN', 'EBAY_MAIN', 'SHOPIFY_PORTRAIT']
 
@@ -601,6 +604,90 @@ const productImagesCrudRoutes: FastifyPluginAsync = async (fastify) => {
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Vision analysis failed'
         return reply.status(502).send({ error: 'VISION_FAILED', message })
+      }
+    },
+  )
+
+  // ── POST /api/products/:id/images/generate-lifestyle ─────────────────
+  // IR.14 — Imagen 3 text-to-image lifestyle generation. Operator
+  // types a scene prompt, server hits Imagen via :predict, uploads
+  // the base64 PNG to Cloudinary, saves a new ProductImage with
+  // type=LIFESTYLE + metadata flagging it AI-generated.
+  fastify.post<{
+    Params: { id: string }
+    Body: { prompt?: string; aspectRatio?: ImagenAspectRatio; alt?: string | null }
+  }>(
+    '/products/:id/images/generate-lifestyle',
+    async (req, reply) => {
+      const { id } = req.params
+      const body = req.body ?? {}
+      const prompt = (body.prompt ?? '').trim()
+      if (prompt.length < 10) {
+        return reply.status(400).send({
+          error: 'PROMPT_TOO_SHORT',
+          message: 'Prompt must be at least 10 characters — describe the scene + product context.',
+        })
+      }
+      if (prompt.length > 2000) {
+        return reply.status(400).send({
+          error: 'PROMPT_TOO_LONG',
+          message: 'Imagen caps prompts at ~2000 characters; trim the description.',
+        })
+      }
+
+      const aspectRatio = body.aspectRatio ?? '1:1'
+      if (!VALID_ASPECT_RATIOS.includes(aspectRatio)) {
+        return reply.status(400).send({ error: 'INVALID_ASPECT_RATIO', validRatios: VALID_ASPECT_RATIOS })
+      }
+
+      const product = await prisma.product.findUnique({ where: { id }, select: { id: true } })
+      if (!product) return reply.status(404).send({ error: 'PRODUCT_NOT_FOUND' })
+
+      if (!isCloudinaryConfigured()) {
+        return reply.status(503).send({ error: 'CLOUDINARY_NOT_CONFIGURED' })
+      }
+
+      try {
+        const generated = await generateLifestyleImage({
+          prompt,
+          aspectRatio,
+          entityType: 'Product',
+          entityId: id,
+        })
+
+        // Imagen returns base64 PNG; push to Cloudinary so we get a
+        // real URL + publicId that the rest of the workspace can use.
+        const buffer = Buffer.from(generated.base64, 'base64')
+        const uploaded = await uploadBufferToCloudinary(buffer, {
+          folder: `product-images/${id}/ai-generated`,
+        })
+
+        const count = await prisma.productImage.count({ where: { productId: id } })
+
+        const image = await prisma.productImage.create({
+          data: {
+            productId: id,
+            url: uploaded.url,
+            publicId: uploaded.publicId,
+            type: 'LIFESTYLE',
+            alt: body.alt ?? null,
+            sortOrder: count,
+            width: uploaded.width,
+            height: uploaded.height,
+            fileSize: uploaded.bytes,
+            mimeType: 'image/png',
+          },
+        })
+
+        return reply.status(201).send({
+          ok: true,
+          image,
+          prompt: generated.prompt,
+          aspectRatio: generated.aspectRatio,
+        })
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Generation failed'
+        return reply.status(502).send({ error: 'GENERATION_FAILED', message })
       }
     },
   )
