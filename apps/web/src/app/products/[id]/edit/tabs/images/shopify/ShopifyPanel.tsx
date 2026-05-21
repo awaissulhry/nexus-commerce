@@ -14,7 +14,7 @@
 
 import { useRef, useState, useMemo } from 'react'
 import {
-  AlertTriangle, CheckCircle2, ChevronDown, Eye, GripVertical, Loader2, Plus,
+  AlertTriangle, CheckCircle2, ChevronDown, Clock, Eye, GripVertical, Loader2, Plus,
   Star, Store, Trash2, Upload,
 } from 'lucide-react'
 import { PLATFORM_RULES } from '@nexus/shared/image-validation'
@@ -24,6 +24,7 @@ import { beFetch } from '../api'
 import ImagePickerModal from '../ImagePickerModal'
 import CrossChannelSyncBar from '../CrossChannelSyncBar'
 import ChannelPreview from '../ChannelPreview'
+import ImagePublishHistory from '../ImagePublishHistory'
 import type { ListingImage, PendingUpsert, ProductImage, VariantSummary, WorkspaceProduct } from '../types'
 
 interface CopyResult { copied: number; skipped: number }
@@ -87,6 +88,7 @@ export default function ShopifyPanel({
   onPublish,
 }: Props) {
   const [previewOpen, setPreviewOpen] = useState(false)
+  const [historyOpen, setHistoryOpen] = useState(false)
   const [publishing, setPublishing] = useState(false)
   const [lastPublish, setLastPublish] = useState<{ success: boolean; message: string; ts: string } | null>(null)
   const [pickerTarget, setPickerTarget] = useState<'pool' | { colorValue: string } | null>(null)
@@ -520,6 +522,26 @@ export default function ShopifyPanel({
               listingImages={listingImages}
               variants={variants}
             />
+          </div>
+        )}
+      </div>
+
+      {/* IR.9.4 — Publish history */}
+      <div className="border-t border-slate-100 dark:border-slate-800">
+        <button
+          type="button"
+          onClick={() => setHistoryOpen((p) => !p)}
+          className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/50"
+          aria-expanded={historyOpen}
+        >
+          <Clock className="w-3.5 h-3.5 text-slate-400" />
+          <span className="font-medium">Publish history</span>
+          <span className="text-slate-400 ml-1">— Shopify product + variant updates + retry</span>
+          <ChevronDown className={cn('w-3.5 h-3.5 ml-auto text-slate-400 transition-transform', historyOpen && 'rotate-180')} />
+        </button>
+        {historyOpen && (
+          <div className="px-4 pb-4">
+            <ImagePublishHistory productId={productId} channel="SHOPIFY" />
           </div>
         )}
       </div>
