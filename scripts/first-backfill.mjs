@@ -100,14 +100,17 @@ function chunks(from, to, daysPerChunk) {
 }
 
 const chunkDays = {
-  'amazon-orders':     30,   // SP-API supports arbitrary; 30d = operator-friendly
-  'amazon-financial':  30,   // listFinancialEvents 180d max — 30d for safety
-  'amazon-returns':    30,
-  'amazon-settlement': 90,   // settlement reports list endpoint has no hard
-                             //   window cap; 90d chunks keep listResults <100
-                             //   (settlement cycle is ~weekly per marketplace)
-  'ebay-orders':        7,   // matches eBay rolling window
-  'ebay-financial':    30,
+  // Sized to fit inside Railway's ~30s HTTP-gateway timeout. SP-API
+  // getOrders is throttled at 0.0167 req/s (1/min sustained) so each
+  // page costs ~5-15s; chunks with N pages cost N × that. 5d typically
+  // = 1 page for Xavia (~30-50 orders/week).
+  'amazon-orders':      5,
+  'amazon-financial':   7,   // listFinancialEvents is faster per call
+  'amazon-returns':     7,
+  'amazon-settlement': 90,   // settlement listReports is fast; 90d ok
+  'ebay-orders':        3,   // eBay GetOrders less throttled but also
+                             //   paginated; 3d keeps requests <20s
+  'ebay-financial':    14,
   'ebay-returns':       7,
 }
 
@@ -129,24 +132,49 @@ async function getActiveEbayConnectionId() {
   }
 }
 
-// ── HTTP helper ────────────────────────────────────────────────────
+// ── HTTP helper with retry on transient 502/503/504 ───────────────
+// Railway's HTTP gateway returns 502 when an upstream request takes >30s
+// (sometimes due to brief container restarts or load). Backfill chunks
+// are idempotent so retry is safe.
 async function postJson(routePath, body) {
   const url = `${API_URL.replace(/\/+$/, '')}${routePath}`
-  const r = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  })
-  const text = await r.text()
-  let payload
-  try { payload = JSON.parse(text) } catch { payload = { raw: text.slice(0, 500) } }
-  if (!r.ok) {
+  const backoffMs = [5_000, 20_000, 60_000]  // up to 3 retries
+  let lastErr
+  for (let attempt = 0; attempt <= backoffMs.length; attempt++) {
+    let r, text, payload
+    try {
+      r = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      text = await r.text()
+      try { payload = JSON.parse(text) } catch { payload = { raw: text.slice(0, 500) } }
+    } catch (e) {
+      // network-level failure (DNS, conn reset, etc.) → treat as transient
+      lastErr = new Error(`fetch failed: ${e.message}`)
+      if (attempt < backoffMs.length) {
+        process.stdout.write(`\n      retry ${attempt + 1}/${backoffMs.length} after ${backoffMs[attempt]/1000}s (fetch failed): `)
+        await new Promise(r => setTimeout(r, backoffMs[attempt]))
+        continue
+      }
+      throw lastErr
+    }
+    if (r.ok) return payload
+    // Transient gateway errors → retry
+    if ([502, 503, 504].includes(r.status) && attempt < backoffMs.length) {
+      lastErr = new Error(`HTTP ${r.status} ${routePath} (retrying)`)
+      process.stdout.write(`\n      retry ${attempt + 1}/${backoffMs.length} after ${backoffMs[attempt]/1000}s (HTTP ${r.status}): `)
+      await new Promise(r => setTimeout(r, backoffMs[attempt]))
+      continue
+    }
+    // Non-retryable error
     const e = new Error(`HTTP ${r.status} ${routePath}: ${JSON.stringify(payload).slice(0, 400)}`)
     e.status = r.status
     e.payload = payload
     throw e
   }
-  return payload
+  throw lastErr
 }
 
 // ── Per-(channel, domain) handlers ─────────────────────────────────
