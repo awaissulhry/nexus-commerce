@@ -122,6 +122,20 @@ export interface ProfitReport {
   }
   waterfall: WaterfallStep[]
   byChannel: ProfitBreakdownEntry[]
+  /** I6 — per-(channel, marketplace, currency) P&L in native currency.
+   *  Each row stands alone — no implicit conversion across marketplaces. */
+  byMarketplace: Array<{
+    channel: string
+    marketplace: string
+    currency: string
+    revenue: number
+    cogs: number
+    fees: number
+    grossProfit: number
+    netProfit: number
+    marginPct: number | null
+    unitsSold: number
+  }>
   bySku: ProfitSkuRow[]
   lossMakers: ProfitSkuRow[]
   feeNotes: { label: string; detail: string }[]
@@ -130,6 +144,8 @@ export interface ProfitReport {
 interface RawOrderItem {
   orderId: string
   channel: string
+  marketplace: string
+  currency: string
   sku: string
   quantity: number
   price: number
@@ -166,7 +182,7 @@ async function loadOrderItems(
       quantity: true,
       price: true,
       product: { select: { name: true, brand: true, costPrice: true } },
-      order: { select: { channel: true } },
+      order: { select: { channel: true, marketplace: true, currencyCode: true } },
     },
     take: 200_000,
   })
@@ -175,6 +191,8 @@ async function loadOrderItems(
     .map((it) => ({
       orderId: it.orderId,
       channel: it.order.channel as string,
+      marketplace: it.order.marketplace ?? 'GLOBAL',
+      currency: it.order.currencyCode ?? 'EUR',
       sku: it.sku,
       quantity: it.quantity ?? 0,
       price: Number(it.price ?? 0),
@@ -265,6 +283,8 @@ function computeFee(channel: string, revenue: number, orders: number): number {
 function aggregate(items: RawOrderItem[]): {
   total: Acc
   byChannel: Map<string, Acc>
+  /** I6 — per-(channel, marketplace, currency) P&L bucket. */
+  byMarketplace: Map<string, Acc & { channel: string; marketplace: string; currency: string }>
   bySku: Map<
     string,
     Acc & { productName: string | null; brand: string | null; channel: string }
@@ -272,6 +292,10 @@ function aggregate(items: RawOrderItem[]): {
 } {
   const total = emptyAcc()
   const byChannel = new Map<string, Acc>()
+  const byMarketplace = new Map<
+    string,
+    Acc & { channel: string; marketplace: string; currency: string }
+  >()
   const bySku = new Map<
     string,
     Acc & { productName: string | null; brand: string | null; channel: string }
@@ -291,6 +315,21 @@ function aggregate(items: RawOrderItem[]): {
     chSlot.units += it.quantity
     chSlot.orders.add(it.orderId)
     byChannel.set(it.channel, chSlot)
+
+    const mkKey = `${it.channel}|${it.marketplace}|${it.currency}`
+    const mkSlot =
+      byMarketplace.get(mkKey) ??
+      ({
+        ...emptyAcc(),
+        channel: it.channel,
+        marketplace: it.marketplace,
+        currency: it.currency,
+      } as Acc & { channel: string; marketplace: string; currency: string })
+    mkSlot.revenue += line
+    mkSlot.cogs += cogsLine
+    mkSlot.units += it.quantity
+    mkSlot.orders.add(it.orderId)
+    byMarketplace.set(mkKey, mkSlot)
 
     const skuSlot =
       bySku.get(it.sku) ??
@@ -314,11 +353,14 @@ function aggregate(items: RawOrderItem[]): {
   for (const [ch, slot] of byChannel.entries()) {
     slot.fees = computeFee(ch, slot.revenue, slot.orders.size)
   }
+  for (const [, slot] of byMarketplace.entries()) {
+    slot.fees = computeFee(slot.channel, slot.revenue, slot.orders.size)
+  }
   total.fees = [...byChannel.values()].reduce((s, a) => s + a.fees, 0)
   for (const [, slot] of bySku.entries()) {
     slot.fees = computeFee(slot.channel, slot.revenue, slot.orders.size)
   }
-  return { total, byChannel, bySku }
+  return { total, byChannel, byMarketplace, bySku }
 }
 
 export async function computeProfitReport(
@@ -474,6 +516,26 @@ export async function computeProfitReport(
     },
     waterfall,
     byChannel,
+    // I6 — per-(channel, marketplace, currency) P&L. Each row in native
+    // currency; no implicit conversion. Sorted by current revenue desc.
+    byMarketplace: [...currentAgg.byMarketplace.values()]
+      .map((slot) => {
+        const gross = slot.revenue - slot.cogs
+        const net = gross - slot.fees
+        return {
+          channel: slot.channel,
+          marketplace: slot.marketplace,
+          currency: slot.currency,
+          revenue: Math.round(slot.revenue * 100) / 100,
+          cogs: Math.round(slot.cogs * 100) / 100,
+          fees: Math.round(slot.fees * 100) / 100,
+          grossProfit: Math.round(gross * 100) / 100,
+          netProfit: Math.round(net * 100) / 100,
+          marginPct: slot.revenue > 0 ? Math.round((net / slot.revenue) * 10000) / 100 : null,
+          unitsSold: slot.units,
+        }
+      })
+      .sort((a, b) => b.revenue - a.revenue),
     bySku: bySku.slice(0, 100),
     lossMakers,
     feeNotes: [
