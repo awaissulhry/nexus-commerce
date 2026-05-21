@@ -1813,6 +1813,40 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
   // for completion. For Railway gateway timeouts, prefer smaller windows
   // and call repeatedly, or trigger from a long-lived job.
 
+  // POST /api/amazon/fba/reimbursements/backfill — HB.5 reimbursements
+  fastify.post<{
+    Body?: { daysBack?: number; marketplaceId?: string }
+  }>('/fba/reimbursements/backfill', async (request, reply) => {
+    const { ingestFbaReimbursements } = await import('../services/fba-cost-detail.service.js')
+    try {
+      const result = await ingestFbaReimbursements(request.body ?? {})
+      return { success: true, ...result }
+    } catch (err) {
+      fastify.log.error({ err }, '[amazon/fba/reimbursements/backfill] failed')
+      return reply.code(500).send({
+        success: false,
+        error: err instanceof Error ? err.message : String(err),
+      })
+    }
+  })
+
+  // POST /api/amazon/fba/adjustments/backfill — HB.5 inventory adjustments
+  fastify.post<{
+    Body?: { daysBack?: number; marketplaceId?: string }
+  }>('/fba/adjustments/backfill', async (request, reply) => {
+    const { ingestFbaInventoryAdjustments } = await import('../services/fba-cost-detail.service.js')
+    try {
+      const result = await ingestFbaInventoryAdjustments(request.body ?? {})
+      return { success: true, ...result }
+    } catch (err) {
+      fastify.log.error({ err }, '[amazon/fba/adjustments/backfill] failed')
+      return reply.code(500).send({
+        success: false,
+        error: err instanceof Error ? err.message : String(err),
+      })
+    }
+  })
+
   // POST /api/amazon/fba/inbound/backfill — HB.4 FBA inbound shipment
   // history backfill. Walks SP-API getShipments with LastUpdatedAfter,
   // paginates via NextToken, upserts FBAShipment rows.

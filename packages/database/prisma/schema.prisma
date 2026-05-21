@@ -10655,3 +10655,52 @@ model ChannelSchema {
   @@unique([channel, marketplace, fieldKey])
   @@index([channel, marketplace])
 }
+
+// ── HB.5 — FBA cost detail ─────────────────────────────────────────────
+
+/// Amazon credits the seller for lost / damaged / not-returned inventory.
+/// Real positive P&L line item. Source: GET_FBA_REIMBURSEMENTS_DATA.
+model FbaReimbursement {
+  id                  String   @id @default(cuid())
+  reimbursementId     String   @unique // Amazon's reimbursement-id, safe upsert key
+  approvalDate        DateTime
+  caseId              String?
+  amazonOrderId       String?
+  reason              String?  // free-form reason text from Amazon
+  sku                 String
+  fnsku               String?
+  asin                String?
+  quantityReimbursed  Int      @default(0)
+  amountPerUnitCents  Int      @default(0)
+  totalAmountCents    Int      @default(0)
+  currencyCode        String   @default("EUR")
+  marketplaceId       String?  // SP-API marketplaceId (e.g. APJ6JRA9NG5V4)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@index([approvalDate])
+  @@index([sku])
+  @@index([marketplaceId])
+}
+
+/// Per-FC inventory ledger events (transfers, removals, damages, corrections).
+/// Source: GET_FBA_INVENTORY_ADJUSTMENTS_DATA.
+model FbaInventoryAdjustment {
+  id                  String   @id @default(cuid())
+  adjustmentId        String   @unique
+  adjustedDate        DateTime
+  transactionType     String   // CustomerReturn / Damaged / Misplaced / etc.
+  fnsku               String?
+  sku                 String
+  asin                String?
+  quantity            Int      // signed — negative for removals
+  fulfillmentCenterId String?
+  reasonCode          String?
+  disposition         String?
+  marketplaceId       String?
+  createdAt           DateTime @default(now())
+
+  @@index([adjustedDate])
+  @@index([sku])
+  @@index([transactionType])
+}
