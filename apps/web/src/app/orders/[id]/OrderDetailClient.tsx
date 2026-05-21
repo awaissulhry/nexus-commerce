@@ -564,6 +564,11 @@ export default function OrderDetailClient({ id }: { id: string }) {
             </Card>
           )}
 
+          {/* OX.11 — Manage Feedback card. Surfaces buyer-side seller
+              feedback when present, or an empty-state with a deep-
+              link to Seller Central's Feedback Manager. */}
+          <ManageFeedbackCard order={order} />
+
           {/* AU.5 — Order-level notes (always-visible sidebar) */}
           <OrderNotesCard orderId={order.id} />
         </div>
@@ -651,13 +656,13 @@ function OrderNotesCard({ orderId }: { orderId: string }) {
   }
 
   return (
-    <Card title="Notes" description="Pack hints, fraud holds, buyer messages">
+    <Card title="Seller Notes" description="For your records only — will not be displayed to the buyer">
       <div className="space-y-2">
         <div className="flex items-start gap-2">
           <textarea
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
-            placeholder="Add a note for this order…"
+            placeholder="Add a note for this order (pack hints, fraud holds, buyer messages)…"
             className="flex-1 h-16 px-2 py-1.5 text-base border border-slate-200 dark:border-slate-700 rounded"
           />
           <button
@@ -1296,6 +1301,38 @@ function ShopifyDiscountsCard({ meta }: { meta: any }) {
           </div>
         )}
       </div>
+    </Card>
+  )
+}
+
+/**
+ * OX.11 — Manage Feedback sidebar card. Amazon's "Manage Feedback"
+ * surface shows the buyer's seller rating + comment if they've left
+ * one, otherwise an empty-state. We don't ingest per-order seller
+ * feedback yet (SellerFeedback model exists but is unwired), so this
+ * card defaults to empty-state with a Seller-Central deep-link so
+ * operators can chase it externally.
+ */
+function ManageFeedbackCard({ order }: { order: any }) {
+  const feedbackUrl =
+    order.channel === 'AMAZON' && order.marketplace
+      ? `https://sellercentral.amazon.${order.marketplace.toLowerCase()}/feedback-manager/index.html?orderId=${encodeURIComponent(order.channelOrderId)}`
+      : null
+  return (
+    <Card title="Manage Feedback">
+      <div className="text-sm text-slate-600 dark:text-slate-400">
+        {order.customerName ?? 'Buyer'} has not left you feedback for this order yet.
+      </div>
+      {feedbackUrl && (
+        <a
+          href={feedbackUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-2 inline-flex items-center gap-1.5 text-sm text-blue-600 dark:text-blue-400 hover:underline"
+        >
+          Open in Seller Central →
+        </a>
+      )}
     </Card>
   )
 }
