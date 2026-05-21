@@ -97,12 +97,16 @@ export async function ordersRoutes(app: FastifyInstance) {
       //   Cancelled  → CANCELLED / REFUNDED / RETURNED
       //   NoInvoice  → marketplace=IT + status NOT IN (PENDING, CANCELLED, …)
       //                AND fiscalInvoice IS NULL (Italian compliance gap)
+      // OX.17 — "All" total excludes cancelled/refunded/returned so the
+      // headline number reflects orders that need attention, not the
+      // lifetime count. The dedicated Cancelled tab still surfaces them.
+      const TERMINAL_NEGATIVE = ['CANCELLED', 'REFUNDED', 'RETURNED']
       const [total, pending, unshipped, shipped, cancelled, delivered, noInvoice] = await Promise.all([
-        prisma.order.count({ where: baseWhere }),
+        prisma.order.count({ where: { ...baseWhere, status: { notIn: TERMINAL_NEGATIVE as any } } }),
         prisma.order.count({ where: { ...baseWhere, status: { in: ['PENDING', 'AWAITING_PAYMENT'] } } }),
         prisma.order.count({ where: { ...baseWhere, status: { in: ['PROCESSING', 'ON_HOLD'] } } }),
         prisma.order.count({ where: { ...baseWhere, status: { in: ['SHIPPED', 'PARTIALLY_SHIPPED', 'DELIVERED'] } } }),
-        prisma.order.count({ where: { ...baseWhere, status: { in: ['CANCELLED', 'REFUNDED', 'RETURNED'] } } }),
+        prisma.order.count({ where: { ...baseWhere, status: { in: TERMINAL_NEGATIVE as any } } }),
         prisma.order.count({ where: { ...baseWhere, status: 'DELIVERED' } }),
         prisma.order.count({
           where: {
@@ -192,7 +196,16 @@ export async function ordersRoutes(app: FastifyInstance) {
       where.deletedAt = showDeleted ? { not: null } : null
       if (channels && channels.length) where.channel = { in: channels }
       if (marketplaces && marketplaces.length) where.marketplace = { in: marketplaces }
-      if (statuses && statuses.length) where.status = { in: statuses }
+      if (statuses && statuses.length) {
+        where.status = { in: statuses }
+      } else {
+        // OX.17 — when no explicit status filter is set (e.g. user
+        // clicks the All tab → status=ALL → stripped above), hide
+        // cancelled/refunded/returned rows so the list matches the
+        // "All" headline count. To see them, the operator clicks the
+        // Cancelled tab which sets an explicit status filter.
+        where.status = { notIn: ['CANCELLED', 'REFUNDED', 'RETURNED'] }
+      }
       if (fulfillment && fulfillment.length) where.fulfillmentMethod = { in: fulfillment }
       if (customerEmail) where.customerEmail = { contains: customerEmail, mode: 'insensitive' }
       // OX.3 — explicit dateFrom/dateTo wins, otherwise apply the preset.
@@ -436,7 +449,9 @@ export async function ordersRoutes(app: FastifyInstance) {
         case '90d': presetFrom = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000); break
       }
       const effectiveFrom = dateFrom ?? presetFrom
-      const baseWhere: any = { deletedAt: null }
+      // OX.17 — facets exclude cancelled rows so segment counts match
+      // the "All" headline. The Cancelled status tab still works.
+      const baseWhere: any = { deletedAt: null, status: { notIn: ['CANCELLED', 'REFUNDED', 'RETURNED'] } }
       if (effectiveFrom || dateTo) {
         baseWhere.purchaseDate = {}
         if (effectiveFrom) baseWhere.purchaseDate.gte = effectiveFrom
