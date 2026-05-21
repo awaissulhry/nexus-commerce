@@ -40,6 +40,9 @@ type OpenOrdersRow = {
 
 type Snapshot = {
   period: { key: string; from: string; to: string; timezone: string }
+  // SA.3 — current marketplace scope + available marketplaces for dropdown
+  marketplace: string | null
+  availableMarketplaces: string[]
   sales: {
     total: {
       valueCents: number
@@ -49,6 +52,11 @@ type Snapshot = {
       comparePrevValueCents?: number | null
       compareDeltaPct?: number | null
       compareLabel?: string | null
+      // SA.1 — Amazon-withheld PENDING orders in the window
+      pending?: {
+        count: number
+        oldestAt: string | null
+      }
     }
     sparkline: Array<{ date: string; valueCents: number }>
     byMarketplace: SalesRow[]
@@ -83,6 +91,8 @@ function freshness(iso: string): string {
 // operator's preferred default panel sticks.
 const EXPANDED_STORAGE_KEY = 'nexus.snapshot.expanded.v1'
 
+const MARKETPLACE_STORAGE_KEY = 'nexus.snapshot.marketplace.v1'
+
 export function GlobalSnapshot() {
   const [data, setData] = useState<Snapshot | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -96,11 +106,30 @@ export function GlobalSnapshot() {
       return null
     }
   })
+  // SA.3 — marketplace scope. Persists in localStorage so the
+  // selection survives navigation between /orders top + /dashboard top.
+  const [marketplace, setMarketplaceState] = useState<string | null>(() => {
+    if (typeof window === 'undefined') return null
+    try {
+      return window.localStorage.getItem(MARKETPLACE_STORAGE_KEY) || null
+    } catch {
+      return null
+    }
+  })
+  const setMarketplace = (next: string | null) => {
+    setMarketplaceState(next)
+    try {
+      if (next) window.localStorage.setItem(MARKETPLACE_STORAGE_KEY, next)
+      else window.localStorage.removeItem(MARKETPLACE_STORAGE_KEY)
+    } catch {}
+  }
   const [tick, setTick] = useState(0)
 
   const fetchSnapshot = async () => {
     try {
-      const res = await fetch(`${getBackendUrl()}/api/dashboard/global-snapshot?period=today`, {
+      const qs = new URLSearchParams({ period: 'today' })
+      if (marketplace) qs.set('marketplace', marketplace)
+      const res = await fetch(`${getBackendUrl()}/api/dashboard/global-snapshot?${qs.toString()}`, {
         cache: 'no-store',
       })
       if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
@@ -113,7 +142,7 @@ export function GlobalSnapshot() {
     }
   }
 
-  useEffect(() => { fetchSnapshot() }, [])
+  useEffect(() => { fetchSnapshot() }, [marketplace])
 
   // Re-tick the "Xs ago" label every 5s without re-fetching.
   useEffect(() => {
@@ -168,6 +197,22 @@ export function GlobalSnapshot() {
       title="Global snapshot"
       action={
         <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+          {/* SA.3 — marketplace scope dropdown */}
+          {data.availableMarketplaces.length > 1 && (
+            <select
+              value={data.marketplace ?? ''}
+              onChange={(e) => setMarketplace(e.target.value || null)}
+              className="h-7 px-2 text-xs border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200"
+              title="Filter every tile by marketplace"
+            >
+              <option value="">All marketplaces</option>
+              {data.availableMarketplaces.map((m) => (
+                <option key={m} value={m}>
+                  {MARKETPLACE_NAMES_GS[m as keyof typeof MARKETPLACE_NAMES_GS] ?? m} ({m})
+                </option>
+              ))}
+            </select>
+          )}
           <span title={new Date(data.lastUpdatedAt).toLocaleString()}>
             Updated {freshness(data.lastUpdatedAt)}
             <span aria-hidden="true">&nbsp;·&nbsp;{tick === 0 ? '' : ''}</span>
@@ -207,6 +252,19 @@ export function GlobalSnapshot() {
                 <span className="ml-1 text-slate-400 dark:text-slate-500"> · {data.sales.total.compareLabel}</span>
               )}
             </div>
+            {/* SA.1 — Amazon-withheld PENDING orders in this window */}
+            {data.sales.total.pending && data.sales.total.pending.count > 0 && (
+              <div
+                className="text-xs text-amber-700 dark:text-amber-300 font-medium"
+                title={
+                  data.sales.total.pending.oldestAt
+                    ? `Amazon withholds OrderTotal for PENDING orders until payment is verified. Oldest pending: ${new Date(data.sales.total.pending.oldestAt).toLocaleString()}. Real prices are fetched eagerly via SP-API getOrder; if Amazon still withholds, the total will update within minutes of the order leaving PENDING.`
+                    : 'Amazon withholds OrderTotal for PENDING orders.'
+                }
+              >
+                + {data.sales.total.pending.count} pending verification
+              </div>
+            )}
             <Sparkline data={data.sales.sparkline} />
           </div>
         </SnapshotTile>
@@ -245,8 +303,8 @@ export function GlobalSnapshot() {
 
       {expanded && (
         <div className="border-t border-slate-200 dark:border-slate-700 p-4 bg-slate-50 dark:bg-slate-900">
-          {expanded === 'sales' && <SalesPanelPlaceholder data={data} />}
-          {expanded === 'openOrders' && <OpenOrdersPanelPlaceholder data={data} />}
+          {expanded === 'sales' && <SalesPanelPlaceholder data={data} onSelectMarketplace={setMarketplace} />}
+          {expanded === 'openOrders' && <OpenOrdersPanelPlaceholder data={data} onSelectMarketplace={setMarketplace} />}
           {expanded === 'messages' && <MessagesPanelPlaceholder />}
         </div>
       )}
@@ -367,7 +425,9 @@ const MARKETPLACE_FLAGS_GS: Record<string, string> = {
   NL: '🇳🇱', PL: '🇵🇱', SE: '🇸🇪', IE: '🇮🇪', BE: '🇧🇪', SA: '🇸🇦',
   AE: '🇦🇪', TR: '🇹🇷', US: '🇺🇸', CA: '🇨🇦', JP: '🇯🇵', MX: '🇲🇽',
 }
-const MARKETPLACE_NAMES: Record<string, string> = {
+// Re-exported under a public name for the SA.3 dropdown in the
+// toolbar above; same map, kept as one source of truth.
+const MARKETPLACE_NAMES_GS = {
   IT: 'Italy', DE: 'Germany', FR: 'France', ES: 'Spain', UK: 'United Kingdom',
   GB: 'United Kingdom', NL: 'Netherlands', PL: 'Poland', SE: 'Sweden',
   IE: 'Ireland', BE: 'Belgium', TR: 'Turkey', AE: 'United Arab Emirates',
@@ -383,11 +443,25 @@ const PERIOD_LABELS: Record<PeriodKey, string> = {
   '90d': 'Last 90 days',
 }
 
-function SalesPanelPlaceholder({ data }: { data: Snapshot }) {
+function SalesPanelPlaceholder({ data, onSelectMarketplace }: { data: Snapshot; onSelectMarketplace: (m: string | null) => void }) {
   const [period, setPeriod] = useState<PeriodKey>('today')
   const [view, setView] = useState<'table' | 'graph'>('table')
   const [panelData, setPanelData] = useState<Snapshot>(data)
   const [loading, setLoading] = useState(false)
+  // SA.5 — yesterday's sales reconciliation vs Amazon's T+1 report.
+  const [recon, setRecon] = useState<{
+    status: 'match' | 'drift' | 'no-report' | 'no-orders'
+    label: string
+    deltaCents: number
+  } | null>(null)
+  useEffect(() => {
+    const qs = new URLSearchParams()
+    if (data.marketplace) qs.set('marketplace', data.marketplace)
+    fetch(`${getBackendUrl()}/api/dashboard/sales-reconciliation?${qs.toString()}`, { cache: 'no-store' })
+      .then((r) => r.ok ? r.json() : null)
+      .then((d) => { if (d) setRecon(d) })
+      .catch(() => {})
+  }, [data.marketplace])
 
   useEffect(() => {
     if (period === 'today') {
@@ -417,6 +491,24 @@ function SalesPanelPlaceholder({ data }: { data: Snapshot }) {
 
   return (
     <div className="space-y-3">
+      {/* SA.5 — reconciliation banner for yesterday */}
+      {recon && recon.status !== 'no-orders' && (
+        <div
+          className={`text-xs px-3 py-1.5 rounded border inline-flex items-center gap-2 ${
+            recon.status === 'match'
+              ? 'bg-emerald-50 border-emerald-200 text-emerald-800 dark:bg-emerald-950/40 dark:border-emerald-900 dark:text-emerald-300'
+              : recon.status === 'drift'
+              ? 'bg-rose-50 border-rose-200 text-rose-800 dark:bg-rose-950/40 dark:border-rose-900 dark:text-rose-300'
+              : 'bg-slate-50 border-slate-200 text-slate-700 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-300'
+          }`}
+        >
+          <span aria-hidden="true">
+            {recon.status === 'match' ? '✓' : recon.status === 'drift' ? '⚠' : '·'}
+          </span>
+          <span className="font-medium">Yesterday:</span>
+          <span>{recon.label}</span>
+        </div>
+      )}
       <div className="flex items-center gap-2 flex-wrap">
         <label className="text-xs uppercase tracking-wider text-slate-500 font-semibold">Period</label>
         <select
@@ -476,22 +568,31 @@ function SalesPanelPlaceholder({ data }: { data: Snapshot }) {
                         <td className="px-3 py-1.5 text-slate-900 dark:text-slate-100 tabular-nums">{regionUnits}</td>
                       </tr>
                       {rows.map((r) => (
-                        <tr key={r.marketplace} className="border-t border-slate-100 dark:border-slate-800">
+                        <tr
+                          key={r.marketplace}
+                          className="border-t border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer"
+                          onClick={(e) => {
+                            // SA.4 — Cmd/Ctrl-click drills into /orders;
+                            // plain click re-scopes the snapshot itself.
+                            if (e.metaKey || e.ctrlKey) {
+                              window.open(`/orders?marketplace=${encodeURIComponent(r.marketplace)}`, '_blank')
+                              return
+                            }
+                            onSelectMarketplace(r.marketplace)
+                          }}
+                          title="Click to scope the snapshot to this marketplace · Cmd/Ctrl-click to open /orders"
+                        >
                           <td className="px-3 py-1.5 text-slate-700 dark:text-slate-300">
                             <span className="inline-flex items-center gap-2">
                               <span aria-hidden="true">{MARKETPLACE_FLAGS_GS[r.marketplace] ?? '🏳️'}</span>
-                              <span>{MARKETPLACE_NAMES[r.marketplace] ?? r.marketplace}</span>
+                              <span>{MARKETPLACE_NAMES_GS[r.marketplace as keyof typeof MARKETPLACE_NAMES_GS] ?? r.marketplace}</span>
                             </span>
                           </td>
                           <td className="px-3 py-1.5 text-blue-600 dark:text-blue-400 tabular-nums">
-                            <Link href={`/orders?marketplace=${encodeURIComponent(r.marketplace)}`} className="hover:underline">
-                              {formatEur(r.valueCents)}
-                            </Link>
+                            {formatEur(r.valueCents)}
                           </td>
                           <td className="px-3 py-1.5 text-blue-600 dark:text-blue-400 tabular-nums">
-                            <Link href={`/orders?marketplace=${encodeURIComponent(r.marketplace)}`} className="hover:underline">
-                              {r.units}
-                            </Link>
+                            {r.units}
                           </td>
                         </tr>
                       ))}
@@ -555,7 +656,7 @@ function SalesGraph({ data }: { data: Array<{ date: string; valueCents: number }
 // by region (Europe / Middle East / etc.) with country flags + names.
 // Every cell is a drill-through link to /orders with marketplace +
 // fulfillment + status filters pre-applied.
-function OpenOrdersPanelPlaceholder({ data }: { data: Snapshot }) {
+function OpenOrdersPanelPlaceholder({ data, onSelectMarketplace }: { data: Snapshot; onSelectMarketplace: (m: string | null) => void }) {
   const grouped = data.openOrders.byMarketplace.reduce<Record<string, OpenOrdersRow[]>>((acc, r) => {
     ;(acc[r.region] = acc[r.region] ?? []).push(r)
     return acc
@@ -621,11 +722,28 @@ function OpenOrdersPanelPlaceholder({ data }: { data: Snapshot }) {
                       <td className="px-3 py-1.5 tabular-nums text-slate-900 dark:text-slate-100">{sumFbaP}</td>
                     </tr>
                     {rows.map((r) => (
-                      <tr key={r.marketplace} className="border-t border-slate-100 dark:border-slate-800">
-                        <td className="px-3 py-1.5 text-slate-700 dark:text-slate-300">
+                      <tr
+                        key={r.marketplace}
+                        className="border-t border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800"
+                      >
+                        <td
+                          className="px-3 py-1.5 text-slate-700 dark:text-slate-300 cursor-pointer"
+                          onClick={(e) => {
+                            // SA.4 — country-cell click re-scopes the
+                            // snapshot. The per-status cells stay as
+                            // deep-links into /orders so operators can
+                            // still drill into a specific status bucket.
+                            if (e.metaKey || e.ctrlKey) {
+                              window.open(`/orders?marketplace=${encodeURIComponent(r.marketplace)}`, '_blank')
+                              return
+                            }
+                            onSelectMarketplace(r.marketplace)
+                          }}
+                          title="Click to scope the snapshot to this marketplace · Cmd/Ctrl-click to open /orders"
+                        >
                           <span className="inline-flex items-center gap-2">
                             <span aria-hidden="true">{MARKETPLACE_FLAGS_GS[r.marketplace] ?? '🏳️'}</span>
-                            <span>{MARKETPLACE_NAMES[r.marketplace] ?? r.marketplace}</span>
+                            <span>{MARKETPLACE_NAMES_GS[r.marketplace as keyof typeof MARKETPLACE_NAMES_GS] ?? r.marketplace}</span>
                           </span>
                         </td>
                         <td className="px-3 py-1.5">

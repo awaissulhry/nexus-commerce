@@ -213,13 +213,102 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
    *
    * 30s cache. Italian operator timezone for "today" / "yesterday".
    */
-  fastify.get<{ Querystring: { period?: string } }>(
+  /**
+   * SA.5 — sales reconciliation. Compares Order-table sum for a
+   * given day vs Amazon's GET_SALES_AND_TRAFFIC_REPORT (DSA, T+1).
+   * Surfaces drift so operators can trust the Sales tile.
+   *
+   *   GET /api/dashboard/sales-reconciliation?day=YYYY-MM-DD&marketplace=IT
+   *
+   * Status: 'match' | 'drift' | 'no-report' | 'no-orders'.
+   * 'match' = within €1 OR 0.5% tolerance.
+   */
+  fastify.get<{ Querystring: { day?: string; marketplace?: string } }>(
+    '/dashboard/sales-reconciliation',
+    async (request, reply) => {
+      try {
+        reply.header('Cache-Control', 'private, max-age=300')
+        const todayStart = zonedStartOfDay(new Date(), OPERATOR_TIMEZONE)
+        const day = request.query.day
+          ? new Date(`${request.query.day}T00:00:00Z`)
+          : new Date(todayStart.getTime() - 24 * 60 * 60 * 1000)
+        const dayEnd = new Date(day.getTime() + 24 * 60 * 60 * 1000)
+        const mkt = (request.query.marketplace ?? '').trim().toUpperCase() || null
+
+        const orderSum = await prisma.order.aggregate({
+          where: {
+            deletedAt: null,
+            channel: 'AMAZON',
+            status: { notIn: ['CANCELLED', 'REFUNDED', 'RETURNED'] as any },
+            purchaseDate: { gte: day, lt: dayEnd },
+            currencyCode: 'EUR',
+            ...(mkt ? { marketplace: mkt } : {}),
+          },
+          _sum: { totalPrice: true },
+          _count: { _all: true },
+        })
+        const orderCents = Math.round(Number(orderSum._sum?.totalPrice ?? 0) * 100)
+
+        const reportSum = await prisma.dailySalesAggregate.aggregate({
+          where: {
+            day: day,
+            channel: 'AMAZON',
+            ...(mkt ? { marketplace: mkt } : {}),
+          },
+          _sum: { grossRevenue: true },
+          _count: { _all: true },
+        })
+        const reportCents = Math.round(Number(reportSum._sum?.grossRevenue ?? 0) * 100)
+
+        let status: 'match' | 'drift' | 'no-report' | 'no-orders'
+        if ((reportSum._count?._all ?? 0) === 0) status = 'no-report'
+        else if ((orderSum._count?._all ?? 0) === 0) status = 'no-orders'
+        else {
+          const deltaAbs = Math.abs(orderCents - reportCents)
+          const tolerance = Math.max(100, Math.round(reportCents * 0.005))
+          status = deltaAbs <= tolerance ? 'match' : 'drift'
+        }
+
+        const deltaCents = orderCents - reportCents
+        const deltaPct = reportCents > 0 ? (deltaCents / reportCents) * 100 : null
+        const label =
+          status === 'match'
+            ? 'Reconciled with Amazon T+1 report'
+            : status === 'drift'
+            ? `Differs from Amazon report by ${deltaCents > 0 ? '+' : '−'}€${Math.abs(deltaCents / 100).toFixed(2)}${deltaPct != null ? ` (${deltaPct > 0 ? '+' : ''}${deltaPct.toFixed(1)}%)` : ''}`
+            : status === 'no-report'
+            ? 'Amazon T+1 report not landed yet — lands at ~03:00 UTC'
+            : 'No orders to reconcile for this day'
+
+        return {
+          day: day.toISOString().slice(0, 10),
+          marketplace: mkt,
+          status,
+          orderTotalCents: orderCents,
+          reportTotalCents: reportCents,
+          deltaCents,
+          deltaPct,
+          label,
+        }
+      } catch (error: any) {
+        fastify.log.error({ err: error }, '[dashboard/sales-reconciliation] failed')
+        return reply.status(500).send({ error: error?.message ?? String(error) })
+      }
+    },
+  )
+
+  fastify.get<{ Querystring: { period?: string; marketplace?: string } }>(
     '/dashboard/global-snapshot',
     async (request, reply) => {
       try {
         reply.header('Cache-Control', 'private, max-age=30')
         const period = (request.query.period ?? 'today') as
           | 'today' | 'yesterday' | '7d' | '30d' | '90d'
+        // SA.3 — optional marketplace scope. When set, every count +
+        // sparkline + byMarketplace row is filtered to this single
+        // marketplace. The byMarketplace array still returns to keep
+        // the response shape stable for the UI.
+        const marketplaceFilter = (request.query.marketplace ?? '').trim().toUpperCase() || null
         const now = new Date()
         const todayStart = zonedStartOfDay(now, OPERATOR_TIMEZONE)
         let from: Date
@@ -257,10 +346,12 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
         // ── Sales aggregation ────────────────────────────────────────
         // Exclude terminal-negative statuses (OX.17 semantics) so the
         // snapshot number matches the "All" tab total.
+        // SA.3 — optional marketplace scope merged into every WHERE.
         const salesWhere = {
           deletedAt: null,
           status: { notIn: ['CANCELLED', 'REFUNDED', 'RETURNED'] as any },
           purchaseDate: { gte: from, lt: to },
+          ...(marketplaceFilter ? { marketplace: marketplaceFilter } : {}),
         }
         const salesByMarketplace = await prisma.order.groupBy({
           by: ['marketplace', 'currencyCode'],
@@ -270,38 +361,61 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
         })
 
         // Per-line units (each OrderItem.quantity summed per order's marketplace).
-        const itemUnits = await prisma.$queryRaw<
-          Array<{ marketplace: string | null; units: bigint }>
-        >`
-          SELECT o."marketplace", COALESCE(SUM(oi."quantity"), 0)::bigint AS units
-            FROM "Order" o
-            JOIN "OrderItem" oi ON oi."orderId" = o.id
-           WHERE o."deletedAt" IS NULL
-             AND o."status" NOT IN ('CANCELLED', 'REFUNDED', 'RETURNED')
-             AND o."purchaseDate" >= ${from}
-             AND o."purchaseDate" <  ${to}
-           GROUP BY o."marketplace"
-        `
+        // SA.3: marketplace filter applied via dynamic WHERE fragment.
+        const itemUnits = marketplaceFilter
+          ? await prisma.$queryRaw<Array<{ marketplace: string | null; units: bigint }>>`
+              SELECT o."marketplace", COALESCE(SUM(oi."quantity"), 0)::bigint AS units
+                FROM "Order" o
+                JOIN "OrderItem" oi ON oi."orderId" = o.id
+               WHERE o."deletedAt" IS NULL
+                 AND o."status" NOT IN ('CANCELLED', 'REFUNDED', 'RETURNED')
+                 AND o."purchaseDate" >= ${from}
+                 AND o."purchaseDate" <  ${to}
+                 AND o."marketplace" = ${marketplaceFilter}
+               GROUP BY o."marketplace"
+            `
+          : await prisma.$queryRaw<Array<{ marketplace: string | null; units: bigint }>>`
+              SELECT o."marketplace", COALESCE(SUM(oi."quantity"), 0)::bigint AS units
+                FROM "Order" o
+                JOIN "OrderItem" oi ON oi."orderId" = o.id
+               WHERE o."deletedAt" IS NULL
+                 AND o."status" NOT IN ('CANCELLED', 'REFUNDED', 'RETURNED')
+                 AND o."purchaseDate" >= ${from}
+                 AND o."purchaseDate" <  ${to}
+               GROUP BY o."marketplace"
+            `
         const unitsByMarketplace = new Map(
           itemUnits.map((r) => [r.marketplace ?? 'UNKNOWN', Number(r.units)]),
         )
 
         // 7-day sparkline (always 7 days regardless of `period` so the
         // tile chart is consistent) — daily totals in primary currency.
+        // SA.3: marketplace filter applied via dynamic WHERE fragment.
         const sparkStart = new Date(todayStart.getTime() - 6 * 24 * 60 * 60 * 1000)
-        const sparkRaw = await prisma.$queryRaw<
-          Array<{ day: Date; cents: bigint }>
-        >`
-          SELECT date_trunc('day', o."purchaseDate" AT TIME ZONE 'Europe/Rome')::date AS day,
-                 COALESCE(SUM(ROUND(o."totalPrice" * 100)), 0)::bigint AS cents
-            FROM "Order" o
-           WHERE o."deletedAt" IS NULL
-             AND o."status" NOT IN ('CANCELLED', 'REFUNDED', 'RETURNED')
-             AND o."purchaseDate" >= ${sparkStart}
-             AND o."currencyCode" = 'EUR'
-           GROUP BY day
-           ORDER BY day ASC
-        `
+        const sparkRaw = marketplaceFilter
+          ? await prisma.$queryRaw<Array<{ day: Date; cents: bigint }>>`
+              SELECT date_trunc('day', o."purchaseDate" AT TIME ZONE 'Europe/Rome')::date AS day,
+                     COALESCE(SUM(ROUND(o."totalPrice" * 100)), 0)::bigint AS cents
+                FROM "Order" o
+               WHERE o."deletedAt" IS NULL
+                 AND o."status" NOT IN ('CANCELLED', 'REFUNDED', 'RETURNED')
+                 AND o."purchaseDate" >= ${sparkStart}
+                 AND o."currencyCode" = 'EUR'
+                 AND o."marketplace" = ${marketplaceFilter}
+               GROUP BY day
+               ORDER BY day ASC
+            `
+          : await prisma.$queryRaw<Array<{ day: Date; cents: bigint }>>`
+              SELECT date_trunc('day', o."purchaseDate" AT TIME ZONE 'Europe/Rome')::date AS day,
+                     COALESCE(SUM(ROUND(o."totalPrice" * 100)), 0)::bigint AS cents
+                FROM "Order" o
+               WHERE o."deletedAt" IS NULL
+                 AND o."status" NOT IN ('CANCELLED', 'REFUNDED', 'RETURNED')
+                 AND o."purchaseDate" >= ${sparkStart}
+                 AND o."currencyCode" = 'EUR'
+               GROUP BY day
+               ORDER BY day ASC
+            `
         const sparkMap = new Map(
           sparkRaw.map((r) => [r.day.toISOString().slice(0, 10), Number(r.cents)]),
         )
@@ -324,6 +438,7 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
             status: {
               in: ['PROCESSING', 'ON_HOLD', 'PENDING', 'AWAITING_PAYMENT'] as any,
             },
+            ...(marketplaceFilter ? { marketplace: marketplaceFilter } : {}),
           },
           _count: { _all: true },
         })
@@ -411,6 +526,7 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
               status: { notIn: ['CANCELLED', 'REFUNDED', 'RETURNED'] as any },
               purchaseDate: { gte: prevFrom, lt: prevTo },
               currencyCode: 'EUR',
+              ...(marketplaceFilter ? { marketplace: marketplaceFilter } : {}),
             },
             _sum: { totalPrice: true },
           })
@@ -421,6 +537,46 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
             ? ((salesTotalCents - comparePrevValueCents) / comparePrevValueCents) * 100
             : null
 
+        // SA.1 — pending-order awareness. Even with SA.2's eager
+        // getOrder, Amazon occasionally withholds OrderTotal for
+        // truly-new PENDING orders. The Sales total exists from
+        // confirmed (non-PENDING+€0) rows; we surface the pending
+        // count so operators see why their tile total may lag Amazon
+        // Seller Central by a few orders for a few minutes.
+        const pendingInWindow = await prisma.order.findMany({
+          where: {
+            deletedAt: null,
+            channel: 'AMAZON',
+            status: 'PENDING' as any,
+            totalPrice: 0,
+            purchaseDate: { gte: from, lt: to },
+            ...(marketplaceFilter ? { marketplace: marketplaceFilter } : {}),
+          },
+          select: { purchaseDate: true },
+          orderBy: { purchaseDate: 'asc' },
+          take: 100,
+        })
+        const pendingCount = pendingInWindow.length
+        const oldestPendingAt = pendingInWindow[0]?.purchaseDate?.toISOString() ?? null
+
+        // SA.3 — distinct list of marketplaces with order activity in
+        // the rolling 90 days, so the UI dropdown can show only what
+        // the seller actually sells on (not the full 17-marketplace map).
+        const ninetyDaysAgo = new Date(todayStart.getTime() - 90 * 24 * 60 * 60 * 1000)
+        const activeMktRows = await prisma.order.findMany({
+          where: {
+            deletedAt: null,
+            marketplace: { not: null },
+            purchaseDate: { gte: ninetyDaysAgo },
+          },
+          distinct: ['marketplace'],
+          select: { marketplace: true },
+        })
+        const availableMarketplaces = activeMktRows
+          .map((r) => r.marketplace)
+          .filter((m): m is string => !!m)
+          .sort()
+
         return {
           period: {
             key: period,
@@ -428,6 +584,8 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
             to: to.toISOString(),
             timezone: OPERATOR_TIMEZONE,
           },
+          marketplace: marketplaceFilter,
+          availableMarketplaces,
           sales: {
             total: {
               valueCents: salesTotalCents,
@@ -437,6 +595,11 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
               comparePrevValueCents,
               compareDeltaPct,
               compareLabel: comparePrevValueCents != null ? 'vs. same day last week' : null,
+              // SA.1 — Amazon-withheld PENDING orders in the window
+              pending: {
+                count: pendingCount,
+                oldestAt: oldestPendingAt,
+              },
             },
             sparkline,
             byMarketplace: salesRows.sort((a, b) => b.valueCents - a.valueCents),

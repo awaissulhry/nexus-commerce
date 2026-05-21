@@ -342,9 +342,37 @@ export class AmazonOrdersService {
 
   private async upsertOrder(raw: AmazonOrderRaw, summary: SyncSummary): Promise<void> {
     const purchaseDate = new Date(raw.PurchaseDate)
-    const totalPrice = raw.OrderTotal?.Amount ? Number(raw.OrderTotal.Amount) : 0
-    const currencyCode = raw.OrderTotal?.CurrencyCode ?? 'EUR'
+    let totalPrice = raw.OrderTotal?.Amount ? Number(raw.OrderTotal.Amount) : 0
+    let currencyCode = raw.OrderTotal?.CurrencyCode ?? 'EUR'
     const status = mapStatus(raw.OrderStatus)
+
+    // SA.2 — eager getOrder for PENDING orders. SP-API ListOrders
+    // withholds OrderTotal for PENDING; getOrder returns it for ALL
+    // statuses. Without this, every new PENDING order lands in our DB
+    // at €0 and the Global Snapshot sales total silently under-reports
+    // by the value of those orders (typically minutes to hours until
+    // they transition out of PENDING). Rate-limit-safe: getOrder is
+    // 0.5 req/sec burst 30 — incremental sync is well inside this.
+    if (status === 'PENDING' && totalPrice === 0) {
+      try {
+        const full = await amazonService.fetchOrderById(raw.AmazonOrderId)
+        if (full?.OrderTotal?.Amount) {
+          const fetchedAmount = Number(full.OrderTotal.Amount)
+          if (Number.isFinite(fetchedAmount) && fetchedAmount > 0) {
+            totalPrice = fetchedAmount
+            currencyCode = full.OrderTotal.CurrencyCode ?? currencyCode
+            // Keep the raw payload as the canonical one but augment
+            // with the resolved total so the row reflects reality.
+            ;(raw as any).OrderTotal = full.OrderTotal
+          }
+        }
+      } catch (e: any) {
+        logger.warn('amazon-orders: SA.2 eager getOrder failed (PENDING row stays at €0)', {
+          orderId: raw.AmazonOrderId,
+          error: e?.message ?? String(e),
+        })
+      }
+    }
 
     // O.45: track the previous status so we can detect the
     // transition to CANCELLED (vs re-ingesting an already-cancelled
