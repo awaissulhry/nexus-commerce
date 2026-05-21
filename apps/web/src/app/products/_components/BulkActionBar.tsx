@@ -119,6 +119,8 @@ export function BulkActionBar({
   onComplete,
   productLookup,
   showDeleted = false,
+  totalMatching,
+  onSelectAllMatching,
 }: {
   selectedIds: string[]
   allTags: Tag[]
@@ -133,6 +135,18 @@ export function BulkActionBar({
    * because the rows are already deleted.
    */
   showDeleted?: boolean
+  /**
+   * IR.13 — Total products matching the current filter set, including
+   * pages the operator hasn't paginated into. Used to render the
+   * "Select all N matching" banner when the visible selection is a
+   * strict subset of the matching universe.
+   */
+  totalMatching?: number
+  /**
+   * IR.13 — Promise that fetches every matching product id and adds
+   * them to the workspace's selection set. Capped server-side at 500.
+   */
+  onSelectAllMatching?: () => Promise<void>
 }) {
   const { toast } = useToast()
   const { t } = useTranslations()
@@ -422,6 +436,17 @@ export function BulkActionBar({
   // what's possible before they click. Sticks to the top when the
   // grid scrolls so the actions stay reachable on long lists.
   const hasSelection = selectedIds.length > 0
+
+  // IR.13 — Should the "Select all matching" banner show? Only when:
+  //   - operator has something selected (so they care about bulk)
+  //   - the matching universe is bigger than their selection
+  //   - and totalMatching + handler are wired by the parent
+  const showSelectAllBanner = hasSelection
+    && typeof totalMatching === 'number'
+    && totalMatching > selectedIds.length
+    && !!onSelectAllMatching
+  const [selectingAll, setSelectingAll] = useState(false)
+
   const countLabel = hasSelection ? (
     <span className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-full bg-blue-600 text-white text-sm font-semibold tabular-nums">
       <CheckCircle2 size={12} />
@@ -446,6 +471,24 @@ export function BulkActionBar({
     >
       <div className="flex items-center gap-2 flex-wrap">
         {countLabel}
+        {/* IR.13 — Select-all-matching banner. Only renders when the
+            operator's selection is a strict subset of the matching set. */}
+        {showSelectAllBanner && (
+          <button
+            type="button"
+            onClick={async () => {
+              setSelectingAll(true)
+              try { await onSelectAllMatching!() }
+              finally { setSelectingAll(false) }
+            }}
+            disabled={selectingAll || busy}
+            className="text-xs text-blue-600 dark:text-blue-400 hover:underline disabled:opacity-50"
+          >
+            {selectingAll
+              ? t('products.bulkImages.selectingAll')
+              : t('products.bulkImages.selectAllMatching', { total: totalMatching! })}
+          </button>
+        )}
         <div className="h-4 w-px bg-slate-200 dark:bg-slate-700" />
 
           {showDeleted ? (

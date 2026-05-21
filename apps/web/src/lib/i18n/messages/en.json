@@ -4325,6 +4325,8 @@
   "products.bulkImages.applyAction": "Apply to {count} product(s)",
   "products.bulkImages.applied": "Applied to {updated}/{total} products · {created} images written",
   "products.bulkImages.appliedWithErrors": "Applied to {updated}/{total} products · {created} images written · {errors} errors",
+  "products.bulkImages.selectAllMatching": "Select all {total} matching",
+  "products.bulkImages.selectingAll": "Fetching matching ids…",
 
   "listWizard.aiComplete.button": "AI: Complete wizard",
   "listWizard.aiComplete.buttonShort": "AI",

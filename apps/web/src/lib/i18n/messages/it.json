@@ -4376,6 +4376,8 @@
   "products.bulkImages.applyAction": "Applica a {count} prodotti",
   "products.bulkImages.applied": "Applicato a {updated}/{total} prodotti · {created} immagini scritte",
   "products.bulkImages.appliedWithErrors": "Applicato a {updated}/{total} prodotti · {created} immagini scritte · {errors} errori",
+  "products.bulkImages.selectAllMatching": "Seleziona tutti i {total} corrispondenti",
+  "products.bulkImages.selectingAll": "Recupero degli id in corso…",
 
   "listWizard.aiComplete.button": "IA: Completa la guida",
   "listWizard.aiComplete.buttonShort": "IA",

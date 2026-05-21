@@ -1669,6 +1669,34 @@ export default function ProductsWorkspace() {
           onComplete={() => { setSelected(new Set()); fetchProducts(); fetchTags() }}
           productLookup={products}
           showDeleted={showDeleted}
+          totalMatching={stats.total}
+          onSelectAllMatching={async () => {
+            // IR.13 — Fetch up to 500 matching ids (the bulk-apply
+            // server cap). Replays the active filters via the same
+            // GET /products endpoint the listing uses, so what the
+            // operator sees in the toolbar matches the universe we
+            // pull from.
+            const params = new URLSearchParams()
+            if (search) params.set('search', search)
+            if (statusFilters.length) params.set('status', statusFilters.join(','))
+            if (channelFilters.length) params.set('channels', channelFilters.join(','))
+            if (marketplaceFilters.length) params.set('marketplaces', marketplaceFilters.join(','))
+            if (productTypeFilters.length) params.set('productTypes', productTypeFilters.join(','))
+            if (brandFilters.length) params.set('brands', brandFilters.join(','))
+            if (familyFilters.length) params.set('families', familyFilters.join(','))
+            if (workflowStageFilters.length) params.set('workflowStages', workflowStageFilters.join(','))
+            if (tagFilters.length) params.set('tags', tagFilters.join(','))
+            if (fulfillmentFilters.length) params.set('fulfillment', fulfillmentFilters.join(','))
+            if (stockLevel !== 'all') params.set('stockLevel', stockLevel)
+            if (showDeleted) params.set('deleted', 'true')
+            params.set('limit', '500')
+            params.set('page', '1')
+            const res = await fetch(`${getBackendUrl()}/api/products?${params}`)
+            if (!res.ok) return
+            const body = await res.json()
+            const ids = ((body.products ?? []) as Array<{ id: string }>).map((p) => p.id)
+            setSelected(new Set(ids))
+          }}
         />
       )}
 
