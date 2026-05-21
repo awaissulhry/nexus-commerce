@@ -1,19 +1,41 @@
 /**
- * IM.9 — eBay and Shopify image publish routes.
+ * IM.9 / IR.9 — eBay + Shopify image publish + cross-channel job log.
  *
  *   POST /api/products/:productId/ebay-images/publish
  *     Body: { activeAxis?: string }
- *     → { success, message, pictureCount, colorSetCount, error? }
+ *     → { success, message, pictureCount, colorSetCount, jobId, error? }
  *
  *   POST /api/products/:productId/shopify-images/publish
  *     Body: { activeAxis?: string }
- *     → { success, message, poolImagesPublished, variantsAssigned, error? }
+ *     → { success, message, poolImagesPublished, variantsAssigned, jobId, error? }
+ *
+ *   GET  /api/products/:productId/image-publish-jobs
+ *     → { jobs: UnifiedJob[] }
+ *     Unified list across Amazon + eBay + Shopify, newest first.
+ *
+ *   POST /api/image-publish-jobs/:jobId/retry
+ *     → { ok, channel, newJobId, status }
+ *     Looks up the job in either AmazonImageFeedJob or
+ *     ChannelImagePublishJob, marks the original CANCELLED, re-runs
+ *     the publish for the same product + same args.
  */
 
 import type { FastifyPluginAsync } from 'fastify'
 import { publishEbayImages } from '../../services/images/ebay-image-publish.service.js'
 import { publishShopifyImages } from '../../services/images/shopify-image-publish.service.js'
+import { submitAmazonImageFeed } from '../../services/images/amazon-image-feed.service.js'
 import prisma from '../../db.js'
+
+interface UnifiedJob {
+  id: string
+  channel: 'AMAZON' | 'EBAY' | 'SHOPIFY'
+  marketplace: string | null
+  status: string
+  errorMessage: string | null
+  vendorEntityId: string | null
+  submittedAt: string
+  completedAt: string | null
+}
 
 const channelImagePublishRoutes: FastifyPluginAsync = async (fastify) => {
   // ── POST /api/products/:productId/ebay-images/publish ─────────────
@@ -64,6 +86,145 @@ const channelImagePublishRoutes: FastifyPluginAsync = async (fastify) => {
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
         return reply.code(500).send({ success: false, message: msg, error: msg, poolImagesPublished: 0, variantsAssigned: 0 })
+      }
+    },
+  )
+
+  // ── GET /api/products/:productId/image-publish-jobs ───────────────────
+  // IR.9.4 — Unified history across Amazon + eBay + Shopify, newest first.
+  fastify.get<{
+    Params: { productId: string }
+    Querystring: { limit?: string }
+  }>(
+    '/products/:productId/image-publish-jobs',
+    async (request, reply) => {
+      const { productId } = request.params
+      const limit = Math.min(parseInt(request.query.limit ?? '20', 10) || 20, 100)
+
+      const [amazonJobs, channelJobs] = await Promise.all([
+        prisma.amazonImageFeedJob.findMany({
+          where: { productId },
+          orderBy: { submittedAt: 'desc' },
+          take: limit,
+          select: {
+            id: true,
+            marketplace: true,
+            status: true,
+            errorMessage: true,
+            feedId: true,
+            submittedAt: true,
+            completedAt: true,
+          },
+        }),
+        prisma.channelImagePublishJob.findMany({
+          where: { productId },
+          orderBy: { submittedAt: 'desc' },
+          take: limit,
+          select: {
+            id: true,
+            channel: true,
+            marketplace: true,
+            status: true,
+            errorMessage: true,
+            vendorEntityId: true,
+            submittedAt: true,
+            completedAt: true,
+          },
+        }),
+      ])
+
+      const unified: UnifiedJob[] = [
+        ...amazonJobs.map((j): UnifiedJob => ({
+          id: j.id,
+          channel: 'AMAZON',
+          marketplace: j.marketplace,
+          status: j.status,
+          errorMessage: j.errorMessage,
+          vendorEntityId: j.feedId,
+          submittedAt: j.submittedAt.toISOString(),
+          completedAt: j.completedAt?.toISOString() ?? null,
+        })),
+        ...channelJobs.map((j): UnifiedJob => ({
+          id: j.id,
+          channel: j.channel as 'EBAY' | 'SHOPIFY',
+          marketplace: j.marketplace,
+          status: j.status,
+          errorMessage: j.errorMessage,
+          vendorEntityId: j.vendorEntityId,
+          submittedAt: j.submittedAt.toISOString(),
+          completedAt: j.completedAt?.toISOString() ?? null,
+        })),
+      ]
+        .sort((a, b) => b.submittedAt.localeCompare(a.submittedAt))
+        .slice(0, limit)
+
+      return reply.send({ jobs: unified })
+    },
+  )
+
+  // ── POST /api/image-publish-jobs/:jobId/retry ─────────────────────────
+  // IR.9.3 — Find the job (Amazon or channel), mark it CANCELLED,
+  // re-run the publish for the same product + args.
+  fastify.post<{ Params: { jobId: string } }>(
+    '/image-publish-jobs/:jobId/retry',
+    async (request, reply) => {
+      const { jobId } = request.params
+
+      // Try Amazon first.
+      const amazonJob = await prisma.amazonImageFeedJob.findUnique({
+        where: { id: jobId },
+        select: { id: true, productId: true, marketplace: true, status: true, skus: true },
+      })
+      if (amazonJob) {
+        if (['DONE', 'CANCELLED'].includes(amazonJob.status)) {
+          return reply.code(400).send({ error: 'JOB_NOT_RETRYABLE', status: amazonJob.status })
+        }
+        await prisma.amazonImageFeedJob.update({
+          where: { id: amazonJob.id },
+          data: { status: 'CANCELLED', completedAt: new Date() },
+        })
+        try {
+          const result = await submitAmazonImageFeed({
+            productId: amazonJob.productId,
+            marketplace: amazonJob.marketplace,
+          })
+          return reply.send({ ok: true, channel: 'AMAZON', newJobId: result.jobId, status: 'PENDING' })
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err)
+          return reply.code(502).send({ ok: false, channel: 'AMAZON', message: msg })
+        }
+      }
+
+      // Then eBay / Shopify.
+      const channelJob = await prisma.channelImagePublishJob.findUnique({
+        where: { id: jobId },
+        select: { id: true, productId: true, channel: true, status: true, requestPayload: true },
+      })
+      if (!channelJob) return reply.code(404).send({ error: 'JOB_NOT_FOUND' })
+      if (['DONE', 'CANCELLED'].includes(channelJob.status)) {
+        return reply.code(400).send({ error: 'JOB_NOT_RETRYABLE', status: channelJob.status })
+      }
+
+      await prisma.channelImagePublishJob.update({
+        where: { id: channelJob.id },
+        data: { status: 'CANCELLED', completedAt: new Date() },
+      })
+
+      const activeAxis = (channelJob.requestPayload as { activeAxis?: string } | null)?.activeAxis
+
+      try {
+        if (channelJob.channel === 'EBAY') {
+          const result = await publishEbayImages(channelJob.productId, activeAxis)
+          return reply.send({ ok: result.success, channel: 'EBAY', newJobId: result.jobId, status: result.success ? 'DONE' : 'FATAL', error: result.error })
+        }
+        if (channelJob.channel === 'SHOPIFY') {
+          const result = await publishShopifyImages(channelJob.productId, activeAxis)
+          return reply.send({ ok: result.success, channel: 'SHOPIFY', newJobId: result.jobId, status: result.success ? 'DONE' : 'FATAL', error: result.error })
+        }
+        return reply.code(400).send({ error: 'UNKNOWN_CHANNEL', channel: channelJob.channel })
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        return reply.code(502).send({ ok: false, channel: channelJob.channel, message: msg })
       }
     },
   )
