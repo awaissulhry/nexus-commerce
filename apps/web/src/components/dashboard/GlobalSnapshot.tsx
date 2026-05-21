@@ -41,7 +41,15 @@ type OpenOrdersRow = {
 type Snapshot = {
   period: { key: string; from: string; to: string; timezone: string }
   sales: {
-    total: { valueCents: number; currency: string; units: number }
+    total: {
+      valueCents: number
+      currency: string
+      units: number
+      // GS.7 — same-day-last-week comparison fields
+      comparePrevValueCents?: number | null
+      compareDeltaPct?: number | null
+      compareLabel?: string | null
+    }
     sparkline: Array<{ date: string; valueCents: number }>
     byMarketplace: SalesRow[]
   }
@@ -71,11 +79,23 @@ function freshness(iso: string): string {
   return `${h}h ago`
 }
 
+// GS.7 — persist the last-expanded tile across reloads so the
+// operator's preferred default panel sticks.
+const EXPANDED_STORAGE_KEY = 'nexus.snapshot.expanded.v1'
+
 export function GlobalSnapshot() {
   const [data, setData] = useState<Snapshot | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
-  const [expanded, setExpanded] = useState<TileKey | null>(null)
+  const [expanded, setExpanded] = useState<TileKey | null>(() => {
+    if (typeof window === 'undefined') return null
+    try {
+      const raw = window.localStorage.getItem(EXPANDED_STORAGE_KEY)
+      return raw === 'sales' || raw === 'openOrders' || raw === 'messages' ? raw : null
+    } catch {
+      return null
+    }
+  })
   const [tick, setTick] = useState(0)
 
   const fetchSnapshot = async () => {
@@ -101,7 +121,31 @@ export function GlobalSnapshot() {
     return () => clearInterval(t)
   }, [])
 
-  const onToggle = (key: TileKey) => setExpanded((cur) => (cur === key ? null : key))
+  // GS.7 — SSE auto-refresh on order events. The /orders SSE bus
+  // already broadcasts order.created/updated/cancelled — piggyback so
+  // the snapshot's "Today so far" tile moves the instant a new order
+  // lands without operator-triggered refresh.
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    let es: EventSource | null = null
+    try {
+      es = new EventSource(`${getBackendUrl()}/api/orders/events`)
+      const handler = () => fetchSnapshot()
+      es.addEventListener('order.created', handler)
+      es.addEventListener('order.updated', handler)
+      es.addEventListener('order.cancelled', handler)
+    } catch {
+      /* SSE unsupported — fall back to the 5s tick / manual refresh */
+    }
+    return () => { try { es?.close() } catch {} }
+  }, [])
+
+  const onToggle = (key: TileKey) =>
+    setExpanded((cur) => {
+      const next = cur === key ? null : key
+      try { window.localStorage.setItem(EXPANDED_STORAGE_KEY, next ?? '') } catch {}
+      return next
+    })
 
   if (loading && !data) {
     return (
@@ -149,13 +193,19 @@ export function GlobalSnapshot() {
           onToggle={() => onToggle('sales')}
         >
           <div className="space-y-1">
-            <div className="text-2xl font-bold tabular-nums text-slate-900 dark:text-slate-100">
+            <div className="text-2xl font-bold tabular-nums text-slate-900 dark:text-slate-100 inline-flex items-baseline gap-2">
               {formatEur(data.sales.total.valueCents)}
+              {data.sales.total.compareDeltaPct != null && (
+                <SalesDelta deltaPct={data.sales.total.compareDeltaPct} />
+              )}
             </div>
             <div className="text-xs text-slate-500 dark:text-slate-400">
               {data.period.key === 'today' ? 'Today so far' : data.period.key}
               {' · '}
               <span>{data.sales.total.units} units</span>
+              {data.sales.total.compareLabel && (
+                <span className="ml-1 text-slate-400 dark:text-slate-500"> · {data.sales.total.compareLabel}</span>
+              )}
             </div>
             <Sparkline data={data.sales.sparkline} />
           </div>
@@ -201,6 +251,29 @@ export function GlobalSnapshot() {
         </div>
       )}
     </Card>
+  )
+}
+
+/**
+ * GS.7 — same-day-last-week delta indicator. Green arrow if revenue
+ * is up, rose if down, slate if even/zero baseline.
+ */
+function SalesDelta({ deltaPct }: { deltaPct: number }) {
+  const rounded = Math.round(deltaPct * 10) / 10
+  const sign = rounded > 0 ? '▲' : rounded < 0 ? '▼' : '·'
+  const tone =
+    rounded > 0
+      ? 'text-emerald-600 dark:text-emerald-400'
+      : rounded < 0
+      ? 'text-rose-600 dark:text-rose-400'
+      : 'text-slate-400 dark:text-slate-500'
+  return (
+    <span
+      className={`text-xs font-semibold tabular-nums ${tone}`}
+      title={`Sales delta vs same day last week: ${rounded > 0 ? '+' : ''}${rounded}%`}
+    >
+      {sign} {Math.abs(rounded).toFixed(1)}%
+    </span>
   )
 }
 

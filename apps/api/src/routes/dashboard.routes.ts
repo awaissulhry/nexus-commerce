@@ -396,6 +396,31 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
           salesUnitsTotal += unitsByMarketplace.get(mkt) ?? 0
         }
 
+        // GS.7 — same-day-last-week comparison for the Sales tile.
+        // Useful at-a-glance signal ("Today vs. same day last week").
+        // Only computed when `period` resolves to a single calendar
+        // day (today / yesterday) so the delta is meaningful.
+        let comparePrevValueCents: number | null = null
+        if (period === 'today' || period === 'yesterday') {
+          const shiftMs = 7 * 24 * 60 * 60 * 1000
+          const prevFrom = new Date(from.getTime() - shiftMs)
+          const prevTo = new Date(to.getTime() - shiftMs)
+          const prev = await prisma.order.aggregate({
+            where: {
+              deletedAt: null,
+              status: { notIn: ['CANCELLED', 'REFUNDED', 'RETURNED'] as any },
+              purchaseDate: { gte: prevFrom, lt: prevTo },
+              currencyCode: 'EUR',
+            },
+            _sum: { totalPrice: true },
+          })
+          comparePrevValueCents = Math.round(Number(prev._sum?.totalPrice ?? 0) * 100)
+        }
+        const compareDeltaPct =
+          comparePrevValueCents != null && comparePrevValueCents > 0
+            ? ((salesTotalCents - comparePrevValueCents) / comparePrevValueCents) * 100
+            : null
+
         return {
           period: {
             key: period,
@@ -408,6 +433,10 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
               valueCents: salesTotalCents,
               currency: 'EUR',
               units: salesUnitsTotal,
+              // GS.7 — vs. same day last week (only for single-day periods)
+              comparePrevValueCents,
+              compareDeltaPct,
+              compareLabel: comparePrevValueCents != null ? 'vs. same day last week' : null,
             },
             sparkline,
             byMarketplace: salesRows.sort((a, b) => b.valueCents - a.valueCents),
