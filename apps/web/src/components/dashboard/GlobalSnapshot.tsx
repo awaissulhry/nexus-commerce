@@ -564,33 +564,126 @@ function SubLine({ label, value, href }: { label: string; value: number; href: s
 }
 
 /**
- * Minimal inline SVG sparkline — 7 days ending today. No external dep.
- * The detail-page chart in GS.3 will be richer; this is just the tile.
+ * Inline SVG sparkline — 7 days ending today. Hover any point to see
+ * the per-day total in a dark tooltip (matches Amazon Seller Central).
+ * The expanded Sales panel has a richer full-width chart (GS.3).
  */
 function Sparkline({ data }: { data: Array<{ date: string; valueCents: number }> }) {
+  const [hover, setHover] = useState<number | null>(null)
   if (data.length === 0) return null
   const W = 180
   const H = 40
-  const PAD = 4
+  const PAD = 6
   const max = Math.max(1, ...data.map((d) => d.valueCents))
   const min = 0
   const xStep = (W - 2 * PAD) / Math.max(1, data.length - 1)
   const yScale = (v: number) => H - PAD - ((v - min) / (max - min)) * (H - 2 * PAD)
-  const points = data.map((d, i) => `${PAD + i * xStep},${yScale(d.valueCents)}`)
+  const xFor = (i: number) => PAD + i * xStep
+  const points = data.map((d, i) => `${xFor(i)},${yScale(d.valueCents)}`)
   const path = `M ${points.join(' L ')}`
+
+  // Track which point is nearest the cursor as it moves over the SVG.
+  // Pointer events fire on the invisible hit-target rect; we
+  // translate the local x coordinate to the closest data index.
+  const onMove = (e: React.MouseEvent<SVGRectElement>) => {
+    const svg = e.currentTarget.ownerSVGElement
+    if (!svg) return
+    const pt = svg.createSVGPoint()
+    pt.x = e.clientX
+    pt.y = e.clientY
+    const ctm = svg.getScreenCTM()
+    if (!ctm) return
+    const local = pt.matrixTransform(ctm.inverse())
+    const idx = Math.round((local.x - PAD) / xStep)
+    if (idx >= 0 && idx < data.length) setHover(idx)
+  }
+
+  const hovered = hover != null ? data[hover] : null
+  const hoveredX = hover != null ? xFor(hover) : 0
+  // Position the HTML tooltip absolutely using the percentage of the
+  // SVG viewBox the point sits at; works inside `overflow-visible`.
+  const tipLeftPct = (hoveredX / W) * 100
+  const fmtDate = (iso: string) =>
+    new Date(iso + 'T00:00:00').toLocaleDateString(undefined, {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+    })
+
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} className="overflow-visible mt-1" aria-label="7-day sales sparkline">
-      <path d={path} fill="none" stroke="currentColor" strokeWidth="1.5" className="text-slate-700 dark:text-slate-300" />
-      {data.map((d, i) => (
-        <circle
-          key={d.date}
-          cx={PAD + i * xStep}
-          cy={yScale(d.valueCents)}
-          r={i === data.length - 1 ? 3 : 1.5}
-          className={i === data.length - 1 ? 'fill-slate-900 dark:fill-slate-100' : 'fill-slate-400 dark:fill-slate-500'}
+    <div className="relative mt-1">
+      <svg
+        viewBox={`0 0 ${W} ${H}`}
+        width="100%"
+        height={H}
+        className="overflow-visible block"
+        aria-label="7-day sales sparkline"
+      >
+        <path
+          d={path}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          className="text-slate-700 dark:text-slate-300"
         />
-      ))}
-    </svg>
+        {data.map((d, i) => {
+          const isHovered = hover === i
+          const isLast = i === data.length - 1
+          return (
+            <circle
+              key={d.date}
+              cx={xFor(i)}
+              cy={yScale(d.valueCents)}
+              r={isHovered ? 4 : isLast ? 3 : 1.5}
+              className={
+                isHovered
+                  ? 'fill-slate-900 dark:fill-slate-100 stroke-white dark:stroke-slate-950'
+                  : isLast
+                  ? 'fill-slate-900 dark:fill-slate-100'
+                  : 'fill-slate-400 dark:fill-slate-500'
+              }
+              strokeWidth={isHovered ? 1.5 : 0}
+            />
+          )
+        })}
+        {hovered && (
+          <line
+            x1={hoveredX}
+            x2={hoveredX}
+            y1={PAD}
+            y2={H - PAD}
+            className="stroke-slate-300 dark:stroke-slate-600"
+            strokeWidth="1"
+            strokeDasharray="2 2"
+          />
+        )}
+        {/* Invisible hit target — covers the full viewBox so the cursor
+            picks up the nearest data point even between markers. */}
+        <rect
+          x={0}
+          y={0}
+          width={W}
+          height={H}
+          fill="transparent"
+          onMouseMove={onMove}
+          onMouseLeave={() => setHover(null)}
+          style={{ cursor: 'pointer' }}
+        />
+      </svg>
+      {hovered && (
+        <div
+          className="pointer-events-none absolute -top-1 z-10 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-md bg-slate-900 dark:bg-slate-100 px-2.5 py-1.5 text-white dark:text-slate-900 shadow-lg"
+          style={{ left: `${tipLeftPct}%` }}
+        >
+          <div className="text-[10px] uppercase tracking-wider opacity-80">
+            {fmtDate(hovered.date)}
+          </div>
+          <div className="text-sm font-bold tabular-nums">
+            €{(hovered.valueCents / 100).toFixed(2)}
+          </div>
+        </div>
+      )}
+    </div>
   )
 }
 
