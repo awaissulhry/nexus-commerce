@@ -7,6 +7,7 @@
 
 import { Loader2, Save, X } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
+import { useTranslations } from '@/lib/i18n/use-translations'
 
 interface Props {
   dirtyCount: number
@@ -16,6 +17,7 @@ interface Props {
 }
 
 export default function ImageActionBar({ dirtyCount, saving, onSave, onDiscard }: Props) {
+  const { t } = useTranslations()
   if (dirtyCount === 0) return null
 
   return (
@@ -29,7 +31,7 @@ export default function ImageActionBar({ dirtyCount, saving, onSave, onDiscard }
         {saving
           ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
           : <Save className="w-3.5 h-3.5" />}
-        Save ({dirtyCount} change{dirtyCount === 1 ? '' : 's'})
+        {t('products.edit.images.actionBar.save')} ({t('products.edit.images.actionBar.changes', { count: dirtyCount })})
       </Button>
       <Button
         size="sm"
@@ -38,7 +40,7 @@ export default function ImageActionBar({ dirtyCount, saving, onSave, onDiscard }
         disabled={saving}
         className="gap-1 text-slate-500"
       >
-        <X className="w-3.5 h-3.5" /> Discard
+        <X className="w-3.5 h-3.5" /> {t('products.edit.images.actionBar.discard')}
       </Button>
     </div>
   )

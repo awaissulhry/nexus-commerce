@@ -28,6 +28,7 @@ import DamPickerModal from './images/DamPickerModal'
 import { fromListing, fromMaster, useLightbox } from './images/useLightbox'
 import type { LightboxImage } from './images/useLightbox'
 import type { ProductImage } from './images/types'
+import { useTranslations } from '@/lib/i18n/use-translations'
 import type { ChannelTab } from './images/types'
 
 interface Props {
@@ -49,6 +50,7 @@ export default function ImagesTab({ product, discardSignal, onDirtyChange }: Pro
   const [editorImage, setEditorImage] = useState<ProductImage | null>(null)
   const [damPickerOpen, setDamPickerOpen] = useState(false)
   const lightbox = useLightbox()
+  const { t } = useTranslations()
 
   const workspace = useImagesWorkspace(product.id, discardSignal, onDirtyChange)
 
@@ -402,11 +404,11 @@ export default function ImagesTab({ product, discardSignal, onDirtyChange }: Pro
         saving={saving}
         onSave={async () => {
           const ok = await savePending()
-          if (ok) showToast('Changes saved')
+          if (ok) showToast(t('products.edit.images.toasts.changesSaved'))
         }}
         onDiscard={() => {
           discardPending()
-          showToast('Changes discarded')
+          showToast(t('products.edit.images.toasts.changesDiscarded'))
         }}
       />
 
@@ -421,7 +423,7 @@ export default function ImagesTab({ product, discardSignal, onDirtyChange }: Pro
           onMasterImageUpdated={() => { void workspace.reload() }}
           onEditMaster={(img) => setEditorImage(img)}
           onSwitchToMaster={(img) => lightbox.open(fromMaster(img), master.map(fromMaster))}
-          onPushToDam={() => { void workspace.reload(); showToast('Pushed to DAM library') }}
+          onPushToDam={() => { void workspace.reload(); showToast(t('products.edit.images.toasts.pushedToDam')) }}
           onClose={lightbox.close}
           onNavigate={lightbox.navigate}
         />
@@ -436,7 +438,7 @@ export default function ImagesTab({ product, discardSignal, onDirtyChange }: Pro
           onSaved={() => {
             setEditorImage(null)
             lightbox.close()
-            showToast('Derivative saved')
+            showToast(t('products.edit.images.toasts.derivativeSaved'))
             void workspace.reload()
           }}
         />
@@ -448,7 +450,7 @@ export default function ImagesTab({ product, discardSignal, onDirtyChange }: Pro
           productId={product.id}
           onClose={() => setDamPickerOpen(false)}
           onImported={() => {
-            showToast('Imported from DAM library')
+            showToast(t('products.edit.images.toasts.importedFromDam'))
             void workspace.reload()
           }}
         />
