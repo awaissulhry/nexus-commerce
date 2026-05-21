@@ -1699,16 +1699,18 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
     }
     const { access_token: accessToken } = await tokRes.json() as { access_token: string }
 
-    const since = new Date(Date.now() - 7 * 86400_000).toISOString()
+    const since = new Date(Date.now() - 30 * 86400_000).toISOString()
+    const sinceShort = new Date(Date.now() - 7 * 86400_000).toISOString()
     const endpoints = [
-      { name: 'finance-v0-events',     path: `/finances/v0/financialEvents?PostedAfter=${since}&MaxResultsPerPage=10` },
-      { name: 'finance-v0-eventGroups', path: `/finances/v0/financialEventGroups?FinancialEventGroupStartedAfter=${since}&MaxResultsPerPage=10` },
-      { name: 'finance-2024-transactions', path: `/finances/2024-06-19/transactions?postedAfter=${since}&marketplaceId=${marketplaceId}` },
+      { name: 'finance-v0-events',     path: `/finances/v0/financialEvents?PostedAfter=${sinceShort}&MaxResultsPerPage=10` },
+      { name: 'finance-v0-eventGroups', path: `/finances/v0/financialEventGroups?FinancialEventGroupStartedAfter=${sinceShort}&MaxResultsPerPage=10` },
+      { name: 'finance-2024-transactions-with-marketplace', path: `/finances/2024-06-19/transactions?postedAfter=${since}&marketplaceId=${marketplaceId}` },
+      { name: 'finance-2024-transactions-no-marketplace', path: `/finances/2024-06-19/transactions?postedAfter=${since}` },
       { name: 'reports-settlement-list', path: `/reports/2021-06-30/reports?reportTypes=GET_V2_SETTLEMENT_REPORT_DATA_FLAT_FILE_V2&pageSize=5` },
       { name: 'reports-merchant-listings', path: `/reports/2021-06-30/reports?reportTypes=GET_MERCHANT_LISTINGS_ALL_DATA&pageSize=5` },
     ]
 
-    const results: Array<{ name: string; status: number; ok: boolean; error?: string }> = []
+    const results: Array<{ name: string; status: number; ok: boolean; error?: string; sample?: unknown }> = []
     for (const ep of endpoints) {
       try {
         const r = await fetch(`https://${host}${ep.path}`, {
@@ -1716,6 +1718,7 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
         })
         const body = await r.text()
         let errMsg: string | undefined
+        let sample: unknown = undefined
         if (r.status !== 200) {
           try {
             const j = JSON.parse(body)
@@ -1723,8 +1726,18 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
           } catch {
             errMsg = body.slice(0, 200)
           }
+        } else if (ep.name.includes('finance-2024')) {
+          try {
+            const j = JSON.parse(body)
+            sample = {
+              transactionCount: j.transactions?.length ?? 0,
+              firstTransaction: j.transactions?.[0],
+              hasNextToken: !!j.nextToken,
+              rawKeys: Object.keys(j),
+            }
+          } catch {}
         }
-        results.push({ name: ep.name, status: r.status, ok: r.status === 200, error: errMsg })
+        results.push({ name: ep.name, status: r.status, ok: r.status === 200, error: errMsg, sample })
       } catch (e) {
         results.push({ name: ep.name, status: 0, ok: false, error: e instanceof Error ? e.message : String(e) })
       }
