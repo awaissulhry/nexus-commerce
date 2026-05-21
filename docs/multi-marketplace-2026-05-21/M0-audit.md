@@ -5,6 +5,26 @@
 
 ---
 
+## ⚠️ POST-M2 CORRECTION (2026-05-21, after live SP-API probe)
+
+The volume table below was based on the deployed I11 reconciliation route. Empirical investigation while landing M1+M2 surfaced a critical flaw in that interpretation:
+
+**SP-API's `MarketplaceIds=[X]` filter is permissive, not strict.** It returns orders where the seller HAS LISTINGS visible in marketplace X — which for Pan-EU FBA effectively means every order is returned for every EU marketplace query. The actual `raw.MarketplaceId` field on each returned order still points to the marketplace where the order was *placed*.
+
+**Verification:**
+- All 2,410 historical Amazon orders in our DB have `raw.MarketplaceId = APJ6JRA9NG5V4` (IT). Every single one.
+- Buyer shipping countries: 2,144 IT (88%), 262 null, 1 each CH/BE/SI/AT (cross-border via Amazon Italy). **Zero buyers in DE/FR/ES/NL/UK/PL/SE/US.**
+- A 1-day M2 probe against `marketplaceCodes=['ES']` returned 7 orders, all with `raw.MarketplaceId = IT` — they upserted onto existing IT rows.
+
+**Conclusion: Xavia has no non-Italian customer orders to backfill.** The DE 40 / FR 19 / ES 3 counts in the original I11 reconciliation were phantom Pan-EU visibility duplicates, not real per-market sales.
+
+**Action taken:**
+- Patched `reconcileAmazon` to filter `o.MarketplaceId === marketplaceId` (strict match), eliminating the phantom counts in future reconciliation runs.
+- M3-M16 phases (the actual data-ingestion work) are **deferred indefinitely** — there's no data to backfill. They'll only become relevant if/when Xavia starts seeing non-IT customer activity.
+- M1+M2 infrastructure stays in place as future-proofing — if/when the operator launches in other markets, the code is ready.
+
+---
+
 ## ✅ Headline: every marketplace IS authorized
 
 The operator's SP-API LWA auth covers **all 9 marketplaces** — none returned 403 on the orders or inventory endpoints. The single auth-scope gap is **US FBA inventory** (the only `Access denied` warning in the probe).

@@ -129,6 +129,8 @@ async function fetchChannelOrderTotals(
     const data = (await res.json()) as {
       payload?: {
         Orders?: Array<{
+          AmazonOrderId?: string
+          MarketplaceId?: string
           OrderTotal?: { Amount?: string; CurrencyCode?: string }
           OrderStatus?: string
         }>
@@ -139,6 +141,17 @@ async function fetchChannelOrderTotals(
     for (const o of orders) {
       // Skip cancelled like our DB does
       if (o.OrderStatus === 'Canceled' || o.OrderStatus === 'Cancelled') continue
+      // Pan-EU FBA fix: SP-API's MarketplaceIds filter is *permissive* — it
+      // returns orders where the seller has listings visible in that
+      // marketplace, NOT only orders actually placed there. For Pan-EU
+      // sellers, a single IT order will appear when querying any of
+      // IT/DE/FR/ES/NL. Without this strict-match filter, the recon
+      // counts inflate per-marketplace by counting the same orders
+      // multiple times. Verified empirically 2026-05-21: all of Xavia's
+      // 2,410 historical orders have raw.MarketplaceId=APJ6JRA9NG5V4 (IT),
+      // yet the un-filtered count reported DE=40 / FR=19 / ES=3 — those
+      // are phantom Pan-EU visibility duplicates, not real DE/FR/ES sales.
+      if (o.MarketplaceId && o.MarketplaceId !== marketplaceId) continue
       orderCount++
       const amt = parseFloat(o.OrderTotal?.Amount ?? '0')
       if (Number.isFinite(amt)) revenue += amt

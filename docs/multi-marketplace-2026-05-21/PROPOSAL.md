@@ -5,6 +5,18 @@
 
 ---
 
+## ⚠️ STATUS: SUPERSEDED — see M0-audit.md correction
+
+This proposal assumed the deployed I11 reconciliation's per-marketplace counts ("DE: 40 orders, FR: 19, ES: 3") were real customer-placed orders that needed backfilling. Empirical verification during M2 implementation revealed they are phantom Pan-EU FBA visibility duplicates — every one of Xavia's 2,410 historical orders has `raw.MarketplaceId = APJ6JRA9NG5V4` (IT), and zero buyers are in DE/FR/ES/NL/UK/PL/SE/US.
+
+**M3–M16 are deferred indefinitely.** M0+M1+M2 work shipped as future-proofing infrastructure; if/when Xavia activates non-IT customer activity, the system is ready to ingest it.
+
+The full proposal below is preserved for reference.
+
+---
+
+---
+
 ## What the read-only audit found
 
 ### 🔴 Empty marketplaces (8 of 9)
