@@ -17,7 +17,7 @@
  */
 
 import { useState } from 'react'
-import { Package, Star, Truck, X, Trash2, Undo2, AlertTriangle } from 'lucide-react'
+import { FileText, Package, Printer, Star, Truck, X, Trash2, Undo2, AlertTriangle } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
 import { IconButton } from '@/components/ui/IconButton'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -113,6 +113,35 @@ export function BulkActionBar({
       return `Sent ${data.sent}, skipped ${data.skipped}, failed ${data.failed}`
     })
 
+  // OX.5 — open a single browser tab containing N packing slips
+  // concatenated with page-break-after; operator prints to PDF via the
+  // browser dialog (no PDF library dep, same pattern as the per-order
+  // packing-slip endpoint).
+  const printPackingSlips = () => {
+    const url = `${getBackendUrl()}/api/orders/bulk-packing-slips.html?ids=${selectedIds.join(',')}`
+    const w = window.open(url, '_blank', 'noopener')
+    if (!w) {
+      setStatus('Allow popups to print packing slips')
+      setTimeout(() => setStatus(null), 4000)
+    }
+  }
+
+  // OX.5 — bulk-issue fiscal invoices (idempotent per order).
+  const issueInvoices = () =>
+    run('Issuing invoices…', async () => {
+      const res = await fetch(`${getBackendUrl()}/api/orders/bulk-issue-invoices`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderIds: selectedIds }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error)
+      const parts = [`+${data.newlyIssued} issued`]
+      if (data.alreadyIssued) parts.push(`${data.alreadyIssued} already issued`)
+      if (data.failed) parts.push(`${data.failed} failed`)
+      return parts.join(' · ')
+    })
+
   const softDelete = () =>
     run(t('orders.bulk.movingToBin'), async () => {
       const res = await fetch(
@@ -195,6 +224,20 @@ export function BulkActionBar({
               </>
             ) : (
               <>
+                <button
+                  onClick={printPackingSlips}
+                  disabled={busy}
+                  className="h-7 px-3 text-base bg-slate-50 text-slate-700 border border-slate-200 rounded hover:bg-slate-100 disabled:opacity-50 inline-flex items-center gap-1.5 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700"
+                >
+                  <Printer size={12} /> Print packing slips
+                </button>
+                <button
+                  onClick={issueInvoices}
+                  disabled={busy}
+                  className="h-7 px-3 text-base bg-violet-50 text-violet-700 border border-violet-200 rounded hover:bg-violet-100 disabled:opacity-50 inline-flex items-center gap-1.5 dark:bg-violet-950/40 dark:text-violet-300 dark:border-violet-800"
+                >
+                  <FileText size={12} /> Issue invoices
+                </button>
                 <button
                   onClick={createShipments}
                   disabled={busy}

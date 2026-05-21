@@ -869,6 +869,99 @@ export async function ordersRoutes(app: FastifyInstance) {
     return reply.send(html)
   })
 
+  // OX.5 — bulk packing slips. Operator selects N orders, hits "Print
+  // packing slips", we return one concatenated HTML doc where each
+  // slip starts on a new physical page (CSS page-break-after). They
+  // print to PDF via the browser dialog (same pattern as the single-
+  // order endpoint — keeps us out of the puppeteer/pdf-lib hole).
+  // GET /api/orders/bulk-packing-slips.html?ids=id1,id2,id3
+  app.get('/api/orders/bulk-packing-slips.html', async (request, reply) => {
+    try {
+      const q = request.query as any
+      const idsRaw = typeof q.ids === 'string' ? q.ids : ''
+      const ids = idsRaw.split(',').map((s: string) => s.trim()).filter(Boolean).slice(0, 200)
+      if (ids.length === 0) {
+        reply.header('Content-Type', 'text/html; charset=utf-8')
+        return reply.send('<html><body><h1>No orders selected</h1></body></html>')
+      }
+      const { packingSlipHtml, safeRender } = await import('../services/fiscal-pdf.service.js')
+      const slips: string[] = []
+      for (const id of ids) {
+        const html = await safeRender(() => packingSlipHtml(id), 'packing-slip')
+        slips.push(html)
+      }
+      // Strip <html>/<body> wrappers from inner docs and stitch with
+      // a page-break wrapper so one print job → one slip per page.
+      const inner = slips
+        .map((h) => {
+          const body = h.match(/<body[^>]*>([\s\S]*?)<\/body>/i)?.[1] ?? h
+          return `<div class="packing-slip-page">${body}</div>`
+        })
+        .join('\n')
+      const combined = `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Packing Slips — ${ids.length} order${ids.length === 1 ? '' : 's'}</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif; margin: 0; }
+    .packing-slip-page { page-break-after: always; padding: 16mm; }
+    .packing-slip-page:last-child { page-break-after: auto; }
+    @media print { .no-print { display: none !important; } }
+  </style>
+</head>
+<body>
+  <div class="no-print" style="padding:12px 16px;background:#0f172a;color:white;display:flex;align-items:center;gap:12px;">
+    <strong>${ids.length} packing slip${ids.length === 1 ? '' : 's'} ready</strong>
+    <span style="opacity:0.7;">Use your browser's Print dialog (Cmd/Ctrl+P) to save as PDF.</span>
+    <button onclick="window.print()" style="margin-left:auto;padding:6px 12px;background:white;color:#0f172a;border:none;border-radius:4px;cursor:pointer;font-weight:600;">Print now</button>
+  </div>
+  ${inner}
+</body>
+</html>`
+      reply.header('Content-Type', 'text/html; charset=utf-8')
+      return reply.send(combined)
+    } catch (error: any) {
+      logger.error('[ORDERS API] bulk-packing-slips failed', { message: error.message })
+      reply.header('Content-Type', 'text/html; charset=utf-8')
+      return reply.status(500).send(`<html><body><h1>Bulk packing slip render failed</h1><pre>${error.message}</pre></body></html>`)
+    }
+  })
+
+  // OX.5 — bulk-issue invoices. Loop selected IDs; for each, call
+  // assignInvoiceNumber() which is idempotent (no-op if a FiscalInvoice
+  // already exists). Returns per-order outcome so the UI can report
+  // newly-assigned vs already-issued vs failed.
+  app.post('/api/orders/bulk-issue-invoices', async (request, reply) => {
+    try {
+      const body = (request.body ?? {}) as { orderIds?: string[] }
+      const ids = (body.orderIds ?? []).slice(0, 200)
+      if (ids.length === 0) return reply.status(400).send({ error: 'orderIds required' })
+      const { assignInvoiceNumber } = await import('../services/fiscal-invoice.service.js')
+      const results = {
+        scanned: ids.length,
+        newlyIssued: 0,
+        alreadyIssued: 0,
+        failed: 0,
+        errors: [] as Array<{ orderId: string; error: string }>,
+      }
+      for (const id of ids) {
+        try {
+          const out = await assignInvoiceNumber(id)
+          if (out.newlyAssigned) results.newlyIssued += 1
+          else results.alreadyIssued += 1
+        } catch (e: any) {
+          results.failed += 1
+          results.errors.push({ orderId: id, error: e?.message ?? String(e) })
+        }
+      }
+      return { success: true, ...results }
+    } catch (error: any) {
+      logger.error('[ORDERS API] bulk-issue-invoices failed', { message: error.message })
+      return reply.status(500).send({ error: error.message })
+    }
+  })
+
   // F.4 — FatturaPA XML download (B2B only). Operator manually
   // uploads to whichever commercial SDI intermediary they use
   // (Aruba / Fatture in Cloud / TeamSystem). Real auto-dispatch is
