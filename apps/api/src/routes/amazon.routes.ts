@@ -1674,6 +1674,64 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // GET /api/amazon/aplus/probe — Phase 9 reconciliation probe.
+  // Calls GET /aplus/2020-11-01/contentDocuments to see if Amazon
+  // has any A+ Content published for this seller. If 0, Phase 9 is
+  // a no-op (nothing to reconcile). If non-zero, we build the pull.
+  fastify.get('/aplus/probe', async () => {
+    const clientId = process.env.AMAZON_LWA_CLIENT_ID
+    const clientSecret = process.env.AMAZON_LWA_CLIENT_SECRET
+    const refreshToken = process.env.AMAZON_REFRESH_TOKEN
+    const marketplaceId = process.env.AMAZON_MARKETPLACE_ID ?? 'APJ6JRA9NG5V4'
+    const region = (process.env.AMAZON_REGION ?? 'eu') as string
+    const host = `sellingpartnerapi-${region}.amazon.com`
+    if (!clientId || !clientSecret || !refreshToken) return { error: 'creds missing' }
+    const tok = await fetch('https://api.amazon.com/auth/o2/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        grant_type: 'refresh_token',
+        refresh_token: refreshToken,
+        client_id: clientId,
+        client_secret: clientSecret,
+      }).toString(),
+    })
+    if (!tok.ok) return { error: `LWA failed: ${await tok.text()}` }
+    const { access_token } = await tok.json() as { access_token: string }
+    const probes: Array<{ name: string; path: string }> = [
+      { name: 'aplus-listDocs', path: `/aplus/2020-11-01/contentDocuments?marketplaceId=${marketplaceId}&pageSize=20` },
+      { name: 'aplus-listAsins', path: `/aplus/2020-11-01/contentAsinRelations?marketplaceId=${marketplaceId}&asinSet=B0BMSC91YK` },
+    ]
+    const results: Array<{ name: string; status: number; sample?: unknown; error?: string }> = []
+    for (const p of probes) {
+      try {
+        const r = await fetch(`https://${host}${p.path}`, {
+          headers: { 'x-amz-access-token': access_token },
+        })
+        const body = await r.text()
+        let sample: unknown
+        let errMsg: string | undefined
+        if (r.status === 200) {
+          try {
+            const j = JSON.parse(body)
+            sample = {
+              keys: Object.keys(j),
+              contentMetadataRecordsCount: j.contentMetadataRecords?.length ?? j.payload?.contentMetadataRecords?.length,
+              asinMetadataSetCount: j.asinMetadataSet?.length ?? j.payload?.asinMetadataSet?.length,
+              hasNext: !!j.nextPageToken,
+            }
+          } catch {}
+        } else {
+          try { const j = JSON.parse(body); errMsg = j.errors?.[0]?.message ?? j.message ?? body.slice(0, 200) } catch { errMsg = body.slice(0, 200) }
+        }
+        results.push({ name: p.name, status: r.status, sample, error: errMsg })
+      } catch (e) {
+        results.push({ name: p.name, status: 0, error: e instanceof Error ? e.message : String(e) })
+      }
+    }
+    return { results }
+  })
+
   // POST /api/amazon/returns/sync — Phase 7 returns backfill. Body shape:
   //   { from, to, marketplaceId? }  — explicit window
   //   { hoursBack: N }              — default rolling window (matches cron)
