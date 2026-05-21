@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
+import { useInsightsLiveRefresh } from '../../_components/useInsightsLiveRefresh'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import {
@@ -98,6 +99,9 @@ export default function BriefClient() {
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [nonce, setNonce] = useState(0)
+  // AL.1 — live refresh on order events (debounced 2s)
+  const bumpNonce = useCallback(() => setNonce((n) => n + 1), [])
+  useInsightsLiveRefresh(bumpNonce)
   const [language, setLanguage] = useState<'it' | 'en'>('it')
 
   useEffect(() => {

@@ -24,6 +24,11 @@ export type OrderEvent =
   | { type: 'order.updated'; orderId: string; channel: string; status?: string; ts: number }
   | { type: 'order.cancelled'; orderId: string; channel?: string; ts: number }
   | { type: 'return.created'; returnId: string; orderId?: string | null; channel: string; ts: number }
+  // AL.4 — fired when the nightly Amazon T+1 sales-report ingest
+  // completes. Analytics surfaces that read from DailySalesAggregate
+  // (e.g. /analytics/products portfolio) listen and auto-reload so
+  // operators see the official numbers without manual refresh.
+  | { type: 'analytics.salesReport.refreshed'; day: string; marketplacesProcessed: number; ts: number }
   | { type: 'ping'; ts: number }
 
 type Listener = (event: OrderEvent) => void

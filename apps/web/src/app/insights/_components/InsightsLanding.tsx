@@ -1,8 +1,9 @@
 'use client'
 
 import Link from 'next/link'
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
+import { useInsightsLiveRefresh } from './useInsightsLiveRefresh'
 import {
   AlertTriangle,
   ArrowRight,
@@ -159,6 +160,9 @@ export default function InsightsLanding() {
     new URLSearchParams(params?.toString() ?? ''),
   )
   const [nonce, setNonce] = useState(0)
+  // AL.1 — live refresh on order events (debounced 2s)
+  const bumpNonce = useCallback(() => setNonce((n) => n + 1), [])
+  useInsightsLiveRefresh(bumpNonce)
   const { data, loading, refreshing, error } = useInsightsHubData(
     filterState,
     nonce,

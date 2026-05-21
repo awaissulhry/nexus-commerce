@@ -45,11 +45,18 @@ const analyticsRoutes: FastifyPluginAsync = async (fastify) => {
       channel,
       limit = '200',
       format,
+      // AL.3 — dual-source: `official` uses Amazon's T+1 sales report
+      // (DailySalesAggregate, default), `live` uses Order/OrderItem
+      // direct (real-time but excludes refunds/returns). `auto` picks
+      // official when DSA has rows in the window, else falls back to
+      // live so brand-new sellers still see something useful.
+      source = 'auto',
     } = request.query as {
       attention?: string
       channel?: string
       limit?: string
       format?: string
+      source?: 'auto' | 'live' | 'official'
     }
 
     const maxRows = Math.min(parseInt(limit, 10) || 200, 500)
@@ -79,20 +86,70 @@ const analyticsRoutes: FastifyPluginAsync = async (fastify) => {
     const skus = products.map((p) => p.sku)
 
     // ── Load sales aggregates (30d) ──────────────────────────────────────
+    // AL.3 — official path (DailySalesAggregate, Amazon T+1 report)
     const salesWhere: Record<string, unknown> = {
       sku: { in: skus },
       day: { gte: cutoff },
     }
     if (channel) salesWhere.channel = channel.toUpperCase()
 
-    const salesRows = await prisma.dailySalesAggregate.groupBy({
+    const officialRows = await prisma.dailySalesAggregate.groupBy({
       by: ['sku'],
       where: salesWhere,
       _sum: { unitsSold: true, grossRevenue: true },
     })
-    const salesBySku = new Map(
-      salesRows.map((r) => [r.sku, { units: r._sum.unitsSold ?? 0, revenue: Number(r._sum.grossRevenue ?? 0) }]),
+    const officialBySku = new Map(
+      officialRows.map((r) => [r.sku, { units: r._sum.unitsSold ?? 0, revenue: Number(r._sum.grossRevenue ?? 0) }]),
     )
+    const officialDataAt = await prisma.dailySalesAggregate.findFirst({
+      where: salesWhere,
+      orderBy: { day: 'desc' },
+      select: { day: true },
+    })
+
+    // AL.3 — live path (Order + OrderItem direct). Excludes terminal-
+    // negative statuses to stay consistent with OX.17's "All" totals.
+    let liveBySku = new Map<string, { units: number; revenue: number }>()
+    let liveDataAt: Date | null = null
+    const needLive = source === 'live' || (source === 'auto' && officialRows.length === 0)
+    if (needLive) {
+      const channelClause = channel
+        ? prisma.$queryRaw`AND o."channel" = ${channel.toUpperCase()}`
+        : prisma.$queryRaw``
+      const liveRows = await prisma.$queryRaw<
+        Array<{ sku: string; units: bigint; revenue: number }>
+      >`
+        SELECT oi."sku",
+               SUM(oi."quantity")::bigint AS units,
+               SUM(oi."price" * oi."quantity")::float AS revenue
+          FROM "OrderItem" oi
+          JOIN "Order" o ON o.id = oi."orderId"
+         WHERE oi."sku" = ANY(${skus})
+           AND o."deletedAt" IS NULL
+           AND o."status" NOT IN ('CANCELLED', 'REFUNDED', 'RETURNED')
+           AND o."purchaseDate" >= ${cutoff}
+           ${channel ? prisma.$queryRaw`AND o."channel" = ${channel.toUpperCase()}` : prisma.$queryRaw``}
+         GROUP BY oi."sku"
+      `
+      liveBySku = new Map(liveRows.map((r) => [r.sku, { units: Number(r.units), revenue: r.revenue }]))
+      const latest = await prisma.order.findFirst({
+        where: {
+          deletedAt: null,
+          status: { notIn: ['CANCELLED', 'REFUNDED', 'RETURNED'] as any },
+          purchaseDate: { gte: cutoff },
+          ...(channel ? { channel: channel.toUpperCase() as any } : {}),
+        },
+        orderBy: { purchaseDate: 'desc' },
+        select: { purchaseDate: true },
+      })
+      liveDataAt = latest?.purchaseDate ?? null
+    }
+
+    // Resolved source the response actually used + which map feeds
+    // the rest of the computation.
+    const resolvedSource: 'live' | 'official' =
+      source === 'live' || (source === 'auto' && officialRows.length === 0) ? 'live' : 'official'
+    const salesBySku = resolvedSource === 'live' ? liveBySku : officialBySku
 
     // ── Load stock ────────────────────────────────────────────────────────
     const stockRows = await prisma.stockLevel.groupBy({
@@ -235,7 +292,27 @@ const analyticsRoutes: FastifyPluginAsync = async (fastify) => {
         .send(lines.join('\n'))
     }
 
-    return { products: filtered, roasTable: roasRows, total: filtered.length }
+    // AL.3 — dataFreshness lets the UI render an "Official report ·
+    // yesterday" vs "Live preview · 3 min ago" badge so operators
+    // know which numbers they're looking at.
+    const lastDataAt =
+      resolvedSource === 'live'
+        ? liveDataAt?.toISOString() ?? null
+        : officialDataAt?.day?.toISOString() ?? null
+    return {
+      products: filtered,
+      roasTable: roasRows,
+      total: filtered.length,
+      dataFreshness: {
+        source: resolvedSource,
+        requestedSource: source,
+        lastDataAt,
+        label:
+          resolvedSource === 'live'
+            ? 'Live preview · includes today'
+            : 'Official report · Amazon T+1',
+      },
+    }
   })
 }
 

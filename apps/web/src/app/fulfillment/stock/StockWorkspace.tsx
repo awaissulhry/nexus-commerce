@@ -11,6 +11,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { VirtualizedGrid, GridFooter, ProductIdentityCell, StockSplit, DensityToggle as SharedDensityToggle, AutoRefreshSelect, BulkActionShell, KeyboardShortcutsModal, FilterPopover, GridToolbar, type AutoRefreshInterval, type BulkAction, type ShortcutGroup, type FilterDimension } from '@/app/_shared/grid-lens'
 import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
+import { useOrderEventsRefresh } from '@/hooks/use-order-events-refresh'
 import type { GridLensColumn, GridLensRow } from '@/app/_shared/grid-lens'
 import { DENSITY_CELL_CLASS } from '@/lib/products/theme'
 import Link from 'next/link'
@@ -763,6 +764,17 @@ export default function StockWorkspace() {
 
   useEffect(() => { fetchStock() }, [fetchStock])
   useEffect(() => { fetchSidecar() }, [fetchSidecar])
+
+  // AL.2 — live refresh on order events. StockLevel.reserved is
+  // updated synchronously when an order is ingested (so prod data is
+  // already correct); this hook just tells the UI to re-fetch the
+  // reserved counts the moment a push notification lands. Debounced
+  // 2s so a burst of orders triggers one refresh.
+  const refreshOnOrderEvent = useCallback(() => {
+    fetchStock()
+    fetchSidecar()
+  }, [fetchStock, fetchSidecar])
+  useOrderEventsRefresh(refreshOnOrderEvent)
 
   // 30s poll + visibility-driven refresh
   useEffect(() => {

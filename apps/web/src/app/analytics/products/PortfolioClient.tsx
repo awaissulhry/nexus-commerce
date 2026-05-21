@@ -1,7 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import { AlertTriangle, Download } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 
@@ -52,20 +53,106 @@ function HealthBar({ score }: { score: number }) {
 export function PortfolioClient({
   initialProducts,
   initialRoas,
+  dataFreshness,
 }: {
   initialProducts: PortfolioRow[]
   initialRoas: RoasRow[]
+  dataFreshness?: {
+    source: 'live' | 'official'
+    requestedSource: 'auto' | 'live' | 'official'
+    lastDataAt: string | null
+    label: string
+  }
 }) {
   const [filter, setFilter] = useState<'all' | 'attention'>('attention')
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const pathname = usePathname()
 
   const displayed = filter === 'attention'
     ? initialProducts.filter((p) => p.healthScore < 60)
     : initialProducts
 
+  // AL.4 — auto-reload when the nightly sales-report cron finishes.
+  // The cron emits `analytics.salesReport.refreshed` via the order-
+  // events SSE bus once DailySalesAggregate has new rows for the
+  // prior day. router.refresh() re-runs the server component fetch
+  // in page.tsx without losing client state (filter selection etc).
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    let es: EventSource | null = null
+    try {
+      es = new EventSource(`${getBackendUrl()}/api/orders/events`)
+      es.addEventListener('analytics.salesReport.refreshed', () => router.refresh())
+    } catch {}
+    return () => { try { es?.close() } catch {} }
+  }, [router])
+
+  // AL.3 — data-source toggle. URL-driven so the page.tsx server
+  // fetch re-runs with the new mode on click.
+  const switchSource = (next: 'auto' | 'live' | 'official') => {
+    const params = new URLSearchParams(searchParams?.toString() ?? '')
+    if (next === 'auto') params.delete('source')
+    else params.set('source', next)
+    router.push(`${pathname}?${params.toString()}`)
+  }
+
   const exportUrl = `${getBackendUrl()}/api/analytics/portfolio?format=csv&limit=500`
 
   return (
     <div className="space-y-6">
+      {/* AL.3 — data freshness banner */}
+      {dataFreshness && (
+        <div
+          className={`flex items-center gap-2 flex-wrap px-3 py-2 rounded border text-sm ${
+            dataFreshness.source === 'live'
+              ? 'bg-amber-50 border-amber-200 dark:bg-amber-950/40 dark:border-amber-900'
+              : 'bg-emerald-50 border-emerald-200 dark:bg-emerald-950/40 dark:border-emerald-900'
+          }`}
+        >
+          <span
+            className={`inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-wider ${
+              dataFreshness.source === 'live'
+                ? 'text-amber-800 dark:text-amber-300'
+                : 'text-emerald-800 dark:text-emerald-300'
+            }`}
+          >
+            {dataFreshness.source === 'live' ? 'Live preview' : 'Official report'}
+          </span>
+          <span className="text-slate-700 dark:text-slate-300">
+            {dataFreshness.label}
+            {dataFreshness.lastDataAt && (
+              <span className="ml-1 text-slate-500 dark:text-slate-400">
+                · last data {new Date(dataFreshness.lastDataAt).toLocaleString()}
+              </span>
+            )}
+          </span>
+          <div className="ml-auto inline-flex items-center bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded p-0.5">
+            {(['auto', 'official', 'live'] as const).map((s) => (
+              <button
+                key={s}
+                type="button"
+                onClick={() => switchSource(s)}
+                className={`h-6 px-2.5 text-xs font-medium rounded ${
+                  dataFreshness.requestedSource === s
+                    ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
+                }`}
+                title={
+                  s === 'auto'
+                    ? 'Use official report if available, else fall back to live preview'
+                    : s === 'official'
+                    ? 'Use only Amazon T+1 GET_SALES_AND_TRAFFIC_REPORT data'
+                    : 'Compute from Order/OrderItem in real time'
+                }
+              >
+                {s.charAt(0).toUpperCase() + s.slice(1)}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Toolbar */}
       <div className="flex items-center gap-2 flex-wrap">
         {(['attention', 'all'] as const).map((f) => (

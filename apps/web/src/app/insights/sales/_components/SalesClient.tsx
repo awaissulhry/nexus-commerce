@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
+import { useInsightsLiveRefresh } from '../../_components/useInsightsLiveRefresh'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { ChevronLeft } from 'lucide-react'
@@ -116,6 +117,11 @@ export default function SalesClient() {
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [nonce, setNonce] = useState(0)
+
+  // AL.1 — live-refresh on Amazon push / Shopify webhook / cron upsert.
+  // Debounced 2s so a burst of orders triggers one refresh, not N.
+  const bumpNonce = useCallback(() => setNonce((n) => n + 1), [])
+  useInsightsLiveRefresh(bumpNonce)
 
   useEffect(() => {
     let cancelled = false

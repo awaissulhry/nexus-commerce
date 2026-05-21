@@ -42,11 +42,17 @@ interface PortfolioPayload {
   products: PortfolioRow[]
   roasTable: RoasRow[]
   total: number
+  dataFreshness?: {
+    source: 'live' | 'official'
+    requestedSource: 'auto' | 'live' | 'official'
+    lastDataAt: string | null
+    label: string
+  }
 }
 
-async function fetchPortfolio(): Promise<PortfolioPayload> {
+async function fetchPortfolio(source: string): Promise<PortfolioPayload> {
   try {
-    const res = await fetch(`${getBackendUrl()}/api/analytics/portfolio?limit=200`, {
+    const res = await fetch(`${getBackendUrl()}/api/analytics/portfolio?limit=200&source=${encodeURIComponent(source)}`, {
       cache: 'no-store',
     })
     if (!res.ok) return { products: [], roasTable: [], total: 0 }
@@ -56,8 +62,16 @@ async function fetchPortfolio(): Promise<PortfolioPayload> {
   }
 }
 
-export default async function PortfolioPage() {
-  const data = await fetchPortfolio()
+export default async function PortfolioPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ source?: string }>
+}) {
+  // AL.3 — `?source=live|official|auto` (default auto: prefer official
+  // T+1 Amazon report, fall back to live Order/OrderItem if empty).
+  const params = (await searchParams) ?? {}
+  const source = params.source === 'live' || params.source === 'official' ? params.source : 'auto'
+  const data = await fetchPortfolio(source)
 
   const needsAttention = data.products.filter((p) => p.healthScore < 60).length
   const stockoutHigh = data.products.filter((p) => p.stockoutRisk === 'HIGH').length
@@ -89,6 +103,7 @@ export default async function PortfolioPage() {
       <PortfolioClient
         initialProducts={data.products}
         initialRoas={data.roasTable}
+        dataFreshness={data.dataFreshness}
       />
     </div>
   )

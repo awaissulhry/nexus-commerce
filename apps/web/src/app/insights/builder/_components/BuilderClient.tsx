@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useInsightsLiveRefresh } from '../../_components/useInsightsLiveRefresh'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { ChevronLeft, Plus, Save, Trash2 } from 'lucide-react'
@@ -145,6 +146,9 @@ export default function BuilderClient() {
   const [error, setError] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const [nonce, setNonce] = useState(0)
+  // AL.1 — live refresh on order events (debounced 2s)
+  const bumpNonce = useCallback(() => setNonce((n) => n + 1), [])
+  useInsightsLiveRefresh(bumpNonce)
 
   const [dimension, setDimension] = useState<Dimension>('channel')
   const [metric, setMetric] = useState<Metric>('revenue')

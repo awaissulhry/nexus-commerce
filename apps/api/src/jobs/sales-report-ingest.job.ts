@@ -48,6 +48,18 @@ async function runYesterdayIngest(): Promise<void> {
         succeeded,
         failed,
       })
+      // AL.4 — broadcast that DailySalesAggregate now has fresh data
+      // so analytics surfaces (Portfolio, Insights Profit, etc.) can
+      // auto-reload without operators needing to F5.
+      if (succeeded > 0) {
+        const { publishOrderEvent } = await import('../services/order-events.service.js')
+        publishOrderEvent({
+          type: 'analytics.salesReport.refreshed',
+          day: yesterday.toISOString().slice(0, 10),
+          marketplacesProcessed: results.length,
+          ts: Date.now(),
+        })
+      }
       return `day=${yesterday.toISOString().slice(0, 10)} marketplaces=${results.length} succeeded=${succeeded} failed=${failed}`
     })
   } catch (err) {
