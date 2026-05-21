@@ -17,6 +17,7 @@ import { useToast } from '@/components/ui/Toast'
 import { getBackendUrl } from '@/lib/backend-url'
 import { deepLinkForOrder } from '../_lib/deep-links'
 import { formatOrderTotal } from '../_lib/money'
+import { FulfillmentPill } from '../_lenses/GridLens'
 
 const CHANNEL_TONE: Record<string, string> = {
   AMAZON: 'bg-orange-50 dark:bg-orange-950/40 text-orange-700 dark:text-orange-300 border-orange-200 dark:border-orange-900',
@@ -333,7 +334,7 @@ export default function OrderDetailClient({ id }: { id: string }) {
                   <span className={`inline-block text-xs font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded ${CHANNEL_TONE[order.channel]}`}>{order.channel}</span>
                   {order.marketplace && <span className="text-xs font-mono bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded text-slate-700 dark:text-slate-300">{order.marketplace}</span>}
                   <Badge variant={STATUS_VARIANT[order.status] ?? 'default'} size="sm">{order.status}</Badge>
-                  {order.fulfillmentMethod && <Badge variant={order.fulfillmentMethod === 'FBA' ? 'warning' : 'info'} size="sm">{order.fulfillmentMethod}</Badge>}
+                  {order.fulfillmentMethod && <FulfillmentPill method={order.fulfillmentMethod} />}
                 </div>
                 <div className="text-sm text-slate-500 dark:text-slate-400">
                   Placed {order.purchaseDate ? new Date(order.purchaseDate).toLocaleString() : new Date(order.createdAt).toLocaleString()}
@@ -2265,8 +2266,9 @@ function OrderSummaryTriptych({ order }: { order: any }) {
           {order.fulfillmentMethod && (
             <div className="flex items-baseline gap-2">
               <dt className="w-24 shrink-0 text-slate-500 dark:text-slate-400">Fulfilment:</dt>
-              <dd className="text-slate-700 dark:text-slate-200">
-                {order.fulfillmentMethod === 'FBA' ? 'Fulfilled by Amazon' : 'Seller fulfilled'}
+              <dd className="text-slate-700 dark:text-slate-200 inline-flex items-center gap-1.5">
+                <FulfillmentPill method={order.fulfillmentMethod} />
+                <span>{order.fulfillmentMethod === 'FBA' ? 'Fulfilled by Amazon' : 'Seller fulfilled'}</span>
               </dd>
             </div>
           )}

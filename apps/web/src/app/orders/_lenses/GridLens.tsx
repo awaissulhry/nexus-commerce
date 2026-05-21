@@ -425,6 +425,32 @@ export function GridLens(props: GridLensProps) {
   )
 }
 
+/**
+ * OX.18 — colored FBM/FBA pill. Solid Amazon-style coloring (amber for
+ * FBA, blue for FBM) so operators can spot fulfilment method at a
+ * glance in dense lists. Used in:
+ *   - row Order details cell (replaces plain "Fulfilment: FBM" text)
+ *   - legacy `fulfillment` column case
+ *   - detail-page header badge
+ *   - OrderSummaryTriptych "Fulfilment" line
+ */
+export function FulfillmentPill({ method }: { method: string }) {
+  const tone =
+    method === 'FBA'
+      ? 'bg-amber-500 text-white border-amber-600'
+      : method === 'FBM'
+      ? 'bg-blue-600 text-white border-blue-700'
+      : 'bg-slate-200 text-slate-700 border-slate-300'
+  return (
+    <span
+      className={`inline-flex items-center px-1.5 py-0 h-5 text-[10px] font-bold uppercase tracking-wider border rounded ${tone}`}
+      title={method === 'FBA' ? 'Fulfilled by Amazon' : method === 'FBM' ? 'Seller fulfilled' : method}
+    >
+      {method}
+    </span>
+  )
+}
+
 // OX.4 — flag emojis for the marketplaces Xavia sells on. Used in the
 // "Order details" cell to mirror Amazon Seller Central's "Sales channel"
 // line (e.g. "Amazon.it 🇮🇹"). Falls back to no flag for unknown codes.
@@ -535,11 +561,15 @@ function OrderCell({
           <div className="text-sm text-slate-700 dark:text-slate-300 truncate">
             <span className="text-slate-500 dark:text-slate-400">Buyer:</span> {o.customerName || '—'}
           </div>
-          <div className="text-xs text-slate-500 dark:text-slate-400 truncate">
-            <span>Fulfilment:</span> {o.fulfillmentMethod ?? '—'}
-            <span className="mx-1.5">·</span>
+          <div className="text-xs text-slate-500 dark:text-slate-400 truncate inline-flex items-center gap-1.5">
+            {o.fulfillmentMethod ? (
+              <FulfillmentPill method={o.fulfillmentMethod} />
+            ) : (
+              <span>—</span>
+            )}
+            <span>·</span>
             <span>{channelLabel}</span>
-            {flag && <span className="ml-1" aria-hidden="true">{flag}</span>}
+            {flag && <span aria-hidden="true">{flag}</span>}
           </div>
         </div>
       )
@@ -791,12 +821,7 @@ function OrderCell({
     }
     case 'fulfillment':
       return o.fulfillmentMethod ? (
-        <Badge
-          variant={o.fulfillmentMethod === 'FBA' ? 'warning' : 'info'}
-          size="sm"
-        >
-          {o.fulfillmentMethod}
-        </Badge>
+        <FulfillmentPill method={o.fulfillmentMethod} />
       ) : (
         <span className="text-slate-400 dark:text-slate-500 text-sm">—</span>
       )
