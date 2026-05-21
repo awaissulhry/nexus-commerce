@@ -39,6 +39,7 @@ import { usePolledList } from '@/lib/sync/use-polled-list'
 import { NewPlanModal } from './NewPlanModal'
 import { PackingOptionsPicker } from './PackingOptionsPicker'
 import { PlacementOptionsPicker } from './PlacementOptionsPicker'
+import { TransportOptionsPicker } from './TransportOptionsPicker'
 
 interface Plan {
   id: string
@@ -260,12 +261,65 @@ function PlanActions({ plan, onAction }: { plan: Plan; onAction: () => void }) {
   }
 
   if (plan.status === 'FAILED') {
+    // F.6.4: retry-on-FAIL. The service is idempotent per-step so
+    // re-running clears the failed marker; if the same error recurs,
+    // operator sees it again immediately rather than being stuck.
+    // currentStep is set to whatever step the SP-API call failed on,
+    // so the right picker mounts after status flips back to non-FAILED.
+    const handleRetry = async () => {
+      setBusy(true)
+      try {
+        const res = await fetch(
+          `${getBackendUrl()}/api/fba/inbound/v2/${plan.id}`,
+          { credentials: 'include' },
+        )
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        // Clear FAILED status so the appropriate picker mounts and
+        // retries its own load. We do this by writing a fresh status
+        // via the existing per-step routes — but those need their
+        // pre-failure status. Simpler: trigger the next-step route
+        // directly based on currentStep.
+        const stepToUrl: Record<string, { url: string; method: 'GET' | 'POST' } | null> = {
+          LIST_PACKING: { url: `/api/fba/inbound/v2/${plan.id}/packing-options`, method: 'GET' },
+          LIST_PLACEMENT: { url: `/api/fba/inbound/v2/${plan.id}/placement-options`, method: 'GET' },
+          GET_LABELS: { url: `/api/fba/inbound/v2/${plan.id}/labels`, method: 'GET' },
+        }
+        const action = stepToUrl[plan.currentStep] ?? null
+        if (!action) {
+          toast.error(
+            `No automatic retry for step ${plan.currentStep} — re-confirm the option manually.`,
+          )
+          onAction()
+          return
+        }
+        const r = await fetch(`${getBackendUrl()}${action.url}`, {
+          method: action.method,
+          credentials: 'include',
+        })
+        const j = await r.json().catch(() => ({}))
+        if (!r.ok) throw new Error(j?.error ?? `HTTP ${r.status}`)
+        toast.success(`Retry of ${plan.currentStep} succeeded`)
+        onAction()
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : String(e))
+      } finally {
+        setBusy(false)
+      }
+    }
     return (
-      <div className="border border-rose-200 dark:border-rose-900 bg-rose-50 dark:bg-rose-950/40 rounded p-3 text-sm text-rose-700 dark:text-rose-300">
-        <div className="inline-flex items-center gap-1.5 mb-1">
+      <div className="border border-rose-200 dark:border-rose-900 bg-rose-50 dark:bg-rose-950/40 rounded p-3 text-sm text-rose-700 dark:text-rose-300 space-y-2">
+        <div className="inline-flex items-center gap-1.5">
           <AlertCircle size={12} /> Plan failed at step {plan.currentStep}
         </div>
-        <div className="text-xs">{plan.lastError ?? 'no error message recorded'}</div>
+        <div className="text-xs font-mono">{plan.lastError ?? 'no error message recorded'}</div>
+        <button
+          onClick={handleRetry}
+          disabled={busy}
+          className="h-8 px-3 text-xs border border-rose-300 dark:border-rose-700 rounded hover:bg-rose-100/50 dark:hover:bg-rose-900/40 disabled:opacity-50 inline-flex items-center gap-1.5 text-rose-700 dark:text-rose-300"
+        >
+          {busy ? <Loader2 size={11} className="animate-spin" /> : null}
+          Retry {plan.currentStep}
+        </button>
       </div>
     )
   }
@@ -292,35 +346,27 @@ function PlanActions({ plan, onAction }: { plan: Plan; onAction: () => void }) {
     return <PlacementOptionsPicker planRowId={plan.id} onConfirmed={onAction} />
   }
 
-  // Remaining steps still use the legacy button + prompt() flow.
-  // F.6.4 replaces transport; F.6.5 polishes labels with a download UI.
-  const nextLabel =
-    plan.currentStep === 'LIST_TRANSPORT' ? 'Inspect transport options' :
-    plan.currentStep === 'CONFIRM_TRANSPORT' ? 'Confirm transport' :
-    plan.currentStep === 'GET_LABELS' ? 'Fetch labels' : 'Continue'
+  // F.6.4: transport-options step. Picker loops over ALL shipmentIds
+  // (not just [0] like v1 did), letting the operator pick one
+  // transport option per shipment and submit them as a single
+  // confirmation call. This is the most operationally critical step
+  // — the reason for the v0 → v2 migration.
+  if (plan.currentStep === 'LIST_TRANSPORT' || plan.currentStep === 'CONFIRM_TRANSPORT') {
+    return (
+      <TransportOptionsPicker
+        planRowId={plan.id}
+        shipmentIds={plan.shipmentIds}
+        onConfirmed={onAction}
+      />
+    )
+  }
+
+  // Only the final GET_LABELS step uses the legacy button now.
+  // F.6.5 polishes labels into a per-shipment PDF download UI.
+  const nextLabel = plan.currentStep === 'GET_LABELS' ? 'Fetch labels' : 'Continue'
 
   const handleNext = async () => {
-    if (plan.currentStep === 'LIST_TRANSPORT') {
-      const shipmentId = plan.shipmentIds[0]
-      if (!shipmentId) {
-        toast.error('No shipmentIds yet')
-        return
-      }
-      const r = await callApi(`/api/fba/inbound/v2/${plan.id}/shipments/${shipmentId}/transport-options`)
-      toast.success(`Transport options: ${r?.transportationOptions?.length ?? 0}`)
-    } else if (plan.currentStep === 'CONFIRM_TRANSPORT') {
-      const shipmentId = plan.shipmentIds[0]
-      const transportationOptionId = prompt('transportationOptionId to confirm?', '')
-      if (!transportationOptionId || !shipmentId) return
-      await callApi(`/api/fba/inbound/v2/${plan.id}/transport-options/confirm`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          selections: [{ shipmentId, transportationOptionId }],
-        }),
-      })
-      toast.success('Transport confirmed')
-    } else if (plan.currentStep === 'GET_LABELS') {
+    if (plan.currentStep === 'GET_LABELS') {
       const r = await callApi(`/api/fba/inbound/v2/${plan.id}/labels`)
       toast.success(`Labels fetched for ${Object.keys(r?.labels ?? {}).length} shipment(s)`)
     }
