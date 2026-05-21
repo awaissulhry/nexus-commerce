@@ -26,7 +26,14 @@ export interface MarketplaceMetrics {
   channel: string         // 'AMAZON' | 'EBAY' | 'SHOPIFY' | ...
   marketplace: string     // 'IT' | 'DE' | 'GLOBAL' | ...
   currency: string        // 'EUR' | 'GBP' | 'USD' | ...
+  /** Gross revenue (sum of order totalPrice). Excludes cancelled orders
+   *  (DailySalesAggregate already filters status != CANCELLED). */
   revenue: { current: number; previous: number; deltaPct: number | null }
+  /** I5 — refunds issued in this window (Return.refundCents grouped by
+   *  the order's channel+marketplace). Subtract from revenue for net. */
+  refunds: { current: number; previous: number; deltaPct: number | null }
+  /** I5 — net revenue = revenue − refunds. */
+  netRevenue: { current: number; previous: number; deltaPct: number | null }
   orders: { current: number; previous: number; deltaPct: number | null }
   units: { current: number; previous: number; deltaPct: number | null }
   aov: { current: number; previous: number; deltaPct: number | null }
@@ -44,6 +51,10 @@ export interface InsightsSummary {
    *  arithmetic that was previously summed as if all currencies were equal. */
   totals: {
     revenue: { current: number; previous: number; deltaPct: number | null }
+    /** I5 — refunds (primary-currency-only subset; full breakdown in byMarketplace) */
+    refunds: { current: number; previous: number; deltaPct: number | null }
+    /** I5 — net = revenue − refunds (primary-currency-only) */
+    netRevenue: { current: number; previous: number; deltaPct: number | null }
     orders: { current: number; previous: number; deltaPct: number | null }
     units: { current: number; previous: number; deltaPct: number | null }
     aov: { current: number; previous: number; deltaPct: number | null }
@@ -69,6 +80,9 @@ interface OrderAggregate {
   /** I3 — per-(channel, marketplace, currency) bucket. Key is
    *  `${channel}|${marketplace}|${currency}`. */
   byMarketplace: Map<string, { channel: string; marketplace: string; currency: string; revenue: number; orders: number; units: number }>
+  /** I5 — refunds issued in window, per (channel, marketplace) in
+   *  marketplace native currency (matches DailySalesAggregate convention). */
+  refundsByMarketplace: Map<string, number>
 }
 
 function dayKey(d: Date): string {
@@ -80,42 +94,106 @@ function dayKey(d: Date): string {
   }).format(d)
 }
 
+/**
+ * I4 — Marketplace.currency lookup. Cached after first call; small
+ * fixed set (≤30 marketplaces total). Returns code (e.g. 'EUR') for
+ * a (channel, marketplaceCode) pair. Falls back to EUR for unknown.
+ */
+let marketplaceCurrencyCache: Map<string, string> | null = null
+async function getMarketplaceCurrencyMap(): Promise<Map<string, string>> {
+  if (marketplaceCurrencyCache) return marketplaceCurrencyCache
+  const rows = await prisma.marketplace.findMany({
+    select: { channel: true, code: true, currency: true },
+  })
+  const map = new Map<string, string>()
+  for (const r of rows) map.set(`${r.channel}|${r.code}`, r.currency)
+  marketplaceCurrencyCache = map
+  return map
+}
+
 async function aggregateRange(
   from: Date,
   to: Date,
   filters: InsightsFilters,
 ): Promise<OrderAggregate> {
-  const whereChannel =
-    filters.channels.length > 0
-      ? { in: filters.channels as Array<'AMAZON' | 'EBAY' | 'SHOPIFY'> }
-      : undefined
-  const whereMarket =
-    filters.markets.length > 0 ? { in: filters.markets } : undefined
+  // I4 — Read from DailySalesAggregate (pre-bucketed per
+  // sku/channel/marketplace/day) instead of live-scanning Order +
+  // OrderItem. 10-100× faster at scale; preserves per-channel and
+  // per-marketplace breakdowns inherently.
+  //
+  // Brand filter requires a Product subquery (DailySalesAggregate
+  // doesn't store brand). Handled with a JOIN via raw SQL when needed.
+  //
+  // Currency: DailySalesAggregate.grossRevenue is implicitly in the
+  // marketplace's native currency (Amazon.it is always EUR, .uk always
+  // GBP). Resolved via Marketplace.currency lookup.
 
-  const orders = await prisma.order.findMany({
-    where: {
-      purchaseDate: { gte: from, lt: to },
-      deletedAt: null,
-      ...(whereChannel ? { channel: whereChannel as never } : {}),
-      ...(whereMarket ? { marketplace: whereMarket } : {}),
-    },
-    select: {
-      id: true,
-      channel: true,
-      marketplace: true,
-      purchaseDate: true,
-      createdAt: true,
-      totalPrice: true,
-      currencyCode: true,
-      items: {
-        select: {
-          quantity: true,
-          product: { select: { brand: true } },
-        },
-      },
-    },
-    take: 50_000,
-  })
+  // Build dynamic WHERE clauses with parameter binding.
+  const params: unknown[] = [from, to]
+  let paramIdx = 3
+  const conditions: string[] = ['d.day >= $1::date', 'd.day < $2::date']
+
+  if (filters.channels.length > 0) {
+    const placeholders = filters.channels.map(() => `$${paramIdx++}`).join(',')
+    conditions.push(`d.channel IN (${placeholders})`)
+    params.push(...filters.channels)
+  }
+  if (filters.markets.length > 0) {
+    const placeholders = filters.markets.map(() => `$${paramIdx++}`).join(',')
+    conditions.push(`d.marketplace IN (${placeholders})`)
+    params.push(...filters.markets)
+  }
+  if (filters.brands.length > 0) {
+    const placeholders = filters.brands.map(() => `$${paramIdx++}`).join(',')
+    conditions.push(
+      `d.sku IN (SELECT sku FROM "Product" WHERE brand IN (${placeholders}))`,
+    )
+    params.push(...filters.brands)
+  }
+
+  const where = conditions.join(' AND ')
+
+  const rows = await prisma.$queryRawUnsafe<
+    Array<{
+      channel: string
+      marketplace: string
+      day: Date
+      revenue: number
+      units: number
+      orders: number
+    }>
+  >(
+    `SELECT d.channel,
+            d.marketplace,
+            d.day,
+            SUM(d."grossRevenue")::float8 AS revenue,
+            SUM(d."unitsSold")::int       AS units,
+            SUM(d."ordersCount")::int     AS orders
+     FROM "DailySalesAggregate" d
+     WHERE ${where}
+     GROUP BY d.channel, d.marketplace, d.day`,
+    ...params,
+  )
+
+  const currencyMap = await getMarketplaceCurrencyMap()
+
+  // I5 — refunds in window, per (channel, marketplace). Return.refundCents
+  // grouped by parent Order's channel+marketplace. We use Return.createdAt
+  // (Amazon's report sets this to the actual return date; correct).
+  const refundRows = await prisma.$queryRawUnsafe<
+    Array<{ channel: string; marketplace: string; refund_cents: bigint }>
+  >(
+    `SELECT o.channel::text AS channel,
+            COALESCE(o.marketplace, 'GLOBAL') AS marketplace,
+            COALESCE(SUM(r."refundCents"), 0)::bigint AS refund_cents
+     FROM "Return" r
+     JOIN "Order" o ON o.id = r."orderId"
+     WHERE r."createdAt" >= $1 AND r."createdAt" < $2
+       AND o."deletedAt" IS NULL
+     GROUP BY o.channel, COALESCE(o.marketplace, 'GLOBAL')`,
+    from,
+    to,
+  )
 
   const result: OrderAggregate = {
     total: 0,
@@ -124,44 +202,38 @@ async function aggregateRange(
     byDay: new Map(),
     currencies: new Map(),
     byMarketplace: new Map(),
+    refundsByMarketplace: new Map(),
+  }
+  for (const rr of refundRows) {
+    const key = `${rr.channel}|${rr.marketplace}`
+    result.refundsByMarketplace.set(key, Number(rr.refund_cents) / 100)
   }
 
-  for (const o of orders) {
-    if (filters.brands.length) {
-      const brandMatch = o.items.some(
-        (it) =>
-          it.product?.brand && filters.brands.includes(it.product.brand),
-      )
-      if (!brandMatch) continue
-    }
-    const amount = Number(o.totalPrice ?? 0)
-    const units = o.items.reduce((s, it) => s + (it.quantity ?? 0), 0)
-    const key = dayKey(o.purchaseDate ?? o.createdAt)
+  for (const r of rows) {
+    const amount = Number(r.revenue ?? 0)
+    const units = Number(r.units ?? 0)
+    const orders = Number(r.orders ?? 0)
+    const key = dayKey(r.day)
     const slot = result.byDay.get(key) ?? { revenue: 0, orders: 0 }
     slot.revenue += amount
-    slot.orders += 1
+    slot.orders += orders
     result.byDay.set(key, slot)
     result.total += amount
-    result.orders += 1
+    result.orders += orders
     result.units += units
-    const code = o.currencyCode ?? 'EUR'
+    const code = currencyMap.get(`${r.channel}|${r.marketplace}`) ?? 'EUR'
     result.currencies.set(code, (result.currencies.get(code) ?? 0) + amount)
-    // I3 — per-(channel, marketplace, currency) bucketing for native-
-    // currency rollup. We never mix currencies; each marketplace stands
-    // alone in its own currency.
-    const channel = String(o.channel)
-    const marketplace = o.marketplace ?? 'GLOBAL'
-    const mkKey = `${channel}|${marketplace}|${code}`
+    const mkKey = `${r.channel}|${r.marketplace}|${code}`
     const mkSlot = result.byMarketplace.get(mkKey) ?? {
-      channel,
-      marketplace,
+      channel: r.channel,
+      marketplace: r.marketplace,
       currency: code,
       revenue: 0,
       orders: 0,
       units: 0,
     }
     mkSlot.revenue += amount
-    mkSlot.orders += 1
+    mkSlot.orders += orders
     mkSlot.units += units
     result.byMarketplace.set(mkKey, mkSlot)
   }
@@ -185,6 +257,7 @@ export async function computeInsightsSummary(
           byDay: new Map(),
           currencies: new Map(),
           byMarketplace: new Map(),
+          refundsByMarketplace: new Map(),
         }),
   ])
 
@@ -221,8 +294,9 @@ export async function computeInsightsSummary(
   const aovCurrent = currentAgg.orders ? primaryAmount / currentAgg.orders : 0
   const aovPrev = compareAgg.orders ? primaryAmountPrev / compareAgg.orders : 0
 
-  // I3 — assemble per-marketplace metrics with native-currency current vs
-  // previous. Each marketplace stands alone in its own currency.
+  // I3 + I5 — assemble per-marketplace metrics with native-currency current
+  // vs previous + refunds + net revenue. Each marketplace stands alone in
+  // its own currency.
   const byMarketplace: MarketplaceMetrics[] = []
   for (const [key, cur] of currentAgg.byMarketplace.entries()) {
     const prev = compareAgg.byMarketplace.get(key)
@@ -231,6 +305,13 @@ export async function computeInsightsSummary(
     const prevUnits = prev?.units ?? 0
     const aovCur = cur.orders > 0 ? cur.revenue / cur.orders : 0
     const aovPr = prevOrders > 0 ? prevRev / prevOrders : 0
+    // Refund lookup uses (channel|marketplace) key — refunds attribute to
+    // the parent order's marketplace regardless of currency.
+    const refundKey = `${cur.channel}|${cur.marketplace}`
+    const refundsCur = currentAgg.refundsByMarketplace.get(refundKey) ?? 0
+    const refundsPrev = compareAgg.refundsByMarketplace.get(refundKey) ?? 0
+    const netCur = cur.revenue - refundsCur
+    const netPrev = prevRev - refundsPrev
     byMarketplace.push({
       channel: cur.channel,
       marketplace: cur.marketplace,
@@ -239,6 +320,16 @@ export async function computeInsightsSummary(
         current: Math.round(cur.revenue * 100) / 100,
         previous: Math.round(prevRev * 100) / 100,
         deltaPct: deltaPct(cur.revenue, prevRev),
+      },
+      refunds: {
+        current: Math.round(refundsCur * 100) / 100,
+        previous: Math.round(refundsPrev * 100) / 100,
+        deltaPct: deltaPct(refundsCur, refundsPrev),
+      },
+      netRevenue: {
+        current: Math.round(netCur * 100) / 100,
+        previous: Math.round(netPrev * 100) / 100,
+        deltaPct: deltaPct(netCur, netPrev),
       },
       orders: {
         current: cur.orders,
@@ -276,6 +367,34 @@ export async function computeInsightsSummary(
         previous: Math.round(primaryAmountPrev * 100) / 100,
         deltaPct: deltaPct(primaryAmount, primaryAmountPrev),
       },
+      refunds: (() => {
+        // I5 — refunds totals restricted to primary currency's marketplaces.
+        // For multi-currency, byMarketplace[].refunds is the canonical view.
+        let cur = 0, prv = 0
+        for (const m of byMarketplace) {
+          if (m.currency !== primaryCurrency) continue
+          cur += m.refunds.current
+          prv += m.refunds.previous
+        }
+        return {
+          current: Math.round(cur * 100) / 100,
+          previous: Math.round(prv * 100) / 100,
+          deltaPct: deltaPct(cur, prv),
+        }
+      })(),
+      netRevenue: (() => {
+        let cur = 0, prv = 0
+        for (const m of byMarketplace) {
+          if (m.currency !== primaryCurrency) continue
+          cur += m.netRevenue.current
+          prv += m.netRevenue.previous
+        }
+        return {
+          current: Math.round(cur * 100) / 100,
+          previous: Math.round(prv * 100) / 100,
+          deltaPct: deltaPct(cur, prv),
+        }
+      })(),
       orders: {
         current: currentAgg.orders,
         previous: compareAgg.orders,
