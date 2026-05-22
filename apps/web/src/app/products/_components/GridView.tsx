@@ -1635,6 +1635,80 @@ const ProductCell = memo(function ProductCell({
         </span>
       )
     }
+    case 'sync-status': {
+      // P-RT.5 — per-row outbound state chip. Reads the API's
+      // syncQueue rollup (populated when ?coverage=true). State
+      // precedence: dead > failed > pending > succeeded. The chip
+      // updates real-time because ProductsWorkspace already feeds
+      // listing.* and product.* SSE events into usePolledList's
+      // invalidationTypes — a worker flipping a row from PENDING
+      // to SUCCEEDED triggers a refetch within ~250ms.
+      const q = p.syncQueue
+      if (!q || q.mostUrgentStatus == null) {
+        return <span className="text-xs text-slate-400">—</span>
+      }
+      const ch = q.mostUrgentChannel?.slice(0, 3) ?? '???'
+      if (q.mostUrgentStatus === 'DEAD') {
+        return (
+          <span
+            className="inline-flex items-center gap-1 px-1.5 h-5 text-xs font-mono border border-rose-400 bg-rose-100 text-rose-800 rounded"
+            title={t('products.grid.syncDead', { channel: q.mostUrgentChannel ?? '', count: q.dead })}
+            data-testid="sync-status-dead"
+          >
+            <span aria-hidden>💀</span>
+            {ch}
+          </span>
+        )
+      }
+      if (q.mostUrgentStatus === 'FAILED') {
+        return (
+          <span
+            className="inline-flex items-center gap-1 px-1.5 h-5 text-xs font-mono border border-amber-300 bg-amber-50 text-amber-800 rounded"
+            title={t('products.grid.syncFailed', { channel: q.mostUrgentChannel ?? '', count: q.failed })}
+            data-testid="sync-status-failed"
+          >
+            <span aria-hidden>⚠</span>
+            {ch}
+          </span>
+        )
+      }
+      if (q.mostUrgentStatus === 'PENDING') {
+        return (
+          <span
+            className="inline-flex items-center gap-1 px-1.5 h-5 text-xs font-mono border border-sky-300 bg-sky-50 text-sky-700 rounded"
+            title={t('products.grid.syncPending', { channel: q.mostUrgentChannel ?? '', count: q.pending })}
+            data-testid="sync-status-pending"
+          >
+            <span aria-hidden className="animate-pulse">⟳</span>
+            {ch}
+          </span>
+        )
+      }
+      // SYNCED — show relative time. Suppress when older than 24h to
+      // keep the column tidy: chip only "earns its space" when recent.
+      if (q.syncedAt) {
+        const ageMs = Date.now() - new Date(q.syncedAt).getTime()
+        if (ageMs > 24 * 60 * 60_000) {
+          return <span className="text-xs text-slate-400">—</span>
+        }
+        const ageMin = Math.max(1, Math.floor(ageMs / 60_000))
+        const label =
+          ageMin < 60
+            ? `${ageMin}m`
+            : `${Math.floor(ageMin / 60)}h`
+        return (
+          <span
+            className="inline-flex items-center gap-1 px-1.5 h-5 text-xs font-mono border border-emerald-200 bg-emerald-50 text-emerald-700 rounded"
+            title={t('products.grid.syncOk', { channel: q.mostUrgentChannel ?? '', when: label })}
+            data-testid="sync-status-ok"
+          >
+            <span aria-hidden>✓</span>
+            {ch} <span className="opacity-60">{label}</span>
+          </span>
+        )
+      }
+      return <span className="text-xs text-slate-400">—</span>
+    }
     case 'updated':
       return (
         <span className="text-sm text-slate-500">

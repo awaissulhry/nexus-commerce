@@ -80,6 +80,24 @@ export type ProductRow = {
     string,
     { live: number; draft: number; error: number; total: number }
   > | null
+  /**
+   * P-RT.5 — outbound sync state aggregated across all OutboundSyncQueue
+   * rows for this product. Populated only when `?coverage=true` is set
+   * on the list query (gated alongside coverage to keep cheap rows
+   * cheap). Used by the 'sync-status' grid column to show "Pushing to
+   * Amazon", "Failed (retry 2/3)", "Synced 2m ago", etc. — closing the
+   * "did my save reach the channel?" gap on /products. The most-urgent
+   * channel wins when multiple states coexist: dead > failed > pending
+   * > succeeded.
+   */
+  syncQueue?: {
+    pending: number      // PENDING + retry-pending count
+    failed: number       // FAILED but not yet dead (still retrying)
+    dead: number         // isDead = true
+    syncedAt: string | null  // most recent successful syncedAt
+    mostUrgentChannel: string | null  // channel driving the chip state
+    mostUrgentStatus: 'PENDING' | 'FAILED' | 'DEAD' | 'SYNCED' | null
+  } | null
   tags?: Array<{ id: string; name: string; color: string | null }>
   updatedAt: string
   createdAt: string

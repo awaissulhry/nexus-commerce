@@ -91,6 +91,11 @@ export const ALL_COLUMNS: ColumnDef[] = [
   { key: 'variants',     label: 'Var.',     labelKey: 'products.col.variants',     width: 70 },
   { key: 'completeness', label: 'Complete', labelKey: 'products.col.completeness', width: 110 },
   { key: 'familyCompleteness', label: 'Family ✓', labelKey: 'products.col.familyCompleteness', width: 110 },
+  // P-RT.5 — per-row outbound sync state chip. Hidden by default;
+  // operators opt in via ColumnPickerMenu. Shows "Pushing to Amazon",
+  // "Failed (retry 2/3)", "Dead", or "Synced 5m ago" pulled from the
+  // OutboundSyncQueue rollup the API attaches when ?coverage=true.
+  { key: 'sync-status', label: 'Sync', labelKey: 'products.col.syncStatus', width: 170 },
   { key: 'updated',      label: 'Updated',  labelKey: 'products.col.updated',      width: 110 },
 
   // ── Always-trailing locked column ───────────────────────────────────

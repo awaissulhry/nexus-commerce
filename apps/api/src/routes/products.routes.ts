@@ -791,6 +791,76 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
         }
       }
 
+      // P-RT.5 — OutboundSyncQueue rollup per product. Gated on
+      // includeCoverage to keep the lightweight default fetch cheap;
+      // the grid's "sync-status" column is opt-in. One findMany
+      // bounded by the page's productIds; in-memory aggregation
+      // picks the most-urgent state per product. State precedence:
+      //   dead > failed (retrying) > pending > succeeded.
+      // syncedAt is the most-recent successful sync across channels —
+      // drives the "Synced Nm ago" copy when no in-flight work.
+      const syncQueueByProduct = new Map<
+        string,
+        {
+          pending: number
+          failed: number
+          dead: number
+          syncedAt: string | null
+          mostUrgentChannel: string | null
+          mostUrgentStatus: 'PENDING' | 'FAILED' | 'DEAD' | 'SYNCED' | null
+        }
+      >()
+      if (includeCoverage && pageProductIds.length > 0) {
+        const queueRows = await prisma.outboundSyncQueue.findMany({
+          where: { productId: { in: pageProductIds } },
+          select: {
+            productId: true,
+            targetChannel: true,
+            syncStatus: true,
+            syncedAt: true,
+            isDead: true,
+            updatedAt: true,
+          },
+          // Newest-first so the per-product fold sees recent rows
+          // before older retries when picking mostUrgentChannel.
+          orderBy: { updatedAt: 'desc' },
+        })
+        for (const r of queueRows) {
+          if (!r.productId) continue
+          const cur = syncQueueByProduct.get(r.productId) ?? {
+            pending: 0, failed: 0, dead: 0,
+            syncedAt: null,
+            mostUrgentChannel: null,
+            mostUrgentStatus: null,
+          }
+          const isPending = r.syncStatus === 'PENDING'
+          const isFailed = r.syncStatus === 'FAILED' && !r.isDead
+          const isSucceeded = r.syncStatus === 'SUCCEEDED'
+          if (r.isDead) cur.dead++
+          else if (isFailed) cur.failed++
+          else if (isPending) cur.pending++
+          if (isSucceeded && r.syncedAt) {
+            const candidate = r.syncedAt.toISOString()
+            if (!cur.syncedAt || candidate > cur.syncedAt) cur.syncedAt = candidate
+          }
+          // Pick mostUrgentChannel/Status by precedence. Once we've
+          // picked DEAD we don't downgrade; on FAILED we don't downgrade
+          // to PENDING; PENDING only loses to FAILED/DEAD.
+          const rank = (s: typeof cur.mostUrgentStatus): number =>
+            s === 'DEAD' ? 3 : s === 'FAILED' ? 2 : s === 'PENDING' ? 1 : s === 'SYNCED' ? 0 : -1
+          const candidateStatus: typeof cur.mostUrgentStatus =
+            r.isDead ? 'DEAD' :
+            isFailed ? 'FAILED' :
+            isPending ? 'PENDING' :
+            isSucceeded ? 'SYNCED' : null
+          if (candidateStatus && rank(candidateStatus) > rank(cur.mostUrgentStatus)) {
+            cur.mostUrgentStatus = candidateStatus
+            cur.mostUrgentChannel = r.targetChannel
+          }
+          syncQueueByProduct.set(r.productId, cur)
+        }
+      }
+
       // ES.3 — transform either a ProductReadCache row or a full Prisma
       // Product row into the canonical ProductRow shape.
       const products = sortedRawProducts.map((p: any) => {
@@ -837,6 +907,15 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
             childCount: p.childCount,
             driftCount: (p as any).driftCount ?? 0,
             coverage,
+            // P-RT.5 — outbound queue rollup. Null when includeCoverage
+            // is false; populated map miss = empty state (no queue rows
+            // for this product).
+            syncQueue: includeCoverage
+              ? (syncQueueByProduct.get(p.id) ?? {
+                  pending: 0, failed: 0, dead: 0,
+                  syncedAt: null, mostUrgentChannel: null, mostUrgentStatus: null,
+                })
+              : null,
             tags: includeTags ? (tagsByProduct.get(p.id) ?? []) : undefined,
           }
         }
@@ -881,6 +960,13 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
           variantCount: p._count?.variations ?? 0,
           childCount: p._count?.children ?? 0,
           coverage,
+          // P-RT.5 — see cache path above for shape rationale.
+          syncQueue: includeCoverage
+            ? (syncQueueByProduct.get(p.id) ?? {
+                pending: 0, failed: 0, dead: 0,
+                syncedAt: null, mostUrgentChannel: null, mostUrgentStatus: null,
+              })
+            : null,
           tags: includeTags ? (tagsByProduct.get(p.id) ?? []) : undefined,
         }
       })
