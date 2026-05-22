@@ -945,6 +945,8 @@ const syncLogsRoutes: FastifyPluginAsync = async (fastify) => {
             error: true,
             createdAt: true,
             updatedAt: true,
+            // RT.4 — needed by the latency column on /sync-logs/webhooks.
+            providerTimestamp: true,
             // Skip the heavy payload + signature fields on the list.
           },
         }),
@@ -1014,6 +1016,35 @@ const syncLogsRoutes: FastifyPluginAsync = async (fastify) => {
           try {
             const since = new Date(Date.now() - 5 * 60 * 1000)
             await amazonOrdersService.syncNewOrders(since, { limit: 50 })
+            await prisma.webhookEvent.update({
+              where: { id: event.id },
+              data: { isProcessed: true, processedAt: new Date(), error: null },
+            })
+            return reply.send({ success: true })
+          } catch (handlerErr) {
+            const msg = handlerErr instanceof Error ? handlerErr.message : String(handlerErr)
+            await prisma.webhookEvent.update({
+              where: { id: event.id },
+              data: { isProcessed: false, error: msg.slice(0, 2000) },
+            })
+            return reply.code(500).send({ success: false, error: msg })
+          }
+        }
+
+        // RT.4 — eBay platform-notification replay: re-runs syncEbayOrders
+        // for every active eBay connection. Service is idempotent on
+        // (channel, channelOrderId) so re-syncing covers the receipt
+        // action even if the cron already picked it up.
+        if (event.channel === 'EBAY') {
+          try {
+            const { ebayOrdersService } = await import('../services/ebay-orders.service.js')
+            const connections = await prisma.channelConnection.findMany({
+              where: { channelType: 'EBAY', isActive: true },
+              select: { id: true },
+            })
+            for (const conn of connections) {
+              await ebayOrdersService.syncEbayOrders(conn.id)
+            }
             await prisma.webhookEvent.update({
               where: { id: event.id },
               data: { isProcessed: true, processedAt: new Date(), error: null },

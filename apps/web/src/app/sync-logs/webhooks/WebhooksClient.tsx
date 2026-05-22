@@ -43,6 +43,10 @@ interface WebhookListRow {
   error: string | null
   createdAt: string
   updatedAt: string
+  // RT.4 — provider-side push timestamp. Nullable because pre-RT.3
+  // rows + sources without a provider clock won't have it. Used by
+  // fmtLatency to render the end-to-end latency column.
+  providerTimestamp?: string | null
 }
 
 interface WebhookDetail extends WebhookListRow {
@@ -66,6 +70,35 @@ function fmtRelative(iso: string): string {
   if (ms < 3_600_000) return `${Math.floor(ms / 60_000)}m ago`
   if (ms < 86_400_000) return `${Math.floor(ms / 3_600_000)}h ago`
   return new Date(iso).toLocaleString()
+}
+
+/**
+ * RT.4 — render end-to-end push latency (createdAt - providerTimestamp).
+ * Returns null when either timestamp is missing so the cell can fall
+ * back to an em-dash. Defensive max(0, …) handles clock-skew rows
+ * that would otherwise render as negative.
+ */
+function fmtLatency(row: WebhookListRow): { label: string; tone: string } | null {
+  if (!row.providerTimestamp) return null
+  const ms = Math.max(
+    0,
+    new Date(row.createdAt).getTime() - new Date(row.providerTimestamp).getTime(),
+  )
+  const tone =
+    ms < 60_000
+      ? 'text-emerald-700 dark:text-emerald-400'
+      : ms < 5 * 60_000
+        ? 'text-amber-700 dark:text-amber-400'
+        : 'text-rose-700 dark:text-rose-400'
+  const label =
+    ms < 1_000
+      ? `${ms}ms`
+      : ms < 60_000
+        ? `${(ms / 1_000).toFixed(1)}s`
+        : ms < 3_600_000
+          ? `${(ms / 60_000).toFixed(1)}m`
+          : `${(ms / 3_600_000).toFixed(1)}h`
+  return { label, tone }
 }
 
 export default function WebhooksClient() {
@@ -339,6 +372,15 @@ export default function WebhooksClient() {
                 <th className="px-3 py-1.5 text-left font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider w-48">
                   {t('syncLogs.webhooks.col.externalId')}
                 </th>
+                {/* RT.4 — end-to-end push latency (createdAt − providerTimestamp).
+                    Empty cell when the row predates RT.3 capture or the
+                    source doesn't expose a provider timestamp. */}
+                <th
+                  className="px-3 py-1.5 text-right font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider w-20"
+                  title="End-to-end push latency: createdAt − providerTimestamp"
+                >
+                  Latency
+                </th>
                 <th className="px-3 py-1.5 text-left font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
                   {t('syncLogs.webhooks.col.error')}
                 </th>
@@ -372,6 +414,20 @@ export default function WebhooksClient() {
                   </td>
                   <td className="px-3 py-1.5 font-mono text-xs text-slate-500 dark:text-slate-500 truncate">
                     {r.externalId}
+                  </td>
+                  <td className="px-3 py-1.5 text-right">
+                    {(() => {
+                      const lat = fmtLatency(r)
+                      if (!lat) return <span className="text-slate-300 dark:text-slate-600">—</span>
+                      return (
+                        <span
+                          className={cn('text-xs font-medium tabular-nums', lat.tone)}
+                          title={`Provider: ${r.providerTimestamp} · Ingest: ${r.createdAt}`}
+                        >
+                          {lat.label}
+                        </span>
+                      )
+                    })()}
                   </td>
                   <td className="px-3 py-1.5 truncate">
                     {r.error && (
@@ -465,7 +521,10 @@ function DetailPanel({
       setReplaying(false)
     }
   }
-  const replaySupported = ['SHOPIFY', 'WOOCOMMERCE', 'ETSY'].includes(row.channel)
+  // RT.4 — AMAZON + EBAY replay backed by the original sync services
+  // (idempotent on channel+orderId). SHOPIFY/WOOCOMMERCE/ETSY use the
+  // dispatchXxxWebhook handler chain.
+  const replaySupported = ['SHOPIFY', 'WOOCOMMERCE', 'ETSY', 'AMAZON', 'EBAY'].includes(row.channel)
   return (
     <div
       className="fixed inset-0 z-40 flex justify-end"
