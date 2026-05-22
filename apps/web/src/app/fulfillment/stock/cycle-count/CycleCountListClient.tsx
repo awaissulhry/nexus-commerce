@@ -20,6 +20,8 @@ import { useToast } from '@/components/ui/Toast'
 import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
 import { AutoRefreshSelect, GridToolbar } from '@/app/_shared/grid-lens'
 import { getBackendUrl } from '@/lib/backend-url'
+import { useInvalidationChannel } from '@/lib/sync/invalidation-channel'
+import { useListingEvents } from '@/lib/sync/use-listing-events'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { formatRelative } from '@/components/inventory/formatRelative'
 import { cn } from '@/lib/utils'
@@ -125,6 +127,17 @@ export default function CycleCountListClient() {
   useEffect(() => {
     fetchData()
   }, [fetchData])
+
+  // SD-RT.2 — cycle counts depend on accurate stock baselines.
+  // stock.adjusted (manual edits) + stock.transferred (movement
+  // postings) both invalidate any open cycle session's "expected"
+  // numbers. Cross-tab refresh closes the stale-baseline window when
+  // another tab applies an adjustment mid-count.
+  useListingEvents()
+  useInvalidationChannel(
+    ['stock.adjusted', 'stock.transferred', 'product.updated'],
+    fetchData,
+  )
 
   // S.17 — trigger the auto-scheduler now (the daily cron already
   // runs this at 02:30 UTC; this button lets the operator force one

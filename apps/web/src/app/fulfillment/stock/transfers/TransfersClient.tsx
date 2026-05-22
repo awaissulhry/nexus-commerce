@@ -16,6 +16,8 @@ import { Badge } from '@/components/ui/Badge'
 import { EmptyState } from '@/components/ui/EmptyState'
 import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
 import { getBackendUrl } from '@/lib/backend-url'
+import { useInvalidationChannel } from '@/lib/sync/invalidation-channel'
+import { useInboundEvents } from '@/lib/sync/use-inbound-events'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { formatRelative } from '@/components/inventory/formatRelative'
 import { AutoRefreshSelect, DensityToggle, GridToolbar, VirtualizedGrid, GridFooter } from '@/app/_shared/grid-lens'
@@ -96,6 +98,17 @@ export default function TransfersClient() {
   }, [])
 
   useEffect(() => { fetchData() }, [fetchData])
+
+  // SD-RT.2 — transfers are inbound shipments with type:TRANSFER.
+  // inbound.received closes a transfer (units land at destination);
+  // inbound.updated catches in-transit status flips; stock.transferred
+  // is the local audit row that confirms the movement applied.
+  useInboundEvents()
+  useInvalidationChannel(
+    ['inbound.received', 'inbound.updated', 'inbound.created', 'inbound.cancelled',
+     'stock.transferred', 'stock.adjusted'],
+    fetchData,
+  )
 
   const rows = useMemo((): TransferRow[] => {
     if (!transfers) return []

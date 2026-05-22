@@ -17,6 +17,8 @@ import { Card } from '@/components/ui/Card'
 import { EmptyState } from '@/components/ui/EmptyState'
 import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
 import { getBackendUrl } from '@/lib/backend-url'
+import { useInvalidationChannel } from '@/lib/sync/invalidation-channel'
+import { useInboundEvents } from '@/lib/sync/use-inbound-events'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { formatRelative } from '@/components/inventory/formatRelative'
 import { AutoRefreshSelect, DensityToggle, GridToolbar, VirtualizedGrid, GridFooter } from '@/app/_shared/grid-lens'
@@ -101,6 +103,16 @@ export default function LotsClient() {
   }, [activeOnly, expiry])
 
   useEffect(() => { fetchLots() }, [fetchLots])
+
+  // SD-RT.2 — lots are minted when an inbound receipt records a new
+  // batch (lot code + expiry pulled from supplier docs at receiving).
+  // inbound.received is the primary mint signal; stock.adjusted
+  // covers operator-initiated lot quantity edits.
+  useInboundEvents()
+  useInvalidationChannel(
+    ['inbound.received', 'inbound.discrepancy', 'stock.adjusted', 'stock.transferred'],
+    fetchLots,
+  )
 
   // Client-side sort
   const rows = useMemo((): LotRow[] => {

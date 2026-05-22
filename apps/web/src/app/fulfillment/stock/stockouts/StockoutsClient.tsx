@@ -23,6 +23,9 @@ import { EmptyState } from '@/components/ui/EmptyState'
 import { useToast } from '@/components/ui/Toast'
 import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
 import { getBackendUrl } from '@/lib/backend-url'
+import { useInvalidationChannel } from '@/lib/sync/invalidation-channel'
+import { useListingEvents } from '@/lib/sync/use-listing-events'
+import { useInboundEvents } from '@/lib/sync/use-inbound-events'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { cn } from '@/lib/utils'
 import { AutoRefreshSelect, DensityToggle, GridToolbar, VirtualizedGrid, GridFooter } from '@/app/_shared/grid-lens'
@@ -189,6 +192,21 @@ export default function StockoutsClient() {
   }, [windowDays, statusFilter, locationFilter, skuQueryDebounced])
 
   useEffect(() => { fetchAll() }, [fetchAll])
+
+  // SD-RT.2 — refresh stockouts list when upstream signals change.
+  // inbound.received drops rows from the out-of-stock list as units
+  // physically arrive; stock.adjusted is direct operator edits;
+  // product.updated catches threshold changes that re-classify a SKU.
+  useListingEvents()
+  useInboundEvents()
+  useInvalidationChannel(
+    [
+      'stock.adjusted', 'stock.transferred',
+      'inbound.received', 'inbound.discrepancy', 'inbound.updated',
+      'product.updated',
+    ],
+    fetchAll,
+  )
 
   const triggerSweep = async () => {
     try {

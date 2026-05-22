@@ -30,6 +30,8 @@ import { useToast } from '@/components/ui/Toast'
 import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
 import { AutoRefreshSelect, GridToolbar } from '@/app/_shared/grid-lens'
 import { getBackendUrl } from '@/lib/backend-url'
+import { useInvalidationChannel } from '@/lib/sync/invalidation-channel'
+import { useInboundEvents } from '@/lib/sync/use-inbound-events'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { formatRelative } from '@/components/inventory/formatRelative'
 
@@ -87,6 +89,17 @@ export default function RecallsClient() {
   }, [statusFilter])
 
   useEffect(() => { fetchRecalls() }, [fetchRecalls])
+
+  // SD-RT.2 — recalls workflow keys off lot-level events. A new
+  // inbound.discrepancy may surface a lot that needs recalling;
+  // inbound.received completes a return-to-supplier on an open recall.
+  // stock.adjusted catches manual write-offs against recalled lots.
+  useInboundEvents()
+  useInvalidationChannel(
+    ['inbound.discrepancy', 'inbound.received', 'inbound.updated',
+     'stock.adjusted', 'stock.transferred'],
+    fetchRecalls,
+  )
 
   const closeRecall = useCallback(async (recall: Recall) => {
     setClosingId(recall.id)

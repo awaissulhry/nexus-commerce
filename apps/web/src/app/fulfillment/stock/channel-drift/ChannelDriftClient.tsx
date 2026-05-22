@@ -23,6 +23,9 @@ import { useToast } from '@/components/ui/Toast'
 import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { getBackendUrl } from '@/lib/backend-url'
+import { useInvalidationChannel } from '@/lib/sync/invalidation-channel'
+import { useListingEvents } from '@/lib/sync/use-listing-events'
+import { useInboundEvents } from '@/lib/sync/use-inbound-events'
 import { AutoRefreshSelect, DensityToggle, GridToolbar, VirtualizedGrid, GridFooter } from '@/app/_shared/grid-lens'
 import type { GridLensColumn, GridLensRow } from '@/app/_shared/grid-lens'
 import { type Density, DENSITY_CELL_CLASS } from '@/lib/products/theme'
@@ -132,6 +135,23 @@ export default function ChannelDriftClient() {
   }, [statusFilter, channelFilter, t, toast])
 
   useEffect(() => { fetchEvents() }, [fetchEvents])
+
+  // SD-RT.2 — channel-drift queue feeds on ChannelStockEvent rows
+  // minted by Shopify inventory_levels/update + eBay ItemRevised +
+  // Amazon FBA_INVENTORY_AVAILABILITY_CHANGES. Each of those lands
+  // a stock.adjusted on the bus (via CS-series + RT.9/10/11 paths).
+  // inbound.received can ALSO close a drift when receipt brings
+  // local back to channel-reported.
+  useListingEvents()
+  useInboundEvents()
+  useInvalidationChannel(
+    [
+      'stock.adjusted', 'stock.transferred',
+      'inbound.received', 'inbound.discrepancy',
+      'product.updated',
+    ],
+    fetchEvents,
+  )
 
   const channels = useMemo(() =>
     Array.from(new Set((events ?? []).map(e => e.channel))).sort(),

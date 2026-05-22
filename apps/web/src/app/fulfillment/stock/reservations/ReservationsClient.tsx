@@ -21,6 +21,9 @@ import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
 import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
 import { getBackendUrl } from '@/lib/backend-url'
+import { useInvalidationChannel } from '@/lib/sync/invalidation-channel'
+import { useListingEvents } from '@/lib/sync/use-listing-events'
+import { useOrderEventsRefresh } from '@/hooks/use-order-events-refresh'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { formatRelative } from '@/components/inventory/formatRelative'
 import { cn } from '@/lib/utils'
@@ -122,6 +125,19 @@ export default function ReservationsClient() {
   }, [filter])
 
   useEffect(() => { fetchData() }, [fetchData])
+
+  // SD-RT.2 — reservations are created at order intake (soft-reserve)
+  // and consumed at fulfillment (hard-reserve → released on ship).
+  // order.created / order.updated / order.shipped all change the
+  // reservation queue; stock.adjusted can release stuck soft reserves.
+  useListingEvents()
+  useOrderEventsRefresh(fetchData, {
+    eventTypes: ['order.created', 'order.updated', 'order.cancelled'],
+  })
+  useInvalidationChannel(
+    ['stock.adjusted', 'stock.transferred', 'shipment.updated', 'order.shipped'],
+    fetchData,
+  )
 
   // Re-render TTL clocks every 30s so the countdown stays live.
   const [, setTick] = useState(0)
