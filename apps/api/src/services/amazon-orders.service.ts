@@ -281,6 +281,11 @@ export class AmazonOrdersService {
   ): Promise<{
     scanned: number
     repaired: number
+    // GS-RT.7 — distinct counter for rows recovered via the
+    // OrderItem.price fallback rather than the primary getOrder
+    // OrderTotal path. Optional so old callers reading the response
+    // shape stay backwards-compatible.
+    repairedFromItems?: number
     skipped: number
     failed: number
     errors: Array<{ orderId: string; error: string }>
@@ -312,28 +317,98 @@ export class AmazonOrdersService {
     const result = {
       scanned: stale.length,
       repaired: 0,
+      // GS-RT.7 — distinct counter for rows recovered from the
+      // OrderItem.price fallback (vs the primary getOrder OrderTotal
+      // path). Helps operators understand whether the SP-API fix
+      // landed (getOrder count climbs) or whether we're surviving on
+      // the legacy ingest data (items count climbs).
+      repairedFromItems: 0,
       skipped: 0,
       failed: 0,
       errors: [] as Array<{ orderId: string; error: string }>,
       skips: [] as Array<{ orderId: string; reason: string; status?: string }>,
     }
+
+    // GS-RT.7 — fallback when getOrder returns no OrderTotal. Looks
+    // up the existing OrderItem rows for the order and sums
+    // price × quantity. SP-API getOrderItems populates ItemPrice for
+    // most orders even when getOrder withholds OrderTotal (esp. older
+    // FBA Shipped orders), and we already captured those values at
+    // ingest into OrderItem.price. Returns { cents, source } or null.
+    const tryItemPriceFallback = async (
+      orderId: string,
+    ): Promise<{ amount: number; currency: string } | null> => {
+      const items = await prisma.orderItem.findMany({
+        where: { orderId },
+        select: { price: true, quantity: true },
+      })
+      if (items.length === 0) return null
+      let total = 0
+      for (const it of items) {
+        const unit = Number(it.price ?? 0)
+        if (!Number.isFinite(unit) || unit <= 0) continue
+        total += unit * (it.quantity ?? 0)
+      }
+      if (total <= 0) return null
+      // Currency: keep whatever the existing Order row had (will be
+      // EUR by default for IT/DE/FR/ES marketplaces). The caller
+      // doesn't touch currencyCode when we go through this path —
+      // OrderItem doesn't carry currency.
+      return { amount: total, currency: '' }
+    }
+
     for (const row of stale) {
       try {
         const raw = await amazonService.fetchOrderById(row.channelOrderId)
         if (!raw) {
+          // GS-RT.7 — even when getOrder returns null (NotFound /
+          // unavailable), the existing OrderItem rows may still give
+          // us a real total. Try the fallback before skipping.
+          const fb = await tryItemPriceFallback(row.id)
+          if (fb) {
+            await prisma.order.update({
+              where: { id: row.id },
+              data: { totalPrice: fb.amount },
+            })
+            result.repairedFromItems += 1
+            continue
+          }
           result.skipped += 1
           result.skips.push({ orderId: row.channelOrderId, reason: 'getOrder returned null (NotFound or unavailable)' })
           continue
         }
         if (!raw.OrderTotal?.Amount) {
+          // GS-RT.7 — primary getOrder path returned no OrderTotal
+          // (the long-tail FBA Shipped case the 2026-05-23 audit
+          // surfaced). Try the OrderItem.price fallback.
+          const fb = await tryItemPriceFallback(row.id)
+          if (fb) {
+            await prisma.order.update({
+              where: { id: row.id },
+              data: { totalPrice: fb.amount },
+            })
+            result.repairedFromItems += 1
+            continue
+          }
           result.skipped += 1
-          result.skips.push({ orderId: row.channelOrderId, reason: 'OrderTotal.Amount missing from response', status: raw.OrderStatus })
+          result.skips.push({ orderId: row.channelOrderId, reason: 'OrderTotal.Amount missing AND OrderItem.price fallback empty', status: raw.OrderStatus })
           continue
         }
         const amount = Number(raw.OrderTotal.Amount)
         if (!Number.isFinite(amount) || amount === 0) {
+          // GS-RT.7 — getOrder returned a non-positive total. Try
+          // OrderItem.price before giving up.
+          const fb = await tryItemPriceFallback(row.id)
+          if (fb) {
+            await prisma.order.update({
+              where: { id: row.id },
+              data: { totalPrice: fb.amount },
+            })
+            result.repairedFromItems += 1
+            continue
+          }
           result.skipped += 1
-          result.skips.push({ orderId: row.channelOrderId, reason: `OrderTotal.Amount=${raw.OrderTotal.Amount}`, status: raw.OrderStatus })
+          result.skips.push({ orderId: row.channelOrderId, reason: `OrderTotal.Amount=${raw.OrderTotal.Amount} AND OrderItem.price fallback empty`, status: raw.OrderStatus })
           continue
         }
         await prisma.order.update({

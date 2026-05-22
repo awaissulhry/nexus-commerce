@@ -95,10 +95,15 @@ if (!res.ok || body?.success === false) {
 }
 
 console.log('[backfill] === RESULT ===')
-console.log(`[backfill] scanned:  ${body.scanned ?? 0}`)
-console.log(`[backfill] repaired: ${body.repaired ?? 0}  ← prices now in DB`)
-console.log(`[backfill] skipped:  ${body.skipped ?? 0}  ← Amazon also has no OrderTotal`)
-console.log(`[backfill] failed:   ${body.failed ?? 0}`)
+console.log(`[backfill] scanned:           ${body.scanned ?? 0}`)
+console.log(`[backfill] repaired:          ${body.repaired ?? 0}  ← from SP-API getOrder OrderTotal`)
+// GS-RT.7 — distinct counter for rows recovered from the local
+// OrderItem.price summation fallback. Useful signal that the
+// long-tail SHIPPED+€0 problem is being closed without waiting on
+// Amazon to fix their getOrder response.
+console.log(`[backfill] repairedFromItems: ${body.repairedFromItems ?? 0}  ← from OrderItem.price summation (GS-RT.7 fallback)`)
+console.log(`[backfill] skipped:           ${body.skipped ?? 0}  ← no OrderTotal AND no OrderItem.price either`)
+console.log(`[backfill] failed:            ${body.failed ?? 0}`)
 
 if (Array.isArray(body.skips) && body.skips.length > 0) {
   console.log('')
