@@ -574,6 +574,9 @@
   "listings.polling": "Polling",
   "listings.live.tooltipConnected": "Live updates connected. Sync events stream within 200 ms.",
   "listings.live.tooltipDisconnected": "Live stream disconnected — falling back to 30 s polling.",
+  "listings.wizard.toast.live": "✓ Listing live on channel",
+  "listings.wizard.toast.submitted": "Listing submitted — awaiting channel acknowledgement",
+  "listings.wizard.toast.failed": "⚠ Listing submission failed — open /products/drafts to retry",
   "listings.stats.total": "total",
   "listings.stats.errors": "errors",
 

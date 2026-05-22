@@ -72,6 +72,7 @@ import { PushHealthChip } from '@/components/dashboard/PushHealthChip'
 // mounts (P-RT.9). Reused not re-implemented so future tweaks to
 // styling/copy land in one place.
 import { BulkProgressBanner } from '../products/_components/BulkProgressBanner'
+import { WizardActivityToast } from './_components/WizardActivityToast'
 import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
 
 // ── Types ───────────────────────────────────────────────────────────
@@ -1070,6 +1071,12 @@ export default function ListingsWorkspace({ lockChannel, lockMarketplace, titleO
           bulk-action job in flight (across any tab). Auto-dismisses
           on bulk.completed with an outcome toast. */}
       <BulkProgressBanner />
+
+      {/* L-RT.4 — cross-tab wizard.submitted toast. Pure side-effect
+          (no render). Closes the gap where an operator submits a
+          wizard in tab A and tab B's /listings sees the grid refresh
+          via SSE but never learns the terminal status. */}
+      <WizardActivityToast />
 
       {/* U.1 — Quick filter presets. One-click pills for the
           high-frequency filter combos operators reach for daily.

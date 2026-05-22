@@ -561,6 +561,9 @@
   "listings.polling": "Polling",
   "listings.live.tooltipConnected": "Aggiornamenti live attivi. Gli eventi di sync arrivano entro 200 ms.",
   "listings.live.tooltipDisconnected": "Stream live disconnesso — fallback a polling 30 s.",
+  "listings.wizard.toast.live": "✓ Inserzione live sul canale",
+  "listings.wizard.toast.submitted": "Inserzione inviata — in attesa di conferma dal canale",
+  "listings.wizard.toast.failed": "⚠ Invio inserzione fallito — apri /products/drafts per riprovare",
   "listings.stats.total": "totale",
   "listings.stats.errors": "errori",
 
