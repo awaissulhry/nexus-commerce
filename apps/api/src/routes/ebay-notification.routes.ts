@@ -209,6 +209,44 @@ export default async function ebayNotificationRoutes(app: FastifyInstance): Prom
       return reply.status(400).send({ error: err?.message ?? String(err) })
     }
 
+    // RT.7 — full coverage of eBay Trading-API events the operator
+    // cares about. Audit log showed we only subscribed to the two
+    // checkout events; returns, refunds, shipments, and item-sold
+    // events were silently absent (existing ebay-returns-poll cron
+    // closed the returns gap but at 30-min lag).
+    //
+    // Events enabled here:
+    //   AuctionCheckoutComplete   — auction BIN / true auction sale
+    //   FixedPriceTransaction     — fixed-price / Buy It Now sale
+    //   ItemSold                  — broader sale notification (covers
+    //                                edge cases the two above miss)
+    //   ItemMarkedAsShipped       — buyer-facing "shipped" event so
+    //                                we can mirror the status back
+    //   ItemMarkedAsPaid          — confirms payment cleared
+    //   ReturnOpened              — buyer initiated a return; close
+    //                                ebay-returns-poll lag from 30min
+    //                                to ~30s
+    //   ReturnClosed              — return resolved (item back / refund
+    //                                paid / case escalated)
+    //   EOR_OrderRefunded         — eBay-issued refund (admin / case)
+    const events = [
+      'AuctionCheckoutComplete',
+      'FixedPriceTransaction',
+      'ItemSold',
+      'ItemMarkedAsShipped',
+      'ItemMarkedAsPaid',
+      'ReturnOpened',
+      'ReturnClosed',
+      'EOR_OrderRefunded',
+    ]
+    const eventXml = events
+      .map(
+        (e) => `    <NotificationEnable>
+      <EventType>${e}</EventType>
+      <EventEnable>Enable</EventEnable>
+    </NotificationEnable>`,
+      )
+      .join('\n')
     const xml = `<?xml version="1.0" encoding="utf-8"?>
 <SetNotificationPreferencesRequest xmlns="urn:ebay:apis:eBLBaseComponents">
   <RequesterCredentials>
@@ -219,14 +257,7 @@ export default async function ebayNotificationRoutes(app: FastifyInstance): Prom
     <AlertEnable>Enable</AlertEnable>
   </ApplicationDeliveryPreferences>
   <UserDeliveryPreferenceArray>
-    <NotificationEnable>
-      <EventType>AuctionCheckoutComplete</EventType>
-      <EventEnable>Enable</EventEnable>
-    </NotificationEnable>
-    <NotificationEnable>
-      <EventType>FixedPriceTransaction</EventType>
-      <EventEnable>Enable</EventEnable>
-    </NotificationEnable>
+${eventXml}
   </UserDeliveryPreferenceArray>
 </SetNotificationPreferencesRequest>`
 
@@ -247,7 +278,8 @@ export default async function ebayNotificationRoutes(app: FastifyInstance): Prom
       return reply.send({
         ok: true,
         ack: result.ack,
-        message: 'Subscribed to AuctionCheckoutComplete + FixedPriceTransaction on site 101 (Italy)',
+        message: `Subscribed to ${events.length} eBay events on site 101 (Italy)`,
+        events,
         warning: result.ack === 'Warning' ? result.shortMessage : undefined,
       })
     } catch (err: any) {
