@@ -13,9 +13,15 @@
  */
 
 import { useEffect, useState } from 'react'
+import { ChevronDown, ChevronUp } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { getBackendUrl } from '@/lib/backend-url'
+
+// MS.7 — collapsed-by-default. Header rollup is always visible so
+// operators still spot a silent market at a glance; grid expands on
+// click. localStorage key preserves operator's choice per device.
+const COLLAPSED_STORAGE_KEY = 'nexus.dashboard.marketHealth.expanded.v1'
 
 type MarketStatus = 'active' | 'quiet' | 'silent' | 'never'
 
@@ -88,6 +94,22 @@ export function MarketIngestHealth() {
   // MS.5 — per-row toggle busy state so we don't double-fire while a
   // PATCH is in flight.
   const [busy, setBusy] = useState<Set<string>>(new Set())
+  // MS.7 — collapsed by default. Header always visible.
+  const [expanded, setExpanded] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false
+    try {
+      return window.localStorage.getItem(COLLAPSED_STORAGE_KEY) === '1'
+    } catch {
+      return false
+    }
+  })
+  const toggleExpanded = () => {
+    setExpanded((prev) => {
+      const next = !prev
+      try { window.localStorage.setItem(COLLAPSED_STORAGE_KEY, next ? '1' : '0') } catch {}
+      return next
+    })
+  }
 
   // Optimistically flip + PATCH the marketplace's isActive flag.
   // Cron picks up the change on the next 15-min tick (or sooner if
@@ -183,9 +205,31 @@ export function MarketIngestHealth() {
 
   return (
     <Card
-      title="Market ingest health"
+      title={
+        <button
+          type="button"
+          onClick={toggleExpanded}
+          aria-expanded={expanded}
+          className="-mx-1 -my-0.5 px-1 py-0.5 inline-flex items-center gap-1.5 text-base font-semibold text-slate-900 dark:text-slate-100 hover:text-blue-600 dark:hover:text-blue-400 cursor-pointer"
+        >
+          Market ingest health
+          <span className="text-slate-400 dark:text-slate-500">
+            {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+          </span>
+        </button>
+      }
       description={`${activeCount} of ${totalKnown} Amazon EU markets actively ingesting · ${r.active} active · ${r.quiet} quiet · ${r.silent} silent · ${r.never} no orders ever`}
     >
+      {!expanded && (
+        <button
+          type="button"
+          onClick={toggleExpanded}
+          className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
+        >
+          Show per-market breakdown →
+        </button>
+      )}
+      {expanded && (<>
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
         {data.markets.map((m) => {
           const tone = STATUS_TONE[m.status]
@@ -241,6 +285,7 @@ export function MarketIngestHealth() {
       <div className="mt-3 text-xs text-slate-500 dark:text-slate-400">
         Auto-refreshes every 60s. <span className="text-slate-400">Updated {relativeAgo(data.checkedAt)}.</span>
       </div>
+      </>)}
     </Card>
   )
 }
