@@ -55,6 +55,22 @@ export type OrderEvent =
       queueArn: string | null
       ts: number
     }
+  // RT.13 — fired by the SQS poller when an ANY_OFFER_CHANGED
+  // notification shows our seller is no longer holding the buy box.
+  // Surfaces in the global competitive banner + (opt-in) browser
+  // notification so the operator can decide whether to reprice
+  // manually. (Auto-reprice lives in CE-series.)
+  | {
+      type: 'competitive.buyBoxLost'
+      asin: string
+      marketplaceId: string
+      ourPrice: number | null
+      winnerPrice: number | null
+      currency: string
+      winnerSellerId: string | null
+      winnerFulfillmentType: string | null
+      ts: number
+    }
   | { type: 'ping'; ts: number }
 
 type Listener = (event: OrderEvent) => void

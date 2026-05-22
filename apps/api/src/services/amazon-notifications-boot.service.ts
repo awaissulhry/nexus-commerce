@@ -140,6 +140,14 @@ export function ensureAmazonNotificationSubscription(): void {
         'FBA_INVENTORY_AVAILABILITY_CHANGES',
         existingDest.destinationId,
       )
+      // 5. RT.13 — Buy Box / competing-offer change. Fires
+      // competitive.buyBoxLost on the SSE bus when we drop out
+      // of the buy box on an ASIN where we have an offer. Alert
+      // only — repricing lives in CE-series.
+      await ensureSubscriptionForType(
+        'ANY_OFFER_CHANGED',
+        existingDest.destinationId,
+      )
     } catch (err: any) {
       logger.error('[amazon-notifications-boot] setup failed (non-fatal)', {
         error: err?.message ?? String(err),

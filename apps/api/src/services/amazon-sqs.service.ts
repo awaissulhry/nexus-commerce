@@ -67,6 +67,38 @@ export interface FbaInventoryNotification {
   }>
 }
 
+/**
+ * RT.13 — ANY_OFFER_CHANGED notification. Fires when Buy Box winner
+ * or competing offer price changes. Lets us alert on Buy Box loss in
+ * ~30s instead of waiting for the periodic ANY_OFFER_CHANGED REST
+ * poll (which we don't do today either).
+ *
+ * Payload normalised to the minimum we need for the alert path:
+ * which ASIN, who has the Buy Box now, at what price. The full
+ * envelope (all competing offers, summary stats) stays in
+ * rawPayload for forensics + the future repricer engine.
+ */
+export interface AnyOfferChangedNotification {
+  asin: string
+  marketplaceId: string
+  itemCondition: string
+  // Best buy-box offer details — null when no buy box exists for
+  // this ASIN (e.g. only used-condition offers).
+  buyBoxWinner: {
+    sellerId: string
+    price?: number
+    currency?: string
+    fulfillmentType?: string
+  } | null
+  // Our own offer, if present. Null when we don't have a live offer
+  // on this ASIN (e.g. listing suppressed or out of stock).
+  ourOffer: {
+    sellerId: string
+    price?: number
+    currency?: string
+  } | null
+}
+
 export interface SqsOrderMessage {
   /** Present on ORDER_CHANGE / ORDER_STATUS_CHANGE messages. */
   notification?: OrderChangeNotification
@@ -74,6 +106,8 @@ export interface SqsOrderMessage {
   mcfNotification?: FbaOutboundShipmentNotification
   /** RT.9 — present on FBA_INVENTORY_AVAILABILITY_CHANGES messages. */
   inventoryNotification?: FbaInventoryNotification
+  /** RT.13 — present on ANY_OFFER_CHANGED messages. */
+  anyOfferChangedNotification?: AnyOfferChangedNotification
   receiptHandle: string
   /** SQS Message.MessageId — used as WebhookEvent.externalId for dedup. */
   messageId: string
@@ -132,6 +166,67 @@ export async function pollSqsMessages(maxMessages = 10): Promise<SqsOrderMessage
       const inner = outer.Message ? JSON.parse(outer.Message) : outer
 
       const notifType = inner.NotificationType ?? inner.notificationType
+
+      // RT.13 — Buy Box / competing-offer change. Normalised here;
+      // poller fires `competitive.buyBoxLost` when our seller drops
+      // out of the buy box.
+      if (notifType === 'ANY_OFFER_CHANGED') {
+        const root =
+          inner.Payload?.AnyOfferChangedNotification ?? inner.Payload?.AnyOfferChanged
+        if (!root) {
+          await deleteSqsMessage(msg.ReceiptHandle)
+          continue
+        }
+        const summary = root.Summary ?? root.summary ?? {}
+        const buyBoxPrices: any[] = Array.isArray(summary.BuyBoxPrices)
+          ? summary.BuyBoxPrices
+          : []
+        const offers: any[] = Array.isArray(root.Offers) ? root.Offers : []
+
+        const buyBoxOfferRaw = offers.find((o: any) => o.IsBuyBoxWinner === true)
+        const ourSellerId =
+          process.env.AMAZON_SELLER_ID ?? process.env.AMAZON_MERCHANT_ID ?? ''
+        const ourOfferRaw = ourSellerId
+          ? offers.find((o: any) => o.SellerId === ourSellerId)
+          : null
+
+        const bbPrice = buyBoxPrices[0]
+        const offerSummary: AnyOfferChangedNotification = {
+          asin: root.OfferChangeTrigger?.ASIN ?? root.OfferChangeTrigger?.Asin ?? '',
+          marketplaceId: root.OfferChangeTrigger?.MarketplaceId ?? '',
+          itemCondition: root.OfferChangeTrigger?.ItemCondition ?? 'New',
+          buyBoxWinner: buyBoxOfferRaw
+            ? {
+                sellerId: buyBoxOfferRaw.SellerId ?? '',
+                price: Number(
+                  buyBoxOfferRaw.ListingPrice?.Amount ?? bbPrice?.ListingPrice?.Amount ?? 0,
+                ),
+                currency:
+                  buyBoxOfferRaw.ListingPrice?.CurrencyCode ??
+                  bbPrice?.ListingPrice?.CurrencyCode ??
+                  'EUR',
+                fulfillmentType:
+                  buyBoxOfferRaw.IsFulfilledByAmazon === true ? 'AFN' : 'MFN',
+              }
+            : null,
+          ourOffer: ourOfferRaw
+            ? {
+                sellerId: ourOfferRaw.SellerId,
+                price: Number(ourOfferRaw.ListingPrice?.Amount ?? 0),
+                currency: ourOfferRaw.ListingPrice?.CurrencyCode ?? 'EUR',
+              }
+            : null,
+        }
+
+        results.push({
+          anyOfferChangedNotification: offerSummary,
+          receiptHandle: msg.ReceiptHandle,
+          messageId: msg.MessageId ?? '',
+          rawPayload: inner,
+          notificationType: notifType,
+        })
+        continue
+      }
 
       // RT.9 — FBA inventory availability changes. Payload carries an
       // array of per-SKU deltas; each downstream becomes one

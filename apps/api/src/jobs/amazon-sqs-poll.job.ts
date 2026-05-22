@@ -73,6 +73,57 @@ async function runSqsPoll(): Promise<void> {
           }
         }
 
+        // RT.13 — Buy Box / competing-offer change. Fires the
+        // competitive.buyBoxLost SSE event when our seller is no
+        // longer the buy-box winner so the global competitive
+        // banner can ping the operator. Alert only — auto-reprice
+        // lives in CE-series.
+        if (msg.anyOfferChangedNotification) {
+          const note = msg.anyOfferChangedNotification
+          const ourSellerId =
+            process.env.AMAZON_SELLER_ID ?? process.env.AMAZON_MERCHANT_ID ?? ''
+          const winnerIsUs =
+            note.buyBoxWinner !== null &&
+            ourSellerId !== '' &&
+            note.buyBoxWinner.sellerId === ourSellerId
+
+          if (!winnerIsUs && note.asin) {
+            // We don't fire on "we never had it" — that's just life,
+            // not a regression. We only ping when we have a current
+            // offer (so we WERE in the running) but lost.
+            if (note.ourOffer) {
+              const { publishOrderEvent } = await import(
+                '../services/order-events.service.js'
+              )
+              publishOrderEvent({
+                type: 'competitive.buyBoxLost',
+                asin: note.asin,
+                marketplaceId: note.marketplaceId,
+                ourPrice: note.ourOffer.price ?? null,
+                winnerPrice: note.buyBoxWinner?.price ?? null,
+                currency: note.buyBoxWinner?.currency ?? note.ourOffer.currency ?? 'EUR',
+                winnerSellerId: note.buyBoxWinner?.sellerId ?? null,
+                winnerFulfillmentType: note.buyBoxWinner?.fulfillmentType ?? null,
+                ts: Date.now(),
+              })
+              logger.info('[SQS poll] buy box lost', {
+                asin: note.asin,
+                ourPrice: note.ourOffer.price,
+                winnerPrice: note.buyBoxWinner?.price,
+              })
+            }
+          }
+          await deleteSqsMessage(msg.receiptHandle)
+          if (webhookEventId) {
+            await prisma.webhookEvent.update({
+              where: { id: webhookEventId },
+              data: { isProcessed: true, processedAt: new Date() },
+            }).catch(() => {})
+          }
+          processed++
+          continue
+        }
+
         // RT.9 — FBA inventory availability change. Each per-SKU
         // delta becomes one ChannelStockEvent row; the recorder is
         // idempotent on (channel, channelEventId) so retries collapse

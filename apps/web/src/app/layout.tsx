@@ -6,6 +6,7 @@ import CommandMatrixPanel from "@/components/CommandMatrixPanel";
 import NotificationsBell from "@/components/NotificationsBell";
 import MobileTopBar from "@/components/MobileTopBar";
 import { GlobalDlqBanner } from "@/components/dashboard/GlobalDlqBanner";
+import { CompetitiveAlertWatcher } from "@/components/dashboard/CompetitiveAlertWatcher";
 import { ToastProvider } from "@/components/ui/Toast";
 import { ConfirmProvider } from "@/components/ui/ConfirmProvider";
 import { getServerLocale, getServerT } from "@/lib/i18n/server";
@@ -61,6 +62,9 @@ export default async function RootLayout({
             <CommandPalette />
             <CommandMatrixPanel />
             <NotificationsBell />
+            {/* RT.13 — Buy Box loss alert listener (no visual UI;
+                fires browser notification + console.info per alert). */}
+            <CompetitiveAlertWatcher />
           </ConfirmProvider>
         </ToastProvider>
       </body>
