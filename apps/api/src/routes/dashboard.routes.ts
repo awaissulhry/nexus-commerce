@@ -770,19 +770,34 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
         // confirmed (non-PENDING+€0) rows; we surface the pending
         // count so operators see why their tile total may lag Amazon
         // Seller Central by a few orders for a few minutes.
+        //
+        // GS-RT.6 — broadened scope. The 2026-05-23 audit found 13
+        // SHIPPED+€0 orders (months old) where Amazon's getOrder ALSO
+        // withholds OrderTotal — see GS-RT.7 for the real-data fix via
+        // OrderItem.price summation. This estimate path is the UI
+        // safety net while those backfills run: surface ANY €0 order
+        // with units (not just PENDING) so the per-marketplace row +
+        // headline don't lie. Once GS-RT.7 backfill repairs the row's
+        // totalPrice, it drops out of this query naturally (no longer
+        // matches totalPrice=0).
         const pendingInWindow = await prisma.order.findMany({
           where: {
             deletedAt: null,
             channel: 'AMAZON',
-            status: 'PENDING' as any,
             totalPrice: 0,
             purchaseDate: { gte: from, lt: to },
+            // GS-RT.6 — exclude CANCELLED (their €0 is correct, no
+            // estimate needed). PENDING + SHIPPED + every other status
+            // with €0 + units → ALL flow through estimate.
+            status: { notIn: ['CANCELLED'] as any },
+            items: { some: { quantity: { gt: 0 } } },
             ...(marketplaceFilter ? { marketplace: marketplaceFilter } : {}),
           },
           select: {
             id: true,
             purchaseDate: true,
             marketplace: true,
+            status: true,
             items: {
               select: {
                 quantity: true,
@@ -793,6 +808,10 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
           orderBy: { purchaseDate: 'asc' },
           take: 100,
         })
+        // GS-RT.6 — keep pendingCount semantics aligned with the
+        // original SA.1 tile copy: count of orders Amazon-withheld
+        // OrderTotal on. PENDING-only is the typical case; broader
+        // €0+units captures the long-tail too.
         const pendingCount = pendingInWindow.length
         const oldestPendingAt = pendingInWindow[0]?.purchaseDate?.toISOString() ?? null
 

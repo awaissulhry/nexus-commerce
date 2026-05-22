@@ -424,18 +424,25 @@ export function GlobalSnapshot() {
                 <span className="ml-1 text-slate-400 dark:text-slate-500"> · {data.sales.total.compareLabel}</span>
               )}
             </div>
-            {/* SA.1 + SR.1 — surface the pending estimate breakdown */}
+            {/* SA.1 + SR.1 + GS-RT.6 — surface the awaiting-price
+                estimate breakdown. Broadened from "pending verification"
+                to "awaiting price" because the scope now includes
+                SHIPPED+€0 orders (long-tail Amazon-withheld OrderTotal),
+                not just PENDING. The GS-RT.7 backfill recovers most
+                of these via OrderItem.price summation; this annotation
+                is the operator's "honest about what's still estimated"
+                marker. */}
             {data.sales.total.pending && data.sales.total.pending.count > 0 && (
               <div
                 className="text-xs text-amber-700 dark:text-amber-300 font-medium"
                 title={
                   data.sales.total.pending.oldestAt
-                    ? `Amazon withholds OrderTotal for PENDING orders even via SP-API getOrder. The estimate uses ChannelListing.price (falls back to Product.basePrice). Real values land within minutes of the order leaving PENDING. Oldest pending: ${new Date(data.sales.total.pending.oldestAt).toLocaleString()}.`
-                    : 'Amazon withholds OrderTotal for PENDING orders.'
+                    ? `Amazon withholds OrderTotal for some orders via SP-API. The estimate uses ChannelListing.price (falls back to Product.basePrice). Real values land via the GS-RT.7 backfill (OrderItem.price summation) or when Amazon releases OrderTotal. Oldest awaiting: ${new Date(data.sales.total.pending.oldestAt).toLocaleString()}.`
+                    : 'Amazon withholds OrderTotal for some orders.'
                 }
               >
                 * includes ~{formatEur(data.sales.total.pending.estimateCents ?? 0)} estimated for{' '}
-                {data.sales.total.pending.count} pending verification
+                {data.sales.total.pending.count} awaiting price
               </div>
             )}
             {/* MS.3 — non-EUR currency chips. Stays close to the
