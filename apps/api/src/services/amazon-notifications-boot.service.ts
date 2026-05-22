@@ -71,6 +71,13 @@ export async function ensureSubscriptionForType(
     }
     // 404 → no sub yet, fall through to create.
   }
+  // The URL path already specifies the notification type — the
+  // redundant processingDirective.eventFilter.eventFilterType is
+  // ACCEPTED by some types (ORDER_CHANGE, ANY_OFFER_CHANGED) but
+  // REJECTED by newer ones (ORDER_STATUS_CHANGE, FBA_*, LISTINGS_*,
+  // FEED_PROCESSING_FINISHED, ACCOUNT_STATUS_CHANGED). First production
+  // run created only 2/8 subscriptions because of this. Body trimmed
+  // to the minimum spec-required shape so all types accept it.
   const subResp = await amazonSpApiClient.request<any>(
     'POST',
     `/notifications/v1/subscriptions/${notifType}`,
@@ -78,10 +85,17 @@ export async function ensureSubscriptionForType(
       body: {
         payloadVersion: '1.0',
         destinationId,
-        processingDirective: { eventFilter: { eventFilterType: notifType } },
       },
     },
-  )
+  ).catch((err: any) => {
+    // Surface the SP-API error body in the log so future debugging
+    // doesn't require Railway log archaeology.
+    logger.warn(`[amazon-notifications] ${notifType} POST failed`, {
+      error: err?.message ?? String(err),
+      statusCode: err?.statusCode,
+    })
+    throw err
+  })
   const subscriptionId = subResp?.payload?.subscriptionId ?? subResp?.subscriptionId
   logger.info(`[amazon-notifications-boot] ${notifType} subscription created`, {
     subscriptionId,
