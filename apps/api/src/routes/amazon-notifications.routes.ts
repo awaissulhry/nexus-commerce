@@ -251,21 +251,29 @@ export default async function amazonNotificationsRoutes(app: FastifyInstance): P
       return reply.send({ configured: false, reason: 'AMAZON_SQS_QUEUE_URL missing' })
     }
 
-    try {
-      const subs = await spApiRequest<any>('GET', '/notifications/v1/subscriptions/ORDER_CHANGE')
-      const sub = subs.payload
-      return reply.send({
-        configured: true,
-        subscription: sub ?? null,
-        sqsQueueUrl: process.env.AMAZON_SQS_QUEUE_URL,
-        pollEnabled: process.env.NEXUS_ENABLE_AMAZON_SQS_POLL === '1',
-      })
-    } catch (err: any) {
-      return reply.send({
-        configured: true,
-        subscription: null,
-        error: err?.message ?? String(err),
-      })
-    }
+    // RT.5 — return both ORDER_CHANGE + ORDER_STATUS_CHANGE state so the
+    // operator can verify both subscriptions are active during the
+    // parallel-run window. `subscription` kept for back-compat with
+    // older UI; `subscriptions` is the canonical new field.
+    const fetchSub = (type: string) =>
+      spApiRequest<any>('GET', `/notifications/v1/subscriptions/${type}`)
+        .then((r) => r.payload ?? null)
+        .catch((err: any) => ({ error: err?.message ?? String(err) }))
+
+    const [orderChange, orderStatusChange] = await Promise.all([
+      fetchSub('ORDER_CHANGE'),
+      fetchSub('ORDER_STATUS_CHANGE'),
+    ])
+
+    return reply.send({
+      configured: true,
+      subscriptions: {
+        ORDER_CHANGE: orderChange,
+        ORDER_STATUS_CHANGE: orderStatusChange,
+      },
+      subscription: orderChange, // legacy alias
+      sqsQueueUrl: process.env.AMAZON_SQS_QUEUE_URL,
+      pollEnabled: process.env.NEXUS_ENABLE_AMAZON_SQS_POLL === '1',
+    })
   })
 }

@@ -1,10 +1,17 @@
 /**
- * IS.2 — Ensure the SP-API ORDER_CHANGE notification subscription exists.
+ * IS.2 — Ensure SP-API order-notification subscriptions exist.
  *
- * Called once at server boot (fire-and-forget from index.ts). Idempotent:
- * checks the current state first and skips every step that's already done.
- * This replaces the HTTP admin endpoint as the primary setup mechanism so
- * Railway's 30s response timeout is never a factor.
+ * RT.5 — now ensures BOTH ORDER_CHANGE (legacy) and ORDER_STATUS_CHANGE
+ * (Amazon's replacement) are subscribed in parallel so we collect 7
+ * days of side-by-side coverage. After that window the verifier
+ * scripts/verify-rt5-order-status-coverage.mjs confirms equivalence
+ * and a follow-up phase removes ORDER_CHANGE. Both feed into the
+ * same SQS destination — amazon-sqs.service accepts either type.
+ *
+ * Called once at server boot (fire-and-forget from index.ts).
+ * Idempotent: checks each subscription's current state and skips
+ * everything already in place. Railway's 30s response timeout is
+ * never a factor.
  */
 
 import { logger } from '../utils/logger.js'
@@ -33,6 +40,50 @@ async function grantlessPost<T>(token: string, slug: string, path: string, body:
   return JSON.parse(text) as T
 }
 
+async function ensureSubscriptionForType(
+  notifType: 'ORDER_CHANGE' | 'ORDER_STATUS_CHANGE',
+  destinationId: string,
+): Promise<void> {
+  const { amazonSpApiClient } = await import('../clients/amazon-sp-api.client.js')
+  // Check existing — return early if active.
+  try {
+    const existingSub = await amazonSpApiClient.request<any>(
+      'GET',
+      `/notifications/v1/subscriptions/${notifType}`,
+    )
+    if (existingSub?.payload?.subscriptionId) {
+      logger.info(`[amazon-notifications-boot] ${notifType} subscription already active`, {
+        subscriptionId: existingSub.payload.subscriptionId,
+      })
+      return
+    }
+  } catch (err: any) {
+    if (!String(err?.message).includes('404') && err?.statusCode !== 404) {
+      logger.warn(`[amazon-notifications-boot] ${notifType} check failed — skipping`, {
+        error: err?.message ?? String(err),
+      })
+      return
+    }
+    // 404 → no sub yet, fall through to create.
+  }
+  const subResp = await amazonSpApiClient.request<any>(
+    'POST',
+    `/notifications/v1/subscriptions/${notifType}`,
+    {
+      body: {
+        payloadVersion: '1.0',
+        destinationId,
+        processingDirective: { eventFilter: { eventFilterType: notifType } },
+      },
+    },
+  )
+  const subscriptionId = subResp?.payload?.subscriptionId ?? subResp?.subscriptionId
+  logger.info(`[amazon-notifications-boot] ${notifType} subscription created`, {
+    subscriptionId,
+    destinationId,
+  })
+}
+
 export function ensureAmazonNotificationSubscription(): void {
   if (!isSqsConfigured()) return
   if (!process.env.NEXUS_ENABLE_AMAZON_SQS_POLL || process.env.NEXUS_ENABLE_AMAZON_SQS_POLL !== '1') return
@@ -48,26 +99,7 @@ export function ensureAmazonNotificationSubscription(): void {
 
       const { amazonSpApiClient } = await import('../clients/amazon-sp-api.client.js')
 
-      // 1. Check existing subscription — if active, nothing to do.
-      try {
-        const existingSub = await amazonSpApiClient.request<any>('GET', '/notifications/v1/subscriptions/ORDER_CHANGE')
-        if (existingSub?.payload?.subscriptionId) {
-          logger.info('[amazon-notifications-boot] ORDER_CHANGE subscription already active', {
-            subscriptionId: existingSub.payload.subscriptionId,
-          })
-          return
-        }
-      } catch (err: any) {
-        // 404 means no subscription yet — continue. Any other error: abort.
-        if (!String(err?.message).includes('404') && err?.statusCode !== 404) {
-          logger.warn('[amazon-notifications-boot] subscription check failed — skipping setup', {
-            error: err?.message ?? String(err),
-          })
-          return
-        }
-      }
-
-      // 2. Get or create destination.
+      // 1. Get or create destination — shared by both subscriptions.
       const grantlessToken = await amazonSpApiClient.getGrantlessToken(NOTIFICATIONS_SCOPE)
       const destList = await grantlessGet<any>(grantlessToken, slug, '/notifications/v1/destinations')
       const destinations: any[] = destList.payload ?? []
@@ -85,22 +117,12 @@ export function ensureAmazonNotificationSubscription(): void {
         logger.info('[amazon-notifications-boot] reusing existing destination', { destinationId: existingDest.destinationId })
       }
 
-      // 3. Create subscription.
-      const subResp = await amazonSpApiClient.request<any>('POST', '/notifications/v1/subscriptions/ORDER_CHANGE', {
-        body: {
-          payloadVersion: '1.0',
-          destinationId: existingDest.destinationId,
-          processingDirective: {
-            eventFilter: { eventFilterType: 'ORDER_CHANGE' },
-          },
-        },
-      })
-      const subscriptionId = subResp?.payload?.subscriptionId ?? subResp?.subscriptionId
-      logger.info('[amazon-notifications-boot] ORDER_CHANGE subscription created', {
-        subscriptionId,
-        destinationId: existingDest.destinationId,
-        sqsArn,
-      })
+      // 2. RT.5 — subscribe to BOTH ORDER_CHANGE + ORDER_STATUS_CHANGE.
+      // Parallel-run window collects 7 days of side-by-side coverage
+      // before the verifier confirms equivalence and a follow-up phase
+      // removes the legacy ORDER_CHANGE subscription.
+      await ensureSubscriptionForType('ORDER_CHANGE', existingDest.destinationId)
+      await ensureSubscriptionForType('ORDER_STATUS_CHANGE', existingDest.destinationId)
     } catch (err: any) {
       logger.error('[amazon-notifications-boot] setup failed (non-fatal)', {
         error: err?.message ?? String(err),

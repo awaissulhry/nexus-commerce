@@ -90,13 +90,24 @@ export async function pollSqsMessages(maxMessages = 10): Promise<SqsOrderMessage
       const inner = outer.Message ? JSON.parse(outer.Message) : outer
 
       const notifType = inner.NotificationType ?? inner.notificationType
-      if (notifType !== 'ORDER_CHANGE') {
-        // Silently ack non-ORDER_CHANGE messages (test events, etc.)
+      // RT.5 — accept both ORDER_CHANGE (legacy) AND ORDER_STATUS_CHANGE
+      // (Amazon's replacement notification type). During the parallel-
+      // run window both arrive in the same SQS queue. The payload
+      // envelope shape differs slightly:
+      //   ORDER_CHANGE          → inner.Payload.OrderChangeNotification
+      //   ORDER_STATUS_CHANGE   → inner.Payload.OrderStatusChangeNotification
+      // — we normalise to the same SqsOrderMessage downstream so the
+      // poller doesn't need a per-type code path.
+      if (notifType !== 'ORDER_CHANGE' && notifType !== 'ORDER_STATUS_CHANGE') {
+        // Silently ack everything else (test events, etc.)
         await deleteSqsMessage(msg.ReceiptHandle)
         continue
       }
 
-      const payload = inner.Payload?.OrderChangeNotification
+      const payload =
+        notifType === 'ORDER_STATUS_CHANGE'
+          ? inner.Payload?.OrderStatusChangeNotification
+          : inner.Payload?.OrderChangeNotification
       if (!payload) continue
 
       results.push({
