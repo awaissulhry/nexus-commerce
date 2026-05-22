@@ -22,7 +22,7 @@
 
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
-import { AmazonService } from './marketplaces/amazon.service.js'
+import { AmazonService, AMAZON_MARKETPLACE_CODE_TO_ID } from './marketplaces/amazon.service.js'
 const amazonService = new AmazonService()
 
 export interface ImageBackfillResult {
@@ -92,13 +92,22 @@ export async function backfillProductImagesFromCatalog(opts: {
   let productsNoImages = 0
   let productsFailed = 0
 
-  // Pick products with Amazon ASIN that haven't been image-backfilled yet.
-  // Order by sku for deterministic batching across runs.
+  // IB.1.1 fix — pick (product, marketplace, asin) tuples, not just
+  // (product, asin). Some products are listed only on DE/FR with
+  // marketplace-specific ASINs that DON'T exist in the IT catalog;
+  // querying IT for them returns "not found in marketplace". We now
+  // query whatever marketplace the ChannelListing is actually scoped
+  // to. The query orders IT first so the cheapest happy-path
+  // (Pan-EU shared images, one fetch) wins when a product has
+  // multiple marketplace listings — subsequent rows for the same
+  // productId become no-ops via the per-(productId, url) dedup in the
+  // upsert below.
   const productsRaw = await prisma.$queryRawUnsafe<
-    Array<{ id: string; sku: string; asin: string }>
+    Array<{ id: string; sku: string; asin: string; marketplace: string }>
   >(
-    `SELECT DISTINCT p.id, p.sku,
-            COALESCE(cl."externalListingId", '') AS asin
+    `SELECT p.id, p.sku,
+            cl."externalListingId" AS asin,
+            cl.marketplace AS marketplace
      FROM "Product" p
      JOIN "ChannelListing" cl ON cl."productId" = p.id
      WHERE p."deletedAt" IS NULL
@@ -108,14 +117,32 @@ export async function backfillProductImagesFromCatalog(opts: {
        ${skipProductsWithImages
          ? `AND NOT EXISTS (SELECT 1 FROM "ProductImage" pi WHERE pi."productId" = p.id)`
          : ''}
-     ORDER BY p.sku ASC
+     ORDER BY p.sku ASC,
+              CASE cl.marketplace WHEN 'IT' THEN 0 ELSE 1 END,
+              cl.marketplace ASC
      LIMIT ${limit}`,
   )
 
   const sp = await (amazonService as unknown as { getClient: () => Promise<{ callAPI: (args: unknown) => Promise<unknown> }> }).getClient()
 
+  // Track which (productId, marketplace) tuples we've fetched so
+  // repeated rows for the same product (Pan-EU listings) become no-op
+  // dedup at the outer scan. After IT lands images, FR/ES rows for the
+  // same product are skipped since the ProductImage entries already
+  // exist (the per-url upsert below catches it too, but skipping
+  // saves the SP-API roundtrip).
+  const fetchedProductIds = new Set<string>()
+
   for (const product of productsRaw) {
     productsScanned++
+    if (fetchedProductIds.has(product.id)) {
+      // already covered by an earlier marketplace's fetch this run
+      continue
+    }
+    // IB.1.1: pick the per-row marketplaceId so DE/FR-only listings
+    // get queried in their own marketplace, not always IT.
+    const rowMarketplaceId =
+      AMAZON_MARKETPLACE_CODE_TO_ID[product.marketplace] ?? marketplaceId
     try {
       const res = (await sp.callAPI({
         operation: 'getCatalogItem',
@@ -123,10 +150,11 @@ export async function backfillProductImagesFromCatalog(opts: {
         version: '2022-04-01',
         path: { asin: product.asin },
         query: {
-          marketplaceIds: [marketplaceId],
+          marketplaceIds: [rowMarketplaceId],
           includedData: ['images'],
         },
       })) as { images?: AmazonImageGroup[] }
+      fetchedProductIds.add(product.id)
 
       // Amazon returns images grouped by marketplaceId; we asked for
       // one marketplace so there should be one group max.
