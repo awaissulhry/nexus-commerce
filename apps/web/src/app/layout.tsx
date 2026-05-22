@@ -5,6 +5,7 @@ import CommandPalette from "@/components/CommandPalette";
 import CommandMatrixPanel from "@/components/CommandMatrixPanel";
 import NotificationsBell from "@/components/NotificationsBell";
 import MobileTopBar from "@/components/MobileTopBar";
+import { GlobalDlqBanner } from "@/components/dashboard/GlobalDlqBanner";
 import { ToastProvider } from "@/components/ui/Toast";
 import { ConfirmProvider } from "@/components/ui/ConfirmProvider";
 import { getServerLocale, getServerT } from "@/lib/i18n/server";
@@ -50,6 +51,9 @@ export default async function RootLayout({
                   className="flex-1 overflow-auto"
                   tabIndex={-1}
                 >
+                  {/* RT.2 — global DLQ alert. Hidden when depth=0;
+                      sticks to top of main when a breach is active. */}
+                  <GlobalDlqBanner />
                   <div className="p-3 md:p-6">{children}</div>
                 </main>
               </div>

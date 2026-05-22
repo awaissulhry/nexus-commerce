@@ -138,6 +138,7 @@ import amazonNotificationsRoutes from "./routes/amazon-notifications.routes.js";
 import ebayNotificationRoutes from "./routes/ebay-notification.routes.js";
 import pushHealthRoutes from "./routes/push-health.routes.js";
 import { startAmazonSqsPollCron } from "./jobs/amazon-sqs-poll.job.js";
+import { startDlqMonitorCron } from "./jobs/dlq-monitor.job.js";
 import { ensureAmazonNotificationSubscription } from "./services/amazon-notifications-boot.service.js";
 import { initializeSyncWorker } from "./workers/sync.worker.js";
 import { startWizardCleanupCron } from "./jobs/wizard-cleanup.job.js";
@@ -789,6 +790,11 @@ async function start() {
     // IS.2 — Real-time Amazon order detection via SQS (~30-90 second latency).
     // Runs every 30s when NEXUS_ENABLE_AMAZON_SQS_POLL=1 and AMAZON_SQS_QUEUE_URL is set.
     startAmazonSqsPollCron();
+
+    // RT.2 — Amazon SQS dead-letter-queue depth monitor (5min). Fires
+    // sync.dlq.threshold on the order-events bus whenever DLQ depth
+    // ≥ NEXUS_DLQ_THRESHOLD. No-op when AMAZON_SQS_DLQ_URL is unset.
+    startDlqMonitorCron();
 
     // IS.2 — Ensure SP-API ORDER_CHANGE subscription exists on every boot.
     // Idempotent: skips if subscription already active. Fire-and-forget;

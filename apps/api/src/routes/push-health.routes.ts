@@ -127,18 +127,27 @@ export default async function pushHealthRoutes(app: FastifyInstance): Promise<vo
       )
 
       // SQS queue depth — informational; doesn't downgrade status because
-      // depth > 0 just means messages are in-flight, not stuck.
-      let sqs: { queueDepth: number | null; region: string | null } = {
-        queueDepth: null,
-        region: null,
-      }
+      // depth > 0 just means messages are in-flight, not stuck. RT.2
+      // extends this to also probe the DLQ — depth there is bad and
+      // surfaces as a global banner via the dlq-monitor cron.
+      let sqs: {
+        queueDepth: number | null
+        dlqDepth: number | null
+        region: string | null
+      } = { queueDepth: null, dlqDepth: null, region: null }
       const queueUrl = process.env.AMAZON_SQS_QUEUE_URL
-      if (queueUrl && process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY) {
+      const dlqUrl = process.env.AMAZON_SQS_DLQ_URL
+      if (
+        (queueUrl || dlqUrl) &&
+        process.env.AWS_ACCESS_KEY_ID &&
+        process.env.AWS_SECRET_ACCESS_KEY
+      ) {
         try {
           const { SQSClient, GetQueueAttributesCommand } = await import('@aws-sdk/client-sqs')
           const sqsRegion =
             process.env.AWS_REGION ??
-            queueUrl.match(/sqs\.([^.]+)\.amazonaws\.com/)?.[1] ??
+            queueUrl?.match(/sqs\.([^.]+)\.amazonaws\.com/)?.[1] ??
+            dlqUrl?.match(/sqs\.([^.]+)\.amazonaws\.com/)?.[1] ??
             'us-east-1'
           const client = new SQSClient({
             region: sqsRegion,
@@ -147,19 +156,40 @@ export default async function pushHealthRoutes(app: FastifyInstance): Promise<vo
               secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
             },
           })
-          const resp = await client.send(
-            new GetQueueAttributesCommand({
-              QueueUrl: queueUrl,
-              AttributeNames: ['ApproximateNumberOfMessages'],
-            }),
-          )
+          const [mainResp, dlqResp] = await Promise.all([
+            queueUrl
+              ? client
+                  .send(
+                    new GetQueueAttributesCommand({
+                      QueueUrl: queueUrl,
+                      AttributeNames: ['ApproximateNumberOfMessages'],
+                    }),
+                  )
+                  .catch(() => null)
+              : Promise.resolve(null),
+            dlqUrl
+              ? client
+                  .send(
+                    new GetQueueAttributesCommand({
+                      QueueUrl: dlqUrl,
+                      AttributeNames: ['ApproximateNumberOfMessages'],
+                    }),
+                  )
+                  .catch(() => null)
+              : Promise.resolve(null),
+          ])
           sqs = {
-            queueDepth: Number(resp.Attributes?.ApproximateNumberOfMessages ?? 0),
+            queueDepth: mainResp
+              ? Number(mainResp.Attributes?.ApproximateNumberOfMessages ?? 0)
+              : null,
+            dlqDepth: dlqResp
+              ? Number(dlqResp.Attributes?.ApproximateNumberOfMessages ?? 0)
+              : null,
             region: sqsRegion,
           }
         } catch {
-          // SQS unreachable — leave depth null; the chip will show
-          // a neutral "depth unknown" rather than a red error.
+          // SQS unreachable — leave depths null; the chip + banner
+          // will show neutral "depth unknown" rather than a red error.
         }
       }
 
@@ -189,7 +219,7 @@ export default async function pushHealthRoutes(app: FastifyInstance): Promise<vo
         summary: {
           processed24h,
           failed24h,
-          dlqDepth: null, // RT.2 will populate this from the DLQ
+          dlqDepth: sqs.dlqDepth, // RT.2 populated from the DLQ probe above
           lastEventAt: newest ? new Date(newest).toISOString() : null,
         },
         sources: perSource,

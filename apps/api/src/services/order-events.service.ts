@@ -42,6 +42,19 @@ export type OrderEvent =
   // (e.g. /analytics/products portfolio) listen and auto-reload so
   // operators see the official numbers without manual refresh.
   | { type: 'analytics.salesReport.refreshed'; day: string; marketplacesProcessed: number; ts: number }
+  // RT.2 — fired by the 5-min dlq-monitor cron whenever the Amazon
+  // SP-API SQS dead-letter-queue depth meets or exceeds the
+  // configured threshold (NEXUS_DLQ_THRESHOLD, default 1). A
+  // non-empty DLQ means push notifications are silently bouncing —
+  // GlobalDlqBanner subscribes via /api/orders/events and rings a
+  // top-of-page alert + an opt-in browser notification.
+  | {
+      type: 'sync.dlq.threshold'
+      depth: number
+      threshold: number
+      queueArn: string | null
+      ts: number
+    }
   | { type: 'ping'; ts: number }
 
 type Listener = (event: OrderEvent) => void
