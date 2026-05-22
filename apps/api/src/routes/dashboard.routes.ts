@@ -229,10 +229,25 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
       try {
         reply.header('Cache-Control', 'private, max-age=300')
         const todayStart = zonedStartOfDay(new Date(), OPERATOR_TIMEZONE)
-        const day = request.query.day
-          ? new Date(`${request.query.day}T00:00:00Z`)
-          : new Date(todayStart.getTime() - 24 * 60 * 60 * 1000)
-        const dayEnd = new Date(day.getTime() + 24 * 60 * 60 * 1000)
+        // MS.6 follow-up — DailySalesAggregate.day is Postgres @db.Date
+        // (no time). To query the right row we need the calendar date
+        // in Europe/Rome, then construct UTC midnight of that date so
+        // Postgres' DATE coercion matches. Previously we passed the
+        // UTC instant of "yesterday's Europe/Rome midnight" which is
+        // 22:00 UTC the day before — and Postgres coerced that to the
+        // wrong calendar date.
+        const dayString = request.query.day
+          ?? new Intl.DateTimeFormat('en-CA', {
+              timeZone: OPERATOR_TIMEZONE,
+              year: 'numeric',
+              month: '2-digit',
+              day: '2-digit',
+            }).format(new Date(todayStart.getTime() - 24 * 60 * 60 * 1000))
+        const day = new Date(`${dayString}T00:00:00Z`)
+        // Time-range bounds for the orderSum query: span the calendar
+        // day in Europe/Rome, expressed as UTC instants.
+        const dayRangeStart = new Date(todayStart.getTime() - 24 * 60 * 60 * 1000)
+        const dayRangeEnd = todayStart
         const mkt = (request.query.marketplace ?? '').trim().toUpperCase() || null
 
         const orderSum = await prisma.order.aggregate({
@@ -243,7 +258,7 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
             // GET_SALES_AND_TRAFFIC_REPORT also includes orders that
             // were subsequently cancelled / refunded (Amazon shows
             // refunds as a separate negative line on their report).
-            purchaseDate: { gte: day, lt: dayEnd },
+            purchaseDate: { gte: dayRangeStart, lt: dayRangeEnd },
             currencyCode: 'EUR',
             ...(mkt ? { marketplace: mkt } : {}),
           },
@@ -284,7 +299,7 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
             : 'No orders to reconcile for this day'
 
         return {
-          day: day.toISOString().slice(0, 10),
+          day: dayString,
           marketplace: mkt,
           status,
           orderTotalCents: orderCents,
