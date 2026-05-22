@@ -923,13 +923,33 @@ function SalesPanelPlaceholder({ data, onSelectMarketplace }: { data: Snapshot; 
               <tbody>
                 {regions.map((region) => {
                   const rows = grouped[region]
-                  const regionTotal = rows.reduce((s, r) => s + r.valueCents, 0)
+                  // GS-RT.9 — regional rollup folds the per-row pending
+                  // estimate too. Without this fix, Europe shows
+                  // €441.99 but its sub-rows include €X * estimates →
+                  // sum doesn't match what's visible below. Matches the
+                  // headline construction (sales total + estimate
+                  // total). Also tracks whether any row contributed an
+                  // estimate so the region row gets the * annotation.
+                  const regionConfirmed = rows.reduce((s, r) => s + r.valueCents, 0)
+                  const regionEstimate = rows.reduce((s, r) => s + (r.pendingEstimateCents ?? 0), 0)
+                  const regionTotal = regionConfirmed + regionEstimate
+                  const regionPendingCount = rows.reduce((s, r) => s + (r.pendingCount ?? 0), 0)
                   const regionUnits = rows.reduce((s, r) => s + r.units, 0)
                   return (
                     <RegionGroup key={region} region={region} rowCount={rows.length}>
                       <tr className="bg-slate-50 dark:bg-slate-900 font-semibold">
                         <td className="px-3 py-1.5 text-slate-900 dark:text-slate-100">▾ {region}</td>
-                        <td className="px-3 py-1.5 text-slate-900 dark:text-slate-100 tabular-nums">{formatEur(regionTotal)}</td>
+                        <td className="px-3 py-1.5 text-slate-900 dark:text-slate-100 tabular-nums">
+                          {formatEur(regionTotal)}
+                          {regionEstimate > 0 && regionPendingCount > 0 && (
+                            <span
+                              className="text-amber-600 dark:text-amber-400 ml-0.5"
+                              title={`Includes ~${formatEur(regionEstimate)} estimated across ${regionPendingCount} order${regionPendingCount === 1 ? '' : 's'} awaiting price (see asterisks on individual rows).`}
+                            >
+                              *
+                            </span>
+                          )}
+                        </td>
                         <td className="px-3 py-1.5 text-slate-900 dark:text-slate-100 tabular-nums">{regionUnits}</td>
                       </tr>
                       {rows.map((r) => (
