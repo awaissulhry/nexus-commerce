@@ -53,6 +53,9 @@ import { cn } from '@/lib/utils'
 import { emitInvalidation, useInvalidationChannel } from '@/lib/sync/invalidation-channel'
 import { useListingEvents } from '@/lib/sync/use-listing-events'
 import { useInboundEvents } from '@/lib/sync/use-inbound-events'
+import { Tooltip } from '@/components/ui/Tooltip'
+import { PushHealthChip } from '@/components/dashboard/PushHealthChip'
+import { BulkProgressBanner } from '../../products/_components/BulkProgressBanner'
 
 // Product-centric row — mirrors /api/stock/products response.
 // One row = one Product, same hierarchy as /products page.
@@ -807,8 +810,11 @@ export default function StockWorkspace() {
   // BroadcastChannel, which requires another tab to have the pipe open.
   // Inbound receipts arriving from suppliers / FBA reflect on stock
   // levels — subscribing closes the silent-update gap.
-  useListingEvents()
-  useInboundEvents()
+  // SD-RT.1 — track connected state for the Live indicator. Aggregate
+  // across both pipes; green if either is up.
+  const { connected: listingConnected } = useListingEvents()
+  const { connected: inboundConnected } = useInboundEvents()
+  const sseConnected = listingConnected || inboundConnected
   useInvalidationChannel(
     ['product.updated', 'product.created', 'product.deleted',
      'stock.adjusted', 'stock.transferred', 'pim.changed', 'listing.updated',
@@ -1386,12 +1392,44 @@ export default function StockWorkspace() {
           />
         }
         freshness={
-          <FreshnessIndicator
-            lastFetchedAt={lastFetchedAt}
-            onRefresh={() => { fetchStock(); fetchSidecar() }}
-            loading={loading}
-            error={!!error}
-          />
+          <div className="flex items-center gap-2">
+            {/* SD-RT.1 — Live indicator. Aggregate across listing +
+                inbound buses (either being up means the page learns
+                about events sub-200ms). Pattern mirrors /products
+                P-RT.1 + /listings S.4 + /fulfillment F-RT.3. */}
+            <Tooltip
+              content={
+                sseConnected
+                  ? t('products.live.tooltipConnected')
+                  : t('products.live.tooltipDisconnected')
+              }
+            >
+              <span
+                className="inline-flex items-center gap-1.5 text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400"
+                aria-label={
+                  sseConnected
+                    ? t('products.live.tooltipConnected')
+                    : t('products.live.tooltipDisconnected')
+                }
+                data-testid="stock-workspace-live-indicator"
+                data-connected={sseConnected ? '1' : '0'}
+              >
+                <span
+                  className={`w-1.5 h-1.5 rounded-full ${
+                    sseConnected ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300'
+                  }`}
+                  aria-hidden
+                />
+                {sseConnected ? t('products.live') : t('products.polling')}
+              </span>
+            </Tooltip>
+            <FreshnessIndicator
+              lastFetchedAt={lastFetchedAt}
+              onRefresh={() => { fetchStock(); fetchSidecar() }}
+              loading={loading}
+              error={!!error}
+            />
+          </div>
         }
         savedViews={
           <SavedViewsButton
@@ -1415,7 +1453,22 @@ export default function StockWorkspace() {
             <Keyboard size={12} aria-hidden="true" />
           </button>
         }
+        trailingSlot={
+          // SD-RT.1 — push-health chip surfaces inbound webhook pipe
+          // health. Stock data flows from Amazon SP-API + eBay +
+          // Shopify webhooks; if any source goes silent, stock
+          // numbers drift from reality. Click expands per-source
+          // modal. Same chip as /products + /listings + /fulfillment
+          // overview — single source of truth.
+          <PushHealthChip />
+        }
       />
+
+      {/* SD-RT.1 — ambient bulk-progress strip. Stock workspace is a
+          common host for bulk operations (mass adjustments, bulk
+          transfers, repricing flows that touch stock). Only renders
+          when a job is in flight; auto-dismisses with outcome toast. */}
+      <BulkProgressBanner />
 
       {/* Filter bar */}
       <Card>
