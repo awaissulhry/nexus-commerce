@@ -330,8 +330,39 @@ export default async function ebayNotificationRoutes(app: FastifyInstance): Prom
     const topic: string = payload?.metadata?.topic ?? ''
     const notifData = payload?.notification?.data ?? payload?.notification ?? {}
     const ebayOrderId: string = notifData.orderId ?? notifData.orderId ?? ''
+    const notificationId: string =
+      payload?.metadata?.notificationId ?? payload?.notification?.notificationId ?? ''
 
     logger.info('[eBay notification] received', { topic, ebayOrderId })
+
+    // RT.1 — persist the receipt as a WebhookEvent so push-health and
+    // /sync-logs/webhooks can see eBay traffic. externalId prefers
+    // eBay's notificationId; if missing we fall back to a deterministic
+    // composite so the unique (channel, externalId) constraint still
+    // bounces duplicate retries from eBay.
+    const externalId = notificationId || `${topic}:${ebayOrderId}:${Date.now()}`
+    try {
+      await prisma.webhookEvent.upsert({
+        where: { channel_externalId: { channel: 'EBAY', externalId } },
+        create: {
+          channel: 'EBAY',
+          eventType: topic || 'unknown',
+          externalId,
+          payload: payload ?? {},
+          isProcessed: true,
+          processedAt: new Date(),
+        },
+        update: { processedAt: new Date() },
+      })
+    } catch (recordErr) {
+      // Recording failure mustn't block the webhook ack — eBay would
+      // retry forever and we don't want that on a logging hiccup.
+      logger.warn('[eBay notification] WebhookEvent persist failed', {
+        topic,
+        ebayOrderId,
+        error: recordErr instanceof Error ? recordErr.message : String(recordErr),
+      })
+    }
 
     if (!ebayOrderId) {
       return reply.status(204).send()

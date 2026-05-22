@@ -924,8 +924,10 @@ export async function shopifyWebhookRoutes(app: FastifyInstance) {
       // Process webhook
       await handleProductUpdate(payload);
 
-      // Mark as processed
-      await WebhookProcessor.markWebhookProcessed("SHOPIFY", externalId, prisma);
+      // Mark as processed — RT.1 passes eventType + payload so push-health
+      // and /sync-logs/webhooks can show meaningful topic names instead
+      // of "unknown" placeholders.
+      await WebhookProcessor.markWebhookProcessed("SHOPIFY", externalId, prisma, undefined, eventType, payload);
 
       return reply.send({ success: true });
     } catch (error) {
@@ -980,8 +982,10 @@ export async function shopifyWebhookRoutes(app: FastifyInstance) {
       // Process webhook
       await handleProductDelete(payload);
 
-      // Mark as processed
-      await WebhookProcessor.markWebhookProcessed("SHOPIFY", externalId, prisma);
+      // Mark as processed — RT.1 passes eventType + payload so push-health
+      // and /sync-logs/webhooks can show meaningful topic names instead
+      // of "unknown" placeholders.
+      await WebhookProcessor.markWebhookProcessed("SHOPIFY", externalId, prisma, undefined, eventType, payload);
 
       return reply.send({ success: true });
     } catch (error) {
@@ -1036,8 +1040,10 @@ export async function shopifyWebhookRoutes(app: FastifyInstance) {
       // Process webhook
       await handleInventoryUpdate(payload);
 
-      // Mark as processed
-      await WebhookProcessor.markWebhookProcessed("SHOPIFY", externalId, prisma);
+      // Mark as processed — RT.1 passes eventType + payload so push-health
+      // and /sync-logs/webhooks can show meaningful topic names instead
+      // of "unknown" placeholders.
+      await WebhookProcessor.markWebhookProcessed("SHOPIFY", externalId, prisma, undefined, eventType, payload);
 
       return reply.send({ success: true });
     } catch (error) {
@@ -1092,8 +1098,10 @@ export async function shopifyWebhookRoutes(app: FastifyInstance) {
       // Process webhook
       await handleOrderCreate(payload);
 
-      // Mark as processed
-      await WebhookProcessor.markWebhookProcessed("SHOPIFY", externalId, prisma);
+      // Mark as processed — RT.1 passes eventType + payload so push-health
+      // and /sync-logs/webhooks can show meaningful topic names instead
+      // of "unknown" placeholders.
+      await WebhookProcessor.markWebhookProcessed("SHOPIFY", externalId, prisma, undefined, eventType, payload);
 
       return reply.send({ success: true });
     } catch (error) {
@@ -1148,8 +1156,10 @@ export async function shopifyWebhookRoutes(app: FastifyInstance) {
       // Process webhook
       await handleOrderUpdate(payload);
 
-      // Mark as processed
-      await WebhookProcessor.markWebhookProcessed("SHOPIFY", externalId, prisma);
+      // Mark as processed — RT.1 passes eventType + payload so push-health
+      // and /sync-logs/webhooks can show meaningful topic names instead
+      // of "unknown" placeholders.
+      await WebhookProcessor.markWebhookProcessed("SHOPIFY", externalId, prisma, undefined, eventType, payload);
 
       return reply.send({ success: true });
     } catch (error) {
@@ -1204,8 +1214,10 @@ export async function shopifyWebhookRoutes(app: FastifyInstance) {
       // Process webhook
       await handleFulfillmentCreate(payload);
 
-      // Mark as processed
-      await WebhookProcessor.markWebhookProcessed("SHOPIFY", externalId, prisma);
+      // Mark as processed — RT.1 passes eventType + payload so push-health
+      // and /sync-logs/webhooks can show meaningful topic names instead
+      // of "unknown" placeholders.
+      await WebhookProcessor.markWebhookProcessed("SHOPIFY", externalId, prisma, undefined, eventType, payload);
 
       return reply.send({ success: true });
     } catch (error) {
@@ -1253,6 +1265,7 @@ export async function shopifyWebhookRoutes(app: FastifyInstance) {
 
       const payload = request.body as ShopifyWebhookPayload;
       const externalId = String(payload.id);
+      const eventType = "refunds/create";
 
       // Top-level idempotency via the WebhookProcessor table covers
       // duplicate webhook deliveries (Shopify retries on 5xx). The
@@ -1264,7 +1277,7 @@ export async function shopifyWebhookRoutes(app: FastifyInstance) {
       }
 
       const result = await handleRefundCreate(payload);
-      await WebhookProcessor.markWebhookProcessed("SHOPIFY", externalId, prisma);
+      await WebhookProcessor.markWebhookProcessed("SHOPIFY", externalId, prisma, undefined, eventType, payload);
 
       return reply.send({ success: true, ...result });
     } catch (error) {

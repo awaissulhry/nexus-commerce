@@ -187,13 +187,20 @@ export class WebhookProcessor {
   }
 
   /**
-   * Mark webhook as processed
+   * Mark webhook as processed.
+   *
+   * RT.1 added the optional eventType + payload params so push-health
+   * and the /sync-logs/webhooks viewer (RT.4) can show meaningful
+   * topic names instead of "unknown" placeholders. Existing 3-arg call
+   * sites keep working unchanged.
    */
   static async markWebhookProcessed(
     channel: MarketplaceChannel,
     externalId: string,
     db: any,
-    error?: string
+    error?: string,
+    eventType?: string,
+    payload?: unknown,
   ): Promise<void> {
     try {
       await db.webhookEvent.upsert({
@@ -206,8 +213,8 @@ export class WebhookProcessor {
         create: {
           channel,
           externalId,
-          eventType: "unknown",
-          payload: {},
+          eventType: eventType ?? "unknown",
+          payload: (payload as any) ?? {},
           isProcessed: !error,
           processedAt: !error ? new Date() : undefined,
           error,
@@ -216,6 +223,11 @@ export class WebhookProcessor {
           isProcessed: !error,
           processedAt: !error ? new Date() : undefined,
           error,
+          // Only overwrite eventType/payload if the caller supplied them
+          // — keeps the record meaningful when a retry comes through a
+          // path that didn't pass the topic.
+          ...(eventType ? { eventType } : {}),
+          ...(payload !== undefined ? { payload: payload as any } : {}),
         },
       });
     } catch (err) {

@@ -13,6 +13,7 @@ import {
 import { Card } from '@/components/ui/Card'
 import { cn } from '@/lib/utils'
 import { getBackendUrl } from '@/lib/backend-url'
+import { PushHealthChip } from '@/components/dashboard/PushHealthChip'
 
 interface LiveSummary {
   currency: string
@@ -114,6 +115,11 @@ export default function LiveClient() {
           Insights
         </Link>
         <div className="flex items-center gap-3">
+          {/* RT.1 — push-health chip on the Live monitor header so the
+              operator can see at a glance whether the pipeline feeding
+              the KPIs is alive. Hidden in TV-mode chrome since the
+              fullscreen view is for at-a-glance KPIs. */}
+          {!fullscreen && <PushHealthChip />}
           {lastRefreshedAt && (
             <span
               className={cn(

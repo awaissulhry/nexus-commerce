@@ -136,6 +136,7 @@ import reconciliationRoutes from "./routes/reconciliation.routes.js";
 import ebayPhase3Routes from "./routes/ebay-phase3.routes.js";
 import amazonNotificationsRoutes from "./routes/amazon-notifications.routes.js";
 import ebayNotificationRoutes from "./routes/ebay-notification.routes.js";
+import pushHealthRoutes from "./routes/push-health.routes.js";
 import { startAmazonSqsPollCron } from "./jobs/amazon-sqs-poll.job.js";
 import { ensureAmazonNotificationSubscription } from "./services/amazon-notifications-boot.service.js";
 import { initializeSyncWorker } from "./workers/sync.worker.js";
@@ -551,6 +552,9 @@ app.register(ebayPhase3Routes, { prefix: '/api' });
 // IS.2 — real-time cross-channel inventory sync routes
 app.register(amazonNotificationsRoutes, { prefix: '/api' });
 app.register(ebayNotificationRoutes, { prefix: '/api' });
+// RT.1 — unified push-health endpoint feeds the PushHealthChip on
+// /orders + /insights/live.
+app.register(pushHealthRoutes, { prefix: '/api' });
 // L.0d — BullMQ admin endpoints. Routes declare full /api/monitoring/...
 // paths inline, so register without a prefix. Coexists with
 // monitoringRoutes (which uses /monitoring/* without /api/).

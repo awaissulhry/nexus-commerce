@@ -33,6 +33,7 @@ import { ReviewsLens } from './_lenses/ReviewsLens'
 import { GridLens } from './_lenses/GridLens'
 import { FilterBar } from './_components/FilterBar'
 import { LiveSyncBadge } from './_components/LiveSyncBadge'
+import { PushHealthChip } from '@/components/dashboard/PushHealthChip'
 import { BulkActionBar } from './_components/BulkActionBar'
 import { DEFAULT_VISIBLE } from './_lib/columns'
 import {
@@ -723,6 +724,11 @@ export default function OrdersWorkspace() {
             onChange={setAutoRefreshMin}
             onTick={() => { fetchOrders(); fetchStats(); fetchFacets() }}
           />
+          {/* RT.1 — unified push-health chip replaces the Amazon-only
+              LiveSyncBadge. We keep LiveSyncBadge mounted alongside
+              during the rollout window so an operator can spot any
+              disagreement; remove after one stable day. */}
+          <PushHealthChip />
           <LiveSyncBadge />
           <FreshnessIndicator
             lastFetchedAt={lastFetchedAt}
