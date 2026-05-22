@@ -37,8 +37,6 @@ async function runSqsPoll(): Promise<void> {
       let skipped = 0
 
       for (const msg of messages) {
-        const { amazonOrderId, orderStatus, fulfillmentType } = msg.notification
-
         // P3.4 — Persist to WebhookEvent so the message appears in
         // /sync-logs/webhooks and can be replayed. Upsert on (channel, externalId)
         // so polling the same message twice (before ack) is idempotent.
@@ -74,6 +72,80 @@ async function runSqsPoll(): Promise<void> {
             // Non-fatal — proceed with processing regardless
           }
         }
+
+        // RT.6 — FBA Outbound (Multi-Channel Fulfillment) shipment
+        // status path. Calls syncMCFStatus inline so MCF status updates
+        // land in ~30s instead of waiting for the 15-min cron tick.
+        // Uses the same unconfiguredAdapter as the 15-min cron until
+        // AMAZON_MCF_LIVE is wired with a real SP-API adapter — at
+        // that point both code paths pick up the production client.
+        if (msg.mcfNotification) {
+          const { sellerFulfillmentOrderId, status } = msg.mcfNotification
+          try {
+            if (sellerFulfillmentOrderId) {
+              const { syncMCFStatus, unconfiguredAdapter } = await import(
+                '../services/amazon-mcf.service.js'
+              )
+              await syncMCFStatus(unconfiguredAdapter, sellerFulfillmentOrderId)
+            }
+            await deleteSqsMessage(msg.receiptHandle)
+            if (webhookEventId) {
+              await prisma.webhookEvent.update({
+                where: { id: webhookEventId },
+                data: { isProcessed: true, processedAt: new Date() },
+              }).catch(() => {})
+            }
+            processed++
+            logger.info('[SQS poll] processed FBA_OUTBOUND_SHIPMENT_STATUS', {
+              sellerFulfillmentOrderId,
+              status,
+            })
+          } catch (err) {
+            const errMsg = err instanceof Error ? err.message : String(err)
+            // unconfiguredAdapter throws by design — log + ack so we
+            // don't loop. Production adapter will replace this.
+            const isUnconfigured = /not configured|unconfigured/i.test(errMsg)
+            if (isUnconfigured) {
+              await deleteSqsMessage(msg.receiptHandle)
+              if (webhookEventId) {
+                await prisma.webhookEvent.update({
+                  where: { id: webhookEventId },
+                  data: {
+                    isProcessed: true,
+                    processedAt: new Date(),
+                    error: 'MCF adapter not configured — see AMAZON_MCF_LIVE',
+                  },
+                }).catch(() => {})
+              }
+              skipped++
+              logger.info('[SQS poll] MCF adapter unconfigured — acked', {
+                sellerFulfillmentOrderId,
+              })
+            } else {
+              logger.warn('[SQS poll] MCF status sync failed', {
+                sellerFulfillmentOrderId,
+                error: errMsg,
+              })
+              if (webhookEventId) {
+                await prisma.webhookEvent.update({
+                  where: { id: webhookEventId },
+                  data: { error: errMsg.slice(0, 2000) },
+                }).catch(() => {})
+              }
+              // Don't delete — let SQS retry (visibility timeout will expire)
+            }
+          }
+          continue
+        }
+
+        if (!msg.notification) {
+          // Defensive — unknown notification shape. Persisted to
+          // WebhookEvent for forensics; ack so we don't loop.
+          await deleteSqsMessage(msg.receiptHandle)
+          skipped++
+          continue
+        }
+        const { amazonOrderId, orderStatus, fulfillmentType } = msg.notification
 
         // FBA orders are managed by Amazon's warehouse — no stock action needed here.
         if (fulfillmentType === 'AFN') {

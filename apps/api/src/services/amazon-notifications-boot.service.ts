@@ -41,7 +41,7 @@ async function grantlessPost<T>(token: string, slug: string, path: string, body:
 }
 
 async function ensureSubscriptionForType(
-  notifType: 'ORDER_CHANGE' | 'ORDER_STATUS_CHANGE',
+  notifType: string,
   destinationId: string,
 ): Promise<void> {
   const { amazonSpApiClient } = await import('../clients/amazon-sp-api.client.js')
@@ -123,6 +123,14 @@ export function ensureAmazonNotificationSubscription(): void {
       // removes the legacy ORDER_CHANGE subscription.
       await ensureSubscriptionForType('ORDER_CHANGE', existingDest.destinationId)
       await ensureSubscriptionForType('ORDER_STATUS_CHANGE', existingDest.destinationId)
+      // 3. RT.6 — Multi-Channel Fulfillment shipment status. Closes
+      // the 15-min cron lag for MCF orders shipping non-Amazon
+      // channels (Shopify, eBay) — operator sees the status flip in
+      // ~30s instead of waiting for the next sweep.
+      await ensureSubscriptionForType(
+        'FBA_OUTBOUND_SHIPMENT_STATUS',
+        existingDest.destinationId,
+      )
     } catch (err: any) {
       logger.error('[amazon-notifications-boot] setup failed (non-fatal)', {
         error: err?.message ?? String(err),

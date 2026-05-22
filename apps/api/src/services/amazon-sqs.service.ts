@@ -30,8 +30,26 @@ export interface OrderChangeNotification {
   purchaseDate?: string
 }
 
+/**
+ * RT.6 — FBA Outbound (Multi-Channel Fulfillment) shipment status
+ * notification. Amazon pushes one of these whenever an MCF shipment
+ * transitions (NEW → RECEIVED → PROCESSING → COMPLETE / CANCELLED /
+ * UNFULFILLABLE) so we can call syncMCFStatus() in ~30s instead of
+ * waiting for the 15-min cron tick.
+ */
+export interface FbaOutboundShipmentNotification {
+  sellerFulfillmentOrderId: string
+  status: string
+  // Amazon may include the linked AmazonOrderId for direct MCF
+  // (Amazon-domestic) shipments. Null for true cross-channel MCF.
+  amazonOrderId?: string
+}
+
 export interface SqsOrderMessage {
-  notification: OrderChangeNotification
+  /** Present on ORDER_CHANGE / ORDER_STATUS_CHANGE messages. */
+  notification?: OrderChangeNotification
+  /** RT.6 — present on FBA_OUTBOUND_SHIPMENT_STATUS messages. */
+  mcfNotification?: FbaOutboundShipmentNotification
   receiptHandle: string
   /** SQS Message.MessageId — used as WebhookEvent.externalId for dedup. */
   messageId: string
@@ -90,6 +108,34 @@ export async function pollSqsMessages(maxMessages = 10): Promise<SqsOrderMessage
       const inner = outer.Message ? JSON.parse(outer.Message) : outer
 
       const notifType = inner.NotificationType ?? inner.notificationType
+
+      // RT.6 — Multi-Channel Fulfillment shipment status notification.
+      // Payload shape: inner.Payload.FBAOutboundShipmentStatus with
+      // SellerFulfillmentOrderId + Status + (optional) AmazonOrderId.
+      // Routes to syncMCFStatus() in the poller.
+      if (notifType === 'FBA_OUTBOUND_SHIPMENT_STATUS') {
+        const payload =
+          inner.Payload?.FBAOutboundShipmentStatus ??
+          inner.Payload?.FBAOutboundShipmentStatusNotification
+        if (!payload) {
+          await deleteSqsMessage(msg.ReceiptHandle)
+          continue
+        }
+        results.push({
+          mcfNotification: {
+            sellerFulfillmentOrderId:
+              payload.SellerFulfillmentOrderId ?? payload.sellerFulfillmentOrderId ?? '',
+            status: payload.Status ?? payload.status ?? '',
+            amazonOrderId: payload.AmazonOrderId ?? payload.amazonOrderId,
+          },
+          receiptHandle: msg.ReceiptHandle,
+          messageId: msg.MessageId ?? '',
+          rawPayload: inner,
+          notificationType: notifType,
+        })
+        continue
+      }
+
       // RT.5 — accept both ORDER_CHANGE (legacy) AND ORDER_STATUS_CHANGE
       // (Amazon's replacement notification type). During the parallel-
       // run window both arrive in the same SQS queue. The payload
