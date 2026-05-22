@@ -214,6 +214,122 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
    * 30s cache. Italian operator timezone for "today" / "yesterday".
    */
   /**
+   * MS.4 — per-marketplace ingest health. Surfaces which Amazon
+   * markets are flowing data in real time and which have gone quiet.
+   * Useful for spotting credential expiry, regional outages, or
+   * markets we forgot to add to NEXUS_AMAZON_MARKETPLACE_IDS.
+   *
+   *   GET /api/dashboard/market-health
+   *
+   * Returns per-marketplace:
+   *   {
+   *     code, name, currency,
+   *     lastOrderAt, ordersLast24h, ordersLast7d,
+   *     secondsSinceLastOrder, status: 'active'|'quiet'|'silent'|'never'
+   *   }
+   *
+   * Status thresholds:
+   *   active  — last order in last 1h
+   *   quiet   — last order in last 24h
+   *   silent  — last order > 24h ago (worth investigating during
+   *             business hours for high-volume markets)
+   *   never   — no orders ever ingested for this market
+   */
+  fastify.get('/dashboard/market-health', async (_request, reply) => {
+    try {
+      reply.header('Cache-Control', 'private, max-age=30')
+      const { DEFAULT_EU_MARKETPLACE_IDS, getConfiguredMarketplaceIds } = await import(
+        '../services/amazon-orders.service.js'
+      )
+      const configuredIds = getConfiguredMarketplaceIds()
+      const ID_TO_CODE: Record<string, { code: string; name: string; currency: string }> = {
+        APJ6JRA9NG5V4: { code: 'IT', name: 'Italy', currency: 'EUR' },
+        A1PA6795UKMFR9: { code: 'DE', name: 'Germany', currency: 'EUR' },
+        A13V1IB3VIYZZH: { code: 'FR', name: 'France', currency: 'EUR' },
+        A1RKKUPIHCS9HS: { code: 'ES', name: 'Spain', currency: 'EUR' },
+        A1F83G8C2ARO7P: { code: 'UK', name: 'United Kingdom', currency: 'GBP' },
+        A1805IZSGTT6HS: { code: 'NL', name: 'Netherlands', currency: 'EUR' },
+        A2NODRKZP88ZB9: { code: 'SE', name: 'Sweden', currency: 'SEK' },
+        A1C3SOZRARQ6R3: { code: 'PL', name: 'Poland', currency: 'PLN' },
+        AMEN7PMS3EDWL: { code: 'BE', name: 'Belgium', currency: 'EUR' },
+        A28R8C7NBKEWEA: { code: 'IE', name: 'Ireland', currency: 'EUR' },
+        A33AVAJ2PDY3EV: { code: 'TR', name: 'Turkey', currency: 'TRY' },
+      }
+      const now = Date.now()
+      const oneHourAgo = new Date(now - 60 * 60 * 1000)
+      const yesterday = new Date(now - 24 * 60 * 60 * 1000)
+      const sevenDaysAgo = new Date(now - 7 * 24 * 60 * 60 * 1000)
+
+      // One query per axis is cheaper than per-market loops.
+      const [lastByMarket, last24hByMarket, last7dByMarket] = await Promise.all([
+        prisma.order.groupBy({
+          by: ['marketplace'],
+          where: { channel: 'AMAZON', deletedAt: null },
+          _max: { purchaseDate: true },
+        }),
+        prisma.order.groupBy({
+          by: ['marketplace'],
+          where: { channel: 'AMAZON', deletedAt: null, purchaseDate: { gte: yesterday } },
+          _count: { _all: true },
+        }),
+        prisma.order.groupBy({
+          by: ['marketplace'],
+          where: { channel: 'AMAZON', deletedAt: null, purchaseDate: { gte: sevenDaysAgo } },
+          _count: { _all: true },
+        }),
+      ])
+
+      const lastMap = new Map(lastByMarket.map((r) => [r.marketplace, r._max.purchaseDate]))
+      const c24Map = new Map(last24hByMarket.map((r) => [r.marketplace, r._count._all]))
+      const c7Map = new Map(last7dByMarket.map((r) => [r.marketplace, r._count._all]))
+
+      const markets = configuredIds.map((id) => {
+        const meta = ID_TO_CODE[id] ?? { code: id, name: id, currency: 'EUR' }
+        const lastAt = lastMap.get(meta.code) ?? null
+        const ordersLast24h = c24Map.get(meta.code) ?? 0
+        const ordersLast7d = c7Map.get(meta.code) ?? 0
+        const seconds = lastAt ? Math.floor((now - lastAt.getTime()) / 1000) : null
+        let status: 'active' | 'quiet' | 'silent' | 'never'
+        if (!lastAt) status = 'never'
+        else if (lastAt.getTime() >= oneHourAgo.getTime()) status = 'active'
+        else if (lastAt.getTime() >= yesterday.getTime()) status = 'quiet'
+        else status = 'silent'
+        return {
+          marketplaceId: id,
+          code: meta.code,
+          name: meta.name,
+          currency: meta.currency,
+          lastOrderAt: lastAt?.toISOString() ?? null,
+          ordersLast24h,
+          ordersLast7d,
+          secondsSinceLastOrder: seconds,
+          status,
+        }
+      })
+
+      // Aggregate rollup so the UI can show "11 configured, 4 active,
+      // 7 quiet, 0 silent" without re-aggregating client-side.
+      const rollup = markets.reduce(
+        (acc, m) => {
+          acc[m.status] = (acc[m.status] ?? 0) + 1
+          return acc
+        },
+        { active: 0, quiet: 0, silent: 0, never: 0 } as Record<string, number>,
+      )
+
+      return {
+        configured: configuredIds.length,
+        rollup,
+        markets,
+        checkedAt: new Date().toISOString(),
+      }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[dashboard/market-health] failed')
+      return reply.status(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  /**
    * SA.5 — sales reconciliation. Compares Order-table sum for a
    * given day vs Amazon's GET_SALES_AND_TRAFFIC_REPORT (DSA, T+1).
    * Surfaces drift so operators can trust the Sales tile.
