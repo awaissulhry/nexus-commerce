@@ -67,6 +67,11 @@ import {
   useInvalidationChannel,
 } from '@/lib/sync/invalidation-channel'
 import { useListingEvents } from '@/lib/sync/use-listing-events'
+import { PushHealthChip } from '@/components/dashboard/PushHealthChip'
+// L-RT.3 — same BulkProgressBanner component the /products workspace
+// mounts (P-RT.9). Reused not re-implemented so future tweaks to
+// styling/copy land in one place.
+import { BulkProgressBanner } from '../products/_components/BulkProgressBanner'
 import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
 
 // ── Types ───────────────────────────────────────────────────────────
@@ -1050,7 +1055,21 @@ export default function ListingsWorkspace({ lockChannel, lockMarketplace, titleO
             </button>
           )
         }
+        trailingSlot={
+          // L-RT.3 — surface the unified push-health chip (RT.1 —
+          // daa8aa4d) on /listings too. Same component, same data,
+          // no new endpoint — just the operator awareness of whether
+          // the inbound webhook stream feeding listing.synced events
+          // is alive while they're triaging publish failures.
+          <PushHealthChip />
+        }
       />
+
+      {/* L-RT.3 — ambient bulk-progress strip. Same component as
+          /products P-RT.9; only renders when there's at least one
+          bulk-action job in flight (across any tab). Auto-dismisses
+          on bulk.completed with an outcome toast. */}
+      <BulkProgressBanner />
 
       {/* U.1 — Quick filter presets. One-click pills for the
           high-frequency filter combos operators reach for daily.
