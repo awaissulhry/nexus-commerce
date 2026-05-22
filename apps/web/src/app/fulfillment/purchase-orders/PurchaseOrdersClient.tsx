@@ -27,6 +27,8 @@ import { EmptyState } from '@/components/ui/EmptyState'
 import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
 import { AutoRefreshSelect, GridToolbar } from '@/app/_shared/grid-lens'
 import { getBackendUrl } from '@/lib/backend-url'
+import { useInvalidationChannel } from '@/lib/sync/invalidation-channel'
+import { useInboundEvents } from '@/lib/sync/use-inbound-events'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { cn } from '@/lib/utils'
 
@@ -642,6 +644,18 @@ export default function PurchaseOrdersClient() {
   useEffect(() => {
     fetchPos()
   }, [fetchPos])
+
+  // F-RT.1 — open the inbound SSE pipe + invalidation listener so a
+  // PO that converts into an inbound shipment (or a discrepancy
+  // landed during receiving) flips this view sub-200ms. POs are
+  // upstream-only — they don't generate stock movements directly —
+  // but inbound.received against a PO closes its receiving window
+  // and shifts its status, so the list must refresh.
+  useInboundEvents()
+  useInvalidationChannel(
+    ['inbound.received', 'inbound.discrepancy', 'inbound.updated', 'inbound.created'],
+    useCallback(() => { fetchPos() }, [fetchPos]),
+  )
 
   const counts = useMemo(() => {
     const c: Record<string, number> = { active: 0 }

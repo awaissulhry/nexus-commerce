@@ -63,6 +63,8 @@ import {
 import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
 import type { GridLensColumn, GridLensRow } from '@/app/_shared/grid-lens/types'
 import { useInvalidationChannel } from '@/lib/sync/invalidation-channel'
+import { useListingEvents } from '@/lib/sync/use-listing-events'
+import { useInboundEvents } from '@/lib/sync/use-inbound-events'
 import { DENSITY_CELL_CLASS } from '@/lib/products/theme'
 import { CommandCenterKpis } from './_shared/CommandCenterKpis'
 import { ReplenishmentWidgets, WidgetLauncher, useWidgetStore } from './_shared/FloatingWidgetSystem'
@@ -396,8 +398,16 @@ export default function ReplenishmentWorkspace() {
   }, [fetchData])
 
   // Real-time sync — refresh when stock or product data changes elsewhere
+  // F-RT.1+2 — open SSE pipes for direct landings. Replenishment
+  // recommendations key off (current stock + sales velocity + open
+  // PO/inbound qty). Any change to those upstream signals — stock
+  // movement, product update, inbound arrival — should re-rank the
+  // recommendation queue without operator action.
+  useListingEvents()
+  useInboundEvents()
   useInvalidationChannel(
-    ['stock.adjusted', 'stock.transferred', 'product.updated', 'product.created', 'pim.changed'],
+    ['stock.adjusted', 'stock.transferred', 'product.updated', 'product.created', 'pim.changed',
+     'inbound.received', 'inbound.discrepancy', 'inbound.updated', 'inbound.created'],
     useCallback(() => { fetchData() }, [fetchData]),
   )
 

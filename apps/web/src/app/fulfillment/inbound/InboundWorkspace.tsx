@@ -40,6 +40,7 @@ import {
   emitInvalidation,
   useInvalidationChannel,
 } from '@/lib/sync/invalidation-channel'
+import { useInboundEvents } from '@/lib/sync/use-inbound-events'
 
 type InboundType = 'FBA' | 'SUPPLIER' | 'MANUFACTURING' | 'TRANSFER'
 type InboundStatus =
@@ -257,38 +258,18 @@ export default function InboundWorkspace() {
     return () => { document.removeEventListener('visibilitychange', onVis); clearInterval(id) }
   }, [fetchAll, fetchKpis])
 
-  // H.14 — SSE realtime channel. Subscribes to /api/fulfillment/
-  // inbound/events and triggers a debounced refresh on any event
-  // (server sends lightweight { type, shipmentId, ts } payloads —
-  // refresh-on-event is simpler and correct vs delta application).
-  // Reconnect: EventSource handles it natively. We don't need a
-  // backoff library. The hook only mounts the EventSource once;
-  // it persists for the page lifetime.
-  useEffect(() => {
-    let debounceId: number | null = null
-    const refresh = () => {
-      if (debounceId !== null) window.clearTimeout(debounceId)
-      debounceId = window.setTimeout(() => { fetchAll(); fetchKpis() }, 250)
-    }
-    const url = `${getBackendUrl()}/api/fulfillment/inbound/events`
-    let es: EventSource | null = null
-    try {
-      es = new EventSource(url, { withCredentials: false })
-    } catch {
-      return
-    }
-    const handler = (_e: MessageEvent) => refresh()
-    es.addEventListener('inbound.created', handler)
-    es.addEventListener('inbound.updated', handler)
-    es.addEventListener('inbound.received', handler)
-    es.addEventListener('inbound.discrepancy', handler)
-    es.addEventListener('inbound.cancelled', handler)
-    // Don't refresh on `ping` — those are connection heartbeats.
-    return () => {
-      if (debounceId !== null) window.clearTimeout(debounceId)
-      es?.close()
-    }
-  }, [fetchAll, fetchKpis])
+  // F-RT.1 — SSE realtime channel. Originally H.14 wired this inline
+  // here; pulled into useInboundEvents so other /fulfillment surfaces
+  // (stock, replenishment, returns, POs) can subscribe via the same
+  // bus + invalidation channel pattern. Mounting the hook opens the
+  // EventSource as a side effect; refresh is driven by
+  // useInvalidationChannel below so the existing 200ms debounce on
+  // cross-tab events benefits inbound too.
+  useInboundEvents()
+  useInvalidationChannel(
+    ['inbound.created', 'inbound.updated', 'inbound.received', 'inbound.discrepancy', 'inbound.cancelled'],
+    () => { fetchAll(); fetchKpis() },
+  )
 
   const filterCount = useMemo(
     () => [tab !== 'ALL', status, delayed, search].filter(Boolean).length,

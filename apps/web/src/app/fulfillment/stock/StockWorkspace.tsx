@@ -51,6 +51,8 @@ import { getBackendUrl } from '@/lib/backend-url'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { cn } from '@/lib/utils'
 import { emitInvalidation, useInvalidationChannel } from '@/lib/sync/invalidation-channel'
+import { useListingEvents } from '@/lib/sync/use-listing-events'
+import { useInboundEvents } from '@/lib/sync/use-inbound-events'
 
 // Product-centric row — mirrors /api/stock/products response.
 // One row = one Product, same hierarchy as /products page.
@@ -799,9 +801,21 @@ export default function StockWorkspace() {
 
   // Real-time cross-tab sync — fires whenever /products, /listings, or another
   // stock tab emits an invalidation event over the BroadcastChannel.
+  // F-RT.1+2 — mount SSE pipes so direct landings on /fulfillment/stock
+  // open the listing-events + inbound-events streams. Without these the
+  // page only learns about stock.*/product.* changes via cross-tab
+  // BroadcastChannel, which requires another tab to have the pipe open.
+  // Inbound receipts arriving from suppliers / FBA reflect on stock
+  // levels — subscribing closes the silent-update gap.
+  useListingEvents()
+  useInboundEvents()
   useInvalidationChannel(
     ['product.updated', 'product.created', 'product.deleted',
-     'stock.adjusted', 'stock.transferred', 'pim.changed', 'listing.updated'],
+     'stock.adjusted', 'stock.transferred', 'pim.changed', 'listing.updated',
+     // F-RT.1 — inbound.received is the high-signal one (qty actually
+     // landed in the warehouse); the others trigger refresh because
+     // counts shown in the side strip reflect in-transit volumes too.
+     'inbound.received', 'inbound.discrepancy', 'inbound.updated'],
     useCallback(() => { fetchStock(); fetchSidecar() }, [fetchStock, fetchSidecar]),
   )
 

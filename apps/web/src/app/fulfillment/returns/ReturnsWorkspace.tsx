@@ -36,6 +36,10 @@ import { EmptyState } from '@/components/ui/EmptyState'
 import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
 import { getBackendUrl } from '@/lib/backend-url'
+import { useInvalidationChannel } from '@/lib/sync/invalidation-channel'
+import { useInboundEvents } from '@/lib/sync/use-inbound-events'
+import { useOutboundEvents } from '@/lib/sync/use-outbound-events'
+import { useListingEvents } from '@/lib/sync/use-listing-events'
 
 // R2.2 — per-item inspection checklist. JSONB on ReturnItem.
 type ItemChecklist = {
@@ -352,6 +356,29 @@ export default function ReturnsWorkspace() {
   }, [tab, statusFilter, channelFilter, search, sortBy, sortDir, page, pageSize])
 
   useEffect(() => { fetchReturns() }, [fetchReturns])
+
+  // F-RT.1 — open SSE pipes so the returns list refreshes when
+  // upstream signals change: a refund webhook from Shopify, a status
+  // flip on the originating order, an inbound shipment recording the
+  // returned units back into stock. The hook returns are unused;
+  // mounting opens the EventSources as side effects. Refresh is
+  // driven by useInvalidationChannel below.
+  useListingEvents()
+  useInboundEvents()
+  useOutboundEvents()
+  useInvalidationChannel(
+    [
+      // Outbound: a shipment update may trigger a return (RTO / refused
+      // delivery). order.shipped resets the no-returns timer.
+      'shipment.updated', 'shipment.deleted', 'order.shipped',
+      // Inbound: returned goods land back as an inbound.received row.
+      'inbound.received', 'inbound.updated',
+      // Listing/product: status flip or price change can re-classify a
+      // pending refund (refund value changes if base price changed).
+      'listing.updated', 'product.updated',
+    ],
+    useCallback(() => { fetchReturns() }, [fetchReturns]),
+  )
 
   // R1.1 — saved views (reuse existing /api/saved-views with surface=returns).
   const fetchSavedViews = useCallback(async () => {

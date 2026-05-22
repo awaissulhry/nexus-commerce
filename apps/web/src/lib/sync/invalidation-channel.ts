@@ -85,6 +85,15 @@ export type InvalidationType =
   // the stock workspace and any other open stock tab refreshes immediately.
   | 'stock.adjusted'
   | 'stock.transferred'
+  // F-RT.1 — inbound shipment events. Originally H.14 wired this through
+  // a per-page EventSource; now flows through useInboundEvents → here so
+  // stock / replenishment / returns / POs (anything that cares about
+  // arriving inventory) refreshes within ~200ms.
+  | 'inbound.created'
+  | 'inbound.updated'
+  | 'inbound.received'
+  | 'inbound.discrepancy'
+  | 'inbound.cancelled'
 
 export interface InvalidationEvent {
   type: InvalidationType
