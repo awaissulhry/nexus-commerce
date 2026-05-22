@@ -71,6 +71,20 @@ export type OrderEvent =
       winnerFulfillmentType: string | null
       ts: number
     }
+  // RT.14 — fired by the SQS poller when LISTINGS_ITEM_STATUS_CHANGE
+  // shows one of our listings entered a suppressed / non-buyable
+  // state. Surfaces as an urgent alert + (opt-in) browser
+  // notification so the operator can investigate the cause (image
+  // / brand-restriction / pricing-violation / etc.) before it
+  // drags on sales for hours.
+  | {
+      type: 'listing.suppressed'
+      asin: string
+      sku: string
+      marketplaceId: string
+      status: string
+      ts: number
+    }
   | { type: 'ping'; ts: number }
 
 type Listener = (event: OrderEvent) => void

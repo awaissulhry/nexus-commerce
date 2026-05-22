@@ -73,6 +73,41 @@ async function runSqsPoll(): Promise<void> {
           }
         }
 
+        // RT.14 — listing status change. Fires `listing.suppressed`
+        // SSE event when a listing transitions to a suppressed /
+        // non-buyable state so the operator can investigate within
+        // minutes instead of waiting for the next listings sweep.
+        if (msg.listingsItemStatusNotification) {
+          const note = msg.listingsItemStatusNotification
+          if (note.isSuppressed && note.asin) {
+            const { publishOrderEvent } = await import(
+              '../services/order-events.service.js'
+            )
+            publishOrderEvent({
+              type: 'listing.suppressed',
+              asin: note.asin,
+              sku: note.sku,
+              marketplaceId: note.marketplaceId,
+              status: note.status,
+              ts: Date.now(),
+            })
+            logger.warn('[SQS poll] listing suppressed', {
+              asin: note.asin,
+              sku: note.sku,
+              status: note.status,
+            })
+          }
+          await deleteSqsMessage(msg.receiptHandle)
+          if (webhookEventId) {
+            await prisma.webhookEvent.update({
+              where: { id: webhookEventId },
+              data: { isProcessed: true, processedAt: new Date() },
+            }).catch(() => {})
+          }
+          processed++
+          continue
+        }
+
         // RT.13 — Buy Box / competing-offer change. Fires the
         // competitive.buyBoxLost SSE event when our seller is no
         // longer the buy-box winner so the global competitive

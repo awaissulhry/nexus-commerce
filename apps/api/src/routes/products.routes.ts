@@ -835,7 +835,8 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
           }
           const isPending = r.syncStatus === 'PENDING'
           const isFailed = r.syncStatus === 'FAILED' && !r.isDead
-          const isSucceeded = r.syncStatus === 'SUCCEEDED'
+          // OutboundSyncStatus enum value is SUCCESS (not SUCCEEDED).
+          const isSucceeded = r.syncStatus === 'SUCCESS'
           if (r.isDead) cur.dead++
           else if (isFailed) cur.failed++
           else if (isPending) cur.pending++

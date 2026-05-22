@@ -1,12 +1,14 @@
 'use client'
 
 /**
- * RT.13 — Global watcher for Buy-Box-loss alerts.
+ * RT.13 + RT.14 — Global watcher for competitive + listing alerts.
  *
- * Subscribes to /api/orders/events and listens for the
- * competitive.buyBoxLost event the SQS poller fires when an Amazon
- * ANY_OFFER_CHANGED notification shows our seller is no longer the
- * buy-box winner on an ASIN where we hold an offer.
+ * Subscribes to /api/orders/events and listens for:
+ *   - competitive.buyBoxLost (RT.13) — ANY_OFFER_CHANGED showed we
+ *     lost the buy box on an ASIN where we have a live offer.
+ *   - listing.suppressed (RT.14) — LISTINGS_ITEM_STATUS_CHANGE
+ *     showed one of our listings entered a suppressed / non-buyable
+ *     state.
  *
  * Behaviour:
  *   - Fires a browser desktop notification per alert (if permission
@@ -14,13 +16,12 @@
  *     the future settings page).
  *   - Tag-collapsed by ASIN so back-to-back changes on the same
  *     ASIN don't pile multiple notifications.
- *   - Logs every alert to console with a [BuyBox] prefix so an
- *     operator with devtools open can see the history.
+ *   - Logs every alert to console with a [BuyBox] / [Suppressed]
+ *     prefix so an operator with devtools open can see the history.
  *
  * Visual UI is intentionally minimal in this phase — RT.17 / RT.19
- * will add the dedicated competitive-alerts panel. RT.13 just
- * proves the push path end-to-end + provides immediate operator
- * notification.
+ * will add the dedicated alerts panel. These phases just prove the
+ * push paths end-to-end + provide immediate operator notification.
  */
 
 import { useEffect } from 'react'
@@ -98,6 +99,38 @@ export function CompetitiveAlertWatcher() {
     }
 
     es.addEventListener('competitive.buyBoxLost', handler)
+
+    // RT.14 — listing.suppressed handler. Same notification pattern,
+    // different copy + tag.
+    const suppressedHandler = (e: MessageEvent) => {
+      try {
+        const data = JSON.parse(e.data) as {
+          asin: string
+          sku: string
+          marketplaceId: string
+          status: string
+        }
+        // eslint-disable-next-line no-console
+        console.warn(
+          `[Suppressed] ${data.sku || data.asin} on ${data.marketplaceId} → ${data.status}`,
+          data,
+        )
+        if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+          try {
+            new Notification('Nexus — Listing suppressed', {
+              body: `${data.sku || data.asin} on ${data.marketplaceId}: ${data.status}. Open Nexus to investigate the cause.`,
+              icon: '/favicon.ico',
+              tag: `nexus-suppressed-${data.asin}`,
+            })
+          } catch {
+            /* ignore */
+          }
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+    es.addEventListener('listing.suppressed', suppressedHandler)
 
     return () => {
       try {

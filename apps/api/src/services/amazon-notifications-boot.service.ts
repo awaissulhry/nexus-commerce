@@ -148,6 +148,13 @@ export function ensureAmazonNotificationSubscription(): void {
         'ANY_OFFER_CHANGED',
         existingDest.destinationId,
       )
+      // 6. RT.14 — listing status change (search-suppression
+      // detection). Fires listing.suppressed on the SSE bus so
+      // an operator can investigate the cause within minutes.
+      await ensureSubscriptionForType(
+        'LISTINGS_ITEM_STATUS_CHANGE',
+        existingDest.destinationId,
+      )
     } catch (err: any) {
       logger.error('[amazon-notifications-boot] setup failed (non-fatal)', {
         error: err?.message ?? String(err),

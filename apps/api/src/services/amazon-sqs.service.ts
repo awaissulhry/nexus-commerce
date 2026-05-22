@@ -68,6 +68,23 @@ export interface FbaInventoryNotification {
 }
 
 /**
+ * RT.14 — LISTINGS_ITEM_STATUS_CHANGE notification. Fires when a
+ * listing's status changes (BUYABLE / DISCOVERABLE / etc.). Lets us
+ * detect search-suppression within minutes instead of waiting for
+ * the next listings sync sweep.
+ */
+export interface ListingsItemStatusChangedNotification {
+  sellerId: string
+  asin: string
+  sku: string
+  marketplaceId: string
+  // Amazon enum — common values: BUYABLE, DISCOVERABLE, NONBUYABLE,
+  // SUPPRESSED. We surface the raw string + a derived flag.
+  status: string
+  isSuppressed: boolean
+}
+
+/**
  * RT.13 — ANY_OFFER_CHANGED notification. Fires when Buy Box winner
  * or competing offer price changes. Lets us alert on Buy Box loss in
  * ~30s instead of waiting for the periodic ANY_OFFER_CHANGED REST
@@ -108,6 +125,8 @@ export interface SqsOrderMessage {
   inventoryNotification?: FbaInventoryNotification
   /** RT.13 — present on ANY_OFFER_CHANGED messages. */
   anyOfferChangedNotification?: AnyOfferChangedNotification
+  /** RT.14 — present on LISTINGS_ITEM_STATUS_CHANGE messages. */
+  listingsItemStatusNotification?: ListingsItemStatusChangedNotification
   receiptHandle: string
   /** SQS Message.MessageId — used as WebhookEvent.externalId for dedup. */
   messageId: string
@@ -166,6 +185,41 @@ export async function pollSqsMessages(maxMessages = 10): Promise<SqsOrderMessage
       const inner = outer.Message ? JSON.parse(outer.Message) : outer
 
       const notifType = inner.NotificationType ?? inner.notificationType
+
+      // RT.14 — listing status change (search-suppression detection).
+      if (notifType === 'LISTINGS_ITEM_STATUS_CHANGE') {
+        const root =
+          inner.Payload?.ListingsItemStatusChangeNotification ??
+          inner.Payload?.ListingsItemStatusChange
+        if (!root) {
+          await deleteSqsMessage(msg.ReceiptHandle)
+          continue
+        }
+        const status =
+          root.Status ?? root.status ?? root.ItemStatus?.[0] ?? 'UNKNOWN'
+        const statusUpper = String(status).toUpperCase()
+        // SUPPRESSED is the explicit hard suppression; DISCOVERABLE
+        // means listed but not search-surfaced (soft suppression).
+        const isSuppressed =
+          statusUpper.includes('SUPPRESSED') ||
+          statusUpper === 'NONBUYABLE' ||
+          statusUpper === 'DISCOVERABLE'
+        results.push({
+          listingsItemStatusNotification: {
+            sellerId: root.SellerId ?? root.sellerId ?? '',
+            asin: root.Asin ?? root.asin ?? root.ASIN ?? '',
+            sku: root.Sku ?? root.sku ?? root.SellerSku ?? '',
+            marketplaceId: root.MarketplaceId ?? root.marketplaceId ?? '',
+            status: String(status),
+            isSuppressed,
+          },
+          receiptHandle: msg.ReceiptHandle,
+          messageId: msg.MessageId ?? '',
+          rawPayload: inner,
+          notificationType: notifType,
+        })
+        continue
+      }
 
       // RT.13 — Buy Box / competing-offer change. Normalised here;
       // poller fires `competitive.buyBoxLost` when our seller drops
