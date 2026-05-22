@@ -39,6 +39,7 @@ import { MarketSplitWidget } from './MarketSplitWidget'
 import { MarketplaceMatrixWidget } from './MarketplaceMatrixWidget'
 import { TopSKUsWidget } from './TopSKUsWidget'
 import { WhatChangedWidget } from './WhatChangedWidget'
+import { MarketIngestHealth } from '@/components/dashboard/MarketIngestHealth'
 
 const HUB_LINKS: Array<{
   href: string
@@ -333,6 +334,13 @@ export default function InsightsLanding() {
             )
           })}
         </div>
+      </div>
+
+      {/* MS.7 — operational health (per-marketplace ingest status).
+          Lives below the hub navigation since it's infrastructure
+          signal, not business insight. Collapsed by default. */}
+      <div className="mt-6">
+        <MarketIngestHealth />
       </div>
     </div>
   )

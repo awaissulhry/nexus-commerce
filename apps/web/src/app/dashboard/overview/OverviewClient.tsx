@@ -29,7 +29,6 @@ import HeatmapPanel from './_components/HeatmapPanel'
 import PredictivePanel from './_components/PredictivePanel'
 import OverviewSkeleton from './_components/OverviewSkeleton'
 import { GlobalSnapshot } from '@/components/dashboard/GlobalSnapshot'
-import { MarketIngestHealth } from '@/components/dashboard/MarketIngestHealth'
 import CustomizeSheet, {
   TOGGLEABLE_WIDGETS,
   resolveWidgetOrder,
@@ -304,12 +303,8 @@ export default function OverviewClient() {
             mounted on /orders top (GS.2) — one source of truth. */}
         <GlobalSnapshot />
 
-        {/* MS.4 — per-marketplace ingest health. Sits under the
-            Global Snapshot so operators can see at a glance which
-            of the 11 EU Amazon markets is delivering data and which
-            has gone quiet (credential expiry, regional outage,
-            forgotten env-var, etc.). */}
-        <MarketIngestHealth />
+        {/* MS.7 — MarketIngestHealth moved to /insights/ (operational
+            signal lives with the rest of analytics health monitoring). */}
 
         {/* DO.35 — first paint shows the section grid as
             shimmer-skeletons instead of a single spinner. The
