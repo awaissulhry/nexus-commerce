@@ -425,13 +425,42 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
         })
         const reportCents = Math.round(Number(reportSum._sum?.grossRevenue ?? 0) * 100)
 
-        let status: 'match' | 'drift' | 'no-report' | 'no-orders'
+        // GS-RT.3 — count orders that have units but `totalPrice=0`
+        // in this window. These are the same SP-API-withholds-OrderTotal
+        // population that GS-RT.1/2/4/5 chase down. When both data
+        // sources (Order.totalPrice and DailySalesAggregate.grossRevenue)
+        // are equally stale at €0 they pass the existing tolerance
+        // match — operator sees a ✓ "Reconciled" banner that's
+        // technically true (both stores agree) but operationally
+        // misleading (the data is wrong). New 'partial' status
+        // surfaces this so the banner can read "Awaiting prices on N
+        // orders" instead of falsely claiming reconciliation.
+        const awaitingPrice = await prisma.order.count({
+          where: {
+            deletedAt: null,
+            channel: 'AMAZON',
+            purchaseDate: { gte: dayRangeStart, lt: dayRangeEnd },
+            currencyCode: 'EUR',
+            totalPrice: 0,
+            items: { some: { quantity: { gt: 0 } } },
+            ...(mkt ? { marketplace: mkt } : {}),
+          },
+        })
+
+        let status: 'match' | 'drift' | 'partial' | 'no-report' | 'no-orders'
         if ((reportSum._count?._all ?? 0) === 0) status = 'no-report'
         else if ((orderSum._count?._all ?? 0) === 0) status = 'no-orders'
         else {
           const deltaAbs = Math.abs(orderCents - reportCents)
           const tolerance = Math.max(100, Math.round(reportCents * 0.005))
-          status = deltaAbs <= tolerance ? 'match' : 'drift'
+          const wouldMatch = deltaAbs <= tolerance
+          // GS-RT.3 — partial wins over match when there are still
+          // PENDING+€0 rows in the window. Drift wins over partial
+          // because actual divergence is a more urgent operator signal
+          // than "we're still waiting on a few prices."
+          if (!wouldMatch) status = 'drift'
+          else if (awaitingPrice > 0) status = 'partial'
+          else status = 'match'
         }
 
         const deltaCents = orderCents - reportCents
@@ -439,6 +468,8 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
         const label =
           status === 'match'
             ? 'Reconciled with Amazon T+1 report'
+            : status === 'partial'
+            ? `Partial reconciliation — awaiting prices on ${awaitingPrice} order${awaitingPrice === 1 ? '' : 's'} (Amazon-withheld OrderTotal)`
             : status === 'drift'
             ? `Differs from Amazon report by ${deltaCents > 0 ? '+' : '−'}€${Math.abs(deltaCents / 100).toFixed(2)}${deltaPct != null ? ` (${deltaPct > 0 ? '+' : ''}${deltaPct.toFixed(1)}%)` : ''}`
             : status === 'no-report'
@@ -453,6 +484,9 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
           reportTotalCents: reportCents,
           deltaCents,
           deltaPct,
+          // GS-RT.3 — surfaced so UIs can render their own annotation
+          // (e.g. "N awaiting" badge on the banner).
+          awaitingPriceCount: awaitingPrice,
           label,
         }
       } catch (error: any) {

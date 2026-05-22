@@ -768,10 +768,16 @@ function SalesPanelPlaceholder({ data, onSelectMarketplace }: { data: Snapshot; 
   const [panelData, setPanelData] = useState<Snapshot>(data)
   const [loading, setLoading] = useState(false)
   // SA.5 — yesterday's sales reconciliation vs Amazon's T+1 report.
+  // GS-RT.3 — 'partial' status added: both data sources may agree
+  // at €0 for PENDING+€0 orders, which the old code labelled "match"
+  // and showed a misleading ✓ banner. 'partial' surfaces the awaiting-
+  // price count so the operator knows the reconciliation isn't really
+  // done.
   const [recon, setRecon] = useState<{
-    status: 'match' | 'drift' | 'no-report' | 'no-orders'
+    status: 'match' | 'drift' | 'partial' | 'no-report' | 'no-orders'
     label: string
     deltaCents: number
+    awaitingPriceCount?: number
   } | null>(null)
   useEffect(() => {
     const qs = new URLSearchParams()
@@ -810,7 +816,9 @@ function SalesPanelPlaceholder({ data, onSelectMarketplace }: { data: Snapshot; 
 
   return (
     <div className="space-y-3">
-      {/* SA.5 — reconciliation banner for yesterday */}
+      {/* SA.5 — reconciliation banner for yesterday.
+          GS-RT.3 — 'partial' tone is amber (intermediate signal: neither
+          green ✓ nor red ⚠; awaiting prices). */}
       {recon && recon.status !== 'no-orders' && (
         <div
           className={`text-xs px-3 py-1.5 rounded border inline-flex items-center gap-2 ${
@@ -818,11 +826,19 @@ function SalesPanelPlaceholder({ data, onSelectMarketplace }: { data: Snapshot; 
               ? 'bg-emerald-50 border-emerald-200 text-emerald-800 dark:bg-emerald-950/40 dark:border-emerald-900 dark:text-emerald-300'
               : recon.status === 'drift'
               ? 'bg-rose-50 border-rose-200 text-rose-800 dark:bg-rose-950/40 dark:border-rose-900 dark:text-rose-300'
+              : recon.status === 'partial'
+              ? 'bg-amber-50 border-amber-200 text-amber-800 dark:bg-amber-950/40 dark:border-amber-900 dark:text-amber-300'
               : 'bg-slate-50 border-slate-200 text-slate-700 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-300'
           }`}
         >
           <span aria-hidden="true">
-            {recon.status === 'match' ? '✓' : recon.status === 'drift' ? '⚠' : '·'}
+            {recon.status === 'match'
+              ? '✓'
+              : recon.status === 'drift'
+              ? '⚠'
+              : recon.status === 'partial'
+              ? '⏳'
+              : '·'}
           </span>
           <span className="font-medium">Yesterday:</span>
           <span>{recon.label}</span>
