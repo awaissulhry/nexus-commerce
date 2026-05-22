@@ -73,6 +73,70 @@ async function runSqsPoll(): Promise<void> {
           }
         }
 
+        // RT.9 — FBA inventory availability change. Each per-SKU
+        // delta becomes one ChannelStockEvent row; the recorder is
+        // idempotent on (channel, channelEventId) so retries collapse
+        // safely. Drift surfaces on /fulfillment/stock/channel-drift
+        // in ~30s instead of waiting for the CS ingester sweep.
+        if (msg.inventoryNotification) {
+          let recordedCount = 0
+          let recordedErrors = 0
+          try {
+            const { recordChannelStockEvent } = await import(
+              '../services/channel-stock-event.service.js'
+            )
+            for (const change of msg.inventoryNotification.changes) {
+              if (!change.sku) continue
+              try {
+                // Composite channelEventId so the same SKU pushed
+                // twice in a window collapses on the unique constraint.
+                const channelEventId = `${msg.messageId}:${change.sku}`
+                await recordChannelStockEvent({
+                  channel: 'AMAZON',
+                  channelEventId,
+                  sku: change.sku,
+                  channelReportedQty: Math.max(0, change.fulfillableQty),
+                  rawPayload: change,
+                })
+                recordedCount++
+              } catch (innerErr) {
+                recordedErrors++
+                logger.warn('[SQS poll] FBA inventory delta record failed', {
+                  sku: change.sku,
+                  error: innerErr instanceof Error ? innerErr.message : String(innerErr),
+                })
+              }
+            }
+            await deleteSqsMessage(msg.receiptHandle)
+            if (webhookEventId) {
+              await prisma.webhookEvent.update({
+                where: { id: webhookEventId },
+                data: {
+                  isProcessed: true,
+                  processedAt: new Date(),
+                  error: recordedErrors > 0 ? `${recordedErrors} sku(s) failed` : null,
+                },
+              }).catch(() => {})
+            }
+            processed++
+            logger.info('[SQS poll] processed FBA_INVENTORY_AVAILABILITY_CHANGES', {
+              recordedCount,
+              recordedErrors,
+            })
+          } catch (err) {
+            const errMsg = err instanceof Error ? err.message : String(err)
+            logger.warn('[SQS poll] FBA inventory handler failed', { error: errMsg })
+            if (webhookEventId) {
+              await prisma.webhookEvent.update({
+                where: { id: webhookEventId },
+                data: { error: errMsg.slice(0, 2000) },
+              }).catch(() => {})
+            }
+            // Don't delete — let SQS retry.
+          }
+          continue
+        }
+
         // RT.6 — FBA Outbound (Multi-Channel Fulfillment) shipment
         // status path. Calls syncMCFStatus inline so MCF status updates
         // land in ~30s instead of waiting for the 15-min cron tick.

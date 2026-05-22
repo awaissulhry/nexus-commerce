@@ -45,11 +45,35 @@ export interface FbaOutboundShipmentNotification {
   amazonOrderId?: string
 }
 
+/**
+ * RT.9 — FBA inventory availability change notification. Fires when
+ * FBA stock moves (inbound received, return restock, removal, lost,
+ * destroyed). Closes the polling gap on the CS-series ingester for
+ * Amazon stock — drift surfaces in ~30s instead of next sweep.
+ *
+ * Amazon's payload carries an array of per-SKU deltas; each becomes
+ * one ChannelStockEvent row so the operator can triage from
+ * /fulfillment/stock/channel-drift.
+ */
+export interface FbaInventoryNotification {
+  changes: Array<{
+    sku: string
+    fnsku?: string
+    asin?: string
+    fulfillableQty: number
+    inboundShippedQty?: number
+    inboundReceivingQty?: number
+    inboundWorkingQty?: number
+  }>
+}
+
 export interface SqsOrderMessage {
   /** Present on ORDER_CHANGE / ORDER_STATUS_CHANGE messages. */
   notification?: OrderChangeNotification
   /** RT.6 — present on FBA_OUTBOUND_SHIPMENT_STATUS messages. */
   mcfNotification?: FbaOutboundShipmentNotification
+  /** RT.9 — present on FBA_INVENTORY_AVAILABILITY_CHANGES messages. */
+  inventoryNotification?: FbaInventoryNotification
   receiptHandle: string
   /** SQS Message.MessageId — used as WebhookEvent.externalId for dedup. */
   messageId: string
@@ -108,6 +132,44 @@ export async function pollSqsMessages(maxMessages = 10): Promise<SqsOrderMessage
       const inner = outer.Message ? JSON.parse(outer.Message) : outer
 
       const notifType = inner.NotificationType ?? inner.notificationType
+
+      // RT.9 — FBA inventory availability changes. Payload carries an
+      // array of per-SKU deltas; each downstream becomes one
+      // ChannelStockEvent row for operator triage.
+      if (notifType === 'FBA_INVENTORY_AVAILABILITY_CHANGES') {
+        const root =
+          inner.Payload?.FBAInventoryAvailabilityChanges ??
+          inner.Payload?.FBAInventoryAvailabilityChangesNotification
+        const items: any[] = Array.isArray(root?.Items)
+          ? root.Items
+          : Array.isArray(root?.InventoryAvailability)
+            ? root.InventoryAvailability
+            : []
+        if (items.length === 0) {
+          await deleteSqsMessage(msg.ReceiptHandle)
+          continue
+        }
+        results.push({
+          inventoryNotification: {
+            changes: items.map((it: any) => ({
+              sku: it.SellerSku ?? it.sellerSku ?? it.Sku ?? it.sku ?? '',
+              fnsku: it.FnSku ?? it.fnsku,
+              asin: it.Asin ?? it.asin,
+              fulfillableQty: Number(
+                it.FulfillableQuantity ?? it.fulfillableQuantity ?? it.Available ?? 0,
+              ),
+              inboundShippedQty: it.InboundShippedQuantity ?? it.inboundShippedQuantity,
+              inboundReceivingQty: it.InboundReceivingQuantity ?? it.inboundReceivingQuantity,
+              inboundWorkingQty: it.InboundWorkingQuantity ?? it.inboundWorkingQuantity,
+            })),
+          },
+          receiptHandle: msg.ReceiptHandle,
+          messageId: msg.MessageId ?? '',
+          rawPayload: inner,
+          notificationType: notifType,
+        })
+        continue
+      }
 
       // RT.6 — Multi-Channel Fulfillment shipment status notification.
       // Payload shape: inner.Payload.FBAOutboundShipmentStatus with

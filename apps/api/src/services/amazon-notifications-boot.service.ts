@@ -131,6 +131,15 @@ export function ensureAmazonNotificationSubscription(): void {
         'FBA_OUTBOUND_SHIPMENT_STATUS',
         existingDest.destinationId,
       )
+      // 4. RT.9 — FBA inventory availability changes. Pushes per-SKU
+      // stock deltas (inbound received, return restock, removal,
+      // lost, destroyed). Routes to recordChannelStockEvent so
+      // drift surfaces on /fulfillment/stock/channel-drift in ~30s
+      // instead of waiting for the CS-series ingester sweep.
+      await ensureSubscriptionForType(
+        'FBA_INVENTORY_AVAILABILITY_CHANGES',
+        existingDest.destinationId,
+      )
     } catch (err: any) {
       logger.error('[amazon-notifications-boot] setup failed (non-fatal)', {
         error: err?.message ?? String(err),
