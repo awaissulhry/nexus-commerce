@@ -22,6 +22,7 @@ import { Skeleton } from '@/components/ui/Skeleton'
 import { Tabs } from '@/components/ui/Tabs'
 import { COUNTRY_NAMES } from '@/lib/country-names'
 import { usePolledList } from '@/lib/sync/use-polled-list'
+import { useListingEvents } from '@/lib/sync/use-listing-events'
 import ListingsWorkspace from '../ListingsWorkspace'
 
 // eBay's seeded marketplaces from the audit (5 countries) — IT first
@@ -55,6 +56,13 @@ export default function EbayListingsClient({
   lockMarketplace,
   breadcrumbs,
 }: Props) {
+  // L-RT.1 — open the SSE pipe on direct landings to /listings/ebay
+  // so this page's invalidationTypes wiring fires sub-200ms. Without
+  // this mount, operators deep-linking here would sit on the 30s
+  // polling baseline until they navigated through the parent
+  // /listings workspace.
+  useListingEvents()
+
   const [activeMarket, setActiveMarket] = useState<string>(
     lockMarketplace ?? 'IT',
   )

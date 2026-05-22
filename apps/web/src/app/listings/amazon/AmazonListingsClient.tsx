@@ -26,6 +26,7 @@ import { useToast } from '@/components/ui/Toast'
 import { COUNTRY_NAMES } from '@/lib/country-names'
 import { getBackendUrl } from '@/lib/backend-url'
 import { usePolledList } from '@/lib/sync/use-polled-list'
+import { useListingEvents } from '@/lib/sync/use-listing-events'
 import { emitInvalidation } from '@/lib/sync/invalidation-channel'
 
 // Amazon's seeded marketplaces, ordered so EU (Awa's primary) renders
@@ -65,6 +66,14 @@ interface Props {
 }
 
 export default function AmazonListingsClient({ lockMarketplace, breadcrumbs }: Props) {
+  // L-RT.1 — open the SSE pipe on direct landings to /listings/amazon
+  // so the page's existing invalidationTypes wiring on usePolledList
+  // actually fires. Without this mount, the only path that ever opened
+  // the EventSource was the top-level /listings workspace; an operator
+  // who deep-linked into /listings/amazon would sit on a 30s polling
+  // baseline and miss sub-200ms refreshes from listing.* SSE events.
+  useListingEvents()
+
   // The active marketplace tab. When the route is /listings/amazon (no
   // [market]), this is local state. When it's /listings/amazon/[market]
   // (lockMarketplace set), the tab is fixed.

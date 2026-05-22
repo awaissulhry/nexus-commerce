@@ -17,6 +17,7 @@
 import { Card } from '@/components/ui/Card'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { usePolledList } from '@/lib/sync/use-polled-list'
+import { useListingEvents } from '@/lib/sync/use-listing-events'
 import ListingsWorkspace from '../ListingsWorkspace'
 
 interface PathAOverview {
@@ -32,6 +33,12 @@ interface Props {
 }
 
 export default function ShopifyListingsClient({ breadcrumbs }: Props) {
+  // L-RT.1 — open SSE pipe on direct landings to /listings/shopify.
+  // See AmazonListingsClient for the full rationale; one-liner mounts
+  // the listing-events EventSource so the invalidationTypes below
+  // actually fire sub-200ms instead of waiting for the 30s tick.
+  useListingEvents()
+
   const { data: overview, loading } = usePolledList<PathAOverview>({
     url: '/api/listings/path-a/overview?channel=SHOPIFY',
     intervalMs: 30_000,
