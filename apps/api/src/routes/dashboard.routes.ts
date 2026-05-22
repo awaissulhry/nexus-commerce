@@ -618,7 +618,28 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
                GROUP BY day
                ORDER BY day ASC
             `
+        // GA-RT.1 — TZ-safe day-key helper. Both sparkMap (from
+        // sparkRaw) and the sparkline loop need to produce the SAME
+        // calendar-date string for the SAME Europe/Rome local day.
+        // Without it, `d.toISOString().slice(0,10)` of a local-midnight
+        // instant returns the UTC date — which is the PREVIOUS day
+        // during CEST (summer time). Result: every sparkline bucket
+        // shows the data of the NEXT day's orders, or zero. Same
+        // helper used in sparkEstimateMap below for the same reason.
+        const isoLocalDay = (d: Date): string =>
+          new Intl.DateTimeFormat('en-CA', {
+            timeZone: OPERATOR_TIMEZONE,
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+          }).format(d)
+
         const sparkMap = new Map(
+          // Postgres date_trunc(... AT TZ 'Europe/Rome')::date already
+          // produces the right calendar date as a UTC-midnight JS Date,
+          // so r.day.toISOString().slice(0,10) IS the local-tz date
+          // here (since UTC-midnight of date X is "X" in ISO no matter
+          // the zone). Kept identical for the existing rows.
           sparkRaw.map((r) => [r.day.toISOString().slice(0, 10), Number(r.cents)]),
         )
 
@@ -721,7 +742,14 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
         const sparkline: Array<{ date: string; valueCents: number }> = []
         for (let i = 6; i >= 0; i--) {
           const d = new Date(todayStart.getTime() - i * 24 * 60 * 60 * 1000)
-          const iso = d.toISOString().slice(0, 10)
+          // GA-RT.1 — use the TZ-aware key. `d` is the UTC instant of
+          // local-midnight on day-N-ago in Europe/Rome. Under CEST that
+          // instant's UTC date is the PREVIOUS day, so the old
+          // `d.toISOString().slice(0,10)` returned the wrong calendar
+          // date and the resulting map lookup missed every bucket. The
+          // helper produces the local-tz calendar date that aligns
+          // with sparkMap + sparkEstimateMap keys.
+          const iso = isoLocalDay(d)
           // GS-RT.8 — combine confirmed + estimated for each day.
           sparkline.push({
             date: iso,
