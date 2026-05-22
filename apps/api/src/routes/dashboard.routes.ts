@@ -664,20 +664,38 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
         const salesRows: SalesRow[] = []
         let salesTotalCents = 0
         let salesUnitsTotal = 0
+        // MS.3 — non-EUR currency rollup. Snapshot headline stays
+        // EUR-only (mixing currencies in one figure is misleading), but
+        // we surface a sibling chip per additional currency so UK GBP
+        // / SE SEK / PL PLN / TR TRY orders don't silently disappear.
+        const additionalByCurrency = new Map<string, { valueCents: number; units: number; orderCount: number }>()
         for (const g of salesByMarketplace) {
           const mkt = g.marketplace ?? 'UNKNOWN'
           const cents = Math.round(Number(g._sum?.totalPrice ?? 0) * 100)
+          const cur = g.currencyCode ?? 'EUR'
+          const units = unitsByMarketplace.get(mkt) ?? 0
           salesRows.push({
             marketplace: mkt,
             region: REGION[mkt] ?? 'Other',
-            currency: g.currencyCode ?? 'EUR',
+            currency: cur,
             valueCents: cents,
-            units: unitsByMarketplace.get(mkt) ?? 0,
+            units,
             orderCount: g._count?._all ?? 0,
           })
-          if (g.currencyCode === 'EUR' || !g.currencyCode) salesTotalCents += cents
-          salesUnitsTotal += unitsByMarketplace.get(mkt) ?? 0
+          salesUnitsTotal += units
+          if (cur === 'EUR') {
+            salesTotalCents += cents
+          } else {
+            const existing = additionalByCurrency.get(cur) ?? { valueCents: 0, units: 0, orderCount: 0 }
+            existing.valueCents += cents
+            existing.units += units
+            existing.orderCount += g._count?._all ?? 0
+            additionalByCurrency.set(cur, existing)
+          }
         }
+        const additionalCurrencies = [...additionalByCurrency.entries()].map(
+          ([currency, v]) => ({ currency, ...v }),
+        )
 
         // GS.7 — same-day-last-week comparison for the Sales tile.
         // Useful at-a-glance signal ("Today vs. same day last week").
@@ -834,6 +852,10 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
                 // Lets the UI render Amazon-style combined headline.
                 estimateCents: pendingEstimateCents,
               },
+              // MS.3 — orders ingested in currencies other than EUR.
+              // Headline stays EUR-only (mixing currencies misleads);
+              // these surface as small chips beside the tile total.
+              additionalCurrencies,
             },
             sparkline,
             byMarketplace: salesRows.sort((a, b) => b.valueCents - a.valueCents),

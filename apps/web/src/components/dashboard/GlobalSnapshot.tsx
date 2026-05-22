@@ -59,6 +59,13 @@ type Snapshot = {
         // SR.1 — estimated value from ChannelListing.price
         estimateCents?: number
       }
+      // MS.3 — orders ingested in currencies other than EUR
+      additionalCurrencies?: Array<{
+        currency: string
+        valueCents: number
+        units: number
+        orderCount: number
+      }>
     }
     sparkline: Array<{ date: string; valueCents: number }>
     byMarketplace: SalesRow[]
@@ -74,6 +81,17 @@ type Snapshot = {
 }
 
 type TileKey = 'sales' | 'openOrders' | 'messages'
+
+// MS.3 — render any currency in its native unit. Used for non-EUR
+// chips beside the EUR headline (UK GBP, SE SEK, PL PLN, TR TRY).
+const CURRENCY_SYMBOL: Record<string, string> = {
+  EUR: '€', GBP: '£', USD: '$', SEK: 'kr', PLN: 'zł', TRY: '₺', CHF: 'CHF', JPY: '¥',
+}
+function formatCurrencyCents(cents: number, currency: string): string {
+  const sym = CURRENCY_SYMBOL[currency] ?? ''
+  const amount = (cents / 100).toFixed(2)
+  return sym ? `${sym}${amount}` : `${amount} ${currency}`
+}
 
 function formatEur(cents: number): string {
   return `€${(cents / 100).toFixed(2)}`
@@ -410,6 +428,24 @@ export function GlobalSnapshot() {
               >
                 * includes ~{formatEur(data.sales.total.pending.estimateCents ?? 0)} estimated for{' '}
                 {data.sales.total.pending.count} pending verification
+              </div>
+            )}
+            {/* MS.3 — non-EUR currency chips. Stays close to the
+                headline so the EUR total isn't read as "everything". */}
+            {data.sales.total.additionalCurrencies && data.sales.total.additionalCurrencies.length > 0 && (
+              <div className="flex items-center gap-1 flex-wrap pt-1">
+                <span className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">
+                  Also:
+                </span>
+                {data.sales.total.additionalCurrencies.map((c) => (
+                  <span
+                    key={c.currency}
+                    className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 tabular-nums"
+                    title={`${c.units} unit${c.units === 1 ? '' : 's'} in ${c.orderCount} order${c.orderCount === 1 ? '' : 's'} (native currency, not converted to EUR)`}
+                  >
+                    {formatCurrencyCents(c.valueCents, c.currency)}
+                  </span>
+                ))}
               </div>
             )}
             <Sparkline data={data.sales.sparkline} />
