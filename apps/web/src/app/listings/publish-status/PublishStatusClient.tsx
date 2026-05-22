@@ -27,6 +27,9 @@ import PageHeader from '@/components/layout/PageHeader'
 import { Card } from '@/components/ui/Card'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { usePolledList } from '@/lib/sync/use-polled-list'
+import { useListingEvents } from '@/lib/sync/use-listing-events'
+import { Tooltip } from '@/components/ui/Tooltip'
+import { useTranslations } from '@/lib/i18n/use-translations'
 
 interface DailyTrendPoint {
   day: string
@@ -105,9 +108,24 @@ interface Breadcrumb {
 }
 
 export default function PublishStatusClient({ breadcrumbs }: { breadcrumbs?: Breadcrumb[] }) {
+  const { t } = useTranslations()
+  // L-RT.2 — open SSE pipe so listing.synced / listing.updated / bulk
+  // job completions surface sub-200ms instead of waiting for the 30s
+  // poll. `connected` powers the Live/Polling chip below.
+  const { connected: sseConnected } = useListingEvents()
   const { data, loading, error, lastFetchedAt, refetch } = usePolledList<PublishStatusResponse>({
     url: '/api/listings/publish-status',
     intervalMs: 30_000,
+    // L-RT.2 — every listing.synced is a row that just landed in this
+    // dashboard's source data (success / gated / failed). The
+    // wizard.submitted + bulk-job.completed types catch the larger
+    // submission events that mint many publish-attempt rows at once.
+    invalidationTypes: [
+      'listing.updated',
+      'listing.created',
+      'wizard.submitted',
+      'bulk-job.completed',
+    ],
   })
 
   const status = data as PublishStatusResponse | undefined
@@ -130,9 +148,42 @@ export default function PublishStatusClient({ breadcrumbs }: { breadcrumbs?: Bre
     <div className="space-y-4">
       <PageHeader
         title="Publish status"
-        description="Live audit of every channel-write attempt. Same data the V.1 CLI script (audit-channel-publish-attempts.mjs) produces, polled every 30s."
+        description="Live audit of every channel-write attempt. Same data the V.1 CLI script (audit-channel-publish-attempts.mjs) produces, polled every 30s + reactive to listing.synced SSE events."
         breadcrumbs={breadcrumbs}
       />
+
+      {/* L-RT.2 — Live indicator. Mirrors the ProductsWorkspace +
+          ListingsWorkspace pattern: green pulse = SSE attached,
+          mutations refresh within ~200ms; gray = falling back to 30s
+          polling baseline. */}
+      <div className="flex items-center gap-2">
+        <Tooltip
+          content={
+            sseConnected
+              ? t('products.live.tooltipConnected')
+              : t('products.live.tooltipDisconnected')
+          }
+        >
+          <span
+            className="inline-flex items-center gap-1.5 text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400"
+            aria-label={
+              sseConnected
+                ? t('products.live.tooltipConnected')
+                : t('products.live.tooltipDisconnected')
+            }
+            data-testid="publish-status-live-indicator"
+            data-connected={sseConnected ? '1' : '0'}
+          >
+            <span
+              className={`w-1.5 h-1.5 rounded-full ${
+                sseConnected ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300'
+              }`}
+              aria-hidden
+            />
+            {sseConnected ? t('products.live') : t('products.polling')}
+          </span>
+        </Tooltip>
+      </div>
 
       {/* Env block — what the API thinks the publish gate is set to */}
       <Card>
