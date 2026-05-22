@@ -64,6 +64,20 @@ const RECEIVE_AUTO_LAYER_REASONS = new Set([
 // from the edit page have their own debounce at the route layer.
 const DEFAULT_HOLD_MS = 30 * 1000
 
+// RT.12 — order-driven movements (ORDER_PLACED / ORDER_CANCELLED /
+// ORDER_REFUNDED / RETURN_RESTOCKED) fan out IMMEDIATELY. The 30s
+// grace existed for manual operator edits where "I changed my mind"
+// was the dominant use case; for orders + returns the urgency is
+// the opposite — every second of lag is overselling risk on the
+// other channels. We carve those reasons out to zero delay.
+const ORDER_DRIVEN_REASONS = new Set([
+  'ORDER_PLACED',
+  'ORDER_CANCELLED',
+  'ORDER_REFUNDED',
+  'RETURN_RESTOCKED',
+  'RETURN_RECEIVED',
+])
+
 type MovementReason =
   | 'ORDER_PLACED'
   | 'ORDER_CANCELLED'
@@ -432,6 +446,12 @@ export async function applyStockMovement(input: StockMovementInput) {
   // Redis is down, the OutboundSyncQueue rows stay PENDING and the next
   // drain pass picks them up — work is never lost. Same pattern as
   // MasterPriceService; see master-price.service.ts.
+  //
+  // RT.12 — order/return-driven cascades fire IMMEDIATELY (delay 0)
+  // because the 30s grace window is overselling risk on the other
+  // channels. Manual + system-adjusted edits keep the DEFAULT_HOLD_MS
+  // grace for operator "undo" patterns.
+  const enqueueDelay = ORDER_DRIVEN_REASONS.has(reason) ? 0 : DEFAULT_HOLD_MS
   if (!outerTx && transactionResult.cascade.queuedSyncIds.length > 0) {
     for (const queueId of transactionResult.cascade.queuedSyncIds) {
       try {
@@ -445,7 +465,7 @@ export async function applyStockMovement(input: StockMovementInput) {
             reason,
           },
           {
-            delay: DEFAULT_HOLD_MS,
+            delay: enqueueDelay,
             jobId: queueId,
           },
         )
@@ -550,7 +570,13 @@ async function cascadeQuantityToListings(
   const snapshottedListingIds: string[] = []
   const queueRowsToCreate: Prisma.OutboundSyncQueueCreateManyInput[] = []
   const validTargets = new Set(['AMAZON', 'EBAY', 'SHOPIFY', 'WOOCOMMERCE'])
-  const holdUntil = new Date(Date.now() + DEFAULT_HOLD_MS)
+  // RT.12 — order/return-driven cascades skip the 30s grace window so
+  // cross-channel pushes go out within ~5s of the inbound trigger.
+  // Manual edits keep the grace for operator "undo" patterns.
+  const isOrderDriven = ORDER_DRIVEN_REASONS.has(reason)
+  const holdUntil = new Date(
+    Date.now() + (isOrderDriven ? 0 : DEFAULT_HOLD_MS),
+  )
 
   for (const listing of listings) {
     const newListingQty = listing.followMasterQuantity
