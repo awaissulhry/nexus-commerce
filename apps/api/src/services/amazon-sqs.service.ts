@@ -68,6 +68,20 @@ export interface FbaInventoryNotification {
 }
 
 /**
+ * RT.15 — FEED_PROCESSING_FINISHED notification. Fires when one of
+ * our JSON_LISTINGS_FEED submissions hits a terminal state (DONE /
+ * CANCELLED / FATAL). Lets the images-feed worker update the
+ * AmazonImageFeedJob row in ~30s instead of waiting for the next
+ * polling tick.
+ */
+export interface FeedProcessingFinishedNotification {
+  feedId: string
+  feedType: string
+  processingStatus: string  // DONE | CANCELLED | FATAL
+  resultFeedDocumentId?: string
+}
+
+/**
  * RT.14 — LISTINGS_ITEM_STATUS_CHANGE notification. Fires when a
  * listing's status changes (BUYABLE / DISCOVERABLE / etc.). Lets us
  * detect search-suppression within minutes instead of waiting for
@@ -127,6 +141,8 @@ export interface SqsOrderMessage {
   anyOfferChangedNotification?: AnyOfferChangedNotification
   /** RT.14 — present on LISTINGS_ITEM_STATUS_CHANGE messages. */
   listingsItemStatusNotification?: ListingsItemStatusChangedNotification
+  /** RT.15 — present on FEED_PROCESSING_FINISHED messages. */
+  feedProcessingFinishedNotification?: FeedProcessingFinishedNotification
   receiptHandle: string
   /** SQS Message.MessageId — used as WebhookEvent.externalId for dedup. */
   messageId: string
@@ -185,6 +201,33 @@ export async function pollSqsMessages(maxMessages = 10): Promise<SqsOrderMessage
       const inner = outer.Message ? JSON.parse(outer.Message) : outer
 
       const notifType = inner.NotificationType ?? inner.notificationType
+
+      // RT.15 — feed processing finished. Routes to
+      // AmazonImageFeedJob update + SSE event in the poller.
+      if (notifType === 'FEED_PROCESSING_FINISHED') {
+        const root =
+          inner.Payload?.FeedProcessingFinishedNotification ??
+          inner.Payload?.FeedProcessingFinished
+        if (!root) {
+          await deleteSqsMessage(msg.ReceiptHandle)
+          continue
+        }
+        results.push({
+          feedProcessingFinishedNotification: {
+            feedId: root.FeedId ?? root.feedId ?? '',
+            feedType: root.FeedType ?? root.feedType ?? '',
+            processingStatus:
+              root.ProcessingStatus ?? root.processingStatus ?? 'UNKNOWN',
+            resultFeedDocumentId:
+              root.ResultFeedDocumentId ?? root.resultFeedDocumentId,
+          },
+          receiptHandle: msg.ReceiptHandle,
+          messageId: msg.MessageId ?? '',
+          rawPayload: inner,
+          notificationType: notifType,
+        })
+        continue
+      }
 
       // RT.14 — listing status change (search-suppression detection).
       if (notifType === 'LISTINGS_ITEM_STATUS_CHANGE') {

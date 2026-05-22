@@ -85,6 +85,17 @@ export type OrderEvent =
       status: string
       ts: number
     }
+  // RT.15 — fired by the SQS poller when FEED_PROCESSING_FINISHED
+  // resolves. Image-tab feed-status polling can stop polling that
+  // jobId and refresh from the push instead.
+  | {
+      type: 'feed.processing.finished'
+      feedId: string
+      processingStatus: string
+      jobId: string | null
+      productId: string | null
+      ts: number
+    }
   | { type: 'ping'; ts: number }
 
 type Listener = (event: OrderEvent) => void

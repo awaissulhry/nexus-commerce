@@ -155,6 +155,14 @@ export function ensureAmazonNotificationSubscription(): void {
         'LISTINGS_ITEM_STATUS_CHANGE',
         existingDest.destinationId,
       )
+      // 7. RT.15 — feed processing finished. Resolves
+      // AmazonImageFeedJob.status from push instead of waiting for
+      // the polling worker. Fires feed.processing.finished SSE so
+      // the images tab can refresh immediately.
+      await ensureSubscriptionForType(
+        'FEED_PROCESSING_FINISHED',
+        existingDest.destinationId,
+      )
     } catch (err: any) {
       logger.error('[amazon-notifications-boot] setup failed (non-fatal)', {
         error: err?.message ?? String(err),

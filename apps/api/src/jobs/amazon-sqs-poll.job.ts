@@ -73,6 +73,66 @@ async function runSqsPoll(): Promise<void> {
           }
         }
 
+        // RT.15 — feed processing finished. Resolves the matching
+        // AmazonImageFeedJob row (if any) by feedId and fires the
+        // feed.processing.finished SSE event so the images-tab UI
+        // can stop polling that job and refresh from the push.
+        if (msg.feedProcessingFinishedNotification) {
+          const note = msg.feedProcessingFinishedNotification
+          try {
+            const job = note.feedId
+              ? await prisma.amazonImageFeedJob.findFirst({
+                  where: { feedId: note.feedId },
+                  select: { id: true, productId: true, status: true },
+                })
+              : null
+            if (job && job.status !== note.processingStatus) {
+              await prisma.amazonImageFeedJob.update({
+                where: { id: job.id },
+                data: {
+                  status: note.processingStatus,
+                  completedAt:
+                    note.processingStatus === 'DONE' ||
+                    note.processingStatus === 'CANCELLED' ||
+                    note.processingStatus === 'FATAL'
+                      ? new Date()
+                      : null,
+                },
+              })
+            }
+            const { publishOrderEvent } = await import(
+              '../services/order-events.service.js'
+            )
+            publishOrderEvent({
+              type: 'feed.processing.finished',
+              feedId: note.feedId,
+              processingStatus: note.processingStatus,
+              jobId: job?.id ?? null,
+              productId: job?.productId ?? null,
+              ts: Date.now(),
+            })
+            logger.info('[SQS poll] feed processing finished', {
+              feedId: note.feedId,
+              status: note.processingStatus,
+              jobId: job?.id,
+            })
+          } catch (err) {
+            logger.warn('[SQS poll] feed-finished handler failed', {
+              feedId: note.feedId,
+              error: err instanceof Error ? err.message : String(err),
+            })
+          }
+          await deleteSqsMessage(msg.receiptHandle)
+          if (webhookEventId) {
+            await prisma.webhookEvent.update({
+              where: { id: webhookEventId },
+              data: { isProcessed: true, processedAt: new Date() },
+            }).catch(() => {})
+          }
+          processed++
+          continue
+        }
+
         // RT.14 — listing status change. Fires `listing.suppressed`
         // SSE event when a listing transitions to a suppressed /
         // non-buyable state so the operator can investigate within
