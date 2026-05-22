@@ -214,6 +214,35 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
    * 30s cache. Italian operator timezone for "today" / "yesterday".
    */
   /**
+   * MS.5 — toggle a marketplace's isActive flag. Operator-controlled.
+   * Active markets are picked up by the cron on the next 15-min tick
+   * (no redeploy needed) via getActiveMarketplaceIdsFromDb().
+   *
+   *   PATCH /api/admin/marketplace-config/:id  body { isActive: bool }
+   */
+  fastify.patch<{ Params: { id: string }; Body: { isActive?: boolean } }>(
+    '/admin/marketplace-config/:id',
+    async (request, reply) => {
+      try {
+        const { id } = request.params
+        const body = request.body ?? {}
+        if (typeof body.isActive !== 'boolean') {
+          return reply.code(400).send({ error: 'isActive: boolean required' })
+        }
+        const updated = await prisma.marketplace.update({
+          where: { id },
+          data: { isActive: body.isActive },
+          select: { id: true, code: true, marketplaceId: true, isActive: true },
+        })
+        return { success: true, marketplace: updated }
+      } catch (error: any) {
+        fastify.log.error({ err: error }, '[admin/marketplace-config] PATCH failed')
+        return reply.code(500).send({ error: error?.message ?? String(error) })
+      }
+    },
+  )
+
+  /**
    * MS.4 — per-marketplace ingest health. Surfaces which Amazon
    * markets are flowing data in real time and which have gone quiet.
    * Useful for spotting credential expiry, regional outages, or
@@ -238,23 +267,22 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get('/dashboard/market-health', async (_request, reply) => {
     try {
       reply.header('Cache-Control', 'private, max-age=30')
-      const { DEFAULT_EU_MARKETPLACE_IDS, getConfiguredMarketplaceIds } = await import(
-        '../services/amazon-orders.service.js'
-      )
-      const configuredIds = getConfiguredMarketplaceIds()
-      const ID_TO_CODE: Record<string, { code: string; name: string; currency: string }> = {
-        APJ6JRA9NG5V4: { code: 'IT', name: 'Italy', currency: 'EUR' },
-        A1PA6795UKMFR9: { code: 'DE', name: 'Germany', currency: 'EUR' },
-        A13V1IB3VIYZZH: { code: 'FR', name: 'France', currency: 'EUR' },
-        A1RKKUPIHCS9HS: { code: 'ES', name: 'Spain', currency: 'EUR' },
-        A1F83G8C2ARO7P: { code: 'UK', name: 'United Kingdom', currency: 'GBP' },
-        A1805IZSGTT6HS: { code: 'NL', name: 'Netherlands', currency: 'EUR' },
-        A2NODRKZP88ZB9: { code: 'SE', name: 'Sweden', currency: 'SEK' },
-        A1C3SOZRARQ6R3: { code: 'PL', name: 'Poland', currency: 'PLN' },
-        AMEN7PMS3EDWL: { code: 'BE', name: 'Belgium', currency: 'EUR' },
-        A28R8C7NBKEWEA: { code: 'IE', name: 'Ireland', currency: 'EUR' },
-        A33AVAJ2PDY3EV: { code: 'TR', name: 'Turkey', currency: 'TRY' },
-      }
+      // MS.5 — list ALL Amazon EU marketplaces from the Marketplace
+      // table, including inactive ones, so the admin UI can show
+      // toggles. Active=true rows are what the cron sweeps.
+      const dbMarkets = await prisma.marketplace.findMany({
+        where: { channel: 'AMAZON', region: 'EU', marketplaceId: { not: null } },
+        orderBy: { code: 'asc' },
+        select: {
+          id: true,
+          code: true,
+          name: true,
+          marketplaceId: true,
+          currency: true,
+          isActive: true,
+          isParticipating: true,
+        },
+      })
       const now = Date.now()
       const oneHourAgo = new Date(now - 60 * 60 * 1000)
       const yesterday = new Date(now - 24 * 60 * 60 * 1000)
@@ -283,11 +311,10 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
       const c24Map = new Map(last24hByMarket.map((r) => [r.marketplace, r._count._all]))
       const c7Map = new Map(last7dByMarket.map((r) => [r.marketplace, r._count._all]))
 
-      const markets = configuredIds.map((id) => {
-        const meta = ID_TO_CODE[id] ?? { code: id, name: id, currency: 'EUR' }
-        const lastAt = lastMap.get(meta.code) ?? null
-        const ordersLast24h = c24Map.get(meta.code) ?? 0
-        const ordersLast7d = c7Map.get(meta.code) ?? 0
+      const markets = dbMarkets.map((m) => {
+        const lastAt = lastMap.get(m.code) ?? null
+        const ordersLast24h = c24Map.get(m.code) ?? 0
+        const ordersLast7d = c7Map.get(m.code) ?? 0
         const seconds = lastAt ? Math.floor((now - lastAt.getTime()) / 1000) : null
         let status: 'active' | 'quiet' | 'silent' | 'never'
         if (!lastAt) status = 'never'
@@ -295,10 +322,13 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
         else if (lastAt.getTime() >= yesterday.getTime()) status = 'quiet'
         else status = 'silent'
         return {
-          marketplaceId: id,
-          code: meta.code,
-          name: meta.name,
-          currency: meta.currency,
+          id: m.id,
+          marketplaceId: m.marketplaceId!,
+          code: m.code,
+          name: m.name,
+          currency: m.currency,
+          isActive: m.isActive,
+          isParticipating: m.isParticipating,
           lastOrderAt: lastAt?.toISOString() ?? null,
           ordersLast24h,
           ordersLast7d,
@@ -306,6 +336,7 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
           status,
         }
       })
+      const configuredIds = dbMarkets.filter((m) => m.isActive).map((m) => m.marketplaceId!)
 
       // Aggregate rollup so the UI can show "11 configured, 4 active,
       // 7 quiet, 0 silent" without re-aggregating client-side.

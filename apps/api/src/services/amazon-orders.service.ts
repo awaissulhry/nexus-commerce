@@ -158,6 +158,37 @@ export function getConfiguredMarketplaceIds(): string[] {
     .filter(Boolean)
 }
 
+/**
+ * MS.5 — DB-backed marketplace config. Reads operator-controlled
+ * isActive flags from the Marketplace table. Falls back to env var,
+ * then the hardcoded default. Used by the cron + market-health
+ * endpoint so flipping a toggle in the admin UI takes effect on the
+ * next sync tick without redeploying.
+ *
+ * Filter: channel='AMAZON' AND isActive AND marketplaceId NOT NULL
+ * AND region='EU' (NA/FE markets need different SP-API credentials).
+ */
+export async function getActiveMarketplaceIdsFromDb(): Promise<string[]> {
+  try {
+    const rows = await prisma.marketplace.findMany({
+      where: {
+        channel: 'AMAZON',
+        isActive: true,
+        region: 'EU',
+        marketplaceId: { not: null },
+      },
+      select: { marketplaceId: true },
+    })
+    const ids = rows.map((r) => r.marketplaceId).filter((id): id is string => !!id)
+    if (ids.length > 0) return ids
+  } catch (e: any) {
+    logger.warn('marketplace-config: DB read failed — falling back to env/default', {
+      error: e?.message ?? String(e),
+    })
+  }
+  return getConfiguredMarketplaceIds()
+}
+
 interface SyncSummary {
   startedAt: Date
   completedAt: Date

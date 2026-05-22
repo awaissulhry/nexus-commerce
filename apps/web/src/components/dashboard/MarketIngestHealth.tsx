@@ -20,10 +20,13 @@ import { getBackendUrl } from '@/lib/backend-url'
 type MarketStatus = 'active' | 'quiet' | 'silent' | 'never'
 
 interface MarketRow {
+  id: string
   marketplaceId: string
   code: string
   name: string
   currency: string
+  isActive: boolean
+  isParticipating: boolean
   lastOrderAt: string | null
   ordersLast24h: number
   ordersLast7d: number
@@ -82,6 +85,58 @@ export function MarketIngestHealth() {
   const [data, setData] = useState<HealthPayload | null>(null)
   const [, setTick] = useState(0)
   const [error, setError] = useState<string | null>(null)
+  // MS.5 — per-row toggle busy state so we don't double-fire while a
+  // PATCH is in flight.
+  const [busy, setBusy] = useState<Set<string>>(new Set())
+
+  // Optimistically flip + PATCH the marketplace's isActive flag.
+  // Cron picks up the change on the next 15-min tick (or sooner if
+  // the operator triggers a manual sync).
+  const toggleActive = async (row: MarketRow) => {
+    if (busy.has(row.id)) return
+    setBusy((s) => new Set(s).add(row.id))
+    setData((d) =>
+      d
+        ? {
+            ...d,
+            markets: d.markets.map((m) =>
+              m.id === row.id ? { ...m, isActive: !m.isActive } : m,
+            ),
+          }
+        : d,
+    )
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/admin/marketplace-config/${row.id}`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ isActive: !row.isActive }),
+        },
+      )
+      if (!res.ok) throw new Error(`${res.status}`)
+      // Re-fetch so the rollup counts reflect the new state.
+      await load()
+    } catch {
+      // Roll back the optimistic flip on failure.
+      setData((d) =>
+        d
+          ? {
+              ...d,
+              markets: d.markets.map((m) =>
+                m.id === row.id ? { ...m, isActive: row.isActive } : m,
+              ),
+            }
+          : d,
+      )
+    } finally {
+      setBusy((s) => {
+        const next = new Set(s)
+        next.delete(row.id)
+        return next
+      })
+    }
+  }
 
   const load = async () => {
     try {
@@ -122,23 +177,28 @@ export function MarketIngestHealth() {
   }
   if (!data) return null
 
-  const total = data.configured
+  const activeCount = data.markets.filter((m) => m.isActive).length
+  const totalKnown = data.markets.length
   const r = data.rollup
 
   return (
     <Card
       title="Market ingest health"
-      description={`${total} Amazon markets configured · ${r.active} active · ${r.quiet} quiet · ${r.silent} silent · ${r.never} no orders ever`}
+      description={`${activeCount} of ${totalKnown} Amazon EU markets actively ingesting · ${r.active} active · ${r.quiet} quiet · ${r.silent} silent · ${r.never} no orders ever`}
     >
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
         {data.markets.map((m) => {
           const tone = STATUS_TONE[m.status]
+          const isBusy = busy.has(m.id)
+          const inactiveStyle = !m.isActive ? 'opacity-50 grayscale' : ''
           return (
             <div
               key={m.marketplaceId}
-              className={`relative px-3 py-2 rounded border border-slate-200 dark:border-slate-700 ${m.status === 'silent' ? 'bg-rose-50/40 dark:bg-rose-950/20' : ''}`}
+              className={`relative px-3 py-2 rounded border border-slate-200 dark:border-slate-700 transition-opacity ${m.isActive && m.status === 'silent' ? 'bg-rose-50/40 dark:bg-rose-950/20' : ''} ${inactiveStyle}`}
               title={
-                m.lastOrderAt
+                !m.isActive
+                  ? 'Ingest disabled — cron skips this market on every tick. Toggle on to resume.'
+                  : m.lastOrderAt
                   ? `Last order: ${new Date(m.lastOrderAt).toLocaleString()} · ${m.ordersLast7d} in last 7 days`
                   : 'No orders ever ingested for this marketplace'
               }
@@ -160,6 +220,20 @@ export function MarketIngestHealth() {
                   <span className="text-slate-400 dark:text-slate-500">/24h</span>
                 </span>
               </div>
+              {/* MS.5 — operator toggle. Optimistic flip + PATCH. */}
+              <button
+                type="button"
+                onClick={() => toggleActive(m)}
+                disabled={isBusy}
+                className={`mt-2 w-full h-6 text-[11px] font-medium rounded transition-colors disabled:opacity-50 ${
+                  m.isActive
+                    ? 'bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-200'
+                    : 'bg-emerald-100 hover:bg-emerald-200 text-emerald-800 dark:bg-emerald-950/60 dark:hover:bg-emerald-950 dark:text-emerald-300'
+                }`}
+                title={m.isActive ? 'Disable cron ingest for this marketplace' : 'Enable cron ingest for this marketplace'}
+              >
+                {isBusy ? '…' : m.isActive ? 'Ingest: ON' : 'Ingest: OFF'}
+              </button>
             </div>
           )
         })}

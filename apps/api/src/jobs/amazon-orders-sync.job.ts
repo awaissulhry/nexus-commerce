@@ -16,7 +16,7 @@
  */
 
 import cron from 'node-cron'
-import { amazonOrdersService, getConfiguredMarketplaceIds } from '../services/amazon-orders.service.js'
+import { amazonOrdersService, getActiveMarketplaceIdsFromDb } from '../services/amazon-orders.service.js'
 import { logger } from '../utils/logger.js'
 import { recordCronRun } from '../utils/cron-observability.js'
 
@@ -30,11 +30,13 @@ async function runOrdersPoll(): Promise<void> {
 
   try {
     await recordCronRun('amazon-orders-sync', async () => {
-      // MS.1 — sweep every configured marketplace in one SP-API call.
-      // SP-API getOrders accepts a MarketplaceIds array and returns
-      // the union, each order carrying its own MarketplaceId. Stays
-      // inside the 0.0167 req/s throttle (still one request per tick).
-      const marketplaceIds = getConfiguredMarketplaceIds()
+      // MS.1 + MS.5 — sweep every configured marketplace in one SP-API
+      // call. Operator-controlled isActive flags on the Marketplace
+      // table win over the env var. SP-API getOrders accepts a
+      // MarketplaceIds array and returns the union, each order
+      // carrying its own MarketplaceId. Stays inside the 0.0167 req/s
+      // throttle (still one request per tick).
+      const marketplaceIds = await getActiveMarketplaceIdsFromDb()
       const latest = await amazonOrdersService.getLatestPurchaseDate()
       const summary = latest
         ? await amazonOrdersService.syncNewOrders(latest, { marketplaceIds })
