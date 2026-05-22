@@ -14,6 +14,7 @@ import type {
   ProductVariation,
 } from '@prisma/client';
 import { logger } from '../utils/logger.js';
+import { publishListingEvent } from './listing-events.service.js';
 import { MasterPriceService } from './master-price.service.js';
 import { MasterStatusService } from './master-status.service.js';
 import { applyStockMovement } from './stock-movement.service.js';
@@ -415,6 +416,28 @@ export class BulkActionService {
         }
       });
 
+      // P-RT.9 — fan progress out to the SSE listing-events bus so
+      // any /products tab can show a live progress bar without
+      // subscribing to the per-job /api/bulk-operations/:id/events
+      // endpoint. The per-job endpoint is still the right tool when
+      // the operator is staring at THIS job's detail view; this bus
+      // event is the ambient signal for "something bulk is in flight"
+      // visible everywhere a workspace is open. Fire-and-forget;
+      // bus failures must never block job progress.
+      try {
+        publishListingEvent({
+          type: 'bulk.progress',
+          jobId,
+          processed: input.processedItems,
+          total: job.totalItems,
+          succeeded: input.processedItems,
+          failed: input.failedItems,
+          ts: Date.now(),
+        })
+      } catch {
+        // bus is in-process + try/catch'd; this is belt + braces
+      }
+
       return updatedJob;
     } catch (error) {
       logger.error('Failed to update job progress', {
@@ -667,6 +690,22 @@ export class BulkActionService {
           updatedAt: new Date()
         }
       });
+
+      // P-RT.9 — fan completion out to the SSE listing-events bus
+      // so /products workspaces clear their progress UI + show a
+      // success/failure summary. use-listing-events.ts already maps
+      // bulk.completed → invalidation 'bulk-job.completed', which the
+      // workspace's invalidationTypes already names.
+      try {
+        publishListingEvent({
+          type: 'bulk.completed',
+          jobId,
+          status: finalStatus,
+          ts: Date.now(),
+        })
+      } catch {
+        // see updateProgress comment
+      }
 
       logger.info(`Job processing completed`, {
         jobId,

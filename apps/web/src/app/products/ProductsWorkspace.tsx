@@ -31,6 +31,7 @@ import { getBackendUrl } from '@/lib/backend-url'
 import { usePolledList } from '@/lib/sync/use-polled-list'
 import { useListingEvents } from '@/lib/sync/use-listing-events'
 import { PushHealthChip } from '@/components/dashboard/PushHealthChip'
+import { BulkProgressBanner } from './_components/BulkProgressBanner'
 import {
   emitInvalidation,
   useInvalidationChannel,
@@ -1612,6 +1613,11 @@ export default function ProductsWorkspace() {
         }
       />
       {/* ── End Row E (GridToolbar) ────────────────────────────────────── */}
+
+      {/* P-RT.9 — ambient bulk-operation progress strip. Only renders
+          when there's at least one bulk job in flight (across any
+          tab). Auto-dismisses on bulk.completed with a toast. */}
+      <BulkProgressBanner />
 
       {/* ── Row 2: Quick filters (grid lens only) ────────────────────── */}
       {lens === 'grid' && !showDeleted && (
