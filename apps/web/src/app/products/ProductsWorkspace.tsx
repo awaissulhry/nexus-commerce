@@ -30,6 +30,7 @@ import { useTranslations } from '@/lib/i18n/use-translations'
 import { getBackendUrl } from '@/lib/backend-url'
 import { usePolledList } from '@/lib/sync/use-polled-list'
 import { useListingEvents } from '@/lib/sync/use-listing-events'
+import { PushHealthChip } from '@/components/dashboard/PushHealthChip'
 import {
   emitInvalidation,
   useInvalidationChannel,
@@ -1599,6 +1600,16 @@ export default function ProductsWorkspace() {
             <Keyboard size={12} />
           </button>
         ) : undefined}
+        trailingSlot={
+          // P-RT.8 — surface the unified push-health chip (RT.1) on
+          // /products too. Operators editing a catalog need to know
+          // whether the inbound webhook stream from Shopify / eBay /
+          // Amazon is alive; today they'd have to switch tabs to
+          // /orders or /insights/live to see it. Click expands the
+          // per-source modal — same component, same data, no new
+          // endpoint.
+          <PushHealthChip />
+        }
       />
       {/* ── End Row E (GridToolbar) ────────────────────────────────────── */}
 
