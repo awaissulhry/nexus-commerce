@@ -179,9 +179,9 @@ import {
 import {
   createInboundShipmentPlan as fbaCreateInboundShipmentPlan,
   getInboundShipmentLabels as fbaGetLabels,
-  putInboundShipmentTransport as fbaPutTransport,
   isFbaInboundConfigured,
-  type FbaShipmentType,
+  // F.6.6: fbaPutTransport + FbaShipmentType removed — v0 putTransport
+  // route is now a 410 Gone stub pointing to /fulfillment/inbound/v2.
 } from '../services/fba-inbound.service.js'
 import {
   runFbaStatusPoll,
@@ -5361,62 +5361,22 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
-  fastify.post('/fulfillment/fba/shipments/:id/transport', async (request, reply) => {
-    try {
-      if (!isFbaInboundConfigured()) {
-        return reply.code(503).send({
-          error: 'SP-API not configured (set AMAZON_LWA_* + AMAZON_MARKETPLACE_ID)',
-        })
-      }
-      const { id } = request.params as { id: string }
-      const body = request.body as {
-        shipmentType?: FbaShipmentType
-        carrierName?: string
-        trackingIds?: string[]
-        proNumber?: string
-      }
-
-      // :id may be FBAShipment.id (cuid) or the Amazon shipmentId
-      // directly. Resolve to Amazon shipmentId for the SP-API call.
-      const local = await prisma.fBAShipment.findUnique({ where: { id } }).catch(() => null)
-      const amazonShipmentId = local?.shipmentId ?? id
-      if (!amazonShipmentId) {
-        return reply.code(400).send({ error: 'shipmentId required' })
-      }
-
-      const shipmentType: FbaShipmentType = body.shipmentType ?? 'SP'
-
-      const result = await fbaPutTransport({
-        shipmentId: amazonShipmentId,
-        shipmentType,
-        ...(shipmentType === 'SP'
-          ? {
-              smallParcel: {
-                carrierName: body.carrierName ?? 'OTHER',
-                trackingIds: body.trackingIds ?? [],
-              },
-            }
-          : {
-              ltl: {
-                carrierName: body.carrierName ?? 'OTHER',
-                proNumber: body.proNumber ?? '',
-              },
-            }),
-      })
-
-      // No local persistence yet — FBAShipment lacks transport fields.
-      // H.8d (status polling) will reconcile state from Amazon as
-      // source of truth, which avoids drift between two writers.
-
-      return {
-        ok: true,
-        transportStatus: result.transportStatus,
-        shipmentId: amazonShipmentId,
-      }
-    } catch (error: any) {
-      fastify.log.error({ err: error }, '[fba/shipments/:id/transport] failed')
-      return reply.code(500).send({ error: error?.message ?? String(error) })
-    }
+  // F.6.6 (TECH_DEBT #50) — v0 transport-booking route removed.
+  // The underlying SP-API endpoint (PUT /fba/inbound/v0/shipments/{id}/transport)
+  // was deprecated by Amazon and returned HTTP 400 in production. The
+  // replacement is the v2024-03-20 multi-step flow exposed via
+  // /api/fba/inbound/v2/* routes and surfaced in the
+  // /fulfillment/inbound/v2 wizard.
+  //
+  // Keeping a 410 Gone stub here so any straggler clients get a clear
+  // pointer instead of a 404 they have to guess at.
+  fastify.post('/fulfillment/fba/shipments/:id/transport', async (_request, reply) => {
+    return reply.code(410).send({
+      error: 'gone',
+      message:
+        'v0 transport booking was retired (Amazon deprecation). Use the v2024-03-20 wizard at /fulfillment/inbound/v2.',
+      replacement: '/api/fba/inbound/v2/:planRowId/transport-options/confirm',
+    })
   })
 
   // H.8d — FBA status polling. POST trigger for manual reconcile;

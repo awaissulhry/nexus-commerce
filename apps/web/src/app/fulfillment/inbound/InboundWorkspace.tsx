@@ -3174,116 +3174,11 @@ function FbaLabelDownload({ shipmentId }: { shipmentId: string }) {
   )
 }
 
-// H.8c — putTransportDetails. Operator picks SP (small parcel) or LTL
-// (truck), enters carrier name + tracking IDs (one per box for SP) or
-// PRO# (for LTL). Calls non-partnered endpoint — partnered (UPS via
-// Amazon) is US/UK-centric and not on Xavia's path.
-function FbaTransportBooking({ shipmentId }: { shipmentId: string }) {
-  const [shipmentType, setShipmentType] = useState<'SP' | 'LTL'>('SP')
-  const [carrierName, setCarrierName] = useState('OTHER')
-  const [trackingInput, setTrackingInput] = useState('')
-  const [proNumber, setProNumber] = useState('')
-  const [transportStatus, setTransportStatus] = useState<string | null>(null)
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  const submit = async () => {
-    setBusy(true)
-    setError(null)
-    setTransportStatus(null)
-    try {
-      const trackingIds = trackingInput.split(/[,\s]+/).map((s) => s.trim()).filter(Boolean)
-      if (shipmentType === 'SP' && trackingIds.length === 0) {
-        throw new Error('Enter at least one tracking ID (one per box).')
-      }
-      if (shipmentType === 'LTL' && !proNumber.trim()) {
-        throw new Error('PRO# is required for LTL shipments.')
-      }
-      const res = await fetch(`${getBackendUrl()}/api/fulfillment/fba/shipments/${encodeURIComponent(shipmentId)}/transport`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          shipmentType,
-          carrierName: carrierName.trim() || 'OTHER',
-          ...(shipmentType === 'SP' ? { trackingIds } : { proNumber: proNumber.trim() }),
-        }),
-      })
-      const data = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(data?.error ?? `Failed (${res.status})`)
-      setTransportStatus(data?.transportStatus ?? 'WORKING')
-    } catch (e: any) {
-      setError(e.message)
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  return (
-    <div className="space-y-1.5">
-      <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">Transport</div>
-      {/* TECH_DEBT #50 — putTransportDetails on v0 is deprecated and
-          Amazon returns 400 in production. Until the inbound surface
-          migrates to v2024-03-20, this form is a fallback only —
-          operators should book transport in Seller Central. */}
-      <div className="text-sm bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 text-amber-900 rounded px-2 py-1.5 leading-snug">
-        <span className="font-semibold">Use Seller Central for transport booking.</span>{' '}
-        Amazon deprecated the v0 booking endpoint — this form returns
-        400 in production. Pending v2024-03-20 migration (TECH_DEBT #50).
-      </div>
-      <div className="flex items-center gap-2 flex-wrap">
-        <select
-          value={shipmentType}
-          onChange={(e) => setShipmentType(e.target.value as 'SP' | 'LTL')}
-          className="h-7 text-sm px-2 border border-slate-200 dark:border-slate-700 rounded"
-        >
-          <option value="SP">Small parcel</option>
-          <option value="LTL">LTL (truck)</option>
-        </select>
-        <input
-          type="text"
-          value={carrierName}
-          onChange={(e) => setCarrierName(e.target.value)}
-          placeholder="Carrier (e.g. DHL, UPS, OTHER)"
-          className="h-7 text-sm px-2 border border-slate-200 dark:border-slate-700 rounded w-40"
-        />
-        {shipmentType === 'SP' ? (
-          <input
-            type="text"
-            value={trackingInput}
-            onChange={(e) => setTrackingInput(e.target.value)}
-            placeholder="Tracking IDs (comma-separated, one per box)"
-            className="h-7 text-sm px-2 border border-slate-200 dark:border-slate-700 rounded flex-1 min-w-[180px] font-mono"
-          />
-        ) : (
-          <input
-            type="text"
-            value={proNumber}
-            onChange={(e) => setProNumber(e.target.value)}
-            placeholder="PRO#"
-            className="h-7 text-sm px-2 border border-slate-200 dark:border-slate-700 rounded w-32 font-mono"
-          />
-        )}
-        <button
-          onClick={submit}
-          disabled={busy}
-          // TECH_DEBT #50 — button is intentionally secondary/muted
-          // (not primary dark) since the call is known-failing and
-          // Seller Central is the recommended path.
-          title="Known-failing while Amazon deprecation is active — try Seller Central first"
-          className="h-7 px-2.5 text-sm border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-900 rounded hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50"
-        >
-          {busy ? 'Booking…' : transportStatus ? 'Re-book (fallback)' : 'Try v0 booking (likely fails)'}
-        </button>
-        {transportStatus && (
-          <span className="text-xs font-mono bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-900 rounded px-1.5 py-0.5">
-            {transportStatus}
-          </span>
-        )}
-      </div>
-      {error && <div className="text-xs text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 rounded px-2 py-1">{error}</div>}
-    </div>
-  )
-}
+// F.6.6 — FbaTransportBooking removed. v0 putTransportDetails is
+// deprecated by Amazon; the working replacement is the v2024-03-20
+// multi-step wizard at /fulfillment/inbound/v2. The v0 wizard's
+// "Transport" subsection now renders a single link to that flow
+// (see the per-shipment block lower in the file).
 
 // H.9 — Catalog-aware SKU picker for the FBA wizard. Replaces the
 // hand-typed SKU input with autocomplete against /api/products,
@@ -3539,21 +3434,22 @@ function FBAWizardModal({ onClose, onCreated }: { onClose: () => void; onCreated
           <button onClick={onClose} className="h-7 w-7 inline-flex items-center justify-center rounded hover:bg-slate-100 dark:hover:bg-slate-700"><X size={16} /></button>
         </header>
 
-        {/* H.8d status banner — Plan + Labels + Status polling are
-            real against SP-API v0; putTransportDetails is deprecated
-            on v0 (Amazon returns 400 with a v2024-03-20 migration
-            note). Honest banner reflects that. */}
-        <div className="mx-5 mt-4 p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 rounded-md text-base text-amber-900">
+        {/* F.6.6 — banner refreshed. v0 surface (plan + labels +
+            status polling) still works; transport now flows through
+            the v2024-03-20 wizard. */}
+        <div className="mx-5 mt-4 p-3 bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900 rounded-md text-base text-blue-900 dark:text-blue-100">
           <div className="font-semibold mb-1 inline-flex items-center gap-1.5">
-            <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-500" />
-            Plan + Labels + Status polling live · Transport v0 deprecated by Amazon
+            <span className="inline-block w-1.5 h-1.5 rounded-full bg-blue-500" />
+            v0 plan + labels + status polling live · transport via v2024-03-20
           </div>
-          <div className="text-amber-800 leading-snug">
+          <div className="text-blue-800 dark:text-blue-200 leading-snug">
             createInboundShipmentPlan, getLabels (FNSKU/carton/pallet), and the
-            15-min status-polling cron submit to Amazon SP-API v0 for real.
-            putTransportDetails on v0 is deprecated (Amazon returns 400) — until
-            we migrate the inbound surface to v2024-03-20, transport booking
-            must be completed in Seller Central. See TECH_DEBT #50.
+            15-min status-polling cron submit to Amazon SP-API v0 for real. For
+            transport booking, use the v2024-03-20 wizard at{' '}
+            <a href="/fulfillment/inbound/v2" className="underline font-medium">
+              /fulfillment/inbound/v2
+            </a>{' '}
+            (Amazon retired v0 putTransportDetails).
           </div>
         </div>
 
@@ -3593,7 +3489,20 @@ function FBAWizardModal({ onClose, onCreated }: { onClose: () => void; onCreated
                 </ul>
                 <div className="mt-2 pt-2 border-t border-slate-100 dark:border-slate-800 space-y-3">
                   <FbaLabelDownload shipmentId={sp.shipmentId} />
-                  <FbaTransportBooking shipmentId={sp.shipmentId} />
+                  {/* F.6.6 — v0 transport booking removed (Amazon
+                      deprecated). Operators book transport in the
+                      v2024-03-20 wizard. */}
+                  <div className="text-sm text-slate-500 dark:text-slate-400">
+                    <span className="font-medium">Transport:</span>{' '}
+                    book in the{' '}
+                    <a
+                      href={`/fulfillment/inbound/v2`}
+                      className="text-blue-600 dark:text-blue-400 hover:underline"
+                    >
+                      v2024-03-20 inbound wizard
+                    </a>{' '}
+                    (Amazon retired the v0 booking endpoint).
+                  </div>
                 </div>
               </div>
             ))}
