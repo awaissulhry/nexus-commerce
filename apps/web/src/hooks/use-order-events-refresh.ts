@@ -51,11 +51,41 @@ export function useOrderEventsRefresh(
       }, debounceMs)
     }
 
+    // RT.8 — track the timestamp of the last event we saw so the
+    // SSE connection (which auto-reconnects on transient drops) can
+    // request a replay of any events that landed during the gap.
+    // sessionStorage so a hard reload re-fetches from scratch; tab
+    // suspends + EventSource auto-reconnects share state.
+    const lastEventKey = 'nexus.orders.events.lastTs.v1'
+    const initialSince = (() => {
+      const raw = typeof window !== 'undefined' ? sessionStorage.getItem(lastEventKey) : null
+      const n = raw ? Number(raw) : NaN
+      return Number.isFinite(n) && n > 0 ? n : null
+    })()
+    const trackTs = (e: MessageEvent) => {
+      try {
+        const data = JSON.parse(e.data) as { ts?: number }
+        if (typeof data.ts === 'number') {
+          sessionStorage.setItem(lastEventKey, String(data.ts))
+        }
+      } catch { /* ignore */ }
+    }
+
     try {
-      es = new EventSource(`${getBackendUrl()}/api/orders/events`)
+      const url = initialSince
+        ? `${getBackendUrl()}/api/orders/events?since=${initialSince}`
+        : `${getBackendUrl()}/api/orders/events`
+      es = new EventSource(url)
       for (const t of eventTypes) {
-        es.addEventListener(t, debouncedRefresh)
+        es.addEventListener(t, (e: MessageEvent) => {
+          trackTs(e)
+          debouncedRefresh()
+        })
       }
+      // Also track ts on the ping heartbeat so a disconnect during
+      // a quiet window still resumes from a recent point (not from
+      // hours ago, which the buffer can't satisfy anyway).
+      es.addEventListener('ping', trackTs)
     } catch {
       /* EventSource unsupported / network blocked — caller keeps
          whatever fetch-on-mount + polling it already has. */

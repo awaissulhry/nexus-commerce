@@ -61,7 +61,41 @@ type Listener = (event: OrderEvent) => void
 
 const listeners = new Set<Listener>()
 
+// RT.8 — replay ring buffer. Browser tabs that disconnect (laptop
+// suspend, mobile network blip, idle tab pruning) silently miss
+// events; on reconnect they'd previously fall back to a full refetch
+// which is laggy + heavy. The ring buffer lets the client pass
+// ?since=<ts> on /api/orders/events and get the missed events
+// replayed before live streaming resumes.
+//
+// 100 events / 5 min was chosen so:
+//   * a 5-min disconnect (laptop closed during lunch) almost always
+//     finds its events still in the buffer
+//   * a 10-min disconnect or a high-volume burst falls back gracefully
+//     — the client just re-fetches (existing behaviour)
+//   * memory cost is negligible (~5KB)
+const REPLAY_BUFFER_MAX = 100
+const REPLAY_BUFFER_TTL_MS = 5 * 60_000
+const replayBuffer: OrderEvent[] = []
+
+function trimReplayBuffer(): void {
+  const cutoff = Date.now() - REPLAY_BUFFER_TTL_MS
+  // Drop events older than the TTL OR beyond the size cap. We trim
+  // by age first (cheaper, common case) then by size (defensive).
+  while (replayBuffer.length > 0 && replayBuffer[0]!.ts < cutoff) {
+    replayBuffer.shift()
+  }
+  while (replayBuffer.length > REPLAY_BUFFER_MAX) {
+    replayBuffer.shift()
+  }
+}
+
 export function publishOrderEvent(event: OrderEvent): void {
+  // Don't buffer ping events — they're heartbeats, no replay value.
+  if (event.type !== 'ping') {
+    replayBuffer.push(event)
+    trimReplayBuffer()
+  }
   for (const listener of listeners) {
     try {
       listener(event)
@@ -80,4 +114,25 @@ export function subscribeOrderEvents(listener: Listener): () => void {
 
 export function getOrderListenerCount(): number {
   return listeners.size
+}
+
+/**
+ * RT.8 — return events from the ring buffer with ts > sinceMs. Used
+ * by /api/orders/events?since=<ts> on reconnect. Returns an empty
+ * array (not throw) when the buffer is empty or sinceMs is in the
+ * future — the SSE endpoint handles that as "nothing to replay,
+ * resume live streaming".
+ */
+export function replayOrderEventsSince(sinceMs: number): OrderEvent[] {
+  trimReplayBuffer()
+  return replayBuffer.filter((e) => e.ts > sinceMs)
+}
+
+/**
+ * RT.8 — exposed for diagnostics (push-health could surface the
+ * current buffer depth in a future phase).
+ */
+export function getReplayBufferDepth(): number {
+  trimReplayBuffer()
+  return replayBuffer.length
 }

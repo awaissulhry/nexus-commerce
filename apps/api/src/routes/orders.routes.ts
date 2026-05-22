@@ -1481,6 +1481,13 @@ export async function ordersRoutes(app: FastifyInstance) {
   // refresh its list/facets/stats without polling. Heartbeat every
   // 25s defeats most reverse-proxy idle timeouts; client EventSource
   // auto-reconnects on transient drops.
+  //
+  // RT.8 — accepts ?since=<ms> on reconnect. Events newer than the
+  // given timestamp are flushed before live streaming resumes so a
+  // browser tab that briefly lost connectivity gets caught up
+  // without falling back to a full list re-fetch. Buffer is in-
+  // memory (last 100 events, 5-min TTL); longer gaps fall through
+  // to the existing re-fetch path automatically.
   app.get('/api/orders/events', async (request, reply) => {
     reply.raw.writeHead(200, {
       'Content-Type': 'text/event-stream',
@@ -1492,7 +1499,7 @@ export async function ordersRoutes(app: FastifyInstance) {
       `event: ping\ndata: ${JSON.stringify({ ts: Date.now(), connected: true })}\n\n`,
     )
 
-    const { subscribeOrderEvents } = await import(
+    const { subscribeOrderEvents, replayOrderEventsSince } = await import(
       '../services/order-events.service.js'
     )
     const send = (event: any) => {
@@ -1500,6 +1507,29 @@ export async function ordersRoutes(app: FastifyInstance) {
         reply.raw.write(`event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`)
       } catch {
         // Connection dead — cleanup runs in the close handler.
+      }
+    }
+
+    // RT.8 — replay missed events for a reconnecting client. We do
+    // this BEFORE subscribing so any events that arrive during
+    // replay flush still get streamed (subscribeOrderEvents handles
+    // them; the replay-vs-live ordering is fine because each event
+    // is idempotent on the client — subscribers re-fetch on receipt).
+    const sinceRaw = (request.query as any)?.since
+    const sinceMs = sinceRaw ? Number(sinceRaw) : NaN
+    if (Number.isFinite(sinceMs) && sinceMs > 0) {
+      const replayed = replayOrderEventsSince(sinceMs)
+      for (const event of replayed) send(event)
+      if (replayed.length > 0) {
+        // Signal end-of-replay so the client can flush any buffered
+        // state before resuming. Type kept distinct from real events
+        // so existing listeners ignore it.
+        reply.raw.write(
+          `event: replay.done\ndata: ${JSON.stringify({
+            ts: Date.now(),
+            count: replayed.length,
+          })}\n\n`,
+        )
       }
     }
 
