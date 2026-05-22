@@ -40,7 +40,12 @@ async function grantlessPost<T>(token: string, slug: string, path: string, body:
   return JSON.parse(text) as T
 }
 
-async function ensureSubscriptionForType(
+// CL.X (post-RT.5) — exported so /api/admin/setup-amazon-notifications
+// can reuse the same per-type subscription logic the boot service uses.
+// Was previously module-private; admin endpoint only created ORDER_CHANGE
+// which meant the 7 new RT.* subscriptions never landed if the boot
+// service didn't run on a deploy.
+export async function ensureSubscriptionForType(
   notifType: string,
   destinationId: string,
 ): Promise<void> {
@@ -84,93 +89,110 @@ async function ensureSubscriptionForType(
   })
 }
 
+/**
+ * Canonical list of SP-API notification types Nexus subscribes to.
+ * Single source of truth used by both the boot service and the
+ * /api/admin/setup-amazon-notifications admin endpoint.
+ *
+ * Add a new RT.* notification type here and both code paths pick it up.
+ */
+export const NEXUS_SP_API_NOTIFICATION_TYPES = [
+  'ORDER_CHANGE',                       // RT.5 legacy
+  'ORDER_STATUS_CHANGE',                // RT.5 replacement
+  'FBA_OUTBOUND_SHIPMENT_STATUS',       // RT.6 (MCF)
+  'FBA_INVENTORY_AVAILABILITY_CHANGES', // RT.9
+  'ANY_OFFER_CHANGED',                  // RT.13
+  'LISTINGS_ITEM_STATUS_CHANGE',        // RT.14
+  'FEED_PROCESSING_FINISHED',           // RT.15
+  'ACCOUNT_STATUS_CHANGED',             // RT.16
+] as const
+
+/**
+ * Idempotent: ensures the destination + all 8 subscriptions exist.
+ * Returns per-type result so the admin endpoint can surface partial
+ * success (e.g. ORDER_CHANGE was already there but ANY_OFFER_CHANGED
+ * failed because the seller's SP-API role lacks pricing scope).
+ */
+export async function setupAllAmazonNotifications(): Promise<{
+  destinationId: string | null
+  perType: Array<{ type: string; status: 'created' | 'already_exists' | 'failed'; error?: string }>
+}> {
+  if (!isSqsConfigured()) {
+    return { destinationId: null, perType: [] }
+  }
+
+  const queueUrl = process.env.AMAZON_SQS_QUEUE_URL!
+  const parts = queueUrl.replace('https://', '').split('/')
+  const [regionHost, accountId, queueName] = [parts[0], parts[1], parts[2]]
+  const sqsRegion = regionHost?.replace('sqs.', '').replace('.amazonaws.com', '') ?? 'us-east-1'
+  const sqsArn = `arn:aws:sqs:${sqsRegion}:${accountId}:${queueName}`
+  const slug = mapAwsRegionToSpApiSlug(process.env.AMAZON_REGION ?? 'na')
+
+  const { amazonSpApiClient } = await import('../clients/amazon-sp-api.client.js')
+
+  // 1. Get or create destination — shared by every subscription.
+  const grantlessToken = await amazonSpApiClient.getGrantlessToken(NOTIFICATIONS_SCOPE)
+  const destList = await grantlessGet<any>(grantlessToken, slug, '/notifications/v1/destinations')
+  const destinations: any[] = destList.payload ?? []
+  let existingDest = destinations.find((d: any) => d.resource?.sqs?.arn === sqsArn)
+
+  if (!existingDest) {
+    logger.info('[amazon-notifications] creating destination', { sqsArn })
+    const destResp = await grantlessPost<any>(grantlessToken, slug, '/notifications/v1/destinations', {
+      name: queueName,
+      resourceSpecification: { sqs: { arn: sqsArn } },
+    })
+    existingDest = { destinationId: destResp.payload?.destinationId ?? destResp.destinationId }
+    logger.info('[amazon-notifications] destination created', { destinationId: existingDest.destinationId })
+  } else {
+    logger.info('[amazon-notifications] reusing existing destination', { destinationId: existingDest.destinationId })
+  }
+
+  // 2. Iterate every type. Per-type failures don't abort the loop —
+  // they're surfaced in the result so the operator sees which subs
+  // need scope adjustments.
+  const perType: Array<{ type: string; status: 'created' | 'already_exists' | 'failed'; error?: string }> = []
+  for (const t of NEXUS_SP_API_NOTIFICATION_TYPES) {
+    try {
+      // Probe first so we can distinguish created vs already-exists in the result.
+      let alreadyActive = false
+      try {
+        const existing = await amazonSpApiClient.request<any>(
+          'GET',
+          `/notifications/v1/subscriptions/${t}`,
+        )
+        if (existing?.payload?.subscriptionId) alreadyActive = true
+      } catch {
+        /* 404 expected when missing; fall through to create */
+      }
+      if (alreadyActive) {
+        perType.push({ type: t, status: 'already_exists' })
+        continue
+      }
+      await ensureSubscriptionForType(t, existingDest.destinationId)
+      perType.push({ type: t, status: 'created' })
+    } catch (err: any) {
+      perType.push({
+        type: t,
+        status: 'failed',
+        error: err?.message ?? String(err),
+      })
+      logger.warn(`[amazon-notifications] ${t} subscription failed`, {
+        error: err?.message ?? String(err),
+      })
+    }
+  }
+
+  return { destinationId: existingDest.destinationId, perType }
+}
+
 export function ensureAmazonNotificationSubscription(): void {
   if (!isSqsConfigured()) return
   if (!process.env.NEXUS_ENABLE_AMAZON_SQS_POLL || process.env.NEXUS_ENABLE_AMAZON_SQS_POLL !== '1') return
 
   void (async () => {
     try {
-      const queueUrl = process.env.AMAZON_SQS_QUEUE_URL!
-      const parts = queueUrl.replace('https://', '').split('/')
-      const [regionHost, accountId, queueName] = [parts[0], parts[1], parts[2]]
-      const sqsRegion = regionHost?.replace('sqs.', '').replace('.amazonaws.com', '') ?? 'us-east-1'
-      const sqsArn = `arn:aws:sqs:${sqsRegion}:${accountId}:${queueName}`
-      const slug = mapAwsRegionToSpApiSlug(process.env.AMAZON_REGION ?? 'na')
-
-      const { amazonSpApiClient } = await import('../clients/amazon-sp-api.client.js')
-
-      // 1. Get or create destination — shared by both subscriptions.
-      const grantlessToken = await amazonSpApiClient.getGrantlessToken(NOTIFICATIONS_SCOPE)
-      const destList = await grantlessGet<any>(grantlessToken, slug, '/notifications/v1/destinations')
-      const destinations: any[] = destList.payload ?? []
-      let existingDest = destinations.find((d: any) => d.resource?.sqs?.arn === sqsArn)
-
-      if (!existingDest) {
-        logger.info('[amazon-notifications-boot] creating destination', { sqsArn })
-        const destResp = await grantlessPost<any>(grantlessToken, slug, '/notifications/v1/destinations', {
-          name: queueName,
-          resourceSpecification: { sqs: { arn: sqsArn } },
-        })
-        existingDest = { destinationId: destResp.payload?.destinationId ?? destResp.destinationId }
-        logger.info('[amazon-notifications-boot] destination created', { destinationId: existingDest.destinationId })
-      } else {
-        logger.info('[amazon-notifications-boot] reusing existing destination', { destinationId: existingDest.destinationId })
-      }
-
-      // 2. RT.5 — subscribe to BOTH ORDER_CHANGE + ORDER_STATUS_CHANGE.
-      // Parallel-run window collects 7 days of side-by-side coverage
-      // before the verifier confirms equivalence and a follow-up phase
-      // removes the legacy ORDER_CHANGE subscription.
-      await ensureSubscriptionForType('ORDER_CHANGE', existingDest.destinationId)
-      await ensureSubscriptionForType('ORDER_STATUS_CHANGE', existingDest.destinationId)
-      // 3. RT.6 — Multi-Channel Fulfillment shipment status. Closes
-      // the 15-min cron lag for MCF orders shipping non-Amazon
-      // channels (Shopify, eBay) — operator sees the status flip in
-      // ~30s instead of waiting for the next sweep.
-      await ensureSubscriptionForType(
-        'FBA_OUTBOUND_SHIPMENT_STATUS',
-        existingDest.destinationId,
-      )
-      // 4. RT.9 — FBA inventory availability changes. Pushes per-SKU
-      // stock deltas (inbound received, return restock, removal,
-      // lost, destroyed). Routes to recordChannelStockEvent so
-      // drift surfaces on /fulfillment/stock/channel-drift in ~30s
-      // instead of waiting for the CS-series ingester sweep.
-      await ensureSubscriptionForType(
-        'FBA_INVENTORY_AVAILABILITY_CHANGES',
-        existingDest.destinationId,
-      )
-      // 5. RT.13 — Buy Box / competing-offer change. Fires
-      // competitive.buyBoxLost on the SSE bus when we drop out
-      // of the buy box on an ASIN where we have an offer. Alert
-      // only — repricing lives in CE-series.
-      await ensureSubscriptionForType(
-        'ANY_OFFER_CHANGED',
-        existingDest.destinationId,
-      )
-      // 6. RT.14 — listing status change (search-suppression
-      // detection). Fires listing.suppressed on the SSE bus so
-      // an operator can investigate the cause within minutes.
-      await ensureSubscriptionForType(
-        'LISTINGS_ITEM_STATUS_CHANGE',
-        existingDest.destinationId,
-      )
-      // 7. RT.15 — feed processing finished. Resolves
-      // AmazonImageFeedJob.status from push instead of waiting for
-      // the polling worker. Fires feed.processing.finished SSE so
-      // the images tab can refresh immediately.
-      await ensureSubscriptionForType(
-        'FEED_PROCESSING_FINISHED',
-        existingDest.destinationId,
-      )
-      // 8. RT.16 — CRITICAL: account-status change. Suspension /
-      // warning / policy violation. Fires account.health.changed
-      // on the SSE bus → GlobalAccountHealthBanner shows a
-      // persistent red banner + browser notification.
-      await ensureSubscriptionForType(
-        'ACCOUNT_STATUS_CHANGED',
-        existingDest.destinationId,
-      )
+      await setupAllAmazonNotifications()
     } catch (err: any) {
       logger.error('[amazon-notifications-boot] setup failed (non-fatal)', {
         error: err?.message ?? String(err),

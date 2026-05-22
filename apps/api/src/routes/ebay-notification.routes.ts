@@ -209,37 +209,24 @@ export default async function ebayNotificationRoutes(app: FastifyInstance): Prom
       return reply.status(400).send({ error: err?.message ?? String(err) })
     }
 
-    // RT.7 — full coverage of eBay Trading-API events the operator
-    // cares about. Audit log showed we only subscribed to the two
-    // checkout events; returns, refunds, shipments, and item-sold
-    // events were silently absent (existing ebay-returns-poll cron
-    // closed the returns gap but at 30-min lag).
+    // RT.7 + RT.10 — Trading API events Nexus subscribes to.
     //
-    // Events enabled here:
-    //   AuctionCheckoutComplete   — auction BIN / true auction sale
-    //   FixedPriceTransaction     — fixed-price / Buy It Now sale
-    //   ItemSold                  — broader sale notification (covers
-    //                                edge cases the two above miss)
-    //   ItemMarkedAsShipped       — buyer-facing "shipped" event so
-    //                                we can mirror the status back
-    //   ItemMarkedAsPaid          — confirms payment cleared
-    //   ReturnOpened              — buyer initiated a return; close
-    //                                ebay-returns-poll lag from 30min
-    //                                to ~30s
-    //   ReturnClosed              — return resolved (item back / refund
-    //                                paid / case escalated)
-    //   EOR_OrderRefunded         — eBay-issued refund (admin / case)
+    // First production run rejected ItemMarkedAsPaid + ReturnOpened +
+    // ReturnClosed + EOR_OrderRefunded with eBay error code 37 "Invalid
+    // input data" — those are REST Notification API topics, NOT
+    // Trading API event names. Trading API's SetNotificationPreferences
+    // only accepts the enum values defined at:
+    // https://developer.ebay.com/devzone/xml/docs/reference/ebay/types/notificationeventtypecodetype.html
+    //
+    // Returns / refunds flow through the REST Notification API instead,
+    // which we already handle via /api/webhooks/ebay-notification with
+    // topics marketplace.order.* — those don't need this admin call.
     const events = [
-      'AuctionCheckoutComplete',
-      'FixedPriceTransaction',
-      'ItemSold',
-      'ItemMarkedAsShipped',
-      'ItemMarkedAsPaid',
-      'ReturnOpened',
-      'ReturnClosed',
-      'EOR_OrderRefunded',
-      // RT.10 — pushes quantity changes (operator edits in eBay UI,
-      // batch upload, third-party stock app). Routes to
+      'AuctionCheckoutComplete',   // auction BIN / true auction sale
+      'FixedPriceTransaction',     // fixed-price / Buy It Now sale
+      'ItemSold',                  // broader sale event
+      'ItemMarkedAsShipped',       // buyer-facing shipped marker
+      // RT.10 — quantity / item revision push. Routes to
       // recordChannelStockEvent so /fulfillment/stock/channel-drift
       // surfaces the drift in ~30s instead of next sweep.
       'ItemRevised',

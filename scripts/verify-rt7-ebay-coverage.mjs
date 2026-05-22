@@ -30,16 +30,16 @@ const days = daysFlag > -1 ? Number(process.argv[daysFlag + 1] ?? '7') : 7
 
 // Keep in sync with apps/api/src/routes/ebay-notification.routes.ts
 // (the events array in setup-ebay-notifications).
+// First production setup rejected 4 invalid types (eBay error 37):
+// ItemMarkedAsPaid, ReturnOpened, ReturnClosed, EOR_OrderRefunded are
+// REST Notification API topics, not Trading API events. Returns +
+// refunds come through /api/webhooks/ebay-notification REST topics
+// instead. See ebay-notification.routes.ts setup-ebay-notifications.
 const SUBSCRIBED = new Set([
   'AuctionCheckoutComplete',
   'FixedPriceTransaction',
   'ItemSold',
   'ItemMarkedAsShipped',
-  'ItemMarkedAsPaid',
-  'ReturnOpened',
-  'ReturnClosed',
-  'EOR_OrderRefunded',
-  // RT.10 — quantity / item revision push.
   'ItemRevised',
 ])
 

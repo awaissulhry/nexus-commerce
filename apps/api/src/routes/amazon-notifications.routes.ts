@@ -183,65 +183,47 @@ export default async function amazonNotificationsRoutes(app: FastifyInstance): P
       })
     }
 
-    // Respond immediately — SP-API calls can take 10-20s and Railway
-    // cuts the connection at 30s. Work runs in background; check status
-    // with GET /api/admin/amazon-notification-status after ~20 seconds.
+    // Respond immediately — SP-API calls for all 8 types take 30-60s
+    // total and Railway cuts the connection at 30s. Work runs in
+    // background; check status with GET /api/admin/amazon-notification-
+    // status after ~60 seconds.
     reply.status(202).send({
       status: 'setup started',
-      message: 'SP-API calls running in background. Check GET /api/admin/amazon-notification-status in ~20s.',
+      message:
+        'SP-API destination + 8 subscriptions running in background. Check GET /api/admin/amazon-notification-status in ~60s.',
+      expectedSubscriptions: [
+        'ORDER_CHANGE',
+        'ORDER_STATUS_CHANGE',
+        'FBA_OUTBOUND_SHIPMENT_STATUS',
+        'FBA_INVENTORY_AVAILABILITY_CHANGES',
+        'ANY_OFFER_CHANGED',
+        'LISTINGS_ITEM_STATUS_CHANGE',
+        'FEED_PROCESSING_FINISHED',
+        'ACCOUNT_STATUS_CHANGED',
+      ],
     })
 
-    // Background work — detached from the HTTP response.
+    // Background work — detached from the HTTP response. Reuses the
+    // canonical helper so the admin endpoint subscribes to the same
+    // 8 types the boot service does (was the pre-fix bug — admin only
+    // created ORDER_CHANGE while boot created all 8).
     void (async () => {
-      const queueUrl = process.env.AMAZON_SQS_QUEUE_URL!
-      const parts = queueUrl.replace('https://', '').split('/')
-      const [regionHost, accountId, queueName] = [parts[0], parts[1], parts[2]]
-      const sqsRegion = regionHost?.replace('sqs.', '').replace('.amazonaws.com', '') ?? 'us-east-1'
-      const sqsArn = `arn:aws:sqs:${sqsRegion}:${accountId}:${queueName}`
-
       try {
-        const [destList, existingSub] = await Promise.all([
-          spApiGrantless<any>('GET', '/notifications/v1/destinations'),
-          spApiRequest<any>('GET', '/notifications/v1/subscriptions/ORDER_CHANGE').catch(() => null),
-        ])
-
-        const destinations: any[] = destList.payload ?? []
-        const existingDest = destinations.find((d: any) => d.resource?.sqs?.arn === sqsArn)
-
-        if (existingDest && existingSub?.payload?.subscriptionId) {
-          logger.info('[amazon-notifications] already fully configured', {
-            destinationId: existingDest.destinationId,
-            subscriptionId: existingSub.payload.subscriptionId,
-          })
-          return
-        }
-
-        let destinationId: string
-        if (existingDest) {
-          destinationId = existingDest.destinationId
-          logger.info('[amazon-notifications] reusing existing destination', { destinationId })
-        } else {
-          const destResp = await spApiGrantless<any>('POST', '/notifications/v1/destinations', {
-            name: queueName,
-            resourceSpecification: { sqs: { arn: sqsArn } },
-          })
-          destinationId = destResp.payload?.destinationId ?? destResp.destinationId
-          logger.info('[amazon-notifications] destination created', { destinationId })
-        }
-
-        if (!existingSub?.payload?.subscriptionId) {
-          const subResp = await spApiRequest<any>('POST', '/notifications/v1/subscriptions/ORDER_CHANGE', {
-            payloadVersion: '1.0',
-            destinationId,
-            processingDirective: {
-              eventFilter: { eventFilterType: 'ORDER_CHANGE' },
-            },
-          })
-          const subscriptionId = subResp.payload?.subscriptionId ?? subResp.subscriptionId
-          logger.info('[amazon-notifications] subscription created', { subscriptionId, destinationId })
-        }
+        const { setupAllAmazonNotifications } = await import(
+          '../services/amazon-notifications-boot.service.js'
+        )
+        const result = await setupAllAmazonNotifications()
+        logger.info('[amazon-notifications] admin setup complete', {
+          destinationId: result.destinationId,
+          summary: result.perType.reduce<Record<string, number>>((acc, r) => {
+            acc[r.status] = (acc[r.status] ?? 0) + 1
+            return acc
+          }, {}),
+        })
       } catch (err: any) {
-        logger.error('[amazon-notifications] background setup failed', { error: err?.message ?? String(err) })
+        logger.error('[amazon-notifications] admin background setup failed', {
+          error: err?.message ?? String(err),
+        })
       }
     })()
   })
@@ -251,27 +233,26 @@ export default async function amazonNotificationsRoutes(app: FastifyInstance): P
       return reply.send({ configured: false, reason: 'AMAZON_SQS_QUEUE_URL missing' })
     }
 
-    // RT.5 — return both ORDER_CHANGE + ORDER_STATUS_CHANGE state so the
-    // operator can verify both subscriptions are active during the
-    // parallel-run window. `subscription` kept for back-compat with
-    // older UI; `subscriptions` is the canonical new field.
+    // Return state for ALL 8 RT-series notification types so the
+    // operator can verify the full subscription set is active.
+    // `subscription` kept as a legacy alias to the ORDER_CHANGE row.
+    const { NEXUS_SP_API_NOTIFICATION_TYPES } = await import(
+      '../services/amazon-notifications-boot.service.js'
+    )
     const fetchSub = (type: string) =>
       spApiRequest<any>('GET', `/notifications/v1/subscriptions/${type}`)
         .then((r) => r.payload ?? null)
         .catch((err: any) => ({ error: err?.message ?? String(err) }))
 
-    const [orderChange, orderStatusChange] = await Promise.all([
-      fetchSub('ORDER_CHANGE'),
-      fetchSub('ORDER_STATUS_CHANGE'),
-    ])
+    const results = await Promise.all(
+      NEXUS_SP_API_NOTIFICATION_TYPES.map(async (t) => [t, await fetchSub(t)] as const),
+    )
+    const subscriptions = Object.fromEntries(results) as Record<string, any>
 
     return reply.send({
       configured: true,
-      subscriptions: {
-        ORDER_CHANGE: orderChange,
-        ORDER_STATUS_CHANGE: orderStatusChange,
-      },
-      subscription: orderChange, // legacy alias
+      subscriptions,
+      subscription: subscriptions.ORDER_CHANGE ?? null, // legacy alias
       sqsQueueUrl: process.env.AMAZON_SQS_QUEUE_URL,
       pollEnabled: process.env.NEXUS_ENABLE_AMAZON_SQS_POLL === '1',
     })
