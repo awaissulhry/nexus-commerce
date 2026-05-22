@@ -32,10 +32,6 @@ import {
 import { cn } from '@/lib/utils'
 import { getBackendUrl } from '@/lib/backend-url'
 import { emitInvalidation, useInvalidationChannel } from '@/lib/sync/invalidation-channel'
-import { useListingEvents } from '@/lib/sync/use-listing-events'
-import { useOrderEventsRefresh } from '@/hooks/use-order-events-refresh'
-import { Tooltip } from '@/components/ui/Tooltip'
-import { useTranslations } from '@/lib/i18n/use-translations'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
 import { IconButton } from '@/components/ui/IconButton'
@@ -1424,36 +1420,6 @@ export default function AmazonFlatFileClient({
     void loadData(marketplace, productType, false, true)
   })
 
-  // FF-RT.1 — auto-poll feed status on SP-API push. RT.15 publishes
-  // `feed.processing.finished` to the order-events bus when Amazon
-  // confirms terminal status (DONE / FATAL / CANCELLED). Before today
-  // operators had to click "Check" manually after submitting a feed
-  // and wait through the pollAllFeeds round-trip; now the page
-  // refreshes the moment SP-API notifies us. Guarded so we only run
-  // pollAllFeeds when at least one in-flight feedEntry's feedId
-  // matches the event payload — events for unrelated feeds (other
-  // marketplaces, images-tab jobs, other operators) are skipped.
-  const { connected: sseConnected } = useListingEvents()
-  const { t } = useTranslations()
-  useOrderEventsRefresh(
-    () => { /* refresh routed through onEvent below */ },
-    {
-      eventTypes: ['feed.processing.finished'],
-      debounceMs: 500,
-      onEvent: (event) => {
-        if (event.type !== 'feed.processing.finished') return
-        const eventFeedId = String(event.feedId ?? '')
-        if (!eventFeedId) return
-        const matches = feedEntries.some(
-          (e) => e.feedId === eventFeedId && e.status !== 'DONE' && e.status !== 'FATAL',
-        )
-        if (matches) {
-          void pollAllFeeds()
-        }
-      },
-    },
-  )
-
   // Load submission history when marketplace/productType change
   useEffect(() => {
     if (!productType) return
@@ -2243,36 +2209,6 @@ export default function AmazonFlatFileClient({
           {/* Hidden file input for Import */}
           <input ref={fileInputRef} type="file" accept=".txt,.tsv,.csv,.xlsm,.xlsx" className="hidden"
             onChange={(e) => { const f = e.target.files?.[0]; if (f) void importFile(f); e.target.value = '' }} />
-
-          {/* FF-RT.1 — Live indicator. Green pulse = SSE up + auto-poll
-              of feed-status active (no need to click Check after a
-              submission). Gray = polling fallback. */}
-          <Tooltip
-            content={
-              sseConnected
-                ? t('products.live.tooltipConnected')
-                : t('products.live.tooltipDisconnected')
-            }
-          >
-            <span
-              className="inline-flex items-center gap-1.5 text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400"
-              aria-label={
-                sseConnected
-                  ? t('products.live.tooltipConnected')
-                  : t('products.live.tooltipDisconnected')
-              }
-              data-testid="amazon-flat-file-live-indicator"
-              data-connected={sseConnected ? '1' : '0'}
-            >
-              <span
-                className={`w-1.5 h-1.5 rounded-full ${
-                  sseConnected ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300'
-                }`}
-                aria-hidden
-              />
-              {sseConnected ? t('products.live') : t('products.polling')}
-            </span>
-          </Tooltip>
 
           {/* Feed status badges */}
           {feedEntries.length > 0 && (
