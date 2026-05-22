@@ -660,6 +660,13 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
           valueCents: number
           units: number
           orderCount: number
+          // GS-RT.1 — per-marketplace pending estimate, attached
+          // after the pendingInWindow scan below. Lets the UI render
+          // FR (or any market with PENDING+€0 orders) with the same
+          // estimated total + `*` annotation the tile headline shows.
+          // Optional in the response so old clients still render.
+          pendingEstimateCents?: number
+          pendingCount?: number
         }
         const salesRows: SalesRow[] = []
         let salesTotalCents = 0
@@ -764,6 +771,14 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
         // ChannelListing row exists for the marketplace.
         let pendingEstimateCents = 0
         const pendingEstimateBreakdown: Array<{ orderId: string; cents: number }> = []
+        // GS-RT.1 — per-marketplace rollups for the byMarketplace UI.
+        // Populated alongside the global accumulator in the same loop
+        // below; emitted on each salesRows entry so the table + the
+        // headline use the same source of truth and the `*` annotation
+        // surfaces in every row that holds an estimate, not just the
+        // tile total.
+        const pendingEstimateByMarketplace = new Map<string, number>()
+        const pendingCountByMarketplace = new Map<string, number>()
         if (pendingInWindow.length > 0) {
           const productIds = Array.from(
             new Set(
@@ -803,8 +818,40 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
               }
               pendingEstimateCents += orderCents
               if (orderCents > 0) pendingEstimateBreakdown.push({ orderId: o.id, cents: orderCents })
+              // GS-RT.1 — per-marketplace pending estimate. Previously
+              // the estimate lived as a single global number that the
+              // headline used + the table ignored, so the FR row (or
+              // any market with a PENDING order) showed €0 while the
+              // headline showed €651.99* — visible split-brain. Now we
+              // accumulate per-marketplace so the row + the headline
+              // share the same number, with the same `*` annotation
+              // marking it as estimated.
+              const mkt = o.marketplace ?? 'UNKNOWN'
+              pendingEstimateByMarketplace.set(
+                mkt,
+                (pendingEstimateByMarketplace.get(mkt) ?? 0) + orderCents,
+              )
+              pendingCountByMarketplace.set(
+                mkt,
+                (pendingCountByMarketplace.get(mkt) ?? 0) + 1,
+              )
             }
           }
+        }
+
+        // GS-RT.1 — fold per-marketplace pending estimate into each
+        // SalesRow now that both passes (orders groupBy + pendingInWindow)
+        // have completed. For a marketplace that has ONLY a PENDING
+        // order (e.g. France yesterday: 1 unit at €0), the row already
+        // exists from salesByMarketplace because we DON'T exclude
+        // PENDING from the gross-sales semantic — so we always have
+        // a row to attach the estimate to. Only attach when there's
+        // genuinely a non-zero estimate to share with the UI.
+        for (const row of salesRows) {
+          const est = pendingEstimateByMarketplace.get(row.marketplace) ?? 0
+          const cnt = pendingCountByMarketplace.get(row.marketplace) ?? 0
+          if (est > 0) row.pendingEstimateCents = est
+          if (cnt > 0) row.pendingCount = cnt
         }
 
         // SA.3 — distinct list of marketplaces with order activity in

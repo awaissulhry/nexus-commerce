@@ -28,6 +28,14 @@ type SalesRow = {
   valueCents: number
   units: number
   orderCount: number
+  // GS-RT.1 — per-marketplace pending estimate. Populated when the
+  // marketplace has at least one PENDING+€0 order with a price that
+  // ChannelListing / Product.basePrice can supply. The table cell
+  // renders `€X * (incl. estimated)` so the row total matches the
+  // tile headline — fixes the FR-row-shows-€0-but-tile-shows-€651.99
+  // split-brain that GS-RT.1 was built to close.
+  pendingEstimateCents?: number
+  pendingCount?: number
 }
 
 type OpenOrdersRow = {
@@ -923,7 +931,32 @@ function SalesPanelPlaceholder({ data, onSelectMarketplace }: { data: Snapshot; 
                             </span>
                           </td>
                           <td className="px-3 py-1.5 text-blue-600 dark:text-blue-400 tabular-nums">
-                            {formatEur(r.valueCents)}
+                            {/* GS-RT.1 — combine confirmed + estimated
+                                for the row total so the table sums to
+                                the tile headline. Annotate with the
+                                same `*` marker the headline uses so the
+                                operator knows the value is estimated
+                                (ChannelListing.price → Product.basePrice
+                                fallback). Tooltip explains the source. */}
+                            {(() => {
+                              const est = r.pendingEstimateCents ?? 0
+                              const cnt = r.pendingCount ?? 0
+                              const combined = r.valueCents + est
+                              const showAsterisk = est > 0 && cnt > 0
+                              return (
+                                <>
+                                  {formatEur(combined)}
+                                  {showAsterisk && (
+                                    <span
+                                      className="text-amber-600 dark:text-amber-400 ml-0.5"
+                                      title={`Includes ~${formatEur(est)} estimated for ${cnt} pending order${cnt === 1 ? '' : 's'}. Amazon withholds OrderTotal for PENDING orders; we estimate from ChannelListing.price (fallback to Product.basePrice). Real value lands within minutes of the order leaving PENDING.`}
+                                    >
+                                      *
+                                    </span>
+                                  )}
+                                </>
+                              )
+                            })()}
                           </td>
                           <td className="px-3 py-1.5 text-blue-600 dark:text-blue-400 tabular-nums">
                             {r.units}
