@@ -40,6 +40,7 @@ import {
   Loader2,
   Play,
   RefreshCw,
+  Radio,
   RotateCcw,
   ShieldAlert,
   ShieldCheck,
@@ -413,6 +414,15 @@ export default function SyncLogsHubClient({
             <Button variant="secondary" size="sm">
               <History className="w-3.5 h-3.5" />
               {t('syncLogs.hub.deepLink.webhooks')}
+            </Button>
+          </Link>
+          {/* RT.19 — live SSE tail. Operator can watch every event
+              flow in real-time, filter by type, copy JSON. The
+              "tail -f" of the sync pipeline. */}
+          <Link href="/sync-logs/live">
+            <Button variant="secondary" size="sm">
+              <Radio className="w-3.5 h-3.5" />
+              Live activity
             </Button>
           </Link>
           <Link href="/sync-logs/alerts">
