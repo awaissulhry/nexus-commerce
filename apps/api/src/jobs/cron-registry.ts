@@ -18,6 +18,7 @@
  */
 
 import { runOrdersPoll as runAmazonOrdersPoll } from './amazon-orders-sync.job.js'
+import { runZeroTotalsBackfill as runAmazonZeroTotalsBackfill } from './amazon-zero-totals-backfill.job.js'
 import { runFinancialSync as runAmazonFinancialSync } from './amazon-financial-sync.job.js'
 import { runEbayFinancialSync } from './ebay-financial-sync.job.js'
 import { runInventorySweep as runAmazonInventorySweep } from './amazon-inventory-sync.job.js'
@@ -109,6 +110,10 @@ import { runSegmentRecountCron } from './segment-recount.job.js'
 // wrapper that the cron itself uses.
 export const CRON_REGISTRY: Record<string, () => Promise<unknown>> = {
   'amazon-orders-sync': () => runAmazonOrdersPoll(),
+  // GS-RT.2 — periodic re-fetch of `totalPrice=0` Amazon orders so
+  // PENDING+€0 rows recover the moment Amazon releases OrderTotal,
+  // without operator intervention.
+  'amazon-zero-totals-backfill': () => runAmazonZeroTotalsBackfill(),
   'amazon-financial-sync': () => runAmazonFinancialSync(),
   'ebay-financial-sync': () => runEbayFinancialSync(),
   'amazon-inventory-sync': () => runAmazonInventorySweep(),

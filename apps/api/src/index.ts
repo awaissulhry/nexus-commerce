@@ -161,6 +161,7 @@ import { startAmazonReturnsPollCron } from "./jobs/amazon-returns-poll.job.js";
 import { startRefundRetryCron } from "./jobs/refund-retry.job.js";
 import { startRefundDeadlineTrackerCron } from "./jobs/refund-deadline-tracker.job.js";
 import { startAmazonOrdersCron } from "./jobs/amazon-orders-sync.job.js";
+import { startAmazonZeroTotalsBackfillCron } from "./jobs/amazon-zero-totals-backfill.job.js";
 import { startEbayOrdersCron } from "./jobs/ebay-orders-sync.job.js";
 import { startAmazonFinancialSyncCron } from "./jobs/amazon-financial-sync.job.js";
 import { startEbayFinancialSyncCron } from "./jobs/ebay-financial-sync.job.js";
@@ -782,6 +783,16 @@ async function start() {
     // Gated behind NEXUS_ENABLE_AMAZON_ORDERS_CRON=1.
     if (process.env.NEXUS_ENABLE_AMAZON_ORDERS_CRON === '1') {
       startAmazonOrdersCron();
+    }
+
+    // GS-RT.2 — Periodic re-fetch of `totalPrice=0` Amazon orders.
+    // Safety net for the SP-API ListOrders withholding behavior on
+    // PENDING orders: if SA.2's eager getOrder failed at intake OR
+    // Amazon STILL withholds OrderTotal at ORDER_CHANGE-time re-poll,
+    // this cron recovers the price the moment Amazon releases it.
+    // Gated behind NEXUS_ENABLE_AMAZON_ZERO_BACKFILL_CRON=1.
+    if (process.env.NEXUS_ENABLE_AMAZON_ZERO_BACKFILL_CRON === '1') {
+      startAmazonZeroTotalsBackfillCron();
     }
 
     // O.2 — Incremental eBay orders polling. Mirror of the Amazon
