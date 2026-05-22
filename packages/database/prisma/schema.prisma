@@ -3297,9 +3297,17 @@ model WebhookEvent {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
+  // RT.3 — provider-reported event time. Lets us measure end-to-end
+  // push latency as (createdAt - providerTimestamp). Nullable because
+  // older rows + sources that don't expose a timestamp won't populate
+  // it. The (channel, providerTimestamp) index supports the per-source
+  // percentile queries on /api/admin/push-latency.
+  providerTimestamp DateTime?
+
   @@unique([channel, externalId])
   @@index([isProcessed])
   @@index([channel])
+  @@index([channel, providerTimestamp])
 }
 
 // ── CS.1: Channel → us inbound stock event ───────────────────────────

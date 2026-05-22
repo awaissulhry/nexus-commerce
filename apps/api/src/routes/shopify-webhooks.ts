@@ -34,6 +34,20 @@ interface ShopifyWebhookPayload {
 }
 
 /**
+ * RT.3 — parse the X-Shopify-Triggered-At header that Shopify
+ * stamps on every webhook (RFC3339 UTC). Used as the provider-side
+ * timestamp on the WebhookEvent row so /api/admin/push-latency can
+ * chart Shopify push latency. Returns null if the header is missing
+ * or malformed — push-latency drops nulls from the percentile calc.
+ */
+function parseShopifyTriggeredAt(request: { headers: Record<string, unknown> }): Date | null {
+  const raw = request.headers["x-shopify-triggered-at"];
+  if (typeof raw !== "string") return null;
+  const t = Date.parse(raw);
+  return Number.isNaN(t) ? null : new Date(t);
+}
+
+/**
  * Process product update webhook
  */
 async function handleProductUpdate(payload: ShopifyWebhookPayload): Promise<void> {
@@ -926,8 +940,17 @@ export async function shopifyWebhookRoutes(app: FastifyInstance) {
 
       // Mark as processed — RT.1 passes eventType + payload so push-health
       // and /sync-logs/webhooks can show meaningful topic names instead
-      // of "unknown" placeholders.
-      await WebhookProcessor.markWebhookProcessed("SHOPIFY", externalId, prisma, undefined, eventType, payload);
+      // of "unknown" placeholders. RT.3 passes the X-Shopify-Triggered-At
+      // header value as providerTimestamp for the push-latency dashboard.
+      await WebhookProcessor.markWebhookProcessed(
+        "SHOPIFY",
+        externalId,
+        prisma,
+        undefined,
+        eventType,
+        payload,
+        parseShopifyTriggeredAt(request),
+      );
 
       return reply.send({ success: true });
     } catch (error) {
@@ -984,8 +1007,17 @@ export async function shopifyWebhookRoutes(app: FastifyInstance) {
 
       // Mark as processed — RT.1 passes eventType + payload so push-health
       // and /sync-logs/webhooks can show meaningful topic names instead
-      // of "unknown" placeholders.
-      await WebhookProcessor.markWebhookProcessed("SHOPIFY", externalId, prisma, undefined, eventType, payload);
+      // of "unknown" placeholders. RT.3 passes the X-Shopify-Triggered-At
+      // header value as providerTimestamp for the push-latency dashboard.
+      await WebhookProcessor.markWebhookProcessed(
+        "SHOPIFY",
+        externalId,
+        prisma,
+        undefined,
+        eventType,
+        payload,
+        parseShopifyTriggeredAt(request),
+      );
 
       return reply.send({ success: true });
     } catch (error) {
@@ -1042,8 +1074,17 @@ export async function shopifyWebhookRoutes(app: FastifyInstance) {
 
       // Mark as processed — RT.1 passes eventType + payload so push-health
       // and /sync-logs/webhooks can show meaningful topic names instead
-      // of "unknown" placeholders.
-      await WebhookProcessor.markWebhookProcessed("SHOPIFY", externalId, prisma, undefined, eventType, payload);
+      // of "unknown" placeholders. RT.3 passes the X-Shopify-Triggered-At
+      // header value as providerTimestamp for the push-latency dashboard.
+      await WebhookProcessor.markWebhookProcessed(
+        "SHOPIFY",
+        externalId,
+        prisma,
+        undefined,
+        eventType,
+        payload,
+        parseShopifyTriggeredAt(request),
+      );
 
       return reply.send({ success: true });
     } catch (error) {
@@ -1100,8 +1141,17 @@ export async function shopifyWebhookRoutes(app: FastifyInstance) {
 
       // Mark as processed — RT.1 passes eventType + payload so push-health
       // and /sync-logs/webhooks can show meaningful topic names instead
-      // of "unknown" placeholders.
-      await WebhookProcessor.markWebhookProcessed("SHOPIFY", externalId, prisma, undefined, eventType, payload);
+      // of "unknown" placeholders. RT.3 passes the X-Shopify-Triggered-At
+      // header value as providerTimestamp for the push-latency dashboard.
+      await WebhookProcessor.markWebhookProcessed(
+        "SHOPIFY",
+        externalId,
+        prisma,
+        undefined,
+        eventType,
+        payload,
+        parseShopifyTriggeredAt(request),
+      );
 
       return reply.send({ success: true });
     } catch (error) {
@@ -1158,8 +1208,17 @@ export async function shopifyWebhookRoutes(app: FastifyInstance) {
 
       // Mark as processed — RT.1 passes eventType + payload so push-health
       // and /sync-logs/webhooks can show meaningful topic names instead
-      // of "unknown" placeholders.
-      await WebhookProcessor.markWebhookProcessed("SHOPIFY", externalId, prisma, undefined, eventType, payload);
+      // of "unknown" placeholders. RT.3 passes the X-Shopify-Triggered-At
+      // header value as providerTimestamp for the push-latency dashboard.
+      await WebhookProcessor.markWebhookProcessed(
+        "SHOPIFY",
+        externalId,
+        prisma,
+        undefined,
+        eventType,
+        payload,
+        parseShopifyTriggeredAt(request),
+      );
 
       return reply.send({ success: true });
     } catch (error) {
@@ -1216,8 +1275,17 @@ export async function shopifyWebhookRoutes(app: FastifyInstance) {
 
       // Mark as processed — RT.1 passes eventType + payload so push-health
       // and /sync-logs/webhooks can show meaningful topic names instead
-      // of "unknown" placeholders.
-      await WebhookProcessor.markWebhookProcessed("SHOPIFY", externalId, prisma, undefined, eventType, payload);
+      // of "unknown" placeholders. RT.3 passes the X-Shopify-Triggered-At
+      // header value as providerTimestamp for the push-latency dashboard.
+      await WebhookProcessor.markWebhookProcessed(
+        "SHOPIFY",
+        externalId,
+        prisma,
+        undefined,
+        eventType,
+        payload,
+        parseShopifyTriggeredAt(request),
+      );
 
       return reply.send({ success: true });
     } catch (error) {
@@ -1277,7 +1345,15 @@ export async function shopifyWebhookRoutes(app: FastifyInstance) {
       }
 
       const result = await handleRefundCreate(payload);
-      await WebhookProcessor.markWebhookProcessed("SHOPIFY", externalId, prisma, undefined, eventType, payload);
+      await WebhookProcessor.markWebhookProcessed(
+        "SHOPIFY",
+        externalId,
+        prisma,
+        undefined,
+        eventType,
+        payload,
+        parseShopifyTriggeredAt(request),
+      );
 
       return reply.send({ success: true, ...result });
     } catch (error) {

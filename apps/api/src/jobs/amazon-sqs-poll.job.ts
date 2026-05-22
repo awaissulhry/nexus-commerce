@@ -42,8 +42,19 @@ async function runSqsPoll(): Promise<void> {
         // P3.4 — Persist to WebhookEvent so the message appears in
         // /sync-logs/webhooks and can be replayed. Upsert on (channel, externalId)
         // so polling the same message twice (before ack) is idempotent.
+        //
+        // RT.3 — capture the SP-API EventTime (when Amazon emitted the
+        // notification) so /api/admin/push-latency can compute the
+        // (ingestedAt - providerTimestamp) percentile per source.
         let webhookEventId: string | null = null
         if (msg.messageId) {
+          const raw = msg.rawPayload as any
+          const eventTimeRaw =
+            raw?.EventTime ?? raw?.eventTime ?? raw?.Payload?.EventTime ?? null
+          const providerTimestamp =
+            typeof eventTimeRaw === 'string' && !Number.isNaN(Date.parse(eventTimeRaw))
+              ? new Date(eventTimeRaw)
+              : null
           try {
             const we = await prisma.webhookEvent.upsert({
               where: { channel_externalId: { channel: 'AMAZON', externalId: msg.messageId } },
@@ -53,6 +64,7 @@ async function runSqsPoll(): Promise<void> {
                 externalId: msg.messageId,
                 payload: msg.rawPayload as any,
                 isProcessed: false,
+                providerTimestamp,
               },
               update: {},  // don't overwrite if already persisted
               select: { id: true },

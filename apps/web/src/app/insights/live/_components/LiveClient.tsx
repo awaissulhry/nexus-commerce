@@ -14,6 +14,7 @@ import { Card } from '@/components/ui/Card'
 import { cn } from '@/lib/utils'
 import { getBackendUrl } from '@/lib/backend-url'
 import { PushHealthChip } from '@/components/dashboard/PushHealthChip'
+import { PushLatencyWidget } from '@/components/dashboard/PushLatencyWidget'
 
 interface LiveSummary {
   currency: string
@@ -271,6 +272,15 @@ export default function LiveClient() {
           </Card>
         )}
       </div>
+
+      {/* RT.3 — push-latency dashboard. Hidden in TV-mode (the
+          fullscreen view is for at-a-glance business KPIs; ops
+          signal would clutter it). */}
+      {!fullscreen && (
+        <div className="mb-5">
+          <PushLatencyWidget />
+        </div>
+      )}
     </div>
   )
 }

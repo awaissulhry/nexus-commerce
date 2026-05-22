@@ -193,6 +193,10 @@ export class WebhookProcessor {
    * and the /sync-logs/webhooks viewer (RT.4) can show meaningful
    * topic names instead of "unknown" placeholders. Existing 3-arg call
    * sites keep working unchanged.
+   *
+   * RT.3 added providerTimestamp so /api/admin/push-latency can chart
+   * end-to-end latency per source. For Shopify the value comes from
+   * the X-Shopify-Triggered-At request header (RFC3339 UTC string).
    */
   static async markWebhookProcessed(
     channel: MarketplaceChannel,
@@ -201,6 +205,7 @@ export class WebhookProcessor {
     error?: string,
     eventType?: string,
     payload?: unknown,
+    providerTimestamp?: Date | null,
   ): Promise<void> {
     try {
       await db.webhookEvent.upsert({
@@ -218,6 +223,7 @@ export class WebhookProcessor {
           isProcessed: !error,
           processedAt: !error ? new Date() : undefined,
           error,
+          providerTimestamp: providerTimestamp ?? undefined,
         },
         update: {
           isProcessed: !error,
@@ -228,6 +234,7 @@ export class WebhookProcessor {
           // path that didn't pass the topic.
           ...(eventType ? { eventType } : {}),
           ...(payload !== undefined ? { payload: payload as any } : {}),
+          ...(providerTimestamp ? { providerTimestamp } : {}),
         },
       });
     } catch (err) {

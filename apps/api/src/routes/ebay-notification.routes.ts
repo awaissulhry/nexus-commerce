@@ -340,7 +340,17 @@ export default async function ebayNotificationRoutes(app: FastifyInstance): Prom
     // eBay's notificationId; if missing we fall back to a deterministic
     // composite so the unique (channel, externalId) constraint still
     // bounces duplicate retries from eBay.
+    //
+    // RT.3 — eBay's notification envelope carries metadata.publishDate
+    // (the moment eBay queued the notification). Capture it as
+    // providerTimestamp so /api/admin/push-latency can chart eBay
+    // push latency alongside Amazon + Shopify.
     const externalId = notificationId || `${topic}:${ebayOrderId}:${Date.now()}`
+    const publishDateRaw = payload?.metadata?.publishDate ?? null
+    const providerTimestamp =
+      typeof publishDateRaw === 'string' && !Number.isNaN(Date.parse(publishDateRaw))
+        ? new Date(publishDateRaw)
+        : null
     try {
       await prisma.webhookEvent.upsert({
         where: { channel_externalId: { channel: 'EBAY', externalId } },
@@ -351,6 +361,7 @@ export default async function ebayNotificationRoutes(app: FastifyInstance): Prom
           payload: payload ?? {},
           isProcessed: true,
           processedAt: new Date(),
+          providerTimestamp,
         },
         update: { processedAt: new Date() },
       })
