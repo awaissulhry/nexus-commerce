@@ -16,6 +16,7 @@ import { WebhookValidator, WebhookProcessor } from "../utils/webhook.js";
 import { ConfigManager } from "../utils/config.js";
 import type { ShopifyConfig } from "../types/marketplace.js";
 import { publishListingEvent } from "../services/listing-events.service.js";
+import { productEventService } from "../services/product-event.service.js";
 import {
   reserveOpenOrder,
   consumeOpenOrder,
@@ -76,6 +77,19 @@ async function handleProductUpdate(payload: ShopifyWebhookPayload): Promise<void
       },
     });
 
+    // P-RT.2 — fan out to ProductEvent timeline + SSE listing-events
+    // bus so /products + /products/[id]/edit refresh within ~250ms
+    // instead of waiting for the 30s usePolledList tick. emit() writes
+    // the audit row AND publishes product.updated to the bus via the
+    // ssePayloadFor mapping (P-RT.1).
+    void productEventService.emit({
+      aggregateId: dbProduct.id,
+      aggregateType: 'Product',
+      eventType: 'PRODUCT_UPDATED',
+      data: { shopifyProductId, title: product.title },
+      metadata: { source: 'WEBHOOK', shopifyProductId, channel: 'SHOPIFY' },
+    });
+
     console.log(`[ShopifyWebhooks] Product ${shopifyProductId} updated successfully`);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -103,6 +117,20 @@ async function handleProductDelete(payload: ShopifyWebhookPayload): Promise<void
       await (prisma as any).product.update({
         where: { id: dbProduct.id },
         data: { status: "INACTIVE" },
+      });
+
+      // P-RT.2 — emit product.deleted on the SSE bus. We use the
+      // PRODUCT_DELETED event type even though the row stays in the
+      // DB (status flipped to INACTIVE) because semantically the
+      // product left the active catalog from Shopify's perspective —
+      // /products grid should drop it from the active view in real
+      // time. The Timeline tab keeps the row + the audit event.
+      void productEventService.emit({
+        aggregateId: dbProduct.id,
+        aggregateType: 'Product',
+        eventType: 'PRODUCT_DELETED',
+        data: { shopifyProductId },
+        metadata: { source: 'WEBHOOK', shopifyProductId, channel: 'SHOPIFY' },
       });
 
       console.log(`[ShopifyWebhooks] Product ${shopifyProductId} marked as inactive`);
@@ -248,6 +276,32 @@ async function handleInventoryUpdate(payload: ShopifyWebhookPayload): Promise<vo
       status: result.status,
       newlyRecorded: result.newlyRecorded,
     });
+
+    // P-RT.2 — emit a STOCK_ADJUSTED ProductEvent when the change
+    // was auto-applied (drift within threshold) so /products + the
+    // stock workspace refresh sub-200ms via the listing-events SSE
+    // bus. REVIEW_NEEDED rows are operator-gated by design — those
+    // already surface in the drift triage UI; firing SSE for them
+    // would imply the change landed locally when it didn't. APPLIED
+    // (drift === 0) is a no-op observation, no UI refresh needed.
+    if (
+      result.newlyRecorded &&
+      (result.status === 'AUTO_APPLIED') &&
+      productId
+    ) {
+      void productEventService.emit({
+        aggregateId: productId,
+        aggregateType: 'Product',
+        eventType: 'STOCK_ADJUSTED',
+        data: {
+          shopifyInventoryItemId: inventoryItemId,
+          locationId: nexusLocation.id,
+          channelReportedQty: available,
+          drift: result.drift,
+        },
+        metadata: { source: 'WEBHOOK', channel: 'SHOPIFY' },
+      });
+    }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.error("[ShopifyWebhooks] Failed to process inventory update:", message);
