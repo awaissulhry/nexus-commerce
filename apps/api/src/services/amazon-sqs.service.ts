@@ -68,6 +68,20 @@ export interface FbaInventoryNotification {
 }
 
 /**
+ * RT.16 — ACCOUNT_STATUS_CHANGED notification. The critical alert.
+ * Fires when Amazon flags account health: warnings, suspensions,
+ * policy violations. Without push the operator only discovers this
+ * by logging into Seller Central manually.
+ */
+export interface AccountStatusChangedNotification {
+  accountStatus: string  // HEALTHY | AT_RISK | DEACTIVATED | ...
+  marketplaceId: string
+  // Optional human-readable summary from Amazon when present —
+  // sometimes carries the breach reason.
+  message?: string
+}
+
+/**
  * RT.15 — FEED_PROCESSING_FINISHED notification. Fires when one of
  * our JSON_LISTINGS_FEED submissions hits a terminal state (DONE /
  * CANCELLED / FATAL). Lets the images-feed worker update the
@@ -143,6 +157,8 @@ export interface SqsOrderMessage {
   listingsItemStatusNotification?: ListingsItemStatusChangedNotification
   /** RT.15 — present on FEED_PROCESSING_FINISHED messages. */
   feedProcessingFinishedNotification?: FeedProcessingFinishedNotification
+  /** RT.16 — present on ACCOUNT_STATUS_CHANGED messages. */
+  accountStatusChangedNotification?: AccountStatusChangedNotification
   receiptHandle: string
   /** SQS Message.MessageId — used as WebhookEvent.externalId for dedup. */
   messageId: string
@@ -201,6 +217,31 @@ export async function pollSqsMessages(maxMessages = 10): Promise<SqsOrderMessage
       const inner = outer.Message ? JSON.parse(outer.Message) : outer
 
       const notifType = inner.NotificationType ?? inner.notificationType
+
+      // RT.16 — account-health change. Critical alert path.
+      if (notifType === 'ACCOUNT_STATUS_CHANGED') {
+        const root =
+          inner.Payload?.AccountStatusChangedNotification ??
+          inner.Payload?.AccountStatusChanged
+        if (!root) {
+          await deleteSqsMessage(msg.ReceiptHandle)
+          continue
+        }
+        results.push({
+          accountStatusChangedNotification: {
+            accountStatus: String(
+              root.AccountStatus ?? root.accountStatus ?? root.Status ?? 'UNKNOWN',
+            ),
+            marketplaceId: root.MarketplaceId ?? root.marketplaceId ?? '',
+            message: root.Message ?? root.message,
+          },
+          receiptHandle: msg.ReceiptHandle,
+          messageId: msg.MessageId ?? '',
+          rawPayload: inner,
+          notificationType: notifType,
+        })
+        continue
+      }
 
       // RT.15 — feed processing finished. Routes to
       // AmazonImageFeedJob update + SSE event in the poller.

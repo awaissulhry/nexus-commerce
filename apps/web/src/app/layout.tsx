@@ -6,6 +6,7 @@ import CommandMatrixPanel from "@/components/CommandMatrixPanel";
 import NotificationsBell from "@/components/NotificationsBell";
 import MobileTopBar from "@/components/MobileTopBar";
 import { GlobalDlqBanner } from "@/components/dashboard/GlobalDlqBanner";
+import { GlobalAccountHealthBanner } from "@/components/dashboard/GlobalAccountHealthBanner";
 import { CompetitiveAlertWatcher } from "@/components/dashboard/CompetitiveAlertWatcher";
 import { ToastProvider } from "@/components/ui/Toast";
 import { ConfirmProvider } from "@/components/ui/ConfirmProvider";
@@ -52,6 +53,10 @@ export default async function RootLayout({
                   className="flex-1 overflow-auto"
                   tabIndex={-1}
                 >
+                  {/* RT.16 — account-health banner FIRST (top of stack)
+                      because account-level outages take priority over
+                      everything else. */}
+                  <GlobalAccountHealthBanner />
                   {/* RT.2 — global DLQ alert. Hidden when depth=0;
                       sticks to top of main when a breach is active. */}
                   <GlobalDlqBanner />

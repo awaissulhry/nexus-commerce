@@ -163,6 +163,14 @@ export function ensureAmazonNotificationSubscription(): void {
         'FEED_PROCESSING_FINISHED',
         existingDest.destinationId,
       )
+      // 8. RT.16 — CRITICAL: account-status change. Suspension /
+      // warning / policy violation. Fires account.health.changed
+      // on the SSE bus → GlobalAccountHealthBanner shows a
+      // persistent red banner + browser notification.
+      await ensureSubscriptionForType(
+        'ACCOUNT_STATUS_CHANGED',
+        existingDest.destinationId,
+      )
     } catch (err: any) {
       logger.error('[amazon-notifications-boot] setup failed (non-fatal)', {
         error: err?.message ?? String(err),

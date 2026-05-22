@@ -96,6 +96,18 @@ export type OrderEvent =
       productId: string | null
       ts: number
     }
+  // RT.16 — CRITICAL alert. ACCOUNT_STATUS_CHANGED from Amazon —
+  // suspension / warning / policy violation. Surfaces as a
+  // persistent red banner + browser notification + console.error
+  // because account-level outages mean nothing else matters
+  // until the operator addresses them.
+  | {
+      type: 'account.health.changed'
+      accountStatus: string
+      marketplaceId: string
+      message?: string
+      ts: number
+    }
   | { type: 'ping'; ts: number }
 
 type Listener = (event: OrderEvent) => void

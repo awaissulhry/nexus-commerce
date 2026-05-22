@@ -73,6 +73,41 @@ async function runSqsPoll(): Promise<void> {
           }
         }
 
+        // RT.16 — CRITICAL: account-health change. Always emits the
+        // SSE event regardless of resolved/unresolved status so the
+        // global banner can reflect the latest state. UI decides
+        // whether to render based on the accountStatus value
+        // (HEALTHY → hide banner, anything else → show).
+        if (msg.accountStatusChangedNotification) {
+          const note = msg.accountStatusChangedNotification
+          const { publishOrderEvent } = await import(
+            '../services/order-events.service.js'
+          )
+          publishOrderEvent({
+            type: 'account.health.changed',
+            accountStatus: note.accountStatus,
+            marketplaceId: note.marketplaceId,
+            message: note.message,
+            ts: Date.now(),
+          })
+          // Log at error level so it shows up in any error monitor
+          // alongside crashes — account health is THE critical signal.
+          logger.error('[SQS poll] account status changed', {
+            accountStatus: note.accountStatus,
+            marketplaceId: note.marketplaceId,
+            message: note.message,
+          })
+          await deleteSqsMessage(msg.receiptHandle)
+          if (webhookEventId) {
+            await prisma.webhookEvent.update({
+              where: { id: webhookEventId },
+              data: { isProcessed: true, processedAt: new Date() },
+            }).catch(() => {})
+          }
+          processed++
+          continue
+        }
+
         // RT.15 — feed processing finished. Resolves the matching
         // AmazonImageFeedJob row (if any) by feedId and fires the
         // feed.processing.finished SSE event so the images-tab UI
