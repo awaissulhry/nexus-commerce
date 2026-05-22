@@ -23,7 +23,6 @@ import {
   Keyboard,
   Plus,
   RefreshCw,
-  TableProperties,
   X,
   Truck,
   ShieldAlert,
@@ -585,20 +584,8 @@ export const PAGE_COMMANDS: Command[] = [
     contextPath: /^\/products\/[^/]+\/edit(\?|$)/,
     keywords: 'image photo media gallery upload immagini foto',
   },
-  {
-    id: 'page-products-edit-open-bulk',
-    label: 'Open spreadsheet view (this product + variants)',
-    icon: TableProperties,
-    run: () =>
-      window.dispatchEvent(
-        new CustomEvent('nexus:products-edit:goto-route', {
-          detail: { route: 'bulk' },
-        }),
-      ),
-    group: 'On this page',
-    contextPath: /^\/products\/[^/]+\/edit(\?|$)/,
-    keywords: 'bulk spreadsheet grid table edit variants foglio modifica',
-  },
+  // CL.1 — bulk/spreadsheet route removed. MatrixTab covers
+  // price/qty bulk edits inline. Command-palette entry deleted.
 ]
 
 /**

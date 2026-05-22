@@ -1,11 +1,12 @@
 /**
  * F6 — variant matrix editor.
  *
- * Distinct from /products/[id]/edit/bulk (which is a multi-channel
- * marketplace editor): this route shows the parent product's
- * children laid out as a matrix on the product's own variation axes
- * (e.g. Color × Size). Built for catalog managers who think in 2D
- * grids rather than per-row tables.
+ * Shows the parent product's children laid out as a matrix on the
+ * product's own variation axes (e.g. Color × Size). Built for catalog
+ * managers who think in 2D grids rather than per-row tables.
+ * (CL.1 removed the standalone /edit/bulk per-row editor — MatrixTab
+ * on /products/[id]/edit covers price/qty bulk edits inline; channel
+ * sub-tabs handle per-marketplace attribute editing.)
  *
  * Server fetches parent + children. Client renders:
  *   - 1 axis  → flat table (rows = variants)

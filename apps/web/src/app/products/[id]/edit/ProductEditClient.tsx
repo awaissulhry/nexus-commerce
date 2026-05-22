@@ -11,7 +11,6 @@ import {
   LifeBuoy,
   Loader2,
   Save,
-  TableProperties,
   X,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
@@ -237,9 +236,9 @@ export default function ProductEditClient({
         router.push(`/products/${product.id}/list-wizard`)
       } else if (route === 'images') {
         router.push(`/products/${product.id}/images`)
-      } else if (route === 'bulk') {
-        router.push(`/products/${product.id}/edit/bulk`)
       }
+      // CL.1 — 'bulk' route handler removed alongside the
+      // /edit/bulk page + Command Palette entry.
     }
     window.addEventListener('nexus:products-edit:goto-route', onGotoRoute)
     return () =>
@@ -609,15 +608,10 @@ export default function ProductEditClient({
               <FileText className="w-3.5 h-3.5 mr-1.5" />
               {t('products.edit.datasheet')}
             </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => router.push(`/products/${product.id}/edit/bulk`)}
-              title={t('products.edit.bulkEditTooltip')}
-            >
-              <TableProperties className="w-3.5 h-3.5 mr-1.5" />
-              {t('products.edit.bulkEdit')}
-            </Button>
+            {/* CL.1 — Bulk Edit button + /edit/bulk route removed.
+                MatrixTab covers price/qty bulk edits inline; the
+                channel sub-tabs handle marketplace attribute editing.
+                The standalone bulk page (2,121 lines) was unused. */}
             <Button
               variant="ghost"
               size="sm"

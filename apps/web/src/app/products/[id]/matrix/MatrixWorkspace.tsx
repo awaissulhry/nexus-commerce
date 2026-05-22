@@ -25,7 +25,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import {
   ChevronLeft,
-  ExternalLink,
   Loader2,
   AlertCircle,
   RefreshCw,
@@ -367,13 +366,9 @@ export default function MatrixWorkspace({
             )}
             Refresh
           </button>
-          <Link
-            href={`/products/${product.id}/edit/bulk`}
-            className="h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 inline-flex items-center gap-1.5"
-          >
-            <ExternalLink className="w-3 h-3" />
-            Channel editor
-          </Link>
+          {/* CL.1 — "Channel editor" link to /edit/bulk removed.
+              Per-channel attribute editing lives on the channel
+              sub-tabs of /products/[id]/edit. */}
         </div>
       </header>
 
