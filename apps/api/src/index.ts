@@ -138,6 +138,7 @@ import amazonNotificationsRoutes from "./routes/amazon-notifications.routes.js";
 import ebayNotificationRoutes from "./routes/ebay-notification.routes.js";
 import pushHealthRoutes from "./routes/push-health.routes.js";
 import pushLatencyRoutes from "./routes/push-latency.routes.js";
+import shopifySetupRoutes from "./routes/shopify-setup.routes.js";
 import { startAmazonSqsPollCron } from "./jobs/amazon-sqs-poll.job.js";
 import { startDlqMonitorCron } from "./jobs/dlq-monitor.job.js";
 import { ensureAmazonNotificationSubscription } from "./services/amazon-notifications-boot.service.js";
@@ -559,6 +560,11 @@ app.register(ebayNotificationRoutes, { prefix: '/api' });
 app.register(pushHealthRoutes, { prefix: '/api' });
 // RT.3 — push-latency dashboard (p50/p95/p99 + histogram per source).
 app.register(pushLatencyRoutes, { prefix: '/api' });
+// RT.11 — Shopify webhook registration helper. POST /api/admin/
+// setup-shopify-webhooks registers every topic our handlers
+// listen for so push delivery is no longer a manual partner-dashboard
+// step.
+app.register(shopifySetupRoutes, { prefix: '/api' });
 // L.0d — BullMQ admin endpoints. Routes declare full /api/monitoring/...
 // paths inline, so register without a prefix. Coexists with
 // monitoringRoutes (which uses /monitoring/* without /api/).
