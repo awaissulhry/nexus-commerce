@@ -221,15 +221,19 @@ export default async function ebayNotificationRoutes(app: FastifyInstance): Prom
     // Returns / refunds flow through the REST Notification API instead,
     // which we already handle via /api/webhooks/ebay-notification with
     // topics marketplace.order.* — those don't need this admin call.
+    // Second hotfix attempt: eBay rejected ItemRevised at index [4]
+    // even after dropping the 4 REST-only event names. Likely this
+    // seller account's Trading API permission level doesn't include
+    // inventory-revision notifications (those need a different scope
+    // / opt-in via eBay developer account). RT.10 push path now
+    // depends on REST Notification API setup instead — handled outside
+    // this admin call. Falls back to the CS-series polling ingester
+    // (same behaviour as before RT.10) when REST sub isn't configured.
     const events = [
       'AuctionCheckoutComplete',   // auction BIN / true auction sale
       'FixedPriceTransaction',     // fixed-price / Buy It Now sale
       'ItemSold',                  // broader sale event
       'ItemMarkedAsShipped',       // buyer-facing shipped marker
-      // RT.10 — quantity / item revision push. Routes to
-      // recordChannelStockEvent so /fulfillment/stock/channel-drift
-      // surfaces the drift in ~30s instead of next sweep.
-      'ItemRevised',
     ]
     const eventXml = events
       .map(

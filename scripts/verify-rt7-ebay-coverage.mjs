@@ -40,7 +40,8 @@ const SUBSCRIBED = new Set([
   'FixedPriceTransaction',
   'ItemSold',
   'ItemMarkedAsShipped',
-  'ItemRevised',
+  // ItemRevised removed — Trading API rejected it (seller perm scope).
+  // RT.10 inventory-revision push needs REST Notification API setup.
 ])
 
 // What the REST notification webhook sees (different namespace than
