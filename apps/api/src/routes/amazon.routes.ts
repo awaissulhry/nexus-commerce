@@ -1816,6 +1816,31 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
   // for completion. For Railway gateway timeouts, prefer smaller windows
   // and call repeatedly, or trigger from a long-lived job.
 
+  // POST /api/amazon/products/images/backfill — IB.1 catalog images.
+  // Walks products with Amazon ASIN, calls getCatalogItem (includedData=
+  // ['images']), upserts ProductImage rows. Idempotent on (productId, url).
+  // Body: { limit?: number (default 50), skipProductsWithImages?: boolean,
+  //         marketplaceId?: string }
+  fastify.post<{
+    Body?: {
+      limit?: number
+      skipProductsWithImages?: boolean
+      marketplaceId?: string
+    }
+  }>('/products/images/backfill', async (request, reply) => {
+    const { backfillProductImagesFromCatalog } = await import('../services/amazon-image-backfill.service.js')
+    try {
+      const result = await backfillProductImagesFromCatalog(request.body ?? {})
+      return { success: true, ...result }
+    } catch (err) {
+      fastify.log.error({ err }, '[amazon/products/images/backfill] failed')
+      return reply.code(500).send({
+        success: false,
+        error: err instanceof Error ? err.message : String(err),
+      })
+    }
+  })
+
   // POST /api/amazon/suppression/backfill — HB.11 listing-health backfill.
   // Pulls GET_MERCHANT_LISTINGS_DEFECT_DATA per participating marketplace,
   // upserts AmazonSuppression rows joined to ChannelListing by SKU.
