@@ -238,6 +238,11 @@ export default async function ebayNotificationRoutes(app: FastifyInstance): Prom
       'ReturnOpened',
       'ReturnClosed',
       'EOR_OrderRefunded',
+      // RT.10 — pushes quantity changes (operator edits in eBay UI,
+      // batch upload, third-party stock app). Routes to
+      // recordChannelStockEvent so /fulfillment/stock/channel-drift
+      // surfaces the drift in ~30s instead of next sweep.
+      'ItemRevised',
     ]
     const eventXml = events
       .map(
@@ -405,6 +410,63 @@ ${eventXml}
         ebayOrderId,
         error: recordErr instanceof Error ? recordErr.message : String(recordErr),
       })
+    }
+
+    // RT.10 — ItemRevised carries quantity changes (operator edits in
+    // eBay UI, batch upload via API, third-party stock app). Each
+    // change becomes one ChannelStockEvent so /fulfillment/stock/
+    // channel-drift surfaces the drift in ~30s instead of waiting
+    // for the CS-series eBay ingester sweep.
+    //
+    // Topic shapes seen:
+    //   Trading API (legacy): ItemRevised (XML notification)
+    //   REST notification API: marketplace.inventory_item.updated
+    if (topic === 'ItemRevised' || topic === 'marketplace.inventory_item.updated') {
+      void (async () => {
+        try {
+          const data = payload?.notification?.data ?? payload?.notification ?? payload
+          // Trading API ItemRevised → ItemID + Quantity
+          // REST inventory → sku + availability
+          const sku: string =
+            data?.sku ??
+            data?.SKU ??
+            data?.Item?.SKU ??
+            data?.itemSku ??
+            ''
+          const qty = Number(
+            data?.availability?.shipToLocationAvailability?.quantity ??
+              data?.Item?.Quantity ??
+              data?.Quantity ??
+              data?.quantity ??
+              -1,
+          )
+          if (!sku || qty < 0) {
+            logger.info('[eBay notification] item revision missing sku/qty — skipping', {
+              topic,
+              sku,
+              qty,
+            })
+            return
+          }
+          const { recordChannelStockEvent } = await import(
+            '../services/channel-stock-event.service.js'
+          )
+          await recordChannelStockEvent({
+            channel: 'EBAY',
+            channelEventId: externalId,
+            sku,
+            channelReportedQty: qty,
+            rawPayload: data,
+          })
+          logger.info('[eBay notification] item revision recorded', { sku, qty })
+        } catch (err) {
+          logger.warn('[eBay notification] item revision handler failed', {
+            topic,
+            error: err instanceof Error ? err.message : String(err),
+          })
+        }
+      })()
+      return reply.status(204).send()
     }
 
     if (!ebayOrderId) {

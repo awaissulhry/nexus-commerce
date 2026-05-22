@@ -39,6 +39,8 @@ const SUBSCRIBED = new Set([
   'ReturnOpened',
   'ReturnClosed',
   'EOR_OrderRefunded',
+  // RT.10 — quantity / item revision push.
+  'ItemRevised',
 ])
 
 // What the REST notification webhook sees (different namespace than
