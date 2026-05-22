@@ -621,11 +621,112 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
         const sparkMap = new Map(
           sparkRaw.map((r) => [r.day.toISOString().slice(0, 10), Number(r.cents)]),
         )
+
+        // GS-RT.8 — fold ChannelListing-based estimates into each
+        // sparkline day for €0+units orders. Without this the line
+        // chart silently undercounts on days that have stuck rows
+        // (Amazon-withheld OrderTotal). Same data source as the
+        // headline + per-marketplace estimate, just grouped by day.
+        // Once GS-RT.7 backfill repairs stuck rows their totalPrice
+        // > 0 → they drop from the €0 query → sparkline naturally
+        // shows the real revenue without estimate contamination.
+        //
+        // Window extended back 1 extra day (sparkStart - 1d) so the
+        // "vs same day last week" delta below can also fold its prev
+        // day's estimate — for "today" period prev = todayStart - 7d
+        // which sits 1 day before the sparkline's normal 6d window.
+        const sparkEstimateScanStart = new Date(sparkStart.getTime() - 24 * 60 * 60 * 1000)
+        const sparkEstimateMap = new Map<string, number>()
+        try {
+          const sparkZeroOrders = await prisma.order.findMany({
+            where: {
+              deletedAt: null,
+              channel: 'AMAZON',
+              totalPrice: 0,
+              currencyCode: 'EUR',
+              purchaseDate: { gte: sparkEstimateScanStart, lt: todayStart },
+              status: { notIn: ['CANCELLED'] as any },
+              items: { some: { quantity: { gt: 0 } } },
+              ...(marketplaceFilter ? { marketplace: marketplaceFilter } : {}),
+            },
+            select: {
+              purchaseDate: true,
+              marketplace: true,
+              items: { select: { quantity: true, productId: true } },
+            },
+            take: 500,
+          })
+          if (sparkZeroOrders.length > 0) {
+            // Resolve productId → ChannelListing.price map (per
+            // channel+marketplace) once for the whole sparkline batch
+            // to keep query count bounded.
+            const productIds = Array.from(
+              new Set(
+                sparkZeroOrders.flatMap((o) =>
+                  o.items.map((i) => i.productId).filter((p): p is string => !!p),
+                ),
+              ),
+            )
+            const sparkListings = productIds.length > 0
+              ? await prisma.channelListing.findMany({
+                  where: {
+                    productId: { in: productIds },
+                    channel: 'AMAZON',
+                    marketplace: { in: ['IT', 'DE', 'FR', 'ES', 'UK', 'NL', 'PL', 'SE', 'BE', 'IE', 'TR', 'AE', 'SA', 'US', 'CA', 'JP'] },
+                  },
+                  select: { productId: true, marketplace: true, price: true, salePrice: true },
+                })
+              : []
+            const sparkProducts = productIds.length > 0
+              ? await prisma.product.findMany({
+                  where: { id: { in: productIds } },
+                  select: { id: true, basePrice: true },
+                })
+              : []
+            const sparkBaseByProduct = new Map(sparkProducts.map((p) => [p.id, Number(p.basePrice)]))
+            const sparkPriceByPair = new Map<string, number>()
+            for (const l of sparkListings) {
+              const eff = l.salePrice != null ? Number(l.salePrice) : l.price != null ? Number(l.price) : null
+              if (eff != null && eff > 0) {
+                sparkPriceByPair.set(`${l.productId}|${l.marketplace}`, eff)
+              }
+            }
+            for (const o of sparkZeroOrders) {
+              let cents = 0
+              for (const it of o.items) {
+                if (!it.productId) continue
+                const pairKey = `${it.productId}|${o.marketplace ?? 'DEFAULT'}`
+                const unit = sparkPriceByPair.get(pairKey) ?? sparkBaseByProduct.get(it.productId) ?? 0
+                cents += Math.round(unit * 100) * it.quantity
+              }
+              // Date key in Europe/Rome to match sparkRaw's TZ bucket.
+              const iso = new Intl.DateTimeFormat('en-CA', {
+                timeZone: OPERATOR_TIMEZONE,
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+              }).format(o.purchaseDate)
+              sparkEstimateMap.set(iso, (sparkEstimateMap.get(iso) ?? 0) + cents)
+            }
+          }
+        } catch (sparkErr) {
+          // Best-effort — sparkline base values still render. Log so
+          // operators can see if estimate folding is failing silently.
+          fastify.log.warn(
+            { err: sparkErr },
+            '[dashboard/global-snapshot] sparkline estimate fold failed (line chart will undercount stuck €0 days)',
+          )
+        }
+
         const sparkline: Array<{ date: string; valueCents: number }> = []
         for (let i = 6; i >= 0; i--) {
           const d = new Date(todayStart.getTime() - i * 24 * 60 * 60 * 1000)
           const iso = d.toISOString().slice(0, 10)
-          sparkline.push({ date: iso, valueCents: sparkMap.get(iso) ?? 0 })
+          // GS-RT.8 — combine confirmed + estimated for each day.
+          sparkline.push({
+            date: iso,
+            valueCents: (sparkMap.get(iso) ?? 0) + (sparkEstimateMap.get(iso) ?? 0),
+          })
         }
 
         // ── Open Orders aggregation ─────────────────────────────────
@@ -758,6 +859,27 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
             _sum: { totalPrice: true },
           })
           comparePrevValueCents = Math.round(Number(prev._sum?.totalPrice ?? 0) * 100)
+
+          // GS-RT.8 — fold the prev-day estimate into comparePrev so
+          // the "vs same day last week" delta compares like-for-like
+          // bases. Without this, last week's confirmed-only number is
+          // compared against this week's confirmed+estimated number,
+          // biasing the delta toward "up" purely from when we
+          // estimate. We reuse the sparkEstimateMap (already covers
+          // sparkStart..todayStart which includes prev windows up to
+          // 7 days back) so no extra DB roundtrip. Falls back to 0
+          // when the previous window is older than 7 days (rare for
+          // today/yesterday periods).
+          if (sparkEstimateMap.size > 0) {
+            let prevEstCents = 0
+            for (const [iso, cents] of sparkEstimateMap.entries()) {
+              const isoMs = new Date(`${iso}T00:00:00Z`).getTime()
+              if (isoMs >= prevFrom.getTime() && isoMs < prevTo.getTime()) {
+                prevEstCents += cents
+              }
+            }
+            comparePrevValueCents += prevEstCents
+          }
         }
         const compareDeltaPct =
           comparePrevValueCents != null && comparePrevValueCents > 0
