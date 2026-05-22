@@ -17,6 +17,9 @@ import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
 import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
 import { getBackendUrl } from '@/lib/backend-url'
+import { useInvalidationChannel } from '@/lib/sync/invalidation-channel'
+import { useOrderEventsRefresh } from '@/hooks/use-order-events-refresh'
+import { useOutboundEvents } from '@/lib/sync/use-outbound-events'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { formatRelative } from '@/components/inventory/formatRelative'
 import { cn } from '@/lib/utils'
@@ -120,6 +123,20 @@ export default function MCFClient() {
   }, [filter])
 
   useEffect(() => { fetchData() }, [fetchData])
+
+  // SD-RT.3 — MCF (FBA Outbound) status flows from Amazon SP-API push
+  // covered by RT.6 (`f1d62365 feat(sync): MCF push-notification
+  // path`). order events drive new MCF submissions (orders flagged
+  // for MCF fulfillment); shipment.updated catches tracking events
+  // from MCF outbound shipments through Sendcloud.
+  useOutboundEvents()
+  useOrderEventsRefresh(fetchData, {
+    eventTypes: ['order.created', 'order.updated', 'order.cancelled'],
+  })
+  useInvalidationChannel(
+    ['shipment.updated', 'shipment.created', 'order.shipped'],
+    fetchData,
+  )
 
   const handleSync = useCallback(async (s: MCFRow) => {
     setActingId(s.id)

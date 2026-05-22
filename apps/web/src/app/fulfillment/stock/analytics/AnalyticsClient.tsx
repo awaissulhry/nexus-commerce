@@ -24,6 +24,9 @@ import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { getBackendUrl } from '@/lib/backend-url'
+import { useInvalidationChannel } from '@/lib/sync/invalidation-channel'
+import { useOrderEventsRefresh } from '@/hooks/use-order-events-refresh'
+import { useListingEvents } from '@/lib/sync/use-listing-events'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { cn } from '@/lib/utils'
 import { DensityToggle, GridToolbar, VirtualizedGrid, GridFooter } from '@/app/_shared/grid-lens'
@@ -253,6 +256,24 @@ export default function AnalyticsClient() {
   }, [days, deadDays])
 
   useEffect(() => { fetchData() }, [fetchData])
+
+  // SD-RT.3 — stock analytics (turnover, dead-stock, ABC class, EOQ
+  // recommendations) is sales-driven. order.created changes velocity
+  // → recomputed turnover + ABC class boundaries; stock.adjusted +
+  // inbound.received affect dead-stock window calculations. AL-series
+  // proved the salesReport.refreshed flow at ~03:00 UTC; that arrives
+  // via the order-events bus too.
+  useListingEvents()
+  useOrderEventsRefresh(fetchData, {
+    eventTypes: ['order.created', 'order.updated'],
+    // Analytics tolerates a wider debounce; recomputing aggregate
+    // queries on every order ingest would be wasteful.
+    debounceMs: 5_000,
+  })
+  useInvalidationChannel(
+    ['stock.adjusted', 'stock.transferred', 'product.updated'],
+    fetchData,
+  )
 
   const applyRecommendation = useCallback(async (rec: EoqRecommendation) => {
     if (rec.recommendation.rop == null && rec.recommendation.eoq == null) return

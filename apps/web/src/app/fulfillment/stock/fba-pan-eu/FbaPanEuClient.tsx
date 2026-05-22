@@ -28,6 +28,9 @@ import { EmptyState } from '@/components/ui/EmptyState'
 import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
 import { AutoRefreshSelect, GridToolbar } from '@/app/_shared/grid-lens'
 import { getBackendUrl } from '@/lib/backend-url'
+import { useInvalidationChannel } from '@/lib/sync/invalidation-channel'
+import { useListingEvents } from '@/lib/sync/use-listing-events'
+import { useInboundEvents } from '@/lib/sync/use-inbound-events'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { cn } from '@/lib/utils'
 
@@ -129,6 +132,19 @@ export default function FbaPanEuClient() {
   }, [])
 
   useEffect(() => { fetchData() }, [fetchData])
+
+  // SD-RT.3 — FBA Pan-EU placement view derives from FBA inventory
+  // availability + Send-to-FBA shipments. RT.9 (76ca1345) wired
+  // FBA_INVENTORY_AVAILABILITY_CHANGES → ChannelStockEvent → emits
+  // stock.adjusted on the listing-events bus. inbound.received closes
+  // a Send-to-FBA shipment (units land in Amazon's warehouse).
+  useListingEvents()
+  useInboundEvents()
+  useInvalidationChannel(
+    ['stock.adjusted', 'stock.transferred',
+     'inbound.received', 'inbound.updated', 'inbound.discrepancy'],
+    fetchData,
+  )
 
   return (
     <div className="space-y-4">
