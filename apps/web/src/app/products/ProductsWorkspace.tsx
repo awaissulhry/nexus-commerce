@@ -25,8 +25,11 @@ import {
 import PageHeader from '@/components/layout/PageHeader'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
+import { Tooltip } from '@/components/ui/Tooltip'
+import { useTranslations } from '@/lib/i18n/use-translations'
 import { getBackendUrl } from '@/lib/backend-url'
 import { usePolledList } from '@/lib/sync/use-polled-list'
+import { useListingEvents } from '@/lib/sync/use-listing-events'
 import {
   emitInvalidation,
   useInvalidationChannel,
@@ -225,6 +228,7 @@ export default function ProductsWorkspace() {
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const { toast } = useToast()
+  const { t } = useTranslations()
 
   const lens = (searchParams.get('lens') as Lens) || 'grid'
   const page = parseInt(searchParams.get('page') ?? '1', 10) || 1
@@ -503,6 +507,14 @@ export default function ProductsWorkspace() {
       'stock.transferred',
     ],
   })
+
+  // P-RT.1 — open one SSE connection per tab so product mutations
+  // (operator save, Shopify webhook, bullmq worker, flat-file import)
+  // refresh the grid sub-200ms instead of waiting for the next 30s
+  // usePolledList tick. `connected` powers the Live/Polling chip in
+  // the toolbar; refetch flows via the invalidation channel (the
+  // hook dispatches product.updated → invalidationTypes above → poll).
+  const { connected: sseConnected } = useListingEvents()
 
   // Sync hook output into the page's existing state slots so the rest
   // of the file (renderers, drawer, bulk-action bar) keeps reading from
@@ -1384,12 +1396,43 @@ export default function ProductsWorkspace() {
           />
         ) : undefined}
         freshness={
-          <FreshnessIndicator
-            lastFetchedAt={productsFetchedAt}
-            onRefresh={() => fetchProducts()}
-            loading={productsLoading}
-            error={!!productsError}
-          />
+          <div className="flex items-center gap-2">
+            {/* P-RT.1 — Live indicator. Green pulse = SSE connected
+                (mutations stream sub-200ms via the listing-events bus);
+                gray = disconnected (falls back to 30s polling baseline). */}
+            <Tooltip
+              content={
+                sseConnected
+                  ? t('products.live.tooltipConnected')
+                  : t('products.live.tooltipDisconnected')
+              }
+            >
+              <span
+                className="inline-flex items-center gap-1.5 text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400"
+                aria-label={
+                  sseConnected
+                    ? t('products.live.tooltipConnected')
+                    : t('products.live.tooltipDisconnected')
+                }
+                data-testid="products-live-indicator"
+                data-connected={sseConnected ? '1' : '0'}
+              >
+                <span
+                  className={`w-1.5 h-1.5 rounded-full ${
+                    sseConnected ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300'
+                  }`}
+                  aria-hidden
+                />
+                {sseConnected ? t('products.live') : t('products.polling')}
+              </span>
+            </Tooltip>
+            <FreshnessIndicator
+              lastFetchedAt={productsFetchedAt}
+              onRefresh={() => fetchProducts()}
+              loading={productsLoading}
+              error={!!productsError}
+            />
+          </div>
         }
         savedViews={
           <SavedViewsButton

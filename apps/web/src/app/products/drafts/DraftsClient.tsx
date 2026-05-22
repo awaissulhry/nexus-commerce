@@ -24,6 +24,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { usePolledList } from '@/lib/sync/use-polled-list'
+import { useListingEvents } from '@/lib/sync/use-listing-events'
 import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
 import PageHeader from '@/components/layout/PageHeader'
 import { CHANNEL_TONE } from '@/lib/theme'
@@ -1030,6 +1031,11 @@ export default function DraftsClient() {
   const router = useRouter()
   const params = useSearchParams()
   const { t } = useTranslations()
+  // P-RT.1 — open the SSE pipe so direct landings on /products/drafts
+  // get sub-200ms updates for wizard.* + product.* events instead of
+  // waiting for the 30s usePolledList tick. invalidationTypes below
+  // already names the events; this just feeds them.
+  useListingEvents()
 
   // C.3 — URL state. Filters, sort, and source are now bookmarkable
   // and reload-stable. The mounting read of `params` seeds local

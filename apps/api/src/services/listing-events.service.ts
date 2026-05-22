@@ -1,4 +1,11 @@
-// S.4 — In-process event bus for listing mutations.
+// S.4 — In-process event bus for listing + product mutations.
+//
+// P-RT.1 — bus also carries product.* events (product.updated /
+// created / deleted), published by productEventService so the
+// /products workspace receives sub-200ms updates from any mutation
+// path (operator edit, webhook, bulk job). Same SSE endpoint
+// (/api/listings/events) — adding a parallel route would have meant
+// a second EventSource per tab for no benefit.
 //
 // Mirrors apps/api/src/services/inbound-events.service.ts. SSE
 // subscribers convert these events to writes on the response stream;
@@ -31,6 +38,15 @@ export type ListingEvent =
   | { type: 'wizard.submitted'; wizardId: string; productId: string; status: 'SUBMITTED' | 'LIVE' | 'FAILED'; ts: number }
   | { type: 'bulk.progress'; jobId: string; processed: number; total: number; succeeded: number; failed: number; ts: number }
   | { type: 'bulk.completed'; jobId: string; status: string; ts: number }
+  // P-RT.1 — product aggregate events. Emitted by productEventService
+  // after the underlying mutation commits. The web client dispatches
+  // these into the existing invalidation channel so ProductsWorkspace
+  // + DraftsClient + the edit page tabs refresh within ~250ms of any
+  // mutation path (operator save, Shopify webhook, bullmq sync worker,
+  // flat-file import). Payload stays minimal — subscribers refetch.
+  | { type: 'product.updated'; productId: string; reason?: string; ts: number }
+  | { type: 'product.created'; productId: string; ts: number }
+  | { type: 'product.deleted'; productId: string; ts: number }
   | { type: 'ping'; ts: number }
 
 type Listener = (event: ListingEvent) => void

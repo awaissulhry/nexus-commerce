@@ -35,6 +35,7 @@ import SeoTab from './tabs/SeoTab'
 import { cn } from '@/lib/utils'
 import { useTrackRecentlyViewed } from '@/lib/use-recently-viewed'
 import { useInvalidationChannel } from '@/lib/sync/invalidation-channel'
+import { useListingEvents } from '@/lib/sync/use-listing-events'
 import { getBackendUrl } from '@/lib/backend-url'
 import { VariationFamilyBanner, type FamilyParent, type FamilySibling } from '../../_shared/VariationFamilyBanner'
 import { FileSpreadsheet } from 'lucide-react'
@@ -255,6 +256,20 @@ export default function ProductEditClient({
   // needing a full page reload.
   const [clientListings, setClientListings] = useState<Record<string, Listing[]>>(listings)
   useInvalidationChannel('channel-pricing.updated', () => {
+    void fetch(`${getBackendUrl()}/api/products/${product.id}/all-listings`, { cache: 'no-store' })
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => { if (data) setClientListings(data) })
+  })
+
+  // P-RT.1 — keep one SSE pipe open on the edit page so tabs subscribed
+  // to product.* / listing.* / pim.changed invalidation events
+  // (Timeline, MasterData, ChannelListing, etc.) refresh sub-200ms
+  // when a webhook, bulk worker, or another tab mutates this product.
+  // The edit page doesn't render the Live chip — that's the grid's job.
+  // Hook return value unused; mounting opens the stream as a side effect.
+  useListingEvents()
+  useInvalidationChannel(['product.updated', 'listing.updated'], (event) => {
+    if (event.type === 'product.updated' && event.id !== product.id) return
     void fetch(`${getBackendUrl()}/api/products/${product.id}/all-listings`, { cache: 'no-store' })
       .then((r) => r.ok ? r.json() : null)
       .then((data) => { if (data) setClientListings(data) })

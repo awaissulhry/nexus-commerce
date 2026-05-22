@@ -6,6 +6,12 @@
 // with the relevant invalidationTypes refreshes within ~200ms instead
 // of waiting for the next 30s polling tick.
 //
+// P-RT.1 — bus also carries product.updated / product.created /
+// product.deleted (published by productEventService after any Product
+// aggregate mutation). /products workspace mounts this hook so a
+// Shopify webhook, bullmq worker, or another tab's edit refreshes the
+// grid sub-200ms instead of waiting for the next 30s tick.
+//
 // Why route through the invalidation channel instead of returning
 // state directly: every workspace already subscribes to `listing.*`
 // invalidation events for cross-tab sync (e.g., a bulk action in one
@@ -36,6 +42,7 @@ import { emitInvalidation } from './invalidation-channel'
 interface ListingEvent {
   type: string
   listingId?: string
+  productId?: string
   jobId?: string
   reason?: string
   status?: string
@@ -96,6 +103,19 @@ export function useListingEvents(): UseListingEventsResult {
             type: 'bulk-job.completed',
             meta: { source: 'sse', subtype: parsed.type, jobId: parsed.jobId, ...parsed },
           })
+        } else if (parsed.type === 'product.updated') {
+          // P-RT.1 — dispatch product mutations into the invalidation
+          // channel so ProductsWorkspace, DraftsClient, edit-page tabs
+          // (all subscribed to 'product.updated') refresh sub-200ms.
+          emitInvalidation({
+            type: 'product.updated',
+            id: parsed.productId,
+            meta: { source: 'sse', reason: parsed.reason },
+          })
+        } else if (parsed.type === 'product.created') {
+          emitInvalidation({ type: 'product.created', id: parsed.productId, meta: { source: 'sse' } })
+        } else if (parsed.type === 'product.deleted') {
+          emitInvalidation({ type: 'product.deleted', id: parsed.productId, meta: { source: 'sse' } })
         }
       } catch {
         // Malformed event payload — ignore silently. The bus may have
@@ -116,6 +136,10 @@ export function useListingEvents(): UseListingEventsResult {
       'wizard.submitted',
       'bulk.progress',
       'bulk.completed',
+      // P-RT.1 — product aggregate events
+      'product.updated',
+      'product.created',
+      'product.deleted',
       'ping',
     ]
     for (const t of namedTypes) source.addEventListener(t, handle as EventListener)

@@ -16,6 +16,7 @@
 import prisma from '../db.js'
 import type { Prisma } from '@prisma/client'
 import { readCacheQueue } from '../lib/queue.js'
+import { publishListingEvent } from './listing-events.service.js'
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -84,6 +85,40 @@ type TxClient = Omit<
 
 // ── Service ──────────────────────────────────────────────────────────
 
+/**
+ * P-RT.1 — map ProductEventType → SSE listing-bus event type so the
+ * /products workspace gets sub-200ms updates over the same SSE
+ * channel /listings already uses. Returns null for event types that
+ * don't warrant a UI invalidation (channel listing + sync events are
+ * already covered by listing.* events from the syndication routes).
+ */
+function ssePayloadFor(
+  input: ProductEventInput,
+): { type: 'product.updated' | 'product.created' | 'product.deleted'; reason?: string } | null {
+  if (input.aggregateType !== 'Product') return null
+  switch (input.eventType) {
+    case 'PRODUCT_CREATED':
+      return { type: 'product.created' }
+    case 'PRODUCT_DELETED':
+      return { type: 'product.deleted' }
+    case 'PRODUCT_UPDATED':
+    case 'PRICE_CHANGED':
+    case 'STOCK_ADJUSTED':
+    case 'TITLE_UPDATED':
+    case 'BULLETS_UPDATED':
+    case 'DESCRIPTION_UPDATED':
+    case 'IMAGES_UPDATED':
+    case 'WORKFLOW_STAGE_CHANGED':
+    case 'BULK_OP_APPLIED':
+    case 'FLAT_FILE_IMPORTED':
+    case 'AI_CONTENT_GENERATED':
+    case 'AI_CONTENT_APPROVED':
+      return { type: 'product.updated', reason: input.eventType }
+    default:
+      return null
+  }
+}
+
 export class ProductEventService {
   /** Enqueue a debounced cache refresh for a product aggregate. */
   private enqueueRefresh(input: ProductEventInput): void {
@@ -146,6 +181,18 @@ export class ProductEventService {
         },
       })
       this.enqueueRefresh(input)
+      // P-RT.1 — fan out to the SSE bus so /products workspace tabs
+      // refresh sub-200ms instead of waiting for the next 30s tick.
+      // ssePayloadFor returns null for ChannelListing/sync events
+      // (those already get listing.* publishes elsewhere).
+      const sse = ssePayloadFor(input)
+      if (sse) {
+        publishListingEvent({
+          ...sse,
+          productId: input.aggregateId,
+          ts: Date.now(),
+        } as Parameters<typeof publishListingEvent>[0])
+      }
     } catch (err) {
       // NEVER throw — event logging must not poison the underlying write.
       console.warn(
@@ -175,6 +222,24 @@ export class ProductEventService {
           seen.add(i.aggregateId)
           this.enqueueRefresh(i)
         }
+      }
+      // P-RT.1 — one SSE event per distinct (productId, sseType).
+      // Flat-file imports often emit TITLE_UPDATED + PRICE_CHANGED +
+      // STOCK_ADJUSTED for the same product in one txn; collapse them
+      // to a single product.updated to keep the wire quiet.
+      const sseSeen = new Set<string>()
+      const ts = Date.now()
+      for (const i of inputs) {
+        const sse = ssePayloadFor(i)
+        if (!sse) continue
+        const key = `${i.aggregateId}:${sse.type}`
+        if (sseSeen.has(key)) continue
+        sseSeen.add(key)
+        publishListingEvent({
+          ...sse,
+          productId: i.aggregateId,
+          ts,
+        } as Parameters<typeof publishListingEvent>[0])
       }
     } catch (err) {
       console.warn(
