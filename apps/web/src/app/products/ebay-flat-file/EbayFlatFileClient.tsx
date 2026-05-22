@@ -1,12 +1,16 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState, useMemo } from 'react'
+import { useRouter } from 'next/navigation'
 import {
   AlertCircle, ArrowRightLeft, CheckCircle2, Download, ExternalLink, GitBranch, GitFork, History, Loader2, RefreshCw, RotateCcw, Search, Send, X,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { getBackendUrl } from '@/lib/backend-url'
-import { emitInvalidation } from '@/lib/sync/invalidation-channel'
+import { emitInvalidation, useInvalidationChannel } from '@/lib/sync/invalidation-channel'
+import { useListingEvents } from '@/lib/sync/use-listing-events'
+import { Tooltip } from '@/components/ui/Tooltip'
+import { useTranslations } from '@/lib/i18n/use-translations'
 import { useToast } from '@/components/ui/Toast'
 import { Button } from '@/components/ui/Button'
 import FlatFileGrid from '@/components/flat-file/FlatFileGrid'
@@ -266,8 +270,24 @@ interface Props {
 
 export default function EbayFlatFileClient({ initialRows, initialMarketplace, familyId }: Props) {
   const { toast } = useToast()
+  const { t } = useTranslations()
   const [marketplace] = useState(initialMarketplace)
   const BACKEND = getBackendUrl()
+
+  // FF-RT.2 — open the listing-events SSE pipe + listen for cross-tab
+  // product/listing mutations. eBay's Bulk Data Exchange API doesn't
+  // emit SP-API-style push notifications (unlike Amazon RT.15), so
+  // task-status updates still flow through the manual feedStatus poll
+  // path. But product.updated / listing.updated events from any other
+  // tab editing the same SKU should refresh this grid so an operator
+  // doesn't push stale data — router.refresh() re-runs the server
+  // component fetch that built initialRows.
+  const router = useRouter()
+  const { connected: sseConnected } = useListingEvents()
+  useInvalidationChannel(
+    ['product.updated', 'listing.updated', 'channel-pricing.updated'],
+    useCallback(() => { router.refresh() }, [router]),
+  )
 
   // ── eBay-specific UI state ─────────────────────────────────────────────
   const [pushing, setPushing]                 = useState(false)
@@ -1036,6 +1056,39 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
 
   return (
     <>
+      {/* FF-RT.2 — Live indicator. Green pulse = SSE up; cross-tab
+          product/listing edits refresh this grid via router.refresh().
+          Gray = polling fallback (page only refreshes on operator
+          actions or pull-job completion). */}
+      <div className="flex justify-end mb-1">
+        <Tooltip
+          content={
+            sseConnected
+              ? t('products.live.tooltipConnected')
+              : t('products.live.tooltipDisconnected')
+          }
+        >
+          <span
+            className="inline-flex items-center gap-1.5 text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400"
+            aria-label={
+              sseConnected
+                ? t('products.live.tooltipConnected')
+                : t('products.live.tooltipDisconnected')
+            }
+            data-testid="ebay-flat-file-live-indicator"
+            data-connected={sseConnected ? '1' : '0'}
+          >
+            <span
+              className={`w-1.5 h-1.5 rounded-full ${
+                sseConnected ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300'
+              }`}
+              aria-hidden
+            />
+            {sseConnected ? t('products.live') : t('products.polling')}
+          </span>
+        </Tooltip>
+      </div>
+
       {/* Pull history drawer — Phase 4 */}
       <PullHistoryDrawer
         open={pullHistoryOpen}
