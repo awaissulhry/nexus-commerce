@@ -1,7 +1,12 @@
 'use client'
 
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { CheckCircle2, Clock, Minus, ChevronUp, ChevronDown } from 'lucide-react'
+import { useListingEvents } from '@/lib/sync/use-listing-events'
+import { useInvalidationChannel } from '@/lib/sync/invalidation-channel'
+import { Tooltip } from '@/components/ui/Tooltip'
+import { useTranslations } from '@/lib/i18n/use-translations'
 
 interface Decision {
   id: string
@@ -63,7 +68,28 @@ function PriceDelta({ oldPrice, newPrice }: { oldPrice: string; newPrice: string
 }
 
 export function RepricingDecisionsClient({ initialDecisions }: { initialDecisions: Decision[] }) {
+  const router = useRouter()
+  const { t } = useTranslations()
   const [filter, setFilter] = useState<'all' | 'applied' | 'pending'>('all')
+
+  // F-RT.5 — repricing decisions are minted by the
+  // repricing-evaluator.job worker every time it runs (every ~5 min)
+  // AND any time a competitor's offer changes (ANY_OFFER_CHANGED →
+  // RT.13 alert + a repricing decision). Surface those as live tail-f
+  // so an operator watching this page sees decisions land in real
+  // time instead of waiting for the next manual refresh.
+  // listing.updated fires when the worker applies a price; bulk-job.
+  // completed when a bulk repricing batch lands.
+  const refresh = useCallback(() => router.refresh(), [router])
+  const { connected: sseConnected } = useListingEvents()
+  // Note: SSE listing.synced events are re-emitted by
+  // use-listing-events.ts as invalidation 'listing.updated', so
+  // subscribing to listing.updated catches both the syndication
+  // path AND any direct invalidation.
+  useInvalidationChannel(
+    ['listing.updated', 'channel-pricing.updated', 'bulk-job.completed'],
+    refresh,
+  )
 
   const displayed = initialDecisions.filter((d) => {
     if (filter === 'applied') return d.applied
@@ -73,6 +99,36 @@ export function RepricingDecisionsClient({ initialDecisions }: { initialDecision
 
   return (
     <div className="space-y-4">
+      {/* F-RT.5 — Live indicator. SSE-connected = repricing decisions
+          appear within ~200ms of the worker writing them; gray =
+          polling fallback. */}
+      <Tooltip
+        content={
+          sseConnected
+            ? t('products.live.tooltipConnected')
+            : t('products.live.tooltipDisconnected')
+        }
+      >
+        <span
+          className="inline-flex items-center gap-1.5 text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400"
+          aria-label={
+            sseConnected
+              ? t('products.live.tooltipConnected')
+              : t('products.live.tooltipDisconnected')
+          }
+          data-testid="repricing-live-indicator"
+          data-connected={sseConnected ? '1' : '0'}
+        >
+          <span
+            className={`w-1.5 h-1.5 rounded-full ${
+              sseConnected ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300'
+            }`}
+            aria-hidden
+          />
+          {sseConnected ? t('products.live') : t('products.polling')}
+        </span>
+      </Tooltip>
+
       {/* Filter tabs */}
       <div className="flex items-center gap-2">
         {(['all', 'applied', 'pending'] as const).map((f) => (
