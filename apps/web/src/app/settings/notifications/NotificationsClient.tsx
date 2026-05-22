@@ -166,7 +166,200 @@ export default function NotificationsClient({
         }}
       />
       <PrefsTable prefs={prefs} onChange={setPrefs} />
+      {/* RT.17 — Browser desktop notifications. State persists in
+          localStorage (per-browser), independent of the server-backed
+          email/SMS prefs above. */}
+      <BrowserNotificationsCard />
     </div>
+  )
+}
+
+// ─── Browser desktop notifications (RT.17) ───────────────────────
+
+import {
+  ALERT_CLASS_META,
+  DEFAULT_CONFIG,
+  fireBrowserNotification,
+  loadBrowserNotificationConfig,
+  requestBrowserNotificationPermission,
+  saveBrowserNotificationConfig,
+  type AlertClass,
+} from '@/lib/notifications/browser-notifications'
+
+function BrowserNotificationsCard() {
+  const [config, setConfig] = useState(DEFAULT_CONFIG)
+  const [permission, setPermission] = useState<NotificationPermission>('default')
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => {
+    setConfig(loadBrowserNotificationConfig())
+    if (typeof Notification !== 'undefined') {
+      setPermission(Notification.permission)
+    }
+    setMounted(true)
+  }, [])
+
+  if (!mounted) return null
+
+  const persist = (next: typeof config) => {
+    setConfig(next)
+    saveBrowserNotificationConfig(next)
+  }
+
+  const requestPermission = async () => {
+    const r = await requestBrowserNotificationPermission()
+    setPermission(r)
+    if (r === 'granted' && !config.enabled) {
+      persist({ ...config, enabled: true })
+    }
+  }
+
+  const sendTest = () => {
+    const fired = fireBrowserNotification('dlq', 'Nexus — test notification', {
+      body: 'If you see this, browser notifications are working.',
+    })
+    if (!fired) {
+      alert(
+        'Test notification was blocked. Check that the global toggle is ON, the DLQ class is enabled, and browser permission was granted.',
+      )
+    }
+  }
+
+  const permissionLabel =
+    permission === 'granted'
+      ? 'Granted'
+      : permission === 'denied'
+        ? 'Blocked (re-enable in site settings)'
+        : 'Not requested yet'
+
+  return (
+    <section className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-5">
+      <div className="flex items-start gap-3 mb-4 pb-3 border-b border-slate-100 dark:border-slate-800">
+        <div className="shrink-0 w-8 h-8 rounded-md bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-400">
+          <MonitorSmartphone size={14} />
+        </div>
+        <div className="flex-1">
+          <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+            Browser desktop notifications
+          </h3>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+            Per-browser opt-in. Independent of the email / SMS settings above.
+            Stored locally (no server round-trip) because browser-notification
+            permission is per-browser-profile.
+          </p>
+        </div>
+      </div>
+
+      <div className="space-y-4">
+        <div className="flex items-center justify-between gap-4 p-3 rounded border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30">
+          <div>
+            <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+              Permission status
+            </div>
+            <div className="text-xs text-slate-500 dark:text-slate-400">
+              {permissionLabel}
+            </div>
+          </div>
+          {permission !== 'granted' && (
+            <button
+              type="button"
+              onClick={requestPermission}
+              className="px-3 py-1.5 text-xs font-medium rounded bg-blue-600 text-white hover:bg-blue-700"
+            >
+              Request permission
+            </button>
+          )}
+          {permission === 'granted' && (
+            <button
+              type="button"
+              onClick={sendTest}
+              className="px-3 py-1.5 text-xs font-medium rounded border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800"
+            >
+              Send test
+            </button>
+          )}
+        </div>
+
+        <label className="flex items-center justify-between gap-3">
+          <div>
+            <div className="text-sm font-medium text-slate-900 dark:text-slate-100">
+              Enable browser notifications
+            </div>
+            <div className="text-xs text-slate-500 dark:text-slate-400">
+              Master switch — disable to silence all classes without
+              touching individual toggles.
+            </div>
+          </div>
+          <input
+            type="checkbox"
+            checked={config.enabled}
+            onChange={(e) => persist({ ...config, enabled: e.target.checked })}
+            className="w-4 h-4 rounded border-slate-300"
+          />
+        </label>
+
+        <div className="space-y-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+          <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1">
+            Per-class toggles
+          </div>
+          {(Object.keys(ALERT_CLASS_META) as AlertClass[]).map((k) => (
+            <label
+              key={k}
+              className="flex items-center justify-between gap-3 p-2 rounded hover:bg-slate-50 dark:hover:bg-slate-800/50"
+            >
+              <div>
+                <div className="text-sm text-slate-900 dark:text-slate-100">
+                  {ALERT_CLASS_META[k].label}
+                </div>
+                <div className="text-xs text-slate-500 dark:text-slate-400">
+                  {ALERT_CLASS_META[k].description}
+                </div>
+              </div>
+              <input
+                type="checkbox"
+                checked={config.classes[k]}
+                disabled={!config.enabled}
+                onChange={(e) =>
+                  persist({
+                    ...config,
+                    classes: { ...config.classes, [k]: e.target.checked },
+                  })
+                }
+                className="w-4 h-4 rounded border-slate-300 disabled:opacity-40"
+              />
+            </label>
+          ))}
+        </div>
+
+        <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
+          <label className="block text-sm">
+            <span className="text-slate-900 dark:text-slate-100">
+              High-value order threshold (EUR)
+            </span>
+            <input
+              type="number"
+              min={0}
+              step={10}
+              value={config.highValueOrderThresholdCents / 100}
+              disabled={!config.enabled || !config.classes.highValueOrder}
+              onChange={(e) =>
+                persist({
+                  ...config,
+                  highValueOrderThresholdCents: Math.round(
+                    Number(e.target.value || 0) * 100,
+                  ),
+                })
+              }
+              className="mt-1 block w-32 px-2 py-1 text-sm border border-slate-300 dark:border-slate-700 rounded bg-white dark:bg-slate-900 disabled:opacity-40"
+            />
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+              Orders at or above this total fire a high-value-order
+              notification when the class is enabled.
+            </p>
+          </label>
+        </div>
+      </div>
+    </section>
   )
 }
 

@@ -23,6 +23,7 @@
 import { useEffect, useState } from 'react'
 import { AlertOctagon, ExternalLink } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
+import { fireBrowserNotification } from '@/lib/notifications/browser-notifications'
 
 interface AccountHealthPayload {
   type: 'account.health.changed'
@@ -94,21 +95,11 @@ export function GlobalAccountHealthBanner() {
         sessionStorage.setItem(SESSION_KEY, JSON.stringify(data))
         setPayload(data)
         const tone = statusToTone(data.accountStatus)
-        if (
-          tone.isCritical &&
-          typeof Notification !== 'undefined' &&
-          Notification.permission === 'granted'
-        ) {
-          try {
-            new Notification(`Nexus — ${tone.label}`, {
-              body: data.message ?? tone.body,
-              icon: '/favicon.ico',
-              tag: 'nexus-account-health', // single non-collapsing alert
-              requireInteraction: true, // sticky until operator clicks
-            })
-          } catch {
-            /* notification rejected outside user gesture — ignore */
-          }
+        if (tone.isCritical) {
+          fireBrowserNotification('accountHealth', `Nexus — ${tone.label}`, {
+            body: data.message ?? tone.body,
+            requireInteraction: true,
+          })
         }
       } catch {
         /* malformed event — ignore */

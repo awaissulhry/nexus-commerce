@@ -31,6 +31,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { AlertTriangle, X, ExternalLink, Bell } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
+import {
+  fireBrowserNotification,
+  requestBrowserNotificationPermission as requestPerm,
+} from '@/lib/notifications/browser-notifications'
 
 interface PushHealthSlim {
   summary: { dlqDepth: number | null }
@@ -203,42 +207,24 @@ export function GlobalDlqBanner() {
 }
 
 /**
- * Fires a single browser notification when the threshold is breached
- * — only when the user has previously granted permission. Re-prompts
- * are gated to once per session via the "Notify me" button (above)
- * so we don't pile permission prompts on operators who already said
- * no.
+ * RT.17 — routed through the shared helper which respects the
+ * operator's per-class opt-in config on /settings/notifications.
  */
 function fireBrowserNotificationOnce(payload: DlqEventPayload): void {
-  if (typeof window === 'undefined' || typeof Notification === 'undefined') return
-  if (Notification.permission !== 'granted') return
-  try {
-    new Notification('Nexus — DLQ alert', {
-      body: `${payload.depth} stuck message${payload.depth === 1 ? '' : 's'} in the Amazon push DLQ. Open Nexus to investigate.`,
-      icon: '/favicon.ico',
-      tag: 'nexus-dlq', // collapses repeated alerts into one
-    })
-  } catch {
-    /* some browsers reject Notification() outside user gestures — ignore */
-  }
+  fireBrowserNotification('dlq', 'Nexus — DLQ alert', {
+    body: `${payload.depth} stuck message${payload.depth === 1 ? '' : 's'} in the Amazon push DLQ. Open Nexus to investigate.`,
+  })
 }
 
 async function requestBrowserNotificationPermission(): Promise<void> {
-  if (typeof window === 'undefined' || typeof Notification === 'undefined') return
-  if (Notification.permission === 'granted') return
-  if (Notification.permission === 'denied') {
-    // Browser won't re-prompt; tell the operator to flip it in site settings.
+  const result = await requestPerm()
+  if (result === 'denied') {
     alert(
       'Browser notifications are blocked. Open your browser site settings and allow notifications for this domain, then click "Notify me" again.',
     )
     return
   }
-  try {
-    const result = await Notification.requestPermission()
-    if (result === 'granted') {
-      sessionStorage.setItem(NOTIF_PROMPTED_KEY, '1')
-    }
-  } catch {
-    /* ignore */
+  if (result === 'granted') {
+    sessionStorage.setItem(NOTIF_PROMPTED_KEY, '1')
   }
 }

@@ -26,6 +26,7 @@
 
 import { useEffect } from 'react'
 import { getBackendUrl } from '@/lib/backend-url'
+import { fireBrowserNotification } from '@/lib/notifications/browser-notifications'
 
 interface BuyBoxLostPayload {
   type: 'competitive.buyBoxLost'
@@ -79,20 +80,15 @@ export function CompetitiveAlertWatcher() {
           data,
         )
 
-        if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
-          try {
-            new Notification('Nexus — Buy Box lost', {
-              body: `${data.asin}: us ${formatPrice(
-                data.ourPrice,
-                data.currency,
-              )}, winner ${formatPrice(data.winnerPrice, data.currency)}${deltaLabel}`,
-              icon: '/favicon.ico',
-              tag: `nexus-buybox-${data.asin}`, // collapse same-ASIN repeats
-            })
-          } catch {
-            /* notification rejected outside user gesture — ignore */
-          }
-        }
+        // RT.17 — routed through the shared helper which checks the
+        // operator's opt-in config + permission state before firing.
+        fireBrowserNotification('buyBoxLost', 'Nexus — Buy Box lost', {
+          body: `${data.asin}: us ${formatPrice(
+            data.ourPrice,
+            data.currency,
+          )}, winner ${formatPrice(data.winnerPrice, data.currency)}${deltaLabel}`,
+          tagSuffix: data.asin,
+        })
       } catch {
         /* malformed event — ignore */
       }
@@ -115,17 +111,14 @@ export function CompetitiveAlertWatcher() {
           `[Suppressed] ${data.sku || data.asin} on ${data.marketplaceId} → ${data.status}`,
           data,
         )
-        if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
-          try {
-            new Notification('Nexus — Listing suppressed', {
-              body: `${data.sku || data.asin} on ${data.marketplaceId}: ${data.status}. Open Nexus to investigate the cause.`,
-              icon: '/favicon.ico',
-              tag: `nexus-suppressed-${data.asin}`,
-            })
-          } catch {
-            /* ignore */
-          }
-        }
+        fireBrowserNotification(
+          'listingSuppressed',
+          'Nexus — Listing suppressed',
+          {
+            body: `${data.sku || data.asin} on ${data.marketplaceId}: ${data.status}. Open Nexus to investigate the cause.`,
+            tagSuffix: data.asin,
+          },
+        )
       } catch {
         /* ignore */
       }
