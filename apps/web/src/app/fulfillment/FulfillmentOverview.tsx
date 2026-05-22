@@ -2,6 +2,12 @@
 
 // FULFILLMENT B.9 — index page. Dashboard tiles for every fulfillment lane,
 // each tile linking into the relevant section with the right filter applied.
+//
+// F-RT.3 — entry page is now real-time across all 4 buses
+// (listing/product, inbound, outbound, push-health). Tiles update
+// sub-200ms on any upstream event; the PushHealthChip + Live indicator
+// give the operator one-glance "is the pipe alive?" coverage from the
+// landing page.
 
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
@@ -12,7 +18,14 @@ import {
 } from 'lucide-react'
 import PageHeader from '@/components/layout/PageHeader'
 import { Card } from '@/components/ui/Card'
+import { Tooltip } from '@/components/ui/Tooltip'
 import { getBackendUrl } from '@/lib/backend-url'
+import { useTranslations } from '@/lib/i18n/use-translations'
+import { useInvalidationChannel } from '@/lib/sync/invalidation-channel'
+import { useListingEvents } from '@/lib/sync/use-listing-events'
+import { useInboundEvents } from '@/lib/sync/use-inbound-events'
+import { useOutboundEvents } from '@/lib/sync/use-outbound-events'
+import { PushHealthChip } from '@/components/dashboard/PushHealthChip'
 
 type Overview = {
   outbound: { pendingShipments: number; readyToPick: number; inTransit: number; deliveredToday: number; overduePending?: number }
@@ -29,6 +42,7 @@ type Overview = {
 }
 
 export default function FulfillmentOverview() {
+  const { t } = useTranslations()
   const [data, setData] = useState<Overview | null>(null)
   const [loading, setLoading] = useState(true)
 
@@ -42,15 +56,68 @@ export default function FulfillmentOverview() {
 
   useEffect(() => { fetchData() }, [fetchData])
 
+  // F-RT.3 — open all three SSE pipes so the tiles' counts (pending,
+  // in-transit, low-stock, returns, replenishment-critical, active
+  // POs…) reflect upstream events in real time. The /api/fulfillment/
+  // overview endpoint aggregates across all 4 fulfillment lanes, so
+  // any event in any lane is a valid refresh trigger.
+  const { connected: listingConnected } = useListingEvents()
+  const { connected: inboundConnected } = useInboundEvents()
+  const { connected: outboundConnected } = useOutboundEvents()
+  const sseConnected = listingConnected || inboundConnected || outboundConnected
+  useInvalidationChannel(
+    [
+      'product.updated', 'product.created', 'product.deleted',
+      'stock.adjusted', 'stock.transferred',
+      'inbound.created', 'inbound.updated', 'inbound.received', 'inbound.discrepancy',
+      'shipment.created', 'shipment.updated', 'shipment.deleted', 'order.shipped',
+      'listing.updated', 'bulk-job.completed',
+    ],
+    useCallback(() => { fetchData() }, [fetchData]),
+  )
+
   return (
     <div className="space-y-5">
       <PageHeader
         title="Fulfillment"
         description={data?.defaultWarehouse ? `Operating from ${data.defaultWarehouse.name} · ${data.defaultWarehouse.country}` : 'Multi-channel inventory + shipments + returns + replenishment'}
         actions={
-          <button onClick={fetchData} className="h-8 px-3 text-base border border-slate-200 rounded-md hover:bg-slate-50 inline-flex items-center gap-1.5">
-            <RefreshCw size={12} /> Refresh
-          </button>
+          <div className="flex items-center gap-2">
+            {/* F-RT.3 — Live chip aggregates across the 3 SSE pipes
+                we mount. Green if any pipe is open (the page learns
+                about any lane's events the moment one bus connects);
+                gray when all three are down (true fallback). */}
+            <Tooltip
+              content={
+                sseConnected
+                  ? t('products.live.tooltipConnected')
+                  : t('products.live.tooltipDisconnected')
+              }
+            >
+              <span
+                className="inline-flex items-center gap-1.5 text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400"
+                aria-label={
+                  sseConnected
+                    ? t('products.live.tooltipConnected')
+                    : t('products.live.tooltipDisconnected')
+                }
+                data-testid="fulfillment-overview-live-indicator"
+                data-connected={sseConnected ? '1' : '0'}
+              >
+                <span
+                  className={`w-1.5 h-1.5 rounded-full ${
+                    sseConnected ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300'
+                  }`}
+                  aria-hidden
+                />
+                {sseConnected ? t('products.live') : t('products.polling')}
+              </span>
+            </Tooltip>
+            <PushHealthChip />
+            <button onClick={fetchData} className="h-8 px-3 text-base border border-slate-200 rounded-md hover:bg-slate-50 inline-flex items-center gap-1.5">
+              <RefreshCw size={12} /> Refresh
+            </button>
+          </div>
         }
       />
 
