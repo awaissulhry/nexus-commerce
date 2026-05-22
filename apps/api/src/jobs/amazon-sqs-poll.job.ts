@@ -411,6 +411,55 @@ async function runSqsPoll(): Promise<void> {
           // upserts on (channel, channelOrderId).
           const since = new Date(Date.now() - 5 * 60 * 1000) // last 5 min
           await amazonOrdersService.syncNewOrders(since, { limit: 50 })
+
+          // GS-RT.4 — if the DB row for this specific order is still at
+          // `totalPrice=0` after the ListOrders pass, fall through to a
+          // direct getOrder call. SP-API ListOrders sometimes returns a
+          // partial snapshot for orders that JUST transitioned out of
+          // PENDING — getOrder always has the canonical OrderTotal once
+          // Amazon releases it. Without this, the only path to recover
+          // the price is the 15-min backfill cron (GS-RT.2).
+          if (amazonOrderId) {
+            const row = await prisma.order.findUnique({
+              where: {
+                channel_channelOrderId: {
+                  channel: 'AMAZON',
+                  channelOrderId: amazonOrderId,
+                },
+              },
+              select: { id: true, totalPrice: true },
+            })
+            if (row && Number(row.totalPrice) === 0) {
+              try {
+                // GS-RT.4 — target THIS order specifically via the
+                // channelOrderIds filter (added to backfillZeroTotals
+                // for this push path). Without the filter we'd risk
+                // re-fetching some other older €0 row whose
+                // purchaseDate is earlier, missing the operationally
+                // important transition that just landed.
+                const repair = await amazonOrdersService.backfillZeroTotals({
+                  limit: 1,
+                  includePending: true,
+                  channelOrderIds: [amazonOrderId],
+                })
+                if (repair.repaired > 0) {
+                  logger.info('[SQS poll] GS-RT.4 backfill repaired €0 row', {
+                    amazonOrderId,
+                    repaired: repair.repaired,
+                  })
+                }
+              } catch (repairErr) {
+                logger.warn('[SQS poll] GS-RT.4 backfill nudge failed', {
+                  amazonOrderId,
+                  error: repairErr instanceof Error ? repairErr.message : String(repairErr),
+                })
+                // Non-fatal — the regular syncNewOrders flow already
+                // succeeded; the order status updated. Price will
+                // catch up via GS-RT.2 cron in <=15 min.
+              }
+            }
+          }
+
           processed++
           logger.info('[SQS poll] processed ORDER_CHANGE', { amazonOrderId, orderStatus })
 

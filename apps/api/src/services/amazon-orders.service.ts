@@ -267,7 +267,17 @@ export class AmazonOrdersService {
    * don't suffer the same Pending-state withholding.
    */
   async backfillZeroTotals(
-    options: { limit?: number; olderThanDays?: number; includePending?: boolean } = {},
+    options: {
+      limit?: number
+      olderThanDays?: number
+      includePending?: boolean
+      // GS-RT.4 — when set, only consider rows whose channelOrderId is
+      // in this list. Used by the SQS ORDER_CHANGE handler to target
+      // the specific order that just transitioned status, instead of
+      // walking the global €0 backlog. The limit + status guards still
+      // apply, so this is a strict subset of the default scope.
+      channelOrderIds?: string[]
+    } = {},
   ): Promise<{
     scanned: number
     repaired: number
@@ -291,6 +301,9 @@ export class AmazonOrdersService {
         totalPrice: 0,
         status: { notIn: excludedStatuses as any },
         deletedAt: null,
+        ...(options.channelOrderIds && options.channelOrderIds.length > 0
+          ? { channelOrderId: { in: options.channelOrderIds } }
+          : {}),
       },
       select: { id: true, channelOrderId: true },
       orderBy: { purchaseDate: 'asc' },
