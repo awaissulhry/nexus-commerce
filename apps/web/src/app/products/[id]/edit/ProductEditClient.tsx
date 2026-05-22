@@ -18,6 +18,7 @@ import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { IconButton } from '@/components/ui/IconButton'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
+import { useToast } from '@/components/ui/Toast'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import ListOnChannelDropdown from './ListOnChannelDropdown'
 import MasterDataTab from './tabs/MasterDataTab'
@@ -266,14 +267,79 @@ export default function ProductEditClient({
   // (Timeline, MasterData, ChannelListing, etc.) refresh sub-200ms
   // when a webhook, bulk worker, or another tab mutates this product.
   // The edit page doesn't render the Live chip — that's the grid's job.
-  // Hook return value unused; mounting opens the stream as a side effect.
-  useListingEvents()
+  // P-RT.6 — destructure lastEvent so the toast effect below can react
+  // to listing.synced outcomes for this product's listings.
+  const { lastEvent: lastSseEvent } = useListingEvents()
   useInvalidationChannel(['product.updated', 'listing.updated'], (event) => {
     if (event.type === 'product.updated' && event.id !== product.id) return
     void fetch(`${getBackendUrl()}/api/products/${product.id}/all-listings`, { cache: 'no-store' })
       .then((r) => r.ok ? r.json() : null)
       .then((data) => { if (data) setClientListings(data) })
   })
+
+  // P-RT.6 — surface channel push outcomes on the edit page. Today
+  // the operator saves a price/title, the worker queues an outbound
+  // sync, and ~30-60s later either it lands on Amazon or Amazon
+  // rejects it ("price below minimum", "listing suppressed", etc).
+  // Without this effect that outcome is silently filed away in the
+  // Timeline tab — the operator never sees it unless they click into
+  // Timeline. Now: listing.synced for any listing in this product
+  // pops a toast. SUCCEEDED reassures the operator their save reached
+  // the channel; FAILED + TIMEOUT surface the failure immediately so
+  // they can react (revert, fix, retry) rather than discover hours
+  // later via a customer complaint. We rely on the local clientListings
+  // map (kept fresh by the invalidation effect above) to filter SSE
+  // noise to events that belong to THIS product.
+  const { toast } = useToast()
+  const knownListingIds = useMemo(() => {
+    const set = new Set<string>()
+    for (const arr of Object.values(clientListings)) {
+      for (const l of arr) set.add(l.id)
+    }
+    return set
+  }, [clientListings])
+  // Track the IDs we've already toasted on so a re-render or
+  // duplicate event from the bus doesn't double-toast.
+  const toastedEventsRef = useRef<Set<string>>(new Set())
+  useEffect(() => {
+    if (!lastSseEvent) return
+    if (lastSseEvent.type !== 'listing.synced') return
+    const lid = lastSseEvent.listingId
+    if (!lid || !knownListingIds.has(lid)) return
+    // Dedup by listingId + ts so we don't re-toast on React StrictMode
+    // double-invoke or on a re-render that re-runs the effect.
+    const dedupKey = `${lid}:${lastSseEvent.ts ?? 0}`
+    if (toastedEventsRef.current.has(dedupKey)) return
+    toastedEventsRef.current.add(dedupKey)
+    // Trim the dedup set so it doesn't grow unbounded over a long
+    // session — 100 entries is plenty (the bus typically fires <10
+    // events/min for any one product).
+    if (toastedEventsRef.current.size > 100) {
+      const first = toastedEventsRef.current.values().next().value
+      if (first) toastedEventsRef.current.delete(first)
+    }
+    // Look up the channel from the local listings map so the toast
+    // copy reads "Amazon" not "cl_abc123".
+    let channelLabel = 'channel'
+    for (const [chKey, arr] of Object.entries(clientListings)) {
+      if (arr.some((l) => l.id === lid)) {
+        channelLabel = LABEL_CASE[chKey] ?? chKey
+        break
+      }
+    }
+    const status = lastSseEvent.status
+    if (status === 'SUCCESS') {
+      toast.success(t('products.edit.sync.success', { channel: channelLabel }))
+    } else if (status === 'FAILED') {
+      toast.error(
+        t('products.edit.sync.failed', { channel: channelLabel }),
+      )
+    } else if (status === 'TIMEOUT') {
+      toast.error(t('products.edit.sync.timeout', { channel: channelLabel }))
+    }
+    // NOT_IMPLEMENTED is silent — channel adapter doesn't support
+    // this op yet, no need to bother the operator.
+  }, [lastSseEvent, knownListingIds, clientListings, toast, t])
 
   // W1.1 — accurate dirty tracking. Each tab reports its own count of
   // unsaved fields via onDirtyChange; the header badge shows the
