@@ -15,6 +15,7 @@ import { cn } from '@/lib/utils'
 import { getBackendUrl } from '@/lib/backend-url'
 import { PushHealthChip } from '@/components/dashboard/PushHealthChip'
 import { PushLatencyWidget } from '@/components/dashboard/PushLatencyWidget'
+import { LivePulse } from '@/components/dashboard/LivePulse'
 
 interface LiveSummary {
   currency: string
@@ -116,6 +117,9 @@ export default function LiveClient() {
           Insights
         </Link>
         <div className="flex items-center gap-3">
+          {/* RT.18 — heartbeat dot. Visible in TV-mode too because
+              the whole point of TV mode is "show me the pulse". */}
+          <LivePulse />
           {/* RT.1 — push-health chip on the Live monitor header so the
               operator can see at a glance whether the pipeline feeding
               the KPIs is alive. Hidden in TV-mode chrome since the
