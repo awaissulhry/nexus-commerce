@@ -1,8 +1,14 @@
 'use client'
 
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { Loader2, Play } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
+import { useOrderEventsRefresh } from '@/hooks/use-order-events-refresh'
+import { useOutboundEvents } from '@/lib/sync/use-outbound-events'
+import { useInvalidationChannel } from '@/lib/sync/invalidation-channel'
+import { Tooltip } from '@/components/ui/Tooltip'
+import { useTranslations } from '@/lib/i18n/use-translations'
 
 interface RoutingDecision {
   id: string
@@ -45,11 +51,29 @@ const METHOD_COLORS: Record<string, string> = {
 }
 
 export function RoutingLogClient({ initialDecisions }: { initialDecisions: RoutingDecision[] }) {
+  const router = useRouter()
+  const { t } = useTranslations()
   const [simChannel, setSimChannel] = useState('AMAZON')
   const [simMarketplace, setSimMarketplace] = useState('IT')
   const [simCountry, setSimCountry] = useState('IT')
   const [simBusy, setSimBusy] = useState(false)
   const [simResult, setSimResult] = useState<SimResult | null>(null)
+
+  // F-RT.4 — RoutingLog is inherently a live feed: every new order
+  // creates a RoutingDecision row at intake. Today the operator had
+  // to manually reload to see new decisions. router.refresh() re-runs
+  // the server component fetch in-place — no flicker, no client-side
+  // pagination state lost — driven by order events (intake creates
+  // decisions) + outbound events (shipment.created can re-route on
+  // re-attempt) + cross-tab invalidation.
+  const refresh = useCallback(() => router.refresh(), [router])
+  useOrderEventsRefresh(refresh, { eventTypes: ['order.created'] })
+  const { connected: outboundConnected } = useOutboundEvents()
+  useInvalidationChannel(
+    ['shipment.created', 'shipment.updated', 'order.shipped'],
+    refresh,
+  )
+  const sseConnected = outboundConnected
 
   async function runSimulation() {
     setSimBusy(true)
@@ -73,6 +97,36 @@ export function RoutingLogClient({ initialDecisions }: { initialDecisions: Routi
 
   return (
     <div className="space-y-5">
+      {/* F-RT.4 — Live indicator. Order events drive most refreshes;
+          the outbound bus (shipment.created on re-routes) is a
+          secondary signal. */}
+      <Tooltip
+        content={
+          sseConnected
+            ? t('products.live.tooltipConnected')
+            : t('products.live.tooltipDisconnected')
+        }
+      >
+        <span
+          className="inline-flex items-center gap-1.5 text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400"
+          aria-label={
+            sseConnected
+              ? t('products.live.tooltipConnected')
+              : t('products.live.tooltipDisconnected')
+          }
+          data-testid="routing-log-live-indicator"
+          data-connected={sseConnected ? '1' : '0'}
+        >
+          <span
+            className={`w-1.5 h-1.5 rounded-full ${
+              sseConnected ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300'
+            }`}
+            aria-hidden
+          />
+          {sseConnected ? t('products.live') : t('products.polling')}
+        </span>
+      </Tooltip>
+
       {/* Simulation panel */}
       <section>
         <h2 className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
