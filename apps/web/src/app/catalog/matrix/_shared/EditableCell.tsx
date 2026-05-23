@@ -16,6 +16,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react'
+import { RotateCcw } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface BaseProps {
@@ -32,6 +33,17 @@ interface BaseProps {
    *  parent should optimistically update its own row state and then
    *  call mutationHook.commit. */
   onCommit: (next: string | number | null) => void
+  // ── C.5 inheritance props (optional; omit on master rows) ──────
+  /** What this cell would inherit from its source (parent row,
+   *  master columns, etc.) if it had no own value. Drives the
+   *  gray-italic ghost when `value` is null. */
+  inheritedFromValue?: string | number | null
+  /** Display name shown in the inheritance chip ("parent", "Global"). */
+  inheritedSourceLabel?: string
+  /** Called when the operator chooses to reset to the inherited value.
+   *  When provided, an inline ↺ button appears on hover when the cell
+   *  has its own value (i.e. could be reset to inherit). */
+  onReset?: () => void
 }
 
 interface TextProps extends BaseProps {
@@ -52,7 +64,17 @@ interface SelectProps extends BaseProps {
 type Props = TextProps | NumberProps | SelectProps
 
 export default function EditableCell(props: Props) {
-  const { cellKey, value, placeholder, compact, className, onCommit } = props
+  const {
+    cellKey,
+    value,
+    placeholder,
+    compact,
+    className,
+    onCommit,
+    inheritedFromValue,
+    inheritedSourceLabel,
+    onReset,
+  } = props
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState<string>(value == null ? '' : String(value))
   const inputRef = useRef<HTMLInputElement | HTMLSelectElement | null>(null)
@@ -165,41 +187,85 @@ export default function EditableCell(props: Props) {
   }
 
   // ── Display (not editing) ──────────────────────────────────────
-  const displayValue =
-    value == null || value === ''
-      ? (placeholder ?? '—')
-      : props.kind === 'number'
-      ? typeof value === 'number'
-        ? formatNumber(value, props.step)
-        : String(value)
-      : props.kind === 'select'
-      ? props.options.find((o) => o.value === value)?.label ?? String(value)
-      : String(value)
+  const ownValueAbsent = value == null || value === ''
+  const inheritedAbsent = inheritedFromValue == null || inheritedFromValue === ''
+  const inheritsFromSource = inheritedSourceLabel !== undefined
 
-  const isPlaceholder = value == null || value === ''
+  // Inheritance mode kicks in when:
+  //   - caller provided an inherited source AND
+  //   - the cell has no own value
+  // In that case we render the inherited value as gray italic ghost.
+  const renderingInherited = inheritsFromSource && ownValueAbsent && !inheritedAbsent
+
+  const formatForKind = (v: string | number | null): string => {
+    if (v == null || v === '') return placeholder ?? '—'
+    if (props.kind === 'number') {
+      return typeof v === 'number' ? formatNumber(v, props.step) : String(v)
+    }
+    if (props.kind === 'select') {
+      return props.options.find((o) => o.value === v)?.label ?? String(v)
+    }
+    return String(v)
+  }
+
+  const displayValue = renderingInherited
+    ? formatForKind(inheritedFromValue ?? null)
+    : formatForKind(value)
+
+  // Show reset button when:
+  //   - caller wired onReset AND
+  //   - cell has its own value (so reset is meaningful)
+  //   - AND the own value differs from inherited (otherwise reset is a no-op)
+  const canReset =
+    onReset && !ownValueAbsent && inheritsFromSource &&
+    String(value) !== String(inheritedFromValue ?? '')
 
   return (
-    <button
-      type="button"
-      onClick={enterEdit}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === 'F2') {
-          e.preventDefault()
-          enterEdit()
-        }
-      }}
-      data-cell-key={cellKey}
-      className={cn(
-        'w-full text-left rounded px-1 py-0.5 truncate',
-        'hover:bg-zinc-100 dark:hover:bg-zinc-800 focus:outline-none focus:ring-1 focus:ring-blue-400',
-        isPlaceholder && 'italic text-zinc-400',
-        props.kind === 'number' && 'text-right tabular-nums',
-        className,
+    <div className="group relative w-full">
+      <button
+        type="button"
+        onClick={enterEdit}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === 'F2') {
+            e.preventDefault()
+            enterEdit()
+          }
+        }}
+        data-cell-key={cellKey}
+        title={renderingInherited ? `inherited from ${inheritedSourceLabel}` : undefined}
+        className={cn(
+          'w-full text-left rounded px-1 py-0.5 truncate',
+          'hover:bg-zinc-100 dark:hover:bg-zinc-800 focus:outline-none focus:ring-1 focus:ring-blue-400',
+          ownValueAbsent && !renderingInherited && 'italic text-zinc-400',
+          renderingInherited && 'italic text-zinc-400 dark:text-zinc-500',
+          props.kind === 'number' && 'text-right tabular-nums',
+          canReset && 'pr-4',
+          className,
+        )}
+        aria-label={`Edit ${cellKey}`}
+      >
+        {displayValue}
+      </button>
+      {canReset && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation()
+            onReset!()
+          }}
+          className={cn(
+            'absolute right-0 top-1/2 -translate-y-1/2',
+            'flex items-center justify-center w-4 h-4 rounded text-zinc-400',
+            'opacity-0 group-hover:opacity-100 hover:bg-zinc-200 dark:hover:bg-zinc-700 hover:text-zinc-700 dark:hover:text-zinc-200',
+            'transition-opacity',
+          )}
+          title={`Reset to ${inheritedSourceLabel}`}
+          aria-label={`Reset to ${inheritedSourceLabel}`}
+        >
+          <RotateCcw className="w-2.5 h-2.5" />
+        </button>
       )}
-      aria-label={`Edit ${cellKey}`}
-    >
-      {displayValue}
-    </button>
+    </div>
   )
 }
 

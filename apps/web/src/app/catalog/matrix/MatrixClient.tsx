@@ -524,9 +524,12 @@ function VariantRow({
         min={0}
         step={1}
         compact
+        inheritedFromValue={parent.totalStock}
+        inheritedSourceLabel="parent"
         onCommit={(next) =>
           onUpdate(variant.id, 'totalStock', next == null ? 0 : Math.trunc(Number(next)), variant.totalStock)
         }
+        onReset={() => onUpdate(variant.id, 'totalStock', parent.totalStock, variant.totalStock)}
         className="text-right tabular-nums"
       />
       <EditableCell
@@ -536,7 +539,10 @@ function VariantRow({
         min={0}
         step={0.01}
         compact
+        inheritedFromValue={parent.basePrice}
+        inheritedSourceLabel="parent"
         onCommit={(next) => onUpdate(variant.id, 'basePrice', next, variant.basePrice)}
+        onReset={() => onUpdate(variant.id, 'basePrice', parent.basePrice, variant.basePrice)}
         className="text-right tabular-nums"
       />
       <EditableCell
@@ -545,7 +551,10 @@ function VariantRow({
         value={variant.status}
         options={STATUS_OPTIONS}
         compact
+        inheritedFromValue={parent.status}
+        inheritedSourceLabel="parent"
         onCommit={(next) => onUpdate(variant.id, 'status', next, variant.status)}
+        onReset={() => onUpdate(variant.id, 'status', parent.status, variant.status)}
       />
       <div className="flex items-center gap-1 flex-wrap overflow-hidden">
         {variant.channelCoverage.length === 0 ? (
