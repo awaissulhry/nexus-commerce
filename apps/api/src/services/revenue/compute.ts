@@ -45,13 +45,20 @@ export type RevenueSource =
   | 'none'              // no path produced a positive amount
 
 /**
+ * Decimal-ish — accepts a Prisma Decimal (has toString()) or any
+ * number/string/null. Centralises the "Prisma serialisation" wart so
+ * callers don't have to cast. The Decimal class has .toString() so
+ * Number(x) gives a useful value.
+ */
+export type DecimalLike = number | string | null | undefined | { toString(): string }
+
+/**
  * Shape of the inputs the helper needs. Designed to accept a Prisma
  * findMany result loosely typed — caller doesn't need to wrap.
  */
 export interface OrderForRevenue {
-  /** Order.totalPrice. Prisma Decimal serialises as string in JS; we
-   *  accept number/string/null transparently. */
-  totalPrice: number | string | null | undefined
+  /** Order.totalPrice. Accepts Prisma Decimal or any numeric form. */
+  totalPrice: DecimalLike
   /** ISO currency code; defaults to 'EUR' for IT/DE/FR/ES markets. */
   currencyCode?: string | null
   /** Amazon marketplace code ('IT', 'DE', etc.) — keys the ChannelListing lookup. */
@@ -60,7 +67,7 @@ export interface OrderForRevenue {
   items?: Array<{
     productId?: string | null
     quantity: number
-    price?: number | string | null
+    price?: DecimalLike
   }>
 }
 
@@ -85,10 +92,13 @@ export interface RevenueComputation {
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
-function toNumber(v: number | string | null | undefined): number {
+function toNumber(v: DecimalLike): number {
   if (v == null) return 0
   if (typeof v === 'number') return Number.isFinite(v) ? v : 0
-  const n = Number(v)
+  // Handles string AND Decimal (Decimal has toString that returns a
+  // numeric string). Number(decimal) → numeric value via valueOf or
+  // toString fallback.
+  const n = Number(v as string)
   return Number.isFinite(n) ? n : 0
 }
 

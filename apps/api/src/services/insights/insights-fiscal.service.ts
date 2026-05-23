@@ -100,6 +100,14 @@ export interface FiscalReport {
   settlement: SettlementChannelRow[]
   currencyBridge: CurrencyBridgeRow[]
   creditNoteLedger: CreditNoteLedgerRow[]
+  // DA-RT.3 — fiscal compliance warning. Surfaces orders whose
+  // OrderTotal Amazon withholds. Estimate NOT in IVA buckets;
+  // operator resolves via manual override before filing.
+  fiscalCompliance: {
+    awaitingPriceCount: number
+    estimatedRevenueCents: number
+    note: string
+  }
 }
 
 function quarterOf(d: Date): number {
@@ -202,9 +210,57 @@ export async function computeFiscalReport(
   let vatCollected = 0
   let b2bRevenue = 0
   let b2cRevenue = 0
+  // DA-RT.3 — fiscal compliance counters. We accumulate these in
+  // parallel so the response includes an explicit warning panel when
+  // the IVA report would under-state. Estimated revenue is computed
+  // via the central computeOrderRevenue helper from DA-RT.1 but is
+  // NOT added into grossRevenue / vatCollected / ivaByRate buckets —
+  // the commercialista needs to either (a) wait for Amazon to release
+  // OrderTotal, or (b) manually override via the admin endpoint
+  // before filing. Including estimates silently would risk filing
+  // wrong VAT amounts.
+  let awaitingPriceCount = 0
+  let estimatedRevenueCents = 0
+  // Lazy-loaded price lookup for the estimate path. Only fetched when
+  // we encounter the first €0 order — typical fiscal periods are
+  // months-wide so most orders have totalPrice set.
+  let priceLookup: { byChannelListing: Map<string, number>; byProduct: Map<string, number> } | null = null
 
   for (const o of orders) {
     const revenue = Number(o.totalPrice ?? 0)
+    // DA-RT.3 — count + estimate stuck orders for the warning panel.
+    if (revenue <= 0 && o.items.length > 0 && o.items.some((it) => (it.quantity ?? 0) > 0)) {
+      awaitingPriceCount += 1
+      // Lazy-load the lookup the first time we need it
+      if (priceLookup == null) {
+        const productIds = Array.from(
+          new Set(
+            orders.flatMap((order) =>
+              order.items
+                .map((it) => (it as { productId?: string | null }).productId)
+                .filter((p): p is string => !!p),
+            ),
+          ),
+        )
+        const { buildPriceLookup } = await import('../revenue/compute.js')
+        priceLookup = await buildPriceLookup(productIds, (o.channel as 'AMAZON' | 'EBAY' | 'SHOPIFY') ?? 'AMAZON')
+      }
+      // Compute the estimate via the central helper
+      const { computeOrderRevenue } = await import('../revenue/compute.js')
+      const est = computeOrderRevenue({
+        totalPrice: o.totalPrice,
+        currencyCode: o.currencyCode,
+        marketplace: o.marketplace,
+        items: o.items.map((it) => ({
+          productId: (it as { productId?: string | null }).productId ?? null,
+          quantity: it.quantity ?? 0,
+          price: it.price,
+        })),
+      }, priceLookup)
+      if (est.estimated && est.cents > 0) {
+        estimatedRevenueCents += est.cents
+      }
+    }
     grossRevenue += revenue
 
     const code = o.currencyCode ?? 'EUR'
@@ -326,6 +382,19 @@ export async function computeFiscalReport(
   }))
   const creditNotesValue = creditNoteLedger.reduce((s, c) => s + c.amount, 0)
 
+  // DA-RT.3 — fiscal compliance warning content. Pre-built so the
+  // UI can render a single banner with: count + estimated value +
+  // human-readable note explaining the remediation path. Note
+  // intentionally references manual override so the operator knows
+  // where to act.
+  const fiscalCompliance = {
+    awaitingPriceCount,
+    estimatedRevenueCents,
+    note: awaitingPriceCount > 0
+      ? `${awaitingPriceCount} order${awaitingPriceCount === 1 ? '' : 's'} in this period have no OrderTotal (Amazon withheld + OrderItem price empty). Estimated value: €${(estimatedRevenueCents / 100).toFixed(2)}. NOT included in IVA buckets below — resolve via POST /api/admin/orders/:id/manual-total OR wait for Amazon to release OrderTotal before filing.`
+      : 'All orders in this period have confirmed totals.',
+  }
+
   return {
     window: { from: current.from.toISOString(), to: current.to.toISOString() },
     fiscalYear: fiscalYearOf(current.from),
@@ -341,6 +410,7 @@ export async function computeFiscalReport(
       b2bRevenue: Math.round(b2bRevenue),
       b2cRevenue: Math.round(b2cRevenue),
     },
+    fiscalCompliance,
     ivaByRate: [...ivaByRateMap.values()]
       .map((v) => ({
         ...v,
