@@ -477,10 +477,12 @@ export default function ImagesTab({ product, discardSignal, onDirtyChange }: Pro
         />
       )}
 
-      {/* ── DAM library picker (IR.7) ────────────────────────────────── */}
+      {/* ── DAM library picker (IR.7 + IE.7 scope chips) ─────────────── */}
       {damPickerOpen && (
         <DamPickerModal
           productId={product.id}
+          productBrand={wp.brand}
+          productProductType={wp.productType}
           onClose={() => setDamPickerOpen(false)}
           onImported={() => {
             showToast(t('products.edit.images.toasts.importedFromDam'))

@@ -56,15 +56,31 @@ interface Props {
   /** Called after a successful import so the parent can refresh the
    *  master gallery. Receives the new ProductImage row. */
   onImported: (img: ProductImage) => void
+  // IE.7 — cross-product reuse. Pre-scopes the picker to assets
+  // already used by Products with the same brand + productType.
+  // Operator can clear either chip to widen the search.
+  productBrand?: string | null
+  productProductType?: string | null
 }
 
-export default function DamPickerModal({ productId, onClose, onImported }: Props) {
+export default function DamPickerModal({
+  productId,
+  onClose,
+  onImported,
+  productBrand,
+  productProductType,
+}: Props) {
   const { t } = useTranslations()
   const [items, setItems] = useState<LibraryItem[]>([])
   const [search, setSearch] = useState('')
   const [folderId, setFolderId] = useState<string>('') // '' = any, 'unfiled' = none, else folder id
   const [selectedTagIds, setSelectedTagIds] = useState<Set<string>>(new Set())
   const [missingAltOnly, setMissingAltOnly] = useState(false)
+  // IE.7 — scope chips. Default ON when the corresponding field is
+  // available so the operator sees same-brand + same-productType
+  // matches first. Clearing widens to the full DAM.
+  const [scopeBrand, setScopeBrand] = useState<boolean>(!!productBrand)
+  const [scopeProductType, setScopeProductType] = useState<boolean>(!!productProductType)
   const [folders, setFolders] = useState<FolderItem[]>([])
   const [tags, setTags] = useState<TagItem[]>([])
   const [loading, setLoading] = useState(false)
@@ -112,6 +128,11 @@ export default function DamPickerModal({ productId, onClose, onImported }: Props
       if (folderId) params.set('folderId', folderId)
       if (selectedTagIds.size > 0) params.set('tagIds', Array.from(selectedTagIds).join(','))
       if (missingAltOnly) params.set('missingAlt', '1')
+      // IE.7 — Cross-product reuse filters. Library API joins
+      // through AssetUsage to find DigitalAssets already in use by
+      // Products with the same brand / productType.
+      if (scopeBrand && productBrand) params.set('relatedBrand', productBrand)
+      if (scopeProductType && productProductType) params.set('relatedProductType', productProductType)
       const res = await beFetch(`/api/assets/library?${params.toString()}`)
       if (!res.ok) throw new Error(`Library fetch failed: ${res.status}`)
       const body: LibraryResponse = await res.json()
@@ -121,7 +142,7 @@ export default function DamPickerModal({ productId, onClose, onImported }: Props
     } finally {
       setLoading(false)
     }
-  }, [search, folderId, selectedTagIds, missingAltOnly])
+  }, [search, folderId, selectedTagIds, missingAltOnly, scopeBrand, scopeProductType, productBrand, productProductType])
 
   useEffect(() => { void fetchLibrary() }, [fetchLibrary])
 
@@ -210,6 +231,45 @@ export default function DamPickerModal({ productId, onClose, onImported }: Props
             <X className="w-4 h-4" />
           </button>
         </div>
+
+        {/* IE.7 — Cross-product scope chips. Default ON so the
+            picker surfaces brand/productType matches first; the
+            operator can click a chip to widen to the full DAM. */}
+        {(productBrand || productProductType) && (
+          <div className="flex items-center gap-2 px-5 py-2 border-b border-slate-100 dark:border-slate-800 flex-shrink-0 text-xs">
+            <span className="text-[11px] uppercase tracking-wide text-slate-400 font-medium">Scope</span>
+            {productBrand && (
+              <button
+                type="button"
+                onClick={() => setScopeBrand((v) => !v)}
+                className={cn(
+                  'inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full border transition-colors',
+                  scopeBrand
+                    ? 'bg-blue-50 dark:bg-blue-950/40 border-blue-400 text-blue-700 dark:text-blue-300'
+                    : 'border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800',
+                )}
+                title="Show only assets already used by other products in this brand"
+              >
+                Brand: {productBrand}
+              </button>
+            )}
+            {productProductType && (
+              <button
+                type="button"
+                onClick={() => setScopeProductType((v) => !v)}
+                className={cn(
+                  'inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full border transition-colors',
+                  scopeProductType
+                    ? 'bg-blue-50 dark:bg-blue-950/40 border-blue-400 text-blue-700 dark:text-blue-300'
+                    : 'border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800',
+                )}
+                title="Show only assets already used by other products of the same type"
+              >
+                Type: {productProductType}
+              </button>
+            )}
+          </div>
+        )}
 
         {/* Filter strip — folder, tags, missing-alt + clear */}
         <div className="flex items-center gap-2 px-5 py-2.5 border-b border-slate-100 dark:border-slate-800 flex-shrink-0 flex-wrap text-xs">

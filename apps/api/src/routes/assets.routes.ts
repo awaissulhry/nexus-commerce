@@ -330,6 +330,14 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
       search?: string
       page?: string
       pageSize?: string
+      // IE.7 — Cross-product scoping. When set, narrows to
+      // DigitalAssets used by at least one Product matching the
+      // given brand / productType. Lets the DAM picker surface
+      // "assets already in use by other products in this brand /
+      // category" first, encouraging cross-product reuse instead
+      // of re-upload.
+      relatedBrand?: string
+      relatedProductType?: string
     }
     const page = Math.max(parseInt(q.page ?? '1', 10) || 1, 1)
     const pageSize = Math.min(
@@ -434,6 +442,27 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
     }
     if (folderFilter === 'unfiled') daWhere.folderId = null
     else if (folderFilter) daWhere.folderId = folderFilter
+
+    // IE.7 — Narrow to DigitalAssets used by at least one Product
+    // matching the given brand / productType. Filters on the
+    // AssetUsage join's product relation. Trim + case-insensitive
+    // so the FE doesn't have to normalise.
+    const relatedBrand = q.relatedBrand?.trim()
+    const relatedProductType = q.relatedProductType?.trim()
+    if (relatedBrand || relatedProductType) {
+      const productFilter: Record<string, unknown> = {}
+      if (relatedBrand) productFilter.brand = { equals: relatedBrand, mode: 'insensitive' }
+      if (relatedProductType) productFilter.productType = { equals: relatedProductType, mode: 'insensitive' }
+      const usageClause = {
+        usages: { some: { scope: 'product', product: productFilter } },
+      }
+      // Compose with any existing AND clauses (e.g. tag filter).
+      if (Array.isArray(daWhere.AND)) {
+        ;(daWhere.AND as Array<Record<string, unknown>>).push(usageClause)
+      } else {
+        Object.assign(daWhere, usageClause)
+      }
+    }
     if (search) {
       // MC.1.4 — match the structured fields plus JSON-path captures
       // for caption and alt living under metadata. Prisma's

@@ -76,6 +76,9 @@ export interface WorkspaceProduct {
   id: string
   sku: string
   name: string
+  // IE.7 — surfaced so MasterPanel can pre-scope the DAM picker to
+  // "same brand" / "same product type" assets.
+  brand: string | null
   productType: string | null
   imageAxisPreference: string | null
   amazonAsin: string | null

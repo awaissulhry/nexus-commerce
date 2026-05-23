@@ -87,6 +87,10 @@ const imagesWorkspaceRoutes: FastifyPluginAsync = async (fastify) => {
           id: true,
           sku: true,
           name: true,
+          // IE.7 — brand surfaces in WorkspaceProduct so the master
+          // panel can pre-scope the DAM picker to "same brand"
+          // matches (cross-product image reuse).
+          brand: true,
           productType: true,
           imageAxisPreference: true,
           amazonAsin: true,
