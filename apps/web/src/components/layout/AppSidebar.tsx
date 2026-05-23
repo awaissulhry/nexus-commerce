@@ -34,6 +34,7 @@ import {
   Image as ImageIcon,
   Star,
   FileEdit,
+  LayoutGrid,
   BadgeCheck,
   BookOpen,
   Palette,
@@ -382,6 +383,12 @@ export default function AppSidebar() {
               pathname === '/inventory' ||
               pathname.startsWith('/inventory/')
             }
+          />
+          <NavItem
+            href="/catalog/matrix"
+            icon={LayoutGrid}
+            label="Matrix"
+            active={pathname === '/catalog/matrix'}
           />
           <NavItem
             href="/products/drafts"
