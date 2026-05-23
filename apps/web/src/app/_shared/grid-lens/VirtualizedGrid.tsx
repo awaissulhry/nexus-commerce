@@ -321,19 +321,36 @@ export function VirtualizedGrid<T extends GridLensRow>({
   const cssVarStyle = useMemo(() => {
     const style: Record<string, string> = {}
     for (const c of visible) {
-      style[`--col-${c.key}-width`] = `${colWidth(c.key, c.width)}px`
+      // PG.6/PG.8 hotfix — clamp LOCKED columns (product, actions) to
+      // at least their schema-default width. Operators can grow them
+      // via the resize handle, but the stored value can never go
+      // below the default — that's the "minimum width needed to
+      // render the cluster without cropping". Pre-hotfix a stale
+      // 140 px stored for `actions` survived the 180 px schema bump
+      // and clipped the Eye+Copy+Edit+▾ cluster on every reload.
+      const schemaW = c.width ?? 100
+      const stored = colWidth(c.key, schemaW)
+      const w = c.locked ? Math.max(stored, schemaW) : stored
+      style[`--col-${c.key}-width`] = `${w}px`
     }
     return style as React.CSSProperties
   }, [visible, colWidth])
 
   // Total table width = [drag(28)] + checkbox(32) + [chevron(24)] + [star(22)] + sum(col widths)
+  // PG.6/PG.8 hotfix — mirror the locked-min clamp from cssVarStyle so
+  // totalWidth doesn't under-report and let the cluster overflow past
+  // the table's minWidth.
   const totalWidth = useMemo(
     () =>
       (draggable ? 28 : 0) +
       32 +
       (showExpandColumn ? 24 : 0) +
       (onTagEdit ? 22 : 0) +
-      visible.reduce((acc, c) => acc + colWidth(c.key, c.width), 0),
+      visible.reduce((acc, c) => {
+        const schemaW = c.width ?? 100
+        const stored = colWidth(c.key, schemaW)
+        return acc + (c.locked ? Math.max(stored, schemaW) : stored)
+      }, 0),
     [visible, colWidth, draggable, onTagEdit, showExpandColumn],
   )
 
@@ -680,6 +697,11 @@ export function VirtualizedGrid<T extends GridLensRow>({
                           renderCell={renderCell}
                           renderDragHandle={renderDragHandle}
                           showExpandColumn={showExpandColumn}
+                          stickyLeft={stickyLeft}
+                          stickyRight={stickyRight}
+                          stickyLeftOffsets={stickyLeftOffsets}
+                          firstStickyKey={firstStickyKey}
+                          lastStickyKey={lastStickyKey}
                         />
                       )}
                       {row.kind === 'loading' && (
