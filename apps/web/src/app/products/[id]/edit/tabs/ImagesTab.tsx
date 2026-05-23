@@ -52,6 +52,11 @@ interface Props {
   product: { id: string; sku: string }
   discardSignal: number
   onDirtyChange: (count: number) => void
+  /** DSP.4 — invoked BEFORE every publish so cross-tab dirty changes
+   *  (Master Data, Channel Listing, etc.) persist atomically with the
+   *  Images workspace flush. If it throws, publish aborts. When omitted
+   *  the tab falls back to its workspace-only flush (legacy behavior). */
+  onPreSaveAll?: () => Promise<void>
 }
 
 const CHANNEL_TABS: { key: ChannelTab; label: string }[] = [
@@ -61,7 +66,7 @@ const CHANNEL_TABS: { key: ChannelTab; label: string }[] = [
   { key: 'shopify', label: 'Shopify' },
 ]
 
-export default function ImagesTab({ product, discardSignal, onDirtyChange }: Props) {
+export default function ImagesTab({ product, discardSignal, onDirtyChange, onPreSaveAll }: Props) {
   const [activeChannel, setActiveChannel] = useState<ChannelTab>('master')
   const [toast, setToast] = useState<string | null>(null)
   const [editorImage, setEditorImage] = useState<ProductImage | null>(null)
@@ -316,11 +321,12 @@ export default function ImagesTab({ product, discardSignal, onDirtyChange }: Pro
     })
   }
 
-  // PB.1 — Top-level publish handler used by ImageActionBar's dropdown.
-  // Saves pending changes first (cheap if nothing dirty), then hits the
-  // per-channel publish endpoint. Per-channel panels keep their own
-  // publish bars for fine-grained control; this is the always-visible
-  // one-click affordance.
+  // PB.1 / DSP.4 — Top-level publish handler used by ImageActionBar's
+  // dropdown. Pre-save guarantee: every publish now flushes the
+  // cross-tab dirty registry FIRST (onPreSaveAll, e.g. Master Data
+  // edits) then the workspace-local pending changes (savePending).
+  // Only after both saves succeed does the publish fire. Per-channel
+  // publish panels delegate here so they get the same guarantee.
   async function handlePublish(target: PublishTarget, bypassApproval = false): Promise<void> {
     // PB.12 — Approval gate. If the per-product flag is set AND the
     // caller didn't bypass (approval modal does), queue the publish
@@ -328,6 +334,17 @@ export default function ImagesTab({ product, discardSignal, onDirtyChange }: Pro
     // don't pile up; the approver sees the already-saved state when
     // they approve.
     if (!bypassApproval && isApprovalRequired(product.id)) {
+      // DSP.4 — pre-save cross-tab dirty state too (Master Data etc.)
+      // before queueing for approval, so the approver sees a fully
+      // consistent snapshot.
+      if (onPreSaveAll) {
+        try {
+          await onPreSaveAll()
+        } catch (err) {
+          showToast(`Save failed before approval: ${err instanceof Error ? err.message : String(err)}`)
+          return
+        }
+      }
       if (workspace.dirtyCount > 0) {
         const ok = await savePending()
         if (!ok) {
@@ -346,6 +363,17 @@ export default function ImagesTab({ product, discardSignal, onDirtyChange }: Pro
 
     setPublishing(true)
     try {
+      // DSP.4 — cross-tab pre-save first. If Master Data (or any
+      // other registered tab) is dirty, this writes it before the
+      // publish call so we never push stale data to a channel.
+      if (onPreSaveAll) {
+        try {
+          await onPreSaveAll()
+        } catch (err) {
+          showToast(`Save failed before publishing: ${err instanceof Error ? err.message : String(err)}`)
+          return
+        }
+      }
       if (workspace.dirtyCount > 0) {
         const ok = await savePending()
         if (!ok) {

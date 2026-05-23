@@ -998,6 +998,7 @@ export default function ProductEditClient({
               product={product}
               discardSignal={discardSignal}
               onDirtyChange={(count) => setTabDirty('images', count)}
+              onPreSaveAll={registry.saveAll}
             />
           </div>
         )}
