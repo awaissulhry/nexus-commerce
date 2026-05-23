@@ -82,28 +82,36 @@ export async function refreshSalesAggregates(
     ? '' // unconditional update
     : `WHERE "DailySalesAggregate"."source" IN ('ORDER_ITEM')`
 
-  // DA-RT.2 — two corrections vs the original AR.1 SQL:
+  // DA-RT.2 / DA-RT.14 / DA-RT.16 — three corrections vs the
+  // original AR.1 SQL:
   //
-  // 1. TZ-aware day bucketing. `DATE(timestamptz)` uses UTC, which
-  //    shifts the calendar day by 1–2 hours every day for Europe/Rome
-  //    (CET = UTC+1, CEST = UTC+2). Orders placed late-evening local
-  //    bucket into the NEXT day in UTC. Switch to
-  //    `date_trunc('day', ... AT TIME ZONE 'UTC' AT TIME ZONE 'Europe/Rome')::date` so
-  //    the aggregate's calendar matches operator + Amazon Seller
-  //    Central + the dashboard global-snapshot.
+  // 1. TZ-aware day bucketing (DA-RT.14). `DATE(timestamptz)` uses
+  //    UTC, which shifts the calendar day by 1–2 hours every day for
+  //    Europe/Rome (CET = UTC+1, CEST = UTC+2). Switch to
+  //    `date_trunc('day', ... AT TIME ZONE 'UTC' AT TIME ZONE 'Europe/Rome')::date`
+  //    so the aggregate's calendar matches the dashboard + Seller Central.
   //
-  // 2. Order.totalPrice apportionment. The original SQL summed
-  //    `oi.price * oi.quantity` — which returns 0 for the long-tail
-  //    SHIPPED+€0 orders (Amazon-withheld OrderTotal, no OrderItem
-  //    price either). New CTE first establishes per-order quantity
-  //    total, then per item:
-  //      - oi.price > 0          → use oi.price * oi.quantity
-  //      - else o.totalPrice > 0 → apportion totalPrice by qty share
+  // 2. Order.totalPrice apportionment as PRIMARY (DA-RT.16). Per-item
+  //    CTE establishes per-order quantity total, then for each item:
+  //      - o.totalPrice > 0      → apportion totalPrice by qty share
+  //                                (PRIMARY — includes shipping/tax
+  //                                so DailySalesAggregate.grossRevenue
+  //                                actually means *gross*)
+  //      - else oi.price > 0     → use oi.price * oi.quantity
+  //                                (FALLBACK for the SHIPPED+€0 long
+  //                                tail where SP-API withheld OrderTotal
+  //                                but item prices are real)
   //      - else                  → 0 (no estimate at this layer;
   //                                runtime callers can layer the
   //                                ChannelListing estimate on top via
   //                                the central computeOrderRevenue
   //                                helper from DA-RT.1)
+  //
+  //    The tier order was swapped 2026-05-23 to align with compute.ts
+  //    Tier 1 (Order.totalPrice). Pre-swap the aggregate diverged from
+  //    Order.totalPrice by the shipping/tax delta on every order with
+  //    extras — surfacing as small drifts that were technically "right
+  //    on both sides" but confusing for operators.
   //
   // The CTE keeps the single-roundtrip INSERT...SELECT shape so the
   // wallclock cost stays minimal even at scale.
@@ -149,10 +157,10 @@ export async function refreshSalesAggregates(
       SUM(quantity)::int AS "unitsSold",
       SUM(
         CASE
-          WHEN price IS NOT NULL AND price > 0
-            THEN price * quantity
           WHEN order_total IS NOT NULL AND order_total > 0 AND order_qty_total > 0
             THEN order_total * (quantity::numeric / order_qty_total)
+          WHEN price IS NOT NULL AND price > 0
+            THEN price * quantity
           ELSE 0
         END
       )::numeric(14,2) AS "grossRevenue",
