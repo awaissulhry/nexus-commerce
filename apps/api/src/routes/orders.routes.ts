@@ -704,6 +704,34 @@ export async function ordersRoutes(app: FastifyInstance) {
     }
   })
 
+  // ── POST /api/orders/reclassify-already-solicited ────────────────
+  // RV.2.5 hotfix — sweep ReviewRequest rows where the failure was Amazon's
+  // duplicate-protection (HTTP 400/403 + "already") and re-classify them as
+  // SKIPPED. The current data has ~51 such rows from the first cron run
+  // before the classification fix landed. Run once.
+  app.post('/api/orders/reclassify-already-solicited', async (request, reply) => {
+    try {
+      const result = await prisma.reviewRequest.updateMany({
+        where: {
+          status: 'FAILED',
+          AND: [
+            { errorMessage: { contains: 'already', mode: 'insensitive' } },
+            { errorMessage: { contains: 'HTTP 40', mode: 'insensitive' } },
+          ],
+        },
+        data: {
+          status: 'SKIPPED',
+          suppressedReason: 'Amazon already solicited a review for this order',
+          providerResponseCode: 'ALREADY_SOLICITED',
+          errorMessage: null,
+        },
+      })
+      return { ok: true, updated: result.count }
+    } catch (error: any) {
+      return reply.status(500).send({ error: error.message })
+    }
+  })
+
   // ── POST /api/orders/backfill-delivered-heuristic ────────────────
   // RV.2.3 (server-side variant) — find Amazon FBA SHIPPED orders with
   // shippedAt + 3 business days in the past, fill deliveredAt + source

@@ -99,9 +99,15 @@ async function sendAmazonSolicitation({
     return { ok: true }
   } catch (err: any) {
     const msg: string = err?.message ?? String(err)
-    // 400 on re-send (Amazon's "already solicited") is a benign no-op
-    // from the engine's POV — record it as SKIPPED, not FAILED.
-    if (/HTTP 400/.test(msg) && /already/i.test(msg)) {
+    // Amazon's "already solicited" duplicate protection — benign no-op
+    // from the engine's POV → record as ALREADY_SOLICITED (the caller
+    // marks SKIPPED, not FAILED). Amazon returns this as:
+    //   HTTP 400 with message "...has already been..." (some markets)
+    //   HTTP 403 with code "Unauthorized" + message "...already requested..."
+    //     (most markets including IT/DE/FR/ES; verified empirically RV.2.5)
+    // Both shapes are duplicate-protection, not auth failures, so we
+    // collapse them.
+    if (/HTTP 40[03]/.test(msg) && /already/i.test(msg)) {
       return {
         ok: false,
         errorCode: 'ALREADY_SOLICITED',
@@ -506,17 +512,28 @@ const ordersReviewsRoutes: FastifyPluginAsync = async (fastify) => {
             failed++; continue
           }
           const result = await sendAmazonSolicitation({ amazonOrderId, marketplaceId })
+          // ALREADY_SOLICITED + NOT_IMPLEMENTED (dry-run) collapse to
+          // SKIPPED — both are benign, neither is a real failure.
+          const benign = result.errorCode === 'ALREADY_SOLICITED' || result.errorCode === 'NOT_IMPLEMENTED'
+          const newStatus = result.ok ? 'SENT' : benign ? 'SKIPPED' : 'FAILED'
           await prisma.reviewRequest.update({
             where: { id: req.id },
             data: {
-              status: result.ok ? 'SENT' : 'FAILED',
+              status: newStatus,
               sentAt: result.ok ? new Date() : null,
               providerRequestId: result.providerRequestId ?? null,
               providerResponseCode: result.errorCode ?? null,
-              errorMessage: result.errorMessage ?? null,
+              errorMessage: benign ? null : result.errorMessage ?? null,
+              suppressedReason: result.errorCode === 'ALREADY_SOLICITED'
+                ? 'Amazon already solicited a review for this order'
+                : result.errorCode === 'NOT_IMPLEMENTED'
+                  ? 'Amazon Solicitations gated by env (NEXUS_ENABLE_AMAZON_SOLICITATIONS)'
+                  : null,
             },
           })
-          if (result.ok) sent++; else failed++
+          if (result.ok) sent++
+          else if (benign) suppressed++
+          else failed++
         } else {
           await prisma.reviewRequest.update({ where: { id: req.id }, data: { status: 'SKIPPED', suppressedReason: 'non-Amazon — track-only' } })
           suppressed++

@@ -57,6 +57,12 @@ async function fireAmazonSolicitation(
     return { ok: true }
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err)
+    // RV.2.5 hotfix — Amazon's duplicate-protection: HTTP 400/403 with
+    // "already requested/solicited" is a benign no-op, not a real failure.
+    // Classify as ALREADY_SOLICITED so the caller marks SKIPPED.
+    if (/HTTP 40[03]/.test(msg) && /already/i.test(msg)) {
+      return { ok: false, errorCode: 'ALREADY_SOLICITED' }
+    }
     return { ok: false, errorCode: msg.slice(0, 100) }
   }
 }
@@ -143,6 +149,18 @@ export async function runReviewMailerOnce(): Promise<MailerTickResult> {
         } else {
           if (result.errorCode === 'DRY_RUN') {
             // Leave as SCHEDULED in dry-run — don't mark FAILED
+            skipped += 1
+          } else if (result.errorCode === 'ALREADY_SOLICITED') {
+            // Amazon's duplicate-protection — benign. Mark SKIPPED with
+            // a clear reason so the dashboard doesn't surface false failures.
+            await prisma.reviewRequest.update({
+              where: { id: req.id },
+              data: {
+                status: 'SKIPPED',
+                providerResponseCode: result.errorCode,
+                suppressedReason: 'Amazon already solicited a review for this order',
+              },
+            })
             skipped += 1
           } else {
             await prisma.reviewRequest.update({
