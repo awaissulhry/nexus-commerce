@@ -67,6 +67,16 @@ interface FinancialSyncSummary {
    *  so the operator can eyeball whether the ID format differs. */
   unmatchedSampleIds?: string[]
   ourSampleChannelOrderIds?: string[]
+  /** DA-RT.17 — for each unmatched ID, whether the order exists in
+   *  our DB at ANY purchaseDate. If yes, window mismatch; if no,
+   *  never ingested. */
+  unmatchedLookup?: Array<{
+    channelOrderId: string
+    existsInOurDb: boolean
+    purchaseDate: string | null
+    status: string | null
+    totalPrice: number | null
+  }>
 }
 
 async function processOrderEvent(event: AmazonOrderFinancialEvent): Promise<{ created: number; skipped: number }> {
@@ -263,6 +273,27 @@ export async function syncFinancialEvents(
     orderBy: { purchaseDate: 'desc' },
   })
 
+  // DA-RT.17 — for each unmatched ID, check whether the order exists
+  // in our Order table at ANY purchaseDate. If it does, the issue is
+  // the window mismatch (event posted in audit window but order was
+  // placed earlier). If it doesn't, the order was never ingested
+  // (different account, deleted, or sync-cron-missed).
+  const unmatchedLookup = await Promise.all(
+    unmatchedIds.map(async (channelOrderId) => {
+      const o = await prisma.order.findFirst({
+        where: { channel: 'AMAZON', channelOrderId },
+        select: { id: true, purchaseDate: true, status: true, totalPrice: true },
+      })
+      return {
+        channelOrderId,
+        existsInOurDb: !!o,
+        purchaseDate: o?.purchaseDate?.toISOString() ?? null,
+        status: o?.status ?? null,
+        totalPrice: o ? Number(o.totalPrice) : null,
+      }
+    }),
+  )
+
   return {
     windowStart: windowStart.toISOString(),
     windowEnd: windowEnd.toISOString(),
@@ -275,6 +306,7 @@ export async function syncFinancialEvents(
     durationMs: Date.now() - t0,
     unmatchedSampleIds: unmatchedIds,
     ourSampleChannelOrderIds: ourSample.map((o) => o.channelOrderId).filter((s): s is string => !!s),
+    unmatchedLookup,
   }
 }
 
