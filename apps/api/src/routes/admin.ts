@@ -10,6 +10,7 @@
 import type { FastifyInstance } from 'fastify'
 import { DataValidationService } from '../services/sync/data-validation.service.js'
 import { BatchRepairService } from '../services/sync/batch-repair.service.js'
+import { auditSalesDrift } from '../services/revenue/drift-audit.service.js'
 import prisma from '../db.js'
 
 // RB.1 — entities tracked by /admin/recycle-bin. Each maps to a Prisma
@@ -254,6 +255,38 @@ export async function adminRoutes(app: FastifyInstance) {
       })
     }
   })
+
+  /**
+   * DA-RT.13 — GET /admin/sales-drift/audit?lookbackDays=7
+   *
+   * Operator HTTP read of the same 3-way drift comparison the nightly
+   * sales-drift-detector cron runs. Returns every (day, marketplace)
+   * window in the lookback with its 3 store sums + the driftPairs[]
+   * breakdown identifying which pair(s) disagree beyond tolerance.
+   *
+   * Use this instead of grepping Railway logs after the cron fires —
+   * `windows` includes both drifting AND in-tolerance entries so you
+   * can verify "everything is fine" without ambiguity. `driftedCount`
+   * matches the cron's outputSummary.
+   *
+   * Query param: lookbackDays (default 7, min 1, max 90). Today is
+   * always excluded — intraday drift is expected.
+   */
+  app.get<{ Querystring: { lookbackDays?: string } }>(
+    '/admin/sales-drift/audit',
+    async (request, reply) => {
+      try {
+        const raw = Number(request.query.lookbackDays ?? 7)
+        const lookbackDays =
+          Number.isFinite(raw) ? Math.min(90, Math.max(1, Math.trunc(raw))) : 7
+        const audit = await auditSalesDrift({ lookbackDays })
+        return reply.send(audit)
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unknown error'
+        return reply.status(500).send({ error: message })
+      }
+    },
+  )
 
   // ═══════════════════════════════════════════════════════════════════
   // RB.1 — Recycle bin housekeeping. Powers /admin/recycle-bin.

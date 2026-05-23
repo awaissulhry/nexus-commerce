@@ -43,26 +43,12 @@
  */
 
 import cron from 'node-cron'
-import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
 import { recordCronRun } from '../utils/cron-observability.js'
 import { publishOrderEvent } from '../services/order-events.service.js'
-import { buildDriftPairs, type ThreeWaySums } from './_helpers/sales-drift-compare.js'
-
-const OPERATOR_TIMEZONE = 'Europe/Rome'
+import { auditSalesDrift } from '../services/revenue/drift-audit.service.js'
 
 let scheduledTask: ReturnType<typeof cron.schedule> | null = null
-
-/** YYYY-MM-DD for the local-tz calendar date of `d`. Matches GA-RT.1
- *  + DA-RT.2's helpers so day keys align across the codebase. */
-function isoLocalDay(d: Date): string {
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone: OPERATOR_TIMEZONE,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(d)
-}
 
 export async function runSalesDriftDetector(): Promise<void> {
   try {
@@ -73,146 +59,48 @@ export async function runSalesDriftDetector(): Promise<void> {
       const lookback =
         Number.isFinite(lookbackDays) && lookbackDays > 0 ? lookbackDays : 7
 
-      // Date window: last N days NOT including today. End-exclusive
-      // = local midnight today (Europe/Rome).
-      const now = new Date()
-      const todayIso = isoLocalDay(now)
-      const dayRangeEnd = new Date(`${todayIso}T00:00:00Z`)
-      const dayRangeStart = new Date(
-        dayRangeEnd.getTime() - lookback * 24 * 60 * 60_000,
-      )
+      // DA-RT.13 — query + merge moved to shared auditSalesDrift
+      // helper so the same logic powers GET /admin/sales-drift/audit.
+      // This cron is now just: audit + publish/log drifting windows.
+      const audit = await auditSalesDrift({ lookbackDays: lookback })
 
-      // Pull all 3 stores' per-(day, marketplace) sums in TZ-aware
-      // buckets so the keys line up exactly. Store C (financial) is
-      // joined to Order so we can apply the same TZ + marketplace
-      // grouping the other two stores use.
-      const [orderRows, aggregateRows, financialRows] = await Promise.all([
-        prisma.$queryRaw<
-          Array<{ day: Date; marketplace: string | null; cents: bigint }>
-        >`
-          SELECT
-            date_trunc('day', "purchaseDate" AT TIME ZONE 'Europe/Rome')::date AS day,
-            "marketplace",
-            COALESCE(SUM(ROUND("totalPrice" * 100)), 0)::bigint AS cents
-          FROM "Order"
-          WHERE "deletedAt" IS NULL
-            AND "channel" = 'AMAZON'
-            AND "currencyCode" = 'EUR'
-            AND "status" != 'CANCELLED'
-            AND "purchaseDate" >= ${dayRangeStart}
-            AND "purchaseDate" <  ${dayRangeEnd}
-          GROUP BY day, "marketplace"
-        `,
-        prisma.$queryRaw<
-          Array<{ day: Date; marketplace: string | null; cents: bigint }>
-        >`
-          SELECT
-            "day",
-            "marketplace",
-            COALESCE(SUM(ROUND("grossRevenue" * 100)), 0)::bigint AS cents
-          FROM "DailySalesAggregate"
-          WHERE "channel" = 'AMAZON'
-            AND "day" >= ${dayRangeStart}::date
-            AND "day" <  ${dayRangeEnd}::date
-          GROUP BY "day", "marketplace"
-        `,
-        // DA-RT.10 — Store C: Amazon-confirmed financial events.
-        // JOIN Order so we get the same TZ bucket + marketplace key
-        // the other two stores group by. Same status/currency filters
-        // for consistency (a CANCELLED order shouldn't show up here
-        // either, even though Amazon sometimes still reports a
-        // "RefundEvent" pair — that's a separate event type).
-        prisma.$queryRaw<
-          Array<{ day: Date; marketplace: string | null; cents: bigint }>
-        >`
-          SELECT
-            date_trunc('day', o."purchaseDate" AT TIME ZONE 'Europe/Rome')::date AS day,
-            o."marketplace",
-            COALESCE(SUM(ROUND(ft."grossRevenue" * 100)), 0)::bigint AS cents
-          FROM "FinancialTransaction" ft
-          JOIN "Order" o ON o.id = ft."orderId"
-          WHERE o."deletedAt" IS NULL
-            AND o."channel" = 'AMAZON'
-            AND o."currencyCode" = 'EUR'
-            AND o."status" != 'CANCELLED'
-            AND o."purchaseDate" >= ${dayRangeStart}
-            AND o."purchaseDate" <  ${dayRangeEnd}
-            AND ft."transactionType" = 'Order'
-          GROUP BY day, o."marketplace"
-        `,
-      ])
-
-      // Merge by (day|marketplace) key. Any side may be missing.
-      // financialCents is `null` when Store C has no rows for that
-      // bucket — distinct from `0` (which would mean "Amazon settled
-      // a €0 order for this day"). We use null to suppress false
-      // drift on recent days where ListFinancialEvents hasn't caught
-      // up yet (T+1 to T+7 settlement window).
-      const merged = new Map<string, ThreeWaySums>()
-      const keyFor = (day: Date, mkt: string | null): string =>
-        `${day.toISOString().slice(0, 10)}|${mkt ?? 'NULL'}`
-
-      const getOrCreate = (key: string): ThreeWaySums => {
-        let existing = merged.get(key)
-        if (!existing) {
-          existing = { orderCents: 0, aggregateCents: 0, financialCents: null }
-          merged.set(key, existing)
-        }
-        return existing
-      }
-      for (const r of orderRows) {
-        getOrCreate(keyFor(r.day, r.marketplace)).orderCents = Number(r.cents)
-      }
-      for (const r of aggregateRows) {
-        getOrCreate(keyFor(r.day, r.marketplace)).aggregateCents = Number(r.cents)
-      }
-      for (const r of financialRows) {
-        getOrCreate(keyFor(r.day, r.marketplace)).financialCents = Number(r.cents)
-      }
-
-      const driftedKeys: Array<{ day: string; marketplace: string | null }> = []
       const nowTs = Date.now()
-      for (const [key, sums] of merged.entries()) {
-        const driftPairs = buildDriftPairs(sums)
-        if (driftPairs.length === 0) continue
-
-        const [day, mktRaw] = key.split('|')
-        const marketplace = mktRaw === 'NULL' ? null : mktRaw
+      for (const w of audit.windows) {
+        if (w.driftPairs.length === 0) continue
 
         // Backwards-compat: legacy `delta*` fields surface the
         // order-vs-aggregate pair (DA-RT.5 semantics) when present;
         // otherwise the first drifting pair so subscribers built
         // before DA-RT.10 still get a usable signal.
         const legacyPair =
-          driftPairs.find((p) => p.a === 'order' && p.b === 'aggregate') ??
-          driftPairs[0]!
+          w.driftPairs.find((p) => p.a === 'order' && p.b === 'aggregate') ??
+          w.driftPairs[0]!
 
         publishOrderEvent({
           type: 'sales.drift.detected',
-          day: day ?? '',
-          marketplace,
-          orderSumCents: sums.orderCents,
-          aggregateSumCents: sums.aggregateCents,
-          financialSumCents: sums.financialCents ?? undefined,
+          day: w.day,
+          marketplace: w.marketplace,
+          orderSumCents: w.orderCents,
+          aggregateSumCents: w.aggregateCents,
+          financialSumCents: w.financialCents ?? undefined,
           deltaCents: legacyPair.deltaCents,
           deltaPct: legacyPair.deltaPct,
-          driftPairs,
+          driftPairs: w.driftPairs,
           ts: nowTs,
         })
-        driftedKeys.push({ day: day ?? '', marketplace })
         logger.warn('[sales-drift-detector] drift detected', {
-          day,
-          marketplace,
-          orderSumCents: sums.orderCents,
-          aggregateSumCents: sums.aggregateCents,
-          financialSumCents: sums.financialCents,
-          driftPairs: driftPairs.map(
+          day: w.day,
+          marketplace: w.marketplace,
+          orderSumCents: w.orderCents,
+          aggregateSumCents: w.aggregateCents,
+          financialSumCents: w.financialCents,
+          driftPairs: w.driftPairs.map(
             (p) => `${p.a}↔${p.b}: ${p.deltaCents}¢ (${p.deltaPct.toFixed(2)}%)`,
           ),
         })
       }
 
-      return `windows=${merged.size} drifted=${driftedKeys.length} lookbackDays=${lookback}`
+      return `windows=${audit.windows.length} drifted=${audit.driftedCount} lookbackDays=${lookback}`
     })
   } catch (err) {
     logger.error('[sales-drift-detector] top-level failure', {
