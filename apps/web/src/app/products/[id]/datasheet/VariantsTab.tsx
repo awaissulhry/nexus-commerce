@@ -51,6 +51,9 @@ import VariantPricingPanel, {
   type PricingVariant,
   type PricingListing,
 } from './VariantPricingPanel'
+import VariantCompliancePanel, {
+  type ComplianceVariant,
+} from './VariantCompliancePanel'
 import { Package } from 'lucide-react'
 
 interface VariantsTabProps {
@@ -75,10 +78,21 @@ export default async function VariantsTab({
     prisma.product
       .findUnique({
         where: { id: parentId },
-        select: { basePrice: true },
+        // VR.6 — basePrice for pricing-delta heatmap.
+        // VR.7 — compliance fields for the variant-compliance
+        // diff panel. All optional on schema; defensive .catch
+        // keeps the panel hidden on stale-client failure.
+        select: {
+          basePrice: true,
+          hsCode: true,
+          countryOfOrigin: true,
+          ppeCategory: true,
+          hazmatClass: true,
+          hazmatUnNumber: true,
+        },
       })
       .catch((e: unknown) => {
-        console.error('[vr.6] parent basePrice fetch failed', e)
+        console.error('[vr.6+7] parent compliance fetch failed', e)
         return null
       }),
     prisma.product
@@ -98,6 +112,13 @@ export default async function VariantsTab({
         amazonAsin: true,
         ebayItemId: true,
         shopifyProductId: true,
+        // VR.7 — compliance fields per child for the variant
+        // compliance diff panel.
+        hsCode: true,
+        countryOfOrigin: true,
+        ppeCategory: true,
+        hazmatClass: true,
+        hazmatUnNumber: true,
         categoryAttributes: true,
         // VR.2 — axis detection inputs.
         // VR.3 — coverage matrix needs channel + marketplace +
@@ -143,6 +164,64 @@ export default async function VariantsTab({
       return null
     }),
   ])
+
+  // VR.7 — Per-child certificate counts + nearest expiry. Fetched
+  // AFTER children resolve (we need the child IDs); kept as a
+  // separate query and wrapped in .catch so a missing
+  // ProductCertificate table on a stale DB never crashes the tab
+  // (lesson from the DS hotfix-1 / ATM.4 saga).
+  const childIds = children?.map((c) => c.id) ?? []
+  const childCerts =
+    childIds.length === 0
+      ? []
+      : await prisma.productCertificate
+          .findMany({
+            where: { productId: { in: childIds } },
+            select: {
+              productId: true,
+              certType: true,
+              expiresAt: true,
+            },
+          })
+          .catch((e: unknown) => {
+            console.error('[vr.7] child certificates fetch failed', e)
+            return [] as Array<{
+              productId: string
+              certType: string
+              expiresAt: Date | null
+            }>
+          })
+
+  // Aggregate certs per child for the panel.
+  const certsByChild = new Map<
+    string,
+    { total: number; expired: number; expiringSoonAt: Date | null; types: Set<string> }
+  >()
+  const now = Date.now()
+  const SOON_MS = 90 * 24 * 60 * 60 * 1000 // 90 days
+  for (const cert of childCerts) {
+    let entry = certsByChild.get(cert.productId)
+    if (!entry) {
+      entry = {
+        total: 0,
+        expired: 0,
+        expiringSoonAt: null,
+        types: new Set<string>(),
+      }
+      certsByChild.set(cert.productId, entry)
+    }
+    entry.total++
+    entry.types.add(cert.certType)
+    if (cert.expiresAt) {
+      const dt = cert.expiresAt.getTime()
+      if (dt < now) {
+        entry.expired++
+      } else if (dt - now < SOON_MS) {
+        if (entry.expiringSoonAt == null || dt < entry.expiringSoonAt.getTime())
+          entry.expiringSoonAt = cert.expiresAt
+      }
+    }
+  }
 
   if (children == null) {
     return (
@@ -324,6 +403,50 @@ export default async function VariantsTab({
             listingStatus: l.listingStatus,
           })),
         }))}
+        locale={locale}
+        t={t}
+      />
+
+      {/* VR.7 — Per-variant compliance diff panel. Each variant's
+          country / HSCode / PPE / hazmat is shown with a "same as
+          parent" or "≠" indicator vs the parent's values; per-child
+          certificate counts include expired + expiring-soon flags. */}
+      <VariantCompliancePanel
+        parent={
+          parent
+            ? {
+                hsCode: parent.hsCode,
+                countryOfOrigin: parent.countryOfOrigin,
+                ppeCategory: parent.ppeCategory,
+                hazmatClass: parent.hazmatClass,
+                hazmatUnNumber: parent.hazmatUnNumber,
+              }
+            : null
+        }
+        variants={children.map<ComplianceVariant>((c) => {
+          const stats = certsByChild.get(c.id) ?? {
+            total: 0,
+            expired: 0,
+            expiringSoonAt: null,
+            types: new Set<string>(),
+          }
+          return {
+            id: c.id,
+            sku: c.sku,
+            name: c.name,
+            hsCode: c.hsCode,
+            countryOfOrigin: c.countryOfOrigin,
+            ppeCategory: c.ppeCategory,
+            hazmatClass: c.hazmatClass,
+            hazmatUnNumber: c.hazmatUnNumber,
+            certs: {
+              total: stats.total,
+              expired: stats.expired,
+              expiringSoonAt: stats.expiringSoonAt,
+              types: [...stats.types],
+            },
+          }
+        })}
         locale={locale}
         t={t}
       />
