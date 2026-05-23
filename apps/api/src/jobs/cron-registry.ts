@@ -20,6 +20,7 @@
 import { runOrdersPoll as runAmazonOrdersPoll } from './amazon-orders-sync.job.js'
 import { runZeroTotalsBackfill as runAmazonZeroTotalsBackfill } from './amazon-zero-totals-backfill.job.js'
 import { runSalesDriftDetector } from './sales-drift-detector.job.js'
+import { runAmazonOrderItemsRetry } from './amazon-order-items-retry.job.js'
 import { runFinancialSync as runAmazonFinancialSync } from './amazon-financial-sync.job.js'
 import { runEbayFinancialSync } from './ebay-financial-sync.job.js'
 import { runInventorySweep as runAmazonInventorySweep } from './amazon-inventory-sync.job.js'
@@ -120,6 +121,12 @@ export const CRON_REGISTRY: Record<string, () => Promise<unknown>> = {
   // sales.drift.detected on tolerance breach so the operator notices
   // drift before it accumulates across multiple periods.
   'sales-drift-detector': () => runSalesDriftDetector(),
+  // DA-RT.9 — periodically re-fetches getOrderItems for orders that
+  // landed with OrderItem.price = 0 (Amazon withheld ItemPrice at
+  // ingest). Repairs the items in-place, then triggers a batched
+  // zero-totals backfill so Order.totalPrice + DailySalesAggregate
+  // update via the GS-RT.7 → DA-RT.6 chain.
+  'amazon-order-items-retry': () => runAmazonOrderItemsRetry(),
   'amazon-financial-sync': () => runAmazonFinancialSync(),
   'ebay-financial-sync': () => runEbayFinancialSync(),
   'amazon-inventory-sync': () => runAmazonInventorySweep(),

@@ -163,6 +163,7 @@ import { startRefundDeadlineTrackerCron } from "./jobs/refund-deadline-tracker.j
 import { startAmazonOrdersCron } from "./jobs/amazon-orders-sync.job.js";
 import { startAmazonZeroTotalsBackfillCron } from "./jobs/amazon-zero-totals-backfill.job.js";
 import { startSalesDriftDetectorCron } from "./jobs/sales-drift-detector.job.js";
+import { startAmazonOrderItemsRetryCron } from "./jobs/amazon-order-items-retry.job.js";
 import { startEbayOrdersCron } from "./jobs/ebay-orders-sync.job.js";
 import { startAmazonFinancialSyncCron } from "./jobs/amazon-financial-sync.job.js";
 import { startEbayFinancialSyncCron } from "./jobs/ebay-financial-sync.job.js";
@@ -805,6 +806,16 @@ async function start() {
     // during rollout — verify it's not noisy first).
     if (process.env.NEXUS_ENABLE_SALES_DRIFT_DETECTOR === '1') {
       startSalesDriftDetectorCron();
+    }
+
+    // DA-RT.9 — OrderItem.price upstream retry. Re-fetches
+    // getOrderItems for items that landed with price=0 (Amazon
+    // withheld ItemPrice at ingest), repairs them, triggers a
+    // batched zero-totals backfill so totalPrice + DailySalesAggregate
+    // catch up via the GS-RT.7 → DA-RT.6 chain. Gated
+    // NEXUS_ENABLE_AMAZON_ORDER_ITEMS_RETRY=1 (default OFF).
+    if (process.env.NEXUS_ENABLE_AMAZON_ORDER_ITEMS_RETRY === '1') {
+      startAmazonOrderItemsRetryCron();
     }
 
     // O.2 — Incremental eBay orders polling. Mirror of the Amazon
