@@ -4216,6 +4216,7 @@
   "products.datasheetHub.variants.summary.axes": "Detected axes: {axes}",
   "products.datasheetHub.variants.summary.noAxes": "No clear variation axes detected — review on the edit page.",
   "products.datasheetHub.variants.summary.lowConfidence": "Low-confidence rollup — some attributes may be inferred.",
+  "products.datasheetHub.variants.layout.aria": "Variants layout",
   "products.datasheetHub.variants.col.markets": "Markets",
   "products.datasheetHub.variants.col.variant": "Variant",
   "products.datasheetHub.variants.cell.empty": "Not configured",
