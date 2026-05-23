@@ -207,6 +207,11 @@ export async function ordersRoutes(app: FastifyInstance) {
       // OX.2: Italian "No Invoice Uploaded" tab — orders that should
       // have a FiscalInvoice (paid + non-terminal) but don't.
       const noInvoice = q.noInvoice === 'true'
+      // PV-RT.3 — drill-through from the reconciliation banner's
+      // "+N awaiting price" chip. Filters to Amazon EUR orders where
+      // Order.totalPrice = 0 AND at least one OrderItem has quantity > 0
+      // (matches the count query in dashboard.routes /sales-reconciliation).
+      const awaitingPrice = q.awaitingPrice === 'true'
       // OX.3 — order-type filter. Values map to:
       //   PRIME      → Order.isPrime = true
       //   BUSINESS   → amazonMetadata.IsBusinessOrder = true
@@ -288,6 +293,17 @@ export async function ordersRoutes(app: FastifyInstance) {
           { customerEmail: { contains: search, mode: 'insensitive' } },
           { items: { some: { sku: { contains: search, mode: 'insensitive' } } } },
         ]
+      }
+      // PV-RT.3 — awaiting-price drill-through from the reconciliation
+      // banner's "+N awaiting price" chip. Mirrors the count query in
+      // dashboard.routes /sales-reconciliation so the list matches the
+      // banner's reported N. AMAZON-only + EUR because the reconciliation
+      // tile compares EUR sums.
+      if (awaitingPrice) {
+        where.channel = 'AMAZON'
+        where.currencyCode = 'EUR'
+        where.totalPrice = 0
+        where.items = { some: { quantity: { gt: 0 } } }
       }
       if (tagIds && tagIds.length) {
         where.tags = { some: { tagId: { in: tagIds } } }

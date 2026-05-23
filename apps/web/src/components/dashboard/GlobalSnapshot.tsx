@@ -457,17 +457,24 @@ export function GlobalSnapshot() {
                 is the operator's "honest about what's still estimated"
                 marker. */}
             {data.sales.total.pending && data.sales.total.pending.count > 0 && (
-              <div
-                className="text-xs text-amber-700 dark:text-amber-300 font-medium"
+              // PV-RT.3 — click-through to /orders?awaitingPrice=true so
+              // operator can see exactly WHICH orders are waiting and
+              // optionally apply a manual total (PV-RT.4 endpoint).
+              // Renders as a link inside the row so it's visually
+              // consistent with the chip style but actionable.
+              <Link
+                href="/orders?awaitingPrice=true"
+                className="text-xs text-amber-700 dark:text-amber-300 font-medium underline-offset-2 hover:underline focus-visible:underline focus-visible:outline-none inline-flex items-center gap-1"
                 title={
                   data.sales.total.pending.oldestAt
-                    ? `Amazon withholds OrderTotal for some orders via SP-API. The estimate uses ChannelListing.price (falls back to Product.basePrice). Real values land via the GS-RT.7 backfill (OrderItem.price summation) or when Amazon releases OrderTotal. Oldest awaiting: ${new Date(data.sales.total.pending.oldestAt).toLocaleString()}.`
-                    : 'Amazon withholds OrderTotal for some orders.'
+                    ? `Amazon withholds OrderTotal for some orders via SP-API. The estimate uses ChannelListing.price (falls back to Product.basePrice). Real values land via the GS-RT.7 backfill (OrderItem.price summation) or when Amazon releases OrderTotal. Click to see the specific orders. Oldest awaiting: ${new Date(data.sales.total.pending.oldestAt).toLocaleString()}.`
+                    : 'Amazon withholds OrderTotal for some orders. Click to see the specific orders.'
                 }
               >
                 * includes ~{formatEur(data.sales.total.pending.estimateCents ?? 0)} estimated for{' '}
                 {data.sales.total.pending.count} awaiting price
-              </div>
+                <ArrowUpRight className="w-3 h-3" aria-hidden="true" />
+              </Link>
             )}
             {/* MS.3 + DA-RT.8b — non-EUR currency chips. Always
                 shown when non-EUR sales exist (operator transparency:
