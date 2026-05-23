@@ -28,17 +28,23 @@ const root = path.resolve(here, '..')
 const appDir = path.join(root, 'apps/web/src/app')
 const srcDir = path.join(root, 'apps/web/src')
 
-// Build route index from page.tsx files
+// Build route index from page.tsx + route.ts files (Next.js App
+// Router treats both as route entry points; route.ts is for
+// non-HTML responses like JSON / file downloads — ATM.14 ships
+// /products/[id]/datasheet/export.json as a route.ts handler).
 function* findPages(dir) {
   for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
     const p = path.join(dir, e.name)
     if (e.isDirectory()) yield* findPages(p)
-    else if (e.name === 'page.tsx') yield p
+    else if (e.name === 'page.tsx' || e.name === 'route.ts') yield p
   }
 }
 const routes = []
 for (const p of findPages(appDir)) {
-  let r = p.replace(appDir, '').replace(/\/page\.tsx$/, '')
+  let r = p
+    .replace(appDir, '')
+    .replace(/\/page\.tsx$/, '')
+    .replace(/\/route\.ts$/, '')
   if (r === '') r = '/'
   routes.push(r)
 }
