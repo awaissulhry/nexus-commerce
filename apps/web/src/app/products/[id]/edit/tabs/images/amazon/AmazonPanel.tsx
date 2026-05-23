@@ -3,12 +3,13 @@
 // IM.4 — Amazon images panel (replaces AmazonPanelStub).
 // Marketplace tabs + Color × Slot matrix + publish bar.
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { cn } from '@/lib/utils'
 import { AlertTriangle, ChevronDown, Clock, Eye, Info, Loader2 } from 'lucide-react'
 import { beFetch } from '../api'
 import AmazonMatrix from './AmazonMatrix'
 import AmazonPublishBar from './AmazonPublishBar'
+import MatrixFilterBar, { readFilterFromUrl, type CellStatus } from './MatrixFilterBar'
 import ImagePickerModal from '../ImagePickerModal'
 import CrossChannelSyncBar from '../CrossChannelSyncBar'
 import ChannelPreview from '../ChannelPreview'
@@ -99,6 +100,11 @@ export default function AmazonPanel({
   const [historyOpen, setHistoryOpen] = useState(false)
   // IE.5 — drift modal state
   const [driftModal, setDriftModal] = useState<{ live: ChannelLiveImage; nexusUrl: string | null } | null>(null)
+  // IE.11 — filter state. Seeded from URL params so deep-links land
+  // on the filtered view; MatrixFilterBar writes back via
+  // history.replaceState on every toggle.
+  const [filterValues, setFilterValues] = useState<Set<string>>(() => readFilterFromUrl().values)
+  const [cellStatus, setCellStatus] = useState<CellStatus>(() => readFilterFromUrl().status)
   const amazon = useAmazonImages({
     productId,
     variants,
@@ -111,6 +117,10 @@ export default function AmazonPanel({
     onSavePending,
     onReload,
   })
+  const filteredVariantGroups = useMemo(() => {
+    if (filterValues.size === 0) return amazon.variantGroups
+    return amazon.variantGroups.filter((g) => filterValues.has(g.groupValue))
+  }, [amazon.variantGroups, filterValues])
 
   async function handleExportZip(marketplace: AmazonMarketplace) {
     if (marketplace === 'ALL') return
@@ -281,6 +291,22 @@ export default function AmazonPanel({
         />
       </div>
 
+      {/* IE.11 — Filter + group-by bar above the matrix. Narrows
+          visible rows to a subset of axis values + dims cells that
+          don't match the status filter. */}
+      {amazon.variantGroups.length > 0 && (
+        <div className="px-4 pb-2">
+          <MatrixFilterBar
+            allValues={amazon.variantGroups.map((g) => g.groupValue)}
+            activeValues={filterValues}
+            onActiveValuesChange={setFilterValues}
+            cellStatus={cellStatus}
+            onCellStatusChange={setCellStatus}
+            axisLabel={activeAxis}
+          />
+        </div>
+      )}
+
       {/* Matrix */}
       <div className="p-4">
         {amazon.variantGroups.length === 0 && variants.length === 0 ? (
@@ -289,7 +315,8 @@ export default function AmazonPanel({
           </div>
         ) : (
           <AmazonMatrix
-            variantGroups={amazon.variantGroups}
+            cellStatusFilter={cellStatus}
+            variantGroups={filteredVariantGroups}
             activeMarketplace={amazon.activeMarketplace}
             activeAxis={activeAxis}
             resolveCell={amazon.resolveCell}

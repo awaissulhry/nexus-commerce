@@ -332,7 +332,21 @@ export default function AmazonMatrix({
   onCopyRow,
   onClearRow,
   onCellFileDrop,
+  cellStatusFilter = 'all',
 }: MatrixProps) {
+  // IE.11 — Match a cell against the active status filter. Empty
+  // cell = `cell === null`. Inherited = master fallback (`fromMaster`)
+  // OR scope inheritance (`origin === 'inherited'`). Override =
+  // explicit row at this scope (`origin === 'own'`). Mismatched
+  // cells get a low-opacity wrapper so the grid structure stays
+  // intact while the operator's eye is drawn to matches.
+  function cellMatchesStatus(cell: CellDisplay | null): boolean {
+    if (cellStatusFilter === 'all') return true
+    if (cellStatusFilter === 'empty') return cell === null
+    if (cellStatusFilter === 'inherited') return cell !== null && (!!cell.fromMaster || cell.origin === 'inherited')
+    if (cellStatusFilter === 'override') return cell !== null && cell.origin === 'own'
+    return true
+  }
   // Track column fill confirmation popover
   const [pendingColumnFill, setPendingColumnFill] = useState<{
     slot: AmazonSlot; url: string; sourceId?: string
@@ -493,27 +507,33 @@ export default function AmazonMatrix({
                 {/* Slot cells */}
                 {ALL_SLOTS.map((slot, colIdx) => {
                   const cell = resolveCell(groupValue, slot)
+                  const dim = !cellMatchesStatus(cell)
                   return (
-                    <SlotCell
+                    <div
                       key={slot}
-                      cell={cell}
-                      slot={slot}
-                      rowLabel={rowLabel}
-                      isFocused={focusedCell.row === rowIdx && focusedCell.col === colIdx}
-                      cellRef={(el) => {
-                        const key = `${rowIdx}-${colIdx}`
-                        if (el) cellRefs.current.set(key, el)
-                        else cellRefs.current.delete(key)
-                      }}
-                      onDrop={(url, sourceId) => onCellDrop(groupValue, slot, url, sourceId)}
-                      onClick={() => onCellClick(groupValue, slot)}
-                      onLightbox={cell && onCellLightbox
-                        ? () => onCellLightbox(groupValue, slot, cell)
-                        : undefined}
-                      onKeyDown={handleCellKeyDown(rowIdx, colIdx)}
-                      onFocus={() => setFocusedCell({ row: rowIdx, col: colIdx })}
-                      onFileDrop={(file) => onCellFileDrop(groupValue, slot, file)}
-                    />
+                      className={dim ? 'opacity-25 transition-opacity' : 'transition-opacity'}
+                      aria-hidden={dim}
+                    >
+                      <SlotCell
+                        cell={cell}
+                        slot={slot}
+                        rowLabel={rowLabel}
+                        isFocused={focusedCell.row === rowIdx && focusedCell.col === colIdx}
+                        cellRef={(el) => {
+                          const key = `${rowIdx}-${colIdx}`
+                          if (el) cellRefs.current.set(key, el)
+                          else cellRefs.current.delete(key)
+                        }}
+                        onDrop={(url, sourceId) => onCellDrop(groupValue, slot, url, sourceId)}
+                        onClick={() => onCellClick(groupValue, slot)}
+                        onLightbox={cell && onCellLightbox
+                          ? () => onCellLightbox(groupValue, slot, cell)
+                          : undefined}
+                        onKeyDown={handleCellKeyDown(rowIdx, colIdx)}
+                        onFocus={() => setFocusedCell({ row: rowIdx, col: colIdx })}
+                        onFileDrop={(file) => onCellFileDrop(groupValue, slot, file)}
+                      />
+                    </div>
                   )
                 })}
 
