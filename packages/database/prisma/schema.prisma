@@ -318,6 +318,7 @@ model Product {
   serials                   SerialNumber[] // SR.1: per-unit serial tracking
   channelStockEvents        ChannelStockEvent[] // CS.1: channel→us stock reconciliation
   channelLiveImages         ChannelLiveImage[] // IE.4: read-replica of channel-served images
+  scheduledImagePublishes   ScheduledImagePublish[] // PB.10: future-dated publish intents
   translations              ProductTranslation[] // H.10: per-language master content
   relationsFrom             ProductRelation[]             @relation("ProductRelationFrom") // H.11
   relationsTo               ProductRelation[]             @relation("ProductRelationTo") // H.11
@@ -5631,6 +5632,47 @@ model ListingWizard {
 // before the cron fires. Cancelled rows are kept (not hard-deleted)
 // so the audit trail of "we were going to publish at X but
 // cancelled" survives.
+// PB.10 — Future-dated image publish intent. Cron picks PENDING rows
+// where scheduledFor <= now and dispatches via the same per-channel
+// publish endpoints the operator's manual Publish button hits.
+model ScheduledImagePublish {
+  id String @id @default(cuid())
+
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  /// 'AMAZON' | 'EBAY' | 'SHOPIFY'
+  channel String
+
+  /// For Amazon: 'IT' | 'DE' | 'FR' | 'ES' | 'UK' | 'ALL'.
+  /// NULL for eBay + Shopify (single-store).
+  marketplace String?
+
+  scheduledFor DateTime
+
+  /// PENDING | FIRED | FAILED | CANCELLED — same lifecycle as
+  /// ScheduledWizardPublish so the operator UI can share patterns.
+  status String @default("PENDING")
+
+  firedAt     DateTime?
+  cancelledAt DateTime?
+
+  /// Outcome from the publish call. Trimmed to ~4KB to keep the row
+  /// narrow (matches ScheduledWizardPublish).
+  fireResult Json?
+  /// Human-readable error when the cron fire threw. Up to 500 chars.
+  fireError  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  createdBy String?
+
+  /// Cron worker scans PENDING in time order.
+  @@index([status, scheduledFor])
+  /// Operator viewing one product's pending schedules.
+  @@index([productId])
+}
+
 model ScheduledWizardPublish {
   id String @id @default(cuid())
 

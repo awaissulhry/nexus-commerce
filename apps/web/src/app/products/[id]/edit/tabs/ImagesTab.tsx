@@ -10,7 +10,7 @@
 // Channel listing-image assignments are staged locally and committed
 // via the Save button in the action bar.
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AlertTriangle, Loader2, RefreshCw } from 'lucide-react'
 import { beFetch } from './images/api'
 import { Button } from '@/components/ui/Button'
@@ -29,6 +29,7 @@ import DamPickerModal from './images/DamPickerModal'
 import LifestyleGenerationModal from './images/LifestyleGenerationModal'
 import CrossChannelPublishModal from './images/CrossChannelPublishModal'
 import RollbackModal from './images/RollbackModal'
+import SchedulePublishModal from './images/SchedulePublishModal'
 import { captureSnapshot, type SnapshotChannel } from './images/publishSnapshotStorage'
 import { fromListing, fromMaster, useLightbox } from './images/useLightbox'
 import type { LightboxImage } from './images/useLightbox'
@@ -63,6 +64,9 @@ export default function ImagesTab({ product, discardSignal, onDirtyChange }: Pro
   const [crossChannelOpen, setCrossChannelOpen] = useState(false)
   // PB.9 — Rollback modal state.
   const [rollbackTarget, setRollbackTarget] = useState<{ channel: SnapshotChannel; marketplace: string | null } | null>(null)
+  // PB.10 — Schedule-publish modal state + pending count badge.
+  const [scheduleOpen, setScheduleOpen] = useState(false)
+  const [pendingScheduleCount, setPendingScheduleCount] = useState(0)
   const lightbox = useLightbox()
   const { t } = useTranslations()
 
@@ -72,6 +76,20 @@ export default function ImagesTab({ product, discardSignal, onDirtyChange }: Pro
     setToast(msg)
     window.setTimeout(() => setToast(null), 3000)
   }
+
+  // PB.10 — Fetch pending schedule count once on mount + when the
+  // operator changes the schedules from inside the modal.
+  const fetchPendingScheduleCount = useCallback(async () => {
+    try {
+      const res = await beFetch(`/api/products/${product.id}/scheduled-image-publishes?status=PENDING`)
+      if (!res.ok) return
+      const body = await res.json() as { rows: unknown[] }
+      setPendingScheduleCount(body.rows?.length ?? 0)
+    } catch {
+      // Non-fatal — badge just stays at zero.
+    }
+  }, [product.id])
+  useEffect(() => { void fetchPendingScheduleCount() }, [fetchPendingScheduleCount])
 
   // These useMemo calls must stay above the early returns to satisfy Rules of Hooks.
   const listing  = workspace.data?.listing  ?? []
@@ -666,6 +684,16 @@ export default function ImagesTab({ product, discardSignal, onDirtyChange }: Pro
         }}
         onPublish={handlePublish}
         onOpenCrossChannel={() => setCrossChannelOpen(true)}
+        onOpenSchedule={() => setScheduleOpen(true)}
+        pendingScheduleCount={pendingScheduleCount}
+      />
+
+      {/* PB.10 — Schedule publish modal */}
+      <SchedulePublishModal
+        open={scheduleOpen}
+        productId={product.id}
+        onClose={() => setScheduleOpen(false)}
+        onChanged={() => { void fetchPendingScheduleCount() }}
       />
 
       {/* PB.9 — Rollback to last published snapshot */}

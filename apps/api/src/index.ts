@@ -96,6 +96,7 @@ import bulkAutomationRulesRoutes from "./routes/bulk-automation-rules.routes.js"
 import bulkAutomationApprovalsRoutes from "./routes/bulk-automation-approvals.routes.js";
 import importWizardRoutes from "./routes/import-wizard.routes.js";
 import scheduledImportsRoutes from "./routes/scheduled-imports.routes.js";
+import scheduledImagePublishesRoutes from "./routes/scheduled-image-publishes.routes.js";
 import exportWizardRoutes from "./routes/export-wizard.routes.js";
 import scheduledExportsRoutes from "./routes/scheduled-exports.routes.js";
 import dashboardRoutes from "./routes/dashboard.routes.js";
@@ -201,6 +202,7 @@ import { seedPromptTemplateDefaults } from "./services/ai/prompt-template.servic
 // SP.3 (list-wizard) — scheduled wizard publish cron. Default-OFF;
 // opt in via NEXUS_ENABLE_SCHEDULED_WIZARD_PUBLISH=1.
 import { startScheduledWizardPublishCron } from "./jobs/scheduled-wizard-publish.job.js";
+import { startScheduledImagePublishCron } from "./jobs/scheduled-image-publish.job.js";
 import { startObservabilityRetentionCron } from "./jobs/observability-retention.job.js";
 import { startAlertEvaluatorCron } from "./jobs/alert-evaluator.job.js";
 import { startRepricingEvaluatorCron } from "./jobs/repricing-evaluator.job.js";
@@ -523,6 +525,7 @@ app.register(bulkAutomationRulesRoutes, { prefix: '/api' });
 app.register(bulkAutomationApprovalsRoutes, { prefix: '/api' });
 app.register(importWizardRoutes, { prefix: '/api' });
 app.register(scheduledImportsRoutes, { prefix: '/api' });
+app.register(scheduledImagePublishesRoutes, { prefix: '/api' });
 app.register(exportWizardRoutes, { prefix: '/api' });
 app.register(scheduledExportsRoutes, { prefix: '/api' });
 app.register(dashboardRoutes, { prefix: '/api' });
@@ -1134,6 +1137,10 @@ async function start() {
     // 60s; cap 25 PENDING rows per tick so a backlog can't pin the
     // worker.
     startScheduledWizardPublishCron();
+
+    // PB.10 — scheduled image publish cron. Default-OFF unless
+    // NEXUS_ENABLE_SCHEDULED_IMAGE_PUBLISH=1. Tick 60s; cap 25 rows.
+    startScheduledImagePublishCron();
 
     // S.17 — daily ABC-driven cycle-count scheduler. 02:30 UTC.
     // Picks up products whose cadence has elapsed (A=7d, B=30d,

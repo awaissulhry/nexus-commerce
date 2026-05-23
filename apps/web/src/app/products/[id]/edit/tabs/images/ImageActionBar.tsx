@@ -13,7 +13,7 @@
 // one-click affordance that doesn't require scrolling into a panel.
 
 import { useEffect, useRef, useState } from 'react'
-import { Loader2, Save, X, Send, ChevronDown, LayoutGrid, Zap } from 'lucide-react'
+import { Loader2, Save, X, Send, ChevronDown, LayoutGrid, Zap, Calendar } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { cn } from '@/lib/utils'
@@ -46,6 +46,10 @@ interface Props {
   // PB.5 — Opens the cross-channel summary modal. Owner is
   // ImagesTab so the modal can read the workspace state directly.
   onOpenCrossChannel?: () => void
+  // PB.10 — Opens the schedule-publish modal. Count badge surfaces
+  // when there are pending scheduled rows.
+  onOpenSchedule?: () => void
+  pendingScheduleCount?: number
 }
 
 function elapsed(ts: string | null): string {
@@ -104,6 +108,8 @@ export default function ImageActionBar({
   onDiscard,
   onPublish,
   onOpenCrossChannel,
+  onOpenSchedule,
+  pendingScheduleCount = 0,
 }: Props) {
   const { t } = useTranslations()
   const [open, setOpen] = useState(false)
@@ -381,6 +387,28 @@ export default function ImageActionBar({
                   <div className="px-3 py-1.5 text-[11px] text-slate-500 dark:text-slate-400 leading-tight">
                     {dirtyCount} pending change{dirtyCount === 1 ? '' : 's'} will be saved first.
                   </div>
+                </>
+              )}
+
+              {/* PB.10 — Schedule for later entry. Always available
+                  when a channel can publish; opens a separate modal. */}
+              {onOpenSchedule && (
+                <>
+                  <Divider />
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => { setOpen(false); onOpenSchedule() }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-700 inline-flex items-center gap-2 text-slate-700 dark:text-slate-300"
+                  >
+                    <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                    Schedule for later…
+                    {pendingScheduleCount > 0 && (
+                      <span className="ml-auto text-[10px] font-medium px-1.5 py-px rounded bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300">
+                        {pendingScheduleCount} pending
+                      </span>
+                    )}
+                  </button>
                 </>
               )}
             </div>
