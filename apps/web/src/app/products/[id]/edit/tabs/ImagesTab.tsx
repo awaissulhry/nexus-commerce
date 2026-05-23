@@ -40,6 +40,7 @@ import {
   pushPendingApproval,
   readPendingApprovals,
 } from './images/approvalPrefs'
+import { fireBrowserNotification } from '@/lib/notifications/browser-notifications'
 import { fromListing, fromMaster, useLightbox } from './images/useLightbox'
 import type { LightboxImage } from './images/useLightbox'
 import type { ProductImage } from './images/types'
@@ -389,11 +390,22 @@ export default function ImagesTab({ product, discardSignal, onDirtyChange }: Pro
           body: JSON.stringify({ activeAxis }),
         })
         const body = await res.json().catch(() => ({} as any))
-        if (res.ok && body?.success !== false) {
+        const success = res.ok && body?.success !== false
+        if (success) {
           // PB.9 — Capture eBay snapshot on success.
           captureSnapshot({ productId: product.id, channel: 'EBAY', marketplace: null, listingImages: listing })
+          // PB.15 — Browser notification.
+          fireBrowserNotification('imagePublishComplete', 'eBay images published', {
+            body: body?.message ?? `${product.sku ?? 'Product'} updated on eBay.`,
+            tagSuffix: `ebay-${product.id}`,
+          })
+        } else {
+          fireBrowserNotification('imagePublishFailed', 'eBay image publish failed', {
+            body: body?.message ?? `HTTP ${res.status}`,
+            tagSuffix: `ebay-${product.id}`,
+          })
         }
-        showToast(body?.message ?? (res.ok ? 'Published to eBay' : `eBay publish failed (${res.status})`))
+        showToast(body?.message ?? (success ? 'Published to eBay' : `eBay publish failed (${res.status})`))
         void workspace.reload()
       } else if (target.channel === 'SHOPIFY') {
         const res = await beFetch(`/api/products/${product.id}/shopify-images/publish`, {
@@ -402,11 +414,22 @@ export default function ImagesTab({ product, discardSignal, onDirtyChange }: Pro
           body: JSON.stringify({ activeAxis }),
         })
         const body = await res.json().catch(() => ({} as any))
-        if (res.ok && body?.success !== false) {
+        const success = res.ok && body?.success !== false
+        if (success) {
           // PB.9 — Capture Shopify snapshot on success.
           captureSnapshot({ productId: product.id, channel: 'SHOPIFY', marketplace: null, listingImages: listing })
+          // PB.15 — Browser notification.
+          fireBrowserNotification('imagePublishComplete', 'Shopify images published', {
+            body: body?.message ?? `${product.sku ?? 'Product'} updated on Shopify.`,
+            tagSuffix: `shopify-${product.id}`,
+          })
+        } else {
+          fireBrowserNotification('imagePublishFailed', 'Shopify image publish failed', {
+            body: body?.message ?? `HTTP ${res.status}`,
+            tagSuffix: `shopify-${product.id}`,
+          })
         }
-        showToast(body?.message ?? (res.ok ? 'Published to Shopify' : `Shopify publish failed (${res.status})`))
+        showToast(body?.message ?? (success ? 'Published to Shopify' : `Shopify publish failed (${res.status})`))
         void workspace.reload()
       }
       // PB.13 — Refetch the health-card stats after any publish path.

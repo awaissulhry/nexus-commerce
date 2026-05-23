@@ -13,6 +13,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { beFetch } from '../api'
+import { fireBrowserNotification } from '@/lib/notifications/browser-notifications'
 import type { ListingImage, PendingUpsert, ProductImage, VariantSummary, AmazonJobSummary } from '../types'
 
 export type AmazonSlot = 'MAIN' | 'PT01' | 'PT02' | 'PT03' | 'PT04' | 'PT05' | 'PT06' | 'PT07' | 'PT08' | 'SWCH'
@@ -122,6 +123,9 @@ export function useAmazonImages({
   const [publishError, setPublishError] = useState<string | null>(null)
   const [feedJobs, setFeedJobs] = useState<FeedJobStatus[]>([])
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  // PB.15 — Ref-mirror of feedJobs so the poll callback can read the
+  // latest array without rebuilding the interval on every change.
+  const feedJobsRef = useRef<FeedJobStatus[]>([])
 
   // Group variants by activeAxis.
   // 'ASIN' and 'SKU' are virtual axes — they pull from dedicated fields
@@ -388,13 +392,39 @@ export function useAmazonImages({
       const res = await beFetch(`/api/products/${productId}/amazon-images/feed-status/${jobId}`)
       if (!res.ok) return
       const { status } = await res.json()
-      setFeedJobs((prev) => prev.map((j) => j.jobId === jobId ? { ...j, status } : j))
+      let priorStatus: string | undefined
+      setFeedJobs((prev) => {
+        const existing = prev.find((j) => j.jobId === jobId)
+        priorStatus = existing?.status
+        return prev.map((j) => j.jobId === jobId ? { ...j, status } : j)
+      })
       if (['DONE', 'FATAL', 'CANCELLED'].includes(status)) {
         if (pollTimerRef.current) clearInterval(pollTimerRef.current)
         onReload()
+        // PB.15 — Browser notification on terminal transition.
+        // Only fires when the status genuinely changed (avoids
+        // dupes on re-render) and the operator has opted in.
+        if (priorStatus !== status) {
+          const job = feedJobsRef.current.find((j) => j.jobId === jobId)
+          const marketplace = job?.marketplace ?? '?'
+          if (status === 'DONE') {
+            fireBrowserNotification('imagePublishComplete', `Amazon ${marketplace} image feed complete`, {
+              body: `${job?.skuCount ?? 0} SKU${job?.skuCount === 1 ? '' : 's'} processed.`,
+              tagSuffix: jobId,
+            })
+          } else {
+            fireBrowserNotification('imagePublishFailed', `Amazon ${marketplace} image feed ${status.toLowerCase()}`, {
+              body: 'Open the recent-jobs strip on the product to see Amazon\'s error.',
+              tagSuffix: jobId,
+            })
+          }
+        }
       }
     }, 30_000)
   }
+
+  // PB.15 — Keep ref in sync so the poll callback reads latest.
+  useEffect(() => { feedJobsRef.current = feedJobs }, [feedJobs])
 
   // Seed feedJobs from workspace amazonJobs on mount
   useEffect(() => {

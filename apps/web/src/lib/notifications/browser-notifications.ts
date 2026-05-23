@@ -23,6 +23,11 @@ export type AlertClass =
   | 'buyBoxLost'
   | 'listingSuppressed'
   | 'highValueOrder'
+  // PB.15 — image publish completion / failure on any channel.
+  // Amazon SP-API feeds take 5–30 minutes to process; without these
+  // the operator has to come back and poll the recent-jobs strip.
+  | 'imagePublishComplete'
+  | 'imagePublishFailed'
 
 interface BrowserNotificationConfig {
   enabled: boolean
@@ -41,6 +46,11 @@ export const DEFAULT_CONFIG: BrowserNotificationConfig = {
     buyBoxLost: false,
     listingSuppressed: false,
     highValueOrder: false,
+    // PB.15 — defaults: failure on, success off. Operators care
+    // about errors immediately but success notifications can be
+    // noisy on a busy day.
+    imagePublishComplete: false,
+    imagePublishFailed: true,
   },
   highValueOrderThresholdCents: 10_000, // €100
 }
@@ -68,6 +78,14 @@ export const ALERT_CLASS_META: Record<
   highValueOrder: {
     label: 'High-value order',
     description: 'New order above your configured threshold lands on any channel.',
+  },
+  imagePublishComplete: {
+    label: 'Image publish — completed',
+    description: 'An Amazon SP-API feed finished processing, or an eBay/Shopify image publish landed.',
+  },
+  imagePublishFailed: {
+    label: 'Image publish — failed',
+    description: 'A channel image publish failed (FATAL feed, eBay ReviseItem error, Shopify 4xx/5xx).',
   },
 }
 
