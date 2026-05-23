@@ -52,7 +52,10 @@ import { ConfirmDialog } from './ConfirmDialog'
 
 interface ConfirmOptions {
   title: string
-  description?: string
+  /** DSP.3 — accepts a string OR a ReactNode so callers can render
+   *  richer bodies (e.g. a bulleted list of affected scopes for the
+   *  Discard confirm). Plain-string usage is unchanged. */
+  description?: ReactNode
   confirmLabel?: string
   cancelLabel?: string
   tone?: 'danger' | 'warning' | 'info'

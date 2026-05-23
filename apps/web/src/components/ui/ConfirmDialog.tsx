@@ -41,7 +41,9 @@ type Tone = 'danger' | 'warning' | 'info'
 interface ConfirmDialogProps {
   open: boolean
   title: string
-  description?: string
+  /** DSP.3 — ReactNode so callers (e.g. ProductEditClient discard
+   *  confirm) can pass a bulleted list of affected scopes. */
+  description?: React.ReactNode
   confirmLabel?: string
   cancelLabel?: string
   tone?: Tone

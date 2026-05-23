@@ -376,9 +376,34 @@ export default function ProductEditClient({
   // Back-compat shim: existing tabs pass count-only via onDirtyChange.
   // DSP.2+ will switch them to register({ count, flush, discard })
   // directly. Until then, keep this so no tab needs to change yet.
+  // DSP.3 — also stamp a human-readable label so the Discard scope
+  // modal renders meaningful names ("Images", "SEO", etc.) instead
+  // of raw tab keys. Labels are looked up from the same i18n keys
+  // the tab strip uses.
+  const tabLabel = useCallback(
+    (tabKey: string): string => {
+      // Channel listing keys (e.g. "AMAZON__IT", "EBAY__US") are
+      // dynamic — show them as "Channel: AMAZON IT" rather than the
+      // raw __ format.
+      if (tabKey.includes('__')) {
+        const [channel, marketplace] = tabKey.split('__')
+        return t('products.edit.discardScopeChannel', {
+          channel: channel ?? '',
+          marketplace: marketplace ?? '',
+        })
+      }
+      // Well-known static tabs map to the same labels the tab strip
+      // renders. Fallback to the raw key for anything unknown.
+      const knownKey = `products.edit.tab.${tabKey}`
+      const localized = t(knownKey)
+      return localized === knownKey ? tabKey : localized
+    },
+    [t],
+  )
   const setTabDirty = useCallback(
-    (tabKey: string, count: number) => registry.register(tabKey, { count }),
-    [registry],
+    (tabKey: string, count: number) =>
+      registry.register(tabKey, { count, label: tabLabel(tabKey) }),
+    [registry, tabLabel],
   )
   // Derived shape that matches the old `dirtyByTab: Record<string, number>`
   // so existing UI lookups (e.g. tab dirty dots) keep working without
@@ -450,12 +475,45 @@ export default function ProductEditClient({
       router.refresh()
       return
     }
+    // DSP.3 — scope-aware confirm. List every dirty tab in the modal
+    // body so the operator sees exactly what they're about to lose
+    // BEFORE confirming. Pre-DSP.3 the modal just said "Discard 3
+    // unsaved fields?" with no indication of which tabs were affected.
+    const dirtyTabs = Object.entries(registry.byTab)
+      .filter(([, entry]) => entry.count > 0)
+      .map(([key, entry]) => ({
+        key,
+        label: entry.label ?? key,
+        count: entry.count,
+      }))
+      .sort((a, b) => a.label.localeCompare(b.label))
+
+    const fieldsLabel = (count: number) =>
+      count === 1
+        ? t('products.edit.discardScopeFields', { count })
+        : t('products.edit.discardScopeFieldsPlural', { count })
+
     const ok = await confirm({
       title:
         totalDirty === 1
           ? t('products.edit.discardConfirmOne')
           : t('products.edit.discardConfirmMany', { count: totalDirty }),
-      description: t('products.edit.discardBody'),
+      description: (
+        <div className="space-y-2">
+          <p className="text-sm">{t('products.edit.discardScopeBody')}</p>
+          <ul className="space-y-1 text-sm">
+            {dirtyTabs.map((tab) => (
+              <li key={tab.key} className="flex items-baseline gap-2">
+                <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-500 dark:bg-amber-400 mt-1 flex-shrink-0" />
+                <span className="font-medium">{tab.label}</span>
+                <span className="text-slate-500 dark:text-slate-400">
+                  ({fieldsLabel(tab.count)})
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ),
       confirmLabel: t('products.edit.discardCta'),
       tone: 'warning',
     })
