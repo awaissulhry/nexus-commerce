@@ -13,6 +13,10 @@ export interface ProductImage {
   height: number | null
   mimeType: string | null
   fileSize: number | null
+  // IE.1 — upload-dedup hashes, NULL on rows from before IE.1 ships
+  // or until the IE.2 backfill hydrates them.
+  contentHash: string | null
+  perceptualHash: string | null
   // IR.4 — Self-FK to the source ProductImage when this row was created
   // by the in-app editor (crop / rotate / flip). NULL for originals.
   derivedFromImageId: string | null

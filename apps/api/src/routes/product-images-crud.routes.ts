@@ -36,6 +36,24 @@ import {
 import { analyzeProductImage } from '../services/ai/image-vision.service.js'
 import { generateLifestyleImage, type ImagenAspectRatio } from '../services/ai/image-generation.service.js'
 import { applyImagesToProducts } from '../services/images/bulk-apply.service.js'
+import {
+  NEAR_DUP_HAMMING_THRESHOLD,
+  hammingHex,
+  sha256Buffer,
+} from '../services/images/image-hash.service.js'
+import { productEventService } from '../services/product-event.service.js'
+
+// PG.1b — fire IMAGES_UPDATED to refresh ProductReadCache.imageUrl
+// (and emit SSE) within ~2s of any master-image mutation. Fail-open:
+// emit() never throws.
+function emitImagesUpdated(productId: string, source: string, extra?: Record<string, unknown>): void {
+  void productEventService.emit({
+    aggregateId: productId,
+    aggregateType: 'Product',
+    eventType: 'IMAGES_UPDATED',
+    data: { source, ...(extra ?? {}) },
+  })
+}
 
 const VALID_ASPECT_RATIOS: ImagenAspectRatio[] = ['1:1', '3:4', '4:3', '9:16', '16:9']
 
@@ -76,7 +94,7 @@ const productImagesCrudRoutes: FastifyPluginAsync = async (fastify) => {
   // ── POST /api/products/:id/images (multipart upload) ─────────────────
   fastify.post<{
     Params: { id: string }
-    Querystring: { type?: string; alt?: string }
+    Querystring: { type?: string; alt?: string; force?: string }
   }>(
     '/products/:id/images',
     async (req, reply) => {
@@ -92,18 +110,91 @@ const productImagesCrudRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.status(400).send({ error: 'INVALID_TYPE', validTypes: [...VALID_TYPES] })
       }
       const alt = req.query.alt ?? null
-
-      // Count existing images to assign next sortOrder
-      const existing = await prisma.productImage.count({ where: { productId: id } })
+      const force = req.query.force === 'true'
 
       if (!isCloudinaryConfigured()) {
         return reply.status(503).send({ error: 'CLOUDINARY_NOT_CONFIGURED' })
       }
 
       const buf = await data.toBuffer()
+
+      // IE.1.2 — Exact-content dedup. SHA-256 the buffer and check
+      // whether this product already owns a row for these bytes. A
+      // hit returns the existing row with `reused: 'exact'` so the
+      // FE can show "duplicate — using existing" without re-uploading
+      // to Cloudinary or appending another card to the gallery.
+      const contentHash = sha256Buffer(buf)
+      const exact = await prisma.productImage.findFirst({
+        where: { productId: id, contentHash },
+      })
+      if (exact) {
+        return reply.status(200).send({ ...exact, reused: 'exact' })
+      }
+
+      // Count existing images to assign next sortOrder. Done after the
+      // exact-dedup short-circuit because the reused row keeps its
+      // original sortOrder; a no-op upload shouldn't reshuffle.
+      const existing = await prisma.productImage.count({ where: { productId: id } })
+
       const cloudResult = await uploadBufferToCloudinary(buf, {
         folder: `product-images/${id}`,
+        phash: true,
       })
+
+      const perceptualHash = cloudResult.perceptualHash ?? null
+
+      // IE.1.3 — Near-duplicate gate. Cloudinary returned a pHash;
+      // scan existing rows on this product and surface the closest
+      // match within the Hamming threshold. The FE shows a "looks
+      // similar to this one — use existing or upload anyway?" modal,
+      // and the operator can re-submit with ?force=true to bypass.
+      // Bypass also undoes the just-uploaded asset to keep Cloudinary
+      // tidy on a "use existing" decision.
+      if (perceptualHash && !force) {
+        const candidates = await prisma.productImage.findMany({
+          where: { productId: id, perceptualHash: { not: null } },
+          select: {
+            id: true,
+            url: true,
+            type: true,
+            alt: true,
+            perceptualHash: true,
+            width: true,
+            height: true,
+          },
+        })
+        let best: { id: string; url: string; type: string; alt: string | null; width: number | null; height: number | null } | null = null
+        let bestDistance = Number.POSITIVE_INFINITY
+        for (const c of candidates) {
+          if (!c.perceptualHash) continue
+          const d = hammingHex(c.perceptualHash, perceptualHash)
+          if (d < bestDistance) {
+            bestDistance = d
+            best = {
+              id: c.id,
+              url: c.url,
+              type: c.type,
+              alt: c.alt,
+              width: c.width,
+              height: c.height,
+            }
+          }
+        }
+        if (best && bestDistance <= NEAR_DUP_HAMMING_THRESHOLD) {
+          // Roll back the Cloudinary asset — operator hasn't committed
+          // to keeping it yet. Fire-and-forget so the 409 response
+          // doesn't wait on Cloudinary's delete RTT.
+          if (cloudResult.publicId) {
+            deleteFromCloudinary(cloudResult.publicId).catch(() => {/* orphan; manual gc later */})
+          }
+          return reply.status(409).send({
+            error: 'NEAR_DUPLICATE',
+            hammingDistance: bestDistance,
+            threshold: NEAR_DUP_HAMMING_THRESHOLD,
+            candidate: best,
+          })
+        }
+      }
 
       const image = await prisma.productImage.create({
         data: {
@@ -120,9 +211,12 @@ const productImagesCrudRoutes: FastifyPluginAsync = async (fastify) => {
           height: cloudResult.height,
           fileSize: cloudResult.bytes,
           mimeType: formatToMimeType(cloudResult.format),
+          contentHash,
+          perceptualHash,
         },
       })
 
+      emitImagesUpdated(id, 'upload-cloudinary', { imageId: image.id, type })
       return reply.status(201).send(image)
     },
   )
@@ -159,6 +253,11 @@ const productImagesCrudRoutes: FastifyPluginAsync = async (fastify) => {
         ),
       )
 
+      // Reorder can change which image lands at sortOrder=0, but the
+      // cache picks by createdAt so the MAIN URL only flips when MAIN
+      // is re-uploaded. Still emit so SSE consumers (DAM, lightbox)
+      // see the new ordering, and the cache row's updatedAt advances.
+      emitImagesUpdated(id, 'reorder', { count: order.length })
       return reply.send({ updated: order.length })
     },
   )
@@ -188,6 +287,7 @@ const productImagesCrudRoutes: FastifyPluginAsync = async (fastify) => {
           ...(type !== undefined && { type }),
         },
       })
+      emitImagesUpdated(id, 'patch-metadata', { imageId, changed: Object.keys(req.body ?? {}) })
       return reply.send(updated)
     },
   )
@@ -275,6 +375,7 @@ const productImagesCrudRoutes: FastifyPluginAsync = async (fastify) => {
         },
       })
 
+      emitImagesUpdated(id, 'derive', { imageId: created.id, sourceImageId: source.id })
       return reply.status(201).send(created)
     },
   )
@@ -329,6 +430,7 @@ const productImagesCrudRoutes: FastifyPluginAsync = async (fastify) => {
         },
       })
 
+      emitImagesUpdated(id, 'auto-enhance', { imageId: created.id, preset })
       return reply.status(201).send({ ok: true, preset, image: created })
     },
   )
@@ -500,6 +602,9 @@ const productImagesCrudRoutes: FastifyPluginAsync = async (fastify) => {
         })
       }
 
+      // Emit only when we actually attached a new image (existing path
+      // is idempotent reuse — cache already knows about it).
+      if (!existing) emitImagesUpdated(id, 'import-from-dam', { imageId: image.id, assetId: asset.id })
       return reply.status(existing ? 200 : 201).send({ ok: true, image, reused: !!existing })
     },
   )
@@ -679,6 +784,7 @@ const productImagesCrudRoutes: FastifyPluginAsync = async (fastify) => {
           },
         })
 
+        emitImagesUpdated(id, 'generate-lifestyle', { imageId: image.id, aspectRatio })
         return reply.status(201).send({
           ok: true,
           image,
@@ -709,6 +815,7 @@ const productImagesCrudRoutes: FastifyPluginAsync = async (fastify) => {
         deleteFromCloudinary(existing.publicId).catch(() => {/* orphaned asset — acceptable */})
       }
 
+      emitImagesUpdated(id, 'delete', { imageId, wasType: existing.type })
       return reply.send({ deleted: true })
     },
   )

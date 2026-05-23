@@ -57,6 +57,10 @@ export interface CloudinaryUploadResult {
   durationSeconds?: number
   /// MC.7 — Cloudinary's resource_type ('image' | 'video' | 'raw').
   resourceType?: string
+  /// IE.1 — 16-char hex perceptual hash (64-bit). Returned only when
+  /// the caller sets `phash: true` and the asset is an image. Used by
+  /// the upload-dedup gate to detect near-duplicates (Hamming ≤ 6).
+  perceptualHash?: string
 }
 
 /**
@@ -78,6 +82,12 @@ export function uploadBufferToCloudinary(
      *  and exposes duration. Defaults to 'image' so existing callers
      *  are unaffected. */
     resourceType?: 'image' | 'video' | 'raw'
+    /** IE.1 — ask Cloudinary to compute a perceptual hash for the
+     *  uploaded image and return it as `phash` on the result. Adds
+     *  a small server-side compute step on Cloudinary's side; only
+     *  set this on paths that consume the hash (currently product
+     *  image upload for the dedup gate). */
+    phash?: boolean
   },
 ): Promise<CloudinaryUploadResult> {
   ensureConfigured()
@@ -88,12 +98,14 @@ export function uploadBufferToCloudinary(
         public_id: options.publicId,
         overwrite: true,
         resource_type: options.resourceType ?? 'image',
+        phash: options.phash === true ? true : undefined,
       },
       (error, result) => {
         if (error || !result) {
           reject(error ?? new Error('Cloudinary upload returned no result'))
           return
         }
+        const phash = (result as unknown as { phash?: string }).phash
         resolve({
           url: result.secure_url,
           publicId: result.public_id,
@@ -107,6 +119,7 @@ export function uploadBufferToCloudinary(
               ? (result as unknown as { duration: number }).duration
               : undefined,
           resourceType: result.resource_type,
+          perceptualHash: typeof phash === 'string' && phash.length > 0 ? phash : undefined,
         })
       },
     )

@@ -1836,6 +1836,18 @@ model ProductImage {
   mimeType String?
   fileSize Int?
 
+  /// IE.1 — Upload-dedup gate. contentHash is SHA-256 hex of the raw
+  /// file buffer, computed BEFORE the Cloudinary call so an exact
+  /// re-upload returns the existing row with zero Cloudinary cost.
+  /// perceptualHash is Cloudinary's 64-bit pHash (16 hex chars) used
+  /// for near-duplicate detection: two images with Hamming distance
+  /// ≤ 6 are treated as the same shot at different quality/crop.
+  /// Both NULL on legacy rows until the IE.2 backfill runs.
+  /// Non-unique index — collapse-to-canonical happens in IE.2 after
+  /// human review.
+  contentHash    String?
+  perceptualHash String?
+
   /// IR.4 — Self-FK for the in-app image editor. When the operator crops /
   /// rotates / flips an existing master image, the result is saved as a NEW
   /// ProductImage row (URL = Cloudinary transformation of the source) and
@@ -1869,6 +1881,8 @@ model ProductImage {
 
   @@index([productId, sortOrder])
   @@index([derivedFromImageId])
+  @@index([productId, contentHash])
+  @@index([productId, perceptualHash])
 }
 
 // (Phase 31 Image model removed 2026-05-02 — see RESTORATION_NOTES.

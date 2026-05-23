@@ -85,6 +85,17 @@ export default function MasterPanel({
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  // IE.1.3 — Near-duplicate confirmation state. Set when the backend
+  // responds 409 NEAR_DUPLICATE; cleared on either "use existing" or
+  // "upload anyway" (the latter re-runs the upload with ?force=true).
+  const [nearDup, setNearDup] = useState<{
+    file: File
+    type: ImageType
+    hammingDistance: number
+    threshold: number
+    candidate: { id: string; url: string; type: string; alt: string | null; width: number | null; height: number | null }
+  } | null>(null)
+  const [forcingUpload, setForcingUpload] = useState(false)
   // IR.8.3 — apply-to-children flow state.
   const [applyConfirm, setApplyConfirm] = useState(false)
   const [applying, setApplying] = useState(false)
@@ -172,6 +183,10 @@ export default function MasterPanel({
     if (!files.length) return
     setUploading(true)
     setUploadError(null)
+    // Accumulate created rows locally so a multi-file drop only fires
+    // a single onImagesChange — important so the React-Query cache
+    // doesn't refetch between files.
+    let next = images
     try {
       for (const file of files) {
         // IM.10 — file size guard (Shopify max 20 MB; Amazon max 10 MB)
@@ -179,24 +194,109 @@ export default function MasterPanel({
           setUploadError(`${file.name} exceeds 20 MB — too large for any channel`)
           continue
         }
-        const fd = new FormData()
-        fd.append('file', file)
-        const res = await beFetch(
-          `/api/products/${product.id}/images?type=${newTypeRef.current}`,
-          { method: 'POST', body: fd },
-        )
-        if (!res.ok) {
-          const body = await res.json().catch(() => ({}))
-          throw new Error(body?.error ?? `Upload failed: ${res.status}`)
+        const result = await uploadOne(file, newTypeRef.current, false)
+        if (result.outcome === 'created') {
+          next = [...next, result.image]
+        } else if (result.outcome === 'reused') {
+          // Already in the gallery — surface a toast but don't add a
+          // duplicate card to the grid.
+          onToast?.(t('products.edit.images.masterPanel.duplicateReused', {
+            type: result.image.type,
+          }))
+        } else if (result.outcome === 'near-duplicate') {
+          // Halt the loop and pop the confirmation modal. Operator
+          // either accepts the existing candidate (no further upload)
+          // or chooses to upload anyway (force=true re-runs this file).
+          setNearDup({
+            file,
+            type: newTypeRef.current,
+            hammingDistance: result.hammingDistance,
+            threshold: result.threshold,
+            candidate: result.candidate,
+          })
+          break
         }
-        const created: ProductImage = await res.json()
-        onImagesChange([...images, created])
       }
+      if (next !== images) onImagesChange(next)
     } catch (err) {
       setUploadError(err instanceof Error ? err.message : 'Upload failed')
     } finally {
       setUploading(false)
       if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }
+
+  type UploadOutcome =
+    | { outcome: 'created'; image: ProductImage }
+    | { outcome: 'reused'; image: ProductImage }
+    | {
+        outcome: 'near-duplicate'
+        hammingDistance: number
+        threshold: number
+        candidate: { id: string; url: string; type: string; alt: string | null; width: number | null; height: number | null }
+      }
+
+  async function uploadOne(file: File, type: ImageType, force: boolean): Promise<UploadOutcome> {
+    const fd = new FormData()
+    fd.append('file', file)
+    const qs = new URLSearchParams()
+    qs.set('type', type)
+    if (force) qs.set('force', 'true')
+    const res = await beFetch(
+      `/api/products/${product.id}/images?${qs.toString()}`,
+      { method: 'POST', body: fd },
+    )
+    if (res.status === 409) {
+      const body = await res.json().catch(() => ({}))
+      if (body?.error === 'NEAR_DUPLICATE' && body.candidate) {
+        return {
+          outcome: 'near-duplicate',
+          hammingDistance: body.hammingDistance,
+          threshold: body.threshold,
+          candidate: body.candidate,
+        }
+      }
+    }
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}))
+      throw new Error(body?.error ?? `Upload failed: ${res.status}`)
+    }
+    const json: ProductImage & { reused?: 'exact' } = await res.json()
+    if (json.reused === 'exact') return { outcome: 'reused', image: json }
+    return { outcome: 'created', image: json }
+  }
+
+  // IE.1.3 — Near-dup modal actions. "use existing" is a no-op (the
+  // candidate is already in the gallery); "upload anyway" re-runs the
+  // POST with ?force=true so the dedup gate accepts it.
+  async function handleNearDupUseExisting() {
+    if (!nearDup) return
+    onToast?.(t('products.edit.images.masterPanel.duplicateReused', {
+      type: nearDup.candidate.type,
+    }))
+    setNearDup(null)
+  }
+
+  async function handleNearDupForce() {
+    if (!nearDup) return
+    setForcingUpload(true)
+    setUploadError(null)
+    try {
+      const result = await uploadOne(nearDup.file, nearDup.type, true)
+      if (result.outcome === 'created') {
+        onImagesChange([...images, result.image])
+      } else if (result.outcome === 'reused') {
+        // Race: someone else uploaded the same bytes between the 409
+        // and the force retry. Surface as a duplicate, not an error.
+        onToast?.(t('products.edit.images.masterPanel.duplicateReused', {
+          type: result.image.type,
+        }))
+      }
+      setNearDup(null)
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : 'Upload failed')
+    } finally {
+      setForcingUpload(false)
     }
   }
 
@@ -757,6 +857,90 @@ export default function MasterPanel({
         <p>• Use the ··· menu to copy any image into a channel panel for slot assignment.</p>
         <p>• Drop image files anywhere on the grid to upload.</p>
       </div>
+
+      {/* IE.1.3 — Near-duplicate confirmation modal. Triggers when the
+          upload endpoint returns 409 NEAR_DUPLICATE. Shows the
+          candidate side-by-side and lets the operator either keep
+          the existing image or force-upload the new one. */}
+      {nearDup && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 dark:bg-slate-950/70 flex items-center justify-center px-4">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 max-w-2xl w-full p-6 space-y-5">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="w-5 h-5 text-amber-500 mt-0.5 flex-shrink-0" />
+              <div className="space-y-1">
+                <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">
+                  {t('products.edit.images.masterPanel.nearDupTitle')}
+                </h2>
+                <p className="text-sm text-slate-500 dark:text-slate-400">
+                  {t('products.edit.images.masterPanel.nearDupHint', {
+                    distance: nearDup.hammingDistance,
+                    threshold: nearDup.threshold,
+                  })}
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <p className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">
+                  {t('products.edit.images.masterPanel.nearDupExisting')}
+                </p>
+                <div className="aspect-square rounded-xl bg-slate-100 dark:bg-slate-800 overflow-hidden border border-slate-200 dark:border-slate-700">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={nearDup.candidate.url}
+                    alt={nearDup.candidate.alt ?? ''}
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  {nearDup.candidate.type}
+                  {nearDup.candidate.width && nearDup.candidate.height
+                    ? ` · ${nearDup.candidate.width}×${nearDup.candidate.height}`
+                    : ''}
+                </p>
+              </div>
+              <div className="space-y-2">
+                <p className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">
+                  {t('products.edit.images.masterPanel.nearDupNew')}
+                </p>
+                <div className="aspect-square rounded-xl bg-slate-100 dark:bg-slate-800 overflow-hidden border border-slate-200 dark:border-slate-700">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={URL.createObjectURL(nearDup.file)}
+                    alt=""
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+                <p className="text-xs text-slate-500 dark:text-slate-400 truncate" title={nearDup.file.name}>
+                  {nearDup.file.name}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={handleNearDupUseExisting}
+                disabled={forcingUpload}
+                className="text-xs"
+              >
+                {t('products.edit.images.masterPanel.nearDupUseExisting')}
+              </Button>
+              <Button
+                size="sm"
+                onClick={handleNearDupForce}
+                disabled={forcingUpload}
+                className="text-xs gap-1.5"
+              >
+                {forcingUpload ? <Loader2 className="w-3 h-3 animate-spin" /> : <Upload className="w-3 h-3" />}
+                {t('products.edit.images.masterPanel.nearDupForce')}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
