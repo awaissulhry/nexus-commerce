@@ -592,6 +592,50 @@ export default function PurchaseOrdersClient() {
     }
   }, [selected, fetchPos])
 
+  // PO.16 — bulk transition state + handler. The summary modal renders
+  // the per-id result so the operator sees what succeeded vs got
+  // skipped (e.g. "approve" on a PO that's already APPROVED).
+  const [bulkTxBusy, setBulkTxBusy] = useState<WorkflowTransition | null>(null)
+  const [bulkTxResult, setBulkTxResult] = useState<{
+    transition: string
+    succeeded: Array<{ poId: string; poNumber: string; fromStatus: string; toStatus: string; ackUrl?: string }>
+    skipped: Array<{ poId: string; reason: string }>
+    failed: Array<{ poId: string; error: string }>
+    total: number
+  } | null>(null)
+
+  const handleBulkTransition = useCallback(
+    async (transition: WorkflowTransition) => {
+      const ids = Array.from(selected)
+      if (ids.length === 0) return
+      setBulkTxBusy(transition)
+      setActionError(null)
+      try {
+        const res = await fetch(
+          `${getBackendUrl()}/api/fulfillment/purchase-orders/bulk-transition`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ids, transition }),
+          },
+        )
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}))
+          throw new Error(body?.error ?? `HTTP ${res.status}`)
+        }
+        const data = await res.json()
+        setBulkTxResult(data)
+        setSelected(new Set())
+        await fetchPos()
+      } catch (err) {
+        setActionError(err instanceof Error ? err.message : String(err))
+      } finally {
+        setBulkTxBusy(null)
+      }
+    },
+    [selected, fetchPos],
+  )
+
   const handleTransition = useCallback(
     async (poId: string, transition: WorkflowTransition, reason?: string) => {
       setActionError(null)
@@ -938,23 +982,68 @@ export default function PurchaseOrdersClient() {
             </>
           ) : (
             <>
+              {/* PO.16 — bulk transitions. Each action runs against
+                  every selected PO and skips rows where the
+                  transition doesn't apply (e.g. "approve" on a
+                  SUBMITTED PO). Skipped/failed counts surface in
+                  the summary modal. */}
+              <button
+                type="button"
+                onClick={() => handleBulkTransition('approve')}
+                disabled={bulkTxBusy !== null}
+                className="h-7 px-3 text-xs rounded border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5 disabled:opacity-50"
+                title="Approve all selected DRAFT/REVIEW POs"
+              >
+                {bulkTxBusy === 'approve' ? <Loader2 size={12} className="animate-spin" /> : null}
+                Approve
+              </button>
+              <button
+                type="button"
+                onClick={() => handleBulkTransition('send')}
+                disabled={bulkTxBusy !== null}
+                className="h-7 px-3 text-xs rounded border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5 disabled:opacity-50"
+                title="Send all selected APPROVED POs to their suppliers"
+              >
+                {bulkTxBusy === 'send' ? <Loader2 size={12} className="animate-spin" /> : null}
+                Send to supplier
+              </button>
+              <a
+                href={`${getBackendUrl()}/api/fulfillment/purchase-orders/export.csv?ids=${Array.from(selected).join(',')}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="h-7 px-3 text-xs rounded border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5"
+                title="Download a CSV of just the selected rows"
+              >
+                Export selected
+              </a>
               <button
                 type="button"
                 onClick={() => setConfirmBulkDelete(true)}
-                className="h-7 px-3 text-xs rounded border border-red-200 dark:border-red-900 text-red-700 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 inline-flex items-center gap-1.5"
+                disabled={bulkTxBusy !== null}
+                className="h-7 px-3 text-xs rounded border border-red-200 dark:border-red-900 text-red-700 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 inline-flex items-center gap-1.5 disabled:opacity-50"
               >
                 <Trash2 size={12} /> Delete
               </button>
               <button
                 type="button"
                 onClick={clearSelection}
-                className="h-7 px-3 text-xs rounded border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
+                disabled={bulkTxBusy !== null}
+                className="h-7 px-3 text-xs rounded border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50"
               >
                 Clear
               </button>
             </>
           )}
         </div>
+      )}
+
+      {/* PO.16 — bulk transition result summary. Renders after a
+          bulk action completes; click to dismiss. */}
+      {bulkTxResult && (
+        <BulkTransitionSummary
+          result={bulkTxResult}
+          onClose={() => setBulkTxResult(null)}
+        />
       )}
 
       {/* List body — table or cards */}
@@ -1044,6 +1133,121 @@ export default function PurchaseOrdersClient() {
           onClose={() => setScorecardSupplierId(null)}
         />
       )}
+    </div>
+  )
+}
+
+// ── Bulk-transition result summary ─────────────────────────────────
+
+function BulkTransitionSummary({
+  result,
+  onClose,
+}: {
+  result: {
+    transition: string
+    succeeded: Array<{ poId: string; poNumber: string; fromStatus: string; toStatus: string; ackUrl?: string }>
+    skipped: Array<{ poId: string; reason: string }>
+    failed: Array<{ poId: string; error: string }>
+    total: number
+  }
+  onClose: () => void
+}) {
+  const hasAckUrls = result.succeeded.some((r) => r.ackUrl)
+  const titleByTransition: Record<string, string> = {
+    'submit-for-review': 'Bulk submit-for-review',
+    approve: 'Bulk approve',
+    send: 'Bulk send to supplier',
+    acknowledge: 'Bulk acknowledge',
+    cancel: 'Bulk cancel',
+  }
+  return (
+    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg shadow-sm">
+      <div className="px-4 py-2 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 flex items-center justify-between">
+        <span className="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide">
+          {titleByTransition[result.transition] ?? `Bulk ${result.transition}`}
+        </span>
+        <span className="text-sm text-slate-500 dark:text-slate-400">
+          {result.succeeded.length} of {result.total} succeeded
+          {result.skipped.length > 0 && ` · ${result.skipped.length} skipped`}
+          {result.failed.length > 0 && ` · ${result.failed.length} failed`}
+        </span>
+      </div>
+      <div className="p-3 space-y-3 max-h-72 overflow-y-auto text-base">
+        {result.succeeded.length > 0 && (
+          <div>
+            <div className="text-sm font-semibold text-green-700 dark:text-green-300 mb-1 inline-flex items-center gap-1">
+              <Check className="w-3 h-3" />
+              Succeeded
+            </div>
+            <ul className="space-y-0.5 ml-4 list-disc text-slate-700 dark:text-slate-300">
+              {result.succeeded.map((r) => (
+                <li key={r.poId} className="font-mono">
+                  {r.poNumber}{' '}
+                  <span className="text-slate-500 dark:text-slate-400 font-sans">
+                    {r.fromStatus} → {r.toStatus}
+                  </span>
+                  {r.ackUrl && (
+                    <a
+                      href={r.ackUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="ml-2 text-sm text-blue-600 dark:text-blue-400 hover:underline font-sans"
+                    >
+                      ack URL
+                    </a>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        {result.skipped.length > 0 && (
+          <div>
+            <div className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              Skipped (not applicable)
+            </div>
+            <ul className="space-y-0.5 ml-4 list-disc text-slate-700 dark:text-slate-300">
+              {result.skipped.map((s) => (
+                <li key={s.poId}>
+                  <span className="font-mono text-sm">{s.poId.slice(0, 10)}</span>
+                  <span className="text-slate-500 dark:text-slate-400"> — {s.reason}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        {result.failed.length > 0 && (
+          <div>
+            <div className="text-sm font-semibold text-red-700 dark:text-red-300 mb-1 inline-flex items-center gap-1">
+              <AlertCircle className="w-3 h-3" />
+              Failed
+            </div>
+            <ul className="space-y-0.5 ml-4 list-disc text-red-700 dark:text-red-300">
+              {result.failed.map((f) => (
+                <li key={f.poId}>
+                  <span className="font-mono text-sm">{f.poId.slice(0, 10)}</span>
+                  <span> — {f.error}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        {hasAckUrls && (
+          <div className="text-sm text-slate-500 dark:text-slate-400">
+            Ack URLs above let you share the supplier-confirmation link
+            out-of-band if email delivery hasn't arrived yet.
+          </div>
+        )}
+      </div>
+      <div className="border-t border-slate-200 dark:border-slate-700 px-3 py-2 flex justify-end">
+        <button
+          type="button"
+          onClick={onClose}
+          className="h-7 px-3 text-xs rounded border border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-800"
+        >
+          Dismiss
+        </button>
+      </div>
     </div>
   )
 }

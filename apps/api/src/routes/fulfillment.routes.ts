@@ -7417,6 +7417,17 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
       const q = request.query as any
       const where: any = {}
       where.deletedAt = q.deleted === 'true' ? { not: null } : null
+      // PO.16 — selected-only export. When `ids` is present it
+      // overrides the other filters so the operator gets exactly the
+      // rows they selected, regardless of the filter context.
+      if (q.ids) {
+        const ids = String(q.ids).split(',').map((s) => s.trim()).filter(Boolean)
+        if (ids.length > 0) {
+          where.id = { in: ids }
+          // Clear other filters; ids is authoritative.
+          delete where.deletedAt
+        }
+      }
       if (q.status && q.status !== 'ALL') {
         const statuses = String(q.status).split(',').map((s) => s.trim()).filter(Boolean)
         if (statuses.length === 1) where.status = statuses[0]
@@ -13719,6 +13730,88 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
 
     return result
   }
+
+  // PO.16 — Bulk transition. Runs transitionPo per id and returns a
+  // per-id result so the client can render a precise summary
+  // (succeeded vs skipped vs failed). Transitions that don't apply
+  // to a PO's current status are skipped with a 'not-allowed' tag —
+  // they're not failures, just non-applicable to that row.
+  //
+  // Bulk 'send' fans out po-supplier-email per id; the response
+  // includes the freshly-minted ack URL per PO so the operator can
+  // copy/share if Resend dryRun is on or email bounces.
+  fastify.post('/fulfillment/purchase-orders/bulk-transition', async (request, reply) => {
+    try {
+      const body = (request.body ?? {}) as {
+        ids?: string[]
+        transition?: WorkflowTransition
+        reason?: string
+        userId?: string
+      }
+      const ids = Array.isArray(body.ids) ? body.ids.filter(Boolean) : []
+      if (ids.length === 0) return reply.code(400).send({ error: 'ids[] required' })
+      if (!body.transition) return reply.code(400).send({ error: 'transition required' })
+
+      const succeeded: Array<{
+        poId: string
+        poNumber: string
+        fromStatus: string
+        toStatus: string
+        ackUrl?: string
+      }> = []
+      const skipped: Array<{ poId: string; reason: string }> = []
+      const failed: Array<{ poId: string; error: string }> = []
+
+      for (const id of ids) {
+        try {
+          const r = await transitionPo({
+            poId: id,
+            transition: body.transition,
+            userId: body.userId ?? null,
+            cancelReason: body.reason ?? null,
+          })
+          // Same idempotent-skip check as the single-transition route.
+          if (r.fromStatus === r.toStatus) {
+            skipped.push({ poId: id, reason: 'already in target status' })
+            continue
+          }
+          publishPoEvent({
+            type: 'po.transitioned',
+            poId: r.poId,
+            poNumber: r.poNumber,
+            fromStatus: r.fromStatus,
+            toStatus: r.toStatus,
+            ts: Date.now(),
+          })
+          succeeded.push({
+            poId: r.poId,
+            poNumber: r.poNumber,
+            fromStatus: r.fromStatus,
+            toStatus: r.toStatus,
+            ackUrl: r.supplierEmail?.ackUrl,
+          })
+        } catch (err: any) {
+          const msg = err?.message ?? String(err)
+          if (/not allowed/i.test(msg) || /transition.*not allowed/i.test(msg)) {
+            skipped.push({ poId: id, reason: msg })
+          } else {
+            failed.push({ poId: id, error: msg })
+          }
+        }
+      }
+
+      return {
+        transition: body.transition,
+        succeeded,
+        skipped,
+        failed,
+        total: ids.length,
+      }
+    } catch (err: any) {
+      fastify.log.error({ err }, '[purchase-orders/bulk-transition] failed')
+      return reply.code(500).send({ error: err?.message ?? String(err) })
+    }
+  })
 
   fastify.post('/fulfillment/purchase-orders/bulk-soft-delete', async (request, reply) => {
     try {
