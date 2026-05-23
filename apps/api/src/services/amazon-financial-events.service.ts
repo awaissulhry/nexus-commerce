@@ -61,6 +61,12 @@ interface FinancialSyncSummary {
   txCreated: number
   txSkipped: number
   durationMs: number
+  /** DA-RT.17 — diagnostics: first 10 AmazonOrderIds from fetched
+   *  events whose row doesn't exist in our Order table, AND first 10
+   *  channelOrderIds we DO have for AMAZON orders in the same window
+   *  so the operator can eyeball whether the ID format differs. */
+  unmatchedSampleIds?: string[]
+  ourSampleChannelOrderIds?: string[]
 }
 
 async function processOrderEvent(event: AmazonOrderFinancialEvent): Promise<{ created: number; skipped: number }> {
@@ -221,12 +227,22 @@ export async function syncFinancialEvents(
   let txSkipped = 0
   let ordersMatched = 0
   let ordersSkipped = 0
+  // DA-RT.17 — capture per-event match/no-match for the diagnostic
+  // sample so operator can eyeball whether IDs are mismatched format.
+  const unmatchedIds: string[] = []
 
   for (const event of payload.orderEvents) {
     const r = await processOrderEvent(event)
     txCreated += r.created
     txSkipped += r.skipped
-    if (r.created > 0) ordersMatched++; else ordersSkipped++
+    if (r.created > 0) {
+      ordersMatched++
+    } else {
+      ordersSkipped++
+      if (event.AmazonOrderId && unmatchedIds.length < 10) {
+        unmatchedIds.push(event.AmazonOrderId)
+      }
+    }
   }
 
   for (const event of payload.refundEvents) {
@@ -234,6 +250,18 @@ export async function syncFinancialEvents(
     txCreated += r.created
     txSkipped += r.skipped
   }
+
+  // Pull a small sample of our own AMAZON channelOrderIds from the
+  // same window so the operator can compare format side-by-side.
+  const ourSample = await prisma.order.findMany({
+    where: {
+      channel: 'AMAZON',
+      purchaseDate: { gte: windowStart, lt: windowEnd },
+    },
+    select: { channelOrderId: true },
+    take: 10,
+    orderBy: { purchaseDate: 'desc' },
+  })
 
   return {
     windowStart: windowStart.toISOString(),
@@ -245,6 +273,8 @@ export async function syncFinancialEvents(
     txCreated,
     txSkipped,
     durationMs: Date.now() - t0,
+    unmatchedSampleIds: unmatchedIds,
+    ourSampleChannelOrderIds: ourSample.map((o) => o.channelOrderId).filter((s): s is string => !!s),
   }
 }
 
