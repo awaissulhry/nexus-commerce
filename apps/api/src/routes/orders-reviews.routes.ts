@@ -130,16 +130,46 @@ const ordersReviewsRoutes: FastifyPluginAsync = async (fastify) => {
       const body = request.body as any
       const data: any = {}
       if (body.name != null) data.name = body.name
+      // RV.9.1 follow-up — scope was missing from the allowlist, so
+      // flipping AMAZON_PER_MARKETPLACE → AMAZON_GLOBAL silently no-op'd
+      // and left the rule broken (scope unchanged, marketplace cleared).
+      if (body.scope != null) {
+        data.scope = body.scope
+        // Server-side guard: scopes other than per-marketplace must NOT
+        // carry a marketplace value (defensive — even if the client
+        // sends one, ignore it).
+        if (body.scope !== 'AMAZON_PER_MARKETPLACE') data.marketplace = null
+      }
       if (body.isActive != null) data.isActive = body.isActive
       if (body.minDaysSinceDelivery != null) data.minDaysSinceDelivery = Math.max(4, Math.floor(body.minDaysSinceDelivery))
       if (body.maxDaysSinceDelivery != null) data.maxDaysSinceDelivery = Math.min(30, Math.floor(body.maxDaysSinceDelivery))
       if (Array.isArray(body.exclusions)) data.exclusions = body.exclusions
       if (body.minOrderTotalCents !== undefined) data.minOrderTotalCents = body.minOrderTotalCents
       if (body.notes !== undefined) data.notes = body.notes
-      if (body.marketplace !== undefined) data.marketplace = body.marketplace
+      // RV.9.1 follow-up — only honor marketplace updates when the new
+      // (or current) scope is AMAZON_PER_MARKETPLACE. The `data.scope`
+      // branch above already cleared it for other scopes; this protects
+      // the case where only marketplace is sent.
+      if (body.marketplace !== undefined && data.marketplace === undefined) {
+        data.marketplace = body.scope === 'AMAZON_PER_MARKETPLACE' || body.scope == null
+          ? body.marketplace
+          : null
+      }
       if (body.useSentimentDiversion !== undefined) data.useSentimentDiversion = body.useSentimentDiversion === true
-      const rule = await prisma.reviewRule.update({ where: { id }, data })
-      return rule
+      // RV.9.1 follow-up — surface the (name, scope, marketplace) unique
+      // violation as a 409 with a useful message; this used to bubble up
+      // as a plain 500.
+      try {
+        const rule = await prisma.reviewRule.update({ where: { id }, data })
+        return rule
+      } catch (err: any) {
+        if (err.code === 'P2002') {
+          return reply.status(409).send({
+            error: 'Another rule with this name and scope already exists',
+          })
+        }
+        throw err
+      }
     } catch (err: any) {
       return reply.status(500).send({ error: err.message })
     }
