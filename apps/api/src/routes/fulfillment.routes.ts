@@ -6049,6 +6049,338 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
     },
   )
 
+  // ═══════════════════════════════════════════════════════════════════
+  // PO.8 — Purchase-order revisions.
+  //
+  // Once a PO has been sent to the supplier (status SUBMITTED+), edits
+  // can no longer go through PO.6's PATCH /lines (that path is locked
+  // for DRAFT/REVIEW only). The supplier already has v1; any change
+  // must be a re-quote. A PurchaseOrderRevision row captures the
+  // before/after side-by-side and tracks supplier re-ack.
+  //
+  // snapshotJson shape:
+  //   {
+  //     before: ItemSnapshot[],   // frozen at create time; never mutates
+  //     after:  ItemSnapshot[],   // operator-editable; what apply commits
+  //     beforeTotalCents: number,
+  //     afterTotalCents:  number,
+  //   }
+  //
+  // Status lifecycle:
+  //   PENDING            — drafted; operator editing
+  //   SUPPLIER_NOTIFIED  — PO.9 emailed change order to supplier
+  //   SUPPLIER_ACKED     — supplier confirmed (or operator "Apply" — PO.8)
+  //   SUPERSEDED         — a newer revision applied first
+  //   CANCELLED          — operator abandoned
+  //
+  // Concurrency: only one revision in flight (PENDING or
+  // SUPPLIER_NOTIFIED) per PO at a time. POST /revisions rejects with
+  // 409 if one already exists; operator must apply or cancel first.
+  // ═══════════════════════════════════════════════════════════════════
+
+  // Statuses where opening a revision makes sense — the supplier has
+  // already seen the PO, so direct edits aren't allowed.
+  const REVISABLE_PO_STATUSES = new Set([
+    'SUBMITTED',
+    'ACKNOWLEDGED',
+    'CONFIRMED',
+    'PARTIAL',
+  ])
+
+  // Statuses of an existing revision that count as "in flight". A new
+  // revision can only be opened when none of these are present.
+  const IN_FLIGHT_REVISION_STATUSES = new Set(['PENDING', 'SUPPLIER_NOTIFIED'])
+
+  interface ItemSnapshot {
+    productId: string | null
+    supplierSku: string | null
+    sku: string
+    quantityOrdered: number
+    unitCostCents: number
+    note: string | null
+  }
+
+  function snapshotFromPoItems(
+    items: Array<{
+      productId: string | null
+      supplierSku: string | null
+      sku: string
+      quantityOrdered: number
+      unitCostCents: number
+      note: string | null
+    }>,
+  ): ItemSnapshot[] {
+    return items.map((it) => ({
+      productId: it.productId,
+      supplierSku: it.supplierSku,
+      sku: it.sku,
+      quantityOrdered: it.quantityOrdered,
+      unitCostCents: it.unitCostCents,
+      note: it.note,
+    }))
+  }
+
+  function totalOf(items: ItemSnapshot[]): number {
+    return items.reduce(
+      (s, it) => s + Math.max(0, it.unitCostCents) * Math.max(0, it.quantityOrdered),
+      0,
+    )
+  }
+
+  // POST /:id/revisions — open a new revision.
+  fastify.post('/fulfillment/purchase-orders/:id/revisions', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const body = (request.body ?? {}) as { reason?: string; userId?: string }
+
+      const po = await prisma.purchaseOrder.findUnique({
+        where: { id },
+        include: { items: { orderBy: [{ lineOrder: 'asc' }, { id: 'asc' }] } },
+      })
+      if (!po) return reply.code(404).send({ error: 'PO not found' })
+      if (!REVISABLE_PO_STATUSES.has(po.status)) {
+        return reply.code(409).send({
+          error: `Revisions can only be opened on SUBMITTED+ POs (current: ${po.status}). Use direct edit on DRAFT/REVIEW POs.`,
+        })
+      }
+
+      const inFlight = await prisma.purchaseOrderRevision.findFirst({
+        where: {
+          purchaseOrderId: id,
+          status: { in: Array.from(IN_FLIGHT_REVISION_STATUSES) },
+        },
+      })
+      if (inFlight) {
+        return reply.code(409).send({
+          error: `A revision (v${inFlight.version}, ${inFlight.status}) is already in flight. Apply or cancel it first.`,
+          existingRevisionId: inFlight.id,
+        })
+      }
+
+      const latestVersion = await prisma.purchaseOrderRevision.findFirst({
+        where: { purchaseOrderId: id },
+        orderBy: { version: 'desc' },
+        select: { version: true },
+      })
+      // v1 = the original PO; first revision is v2.
+      const nextVersion = (latestVersion?.version ?? 1) + 1
+
+      const before = snapshotFromPoItems(po.items)
+      const after = before.map((it) => ({ ...it })) // deep copy
+      const snapshot = {
+        before,
+        after,
+        beforeTotalCents: totalOf(before),
+        afterTotalCents: totalOf(after),
+      }
+
+      const created = await prisma.purchaseOrderRevision.create({
+        data: {
+          purchaseOrderId: id,
+          version: nextVersion,
+          reason: body.reason?.trim() || null,
+          status: 'PENDING',
+          snapshotJson: snapshot as unknown as Prisma.InputJsonValue,
+          createdBy: body.userId ?? null,
+        },
+      })
+
+      publishPoEvent({ type: 'po.updated', poId: id, reason: 'revision-opened', ts: Date.now() })
+      return created
+    } catch (err: any) {
+      fastify.log.error({ err }, '[purchase-orders/:id/revisions POST] failed')
+      return reply.code(500).send({ error: err?.message ?? String(err) })
+    }
+  })
+
+  // PATCH /:id/revisions/:revisionId — overwrite the proposed (after)
+  // items. The frozen `before` snapshot is preserved. Only PENDING
+  // revisions are mutable — once notified or acked, the revision is
+  // locked.
+  fastify.patch(
+    '/fulfillment/purchase-orders/:id/revisions/:revisionId',
+    async (request, reply) => {
+      try {
+        const { id, revisionId } = request.params as {
+          id: string
+          revisionId: string
+        }
+        const body = (request.body ?? {}) as {
+          items?: ItemSnapshot[]
+          reason?: string | null
+        }
+        const items = Array.isArray(body.items) ? body.items : []
+        if (items.length === 0) {
+          return reply.code(400).send({ error: 'items[] required' })
+        }
+
+        const rev = await prisma.purchaseOrderRevision.findUnique({
+          where: { id: revisionId },
+        })
+        if (!rev || rev.purchaseOrderId !== id) {
+          return reply.code(404).send({ error: 'Revision not found' })
+        }
+        if (rev.status !== 'PENDING') {
+          return reply.code(409).send({
+            error: `Revision is ${rev.status}; only PENDING revisions can be edited`,
+          })
+        }
+
+        const existing = rev.snapshotJson as any
+        const before = (existing?.before ?? []) as ItemSnapshot[]
+        const after = items.map((it) => ({
+          productId: it.productId ?? null,
+          supplierSku: it.supplierSku ?? null,
+          sku: it.sku,
+          quantityOrdered: Math.max(0, it.quantityOrdered),
+          unitCostCents: Math.max(0, it.unitCostCents),
+          note: it.note ?? null,
+        }))
+        const snapshot = {
+          before,
+          after,
+          beforeTotalCents: totalOf(before),
+          afterTotalCents: totalOf(after),
+        }
+        const updated = await prisma.purchaseOrderRevision.update({
+          where: { id: revisionId },
+          data: {
+            snapshotJson: snapshot as unknown as Prisma.InputJsonValue,
+            reason: body.reason === undefined ? rev.reason : body.reason?.trim() || null,
+          },
+        })
+
+        publishPoEvent({ type: 'po.updated', poId: id, reason: 'revision-edited', ts: Date.now() })
+        return updated
+      } catch (err: any) {
+        fastify.log.error({ err }, '[purchase-orders/:id/revisions PATCH] failed')
+        return reply.code(500).send({ error: err?.message ?? String(err) })
+      }
+    },
+  )
+
+  // POST /:id/revisions/:revisionId/apply — apply the revision's
+  // `after` items to the PO. Bumps PO.version, replaces line items,
+  // marks revision SUPPLIER_ACKED. Any other PENDING/SUPPLIER_NOTIFIED
+  // revisions on the same PO are marked SUPERSEDED defensively (we
+  // already block opening one when in-flight exists, but a race could
+  // sneak past).
+  //
+  // PO status itself is preserved — applying a revision doesn't move
+  // the PO backward. The factory PDF + supplier-side state is the
+  // supplier's problem (PO.9 wires the supplier re-ack flow that flips
+  // SUPPLIER_NOTIFIED → SUPPLIER_ACKED on the ack URL).
+  fastify.post(
+    '/fulfillment/purchase-orders/:id/revisions/:revisionId/apply',
+    async (request, reply) => {
+      try {
+        const { id, revisionId } = request.params as {
+          id: string
+          revisionId: string
+        }
+
+        const rev = await prisma.purchaseOrderRevision.findUnique({
+          where: { id: revisionId },
+        })
+        if (!rev || rev.purchaseOrderId !== id) {
+          return reply.code(404).send({ error: 'Revision not found' })
+        }
+        if (rev.status !== 'PENDING' && rev.status !== 'SUPPLIER_NOTIFIED') {
+          return reply.code(409).send({
+            error: `Revision is ${rev.status}; only PENDING / SUPPLIER_NOTIFIED revisions can be applied`,
+          })
+        }
+
+        const snapshot = rev.snapshotJson as any
+        const after = (snapshot?.after ?? []) as ItemSnapshot[]
+        if (after.length === 0) {
+          return reply.code(400).send({ error: 'Revision has no items to apply' })
+        }
+        const totalCents = totalOf(after)
+
+        await prisma.$transaction(async (tx) => {
+          // Replace PO items.
+          await tx.purchaseOrderItem.deleteMany({ where: { purchaseOrderId: id } })
+          await tx.purchaseOrderItem.createMany({
+            data: after.map((it, idx) => ({
+              purchaseOrderId: id,
+              productId: it.productId ?? null,
+              sku: it.sku,
+              supplierSku: it.supplierSku ?? null,
+              quantityOrdered: it.quantityOrdered,
+              unitCostCents: it.unitCostCents,
+              note: it.note ?? null,
+              lineOrder: idx,
+            })),
+          })
+          await tx.purchaseOrder.update({
+            where: { id },
+            data: {
+              totalCents,
+              version: { increment: 1 },
+            },
+          })
+          await tx.purchaseOrderRevision.update({
+            where: { id: revisionId },
+            data: { status: 'SUPPLIER_ACKED', supplierAckedAt: new Date() },
+          })
+          // Defensive: any other in-flight revisions are now stale.
+          await tx.purchaseOrderRevision.updateMany({
+            where: {
+              purchaseOrderId: id,
+              id: { not: revisionId },
+              status: { in: ['PENDING', 'SUPPLIER_NOTIFIED'] },
+            },
+            data: { status: 'SUPERSEDED' },
+          })
+        })
+
+        publishPoEvent({ type: 'po.updated', poId: id, reason: 'revision-applied', ts: Date.now() })
+        return { ok: true, applied: revisionId }
+      } catch (err: any) {
+        fastify.log.error({ err }, '[purchase-orders/:id/revisions/:revisionId/apply] failed')
+        return reply.code(500).send({ error: err?.message ?? String(err) })
+      }
+    },
+  )
+
+  // POST /:id/revisions/:revisionId/cancel — operator abandons a
+  // revision. Only PENDING revisions can be cancelled this way; once
+  // SUPPLIER_NOTIFIED, the supplier already knows about the change
+  // order, so cancelling has to be communicated separately (PO.9 will
+  // wire an explicit "withdraw change order" supplier email).
+  fastify.post(
+    '/fulfillment/purchase-orders/:id/revisions/:revisionId/cancel',
+    async (request, reply) => {
+      try {
+        const { id, revisionId } = request.params as {
+          id: string
+          revisionId: string
+        }
+        const rev = await prisma.purchaseOrderRevision.findUnique({
+          where: { id: revisionId },
+        })
+        if (!rev || rev.purchaseOrderId !== id) {
+          return reply.code(404).send({ error: 'Revision not found' })
+        }
+        if (rev.status !== 'PENDING') {
+          return reply.code(409).send({
+            error: `Revision is ${rev.status}; only PENDING revisions can be cancelled directly`,
+          })
+        }
+        await prisma.purchaseOrderRevision.update({
+          where: { id: revisionId },
+          data: { status: 'CANCELLED', cancelledAt: new Date() },
+        })
+        publishPoEvent({ type: 'po.updated', poId: id, reason: 'revision-cancelled', ts: Date.now() })
+        return { ok: true, cancelled: revisionId }
+      } catch (err: any) {
+        fastify.log.error({ err }, '[purchase-orders/:id/revisions/:revisionId/cancel] failed')
+        return reply.code(500).send({ error: err?.message ?? String(err) })
+      }
+    },
+  )
+
   // F.6 — Factory-ready PDF for a PO. Renders letterhead with company
   // branding (BrandSettings), per-product groups with images and Size×
   // Color matrix when applicable, totals, and a signature block.

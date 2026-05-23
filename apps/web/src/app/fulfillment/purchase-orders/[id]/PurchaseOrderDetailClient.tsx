@@ -14,7 +14,7 @@
 // formatCurrency) duplicate the list page for now. PO.3 hoists them
 // to a shared `_shared/po-lens` module alongside the grid components.
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import {
@@ -25,8 +25,10 @@ import {
   Loader2,
   Mail,
   MessageSquare,
+  Plus,
   Printer,
   ShoppingCart,
+  Trash2,
   Truck,
   Paperclip,
   GitBranch,
@@ -77,11 +79,28 @@ interface POAttachment {
   uploadedAt: string
 }
 
+interface RevisionItemSnapshot {
+  productId: string | null
+  supplierSku: string | null
+  sku: string
+  quantityOrdered: number
+  unitCostCents: number
+  note: string | null
+}
+
+interface RevisionSnapshot {
+  before: RevisionItemSnapshot[]
+  after: RevisionItemSnapshot[]
+  beforeTotalCents: number
+  afterTotalCents: number
+}
+
 interface PORevision {
   id: string
   version: number
   reason: string | null
   status: string
+  snapshotJson: RevisionSnapshot
   createdAt: string
   createdBy: string | null
   supplierNotifiedAt: string | null
@@ -651,7 +670,13 @@ export default function PurchaseOrderDetailClient({ id }: { id: string }) {
           <AttachmentsPane attachments={po.attachments} />
         </section>
         <section data-tab-pane className={cn(tab !== 'revisions' && 'po-detail-no-print')}>
-          <RevisionsPane revisions={po.revisions} />
+          <RevisionsPane
+            poId={po.id}
+            poStatus={po.status}
+            poCurrency={po.currencyCode}
+            revisions={po.revisions}
+            onRefresh={refresh}
+          />
         </section>
         <section data-tab-pane className={cn(tab !== 'comments' && 'po-detail-no-print')}>
           <CommentsPane poId={po.id} comments={po.comments} onRefresh={refresh} />
@@ -961,56 +986,701 @@ function AttachmentsPane({ attachments }: { attachments: POAttachment[] }) {
   )
 }
 
-function RevisionsPane({ revisions }: { revisions: PORevision[] }) {
-  if (revisions.length === 0) {
+// PO.8 — Statuses where opening a revision is allowed. Mirrors the
+// server-side REVISABLE_PO_STATUSES set in fulfillment.routes.ts.
+const REVISABLE_STATUSES = new Set(['SUBMITTED', 'ACKNOWLEDGED', 'CONFIRMED', 'PARTIAL'])
+
+function RevisionsPane({
+  poId,
+  poStatus,
+  poCurrency,
+  revisions,
+  onRefresh,
+}: {
+  poId: string
+  poStatus: string
+  poCurrency: string
+  revisions: PORevision[]
+  onRefresh: () => void | Promise<void>
+}) {
+  const [opening, setOpening] = useState(false)
+  const [openError, setOpenError] = useState<string | null>(null)
+  const [reason, setReason] = useState('')
+  const [showReasonInput, setShowReasonInput] = useState(false)
+
+  const inFlight = revisions.find(
+    (r) => r.status === 'PENDING' || r.status === 'SUPPLIER_NOTIFIED',
+  )
+  const canOpen = REVISABLE_STATUSES.has(poStatus) && !inFlight
+
+  const openRevision = async () => {
+    setOpening(true)
+    setOpenError(null)
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/fulfillment/purchase-orders/${poId}/revisions`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ reason: reason.trim() || undefined }),
+        },
+      )
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body?.error ?? `HTTP ${res.status}`)
+      }
+      setShowReasonInput(false)
+      setReason('')
+      await onRefresh()
+    } catch (err) {
+      setOpenError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setOpening(false)
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Open-revision affordance / explanation */}
+      {canOpen && (
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-3">
+          {showReasonInput ? (
+            <div className="space-y-2">
+              <div className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                Why are you opening a revision?
+              </div>
+              <input
+                type="text"
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                placeholder="Supplier quoted +12% on FX; price-match request; qty short-shipped…"
+                autoFocus
+                className="w-full h-9 px-2 text-base border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+              />
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={openRevision}
+                  disabled={opening}
+                  className="h-8 px-3 inline-flex items-center gap-1.5 text-base font-medium rounded border transition-colors bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 border-slate-900 dark:border-slate-100 hover:bg-slate-800 disabled:opacity-50"
+                >
+                  {opening ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <GitBranch className="w-3.5 h-3.5" />}
+                  Open revision
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowReasonInput(false)
+                    setReason('')
+                  }}
+                  className="h-8 px-3 inline-flex items-center text-base font-medium rounded border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"
+                >
+                  Cancel
+                </button>
+              </div>
+              {openError && (
+                <div className="text-sm text-red-700 dark:text-red-300 inline-flex items-center gap-1">
+                  <AlertCircle className="w-3 h-3" /> {openError}
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="flex items-center justify-between gap-3">
+              <div className="text-base text-slate-700 dark:text-slate-300">
+                This PO has been sent to the supplier. Direct edits are
+                locked — open a revision to propose a change.
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowReasonInput(true)}
+                className="h-8 px-3 inline-flex items-center gap-1.5 text-base font-medium rounded border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 flex-shrink-0"
+              >
+                <GitBranch className="w-3.5 h-3.5" />
+                Open revision
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* In-flight revision editor */}
+      {inFlight && (
+        <RevisionEditor
+          poId={poId}
+          poCurrency={poCurrency}
+          revision={inFlight}
+          onRefresh={onRefresh}
+        />
+      )}
+
+      {/* Historical revisions table */}
+      {revisions.length === 0 ? (
+        !canOpen && (
+          <EmptyState
+            icon={GitBranch}
+            title="No revisions"
+            description="If this PO needs to change after the supplier sees it, open a revision here. POs in DRAFT or REVIEW can be edited directly without a revision."
+          />
+        )
+      ) : (
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
+          <table className="w-full text-base">
+            <thead className="bg-slate-50 dark:bg-slate-800 text-sm text-slate-600 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700">
+              <tr>
+                <th className="text-left font-medium px-4 py-1.5 w-16">v</th>
+                <th className="text-left font-medium px-4 py-1.5">Reason</th>
+                <th className="text-left font-medium px-4 py-1.5">Status</th>
+                <th className="text-right font-medium px-4 py-1.5">Δ Total</th>
+                <th className="text-left font-medium px-4 py-1.5">Created</th>
+                <th className="text-left font-medium px-4 py-1.5">Supplier ack</th>
+              </tr>
+            </thead>
+            <tbody>
+              {revisions.map((r) => {
+                const delta = r.snapshotJson.afterTotalCents - r.snapshotJson.beforeTotalCents
+                const deltaSign = delta > 0 ? '+' : delta < 0 ? '−' : ''
+                const deltaCls =
+                  delta > 0
+                    ? 'text-amber-700 dark:text-amber-300'
+                    : delta < 0
+                      ? 'text-green-700 dark:text-green-300'
+                      : 'text-slate-500 dark:text-slate-400'
+                return (
+                  <tr key={r.id} className="border-b border-slate-100 dark:border-slate-800 last:border-0">
+                    <td className="px-4 py-2 font-mono tabular-nums">v{r.version}</td>
+                    <td className="px-4 py-2">
+                      {r.reason ?? <span className="text-slate-500 dark:text-slate-400">—</span>}
+                    </td>
+                    <td className="px-4 py-2">
+                      <Badge variant={revisionStatusVariant(r.status)} size="sm">
+                        {r.status.replace(/_/g, ' ')}
+                      </Badge>
+                    </td>
+                    <td className={cn('px-4 py-2 text-right tabular-nums', deltaCls)}>
+                      {delta === 0 ? '—' : `${deltaSign}${formatCurrency(Math.abs(delta), poCurrency)}`}
+                    </td>
+                    <td className="px-4 py-2 text-sm text-slate-500 dark:text-slate-400">
+                      {relativeTime(r.createdAt)}
+                      {r.createdBy ? ` · ${r.createdBy}` : ''}
+                    </td>
+                    <td className="px-4 py-2 text-sm text-slate-500 dark:text-slate-400">
+                      {r.supplierAckedAt
+                        ? relativeTime(r.supplierAckedAt)
+                        : r.supplierNotifiedAt
+                          ? `Notified ${relativeTime(r.supplierNotifiedAt)}`
+                          : '—'}
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function revisionStatusVariant(
+  status: string,
+): 'success' | 'warning' | 'danger' | 'info' | 'default' {
+  switch (status) {
+    case 'SUPPLIER_ACKED':
+      return 'success'
+    case 'SUPPLIER_NOTIFIED':
+      return 'info'
+    case 'PENDING':
+      return 'warning'
+    case 'CANCELLED':
+    case 'SUPERSEDED':
+      return 'default'
+    default:
+      return 'default'
+  }
+}
+
+// ── Revision editor with side-by-side diff ─────────────────────────
+
+function RevisionEditor({
+  poId,
+  poCurrency,
+  revision,
+  onRefresh,
+}: {
+  poId: string
+  poCurrency: string
+  revision: PORevision
+  onRefresh: () => void | Promise<void>
+}) {
+  const before = revision.snapshotJson.before
+  // Local mutable copy of the proposed (after) items.
+  const [items, setItems] = useState<RevisionItemSnapshot[]>(
+    revision.snapshotJson.after.map((it) => ({ ...it })),
+  )
+  const [reason, setReason] = useState<string>(revision.reason ?? '')
+  const [saving, setSaving] = useState(false)
+  const [savedJustNow, setSavedJustNow] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [busy, setBusy] = useState<'apply' | 'cancel' | null>(null)
+  const saveTimerRef = useRef<number | null>(null)
+
+  // Re-seed when the server pushes a fresh revision (e.g. after a peer
+  // edits it via the SSE pipe).
+  useEffect(() => {
+    setItems(revision.snapshotJson.after.map((it) => ({ ...it })))
+    setReason(revision.reason ?? '')
+  }, [revision.id, revision.snapshotJson])
+
+  const diff = useMemo(() => computeDiff(before, items), [before, items])
+  const afterTotal = items.reduce(
+    (s, it) => s + Math.max(0, it.quantityOrdered) * Math.max(0, it.unitCostCents),
+    0,
+  )
+  const deltaCents = afterTotal - revision.snapshotJson.beforeTotalCents
+
+  const scheduleSave = useCallback(() => {
+    setSavedJustNow(false)
+    if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current)
+    saveTimerRef.current = window.setTimeout(async () => {
+      setSaving(true)
+      setError(null)
+      try {
+        const res = await fetch(
+          `${getBackendUrl()}/api/fulfillment/purchase-orders/${poId}/revisions/${revision.id}`,
+          {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ items, reason: reason || null }),
+          },
+        )
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}))
+          throw new Error(body?.error ?? `HTTP ${res.status}`)
+        }
+        setSavedJustNow(true)
+        window.setTimeout(() => setSavedJustNow(false), 2000)
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err))
+      } finally {
+        setSaving(false)
+      }
+    }, 1500)
+  }, [poId, revision.id, items, reason])
+
+  const updateItem = (idx: number, patch: Partial<RevisionItemSnapshot>) => {
+    setItems((prev) => prev.map((it, i) => (i === idx ? { ...it, ...patch } : it)))
+    scheduleSave()
+  }
+  const addItem = () => {
+    setItems((prev) => [
+      ...prev,
+      {
+        productId: null,
+        supplierSku: null,
+        sku: '',
+        quantityOrdered: 1,
+        unitCostCents: 0,
+        note: null,
+      },
+    ])
+  }
+  const removeItem = (idx: number) => {
+    setItems((prev) => (prev.length === 1 ? prev : prev.filter((_, i) => i !== idx)))
+    scheduleSave()
+  }
+
+  const applyRevision = async () => {
+    if (!window.confirm(`Apply revision v${revision.version}? This replaces the PO's line items.`)) {
+      return
+    }
+    setBusy('apply')
+    setError(null)
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/fulfillment/purchase-orders/${poId}/revisions/${revision.id}/apply`,
+        { method: 'POST' },
+      )
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body?.error ?? `HTTP ${res.status}`)
+      }
+      await onRefresh()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  const cancelRevision = async () => {
+    if (!window.confirm(`Cancel revision v${revision.version}? Edits will be discarded.`)) {
+      return
+    }
+    setBusy('cancel')
+    setError(null)
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/fulfillment/purchase-orders/${poId}/revisions/${revision.id}/cancel`,
+        { method: 'POST' },
+      )
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body?.error ?? `HTTP ${res.status}`)
+      }
+      await onRefresh()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  return (
+    <div className="bg-blue-50/30 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-900 rounded-lg overflow-hidden">
+      {/* Header */}
+      <div className="px-4 py-3 border-b border-blue-200 dark:border-blue-900 flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-3 flex-wrap">
+          <Badge variant={revisionStatusVariant(revision.status)} size="md">
+            v{revision.version} · {revision.status.replace(/_/g, ' ')}
+          </Badge>
+          <span className="text-sm text-slate-500 dark:text-slate-400">
+            Opened {relativeTime(revision.createdAt)}
+            {revision.createdBy ? ` by ${revision.createdBy}` : ''}
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          {saving && (
+            <span className="text-sm text-slate-500 dark:text-slate-400 inline-flex items-center gap-1">
+              <Loader2 className="w-3 h-3 animate-spin" /> Saving…
+            </span>
+          )}
+          {savedJustNow && (
+            <span className="text-sm text-green-700 dark:text-green-300 inline-flex items-center gap-1">
+              <CheckCircle2 className="w-3 h-3" /> Saved
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={cancelRevision}
+            disabled={busy !== null}
+            className="h-8 px-3 inline-flex items-center gap-1.5 text-base font-medium rounded border bg-white dark:bg-slate-900 text-red-700 dark:text-red-300 border-red-200 dark:border-red-900 hover:bg-red-50 dark:hover:bg-red-950/40 disabled:opacity-50"
+          >
+            {busy === 'cancel' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+            Cancel revision
+          </button>
+          <button
+            type="button"
+            onClick={applyRevision}
+            disabled={busy !== null || items.length === 0}
+            className="h-8 px-3 inline-flex items-center gap-1.5 text-base font-medium rounded border transition-colors bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 border-slate-900 hover:bg-slate-800 disabled:opacity-50"
+          >
+            {busy === 'apply' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+            Apply revision
+          </button>
+        </div>
+      </div>
+
+      {/* Reason field */}
+      <div className="px-4 py-3 border-b border-blue-200 dark:border-blue-900">
+        <label className="text-sm font-medium text-slate-700 dark:text-slate-300 block mb-1">
+          Reason
+        </label>
+        <input
+          type="text"
+          value={reason}
+          onChange={(e) => {
+            setReason(e.target.value)
+            scheduleSave()
+          }}
+          placeholder="Why is this revision needed?"
+          className="w-full h-9 px-2 text-base border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+        />
+      </div>
+
+      {/* Diff summary */}
+      <DiffSummary diff={diff} currency={poCurrency} deltaCents={deltaCents} />
+
+      {/* Editable proposed lines */}
+      <div className="bg-white dark:bg-slate-900">
+        <div className="px-4 py-2 border-y border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide flex items-center justify-between">
+          <span>Proposed line items</span>
+          <button
+            type="button"
+            onClick={addItem}
+            className="text-sm px-2 py-1 border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-100 dark:hover:bg-slate-700 inline-flex items-center gap-1 normal-case font-normal"
+          >
+            <Plus size={11} /> Add line
+          </button>
+        </div>
+        <table className="w-full text-base">
+          <thead className="bg-slate-50 dark:bg-slate-800 text-sm text-slate-600 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700">
+            <tr>
+              <th className="text-left font-medium px-3 py-1.5 w-12">#</th>
+              <th className="text-left font-medium px-3 py-1.5">SKU</th>
+              <th className="text-right font-medium px-3 py-1.5 w-24">Qty</th>
+              <th className="text-right font-medium px-3 py-1.5 w-32">Unit cost</th>
+              <th className="text-right font-medium px-3 py-1.5 w-28">Subtotal</th>
+              <th className="text-left font-medium px-3 py-1.5 w-12">Δ</th>
+              <th className="w-8"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {items.map((it, idx) => {
+              const change = diffFor(before, it)
+              return (
+                <tr key={idx} className="border-b border-slate-100 dark:border-slate-800 last:border-0 align-top">
+                  <td className="px-3 py-2 text-sm text-slate-500 dark:text-slate-400 tabular-nums">
+                    {idx + 1}
+                  </td>
+                  <td className="px-3 py-2">
+                    <input
+                      type="text"
+                      value={it.sku}
+                      onChange={(e) => updateItem(idx, { sku: e.target.value, productId: null, supplierSku: null })}
+                      className="w-full h-8 px-2 text-base font-mono border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+                    />
+                  </td>
+                  <td className="px-3 py-2 text-right">
+                    <input
+                      type="number"
+                      min="0"
+                      step="1"
+                      value={it.quantityOrdered || ''}
+                      onChange={(e) =>
+                        updateItem(idx, {
+                          quantityOrdered: parseInt(e.target.value, 10) || 0,
+                        })
+                      }
+                      className="w-full h-8 px-2 text-base text-right tabular-nums border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+                    />
+                  </td>
+                  <td className="px-3 py-2 text-right">
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      value={(it.unitCostCents / 100).toFixed(2)}
+                      onChange={(e) => {
+                        const raw = e.target.value.replace(',', '.')
+                        const n = parseFloat(raw)
+                        updateItem(idx, {
+                          unitCostCents: Number.isFinite(n) ? Math.round(n * 100) : 0,
+                        })
+                      }}
+                      className="w-full h-8 px-2 text-base text-right tabular-nums border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+                    />
+                  </td>
+                  <td className="px-3 py-2 text-right tabular-nums font-medium text-slate-900 dark:text-slate-100">
+                    {formatCurrency(it.unitCostCents * it.quantityOrdered, poCurrency)}
+                  </td>
+                  <td className="px-3 py-2">
+                    {change && <ChangeBadge change={change} />}
+                  </td>
+                  <td className="px-1 py-2 text-center">
+                    <button
+                      type="button"
+                      onClick={() => removeItem(idx)}
+                      disabled={items.length === 1}
+                      className="h-8 w-8 inline-flex items-center justify-center rounded text-slate-400 dark:text-slate-500 hover:text-rose-700 dark:hover:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/40 disabled:opacity-30"
+                      aria-label="Remove line"
+                    >
+                      <Trash2 size={12} />
+                    </button>
+                  </td>
+                </tr>
+              )
+            })}
+            {/* Removed-line rows (present in before, not in items) */}
+            {diff.removed.map((it, k) => (
+              <tr key={`removed-${k}`} className="border-b border-slate-100 dark:border-slate-800 last:border-0 bg-red-50/30 dark:bg-red-950/20">
+                <td className="px-3 py-2 text-sm text-slate-500 dark:text-slate-400">—</td>
+                <td className="px-3 py-2 font-mono text-sm text-slate-500 dark:text-slate-400 line-through">
+                  {it.sku}
+                </td>
+                <td className="px-3 py-2 text-right tabular-nums text-slate-500 dark:text-slate-400 line-through">
+                  {it.quantityOrdered}
+                </td>
+                <td className="px-3 py-2 text-right tabular-nums text-slate-500 dark:text-slate-400 line-through">
+                  {formatCurrency(it.unitCostCents, poCurrency)}
+                </td>
+                <td className="px-3 py-2 text-right tabular-nums text-slate-500 dark:text-slate-400 line-through">
+                  {formatCurrency(it.unitCostCents * it.quantityOrdered, poCurrency)}
+                </td>
+                <td className="px-3 py-2">
+                  <Badge variant="danger" size="sm">
+                    removed
+                  </Badge>
+                </td>
+                <td></td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot className="bg-slate-50 dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700">
+            <tr>
+              <td colSpan={4} className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wide text-slate-700 dark:text-slate-300">
+                After total
+              </td>
+              <td className="px-3 py-2 text-right tabular-nums font-semibold text-slate-900 dark:text-slate-100">
+                {formatCurrency(afterTotal, poCurrency)}
+              </td>
+              <td colSpan={2} className={cn('px-3 py-2 text-sm', deltaCents > 0 ? 'text-amber-700 dark:text-amber-300' : deltaCents < 0 ? 'text-green-700 dark:text-green-300' : 'text-slate-500 dark:text-slate-400')}>
+                {deltaCents === 0
+                  ? '— no change'
+                  : `${deltaCents > 0 ? '+' : '−'}${formatCurrency(Math.abs(deltaCents), poCurrency)}`}
+              </td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+
+      {error && (
+        <div className="px-4 py-3 bg-red-50 dark:bg-red-950/40 border-t border-red-200 dark:border-red-900 text-base text-red-700 dark:text-red-300 inline-flex items-center gap-2">
+          <AlertCircle className="w-4 h-4" />
+          {error}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Diff helpers ───────────────────────────────────────────────────
+
+interface LineChange {
+  kind: 'added' | 'qty' | 'cost' | 'both' | 'note'
+  prevQty?: number
+  prevCost?: number
+}
+
+function diffFor(
+  before: RevisionItemSnapshot[],
+  item: RevisionItemSnapshot,
+): LineChange | null {
+  // Match on sku — the only stable identifier across before/after.
+  if (!item.sku.trim()) return null
+  const prior = before.find((b) => b.sku === item.sku)
+  if (!prior) return { kind: 'added' }
+  const qtyChanged = prior.quantityOrdered !== item.quantityOrdered
+  const costChanged = prior.unitCostCents !== item.unitCostCents
+  if (qtyChanged && costChanged) {
+    return {
+      kind: 'both',
+      prevQty: prior.quantityOrdered,
+      prevCost: prior.unitCostCents,
+    }
+  }
+  if (qtyChanged) return { kind: 'qty', prevQty: prior.quantityOrdered }
+  if (costChanged) return { kind: 'cost', prevCost: prior.unitCostCents }
+  if ((prior.note ?? '') !== (item.note ?? '')) return { kind: 'note' }
+  return null
+}
+
+function computeDiff(
+  before: RevisionItemSnapshot[],
+  after: RevisionItemSnapshot[],
+): {
+  added: RevisionItemSnapshot[]
+  removed: RevisionItemSnapshot[]
+  modified: Array<{ sku: string; prior: RevisionItemSnapshot; next: RevisionItemSnapshot }>
+} {
+  const afterBySku = new Map(after.map((it) => [it.sku, it]))
+  const beforeBySku = new Map(before.map((it) => [it.sku, it]))
+  const added = after.filter((it) => it.sku.trim() && !beforeBySku.has(it.sku))
+  const removed = before.filter((it) => !afterBySku.has(it.sku))
+  const modified: Array<{ sku: string; prior: RevisionItemSnapshot; next: RevisionItemSnapshot }> = []
+  for (const a of after) {
+    const b = beforeBySku.get(a.sku)
+    if (!b) continue
+    if (
+      b.quantityOrdered !== a.quantityOrdered ||
+      b.unitCostCents !== a.unitCostCents ||
+      (b.note ?? '') !== (a.note ?? '')
+    ) {
+      modified.push({ sku: a.sku, prior: b, next: a })
+    }
+  }
+  return { added, removed, modified }
+}
+
+function DiffSummary({
+  diff,
+  currency,
+  deltaCents,
+}: {
+  diff: ReturnType<typeof computeDiff>
+  currency: string
+  deltaCents: number
+}) {
+  const noChanges =
+    diff.added.length === 0 &&
+    diff.removed.length === 0 &&
+    diff.modified.length === 0
+  return (
+    <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
+      <div className="flex items-center gap-3 text-base flex-wrap">
+        <span className="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide">
+          Changes
+        </span>
+        {noChanges ? (
+          <span className="text-slate-500 dark:text-slate-400">
+            No changes yet — edit the lines below to propose a revision.
+          </span>
+        ) : (
+          <>
+            {diff.added.length > 0 && (
+              <span className="text-green-700 dark:text-green-300">
+                +{diff.added.length} added
+              </span>
+            )}
+            {diff.removed.length > 0 && (
+              <span className="text-red-700 dark:text-red-300">
+                −{diff.removed.length} removed
+              </span>
+            )}
+            {diff.modified.length > 0 && (
+              <span className="text-amber-700 dark:text-amber-300">
+                {diff.modified.length} modified
+              </span>
+            )}
+            <span
+              className={cn(
+                'ml-auto text-sm',
+                deltaCents > 0
+                  ? 'text-amber-700 dark:text-amber-300'
+                  : deltaCents < 0
+                    ? 'text-green-700 dark:text-green-300'
+                    : 'text-slate-500 dark:text-slate-400',
+              )}
+            >
+              Total Δ:{' '}
+              {deltaCents === 0
+                ? '—'
+                : `${deltaCents > 0 ? '+' : '−'}${formatCurrency(Math.abs(deltaCents), currency)}`}
+            </span>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function ChangeBadge({ change }: { change: LineChange }) {
+  if (change.kind === 'added') {
     return (
-      <EmptyState
-        icon={GitBranch}
-        title="No revisions"
-        description="If you need to change a PO after sending it to the supplier, open a revision (PO.8 ships the diff workflow)."
-      />
+      <Badge variant="success" size="sm">
+        added
+      </Badge>
+    )
+  }
+  if (change.kind === 'note') {
+    return (
+      <Badge variant="default" size="sm">
+        note
+      </Badge>
     )
   }
   return (
-    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
-      <table className="w-full text-base">
-        <thead className="bg-slate-50 dark:bg-slate-800 text-sm text-slate-600 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700">
-          <tr>
-            <th className="text-left font-medium px-4 py-1.5 w-16">v</th>
-            <th className="text-left font-medium px-4 py-1.5">Reason</th>
-            <th className="text-left font-medium px-4 py-1.5">Status</th>
-            <th className="text-left font-medium px-4 py-1.5">Created</th>
-            <th className="text-left font-medium px-4 py-1.5">Supplier ack</th>
-          </tr>
-        </thead>
-        <tbody>
-          {revisions.map((r) => (
-            <tr key={r.id} className="border-b border-slate-100 dark:border-slate-800 last:border-0">
-              <td className="px-4 py-2 font-mono tabular-nums">v{r.version}</td>
-              <td className="px-4 py-2">
-                {r.reason ?? <span className="text-slate-500 dark:text-slate-400">—</span>}
-              </td>
-              <td className="px-4 py-2">
-                <Badge variant="default" size="sm">
-                  {r.status}
-                </Badge>
-              </td>
-              <td className="px-4 py-2 text-sm text-slate-500 dark:text-slate-400">
-                {relativeTime(r.createdAt)}
-                {r.createdBy ? ` · ${r.createdBy}` : ''}
-              </td>
-              <td className="px-4 py-2 text-sm text-slate-500 dark:text-slate-400">
-                {r.supplierAckedAt
-                  ? relativeTime(r.supplierAckedAt)
-                  : r.supplierNotifiedAt
-                    ? `Notified ${relativeTime(r.supplierNotifiedAt)}`
-                    : '—'}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <Badge variant="warning" size="sm">
+      modified
+    </Badge>
   )
 }
 
