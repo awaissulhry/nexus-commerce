@@ -44,6 +44,7 @@ import TranslationsTab from './TranslationsTab'
 import CompliancePerMarketTab from './CompliancePerMarketTab'
 import ImagesTab from './ImagesTab'
 import HistoryTab from './HistoryTab'
+import HubLiveRefresh from './HubLiveRefresh'
 
 export const dynamic = 'force-dynamic'
 
@@ -115,6 +116,18 @@ export default async function ProductDatasheetHubPage({
 
   if (!product) notFound()
 
+  // ATM.15 — Listing IDs for the live-refresh filter. Single cheap
+  // query; defensive .catch so a transient failure doesn't break
+  // the hub. The live-refresh client component uses this list to
+  // narrow listing.* events to our product's listings only.
+  const productListingIds = await prisma.channelListing
+    .findMany({
+      where: { productId: product.id },
+      select: { id: true },
+    })
+    .catch(() => [] as never[])
+    .then((rows) => rows.map((r) => r.id))
+
   // VR.1 — Tabs depend on isParent (variants tab only for parents).
   // Parse tab AFTER the fetch so the validator knows whether
   // ?tab=variants is allowed for this SKU.
@@ -129,6 +142,13 @@ export default async function ProductDatasheetHubPage({
 
   return (
     <div className="space-y-4">
+      {/* ATM.15 — Live refresh on product / listing / pricing
+          invalidation events. The component is null-rendering but
+          drives router.refresh() when matching events land. */}
+      <HubLiveRefresh
+        productId={product.id}
+        listingIds={productListingIds}
+      />
       {/* ── Header ─────────────────────────────────────────────────── */}
       <header className="flex items-start justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-3">
         <div className="min-w-0 flex-1">
