@@ -135,7 +135,7 @@ Critical accuracy crons (all OFF by default; enable via Railway env):
 | `amazon-order-items-retry`   | Every 2h       | `NEXUS_ENABLE_AMAZON_ORDER_ITEMS_RETRY=1`| Push Tier 4 → Tier 2 via getOrderItems |
 | `amazon-orders-backfill`     | Every 6h       | `NEXUS_ENABLE_AMAZON_BACKFILL=1`         | Push Tier 2 → Tier 1 via getOrder |
 | `pricing-fx-refresh`         | Daily          | always on                                | Refresh FxRate cache |
-| `amazon-financial-events`    | Daily          | `NEXUS_ENABLE_AMAZON_FINANCIAL_EVENTS=1` | Hydrate Store C |
+| `amazon-financial-sync`      | Daily          | `NEXUS_ENABLE_AMAZON_FINANCIAL_CRON=1`   | Hydrate Store C |
 
 Per memory `reference_neon_migrations` + `reference_railway_deploy_debug` —
 crons read from Railway env, not local `.env`. Verify gate is set after
