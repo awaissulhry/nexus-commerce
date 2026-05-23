@@ -75,11 +75,16 @@ import { BulkActionBar } from './_components/BulkActionBar'
 import { SavedViewsButton } from './_components/SavedViewsButton'
 import { Pagination } from './_components/Pagination'
 import { MobileProductList } from './_components/MobileProductList'
+// XG.1 — PreferencesModal hoisted to _shared/grid-lens so /listings,
+// /fulfillment/stock, /fulfillment/replenishment, /pricing can plug
+// in the same Amazon-style two-panel preferences UI. /products keeps
+// productNameDisplay as a workspace-local pref rendered via the
+// modal's `workspaceSlot` escape hatch (not part of the shared shape).
 import {
   PreferencesModal,
-  type ProductNameDisplay,
   type PreferencesValue,
-} from './_components/PreferencesModal'
+} from '@/app/_shared/grid-lens'
+type ProductNameDisplay = 'full' | 'shortened'
 import { LensPickerMenu } from './_components/LensPickerMenu'
 import { TagEditor } from './_components/TagEditor'
 import { VirtualizedGrid } from './_components/GridView'
@@ -1906,42 +1911,90 @@ export default function ProductsWorkspace() {
         />
       )}
 
-      {/* PG.5 — Preferences modal. Owns page size + sticky toggles +
-          name display + sort order + column visibility/order. The
-          old ColumnPickerMenu popover was replaced; this consolidates
-          every per-table preference in one Amazon-style two-panel
-          dialog. Sticky toggles persist now; PG.6 wires the actual
-          position:sticky behavior on VirtualizedGrid. */}
+      {/* PG.5 + XG.1 — Preferences modal hoisted to _shared/grid-lens.
+          The shared shape (page size + sticky toggles + sort + column
+          panel) is wired here; the /products-specific "Product name
+          display" radios render via the workspaceSlot escape hatch.
+          /products owns + persists productNameDisplay locally; the
+          shared modal stays free of products-specific fields. */}
       <PreferencesModal
         open={columnPickerOpen}
         onClose={() => setColumnPickerOpen(false)}
+        allColumns={ALL_COLUMNS}
+        defaultVisible={DEFAULT_VISIBLE}
         sortFieldOptions={SORT_FIELD_OPTIONS}
         value={{
           pageSize,
           visibleColumns,
           stickyFirstColumn,
           stickyLastColumn,
-          productNameDisplay,
           sortBy: sortBy.replace(/-(asc|desc)$/, ''),
           sortDir: sortBy.endsWith('-asc') ? 'asc' : 'desc',
         }}
         onConfirm={(next: PreferencesValue) => {
-          // Atomic commit: every preference flips at once so the user
-          // sees a single re-render rather than a cascade of partial
-          // updates. URL params (pageSize, sortBy) get pushed via the
-          // existing onPage/onPageSize/onSort callbacks; local state
-          // updates fire directly.
+          // Atomic commit on the shared shape; productNameDisplay
+          // lives on the workspace itself (rendered in the slot).
           if (next.pageSize !== pageSize) onPageSize(next.pageSize)
           setVisibleColumns(next.visibleColumns)
           setStickyFirstColumn(next.stickyFirstColumn)
           setStickyLastColumn(next.stickyLastColumn)
-          setProductNameDisplay(next.productNameDisplay)
           const nextSortBy =
             next.sortDir === 'asc' ? `${next.sortBy}-asc` : next.sortBy
           if (nextSortBy !== sortBy) onSort(nextSortBy)
         }}
+        workspaceSlot={
+          <ProductNameDisplaySlot
+            value={productNameDisplay}
+            onChange={setProductNameDisplay}
+          />
+        }
       />
     </div>
+  )
+}
+
+// XG.1 — /products-specific preference slot. Rendered inside the
+// shared PreferencesModal via the `workspaceSlot` escape hatch so
+// the modal stays generic. Owns just the radio group; the workspace
+// owns the state + localStorage persistence.
+function ProductNameDisplaySlot({
+  value,
+  onChange,
+}: {
+  value: ProductNameDisplay
+  onChange: (next: ProductNameDisplay) => void
+}) {
+  const { t } = useTranslations()
+  return (
+    <fieldset className="space-y-2">
+      <legend className="text-sm font-semibold text-slate-800 dark:text-slate-200">
+        {t('products.preferences.nameDisplay')}
+      </legend>
+      <div className="space-y-1.5">
+        <label className="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-300 cursor-pointer">
+          <input
+            type="radio"
+            name="xg1-name-display"
+            value="full"
+            checked={value === 'full'}
+            onChange={() => onChange('full')}
+            className="accent-blue-600 mt-0.5"
+          />
+          <span>{t('products.preferences.nameDisplayFull')}</span>
+        </label>
+        <label className="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-300 cursor-pointer">
+          <input
+            type="radio"
+            name="xg1-name-display"
+            value="shortened"
+            checked={value === 'shortened'}
+            onChange={() => onChange('shortened')}
+            className="accent-blue-600 mt-0.5"
+          />
+          <span>{t('products.preferences.nameDisplayShort')}</span>
+        </label>
+      </div>
+    </fieldset>
   )
 }
 

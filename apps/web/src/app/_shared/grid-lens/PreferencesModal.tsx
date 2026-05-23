@@ -1,38 +1,51 @@
 'use client'
 
 /**
- * PG.5 — Consolidated /products preferences modal.
+ * XG.1 — Shared workspace Preferences modal.
  *
- * Replaces the old ColumnPickerMenu popover with an Amazon-style
- * two-panel modal: left panel collects page-level preferences (page
- * size, sticky columns, product name display, sort order), right
- * panel lists every togglable column with a drag handle + toggle.
+ * Hoisted from /products/_components/PreferencesModal.tsx (PG.5) so
+ * every VirtualizedGrid consumer can plug in the same Amazon-style
+ * two-panel preferences UI.
+ *
+ * Generic shape:
+ *   - left panel:  page size · sticky columns · workspaceSlot · sort
+ *   - right panel: every togglable column with drag-handle + iOS toggle
+ *
+ * Workspace-specific preferences (e.g. /products' "Product name
+ * display" radios, /stock's hypothetical "Show ABC badge" toggle)
+ * render via `workspaceSlot`. The workspace owns those bits of state
+ * + their persistence; the modal just composes the JSX.
  *
  * Edits are held in local draft state and committed atomically on
  * Confirm; Cancel discards. Reset returns every panel field to its
- * default + reverts the visible-columns array to DEFAULT_VISIBLE.
- *
- * The sticky-columns checkboxes here are settings only — the actual
- * `position: sticky` wiring on VirtualizedGrid lands in PG.6 (the
- * preference is persisted now so PG.6 ships behavior, not state).
+ * default + reverts the visible-columns array to `defaultVisible`.
  */
 
-import { useEffect, useMemo, useState } from 'react'
-import { GripVertical, X } from 'lucide-react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { GripVertical } from 'lucide-react'
 import { Modal, ModalBody, ModalFooter } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { cn } from '@/lib/utils'
-import { ALL_COLUMNS, DEFAULT_VISIBLE, type ColumnDef } from '../_columns'
 
-export type ProductNameDisplay = 'full' | 'shortened'
+/**
+ * Minimal column shape the modal needs. Both /products' ColumnDef and
+ * /listings' bespoke column type extend this naturally; workspaces
+ * pass their own column registry without forking the modal.
+ */
+export interface PreferencesColumnSpec {
+  key: string
+  label: string
+  labelKey?: string
+  width?: number
+  locked?: boolean
+}
 
 export interface PreferencesValue {
   pageSize: number
   visibleColumns: string[]
   stickyFirstColumn: boolean
   stickyLastColumn: boolean
-  productNameDisplay: ProductNameDisplay
   sortBy: string
   sortDir: 'asc' | 'desc'
 }
@@ -42,18 +55,33 @@ export interface PreferencesModalProps {
   onClose: () => void
   value: PreferencesValue
   onConfirm: (next: PreferencesValue) => void
-  /** Reusable so future workspaces with different sort fields can
-   *  drop in their own list without forking the modal. */
+  /** Workspace's full column registry (visible + hidden + locked). */
+  allColumns: PreferencesColumnSpec[]
+  /** Workspace's "Reset" target visible-columns list. */
+  defaultVisible: string[]
+  /** Workspace's sort field options. */
   sortFieldOptions: Array<{ value: string; label: string }>
+  /** Optional override of the 20/50/100/250 page-size choices. */
+  pageSizeChoices?: number[]
+  /** Modal title (defaults to t('products.preferences.title')). */
+  title?: string
+  /**
+   * Escape hatch for workspace-specific preference panels. Rendered
+   * between Sort order and the Column panel on desktop. Workspace
+   * owns the state + persistence for whatever's in here.
+   *
+   * Example: /products renders a "Product name display" radio group;
+   * /stock could render "Show ABC class badge" toggle, etc.
+   */
+  workspaceSlot?: ReactNode
 }
 
-const PAGE_SIZE_CHOICES = [20, 50, 100, 250] as const
+const DEFAULT_PAGE_SIZE_CHOICES = [20, 50, 100, 250]
 
-const DEFAULTS: Omit<PreferencesValue, 'visibleColumns'> = {
+const SHARED_DEFAULTS: Omit<PreferencesValue, 'visibleColumns'> = {
   pageSize: 100,
   stickyFirstColumn: true,
   stickyLastColumn: true,
-  productNameDisplay: 'full',
   sortBy: 'updated',
   sortDir: 'desc',
 }
@@ -63,7 +91,12 @@ export function PreferencesModal({
   onClose,
   value,
   onConfirm,
+  allColumns,
+  defaultVisible,
   sortFieldOptions,
+  pageSizeChoices = DEFAULT_PAGE_SIZE_CHOICES,
+  title,
+  workspaceSlot,
 }: PreferencesModalProps) {
   const { t } = useTranslations()
 
@@ -75,24 +108,38 @@ export function PreferencesModal({
     if (open) setDraft(value)
   }, [open, value])
 
-  // Split togglable vs locked columns. Locked columns (`product`,
-  // `actions`) render with a disabled toggle so the operator sees
-  // they exist but can't hide them.
+  // Split togglable vs locked columns. Locked columns (workspace-
+  // defined `locked: true`) render with a disabled toggle so the
+  // operator sees they exist but can't hide them.
   const togglable = useMemo(
-    () => ALL_COLUMNS.filter((c) => c.label || c.key === 'thumb'),
-    [],
+    () => allColumns.filter((c) => c.label || c.key === 'thumb'),
+    [allColumns],
   )
 
-  // Render order on the right panel: visible columns in their current
-  // order first (drag-reorderable), then hidden columns at the end.
-  // Locked columns float to the top to match the table's leading
-  // position.
-  const orderedForDisplay = useMemo<ColumnDef[]>(() => {
-    const lockedLeading = togglable.filter((c) => c.locked && c.key === 'product')
-    const lockedTrailing = togglable.filter((c) => c.locked && c.key === 'actions')
+  // Render order on the right panel: locked-leading (any locked
+  // column whose position in `allColumns` precedes the first unlocked
+  // column) → visible columns in draft order → hidden columns →
+  // locked-trailing (locked columns appearing after the last unlocked).
+  //
+  // Workspaces designate leading vs trailing by ordering their
+  // `allColumns` registry; we never hardcode column keys here.
+  const orderedForDisplay = useMemo<PreferencesColumnSpec[]>(() => {
+    const firstUnlockedIdx = togglable.findIndex((c) => !c.locked)
+    const lastUnlockedIdx = (() => {
+      for (let i = togglable.length - 1; i >= 0; i--) {
+        if (!togglable[i].locked) return i
+      }
+      return -1
+    })()
+    const lockedLeading = togglable.filter(
+      (c, i) => c.locked && (firstUnlockedIdx === -1 || i < firstUnlockedIdx),
+    )
+    const lockedTrailing = togglable.filter(
+      (c, i) => c.locked && lastUnlockedIdx !== -1 && i > lastUnlockedIdx,
+    )
     const unlockedVisible = draft.visibleColumns
       .map((k) => togglable.find((c) => c.key === k && !c.locked))
-      .filter((c): c is ColumnDef => !!c)
+      .filter((c): c is PreferencesColumnSpec => !!c)
     const unlockedHidden = togglable.filter(
       (c) => !c.locked && !draft.visibleColumns.includes(c.key),
     )
@@ -139,8 +186,8 @@ export function PreferencesModal({
 
   const resetAll = () => {
     setDraft({
-      ...DEFAULTS,
-      visibleColumns: DEFAULT_VISIBLE,
+      ...SHARED_DEFAULTS,
+      visibleColumns: defaultVisible,
     })
   }
 
@@ -153,7 +200,7 @@ export function PreferencesModal({
     <Modal
       open={open}
       onClose={onClose}
-      title={t('products.preferences.title')}
+      title={title ?? t('products.preferences.title')}
       size="3xl"
       className="max-h-[85vh] flex flex-col"
     >
@@ -166,14 +213,14 @@ export function PreferencesModal({
               {t('products.preferences.pageSize')}
             </legend>
             <div className="space-y-1.5">
-              {PAGE_SIZE_CHOICES.map((n) => (
+              {pageSizeChoices.map((n) => (
                 <label
                   key={n}
                   className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300 cursor-pointer"
                 >
                   <input
                     type="radio"
-                    name="pg5-page-size"
+                    name="xg1-page-size"
                     value={n}
                     checked={draft.pageSize === n}
                     onChange={() => setDraft((d) => ({ ...d, pageSize: n }))}
@@ -185,8 +232,7 @@ export function PreferencesModal({
             </div>
           </fieldset>
 
-          {/* Sticky columns (PG.6 wires the behavior; we persist the
-              setting now so the flip is data-only when PG.6 lands). */}
+          {/* Sticky columns */}
           <fieldset className="space-y-2">
             <legend className="text-sm font-semibold text-slate-800 dark:text-slate-200">
               {t('products.preferences.stickyColumns')}
@@ -220,40 +266,12 @@ export function PreferencesModal({
             </div>
           </fieldset>
 
-          {/* Product name display */}
-          <fieldset className="space-y-2">
-            <legend className="text-sm font-semibold text-slate-800 dark:text-slate-200">
-              {t('products.preferences.nameDisplay')}
-            </legend>
-            <div className="space-y-1.5">
-              <label className="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-300 cursor-pointer">
-                <input
-                  type="radio"
-                  name="pg5-name-display"
-                  value="full"
-                  checked={draft.productNameDisplay === 'full'}
-                  onChange={() => setDraft((d) => ({ ...d, productNameDisplay: 'full' }))}
-                  className="accent-blue-600 mt-0.5"
-                />
-                <span>{t('products.preferences.nameDisplayFull')}</span>
-              </label>
-              <label className="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-300 cursor-pointer">
-                <input
-                  type="radio"
-                  name="pg5-name-display"
-                  value="shortened"
-                  checked={draft.productNameDisplay === 'shortened'}
-                  onChange={() => setDraft((d) => ({ ...d, productNameDisplay: 'shortened' }))}
-                  className="accent-blue-600 mt-0.5"
-                />
-                <span>{t('products.preferences.nameDisplayShort')}</span>
-              </label>
-            </div>
-          </fieldset>
+          {/* Workspace-specific extras (e.g. /products name display) */}
+          {workspaceSlot}
 
-          {/* Sort order — single-field select. SortStackBar in the
-              toolbar still drives multi-sort for power users; this is
-              the simple Amazon-style entry point. */}
+          {/* Sort order — single-field select. Per-workspace SortStack
+              still drives multi-sort for power users; this is the
+              simple Amazon-style entry point. */}
           <fieldset className="space-y-2">
             <legend className="text-sm font-semibold text-slate-800 dark:text-slate-200">
               {t('products.preferences.sortOrder')}
@@ -382,7 +400,4 @@ export function PreferencesModal({
   )
 }
 
-// Re-export the default value object so the workspace can hydrate
-// its own state without duplicating the constants.
-export const PREFERENCES_DEFAULTS = DEFAULTS
-export { X as CloseIcon }
+export const PREFERENCES_DEFAULTS = SHARED_DEFAULTS
