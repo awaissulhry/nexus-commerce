@@ -343,14 +343,14 @@ export async function adminRoutes(app: FastifyInstance) {
         SELECT
           id, "channelOrderId", "purchaseDate", "createdAt",
           "totalPrice"::float, "status",
-          date_trunc('day', "purchaseDate" AT TIME ZONE 'Europe/Rome')::date AS "romeDayPurchase",
-          date_trunc('day', "createdAt"    AT TIME ZONE 'Europe/Rome')::date AS "romeDayCreated"
+          date_trunc('day', "purchaseDate" AT TIME ZONE 'UTC' AT TIME ZONE 'Europe/Rome')::date AS "romeDayPurchase",
+          date_trunc('day', "createdAt"    AT TIME ZONE 'UTC' AT TIME ZONE 'Europe/Rome')::date AS "romeDayCreated"
         FROM "Order"
         WHERE "deletedAt" IS NULL
           AND "channel" = 'AMAZON'
           AND "marketplace" = ${marketplace}
           AND "status" != 'CANCELLED'
-          AND date_trunc('day', "purchaseDate" AT TIME ZONE 'Europe/Rome')::date = ${day}::date
+          AND date_trunc('day', "purchaseDate" AT TIME ZONE 'UTC' AT TIME ZONE 'Europe/Rome')::date = ${day}::date
         ORDER BY "purchaseDate"
       `
 
@@ -371,7 +371,7 @@ export async function adminRoutes(app: FastifyInstance) {
           AND "marketplace" = ${marketplace}
           AND "status" != 'CANCELLED'
           AND date_trunc('day',
-                COALESCE("purchaseDate", "createdAt") AT TIME ZONE 'Europe/Rome'
+                COALESCE("purchaseDate", "createdAt") AT TIME ZONE 'UTC' AT TIME ZONE 'Europe/Rome'
               )::date = ${day}::date
         ORDER BY "createdAt"
       `

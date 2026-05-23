@@ -88,7 +88,7 @@ export async function refreshSalesAggregates(
   //    shifts the calendar day by 1–2 hours every day for Europe/Rome
   //    (CET = UTC+1, CEST = UTC+2). Orders placed late-evening local
   //    bucket into the NEXT day in UTC. Switch to
-  //    `date_trunc('day', ... AT TIME ZONE 'Europe/Rome')::date` so
+  //    `date_trunc('day', ... AT TIME ZONE 'UTC' AT TIME ZONE 'Europe/Rome')::date` so
   //    the aggregate's calendar matches operator + Amazon Seller
   //    Central + the dashboard global-snapshot.
   //
@@ -121,17 +121,17 @@ export async function refreshSalesAggregates(
         SUM(oi.quantity) OVER (PARTITION BY o.id) AS order_qty_total,
         date_trunc(
           'day',
-          COALESCE(o."purchaseDate", o."createdAt") AT TIME ZONE 'Europe/Rome'
+          COALESCE(o."purchaseDate", o."createdAt") AT TIME ZONE 'UTC' AT TIME ZONE 'Europe/Rome'
         )::date AS day
       FROM "OrderItem" oi
       JOIN "Order" o ON o.id = oi."orderId"
       WHERE date_trunc(
               'day',
-              COALESCE(o."purchaseDate", o."createdAt") AT TIME ZONE 'Europe/Rome'
+              COALESCE(o."purchaseDate", o."createdAt") AT TIME ZONE 'UTC' AT TIME ZONE 'Europe/Rome'
             )::date >= $1::date
         AND date_trunc(
               'day',
-              COALESCE(o."purchaseDate", o."createdAt") AT TIME ZONE 'Europe/Rome'
+              COALESCE(o."purchaseDate", o."createdAt") AT TIME ZONE 'UTC' AT TIME ZONE 'Europe/Rome'
             )::date <= $2::date
         AND o.status != 'CANCELLED'
     )
@@ -197,7 +197,7 @@ export async function refreshSalesAggregates(
           AND COALESCE(o.marketplace, 'GLOBAL') = "DailySalesAggregate".marketplace
           AND date_trunc(
                 'day',
-                COALESCE(o."purchaseDate", o."createdAt") AT TIME ZONE 'Europe/Rome'
+                COALESCE(o."purchaseDate", o."createdAt") AT TIME ZONE 'UTC' AT TIME ZONE 'Europe/Rome'
               )::date = "DailySalesAggregate".day
           AND o.status != 'CANCELLED'
       )
@@ -267,7 +267,7 @@ export async function recordOrderItem(orderItemId: string): Promise<void> {
 /**
  * UTC midnight of the calendar day in Europe/Rome that contains `d`.
  * Used to align JS-side day boundaries with the SQL's
- * `date_trunc('day', ... AT TIME ZONE 'Europe/Rome')::date` bucket.
+ * `date_trunc('day', ... AT TIME ZONE 'UTC' AT TIME ZONE 'Europe/Rome')::date` bucket.
  *
  * Example: 2026-05-23T23:00:00Z (= 2026-05-24 01:00 in Rome under
  * CEST) → returns 2026-05-24T00:00:00Z.

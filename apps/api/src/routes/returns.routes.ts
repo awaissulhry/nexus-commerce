@@ -96,7 +96,7 @@ const returnsRoutes: FastifyPluginAsync = async (fastify) => {
         // group key is UTC, which buckets late-evening returns into the
         // next day for CET/CEST. Matches all other Order/Return surfaces.
         prisma.$queryRaw<Array<{ day: Date; count: bigint }>>`
-          SELECT date_trunc('day', "createdAt" AT TIME ZONE 'Europe/Rome') AS day, COUNT(*)::bigint AS count
+          SELECT date_trunc('day', "createdAt" AT TIME ZONE 'UTC' AT TIME ZONE 'Europe/Rome') AS day, COUNT(*)::bigint AS count
           FROM "Return"
           WHERE "createdAt" >= ${since}
           GROUP BY day

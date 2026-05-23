@@ -89,7 +89,7 @@ export async function auditSalesDrift(
       Array<{ day: Date; marketplace: string | null; cents: bigint }>
     >`
       SELECT
-        date_trunc('day', "purchaseDate" AT TIME ZONE 'Europe/Rome')::date AS day,
+        date_trunc('day', "purchaseDate" AT TIME ZONE 'UTC' AT TIME ZONE 'Europe/Rome')::date AS day,
         "marketplace",
         COALESCE(SUM(ROUND("totalPrice" * 100)), 0)::bigint AS cents
       FROM "Order"
@@ -118,7 +118,7 @@ export async function auditSalesDrift(
       Array<{ day: Date; marketplace: string | null; cents: bigint }>
     >`
       SELECT
-        date_trunc('day', o."purchaseDate" AT TIME ZONE 'Europe/Rome')::date AS day,
+        date_trunc('day', o."purchaseDate" AT TIME ZONE 'UTC' AT TIME ZONE 'Europe/Rome')::date AS day,
         o."marketplace",
         COALESCE(SUM(ROUND(ft."grossRevenue" * 100)), 0)::bigint AS cents
       FROM "FinancialTransaction" ft

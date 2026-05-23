@@ -606,7 +606,7 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
         // MS.6: no status exclusion — Amazon "Sales" semantic.
         const sparkRaw = marketplaceFilter
           ? await prisma.$queryRaw<Array<{ day: Date; cents: bigint }>>`
-              SELECT date_trunc('day', o."purchaseDate" AT TIME ZONE 'Europe/Rome')::date AS day,
+              SELECT date_trunc('day', o."purchaseDate" AT TIME ZONE 'UTC' AT TIME ZONE 'Europe/Rome')::date AS day,
                      COALESCE(SUM(ROUND(o."totalPrice" * 100)), 0)::bigint AS cents
                 FROM "Order" o
                WHERE o."deletedAt" IS NULL
@@ -617,7 +617,7 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
                ORDER BY day ASC
             `
           : await prisma.$queryRaw<Array<{ day: Date; cents: bigint }>>`
-              SELECT date_trunc('day', o."purchaseDate" AT TIME ZONE 'Europe/Rome')::date AS day,
+              SELECT date_trunc('day', o."purchaseDate" AT TIME ZONE 'UTC' AT TIME ZONE 'Europe/Rome')::date AS day,
                      COALESCE(SUM(ROUND(o."totalPrice" * 100)), 0)::bigint AS cents
                 FROM "Order" o
                WHERE o."deletedAt" IS NULL
@@ -1920,12 +1920,12 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
           // next day for CET/CEST. Matches the day boundaries
           // sales-aggregate.service (DA-RT.2) + dashboard global-snapshot
           // (GA-RT.1) use, so cross-page numbers agree.
-          ? `to_char(date_trunc('hour', COALESCE("purchaseDate", "createdAt") AT TIME ZONE 'Europe/Rome'), 'YYYY-MM-DD"T"HH24')`
-          : `to_char(date_trunc('day',  COALESCE("purchaseDate", "createdAt") AT TIME ZONE 'Europe/Rome'), 'YYYY-MM-DD')`
+          ? `to_char(date_trunc('hour', COALESCE("purchaseDate", "createdAt") AT TIME ZONE 'UTC' AT TIME ZONE 'Europe/Rome'), 'YYYY-MM-DD"T"HH24')`
+          : `to_char(date_trunc('day',  COALESCE("purchaseDate", "createdAt") AT TIME ZONE 'UTC' AT TIME ZONE 'Europe/Rome'), 'YYYY-MM-DD')`
         const orderGroupExpr = sparkBucketIsHour
           // DA-RT.4 — TZ-aware bucketing (see comment on groupExpr above).
-          ? `to_char(date_trunc('hour', COALESCE(o."purchaseDate", o."createdAt") AT TIME ZONE 'Europe/Rome'), 'YYYY-MM-DD"T"HH24')`
-          : `to_char(date_trunc('day',  COALESCE(o."purchaseDate", o."createdAt") AT TIME ZONE 'Europe/Rome'), 'YYYY-MM-DD')`
+          ? `to_char(date_trunc('hour', COALESCE(o."purchaseDate", o."createdAt") AT TIME ZONE 'UTC' AT TIME ZONE 'Europe/Rome'), 'YYYY-MM-DD"T"HH24')`
+          : `to_char(date_trunc('day',  COALESCE(o."purchaseDate", o."createdAt") AT TIME ZONE 'UTC' AT TIME ZONE 'Europe/Rome'), 'YYYY-MM-DD')`
         ;[sparkRows, unitsRows] = (await Promise.all([
           prisma.$queryRawUnsafe(
             `SELECT ${groupExpr} AS d,
@@ -2325,8 +2325,8 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
           // Heatmap of orders by day-of-week × hour-of-day in operator TZ.
           // Use purchaseDate (when buyer placed) not createdAt (ingest time).
           `SELECT
-             ((EXTRACT(DOW FROM (COALESCE("purchaseDate", "createdAt") AT TIME ZONE 'Europe/Rome'))::int + 6) % 7) AS dow,
-             EXTRACT(HOUR FROM (COALESCE("purchaseDate", "createdAt") AT TIME ZONE 'Europe/Rome'))::int AS hour,
+             ((EXTRACT(DOW FROM (COALESCE("purchaseDate", "createdAt") AT TIME ZONE 'UTC' AT TIME ZONE 'Europe/Rome'))::int + 6) % 7) AS dow,
+             EXTRACT(HOUR FROM (COALESCE("purchaseDate", "createdAt") AT TIME ZONE 'UTC' AT TIME ZONE 'Europe/Rome'))::int AS hour,
              COALESCE(SUM("totalPrice"), 0)::float AS revenue
            FROM "Order"
            WHERE COALESCE("purchaseDate", "createdAt") >= $1 AND COALESCE("purchaseDate", "createdAt") <= $2

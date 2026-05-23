@@ -65,8 +65,10 @@ UTC. The operator's day starts at 00:00 Rome (CEST = UTC+2, CET = UTC+1).
 ### SQL
 
 ```sql
-date_trunc('day', "purchaseDate" AT TIME ZONE 'Europe/Rome')::date AS day
+date_trunc('day', "purchaseDate" AT TIME ZONE 'UTC' AT TIME ZONE 'Europe/Rome')::date AS day
 ```
+
+The double `AT TIME ZONE` is **not redundant** — it's the fix for DA-RT.14. Prisma's `DateTime` maps to Postgres `timestamp` (no TZ), but Amazon's UTC values get stored naively. Without the first `AT TIME ZONE 'UTC'`, the `AT TIME ZONE 'Europe/Rome'` operator interprets the value AS Rome local time (treating UTC as Rome), inverting the conversion. The `AT TIME ZONE 'UTC'` tells PG "this naive value is UTC", the `AT TIME ZONE 'Europe/Rome'` then converts correctly to Rome local clock time, and `date_trunc('day')` yields the real Rome calendar day. A single-`AT TIME ZONE` query buckets every order ~2h early during CEST.
 
 ### TypeScript
 
