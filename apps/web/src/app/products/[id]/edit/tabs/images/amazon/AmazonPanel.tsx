@@ -230,6 +230,44 @@ export default function AmazonPanel({
     }
   }
 
+  // IA.9 — Move an image from one matrix cell to another via drag.
+  // Source own row: delete the source (or remove pending) + upsert
+  // target → "move". Source inherited: just upsert target → "copy".
+  // Both paths flow through pending state, so Save/Discard in the
+  // action bar commits or rolls back the whole drag batch.
+  function handleCellMove(
+    from: { groupValue: string | null; slot: AmazonSlot; url: string; origin: 'own' | 'inherited'; listingImageId?: string },
+    to: { groupValue: string | null; slot: AmazonSlot },
+  ) {
+    // 1. Drop a pending row onto the target with the source's URL.
+    //    Resolves to an existing ListingImage if one already exists
+    //    at the target scope (addPendingUpsert auto-detects).
+    amazon.assignCell(to.groupValue, to.slot, from.url, undefined)
+
+    // 2. Source-side cleanup. Only "move" when the source had an
+    //    explicit row at the current scope — inherited cells keep
+    //    rendering via the cascade after the copy.
+    if (from.origin !== 'own') return
+
+    // 2a. Drop any matching pending upsert at the source.
+    const isAll = amazon.activeMarketplace === 'ALL'
+    const scope = isAll ? 'PLATFORM' : 'MARKETPLACE'
+    const marketplace = isAll ? null : amazon.activeMarketplace
+    for (const [key, u] of pendingUpserts.entries()) {
+      if (u.platform !== 'AMAZON' || u.amazonSlot !== from.slot) continue
+      if (u.scope !== scope || u.marketplace !== marketplace) continue
+      const matchesGroup = from.groupValue === null
+        ? !u.variantGroupKey
+        : u.variantGroupKey === activeAxis && u.variantGroupValue === from.groupValue
+      if (matchesGroup) removePendingUpsert(key)
+    }
+
+    // 2b. Queue a delete for the existing server row at the source.
+    if (from.listingImageId && addPendingDelete) {
+      addPendingDelete(from.listingImageId)
+    }
+  }
+
   // IE.17 — Revert a single override cell back to its inherited /
   // master-fallback state. Drop the pending upsert if the override is
   // unsaved; queue a pending delete for the server row if the override
@@ -416,6 +454,7 @@ export default function AmazonPanel({
             onClearRow={handleClearRow}
             onCellFileDrop={handleCellFileDrop}
             onCellRevert={handleRevertCell}
+            onCellMove={handleCellMove}
           />
         )}
       </div>

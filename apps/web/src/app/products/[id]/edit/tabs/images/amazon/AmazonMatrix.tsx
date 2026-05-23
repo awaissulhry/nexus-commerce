@@ -36,14 +36,12 @@ interface MatrixProps {
    *  master-fallback state. Hover affordance on cells with
    *  origin='own'; the cascade re-renders to the parent scope. */
   onCellRevert?: (groupValue: string | null, slot: AmazonSlot) => void
-  /** IE.18 — Move a cell's image to a different slot (drag between
-   *  slots within the same row). Optional so callers that don't
-   *  wire the substrate yet still type-check. */
+  /** IA.9 — Move an image between matrix cells via drag. Source cell
+   *  contributes its url + origin + listingImageId so the handler can
+   *  pick move (delete source) vs copy (leave source inherited). */
   onCellMove?: (
-    fromGroupValue: string | null,
-    fromSlot: AmazonSlot,
-    toGroupValue: string | null,
-    toSlot: AmazonSlot,
+    from: { groupValue: string | null; slot: AmazonSlot; url: string; origin: 'own' | 'inherited'; listingImageId?: string },
+    to: { groupValue: string | null; slot: AmazonSlot },
   ) => void
 }
 
