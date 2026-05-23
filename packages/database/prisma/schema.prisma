@@ -7609,6 +7609,17 @@ model SupplierProduct {
   leadTimeDaysOverride Int?
   isPrimary            Boolean @default(false)
 
+  // PO-Plus.7 — observed landed cost in EUR cents. Populated when the
+  // operator clicks "Push to catalog" on the PO.11 three-way match
+  // panel after receiving a PO. Distinct from `costCents` (which is
+  // the supplier-quoted factory cost) — landed cost includes the
+  // prorated shipping/customs/duties/insurance from the linked
+  // InboundShipment. Replenishment recommendations prefer
+  // lastLandedCostCents over costCents when present so EOQ math
+  // works against true-cost.
+  lastLandedCostCents    Int?
+  lastLandedCostUpdatedAt DateTime?
+
   supplier Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
 
   createdAt DateTime @default(now())

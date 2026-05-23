@@ -30,6 +30,7 @@ import { formatCurrency } from './po-lens'
 
 interface MatchLine {
   purchaseOrderItemId: string
+  productId: string | null
   sku: string
   supplierSku: string | null
   note: string | null
@@ -232,9 +233,17 @@ export function ThreeWayMatchPanel({ poId }: { poId: string }) {
       </div>
 
       {/* PO.11 — Landed-cost breakdown. Only renders when there's
-          actual overhead captured on a linked shipment. */}
+          actual overhead captured on a linked shipment. PO-Plus.7
+          adds a "Push to catalog" affordance that snapshots the
+          per-line landed cost back to SupplierProduct so future
+          replenishment recommendations use true-cost rather than
+          factory cost. */}
       {data.landed.overheadTotalEurCents > 0 && (
-        <LandedCostBreakdown landed={data.landed} />
+        <LandedCostBreakdown
+          landed={data.landed}
+          lines={data.lines}
+          poId={poId}
+        />
       )}
 
       {/* Per-line table */}
@@ -276,8 +285,54 @@ export function ThreeWayMatchPanel({ poId }: { poId: string }) {
   )
 }
 
-function LandedCostBreakdown({ landed }: { landed: LandedRollup }) {
+function LandedCostBreakdown({
+  landed,
+  lines,
+  poId,
+}: {
+  landed: LandedRollup
+  lines: MatchLine[]
+  poId: string
+}) {
   const sharePct = landed.overheadShareBp / 100
+  const pushableLines = lines.filter(
+    (l) => l.productId != null && l.landedUnitCentsEur != null && l.landedUnitCentsEur > 0,
+  )
+  const [pushing, setPushing] = useState(false)
+  const [pushed, setPushed] = useState<number | null>(null)
+  const [pushError, setPushError] = useState<string | null>(null)
+
+  const pushAll = async () => {
+    setPushing(true)
+    setPushError(null)
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/fulfillment/purchase-orders/${poId}/push-landed-cost`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            lines: pushableLines.map((l) => ({
+              productId: l.productId,
+              landedCostCents: l.landedUnitCentsEur,
+            })),
+          }),
+        },
+      )
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body?.error ?? `HTTP ${res.status}`)
+      }
+      const data = await res.json()
+      setPushed(data.updatedProductIds?.length ?? 0)
+      window.setTimeout(() => setPushed(null), 4000)
+    } catch (err) {
+      setPushError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setPushing(false)
+    }
+  }
+
   return (
     <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
       <div className="flex items-baseline justify-between mb-2 flex-wrap gap-2">
@@ -296,6 +351,44 @@ function LandedCostBreakdown({ landed }: { landed: LandedRollup }) {
         <CostCell label="Insurance" cents={landed.overheadInsuranceEurCents} />
         <CostCell label="Total" cents={landed.totalEurCents} bold />
       </div>
+
+      {pushableLines.length > 0 && (
+        <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between gap-2 flex-wrap">
+          <div className="text-sm text-slate-600 dark:text-slate-400">
+            {pushableLines.length} line{pushableLines.length === 1 ? '' : 's'} can
+            push landed cost back to SupplierProduct as "true cost" for
+            future replenishment math.
+          </div>
+          <div className="inline-flex items-center gap-2">
+            {pushed != null && (
+              <span className="text-sm text-green-700 dark:text-green-300 inline-flex items-center gap-1">
+                <CheckCircle2 className="w-3 h-3" />
+                Pushed {pushed} catalog row{pushed === 1 ? '' : 's'}
+              </span>
+            )}
+            {pushError && (
+              <span className="text-sm text-red-700 dark:text-red-300 inline-flex items-center gap-1">
+                <AlertCircle className="w-3 h-3" />
+                {pushError}
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={pushAll}
+              disabled={pushing}
+              className="h-7 px-3 inline-flex items-center gap-1.5 text-sm font-medium rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50"
+              title="Update SupplierProduct.lastLandedCostCents for these lines"
+            >
+              {pushing ? (
+                <Loader2 className="w-3 h-3 animate-spin" />
+              ) : (
+                <CheckCircle2 className="w-3 h-3" />
+              )}
+              Push to catalog
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

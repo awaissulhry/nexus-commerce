@@ -89,6 +89,7 @@ import {
 } from './_shared/AdvancedFilters'
 import { CsvImportModal, ExportCsvButton } from './_shared/CsvImportModal'
 import { BulkReassignSupplierModal, BulkMergeModal } from './_shared/BulkOpsModals'
+import { SavedPoViewsPicker } from './_shared/SavedPoViewsPicker'
 
 // ── Audit-trail panel (still used by the card lens) ────────────────
 
@@ -797,6 +798,13 @@ export default function PurchaseOrdersClient() {
             <div className="h-5 w-px bg-slate-200 dark:bg-slate-700" />
             <SavedViewChips onApply={applyView} />
             <AdvancedFiltersButton value={advanced} onChange={setAdvanced} />
+            {/* PO-Plus.7 — user-saved named views. Persists current
+                URL state under a name; default views auto-apply on
+                next page load via the SavedView model. */}
+            <SavedPoViewsPicker
+              currentSearchParams={searchParams.toString()}
+              onApply={(qs) => router.replace(qs ? `${pathname}?${qs}` : pathname)}
+            />
           </div>
         }
         density={

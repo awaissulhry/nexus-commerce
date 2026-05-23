@@ -6096,6 +6096,69 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
   // schema-migration-free:
   //   NEXUS_PO_AUTO_CLOSE_TOLERANCE_UNITS  (default 0)
   //   NEXUS_PO_PPV_WARNING_BP              (default 200, i.e. 2%)
+  // PO-Plus.7 — Push observed landed cost to SupplierProduct catalog.
+  // Called from the PO.11 three-way match panel after the operator
+  // receives a PO and accepts the per-unit landed figure as the new
+  // truth-of-cost for (supplier, productId). Upserts so a missing
+  // SupplierProduct row gets created on demand (covers the case where
+  // the PO line was free-typed rather than catalog-picked).
+  fastify.post(
+    '/fulfillment/purchase-orders/:id/push-landed-cost',
+    async (request, reply) => {
+      try {
+        const { id } = request.params as { id: string }
+        const body = (request.body ?? {}) as {
+          // Map productId → landedUnitCentsEur. Operator pushes a
+          // subset of lines at a time (the match panel surfaces one
+          // button per line).
+          lines?: Array<{ productId: string; landedCostCents: number }>
+        }
+        const rows = Array.isArray(body.lines) ? body.lines : []
+        if (rows.length === 0)
+          return reply.code(400).send({ error: 'lines[] required' })
+
+        const po = await prisma.purchaseOrder.findUnique({
+          where: { id },
+          select: { supplierId: true },
+        })
+        if (!po) return reply.code(404).send({ error: 'PO not found' })
+        if (!po.supplierId)
+          return reply.code(409).send({
+            error: 'PO has no supplier; cannot push landed cost to a non-existent supplier-product',
+          })
+
+        const now = new Date()
+        const updated: string[] = []
+        for (const r of rows) {
+          if (!r.productId || !Number.isFinite(r.landedCostCents) || r.landedCostCents <= 0) continue
+          await prisma.supplierProduct.upsert({
+            where: {
+              supplierId_productId: {
+                supplierId: po.supplierId,
+                productId: r.productId,
+              },
+            },
+            update: {
+              lastLandedCostCents: Math.round(r.landedCostCents),
+              lastLandedCostUpdatedAt: now,
+            },
+            create: {
+              supplierId: po.supplierId,
+              productId: r.productId,
+              lastLandedCostCents: Math.round(r.landedCostCents),
+              lastLandedCostUpdatedAt: now,
+            },
+          })
+          updated.push(r.productId)
+        }
+        return { ok: true, supplierId: po.supplierId, updatedProductIds: updated }
+      } catch (err: any) {
+        fastify.log.error({ err }, '[push-landed-cost] failed')
+        return reply.code(500).send({ error: err?.message ?? String(err) })
+      }
+    },
+  )
+
   fastify.get('/fulfillment/purchase-orders/:id/match', async (request, reply) => {
     try {
       const { id } = request.params as { id: string }
