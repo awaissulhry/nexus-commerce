@@ -296,6 +296,8 @@ function aggregateOrders(orders: OrderRow[]): {
   }>
   /** I7 — totalCents in integer cents. */
   totalCents: number
+  /** DA-RT.8c — non-EUR orders skipped from EUR headline math. */
+  nonEurExcluded: { orderCount: number; currencies: string[] }
 } {
   const trend = new Map<
     string,
@@ -325,6 +327,15 @@ function aggregateOrders(orders: OrderRow[]): {
     }
   >()
   let totalCents = 0
+  // DA-RT.8c — non-EUR exclusion. Previously the per-channel/per-market/
+  // per-sku/per-day/total accumulators summed native cents across all
+  // currencies as if they were EUR — a TRY order at 100 TRY (~€3)
+  // contributed 10000 cents toward EUR total (€100). Now we skip
+  // non-EUR from the EUR-headline accumulators and surface the
+  // skipped set as a transparency annotation. The byMarketplaceNative
+  // map still captures native-currency rollups (it always did).
+  const nonEurExcludedOrderCount = { n: 0 }
+  const nonEurExcludedCurrencies = new Set<string>()
 
   for (const o of orders) {
     const units = o.items.reduce((s, it) => s + it.quantity, 0)
@@ -334,7 +345,14 @@ function aggregateOrders(orders: OrderRow[]): {
       0,
     )
     const orderCents = o.totalPriceCents > 0 ? o.totalPriceCents : lineCents
-    totalCents += orderCents
+    const code = o.currencyCode ?? 'EUR'
+    const isEur = code === 'EUR'
+    if (!isEur) {
+      nonEurExcludedOrderCount.n += 1
+      nonEurExcludedCurrencies.add(code)
+    } else {
+      totalCents += orderCents
+    }
 
     const dk = dayKey(o.createdAt)
     const ts = trend.get(dk) ?? {
@@ -342,14 +360,15 @@ function aggregateOrders(orders: OrderRow[]): {
       orders: new Set<string>(),
       units: 0,
     }
-    ts.revenueCents += orderCents
+    if (isEur) ts.revenueCents += orderCents
     ts.orders.add(o.id)
     ts.units += units
     trend.set(dk, ts)
 
     const push = (map: Map<string, Slot>, key: string, addUnits = units) => {
       const slot = map.get(key) ?? emptySlot()
-      slot.revenueCents += orderCents
+      // DA-RT.8c — only EUR contributes to the EUR-headline slots.
+      if (isEur) slot.revenueCents += orderCents
       slot.orders.add(o.id)
       slot.units += addUnits
       map.set(key, slot)
@@ -366,7 +385,10 @@ function aggregateOrders(orders: OrderRow[]): {
     const typeSet = new Set<string>()
     for (const it of o.items) {
       const slot = bySku.get(it.sku) ?? emptySlot()
-      slot.revenueCents += it.priceCents * it.quantity
+      // DA-RT.8c — non-EUR orders don't contribute to the EUR-headline
+      // per-SKU revenue. Units stay counted (demand signal is currency-
+      // independent).
+      if (isEur) slot.revenueCents += it.priceCents * it.quantity
       slot.orders.add(o.id)
       slot.units += it.quantity
       bySku.set(it.sku, slot)
@@ -376,7 +398,7 @@ function aggregateOrders(orders: OrderRow[]): {
     for (const b of brandSet) push(byBrand, b, 0)
     for (const t of typeSet) push(byProductType, t, 0)
 
-    const code = o.currencyCode ?? 'EUR'
+    // `code` already declared above in DA-RT.8c block (line ~346).
     currencies.set(code, (currencies.get(code) ?? 0) + orderCents)
     // I3 — per-(channel, marketplace, currency) bucketing for native-
     // currency rollup. Mirrors the summary service pattern.
@@ -407,6 +429,14 @@ function aggregateOrders(orders: OrderRow[]): {
     currencies,
     byMarketplaceNative,
     totalCents,
+    // DA-RT.8c — transparency annotation for non-EUR orders excluded
+    // from the EUR-headline accumulators. UI can render this as a
+    // "+N non-EUR orders" chip below the headline (matching the
+    // Global Snapshot tile's pattern).
+    nonEurExcluded: {
+      orderCount: nonEurExcludedOrderCount.n,
+      currencies: Array.from(nonEurExcludedCurrencies).sort(),
+    },
   }
 }
 

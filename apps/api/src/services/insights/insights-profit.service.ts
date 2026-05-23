@@ -306,6 +306,8 @@ function aggregate(items: RawOrderItem[]): {
     string,
     Acc & { productName: string | null; brand: string | null; channel: string }
   >
+  /** DA-RT.8c — non-EUR orders excluded from EUR-headline math. */
+  nonEurExcluded: { orderCount: number; currencies: string[] }
 } {
   const total = emptyAcc()
   const byChannel = new Map<string, Acc>()
@@ -318,18 +320,31 @@ function aggregate(items: RawOrderItem[]): {
     Acc & { productName: string | null; brand: string | null; channel: string }
   >()
 
+  // DA-RT.8c — non-EUR orders are excluded from EUR-headline
+  // accumulators (matches snapshot/insights-sales). byMarketplace still
+  // groups by currency natively. cogs is currency-agnostic at the item
+  // level (Product.costPrice is the operator's cost basis, stored
+  // separate from the order's currency), so it accumulates either way.
+  const nonEurOrderIds = new Set<string>()
+  const nonEurExcludedCurrencies = new Set<string>()
+
   for (const it of items) {
     // I7 — all line math in integer cents. priceCents × quantity stays
     // exact (both are integers); cogsCents likewise. No float drift.
     const lineCents = it.priceCents * it.quantity
     const cogsLineCents = (it.costPriceCents ?? 0) * it.quantity
-    total.revenueCents += lineCents
+    const isEur = it.currency === 'EUR'
+    if (!isEur) {
+      nonEurOrderIds.add(it.orderId)
+      nonEurExcludedCurrencies.add(it.currency)
+    }
+    if (isEur) total.revenueCents += lineCents
     total.cogsCents += cogsLineCents
     total.units += it.quantity
     total.orders.add(it.orderId)
 
     const chSlot = byChannel.get(it.channel) ?? emptyAcc()
-    chSlot.revenueCents += lineCents
+    if (isEur) chSlot.revenueCents += lineCents
     chSlot.cogsCents += cogsLineCents
     chSlot.units += it.quantity
     chSlot.orders.add(it.orderId)
@@ -362,7 +377,9 @@ function aggregate(items: RawOrderItem[]): {
         brand: string | null
         channel: string
       })
-    skuSlot.revenueCents += lineCents
+    // DA-RT.8c — per-SKU revenue is EUR-only too. Units stay counted
+    // (demand signal); cogs accumulates either way (currency-agnostic).
+    if (isEur) skuSlot.revenueCents += lineCents
     skuSlot.cogsCents += cogsLineCents
     skuSlot.units += it.quantity
     skuSlot.orders.add(it.orderId)
@@ -379,7 +396,18 @@ function aggregate(items: RawOrderItem[]): {
   for (const [, slot] of bySku.entries()) {
     slot.feesCents = computeFeeCents(slot.channel, slot.revenueCents, slot.orders.size)
   }
-  return { total, byChannel, byMarketplace, bySku }
+  return {
+    total,
+    byChannel,
+    byMarketplace,
+    bySku,
+    // DA-RT.8c — transparency annotation. UI can render "+N non-EUR
+    // orders excluded from the EUR headline" + the list of currencies.
+    nonEurExcluded: {
+      orderCount: nonEurOrderIds.size,
+      currencies: Array.from(nonEurExcludedCurrencies).sort(),
+    },
+  }
 }
 
 export async function computeProfitReport(
