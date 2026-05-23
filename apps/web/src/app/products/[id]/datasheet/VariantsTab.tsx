@@ -43,6 +43,9 @@ import VariantChannelCoverage, {
   type CoverageListing,
   type CoverageVariant,
 } from './VariantChannelCoverage'
+import VariantIdentifiers, {
+  type IdentifierVariant,
+} from './VariantIdentifiers'
 import { Package } from 'lucide-react'
 
 interface VariantsTabProps {
@@ -70,6 +73,8 @@ export default async function VariantsTab({
         basePrice: true,
         totalStock: true,
         gtin: true,
+        upc: true,
+        ean: true,
         amazonAsin: true,
         ebayItemId: true,
         shopifyProductId: true,
@@ -237,6 +242,31 @@ export default async function VariantsTab({
           t={t}
         />
       )}
+
+      {/* VR.4 — Variant identifier audit table. Single row per
+          variant: master GTIN/UPC/EAN + per-channel distinct
+          ASINs / eBay IDs / Shopify IDs. Surfaces sync skew via
+          ⚠ when master Product.amazonAsin etc. doesn't appear in
+          the channel-side listings. */}
+      <VariantIdentifiers
+        variants={children.map<IdentifierVariant>((c) => ({
+          id: c.id,
+          sku: c.sku,
+          name: c.name,
+          gtin: c.gtin,
+          upc: c.upc,
+          ean: c.ean,
+          amazonAsin: c.amazonAsin,
+          ebayItemId: c.ebayItemId,
+          shopifyProductId: c.shopifyProductId,
+          listings: c.channelListings.map((l) => ({
+            channel: l.channel,
+            marketplace: l.marketplace,
+            externalListingId: l.externalListingId,
+          })),
+        }))}
+        t={t}
+      />
 
       {/* VR.3 — Per-variant channel coverage matrix. Renders below
           the main view so the operator sees the variant grid AND
