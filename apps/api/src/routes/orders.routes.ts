@@ -704,6 +704,81 @@ export async function ordersRoutes(app: FastifyInstance) {
     }
   })
 
+  // ── POST /api/orders/backfill-delivered-heuristic ────────────────
+  // RV.2.3 (server-side variant) — find Amazon FBA SHIPPED orders with
+  // shippedAt + 3 business days in the past, fill deliveredAt + source
+  // = HEURISTIC_FBA_3D. Idempotent (deliveredAt IS NULL filter). Caller
+  // can hit this once after RV.2 deploy; the same heuristic continues
+  // to run inline on future sync upserts.
+  app.post('/api/orders/backfill-delivered-heuristic', async (request, reply) => {
+    try {
+      const body = (request.body ?? {}) as { dryRun?: boolean; limit?: number }
+      const dryRun = body.dryRun === true
+      const limit = Math.min(Math.max(body.limit ?? 5000, 1), 10000)
+
+      const fiveDaysAgo = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000)
+      const candidates = await prisma.order.findMany({
+        where: {
+          channel: 'AMAZON',
+          fulfillmentMethod: 'FBA',
+          deliveredAt: null,
+          status: { in: ['SHIPPED', 'PARTIALLY_SHIPPED'] },
+          shippedAt: { not: null, lte: fiveDaysAgo },
+        },
+        select: { id: true, channelOrderId: true, shippedAt: true, marketplace: true },
+        orderBy: { shippedAt: 'asc' },
+        take: limit,
+      })
+
+      const now = Date.now()
+      const addBusinessDays = (date: Date, days: number): Date => {
+        const out = new Date(date.getTime())
+        let added = 0
+        while (added < days) {
+          out.setDate(out.getDate() + 1)
+          const dow = out.getDay()
+          if (dow !== 0 && dow !== 6) added++
+        }
+        return out
+      }
+
+      let updated = 0
+      let stillTooSoon = 0
+      const sample: any[] = []
+      for (const o of candidates) {
+        if (!o.shippedAt) continue
+        const projected = addBusinessDays(o.shippedAt, 3)
+        if (projected.getTime() > now) { stillTooSoon++; continue }
+        if (!dryRun) {
+          await prisma.order.update({
+            where: { id: o.id },
+            data: { deliveredAt: projected, deliveredAtSource: 'HEURISTIC_FBA_3D' },
+          })
+        }
+        updated++
+        if (sample.length < 5) {
+          sample.push({
+            id: o.id,
+            channelOrderId: o.channelOrderId,
+            marketplace: o.marketplace,
+            shippedAt: o.shippedAt.toISOString(),
+            projectedDeliveredAt: projected.toISOString(),
+          })
+        }
+      }
+      return {
+        ok: true,
+        dryRun,
+        candidates: candidates.length,
+        updated,
+        stillTooSoon,
+        sample,
+      }
+    } catch (error: any) {
+      return reply.status(500).send({ error: error.message })
+    }
+  })
+
   // ── POST /api/orders/:id/mark-delivered ──────────────────────────
   // RV.2.4 — operator manual delivery override. Writes deliveredAt with
   // source=MANUAL so the higher-authority guard in amazon-orders.service
