@@ -58,22 +58,28 @@ export async function runAmazonOrderItemsRetry(): Promise<void> {
       const batchLimit =
         Number.isFinite(limit) && limit > 0 ? limit : 50
 
-      // Distinct orderIds that have at least one €0-price item AND
-      // are recent enough to still be in SP-API hot cache. Ordered
-      // by purchaseDate ASC so the oldest stuck rows clear first.
+      // Orders that have at least one €0-price item AND are recent
+      // enough to still be in SP-API hot cache. Ordered by
+      // purchaseDate ASC so the oldest stuck rows clear first.
+      // EXISTS subquery avoids the duplicate-row problem JOIN+DISTINCT
+      // would create — Postgres also forbids ORDER BY on non-SELECTed
+      // columns under DISTINCT, so EXISTS keeps the SQL trivially valid.
       const since = new Date(Date.now() - lookback * 24 * 60 * 60_000)
       const stuckRows = await prisma.$queryRaw<Array<{
         orderId: string
         channelOrderId: string
       }>>`
-        SELECT DISTINCT o.id AS "orderId", o."channelOrderId"
+        SELECT o.id AS "orderId", o."channelOrderId"
         FROM "Order" o
-        JOIN "OrderItem" oi ON oi."orderId" = o.id
         WHERE o."channel" = 'AMAZON'
           AND o."deletedAt" IS NULL
           AND o."status" != 'CANCELLED'
           AND o."purchaseDate" >= ${since}
-          AND (oi."price" = 0 OR oi."price" IS NULL)
+          AND EXISTS (
+            SELECT 1 FROM "OrderItem" oi
+            WHERE oi."orderId" = o.id
+              AND (oi."price" = 0 OR oi."price" IS NULL)
+          )
         ORDER BY o."purchaseDate" ASC
         LIMIT ${batchLimit}
       `
