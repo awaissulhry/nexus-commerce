@@ -9,7 +9,14 @@
 // breakdown lives in Commit 4.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { VirtualizedGrid, GridFooter, ProductIdentityCell, StockSplit, DensityToggle as SharedDensityToggle, AutoRefreshSelect, BulkActionShell, KeyboardShortcutsModal, FilterPopover, GridToolbar, type AutoRefreshInterval, type BulkAction, type ShortcutGroup, type FilterDimension } from '@/app/_shared/grid-lens'
+import {
+  VirtualizedGrid, GridFooter, ProductIdentityCell, StockSplit,
+  DensityToggle as SharedDensityToggle, AutoRefreshSelect, BulkActionShell,
+  KeyboardShortcutsModal, FilterPopover, GridToolbar,
+  PreferencesModal, ActionCluster,
+  type AutoRefreshInterval, type BulkAction, type ShortcutGroup, type FilterDimension,
+  type PreferencesValue, type ActionDef,
+} from '@/app/_shared/grid-lens'
 import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
 import { useOrderEventsRefresh } from '@/hooks/use-order-events-refresh'
 import type { GridLensColumn, GridLensRow } from '@/app/_shared/grid-lens'
@@ -17,27 +24,18 @@ import { DENSITY_CELL_CLASS } from '@/lib/products/theme'
 import Link from 'next/link'
 import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import {
-  Warehouse, Search, RefreshCw, Package, ChevronRight,
+  Warehouse, Search, RefreshCw, Package, ChevronRight, Eye, Settings2,
   X, History, ExternalLink, ArrowRightLeft, Plus, Minus,
   Boxes, AlertTriangle, TrendingDown, Layers, Activity, Truck,
   Lock as LockIcon, Table as TableIcon, Grid, LayoutGrid,
   Check, Download, Sliders, Undo2, CheckCircle2,
   Lightbulb, Zap, AlertCircle,
-  Columns, Keyboard,
+  Keyboard,
   ClipboardCheck, Bookmark, BookmarkPlus, Trash2, Star,
-  ShieldAlert, GripVertical,
+  ShieldAlert,
 } from 'lucide-react'
-// CS.5 — dnd-kit pieces for the column-reorder picker.
-import {
-  DndContext, closestCenter, KeyboardSensor, PointerSensor,
-  useSensor, useSensors,
-  type DragEndEvent,
-} from '@dnd-kit/core'
-import {
-  arrayMove, SortableContext, sortableKeyboardCoordinates,
-  useSortable, verticalListSortingStrategy,
-} from '@dnd-kit/sortable'
-import { CSS } from '@dnd-kit/utilities'
+// XG.3 — dnd-kit imports removed alongside the bespoke ColumnPicker;
+// the shared PreferencesModal uses native HTML5 drag-drop.
 import PageHeader from '@/components/layout/PageHeader'
 import { StockSubNav } from '@/components/inventory/StockSubNav'
 import { AbcBadge } from '@/components/inventory/AbcBadge'
@@ -135,7 +133,10 @@ const STOCK_COLUMNS: GridLensColumn[] = [
   { key: 'value',     label: 'Value',      subLabel: '€ cost × qty',  width: 100 },
   { key: 'abcClass',  label: 'ABC',        subLabel: 'Pareto band',   width: 70  },
   { key: 'updated',   label: 'Updated',    subLabel: 'Last movement', width: 120 },
-  { key: 'open',      label: '',                                      width: 44  },
+  // XG.3 — `locked: true` so the shared PreferencesModal renders it
+  // as locked-trailing (disabled toggle, sticky-right freeze target).
+  // The cell is rendered as an ActionCluster (Eye → drawer) below.
+  { key: 'open',      label: '',                                      width: 60, locked: true },
 ]
 
 // S.5 — client-side sort keys for the table view (current page only).
@@ -143,6 +144,18 @@ const STOCK_SORT_KEYS: Record<string, string> = {
   onHand: 'onHand', reserved: 'reserved', available: 'available',
   cost: 'cost', value: 'value', abcClass: 'abcClass', updated: 'updated',
 }
+
+// XG.3 — sort field options for the shared PreferencesModal's Sort
+// dropdown. Mirrors STOCK_SORT_KEYS with human-readable labels.
+const STOCK_SORT_FIELD_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: 'updated',   label: 'Last movement' },
+  { value: 'onHand',    label: 'On hand' },
+  { value: 'available', label: 'Available' },
+  { value: 'reserved',  label: 'Reserved' },
+  { value: 'value',     label: 'Stock value' },
+  { value: 'cost',      label: 'Unit cost' },
+  { value: 'abcClass',  label: 'ABC class' },
+]
 type StockGridRow = StockRow & GridLensRow
 
 // Stable empties for unused VirtualizedGrid props in table mode.
@@ -590,6 +603,24 @@ export default function StockWorkspace() {
   // S.4 — column widths now managed by VirtualizedGrid via storageKey='stock'.
   // The bespoke columnWidths state + ResizeHandle are removed.
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
+
+  // XG.3 — preferences modal (replaces the bespoke ColumnPicker
+  // popover). Sticky toggles + sort direction live as workspace state
+  // so the shared modal can read + commit them atomically; both
+  // persist to localStorage under stock.*.
+  const [preferencesOpen, setPreferencesOpen] = useState(false)
+  const [stickyFirstColumn, setStickyFirstColumn] = useState<boolean>(true)
+  const [stickyLastColumn, setStickyLastColumn] = useState<boolean>(true)
+  useEffect(() => {
+    try {
+      const sl = localStorage.getItem('stock.stickyFirstColumn')
+      if (sl !== null) setStickyFirstColumn(sl !== 'false')
+      const sr = localStorage.getItem('stock.stickyLastColumn')
+      if (sr !== null) setStickyLastColumn(sr !== 'false')
+    } catch { /* ignore */ }
+  }, [])
+  useEffect(() => { try { localStorage.setItem('stock.stickyFirstColumn', String(stickyFirstColumn)) } catch {} }, [stickyFirstColumn])
+  useEffect(() => { try { localStorage.setItem('stock.stickyLastColumn', String(stickyLastColumn)) } catch {} }, [stickyLastColumn])
   useEffect(() => {
     try {
       const d = localStorage.getItem('stock.density')
@@ -1078,17 +1109,23 @@ export default function StockWorkspace() {
 
   const renderCell = useCallback((row: StockGridRow, colKey: string) => {
     if (colKey === 'open') {
-      return (
-        <button
-          type="button"
-          onClick={() => { setDrawerProductId(row.id); setDrawerIsParent(row.isParent ?? false) }}
-          title="Open product"
-          aria-label="Open product"
-          className="h-7 w-7 inline-flex items-center justify-center text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 rounded hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-        >
-          <ChevronRight size={14} />
-        </button>
-      )
+      // XG.3 — shared ActionCluster. Single Eye → drawer for now;
+      // adding a dropdown (View locations, View movements, Edit FBM
+      // stock, Transfer) is a separate /stock follow-up since those
+      // flows aren't built yet. The PG.6 sticky-right freeze pins
+      // this column on horizontal scroll.
+      const inlineActions: ActionDef[] = [
+        {
+          id: 'open',
+          icon: Eye,
+          label: 'Open stock detail',
+          onClick: () => {
+            setDrawerProductId(row.id)
+            setDrawerIsParent(row.isParent ?? false)
+          },
+        },
+      ]
+      return <ActionCluster rowId={row.id} inlineActions={inlineActions} />
     }
     const threshold = row.stockLevels?.[0]?.reorderThreshold ?? row.lowStockThreshold
     const qty = row.totalStock
@@ -1382,7 +1419,19 @@ export default function StockWorkspace() {
             onSaveView={() => setSaveViewModalOpen(true)}
           />
         }
-        columns={view === 'table' ? <ColumnPicker visible={visibleColumns} onChange={setVisibleColumns} /> : undefined}
+        columns={
+          view === 'table' ? (
+            <button
+              type="button"
+              onClick={() => setPreferencesOpen(true)}
+              className="h-11 sm:h-8 px-2.5 text-base inline-flex items-center gap-1.5 border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800 text-slate-600"
+              title="Preferences"
+              aria-haspopup="dialog"
+            >
+              <Settings2 size={12} /> Preferences ({visibleColumns.length})
+            </button>
+          ) : undefined
+        }
         density={view === 'table' ? <SharedDensityToggle density={density} onChange={setDensity} /> : undefined}
         autoRefresh={
           <AutoRefreshSelect
@@ -1604,6 +1653,8 @@ export default function StockWorkspace() {
             riskFlaggedSkus={_GRID_EMPTY_SET}
             storageKey="stock"
             renderCell={renderCell}
+            stickyLeft={stickyFirstColumn}
+            stickyRight={stickyLastColumn}
           />
         )
       })()}
@@ -1706,6 +1757,39 @@ export default function StockWorkspace() {
           onClose={() => setShortcutsOpen(false)}
         />
       )}
+
+      {/* XG.3 — shared Preferences modal. Replaces /stock's bespoke
+          dnd-kit ColumnPicker popover. Page-size section hidden via
+          pageSizeChoices=[] since /stock fixes page size at 200 (see
+          comment above the const). Sticky toggles + sort persist to
+          localStorage stock.*; column visibility/order persist via
+          the existing stock.columns key (untouched). */}
+      <PreferencesModal
+        open={preferencesOpen}
+        onClose={() => setPreferencesOpen(false)}
+        allColumns={STOCK_COLUMNS}
+        defaultVisible={DEFAULT_VISIBLE_COLUMNS}
+        pageSizeChoices={[]}
+        sortFieldOptions={STOCK_SORT_FIELD_OPTIONS}
+        value={{
+          pageSize,
+          visibleColumns,
+          stickyFirstColumn,
+          stickyLastColumn,
+          sortBy: sortBy.replace(/-asc$/, '') || 'updated',
+          sortDir: sortBy.endsWith('-asc') ? 'asc' : 'desc',
+        }}
+        onConfirm={(next: PreferencesValue) => {
+          // visibleColumns may include 'open' from the modal's locked
+          // detection — strip it since /stock's renderCell always
+          // injects 'open' as the trailing action column.
+          setVisibleColumns(next.visibleColumns.filter((k) => k !== 'open') as ColumnKey[])
+          setStickyFirstColumn(next.stickyFirstColumn)
+          setStickyLastColumn(next.stickyLastColumn)
+          const nextSortBy = next.sortDir === 'asc' ? `${next.sortBy}-asc` : next.sortBy
+          if (nextSortBy !== sortBy) setSortBy(nextSortBy)
+        }}
+      />
 
       {/* S.18 — save-current-view modal. Captures the existing
           configuration (view, location, status, search, density,
@@ -3314,152 +3398,6 @@ function SavedViewsButton({
 // hidden columns appear below (no drag, just toggle to enable). Toggling
 // a hidden column on appends it to the end of the visible list — operator
 // can then drag it into position.
-function ColumnPicker({ visible, onChange }: { visible: ColumnKey[]; onChange: (next: ColumnKey[]) => void }) {
-  const [open, setOpen] = useState(false)
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
-  )
-
-  const hidden = ALL_COLUMNS.filter((col) => !visible.includes(col.key))
-
-  const onDragEnd = (e: DragEndEvent) => {
-    const { active, over } = e
-    if (!over || active.id === over.id) return
-    const oldIdx = visible.indexOf(active.id as ColumnKey)
-    const newIdx = visible.indexOf(over.id as ColumnKey)
-    if (oldIdx === -1 || newIdx === -1) return
-    onChange(arrayMove(visible, oldIdx, newIdx))
-  }
-
-  const toggleHidden = (key: ColumnKey) => {
-    onChange([...visible, key])
-  }
-
-  const removeVisible = (key: ColumnKey) => {
-    const meta = ALL_COLUMNS.find((c) => c.key === key)
-    if (meta?.alwaysOn) return
-    onChange(visible.filter((k) => k !== key))
-  }
-
-  return (
-    <div className="relative">
-      <button
-        onClick={() => setOpen((o) => !o)}
-        className="h-11 sm:h-8 px-2.5 text-base inline-flex items-center gap-1.5 border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800 text-slate-600"
-        title="Show / hide / reorder columns"
-      >
-        <Columns size={12} /> Columns
-      </button>
-      {open && (
-        <>
-          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-          <div
-            className="absolute right-0 top-full mt-1 w-64 z-20 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md shadow-lg p-2 text-base"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold px-1.5 pb-1.5 inline-flex items-center gap-1">
-              Visible
-              <span className="text-slate-400 dark:text-slate-500 normal-case font-normal">· drag to reorder</span>
-            </div>
-            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
-              <SortableContext items={visible} strategy={verticalListSortingStrategy}>
-                <ul className="space-y-0.5">
-                  {visible.map((key) => {
-                    const col = ALL_COLUMNS.find((c) => c.key === key)
-                    if (!col) return null
-                    return (
-                      <SortableColumnRow
-                        key={key}
-                        colKey={key}
-                        label={col.label}
-                        alwaysOn={!!col.alwaysOn}
-                        onRemove={() => removeVisible(key)}
-                      />
-                    )
-                  })}
-                </ul>
-              </SortableContext>
-            </DndContext>
-
-            {hidden.length > 0 && (
-              <>
-                <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold px-1.5 pt-2 pb-1.5 mt-1.5 border-t border-slate-100 dark:border-slate-800">
-                  Hidden
-                </div>
-                <ul className="space-y-0.5">
-                  {hidden.map((col) => (
-                    <li key={col.key}>
-                      <button
-                        onClick={() => toggleHidden(col.key)}
-                        className="w-full flex items-center justify-between gap-2 px-1.5 py-1 rounded hover:bg-slate-50 dark:hover:bg-slate-800 text-left text-slate-600 dark:text-slate-400"
-                      >
-                        <span className="inline-flex items-center gap-2">
-                          <Plus size={11} aria-hidden="true" /> {col.label}
-                        </span>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </>
-            )}
-
-            <button
-              onClick={() => onChange(DEFAULT_VISIBLE_COLUMNS)}
-              className="w-full mt-1.5 pt-1.5 border-t border-slate-100 dark:border-slate-800 text-sm text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 text-left px-1.5 py-1"
-            >
-              Reset to default
-            </button>
-          </div>
-        </>
-      )}
-    </div>
-  )
-}
-
-// CS.5 — single sortable row in the column picker. Drag handle on the
-// left, label in the middle, remove button on the right (omitted for
-// alwaysOn columns).
-function SortableColumnRow({
-  colKey, label, alwaysOn, onRemove,
-}: { colKey: ColumnKey; label: string; alwaysOn: boolean; onRemove: () => void }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: colKey })
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.4 : 1,
-  }
-  return (
-    <li
-      ref={setNodeRef}
-      style={style}
-      className="flex items-center gap-1 px-1 py-1 rounded hover:bg-slate-50 dark:hover:bg-slate-800 group"
-    >
-      <button
-        type="button"
-        {...attributes}
-        {...listeners}
-        aria-label={`Reorder ${label}`}
-        className="h-6 w-6 inline-flex items-center justify-center text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 cursor-grab active:cursor-grabbing rounded"
-      >
-        <GripVertical size={12} aria-hidden="true" />
-      </button>
-      <span className="flex-1 text-slate-700 dark:text-slate-300">{label}</span>
-      {alwaysOn ? (
-        <span className="text-xs text-slate-400 dark:text-slate-500">always on</span>
-      ) : (
-        <button
-          type="button"
-          onClick={onRemove}
-          aria-label={`Hide ${label}`}
-          className="h-6 w-6 inline-flex items-center justify-center text-slate-400 dark:text-slate-500 hover:text-rose-700 dark:hover:text-rose-300 opacity-0 group-hover:opacity-100 rounded"
-        >
-          <X size={12} aria-hidden="true" />
-        </button>
-      )}
-    </li>
-  )
-}
 
 const STOCK_SHORTCUTS: ShortcutGroup[] = [
   {

@@ -108,8 +108,14 @@ export interface ActionClusterProps {
 }
 
 // Tailwind class fragments — pulled out so the JSX stays readable.
+// PG.8 baseline; XG.3 adjusted to handle the "inline-only" cluster
+// (no primary, no chevron — e.g. /stock's single-Eye affordance) by
+// not assuming a primary/chevron sibling owns the right border. The
+// `last:` classes only apply when this is the rightmost segment.
 const INLINE_BTN_CLS =
-  'h-7 w-7 inline-flex items-center justify-center bg-white dark:bg-slate-800 border-l-0 first:border-l first:rounded-l-md border-y border-slate-300 dark:border-slate-600 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 hover:text-slate-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed'
+  'h-7 w-7 inline-flex items-center justify-center bg-white dark:bg-slate-800 border-y border-l-0 first:border-l first:rounded-l-md border-slate-300 dark:border-slate-600 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 hover:text-slate-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed'
+
+const INLINE_BTN_LAST_CLS = 'last:border-r last:rounded-r-md'
 
 const PRIMARY_BTN_CLS =
   'h-7 px-3 text-sm font-medium bg-white dark:bg-slate-800 border-l-0 border-y border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 inline-flex items-center transition-colors'
@@ -335,6 +341,11 @@ export function ActionCluster({
   }
 
   // ── Cluster variant: full segmented control ─────────────────────
+  // If neither primaryAction nor a chevron renders, the rightmost
+  // inline button needs to close the cluster with its own right
+  // border + rounded corner. The `last:` modifier handles the case
+  // automatically since inline buttons are the last children.
+  const inlineOnly = !primaryAction && !hasDropdown
   return (
     <div className="inline-flex rounded-md shadow-sm">
       {inlineActions?.map((action) => (
@@ -343,7 +354,7 @@ export function ActionCluster({
           type="button"
           onClick={(e) => void runInline(action, e)}
           disabled={action.disabled || busyId === action.id}
-          className={INLINE_BTN_CLS}
+          className={cn(INLINE_BTN_CLS, inlineOnly && INLINE_BTN_LAST_CLS)}
           title={action.label}
           aria-label={action.label}
         >

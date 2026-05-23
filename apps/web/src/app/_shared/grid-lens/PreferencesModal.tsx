@@ -61,7 +61,10 @@ export interface PreferencesModalProps {
   defaultVisible: string[]
   /** Workspace's sort field options. */
   sortFieldOptions: Array<{ value: string; label: string }>
-  /** Optional override of the 20/50/100/250 page-size choices. */
+  /** Optional override of the 20/50/100/250 page-size choices.
+   *  Pass an empty array to hide the page-size section entirely
+   *  (workspaces with a fixed page size, e.g. /fulfillment/stock at
+   *  200, opt out this way). */
   pageSizeChoices?: number[]
   /** Modal title (defaults to t('products.preferences.title')). */
   title?: string
@@ -207,30 +210,32 @@ export function PreferencesModal({
       <ModalBody className="grid grid-cols-1 md:grid-cols-2 gap-8 p-6">
         {/* ── Left panel: page-level preferences ────────────────── */}
         <div className="space-y-6">
-          {/* Page size */}
-          <fieldset className="space-y-2">
-            <legend className="text-sm font-semibold text-slate-800 dark:text-slate-200">
-              {t('products.preferences.pageSize')}
-            </legend>
-            <div className="space-y-1.5">
-              {pageSizeChoices.map((n) => (
-                <label
-                  key={n}
-                  className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300 cursor-pointer"
-                >
-                  <input
-                    type="radio"
-                    name="xg1-page-size"
-                    value={n}
-                    checked={draft.pageSize === n}
-                    onChange={() => setDraft((d) => ({ ...d, pageSize: n }))}
-                    className="accent-blue-600"
-                  />
-                  <span>{n}</span>
-                </label>
-              ))}
-            </div>
-          </fieldset>
+          {/* Page size — hidden when workspace passes pageSizeChoices=[] */}
+          {pageSizeChoices.length > 0 && (
+            <fieldset className="space-y-2">
+              <legend className="text-sm font-semibold text-slate-800 dark:text-slate-200">
+                {t('products.preferences.pageSize')}
+              </legend>
+              <div className="space-y-1.5">
+                {pageSizeChoices.map((n) => (
+                  <label
+                    key={n}
+                    className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300 cursor-pointer"
+                  >
+                    <input
+                      type="radio"
+                      name="xg1-page-size"
+                      value={n}
+                      checked={draft.pageSize === n}
+                      onChange={() => setDraft((d) => ({ ...d, pageSize: n }))}
+                      className="accent-blue-600"
+                    />
+                    <span>{n}</span>
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+          )}
 
           {/* Sticky columns */}
           <fieldset className="space-y-2">
