@@ -127,6 +127,16 @@ interface POInboundShipment {
   trackingNumber: string | null
 }
 
+interface POFiscal {
+  piva: string
+  vatScheme: string | null
+  ivaRateBp: number
+  reverseCharge: boolean
+  totalNetCents: number
+  ivaCents: number
+  totalGrossCents: number
+}
+
 interface PODetail {
   id: string
   poNumber: string
@@ -152,6 +162,8 @@ interface PODetail {
   createdBy: string | null
   version: number
   deletedAt: string | null
+  // PO.12 — fiscal block, null when brand.piva is unset.
+  fiscal: POFiscal | null
   items: POItem[]
   inboundShipments: POInboundShipment[]
   attachments: POAttachment[]
@@ -670,6 +682,49 @@ export default function PurchaseOrderDetailClient({ id }: { id: string }) {
             </span>
           </DetailField>
         </div>
+
+        {/* PO.12 — Italian fiscal strip. Renders only when BrandSettings
+            has piva (i.e. operator is Italian). Reverse-charge case
+            zeroes the IVA and shows a banner; otherwise the standard
+            22% breakdown. */}
+        {po.fiscal && (
+          <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800">
+            <div className="flex items-baseline justify-between gap-3 flex-wrap">
+              <span className="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide">
+                Italian fiscal · P.IVA {po.fiscal.piva}
+                {po.fiscal.vatScheme ? ` · ${po.fiscal.vatScheme}` : ''}
+              </span>
+              {po.fiscal.reverseCharge && (
+                <span className="text-sm text-amber-700 dark:text-amber-300">
+                  Reverse charge — IVA accounted by buyer (Art. 17(6) DPR 633/72)
+                </span>
+              )}
+            </div>
+            <div className="grid grid-cols-3 gap-3 mt-2 text-base">
+              <FiscalCell
+                label="Imponibile"
+                value={formatCurrency(po.fiscal.totalNetCents, po.currencyCode)}
+              />
+              <FiscalCell
+                label={
+                  po.fiscal.reverseCharge
+                    ? 'IVA (reverse-charged)'
+                    : `IVA ${(po.fiscal.ivaRateBp / 100).toFixed(0)}%`
+                }
+                value={
+                  po.fiscal.reverseCharge
+                    ? '—'
+                    : formatCurrency(po.fiscal.ivaCents, po.currencyCode)
+                }
+              />
+              <FiscalCell
+                label="Totale"
+                value={formatCurrency(po.fiscal.totalGrossCents, po.currencyCode)}
+                bold
+              />
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Tab nav — hidden in print, all panes render in print */}
@@ -763,6 +818,32 @@ function DetailField({ label, children }: { label: string; children: React.React
         {label}
       </div>
       <div className="text-base">{children}</div>
+    </div>
+  )
+}
+
+function FiscalCell({
+  label,
+  value,
+  bold,
+}: {
+  label: string
+  value: string
+  bold?: boolean
+}) {
+  return (
+    <div>
+      <div className="text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wide">
+        {label}
+      </div>
+      <div
+        className={cn(
+          'tabular-nums',
+          bold ? 'font-semibold text-slate-900 dark:text-slate-100' : 'text-slate-700 dark:text-slate-300',
+        )}
+      >
+        {value}
+      </div>
     </div>
   )
 }

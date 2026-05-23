@@ -5736,7 +5736,51 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
       },
     })
     if (!po) return reply.code(404).send({ error: 'PO not found' })
-    return po
+
+    // PO.12 — fiscal preview attached to the detail response. Only
+    // populated when BrandSettings.piva is set; non-IT operators see
+    // null and the detail UI skips the strip. Reverse-charge is
+    // auto-detected from supplier.country against the EU-non-IT set.
+    const brand = await prisma.brandSettings.findFirst({
+      select: { piva: true, vatScheme: true, codiceFiscale: true },
+    })
+    let fiscal: {
+      piva: string
+      vatScheme: string | null
+      ivaRateBp: number
+      reverseCharge: boolean
+      totalNetCents: number
+      ivaCents: number
+      totalGrossCents: number
+    } | null = null
+    if (brand?.piva) {
+      const EU_NON_IT_INLINE = new Set([
+        'AT','BE','BG','HR','CY','CZ','DK','EE','FI','FR','DE','GR','HU','IE',
+        'LV','LT','LU','MT','NL','PL','PT','RO','SK','SI','ES','SE',
+      ])
+      const supplierCountry = (po.supplier?.country ?? null)?.toUpperCase() ?? null
+      const reverseCharge =
+        supplierCountry !== null && EU_NON_IT_INLINE.has(supplierCountry)
+      const ivaRateBp = Math.max(
+        0,
+        Number(process.env.NEXUS_DEFAULT_IVA_RATE_BP) || 2200,
+      )
+      const totalNetCents = po.totalCents
+      const ivaCents = reverseCharge
+        ? 0
+        : Math.round((totalNetCents * ivaRateBp) / 10000)
+      fiscal = {
+        piva: brand.piva,
+        vatScheme: brand.vatScheme,
+        ivaRateBp,
+        reverseCharge,
+        totalNetCents,
+        ivaCents,
+        totalGrossCents: totalNetCents + ivaCents,
+      }
+    }
+
+    return { ...po, fiscal }
   })
 
   // R.7 — workflow state machine. submit-for-review / approve / send /
@@ -6687,13 +6731,16 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
     try {
       const { id } = request.params as { id: string }
       // W9.7 — locale resolution: explicit ?locale= wins, then supplier
-      // country (IT → it), then 'en'. Italian suppliers default to it
-      // because Xavia's factories all read Italian and getting the PO
-      // language wrong adds a round-trip every time.
+      // country (IT → it, CN → zh), then 'en'. Italian suppliers default
+      // to it because Xavia's factories all read Italian and getting
+      // the PO language wrong adds a round-trip every time. PO.12 adds
+      // 'zh' for Chinese factories.
       const localeQuery = (request.query as { locale?: string } | undefined)
         ?.locale
-      const explicitLocale: 'en' | 'it' | null =
-        localeQuery === 'it' || localeQuery === 'en' ? localeQuery : null
+      const explicitLocale: 'en' | 'it' | 'zh' | null =
+        localeQuery === 'it' || localeQuery === 'en' || localeQuery === 'zh'
+          ? (localeQuery as 'en' | 'it' | 'zh')
+          : null
 
       const po = await prisma.purchaseOrder.findUnique({
         where: { id },
@@ -6883,8 +6930,39 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
       let brand = await prisma.brandSettings.findFirst()
       if (!brand) brand = await prisma.brandSettings.create({ data: {} })
 
-      const resolvedLocale: 'en' | 'it' =
-        explicitLocale ?? (po.supplier?.country === 'IT' ? 'it' : 'en')
+      // PO.12 — supplier country drives both locale auto-pick + the
+      // reverse-charge marker on the fiscal block. EU member states get
+      // reverse-charge under DPR 633/72 Art. 17(6); extra-EU suppliers
+      // (typical CN factory case) bypass IVA at the customs layer.
+      const supplierCountry = (po.supplier?.country ?? null)?.toUpperCase() ?? null
+      const EU_NON_IT = new Set([
+        'AT','BE','BG','HR','CY','CZ','DK','EE','FI','FR','DE','GR','HU','IE',
+        'LV','LT','LU','MT','NL','PL','PT','RO','SK','SI','ES','SE',
+      ])
+
+      const resolvedLocale: 'en' | 'it' | 'zh' =
+        explicitLocale ??
+        (supplierCountry === 'IT'
+          ? 'it'
+          : supplierCountry === 'CN' || supplierCountry === 'HK' || supplierCountry === 'TW'
+            ? 'zh'
+            : 'en')
+
+      // PO.12 — fiscal-block inputs. Only meaningful when brand.piva is
+      // populated; the PDF service silently no-ops the block otherwise.
+      // Default IVA rate comes from NEXUS_DEFAULT_IVA_RATE_BP (2200 =
+      // 22%, Italy's standard rate for motorcycle gear).
+      const ivaRateBp = Math.max(
+        0,
+        Number(process.env.NEXUS_DEFAULT_IVA_RATE_BP) || 2200,
+      )
+      const reverseCharge =
+        !!brand.piva && supplierCountry !== null && EU_NON_IT.has(supplierCountry)
+      const totalNetCents = po.totalCents
+      const ivaCents = reverseCharge
+        ? 0
+        : Math.round((totalNetCents * ivaRateBp) / 10000)
+      const totalGrossCents = totalNetCents + ivaCents
 
       const input: FactoryPoInput = {
         poNumber: po.poNumber,
@@ -6903,6 +6981,11 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
           logoUrl: brand.logoUrl,
           signatureBlockText: brand.signatureBlockText,
           defaultPoNotes: brand.defaultPoNotes,
+          // PO.12 — thread Italian fiscal fields onto the brand block.
+          piva: brand.piva,
+          codiceFiscale: brand.codiceFiscale,
+          sdiCode: brand.sdiCode,
+          vatScheme: brand.vatScheme,
         },
         supplier: po.supplier
           ? {
@@ -6915,6 +6998,15 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
           : null,
         groups,
         totalUnits,
+        // PO.12 — fiscal computation passed pre-resolved so the PDF
+        // service stays pure.
+        currencyCode: po.currencyCode,
+        totalNetCents,
+        ivaRateBp,
+        ivaCents,
+        totalGrossCents,
+        reverseCharge,
+        supplierCountry,
       }
 
       const buffer = await renderFactoryPoPdf(input)

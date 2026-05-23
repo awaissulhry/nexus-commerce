@@ -56,6 +56,14 @@ export interface FactoryPoBrand {
   logoUrl: string | null
   signatureBlockText: string | null
   defaultPoNotes: string | null
+  // PO.12 — Italian fiscal fields. Threaded from BrandSettings so the
+  // PDF can render the imponibile / IVA / totale block + the reverse-
+  // charge note for non-IT EU suppliers. Absent (null) on non-IT
+  // operators; the fiscal block silently no-ops.
+  piva?: string | null
+  codiceFiscale?: string | null
+  sdiCode?: string | null
+  vatScheme?: string | null
 }
 
 export interface FactoryPoSupplier {
@@ -101,10 +109,27 @@ export interface FactoryPoInput {
   /** Pre-computed total units across every group's lines. Caller computes
    *  to keep this service stateless. */
   totalUnits: number
-  /** W9.7 — Localization. 'it' renders the Italian fiscal-compliant
-   *  label set ("Ordine d'acquisto" / "Fornitore" / "Data ordine" / etc).
-   *  Default 'en'. */
-  locale?: 'en' | 'it'
+  /** PO.12 — Localization. 'it' renders Italian fiscal-compliant
+   *  labels; 'zh' renders simplified Chinese for Asian suppliers
+   *  (factory floors in Guangdong, Zhejiang, etc.); 'en' default. */
+  locale?: 'en' | 'it' | 'zh'
+  // PO.12 — fiscal context. When brand.piva is set the PDF renders the
+  // imponibile/IVA/totale strip. The caller computes both since the
+  // service is intentionally stateless. Currency stays in PO ccy;
+  // multi-currency POs to Italian buyers are rare in Xavia's flow.
+  currencyCode?: string
+  totalNetCents?: number
+  ivaRateBp?: number // 2200 = 22%
+  ivaCents?: number
+  totalGrossCents?: number
+  /** When true, IVA is zero on the PDF and the inversione-contabile
+   *  note is rendered. Caller decides (typically: brand IT + supplier
+   *  in EU but not IT). */
+  reverseCharge?: boolean
+  /** Country code of the supplier (IT, DE, FR, CN, …). Surfaces in
+   *  the fiscal block ("Fornitore UE" / "Fornitore extra-UE") and
+   *  drives the locale fallback when not explicitly set. */
+  supplierCountry?: string | null
 }
 
 // W9.7 — Italian fiscal PO labels. Italian operations expect a PO
@@ -121,7 +146,15 @@ type PoLabelKey =
   | 'status'
   | 'totalUnits'
   | 'notes'
-const PO_LABELS: Record<'en' | 'it', Record<PoLabelKey, string>> = {
+  // PO.12 — fiscal block label keys
+  | 'imponibile'
+  | 'iva'
+  | 'totale'
+  | 'reverseCharge'
+  | 'reverseChargeNote'
+  | 'pivaLabel'
+  | 'codiceFiscaleLabel'
+const PO_LABELS: Record<'en' | 'it' | 'zh', Record<PoLabelKey, string>> = {
   en: {
     title: 'PURCHASE ORDER',
     supplier: 'Supplier',
@@ -131,6 +164,14 @@ const PO_LABELS: Record<'en' | 'it', Record<PoLabelKey, string>> = {
     status: 'Status',
     totalUnits: 'Total units',
     notes: 'Notes',
+    imponibile: 'Net (excl. VAT)',
+    iva: 'VAT',
+    totale: 'Total (incl. VAT)',
+    reverseCharge: 'Reverse charge',
+    reverseChargeNote:
+      'Reverse charge — supplier accounts for VAT under Art. 17(6) of DPR 633/72. No VAT charged on this invoice.',
+    pivaLabel: 'VAT no.',
+    codiceFiscaleLabel: 'Tax ID',
   },
   it: {
     title: "Ordine d'acquisto",
@@ -141,6 +182,32 @@ const PO_LABELS: Record<'en' | 'it', Record<PoLabelKey, string>> = {
     status: 'Stato',
     totalUnits: 'Unità totali',
     notes: 'Note',
+    imponibile: 'Imponibile',
+    iva: 'IVA',
+    totale: 'Totale',
+    reverseCharge: 'Inversione contabile',
+    reverseChargeNote:
+      "Inversione contabile — art. 17 c. 6 DPR 633/72. L'IVA è assolta dal committente in regime di reverse charge.",
+    pivaLabel: 'P.IVA',
+    codiceFiscaleLabel: 'C.F.',
+  },
+  zh: {
+    title: '采购订单',
+    supplier: '供应商',
+    supplierNotAssigned: '供应商：未指定',
+    orderDate: '订单日期',
+    expectedDelivery: '预计交货',
+    status: '状态',
+    totalUnits: '总数量',
+    notes: '备注',
+    imponibile: '不含税金额',
+    iva: '增值税',
+    totale: '含税总额',
+    reverseCharge: '反向征税',
+    reverseChargeNote:
+      'Reverse charge — VAT accounted by buyer under EU Art. 17(6) of DPR 633/72.',
+    pivaLabel: 'VAT no.',
+    codiceFiscaleLabel: 'Tax ID',
   },
 }
 function poLabel(input: FactoryPoInput, key: PoLabelKey): string {
@@ -215,6 +282,14 @@ export async function renderFactoryPoPdf(input: FactoryPoInput): Promise<Buffer>
     .fillColor(HEADER_DARK)
     .font('Helvetica-Bold')
     .text(`${poLabel(input, 'totalUnits')}: ${input.totalUnits}`)
+
+  // PO.12 — Italian fiscal block. Only renders when brand.piva is set
+  // (i.e. operator has filled out Italian fiscal context). Reverse-
+  // charge flag zeroes the IVA + prints the legal note.
+  if (input.brand.piva && input.currencyCode && input.totalNetCents != null) {
+    renderFiscalBlock(doc, input)
+  }
+
   if (input.notes && input.notes.trim().length > 0) {
     doc.moveDown(0.5)
     doc
@@ -299,7 +374,15 @@ async function renderLetterhead(
   for (const line of brand.addressLines) {
     doc.text(line, { width: textWidth, align: 'right' })
   }
-  if (brand.taxId) {
+  // PO.12 — prefer Italian-style P.IVA / C.F. line when those fields
+  // are populated; otherwise fall back to the legacy taxId line.
+  if (brand.piva || brand.codiceFiscale) {
+    const fiscalParts: string[] = []
+    if (brand.piva) fiscalParts.push(`P.IVA ${brand.piva}`)
+    if (brand.codiceFiscale) fiscalParts.push(`C.F. ${brand.codiceFiscale}`)
+    if (brand.sdiCode) fiscalParts.push(`SDI ${brand.sdiCode}`)
+    doc.text(fiscalParts.join(' · '), { width: textWidth, align: 'right' })
+  } else if (brand.taxId) {
     doc.text(`Tax ID: ${brand.taxId}`, { width: textWidth, align: 'right' })
   }
   const contact: string[] = []
@@ -316,6 +399,78 @@ async function renderLetterhead(
   doc.x = PAGE_MARGIN
   doc.moveDown(0.5)
   drawHorizontalRule(doc)
+}
+
+/* ───────────────────────────────────────────────────────────────────
+ * PO.12 — Italian fiscal block (Imponibile / IVA / Totale + reverse-
+ * charge banner). Caller already computed the cents; we just render.
+ * ─────────────────────────────────────────────────────────────────── */
+
+function formatFiscalMoney(cents: number, code: string): string {
+  try {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: code,
+      maximumFractionDigits: 2,
+    }).format(cents / 100)
+  } catch {
+    return `${(cents / 100).toFixed(2)} ${code}`
+  }
+}
+
+function renderFiscalBlock(doc: PDFKit.PDFDocument, input: FactoryPoInput): void {
+  const ccy = input.currencyCode ?? 'EUR'
+  const net = input.totalNetCents ?? 0
+  const rateBp = input.ivaRateBp ?? 2200
+  const reverseCharge = !!input.reverseCharge
+  const iva = reverseCharge ? 0 : input.ivaCents ?? Math.round((net * rateBp) / 10000)
+  const gross = input.totalGrossCents ?? net + iva
+
+  doc.moveDown(0.6)
+
+  // Right-aligned three-line totals strip.
+  const pageWidth = doc.page.width - PAGE_MARGIN * 2
+  const labelW = 140
+  const valueW = 110
+  const startX = PAGE_MARGIN + pageWidth - (labelW + valueW)
+
+  const writeRow = (label: string, value: string, bold = false) => {
+    const y = doc.y
+    doc
+      .font(bold ? 'Helvetica-Bold' : 'Helvetica')
+      .fontSize(bold ? 11 : 10)
+      .fillColor(bold ? HEADER_DARK : TEXT_GREY)
+      .text(label, startX, y, { width: labelW, align: 'right' })
+    doc.text(value, startX + labelW, y, {
+      width: valueW,
+      align: 'right',
+    })
+    doc.moveDown(0.2)
+  }
+
+  writeRow(`${poLabel(input, 'imponibile')}:`, formatFiscalMoney(net, ccy))
+
+  if (reverseCharge) {
+    writeRow(`${poLabel(input, 'iva')} (${poLabel(input, 'reverseCharge')}):`, '—')
+  } else {
+    writeRow(`${poLabel(input, 'iva')} ${(rateBp / 100).toFixed(0)}%:`, formatFiscalMoney(iva, ccy))
+  }
+
+  writeRow(`${poLabel(input, 'totale')}:`, formatFiscalMoney(gross, ccy), true)
+
+  doc.moveDown(0.3)
+
+  if (reverseCharge) {
+    doc
+      .font('Helvetica-Oblique')
+      .fontSize(9)
+      .fillColor(TEXT_GREY)
+      .text(poLabel(input, 'reverseChargeNote'), PAGE_MARGIN, doc.y, {
+        width: pageWidth,
+        lineGap: LINE_GAP,
+      })
+    doc.moveDown(0.3)
+  }
 }
 
 /* ───────────────────────────────────────────────────────────────────
