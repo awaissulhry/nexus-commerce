@@ -5437,6 +5437,121 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
     return supplier
   })
 
+  // PO.5 — supplier-product catalog feed for the smart Create-PO modal.
+  // SupplierProduct rows joined with the linked Product (SKU + name)
+  // so the line-item autocomplete can show meaningful suggestions and
+  // auto-fill cost / MOQ / case-pack on selection. Optional `q` does a
+  // case-insensitive substring match against product SKU OR product
+  // name OR supplierSku. Default cap of 50 rows keeps the dropdown
+  // responsive even with thousands of catalog entries.
+  fastify.get('/fulfillment/suppliers/:id/catalog', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const q = request.query as { q?: string; take?: string }
+      const take = Math.min(200, Math.max(1, Number(q.take) || 50))
+
+      const where: any = { supplierId: id }
+      const search = q.q?.trim()
+      if (search) {
+        where.OR = [
+          { supplierSku: { contains: search, mode: 'insensitive' } },
+        ]
+      }
+
+      const rows = await prisma.supplierProduct.findMany({
+        where,
+        take,
+        orderBy: [{ isPrimary: 'desc' }, { id: 'asc' }],
+      })
+
+      // Fetch the matching Products in one go and join in-memory; this
+      // avoids the include-with-relation-search awkwardness of Prisma
+      // when the search term needs to match across two tables.
+      const productIds = rows.map((r) => r.productId).filter(Boolean) as string[]
+      const products = productIds.length
+        ? await prisma.product.findMany({
+            where: { id: { in: productIds } },
+            select: { id: true, sku: true, name: true, basePrice: true },
+          })
+        : []
+      const productById = new Map(products.map((p) => [p.id, p]))
+
+      // Second pass: if a search was supplied and matched only via the
+      // Product side, do a separate lookup. Otherwise the rows above
+      // are the complete result.
+      let extraRows: typeof rows = []
+      if (search && rows.length < take) {
+        const productHits = await prisma.product.findMany({
+          where: {
+            OR: [
+              { sku: { contains: search, mode: 'insensitive' } },
+              { name: { contains: search, mode: 'insensitive' } },
+            ],
+          },
+          select: { id: true },
+          take,
+        })
+        const hitIds = productHits.map((p) => p.id)
+        if (hitIds.length > 0) {
+          extraRows = await prisma.supplierProduct.findMany({
+            where: {
+              supplierId: id,
+              productId: { in: hitIds },
+              id: { notIn: rows.map((r) => r.id) },
+            },
+            take: take - rows.length,
+            orderBy: [{ isPrimary: 'desc' }, { id: 'asc' }],
+          })
+          for (const r of extraRows) {
+            if (r.productId && !productById.has(r.productId)) {
+              const p = await prisma.product.findUnique({
+                where: { id: r.productId },
+                select: { id: true, sku: true, name: true, basePrice: true },
+              })
+              if (p) productById.set(p.id, p)
+            }
+          }
+        }
+      }
+
+      const all = [...rows, ...extraRows]
+      const items = all.map((r) => ({
+        id: r.id,
+        supplierSku: r.supplierSku,
+        costCents: r.costCents,
+        currencyCode: r.currencyCode,
+        moq: r.moq,
+        casePack: r.casePack,
+        leadTimeDaysOverride: r.leadTimeDaysOverride,
+        isPrimary: r.isPrimary,
+        product: r.productId ? productById.get(r.productId) ?? null : null,
+      }))
+
+      return { items, total: items.length }
+    } catch (err: any) {
+      fastify.log.error({ err }, '[suppliers/:id/catalog] failed')
+      return reply.code(500).send({ error: err?.message ?? String(err) })
+    }
+  })
+
+  // PO.5 — point-in-time FX rate lookup for the Create-PO modal's
+  // currency preview ("≈ €4,500 at 1.084 USD/EUR"). Thin wrapper
+  // around fx-rate.service:getFxRate so we don't have to import the
+  // service onto the client.
+  fastify.get('/fulfillment/fx-rate', async (request, reply) => {
+    try {
+      const q = request.query as { from?: string; to?: string }
+      const from = (q.from ?? 'EUR').toUpperCase()
+      const to = (q.to ?? 'EUR').toUpperCase()
+      const { getFxRate } = await import('../services/fx-rate.service.js')
+      const rate = await getFxRate(prisma, from, to, new Date())
+      return { from, to, rate, asOf: new Date().toISOString() }
+    } catch (err: any) {
+      fastify.log.error({ err }, '[fulfillment/fx-rate] failed')
+      return reply.code(500).send({ error: err?.message ?? String(err) })
+    }
+  })
+
   // H.13 — supplier scorecard. Aggregates from PurchaseOrder +
   // InboundShipment + InboundShipmentItem over a rolling window
   // (default 365 days). Metrics:
@@ -5943,7 +6058,20 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
         warehouseId?: string
         expectedDeliveryDate?: string
         notes?: string
-        items?: Array<{ productId?: string; sku: string; supplierSku?: string; quantityOrdered: number; unitCostCents?: number }>
+        // PO.5 — currency lives on the PO header so line-item cents
+        // are unambiguous. Default EUR matches the Supplier model's
+        // defaultCurrency default.
+        currencyCode?: string
+        items?: Array<{
+          productId?: string
+          sku: string
+          supplierSku?: string
+          quantityOrdered: number
+          unitCostCents?: number
+          // PO.5 — per-line note, persisted via the PO.1 column added
+          // to PurchaseOrderItem. Surfaces in the factory PDF in PO.12.
+          note?: string
+        }>
       }
       const items = Array.isArray(body.items) ? body.items : []
       if (items.length === 0) return reply.code(400).send({ error: 'items[] required' })
@@ -5959,13 +6087,16 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
           expectedDeliveryDate: body.expectedDeliveryDate ? new Date(body.expectedDeliveryDate) : null,
           notes: body.notes ?? null,
           totalCents,
+          currencyCode: body.currencyCode?.toUpperCase() || 'EUR',
           items: {
-            create: items.map((it) => ({
+            create: items.map((it, idx) => ({
               productId: it.productId ?? null,
               sku: it.sku,
               supplierSku: it.supplierSku ?? null,
               quantityOrdered: it.quantityOrdered,
               unitCostCents: it.unitCostCents ?? 0,
+              note: it.note ?? null,
+              lineOrder: idx,
             })),
           },
         },
