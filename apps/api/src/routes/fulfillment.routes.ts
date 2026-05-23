@@ -7384,6 +7384,380 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
   })
 
   // ═══════════════════════════════════════════════════════════════════
+  // PO.15 — CSV export + import.
+  //
+  // Export streams a one-row-per-line-item CSV honoring the same
+  // filter query params as the GET list endpoint. Use the existing
+  // filter mechanics so a "share this filtered view" URL becomes a
+  // "download this filtered view" URL by swapping the .csv suffix.
+  //
+  // Import expects the same column shape. Rows with the same
+  // `groupKey` form one PO; supplier / warehouse / expectedDelivery /
+  // currency are taken from the first row of each group. Empty
+  // groupKey rows belong to the most-recently-seen group within the
+  // upload (carryover convention).
+  //
+  // Recurring/template POs + RFQ pre-PO flow are deferred — they
+  // need their own data models + workflow surfaces and warrant a
+  // separate engagement once CSV round-trips prove the data path.
+  // ═══════════════════════════════════════════════════════════════════
+
+  function csvEscape(value: unknown): string {
+    if (value == null) return ''
+    const s = typeof value === 'string' ? value : String(value)
+    if (s.includes(',') || s.includes('"') || s.includes('\n')) {
+      return `"${s.replace(/"/g, '""')}"`
+    }
+    return s
+  }
+
+  fastify.get('/fulfillment/purchase-orders/export.csv', async (request, reply) => {
+    try {
+      // Re-use the same filter parse semantics as the list route.
+      const q = request.query as any
+      const where: any = {}
+      where.deletedAt = q.deleted === 'true' ? { not: null } : null
+      if (q.status && q.status !== 'ALL') {
+        const statuses = String(q.status).split(',').map((s) => s.trim()).filter(Boolean)
+        if (statuses.length === 1) where.status = statuses[0]
+        else if (statuses.length > 1) where.status = { in: statuses }
+      }
+      if (q.supplierIds) {
+        const ids = String(q.supplierIds).split(',').map((s) => s.trim()).filter(Boolean)
+        if (ids.length === 1) where.supplierId = ids[0]
+        else if (ids.length > 1) where.supplierId = { in: ids }
+      } else if (q.supplierId) {
+        where.supplierId = q.supplierId
+      }
+      if (q.warehouseId) where.warehouseId = q.warehouseId
+      if (q.currencyCode) where.currencyCode = String(q.currencyCode).trim().toUpperCase()
+      const min = q.minValueCents != null ? Number(q.minValueCents) : null
+      const max = q.maxValueCents != null ? Number(q.maxValueCents) : null
+      if (Number.isFinite(min) || Number.isFinite(max)) {
+        where.totalCents = {}
+        if (Number.isFinite(min) && min! >= 0) where.totalCents.gte = Math.floor(min!)
+        if (Number.isFinite(max) && max! >= 0) where.totalCents.lte = Math.floor(max!)
+      }
+      const fromDate = q.expectedFrom ? new Date(String(q.expectedFrom)) : null
+      const toDate = q.expectedTo ? new Date(String(q.expectedTo)) : null
+      if (fromDate || toDate) {
+        where.expectedDeliveryDate = {}
+        if (fromDate && !isNaN(fromDate.getTime())) where.expectedDeliveryDate.gte = fromDate
+        if (toDate && !isNaN(toDate.getTime())) {
+          const inclusive = new Date(toDate.getTime())
+          inclusive.setHours(23, 59, 59, 999)
+          where.expectedDeliveryDate.lte = inclusive
+        }
+      }
+      if (q.lateOnly === 'true') {
+        where.expectedDeliveryDate = { ...(where.expectedDeliveryDate ?? {}), lt: new Date() }
+        if (!where.status) {
+          where.status = {
+            in: ['DRAFT','REVIEW','APPROVED','SUBMITTED','ACKNOWLEDGED','CONFIRMED','PARTIAL'],
+          }
+        }
+      }
+
+      const pos = await prisma.purchaseOrder.findMany({
+        where,
+        include: {
+          supplier: { select: { id: true, name: true } },
+          warehouse: { select: { code: true } },
+          items: { orderBy: [{ lineOrder: 'asc' }, { id: 'asc' }] },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 5000, // hard cap to avoid runaway memory
+      })
+
+      const HEADER = [
+        'groupKey',          // = poNumber, used by import to re-group
+        'poNumber',
+        'status',
+        'supplierName',
+        'supplierId',
+        'warehouseCode',
+        'expectedDeliveryDate',
+        'currencyCode',
+        'totalCents',
+        'createdAt',
+        'sku',
+        'supplierSku',
+        'quantityOrdered',
+        'quantityReceived',
+        'unitCostCents',
+        'lineNote',
+      ]
+      const rows: string[] = [HEADER.join(',')]
+      for (const po of pos) {
+        if (po.items.length === 0) {
+          rows.push(
+            [
+              csvEscape(po.poNumber),
+              csvEscape(po.poNumber),
+              csvEscape(po.status),
+              csvEscape(po.supplier?.name ?? ''),
+              csvEscape(po.supplier?.id ?? ''),
+              csvEscape(po.warehouse?.code ?? ''),
+              csvEscape(po.expectedDeliveryDate?.toISOString().slice(0, 10) ?? ''),
+              csvEscape(po.currencyCode),
+              csvEscape(po.totalCents),
+              csvEscape(po.createdAt.toISOString()),
+              '',
+              '',
+              '',
+              '',
+              '',
+              '',
+            ].join(','),
+          )
+          continue
+        }
+        for (const it of po.items) {
+          rows.push(
+            [
+              csvEscape(po.poNumber),
+              csvEscape(po.poNumber),
+              csvEscape(po.status),
+              csvEscape(po.supplier?.name ?? ''),
+              csvEscape(po.supplier?.id ?? ''),
+              csvEscape(po.warehouse?.code ?? ''),
+              csvEscape(po.expectedDeliveryDate?.toISOString().slice(0, 10) ?? ''),
+              csvEscape(po.currencyCode),
+              csvEscape(po.totalCents),
+              csvEscape(po.createdAt.toISOString()),
+              csvEscape(it.sku),
+              csvEscape(it.supplierSku ?? ''),
+              csvEscape(it.quantityOrdered),
+              csvEscape(it.quantityReceived),
+              csvEscape(it.unitCostCents),
+              csvEscape(it.note ?? ''),
+            ].join(','),
+          )
+        }
+      }
+
+      const filename = `purchase-orders-${new Date().toISOString().slice(0, 10)}.csv`
+      reply
+        .header('Content-Type', 'text/csv; charset=utf-8')
+        .header('Content-Disposition', `attachment; filename="${filename}"`)
+      return rows.join('\n') + '\n'
+    } catch (err: any) {
+      fastify.log.error({ err }, '[purchase-orders/export.csv] failed')
+      return reply.code(500).send({ error: err?.message ?? String(err) })
+    }
+  })
+
+  // Import parser/validator/writer. The preview path returns the
+  // parsed groups + per-group/per-line validation; the commit path
+  // creates POs. Reuses the existing parseCsv helper from the W8.2
+  // import wizard.
+  interface ImportLine {
+    sku: string
+    supplierSku?: string
+    quantityOrdered: number
+    unitCostCents: number
+    lineNote?: string
+    /** Set when this line failed validation; the UI surfaces the
+     *  reason next to the row. */
+    error?: string
+  }
+  interface ImportGroup {
+    groupKey: string
+    supplierName: string | null
+    supplierId: string | null
+    warehouseCode: string | null
+    expectedDeliveryDate: string | null
+    currencyCode: string
+    lines: ImportLine[]
+    groupErrors: string[]
+  }
+
+  async function parseImportCsv(text: string): Promise<{
+    groups: ImportGroup[]
+    totalRows: number
+    rejectedRows: number
+  }> {
+    const { parseCsv } = await import('../services/import/parsers.js')
+    const { headers, rows } = parseCsv(text)
+    const required = ['groupKey', 'sku', 'quantityOrdered']
+    const missing = required.filter((h) => !headers.includes(h))
+    if (missing.length > 0) {
+      throw new Error(
+        `Missing required column(s): ${missing.join(', ')}. Required: ${required.join(', ')}.`,
+      )
+    }
+
+    const supplierByName = new Map<string, { id: string }>()
+    {
+      const suppliers = await prisma.supplier.findMany({
+        select: { id: true, name: true },
+      })
+      for (const s of suppliers) supplierByName.set(s.name.toLowerCase(), { id: s.id })
+    }
+
+    const warehouseByCode = new Map<string, { id: string }>()
+    {
+      const whs = await prisma.warehouse.findMany({ select: { id: true, code: true } })
+      for (const w of whs) warehouseByCode.set(w.code.toLowerCase(), { id: w.id })
+    }
+
+    const groupsByKey = new Map<string, ImportGroup>()
+    let lastKey: string | null = null
+    let totalRows = 0
+    let rejectedRows = 0
+    for (const r of rows) {
+      totalRows++
+      const groupKeyRaw = String((r['groupKey'] ?? '') as any).trim()
+      const groupKey = groupKeyRaw || lastKey
+      if (!groupKey) {
+        rejectedRows++
+        continue
+      }
+      lastKey = groupKey
+
+      const qty = parseInt(String(r['quantityOrdered'] ?? '0'), 10)
+      const sku = String((r['sku'] ?? '') as any).trim()
+      const unitCostCents = Math.max(0, Math.round(Number(r['unitCostCents'] ?? 0)))
+      const line: ImportLine = {
+        sku,
+        supplierSku: String((r['supplierSku'] ?? '') as any).trim() || undefined,
+        quantityOrdered: qty,
+        unitCostCents,
+        lineNote: String((r['lineNote'] ?? '') as any).trim() || undefined,
+      }
+      if (!sku) line.error = 'sku required'
+      else if (!Number.isFinite(qty) || qty <= 0) line.error = 'quantityOrdered must be ≥ 1'
+
+      if (!groupsByKey.has(groupKey)) {
+        const supplierName = String((r['supplierName'] ?? '') as any).trim() || null
+        const supplierId =
+          String((r['supplierId'] ?? '') as any).trim() ||
+          (supplierName ? supplierByName.get(supplierName.toLowerCase())?.id : null) ||
+          null
+        const warehouseCode = String((r['warehouseCode'] ?? '') as any).trim() || null
+        const expectedRaw = String((r['expectedDeliveryDate'] ?? '') as any).trim() || null
+        const currencyCode =
+          String((r['currencyCode'] ?? '') as any).trim().toUpperCase() || 'EUR'
+
+        const groupErrors: string[] = []
+        if (supplierName && !supplierId) {
+          groupErrors.push(`Unknown supplier "${supplierName}"; PO will be created without a supplier.`)
+        }
+        if (warehouseCode && !warehouseByCode.has(warehouseCode.toLowerCase())) {
+          groupErrors.push(`Unknown warehouse code "${warehouseCode}"; default will be used.`)
+        }
+        if (expectedRaw && isNaN(new Date(expectedRaw).getTime())) {
+          groupErrors.push(`Invalid expectedDeliveryDate "${expectedRaw}"; ignored.`)
+        }
+
+        groupsByKey.set(groupKey, {
+          groupKey,
+          supplierName,
+          supplierId,
+          warehouseCode,
+          expectedDeliveryDate: expectedRaw,
+          currencyCode,
+          lines: [],
+          groupErrors,
+        })
+      }
+      groupsByKey.get(groupKey)!.lines.push(line)
+      if (line.error) rejectedRows++
+    }
+    return { groups: Array.from(groupsByKey.values()), totalRows, rejectedRows }
+  }
+
+  fastify.post('/fulfillment/purchase-orders/import-preview', async (request, reply) => {
+    try {
+      const body = (request.body ?? {}) as { csv?: string }
+      if (!body.csv || typeof body.csv !== 'string') {
+        return reply.code(400).send({ error: 'csv (string) required' })
+      }
+      const result = await parseImportCsv(body.csv)
+      return result
+    } catch (err: any) {
+      fastify.log.error({ err }, '[purchase-orders/import-preview] failed')
+      return reply.code(400).send({ error: err?.message ?? String(err) })
+    }
+  })
+
+  fastify.post('/fulfillment/purchase-orders/import', async (request, reply) => {
+    try {
+      const body = (request.body ?? {}) as { csv?: string }
+      if (!body.csv || typeof body.csv !== 'string') {
+        return reply.code(400).send({ error: 'csv (string) required' })
+      }
+      const { groups } = await parseImportCsv(body.csv)
+      const defaultWarehouse = await prisma.warehouse.findFirst({
+        where: { isDefault: true },
+        select: { id: true, code: true },
+      })
+      const warehouseByCode = new Map<string, { id: string }>()
+      {
+        const whs = await prisma.warehouse.findMany({ select: { id: true, code: true } })
+        for (const w of whs) warehouseByCode.set(w.code.toLowerCase(), { id: w.id })
+      }
+
+      const created: Array<{ id: string; poNumber: string }> = []
+      const failed: Array<{ groupKey: string; error: string }> = []
+      for (const g of groups) {
+        const validLines = g.lines.filter((l) => !l.error)
+        if (validLines.length === 0) {
+          failed.push({ groupKey: g.groupKey, error: 'no valid lines' })
+          continue
+        }
+        const warehouseId =
+          (g.warehouseCode
+            ? warehouseByCode.get(g.warehouseCode.toLowerCase())?.id
+            : null) ?? defaultWarehouse?.id
+        try {
+          const totalCents = validLines.reduce(
+            (s, l) => s + l.unitCostCents * l.quantityOrdered,
+            0,
+          )
+          const po = await prisma.purchaseOrder.create({
+            data: {
+              poNumber: generatePoNumber(),
+              supplierId: g.supplierId,
+              warehouseId,
+              status: 'DRAFT',
+              expectedDeliveryDate: g.expectedDeliveryDate
+                ? new Date(g.expectedDeliveryDate)
+                : null,
+              notes: `Imported from CSV (group: ${g.groupKey})`,
+              totalCents,
+              currencyCode: g.currencyCode,
+              items: {
+                create: validLines.map((l, idx) => ({
+                  sku: l.sku,
+                  supplierSku: l.supplierSku ?? null,
+                  quantityOrdered: l.quantityOrdered,
+                  unitCostCents: l.unitCostCents,
+                  note: l.lineNote ?? null,
+                  lineOrder: idx,
+                })),
+              },
+            },
+          })
+          publishPoEvent({
+            type: 'po.created',
+            poId: po.id,
+            poNumber: po.poNumber,
+            ts: Date.now(),
+          })
+          created.push({ id: po.id, poNumber: po.poNumber })
+        } catch (err: any) {
+          failed.push({ groupKey: g.groupKey, error: err?.message ?? String(err) })
+        }
+      }
+      return { created, failed, totalGroups: groups.length }
+    } catch (err: any) {
+      fastify.log.error({ err }, '[purchase-orders/import] failed')
+      return reply.code(400).send({ error: err?.message ?? String(err) })
+    }
+  })
+
+  // ═══════════════════════════════════════════════════════════════════
   // PO.9 — Public supplier ack endpoints. Token-gated, no auth.
   //
   // Reached from the URL embedded in the supplier email. The token is

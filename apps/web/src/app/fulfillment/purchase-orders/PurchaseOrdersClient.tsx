@@ -37,6 +37,7 @@ import {
   Settings2,
   ShoppingCart,
   Trash2,
+  Upload,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
@@ -85,6 +86,7 @@ import {
   type AdvancedFilterState,
   type SavedView,
 } from './_shared/AdvancedFilters'
+import { CsvImportModal, ExportCsvButton } from './_shared/CsvImportModal'
 
 // ── Audit-trail panel (still used by the card lens) ────────────────
 
@@ -413,6 +415,7 @@ export default function PurchaseOrdersClient() {
   const [actionError, setActionError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [createOpen, setCreateOpen] = useState(false)
+  const [importOpen, setImportOpen] = useState(false)
   // PO.13 — scorecard drawer state. Opened from the spend tile's Top
   // Suppliers list and from supplier-name cells in PO rows (when
   // PO.14 adds the supplier picker, this becomes the primary deep-
@@ -767,6 +770,20 @@ export default function PurchaseOrdersClient() {
               <Plus className="w-3.5 h-3.5" />
               {t('po.newPo')}
             </Button>
+            {/* PO.15 — CSV round-trip. Export honors the active filter
+                query so a "share this filtered view" URL becomes a
+                "download this filtered view" by swapping path. Import
+                opens a modal with paste/upload + preview + confirm. */}
+            <ExportCsvButton filterQuery={searchParams.toString()} />
+            <button
+              type="button"
+              onClick={() => setImportOpen(true)}
+              className="h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded-md inline-flex items-center gap-1.5 hover:bg-slate-50 dark:hover:bg-slate-800"
+              title="Import POs from CSV"
+            >
+              <Upload className="w-3 h-3" />
+              Import CSV
+            </button>
             <button
               type="button"
               onClick={toggleShowDeleted}
@@ -1007,6 +1024,15 @@ export default function PurchaseOrdersClient() {
             setCreateOpen(false)
             await fetchPos()
           }}
+        />
+      )}
+
+      {/* PO.15 — CSV import modal. Bulk-create POs from a pasted or
+          uploaded CSV file. */}
+      {importOpen && (
+        <CsvImportModal
+          onClose={() => setImportOpen(false)}
+          onImported={fetchPos}
         />
       )}
 
