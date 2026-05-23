@@ -36,6 +36,15 @@ interface MatrixProps {
    *  master-fallback state. Hover affordance on cells with
    *  origin='own'; the cascade re-renders to the parent scope. */
   onCellRevert?: (groupValue: string | null, slot: AmazonSlot) => void
+  /** IE.18 — Move a cell's image to a different slot (drag between
+   *  slots within the same row). Optional so callers that don't
+   *  wire the substrate yet still type-check. */
+  onCellMove?: (
+    fromGroupValue: string | null,
+    fromSlot: AmazonSlot,
+    toGroupValue: string | null,
+    toSlot: AmazonSlot,
+  ) => void
 }
 
 // ── Slot cell ──────────────────────────────────────────────────────────
@@ -56,6 +65,17 @@ interface SlotCellProps {
   onFileDrop?: (file: File) => void
   /** IE.17 — Revert this cell to its inherited / master-fallback state. */
   onRevert?: () => void
+  /** IA.9 — Receive an internal cell-to-cell move payload. */
+  onCellMoveDrop?: (payload: {
+    groupValue: string | null
+    slot: AmazonSlot
+    url: string
+    origin: 'own' | 'inherited'
+    listingImageId?: string
+  }) => void
+  /** IA.9 — Identifier the cell stamps onto its dataTransfer payload
+   *  so the drop target knows which cell it's coming from. */
+  selfGroupValue: string | null
 }
 
 function SlotCell({
@@ -71,12 +91,18 @@ function SlotCell({
   onFocus,
   onFileDrop,
   onRevert,
+  onCellMoveDrop,
+  selfGroupValue,
 }: SlotCellProps) {
   const [isOver, setIsOver] = useState(false)
   const isMain = slot === 'MAIN'
 
   function handleDragOver(e: React.DragEvent) {
-    if (e.dataTransfer.types.includes('application/nexus-image-url') || e.dataTransfer.types.includes('Files')) {
+    if (
+      e.dataTransfer.types.includes('application/nexus-matrix-cell') ||
+      e.dataTransfer.types.includes('application/nexus-image-url') ||
+      e.dataTransfer.types.includes('Files')
+    ) {
       e.preventDefault()
       setIsOver(true)
     }
@@ -88,11 +114,46 @@ function SlotCell({
     e.preventDefault()
     e.stopPropagation()
     setIsOver(false)
+    // IA.9 — Internal cell-to-cell drop. Check this first so the
+    // outer onDrop (which assumes an external source) doesn't fire
+    // when the drag came from another matrix cell.
+    const matrixPayload = e.dataTransfer.getData('application/nexus-matrix-cell')
+    if (matrixPayload && onCellMoveDrop) {
+      try {
+        const parsed = JSON.parse(matrixPayload) as {
+          groupValue: string | null
+          slot: AmazonSlot
+          url: string
+          origin: 'own' | 'inherited'
+          listingImageId?: string
+        }
+        // Drop on the same cell = no-op.
+        if (parsed.groupValue === selfGroupValue && parsed.slot === slot) return
+        onCellMoveDrop(parsed)
+        return
+      } catch { /* malformed payload — fall through to URL/file handling */ }
+    }
     const url = e.dataTransfer.getData('application/nexus-image-url')
     const sourceId = e.dataTransfer.getData('application/nexus-image-id') || undefined
     if (url) { onDrop(url, sourceId); return }
     const files = Array.from(e.dataTransfer.files)
     if (files.length && onFileDrop) { onFileDrop(files[0]); return }
+  }
+
+  // IA.9 — Filled cells become drag sources. Carries the cell's
+  // coords + origin in a custom dataTransfer key so the drop target
+  // knows it's an internal move (and what to do with the source).
+  function handleDragStart(e: React.DragEvent) {
+    if (!cell) return
+    const payload = JSON.stringify({
+      groupValue: selfGroupValue,
+      slot,
+      url: cell.url,
+      origin: cell.origin,
+      listingImageId: cell.listingImageId,
+    })
+    e.dataTransfer.effectAllowed = 'move'
+    e.dataTransfer.setData('application/nexus-matrix-cell', payload)
   }
 
   const ariaLabel = `${rowLabel}, ${SLOT_LABELS[slot]}: ${
@@ -131,7 +192,10 @@ function SlotCell({
       onDrop={handleDrop}
     >
       {cell ? (
-        <div className={cn(
+        <div
+          draggable={!!onCellMoveDrop /* gate on the move handler being wired */}
+          onDragStart={handleDragStart}
+          className={cn(
           'w-full h-full rounded-lg overflow-hidden relative group cursor-pointer',
           // IE.3 — master-fallback cells get a dashed border so the
           // operator sees at a glance "this is just the master gallery
@@ -361,6 +425,7 @@ export default function AmazonMatrix({
   onClearRow,
   onCellFileDrop,
   onCellRevert,
+  onCellMove,
   cellStatusFilter = 'all',
 }: MatrixProps) {
   // IE.11 — Match a cell against the active status filter. Empty
@@ -553,6 +618,7 @@ export default function AmazonMatrix({
                           if (el) cellRefs.current.set(key, el)
                           else cellRefs.current.delete(key)
                         }}
+                        selfGroupValue={groupValue}
                         onDrop={(url, sourceId) => onCellDrop(groupValue, slot, url, sourceId)}
                         onClick={() => onCellClick(groupValue, slot)}
                         onLightbox={cell && onCellLightbox
@@ -562,6 +628,9 @@ export default function AmazonMatrix({
                         onFocus={() => setFocusedCell({ row: rowIdx, col: colIdx })}
                         onFileDrop={(file) => onCellFileDrop(groupValue, slot, file)}
                         onRevert={onCellRevert ? () => onCellRevert(groupValue, slot) : undefined}
+                        onCellMoveDrop={onCellMove
+                          ? (from) => onCellMove(from, { groupValue, slot })
+                          : undefined}
                       />
                     </div>
                   )
