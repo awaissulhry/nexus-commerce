@@ -175,6 +175,14 @@ async function loadOrderItems(
         // Filter by parent order's purchaseDate, not createdAt (I1)
         purchaseDate: { gte: from, lt: to },
         deletedAt: null,
+        // DA-RT.7 — exclude CANCELLED. Profit on cancelled orders is
+        // 0 (no revenue, no fulfilment cost incurred). Including them
+        // inflates orderItem count + skews per-SKU averages. The
+        // marketing dashboard tile uses "Amazon Sales" semantic which
+        // includes cancelled — that's deliberate parity with Seller
+        // Central's UI; profit math here uses the realized-revenue
+        // semantic instead.
+        status: { notIn: ['CANCELLED'] as any },
         ...(whereChannel ? { channel: whereChannel as never } : {}),
         ...(whereMarket ? { marketplace: whereMarket } : {}),
       },

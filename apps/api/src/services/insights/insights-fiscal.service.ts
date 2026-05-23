@@ -143,6 +143,18 @@ export async function computeFiscalReport(
         // recognized) — NOT DB insert time. Wrong here = wrong tax filing.
         purchaseDate: { gte: current.from, lt: current.to },
         deletedAt: null,
+        // DA-RT.7 (delivered) — exclude CANCELLED. Italian IVA is
+        // collected on completed sales only; orders cancelled before
+        // fulfilment never generate a VAT liability. The MS.6 "Amazon
+        // Sales semantic" (which DOES include cancelled gross) applies
+        // to the marketing dashboard tile only — NOT to a tax-
+        // authority-facing report. Refunded orders stay in (they
+        // generated revenue when shipped) — the creditNotesValue
+        // counter handles their offset.
+        // Was originally promised by DA-RT.3 commit message but the
+        // Edit was lost during a concurrent-session rescue scramble;
+        // DA-RT.7 re-delivers + documents the policy.
+        status: { notIn: ['CANCELLED'] as any },
       },
       select: {
         id: true,

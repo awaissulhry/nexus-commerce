@@ -11,6 +11,36 @@
  * to validate end-to-end wiring; subsequent phases add per-report
  * helpers (sales, profit, ads, …) here without bloating individual
  * route files.
+ *
+ * ─────────────────────────────────────────────────────────────────
+ * DA-RT.7 — Order status semantic policy (canonical)
+ * ─────────────────────────────────────────────────────────────────
+ * Decision matrix for whether CANCELLED + PENDING + €0 orders count
+ * toward each report. Apply consistently — divergence creates
+ * cross-page disagreement (the symptom that prompted DA-RT-series).
+ *
+ *   Surface                       CANCELLED  PENDING  €0+units
+ *   ────────────────────────────  ─────────  ───────  ─────────
+ *   Global Snapshot tile (MS.6)   INCLUDE    INCLUDE  ESTIMATE  ← matches Amazon Seller Central "Sales" tile
+ *   /insights/sales               INCLUDE    INCLUDE  ESTIMATE  ← same semantic as snapshot
+ *   /insights/profit              EXCLUDE    INCLUDE  EXCLUDE   ← profit is realized; no revenue on €0 cancelled
+ *   /insights/fiscal (IVA)        EXCLUDE    INCLUDE  WARN      ← regulatory: VAT on completed sales only
+ *   DailySalesAggregate (F.1)     EXCLUDE    INCLUDE  APPORTION ← forecast/replenishment source of truth
+ *   /orders workspace             EXCLUDE    INCLUDE  INCLUDE   ← operator "actionable" filter (OX.17)
+ *   sales-reconciliation banner   INCLUDE    INCLUDE  WARN      ← matches snapshot tile for parity check
+ *
+ * "ESTIMATE" = surface fills in via ChannelListing.price-based
+ * estimate (DA-RT.1 helper). Flagged with `*` annotation.
+ * "WARN" = report includes the count + estimated value as a
+ * separate metadata field but DOES NOT add into core totals — operator
+ * resolves before downstream action (filing, reconciling).
+ * "APPORTION" = Order.totalPrice apportioned by quantity share when
+ * item prices are €0 (DA-RT.2 CTE logic).
+ *
+ * When in doubt: COMMENT the choice at the `where:` clause site.
+ * Surfaces that diverge from this matrix need an explicit reason in
+ * the comment + a follow-up to align, OR formal exemption added
+ * here.
  */
 
 import type { FastifyRequest } from 'fastify'
