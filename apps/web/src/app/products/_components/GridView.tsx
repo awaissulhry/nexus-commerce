@@ -1179,6 +1179,49 @@ const ProductCell = memo(function ProductCell({
   const { t } = useTranslations()
   const p = product
 
+  // PG.9 — drag-drop upload from the grid. POSTs each file to the same
+  // multipart endpoint the per-product images tab uses; the server
+  // emits IMAGES_UPDATED, the cache refreshes via the read-cache
+  // queue, and the thumbnail catches up within ~2s. Parent rows skip
+  // (Amazon-parity: galleries live on the variant, not the parent).
+  const handleThumbUpload = useCallback(
+    async (files: File[]) => {
+      if (p.isParent && !p.parentId) return
+      let okCount = 0
+      let failCount = 0
+      for (const file of files) {
+        const fd = new FormData()
+        fd.append('file', file, file.name)
+        try {
+          const res = await fetch(
+            `${getBackendUrl()}/api/products/${p.id}/images?type=ALT`,
+            { method: 'POST', body: fd },
+          )
+          if (!res.ok) throw new Error(`HTTP ${res.status}`)
+          okCount++
+        } catch (err) {
+          failCount++
+          toast.error(
+            `Upload failed for ${file.name}: ${err instanceof Error ? err.message : String(err)}`,
+          )
+        }
+      }
+      if (okCount > 0) {
+        toast.success(
+          okCount === 1
+            ? 'Photo uploaded'
+            : `${okCount} photos uploaded${failCount > 0 ? ` (${failCount} failed)` : ''}`,
+        )
+        emitInvalidation({
+          type: 'product.updated',
+          meta: { productIds: [p.id], source: 'grid-thumb-drop' },
+        })
+        onChanged()
+      }
+    },
+    [p.id, p.isParent, p.parentId, toast, onChanged],
+  )
+
   switch (col) {
     // AM.1 — Product cell: matches Amazon exactly per row type.
     // Parent: thumbnail + name + ASIN (grey) + product-type link.
@@ -1200,6 +1243,7 @@ const ProductCell = memo(function ProductCell({
           searchQuery={searchQuery}
           showThumb
           fulfillmentMethod={p.fulfillmentMethod}
+          onUploadFiles={handleThumbUpload}
         />
       )
 
@@ -1211,6 +1255,13 @@ const ProductCell = memo(function ProductCell({
       const isParentRow = p.isParent && !p.parentId
       const channelCount = p.channelCount ?? 0
       const needsFix = p.status === 'ACTIVE' && channelCount === 0
+      // PG.9 — surface a parallel "Add photos" pill when the product
+      // has zero images. Catches the 11 imageless rows in the Xavia
+      // catalog (and any future operator-onboarded SKU that lands
+      // without a gallery). Same amber treatment as the existing
+      // "Improve listing quality" link so the operator scans both
+      // hints with one glance.
+      const needsPhotos = !p.isParent && (p.photoCount ?? 0) === 0
       const statusBg =
         p.status === 'ACTIVE'
           ? 'bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800'
@@ -1236,6 +1287,16 @@ const ProductCell = memo(function ProductCell({
             >
               <AlertCircle size={10} className="flex-shrink-0" />
               Improve listing quality
+            </Link>
+          )}
+          {needsPhotos && (
+            <Link
+              href={`/products/${p.id}/edit?tab=images`}
+              className="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400 hover:underline"
+              title="No images yet — channel listings need photos before they ship"
+            >
+              <AlertCircle size={10} className="flex-shrink-0" />
+              Add photos
             </Link>
           )}
         </div>
@@ -1337,8 +1398,16 @@ const ProductCell = memo(function ProductCell({
       // PG.7 — the standalone thumb column now uses the shared
       // Thumbnail component so it shares hover preview + multi-image
       // dot + Cloudinary transform + onError + density sizing with
-      // the Product column's inline thumb.
-      return <Thumbnail src={p.imageUrl ?? null} photoCount={p.photoCount} alt={p.name} />
+      // the Product column's inline thumb. PG.9 — wired with the same
+      // drag-drop upload callback as the inline thumb.
+      return (
+        <Thumbnail
+          src={p.imageUrl ?? null}
+          photoCount={p.photoCount}
+          alt={p.name}
+          onUpload={handleThumbUpload}
+        />
+      )
 
     case 'sku':
       return (

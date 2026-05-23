@@ -34,7 +34,7 @@ import {
   useState,
 } from 'react'
 import { createPortal } from 'react-dom'
-import { Image as ImageIcon, Layers as ImagesIcon } from 'lucide-react'
+import { Image as ImageIcon, Layers as ImagesIcon, Loader2, Upload } from 'lucide-react'
 import {
   DENSITY_THUMB_ICON_PX,
   DENSITY_THUMB_PX,
@@ -59,6 +59,11 @@ export interface ThumbnailProps {
   onClick?: () => void
   /** Override the auto-derived button title / aria-label. */
   title?: string
+  /** PG.9 — when set, dragging image files over the thumbnail shows
+   *  a "Drop to upload" overlay; drop fires the callback. The caller
+   *  owns the actual upload (POST /api/products/:id/images per file)
+   *  so this component stays free of product-specific endpoints. */
+  onUpload?: (files: File[]) => Promise<void>
 }
 
 const HOVER_DELAY_MS = 400
@@ -92,6 +97,7 @@ export function Thumbnail({
   hoverPreview = true,
   onClick,
   title,
+  onUpload,
 }: ThumbnailProps) {
   const density = useContext(DensityContext)
   const thumbPx = DENSITY_THUMB_PX[density]
@@ -104,6 +110,12 @@ export function Thumbnail({
     top: number
     left: number
   } | null>(null)
+  // PG.9 — drag-drop upload state. dragOver is the "highlight the drop
+  // target" flag (transient on dragenter/leave); uploading is the
+  // "show a spinner instead of the thumb" flag (active during the
+  // onUpload promise).
+  const [dragOver, setDragOver] = useState(false)
+  const [uploading, setUploading] = useState(false)
 
   const hostRef = useRef<HTMLElement | null>(null)
   const dwellTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -218,6 +230,49 @@ export function Thumbnail({
     </div>
   )
 
+  // PG.9 — drag-drop upload wiring. Only active when onUpload is set;
+  // otherwise the handlers are no-ops so existing surfaces (e.g. the
+  // gallery editor) don't accidentally intercept their own drag-drop.
+  // dragenter/dragover both preventDefault — without it the browser
+  // refuses to fire drop.
+  const handleDragEnter = (e: React.DragEvent) => {
+    if (!onUpload || uploading) return
+    if (!e.dataTransfer.types.includes('Files')) return
+    e.preventDefault()
+    e.stopPropagation()
+    setDragOver(true)
+  }
+  const handleDragOver = (e: React.DragEvent) => {
+    if (!onUpload || uploading) return
+    if (!e.dataTransfer.types.includes('Files')) return
+    e.preventDefault()
+    e.stopPropagation()
+    e.dataTransfer.dropEffect = 'copy'
+  }
+  const handleDragLeave = (e: React.DragEvent) => {
+    if (!onUpload) return
+    // Ignore leave events firing from descendants of the host (the
+    // overlay div, image, etc.); only clear when the cursor actually
+    // exits the bounding rect.
+    if (e.currentTarget === e.target) setDragOver(false)
+  }
+  const handleDrop = async (e: React.DragEvent) => {
+    if (!onUpload || uploading) return
+    e.preventDefault()
+    e.stopPropagation()
+    setDragOver(false)
+    const files = Array.from(e.dataTransfer.files).filter((f) =>
+      f.type.startsWith('image/'),
+    )
+    if (files.length === 0) return
+    setUploading(true)
+    try {
+      await onUpload(files)
+    } finally {
+      setUploading(false)
+    }
+  }
+
   return (
     <>
       <Tag
@@ -236,8 +291,37 @@ export function Thumbnail({
             })}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
+        onDragEnter={onUpload ? handleDragEnter : undefined}
+        onDragOver={onUpload ? handleDragOver : undefined}
+        onDragLeave={onUpload ? handleDragLeave : undefined}
+        onDrop={onUpload ? handleDrop : undefined}
       >
         {content}
+        {/* PG.9 — drag-over overlay. Same square as the thumb so the
+            operator sees the exact drop zone. Only visible while a
+            file drag is hovering AND onUpload is wired. */}
+        {dragOver && onUpload && (
+          <div
+            aria-hidden="true"
+            style={{ width: thumbPx, height: thumbPx }}
+            className="absolute inset-0 rounded bg-blue-500/20 border-2 border-dashed border-blue-500 flex items-center justify-center text-blue-700 dark:text-blue-300 pointer-events-none"
+          >
+            <Upload size={Math.max(iconPx, 14)} strokeWidth={2.5} />
+          </div>
+        )}
+        {/* PG.9 — upload-in-flight spinner. Replaces the thumb until
+            the onUpload promise resolves so the operator sees that
+            their drop landed and the network request is in motion. */}
+        {uploading && (
+          <div
+            aria-live="polite"
+            aria-busy="true"
+            style={{ width: thumbPx, height: thumbPx }}
+            className="absolute inset-0 rounded bg-slate-900/70 flex items-center justify-center text-white"
+          >
+            <Loader2 size={Math.max(iconPx, 14)} className="animate-spin" />
+          </div>
+        )}
       </Tag>
       {previewOpen && previewPos && previewSrc &&
         createPortal(

@@ -23,6 +23,9 @@ export type ProductIdentityCellProps = {
   showThumb?: boolean
   /** Derived FBA/FBM/BOTH chip — render only when set */
   fulfillmentMethod?: 'FBA' | 'FBM' | 'BOTH' | string | null
+  /** PG.9 — when set, the thumbnail accepts file drops and forwards
+   *  them to this callback. Caller owns the actual upload. */
+  onUploadFiles?: (files: File[]) => Promise<void>
 }
 
 function Highlight({ text, query }: { text: string; query?: string }) {
@@ -62,6 +65,7 @@ export function ProductIdentityCell(props: ProductIdentityCellProps) {
     onThumbClick, productHref, variantDetailHref, variantDetailLabel,
     showThumb = false,
     fulfillmentMethod,
+    onUploadFiles,
   } = props
 
   const isParentRow = isParent && !parentId
@@ -94,6 +98,7 @@ export function ProductIdentityCell(props: ProductIdentityCellProps) {
           alt={name}
           title={`Open drawer for ${name}`}
           onClick={handleThumbClick}
+          onUpload={onUploadFiles}
         />
       )}
       <div className="min-w-0 flex-1">
