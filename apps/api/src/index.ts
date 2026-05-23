@@ -97,6 +97,7 @@ import bulkAutomationApprovalsRoutes from "./routes/bulk-automation-approvals.ro
 import importWizardRoutes from "./routes/import-wizard.routes.js";
 import scheduledImportsRoutes from "./routes/scheduled-imports.routes.js";
 import scheduledImagePublishesRoutes from "./routes/scheduled-image-publishes.routes.js";
+import bulkImagePublishRoutes from "./routes/bulk-image-publish.routes.js";
 import exportWizardRoutes from "./routes/export-wizard.routes.js";
 import scheduledExportsRoutes from "./routes/scheduled-exports.routes.js";
 import dashboardRoutes from "./routes/dashboard.routes.js";
@@ -526,6 +527,7 @@ app.register(bulkAutomationApprovalsRoutes, { prefix: '/api' });
 app.register(importWizardRoutes, { prefix: '/api' });
 app.register(scheduledImportsRoutes, { prefix: '/api' });
 app.register(scheduledImagePublishesRoutes, { prefix: '/api' });
+app.register(bulkImagePublishRoutes, { prefix: '/api' });
 app.register(exportWizardRoutes, { prefix: '/api' });
 app.register(scheduledExportsRoutes, { prefix: '/api' });
 app.register(dashboardRoutes, { prefix: '/api' });

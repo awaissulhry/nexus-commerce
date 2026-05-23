@@ -154,6 +154,10 @@ export function BulkActionBar({
   const [status, setStatus] = useState<string | null>(null)
   const [tagMenuOpen, setTagMenuOpen] = useState(false)
   const [publishMenuOpen, setPublishMenuOpen] = useState(false)
+  // PB.14 — separate menu for "Publish images" (per-product images
+  // pipeline; distinct from the listing-wizard republish in the
+  // Publish menu above).
+  const [imagePublishMenuOpen, setImagePublishMenuOpen] = useState(false)
   const [aiModalOpen, setAiModalOpen] = useState(false)
   // P.17 — compare-products modal state. Visible when 2-4 products
   // are in the selection; uses productLookup so no extra fetch.
@@ -181,17 +185,17 @@ export function BulkActionBar({
   }, [compareEligible, selectedIds, productLookup])
   const tagMenuRef = useRef<HTMLDivElement>(null)
   const pubMenuRef = useRef<HTMLDivElement>(null)
+  const imgPubMenuRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
     const onClick = (e: MouseEvent) => {
       if (tagMenuRef.current && !tagMenuRef.current.contains(e.target as Node))
         setTagMenuOpen(false)
       if (pubMenuRef.current && !pubMenuRef.current.contains(e.target as Node))
         setPublishMenuOpen(false)
+      if (imgPubMenuRef.current && !imgPubMenuRef.current.contains(e.target as Node))
+        setImagePublishMenuOpen(false)
     }
-    // W5.17 — keyboard equivalent of the outside-click dismiss. Without
-    // this Escape didn't close the menu for screen-reader / keyboard
-    // users (WCAG 2.1.2 No Keyboard Trap edge case + 2.4.3 Focus
-    // Order). Refocusing the trigger button keeps the user oriented.
+    // W5.17 — keyboard equivalent of the outside-click dismiss.
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return
       if (tagMenuOpen) {
@@ -202,6 +206,10 @@ export function BulkActionBar({
         setPublishMenuOpen(false)
         ;(pubMenuRef.current?.querySelector('button') as HTMLButtonElement | null)?.focus()
       }
+      if (imagePublishMenuOpen) {
+        setImagePublishMenuOpen(false)
+        ;(imgPubMenuRef.current?.querySelector('button') as HTMLButtonElement | null)?.focus()
+      }
     }
     document.addEventListener('mousedown', onClick)
     document.addEventListener('keydown', onKey)
@@ -209,7 +217,7 @@ export function BulkActionBar({
       document.removeEventListener('mousedown', onClick)
       document.removeEventListener('keydown', onKey)
     }
-  }, [tagMenuOpen, publishMenuOpen])
+  }, [tagMenuOpen, publishMenuOpen, imagePublishMenuOpen])
 
   // U.4 — toast feedback for bulk operations. Was a setStatus()
   // string + inline banner that sat in the bulk action bar and
@@ -371,6 +379,36 @@ export function BulkActionBar({
   // Publish: enqueue per-channel via /api/listings/bulk-action.
   // For products without an existing ChannelListing on the target channel,
   // user is redirected to the listing-wizard to set it up first.
+  // PB.14 — Bulk image publish. Distinct from listing-wizard
+  // re-publish above: this calls the per-product image publish
+  // services directly (Amazon SP-API feed, eBay ReviseItem, Shopify
+  // PUT /products). Returns per-product outcome which we surface in
+  // the toast.
+  const publishImages = async (channel: 'AMAZON' | 'EBAY' | 'SHOPIFY', marketplace: string | null) =>
+    run(
+      `Publishing images to ${channel}${marketplace ? ` ${marketplace}` : ''} for ${selectedIds.length} product${selectedIds.length === 1 ? '' : 's'}…`,
+      async () => {
+        const res = await fetch(`${getBackendUrl()}/api/products/bulk-image-publish`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            productIds: selectedIds,
+            channel,
+            marketplace,
+          }),
+        })
+        const body = await res.json().catch(() => ({} as any))
+        if (!res.ok) {
+          throw new Error(body?.message ?? body?.error ?? `Bulk image publish failed (${res.status})`)
+        }
+        const summary = body?.summary as { total: number; ok: number; failed: number } | undefined
+        if (!summary) return
+        return summary.failed === 0
+          ? `Queued image publishes for all ${summary.total} product${summary.total === 1 ? '' : 's'} on ${channel}${marketplace ? ` ${marketplace}` : ''}`
+          : `${summary.ok}/${summary.total} queued · ${summary.failed} failed — open the products to see per-product errors`
+      },
+    )
+
   const publish = async (channel: string, marketplace: string) =>
     run(`Queuing publish to ${channel} ${marketplace}…`, async () => {
       // Step 1: resolve productIds → listingIds for this channel/marketplace
@@ -692,6 +730,82 @@ export function BulkActionBar({
                     {c.charAt(0) + c.slice(1).toLowerCase()}
                   </button>
                 ))}
+              </div>
+            )}
+          </div>
+
+          {/* PB.14 — Bulk image publish menu. Distinct from the
+              listing-wizard re-publish above; calls the per-product
+              image-publish services for every selected product. */}
+          <div className="relative" ref={imgPubMenuRef}>
+            <Button
+              size="sm"
+              onClick={() => setImagePublishMenuOpen(!imagePublishMenuOpen)}
+              disabled={busy || !hasSelection}
+              className="bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-800 dark:hover:bg-purple-900/40"
+              icon={<ImageIcon size={12} />}
+              aria-haspopup="menu"
+              aria-expanded={imagePublishMenuOpen}
+              title="Publish per-product images across selected products"
+            >
+              Publish images <ChevronDown size={10} />
+            </Button>
+            {imagePublishMenuOpen && (
+              <div
+                role="menu"
+                aria-label="Publish images destinations"
+                className="absolute left-0 top-full mt-1 w-72 bg-white border border-slate-200 rounded-md shadow-lg z-30 p-2 max-h-96 overflow-y-auto dark:bg-slate-900 dark:border-slate-800"
+              >
+                <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 px-2 py-1">
+                  Amazon
+                </div>
+                {['IT', 'DE', 'FR', 'ES', 'UK'].map((m) => (
+                  <button
+                    key={`imgamz-${m}`}
+                    role="menuitem"
+                    onClick={() => {
+                      void publishImages('AMAZON', m)
+                      setImagePublishMenuOpen(false)
+                    }}
+                    className="w-full text-left px-2 py-1 text-base text-slate-700 hover:bg-slate-50 rounded dark:text-slate-300 dark:hover:bg-slate-800"
+                  >
+                    Amazon {m}
+                  </button>
+                ))}
+                <button
+                  role="menuitem"
+                  onClick={() => {
+                    void publishImages('AMAZON', 'ALL')
+                    setImagePublishMenuOpen(false)
+                  }}
+                  className="w-full text-left px-2 py-1 text-base font-medium text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-950/30 rounded"
+                >
+                  All Amazon markets
+                </button>
+                <div className="border-t border-slate-100 dark:border-slate-800 my-1" />
+                <button
+                  role="menuitem"
+                  onClick={() => {
+                    void publishImages('EBAY', null)
+                    setImagePublishMenuOpen(false)
+                  }}
+                  className="w-full text-left px-2 py-1 text-base text-slate-700 hover:bg-slate-50 rounded dark:text-slate-300 dark:hover:bg-slate-800"
+                >
+                  eBay
+                </button>
+                <button
+                  role="menuitem"
+                  onClick={() => {
+                    void publishImages('SHOPIFY', null)
+                    setImagePublishMenuOpen(false)
+                  }}
+                  className="w-full text-left px-2 py-1 text-base text-slate-700 hover:bg-slate-50 rounded dark:text-slate-300 dark:hover:bg-slate-800"
+                >
+                  Shopify
+                </button>
+                <div className="border-t border-slate-100 dark:border-slate-800 mt-1 pt-1 px-2 text-[10px] text-slate-400 leading-snug">
+                  Max 50 products per call. Larger batches will surface a server-side error; chunk and re-run.
+                </div>
               </div>
             )}
           </div>
