@@ -1696,6 +1696,15 @@ export class AmazonService {
       })
 
       const fe = res?.FinancialEvents ?? {}
+      // DA-RT.17 — Amazon's SP-API listFinancialEvents response field
+      // for shipped-order events is `ShipmentEventList`, NOT
+      // `OrderFinancialEventList` (which doesn't exist in the SP-API
+      // schema). The previous lookup silently dropped every shipment
+      // event since this code was written, leaving Store C of the
+      // 3-way drift recon perpetually empty. Both keys appear here
+      // as a temporary safety net in case some other Amazon endpoint
+      // version returns the older name.
+      if (Array.isArray(fe.ShipmentEventList)) allOrderEvents.push(...fe.ShipmentEventList)
       if (Array.isArray(fe.OrderFinancialEventList)) allOrderEvents.push(...fe.OrderFinancialEventList)
       if (Array.isArray(fe.RefundEventList)) allRefundEvents.push(...fe.RefundEventList)
       if (Array.isArray(fe.ServiceFeeEventList)) allServiceFeeEvents.push(...fe.ServiceFeeEventList)
@@ -1719,7 +1728,13 @@ export class AmazonService {
         endpoint: 'finances',
         path: { orderId: amazonOrderId },
       })
-      const events = res?.FinancialEvents?.OrderFinancialEventList ?? []
+      // DA-RT.17 — see fetchFinancialEvents above. Amazon's actual
+      // response key is ShipmentEventList; OrderFinancialEventList
+      // doesn't exist in the SP-API schema.
+      const events =
+        res?.FinancialEvents?.ShipmentEventList ??
+        res?.FinancialEvents?.OrderFinancialEventList ??
+        []
       return events[0] ?? null
     } catch (err) {
       console.warn('[amazon] fetchFinancialEventsByOrderId failed', amazonOrderId, err instanceof Error ? err.message : String(err))
