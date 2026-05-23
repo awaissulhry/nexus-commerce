@@ -317,7 +317,7 @@ model Product {
   lots                      Lot[] // L.1: lot tracking for recall traceability
   serials                   SerialNumber[] // SR.1: per-unit serial tracking
   channelStockEvents        ChannelStockEvent[] // CS.1: channel→us stock reconciliation
-  channelLiveImages         ChannelLiveImage[]  // IE.4: read-replica of channel-served images
+  channelLiveImages         ChannelLiveImage[] // IE.4: read-replica of channel-served images
   translations              ProductTranslation[] // H.10: per-language master content
   relationsFrom             ProductRelation[]             @relation("ProductRelationFrom") // H.11
   relationsTo               ProductRelation[]             @relation("ProductRelationTo") // H.11
@@ -1178,10 +1178,14 @@ model ProductVariation {
   stockBuffer Int @default(0)
 
   // ── Per-variant identifiers ───────────────────────────────────────
-  upc   String?
-  ean   String?
-  gtin  String?
-  fnsku String? // Amazon Fulfillment Network SKU — cached after first SP-API lookup
+  upc  String?
+  ean  String?
+  gtin String?
+  // NOTE (FN.9.3): ProductVariation.fnsku was removed in migration
+  // 20260523_fn9_drop_productvariation_fnsku. ProductVariation is a
+  // deprecated empty table — variants live as child Product rows. The
+  // actual FNSKU cache is on Product.fnsku (line ~259), which is what
+  // fnsku-lookup.service.ts reads and writes.
 
   // ── Per-variant physical attributes (override parent defaults) ────
   weightValue Decimal? @db.Decimal(10, 3)
@@ -1812,8 +1816,8 @@ model ChannelListingImage {
 }
 
 model ProductImage {
-  id        String   @id @default(cuid())
-  product   Product  @relation(fields: [productId], references: [id])
+  id        String  @id @default(cuid())
+  product   Product @relation(fields: [productId], references: [id])
   productId String
   url       String
   alt       String?
@@ -1822,7 +1826,7 @@ model ProductImage {
   /// W8.1 — display sort order; lower = earlier. MAIN is always 0.
   /// Populated on creation; the PATCH /api/products/:id/images/reorder
   /// endpoint writes a fresh contiguous sequence on drag-drop commit.
-  sortOrder Int      @default(0)
+  sortOrder Int     @default(0)
   /// W8.1 — Cloudinary public_id so the delete endpoint can clean up
   /// the asset from Cloudinary as well as the DB row. NULL for images
   /// imported from external URLs (Amazon sync, URL paste).
@@ -1889,13 +1893,13 @@ model ProductImage {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@index([productId, sortOrder])
-  @@index([derivedFromImageId])
   /// IE.2 — Enforces the IE.1 dedup contract at the DB level once
   /// the backfill + collapse pass has removed pre-existing duplicates.
   /// Postgres treats NULL contentHash values as distinct, so legacy
   /// rows that never got backfilled don't trip the constraint.
   @@unique([productId, contentHash])
+  @@index([productId, sortOrder])
+  @@index([derivedFromImageId])
   @@index([productId, perceptualHash])
   /// PG.4 — Partial unique index implemented as raw SQL in the
   /// 20260523_pg4_product_image_is_primary migration (Prisma's
@@ -3409,7 +3413,7 @@ model ChannelLiveImage {
   url       String
   width     Int?
   height    Int?
-  sortOrder Int     @default(0)
+  sortOrder Int    @default(0)
 
   // Channel response identifier for short-circuit on next fetch. SP-API
   // doesn't return ETag headers per-image but the GetListingsItem
@@ -6271,13 +6275,13 @@ model AmazonImageFeedJob {
 /// operator can read the exact payload that was sent without
 /// recreating state.
 model ChannelImagePublishJob {
-  id           String  @id @default(cuid())
-  productId    String
-  channel      String  // 'EBAY' | 'SHOPIFY'
+  id          String  @id @default(cuid())
+  productId   String
+  channel     String // 'EBAY' | 'SHOPIFY'
   // Optional marketplace narrowing for future per-locale eBay sites
   // (eBay UK vs DE vs IT). Shopify is single-store today; column stays
   // for forward compat.
-  marketplace  String?
+  marketplace String?
 
   status       String  @default("SUBMITTING")
   errorMessage String?
@@ -10760,22 +10764,22 @@ model ChannelSchema {
 /// Amazon credits the seller for lost / damaged / not-returned inventory.
 /// Real positive P&L line item. Source: GET_FBA_REIMBURSEMENTS_DATA.
 model FbaReimbursement {
-  id                  String   @id @default(cuid())
-  reimbursementId     String   @unique // Amazon's reimbursement-id, safe upsert key
-  approvalDate        DateTime
-  caseId              String?
-  amazonOrderId       String?
-  reason              String?  // free-form reason text from Amazon
-  sku                 String
-  fnsku               String?
-  asin                String?
-  quantityReimbursed  Int      @default(0)
-  amountPerUnitCents  Int      @default(0)
-  totalAmountCents    Int      @default(0)
-  currencyCode        String   @default("EUR")
-  marketplaceId       String?  // SP-API marketplaceId (e.g. APJ6JRA9NG5V4)
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
+  id                 String   @id @default(cuid())
+  reimbursementId    String   @unique // Amazon's reimbursement-id, safe upsert key
+  approvalDate       DateTime
+  caseId             String?
+  amazonOrderId      String?
+  reason             String? // free-form reason text from Amazon
+  sku                String
+  fnsku              String?
+  asin               String?
+  quantityReimbursed Int      @default(0)
+  amountPerUnitCents Int      @default(0)
+  totalAmountCents   Int      @default(0)
+  currencyCode       String   @default("EUR")
+  marketplaceId      String? // SP-API marketplaceId (e.g. APJ6JRA9NG5V4)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
   @@index([approvalDate])
   @@index([sku])
@@ -10788,11 +10792,11 @@ model FbaInventoryAdjustment {
   id                  String   @id @default(cuid())
   adjustmentId        String   @unique
   adjustedDate        DateTime
-  transactionType     String   // CustomerReturn / Damaged / Misplaced / etc.
+  transactionType     String // CustomerReturn / Damaged / Misplaced / etc.
   fnsku               String?
   sku                 String
   asin                String?
-  quantity            Int      // signed — negative for removals
+  quantity            Int // signed — negative for removals
   fulfillmentCenterId String?
   reasonCode          String?
   disposition         String?

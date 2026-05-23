@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ArrowLeft, Printer, FileDown, Loader2, Globe, AlertTriangle, Package, X as XIcon, Keyboard } from 'lucide-react'
+import { ArrowLeft, Printer, FileDown, Loader2, Globe, AlertTriangle, Package, X as XIcon, Keyboard, Eye, Layers } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { SkuPanel } from './SkuPanel'
 import { LabelPreview } from './LabelPreview'
@@ -372,7 +372,7 @@ export default function FnskuLabelDesigner() {
     URL.revokeObjectURL(url)
   }
 
-  const handleDownloadPdf = async (mode: 'label' | 'a4') => {
+  const handleDownloadPdf = async (mode: 'label' | 'a4', target: 'download' | 'preview' = 'download') => {
     // Pre-flight: missing listing title (FBA requirement)
     if (template.showListingTitle) {
       const missingTitle = items.filter(it => !it.listingTitle)
@@ -444,17 +444,26 @@ export default function FnskuLabelDesigner() {
       }
       const blob = new Blob(chunks as unknown as BlobPart[], { type: 'application/pdf' })
       const url  = URL.createObjectURL(blob)
-      const a    = document.createElement('a')
-      a.href     = url
-      // Filename: include shipment ref (when pre-filled), date, and mode.
-      // Example: fnsku-shipment-INB123-2026-05-23-label.pdf
-      const datePart  = new Date().toISOString().slice(0, 10)
-      const shipPart  = shipmentContext
-        ? `shipment-${(shipmentContext.reference ?? shipmentContext.id).replace(/[^\w-]/g, '_')}-`
-        : ''
-      a.download = `fnsku-${shipPart}${datePart}-${mode}.pdf`
-      a.click()
-      URL.revokeObjectURL(url)
+      if (target === 'preview') {
+        // Open the PDF inline in a new tab — operator visually QAs before
+        // committing to a download. The blob URL stays valid until the tab
+        // closes; we don't revoke immediately so the new tab can render.
+        window.open(url, '_blank', 'noopener,noreferrer')
+        // Revoke after a delay so the new tab has time to read the URL.
+        setTimeout(() => URL.revokeObjectURL(url), 60_000)
+      } else {
+        const a    = document.createElement('a')
+        a.href     = url
+        // Filename: include shipment ref (when pre-filled), date, and mode.
+        // Example: fnsku-shipment-INB123-2026-05-23-label.pdf
+        const datePart  = new Date().toISOString().slice(0, 10)
+        const shipPart  = shipmentContext
+          ? `shipment-${(shipmentContext.reference ?? shipmentContext.id).replace(/[^\w-]/g, '_')}-`
+          : ''
+        a.download = `fnsku-${shipPart}${datePart}-${mode}.pdf`
+        a.click()
+        URL.revokeObjectURL(url)
+      }
     } catch (err: any) {
       alert(`PDF generation failed: ${err?.message ?? String(err)}`)
     } finally {
@@ -598,6 +607,30 @@ export default function FnskuLabelDesigner() {
     setItems(prev => prev.map((it, i) => i === selectedIdx ? { ...it, quantity: labelsPerSheet } : it))
   }
 
+  // Scale each item's quantity proportionally so the total labels fill
+  // exactly `n` A4 sheets. Preserves ratios — a SKU with 10× the qty of
+  // another still has 10×. Rounding remainder lands on the last item.
+  const fillSheets = (n: number) => {
+    if (items.length === 0 || n < 1) return
+    const target = labelsPerSheet * n
+    const current = items.reduce((s, it) => s + Math.max(1, it.quantity), 0)
+    if (current === 0) return
+    const factor = target / current
+    let scaled = items.map(it => ({
+      ...it,
+      quantity: Math.max(1, Math.round(Math.max(1, it.quantity) * factor)),
+    }))
+    const newTotal = scaled.reduce((s, it) => s + it.quantity, 0)
+    const diff = target - newTotal
+    if (diff !== 0) {
+      scaled = scaled.map((it, i) =>
+        i === scaled.length - 1 ? { ...it, quantity: Math.max(1, it.quantity + diff) } : it,
+      )
+    }
+    handleItemsChange(scaled)
+  }
+  const [fillSheetsN, setFillSheetsN] = useState(1)
+
   return (
     <div className="flex flex-col h-screen bg-slate-100 dark:bg-slate-950">
       {/* Top bar */}
@@ -681,13 +714,34 @@ export default function FnskuLabelDesigner() {
         <span className="text-xs text-slate-400 hidden sm:inline">·</span>
         <span className="text-xs text-slate-400 hidden sm:inline">{a4Cols}×{a4Rows} = {labelsPerSheet}/sheet</span>
         {items.length > 0 && (
-          <button
-            onClick={fillSheet}
-            title={`Set selected SKU qty to ${labelsPerSheet} to fill one A4 sheet`}
-            className="text-xs h-7 px-2 rounded border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800"
-          >
-            Fill sheet
-          </button>
+          <>
+            <button
+              onClick={fillSheet}
+              title={`Set selected SKU qty to ${labelsPerSheet} to fill one A4 sheet`}
+              className="text-xs h-7 px-2 rounded border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800"
+            >
+              Fill sheet
+            </button>
+            <span className="inline-flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400 h-7 px-1.5 rounded border border-slate-300 dark:border-slate-600">
+              <Layers size={12} />
+              <input
+                type="number"
+                min={1}
+                max={Math.max(1, Math.floor(MAX_LABELS_PER_PDF / Math.max(1, labelsPerSheet)))}
+                value={fillSheetsN}
+                onChange={e => setFillSheetsN(Math.max(1, parseInt(e.target.value) || 1))}
+                className="w-9 h-5 px-1 text-xs text-center font-mono tabular-nums rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 focus:outline-none focus:ring-1 focus:ring-violet-500"
+                aria-label="Number of A4 sheets to fill"
+              />
+              <button
+                onClick={() => fillSheets(fillSheetsN)}
+                title={`Scale all SKU quantities proportionally so total = ${(fillSheetsN * labelsPerSheet).toLocaleString()} labels (${fillSheetsN} A4 sheet${fillSheetsN > 1 ? 's' : ''})`}
+                className="px-1.5 rounded hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400"
+              >
+                Fill {fillSheetsN} sheet{fillSheetsN > 1 ? 's' : ''}
+              </button>
+            </span>
+          </>
         )}
         <div className="flex items-center gap-1.5">
           <button
@@ -704,6 +758,15 @@ export default function FnskuLabelDesigner() {
             className="inline-flex items-center gap-1.5 h-8 px-3 rounded border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 text-sm hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <Printer size={13} /> Print
+          </button>
+          <button
+            onClick={() => handleDownloadPdf('label', 'preview')}
+            disabled={items.length === 0 || pdfLoading !== null}
+            title="Preview PDF in a new tab — visual QA before downloading"
+            className="inline-flex items-center justify-center h-8 w-8 rounded border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed"
+            aria-label="Preview PDF (label) in new tab"
+          >
+            {pdfLoading === 'label' ? <Loader2 size={13} className="animate-spin" /> : <Eye size={13} />}
           </button>
           <button
             onClick={() => handleDownloadPdf('label')}
