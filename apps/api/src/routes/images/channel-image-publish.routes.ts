@@ -35,6 +35,16 @@ interface UnifiedJob {
   vendorEntityId: string | null
   submittedAt: string
   completedAt: string | null
+  // IA.3 — Per-SKU receipt from Amazon's processing report. Only
+  // populated on AMAZON jobs once feed-status reaches DONE. Shape:
+  // { perSku: [{ sku, asin, accepted, errors }] } embedded in
+  // AmazonImageFeedJob.resultSummary.
+  perSku?: Array<{
+    sku: string
+    asin: string | null
+    accepted: boolean
+    errors: Array<{ code: string; message: string }>
+  }>
 }
 
 const channelImagePublishRoutes: FastifyPluginAsync = async (fastify) => {
@@ -114,6 +124,9 @@ const channelImagePublishRoutes: FastifyPluginAsync = async (fastify) => {
             feedId: true,
             submittedAt: true,
             completedAt: true,
+            // IA.3 — pull resultSummary so the FE can render per-SKU
+            // receipts without a second round-trip per job.
+            resultSummary: true,
           },
         }),
         prisma.channelImagePublishJob.findMany({
@@ -134,16 +147,23 @@ const channelImagePublishRoutes: FastifyPluginAsync = async (fastify) => {
       ])
 
       const unified: UnifiedJob[] = [
-        ...amazonJobs.map((j): UnifiedJob => ({
-          id: j.id,
-          channel: 'AMAZON',
-          marketplace: j.marketplace,
-          status: j.status,
-          errorMessage: j.errorMessage,
-          vendorEntityId: j.feedId,
-          submittedAt: j.submittedAt.toISOString(),
-          completedAt: j.completedAt?.toISOString() ?? null,
-        })),
+        ...amazonJobs.map((j): UnifiedJob => {
+          // IA.3 — Surface the per-SKU receipt when present. The raw
+          // resultSummary may include other Amazon fields; we only
+          // expose perSku to the FE to keep the payload narrow.
+          const rs = j.resultSummary as { perSku?: UnifiedJob['perSku'] } | null
+          return {
+            id: j.id,
+            channel: 'AMAZON',
+            marketplace: j.marketplace,
+            status: j.status,
+            errorMessage: j.errorMessage,
+            vendorEntityId: j.feedId,
+            submittedAt: j.submittedAt.toISOString(),
+            completedAt: j.completedAt?.toISOString() ?? null,
+            perSku: rs?.perSku,
+          }
+        }),
         ...channelJobs.map((j): UnifiedJob => ({
           id: j.id,
           channel: j.channel as 'EBAY' | 'SHOPIFY',

@@ -382,15 +382,24 @@ export async function pollAndUpdateFeedJob(jobId: string): Promise<{
     const skus = Array.isArray(job.skus) ? (job.skus as string[]) : []
     await applyPublishResults(job.productId, skus, summary)
 
+    // IA.3 — Structured per-SKU receipt. Embedded in resultSummary
+    // so existing readers (raw Amazon report) still work, while the
+    // ImagePublishHistory drill-down can pivot on `perSku` directly.
+    const perSku = await buildPerSkuReceipt(job.productId, skus, summary)
+    const summaryWithReceipt = {
+      ...((summary as Record<string, unknown> | null) ?? {}),
+      perSku,
+    }
+
     await prisma.amazonImageFeedJob.update({
       where: { id: jobId },
       data: {
         status: 'DONE',
-        resultSummary: summary as any,
+        resultSummary: summaryWithReceipt as any,
         completedAt: new Date(),
       },
     })
-    return { jobId, status: 'DONE', resultSummary: summary }
+    return { jobId, status: 'DONE', resultSummary: summaryWithReceipt }
   }
 
   if (poll.processingStatus === 'FATAL' || poll.processingStatus === 'CANCELLED') {
@@ -456,6 +465,70 @@ async function fetchProcessingReport(resultFeedDocumentId: string): Promise<unkn
     logger.warn('[amazon-image-feed] could not fetch processing report', { err })
     return null
   }
+}
+
+/**
+ * IA.3 — Build a structured per-SKU receipt from Amazon's processing
+ * report. The drill-down UI pivots on this rather than re-parsing the
+ * raw report. Stored on AmazonImageFeedJob.resultSummary.perSku so
+ * existing readers (raw Amazon report) keep working.
+ */
+export interface PerSkuReceipt {
+  sku: string
+  asin: string | null
+  accepted: boolean
+  errors: Array<{ code: string; message: string }>
+}
+
+async function buildPerSkuReceipt(
+  productId: string,
+  skus: string[],
+  report: unknown,
+): Promise<PerSkuReceipt[]> {
+  if (!skus.length) return []
+
+  // Index issues by messageId (1-based — matches the position the
+  // submitter wrote them at). Same parsing rules as applyPublishResults
+  // so the receipt agrees with what we wrote to ListingImage.
+  const issues: Array<{ messageId?: number; code?: string; message?: string }> =
+    (report as any)?.processingReport?.issues ?? []
+  const errorsByMessageId = new Map<number, Array<{ code: string; message: string }>>()
+  for (const issue of issues) {
+    if (!issue.messageId || issue.code === 'VALID' || !issue.code) continue
+    const list = errorsByMessageId.get(issue.messageId) ?? []
+    list.push({ code: issue.code, message: issue.message ?? '' })
+    errorsByMessageId.set(issue.messageId, list)
+  }
+
+  // Resolve ASINs in one batched query — the operator wants to see
+  // "B0XYZ123" not just the SKU when scanning the receipt.
+  const variants = await prisma.product.findMany({
+    where: { sku: { in: skus }, parentId: productId },
+    select: { sku: true, amazonAsin: true },
+  })
+  const asinBySku = new Map<string, string | null>()
+  for (const v of variants) asinBySku.set(v.sku, v.amazonAsin ?? null)
+  // Fall back to legacy ProductVariation rows (pre-PIM refactor)
+  // for any SKU the parent-child query missed.
+  const missing = skus.filter((s) => !asinBySku.has(s))
+  if (missing.length > 0) {
+    const pvs = await prisma.productVariation.findMany({
+      where: { sku: { in: missing }, productId },
+      select: { sku: true, amazonAsin: true },
+    })
+    for (const v of pvs) asinBySku.set(v.sku, v.amazonAsin ?? null)
+  }
+
+  return skus.map((sku, i) => {
+    const messageId = i + 1
+    const errors = errorsByMessageId.get(messageId) ?? []
+    return {
+      sku,
+      asin: asinBySku.get(sku) ?? null,
+      accepted: errors.length === 0,
+      errors,
+    }
+  })
 }
 
 async function applyPublishResults(

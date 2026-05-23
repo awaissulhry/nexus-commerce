@@ -15,13 +15,20 @@
 // refresh pulls the new row in.
 
 import { useCallback, useEffect, useState } from 'react'
-import { AlertCircle, CheckCircle2, Clock, Loader2, RefreshCw, RotateCw, Activity } from 'lucide-react'
+import { AlertCircle, CheckCircle2, ChevronDown, ChevronRight, Clock, Loader2, RefreshCw, RotateCw, Activity, XCircle } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { cn } from '@/lib/utils'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { beFetch } from './api'
 
 type Channel = 'AMAZON' | 'EBAY' | 'SHOPIFY'
+
+interface PerSkuRow {
+  sku: string
+  asin: string | null
+  accepted: boolean
+  errors: Array<{ code: string; message: string }>
+}
 
 interface UnifiedJob {
   id: string
@@ -32,6 +39,11 @@ interface UnifiedJob {
   vendorEntityId: string | null
   submittedAt: string
   completedAt: string | null
+  // IA.3 — per-SKU receipt for Amazon jobs in DONE state. Surfaced
+  // as an expandable drill-down so the operator sees exactly which
+  // ASINs were accepted vs rejected, with Amazon's verbatim message
+  // for each rejection.
+  perSku?: PerSkuRow[]
 }
 
 interface Props {
@@ -106,6 +118,17 @@ export default function ImagePublishHistory({ productId, channel }: Props) {
   const [retryError, setRetryError] = useState<string | null>(null)
   // IR.15 — manual "pull fresh status from Amazon" state.
   const [refreshingId, setRefreshingId] = useState<string | null>(null)
+  // IA.3 — Track which jobs are expanded to show their per-SKU
+  // receipts. Multiple jobs can be open simultaneously.
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
+  function toggleExpand(id: string) {
+    setExpandedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
 
   const fetchJobs = useCallback(async () => {
     setLoading(true)
@@ -229,16 +252,50 @@ export default function ImagePublishHistory({ productId, channel }: Props) {
             const tone = statusTone(j.status)
             const canRetry = j.status !== 'DONE' && j.status !== 'CANCELLED'
             const Icon = tone.icon
+            // IA.3 — Job has a drill-down when Amazon returned a
+            // per-SKU receipt. Show the expand chevron only then;
+            // jobs without receipts (pending, fatal pre-parse,
+            // eBay/Shopify) stay collapsed-by-default with no toggle.
+            const hasReceipt = !!j.perSku && j.perSku.length > 0
+            const isExpanded = expandedIds.has(j.id)
+            const acceptedCount = hasReceipt ? j.perSku!.filter((r) => r.accepted).length : 0
+            const rejectedCount = hasReceipt ? j.perSku!.length - acceptedCount : 0
             return (
               <li
                 key={j.id}
-                className={cn('flex items-center gap-2 px-3 py-1.5 rounded border border-slate-100 dark:border-slate-800 text-xs', tone.bg)}
+                className={cn('rounded border border-slate-100 dark:border-slate-800 text-xs', tone.bg)}
               >
-                <Icon className={cn('w-3.5 h-3.5 flex-shrink-0', tone.text)} />
+                <div className="flex items-center gap-2 px-3 py-1.5">
+                  {hasReceipt ? (
+                    <button
+                      type="button"
+                      onClick={() => toggleExpand(j.id)}
+                      aria-label={isExpanded ? 'Collapse receipt' : 'Expand receipt'}
+                      className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 flex-shrink-0"
+                    >
+                      {(() => {
+                        // Next 16 / Turbopack TS plugin sometimes misses
+                        // inline-conditional component-class JSX as a "use"
+                        // of the imported icon — assigning to a local makes
+                        // the usage explicit so the noUnusedLocals lint clears.
+                        const ChevronIcon = isExpanded ? ChevronDown : ChevronRight
+                        return <ChevronIcon className="w-3 h-3" />
+                      })()}
+                    </button>
+                  ) : <span className="w-3" />}
+                  <Icon className={cn('w-3.5 h-3.5 flex-shrink-0', tone.text)} />
                 <span className={cn('font-mono text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded flex-shrink-0', CHANNEL_COLOR[j.channel])}>
                   {CHANNEL_LABEL[j.channel]}{j.marketplace ? ` · ${j.marketplace}` : ''}
                 </span>
                 <span className={cn('font-medium flex-shrink-0', tone.text)}>{j.status}</span>
+                {hasReceipt && (
+                  <span className="text-[10px] flex-shrink-0">
+                    <span className="text-emerald-600 dark:text-emerald-400">{acceptedCount} ok</span>
+                    {rejectedCount > 0 && (
+                      <span className="text-rose-600 dark:text-rose-400 ml-1">· {rejectedCount} rejected</span>
+                    )}
+                  </span>
+                )}
                 {j.errorMessage && (
                   <span className="text-slate-500 dark:text-slate-400 truncate min-w-0" title={j.errorMessage}>
                     — {j.errorMessage}
@@ -276,6 +333,59 @@ export default function ImagePublishHistory({ productId, channel }: Props) {
                       : <RotateCw className="w-3 h-3" />}
                     {t('products.edit.images.history.retry')}
                   </Button>
+                )}
+                </div>
+
+                {/* IA.3 — Per-SKU receipt drill-down. Hidden by default;
+                    operator clicks the chevron to expand. Shows
+                    Amazon's per-row outcome with the verbatim error
+                    code + message so the operator can debug. */}
+                {hasReceipt && isExpanded && (
+                  <div className="px-3 pb-2 pt-1 border-t border-slate-100 dark:border-slate-800">
+                    <table className="w-full text-[11px]">
+                      <thead>
+                        <tr className="text-left text-slate-500 dark:text-slate-400">
+                          <th className="px-1.5 py-1 font-medium">SKU</th>
+                          <th className="px-1.5 py-1 font-medium">ASIN</th>
+                          <th className="px-1.5 py-1 font-medium text-center">Status</th>
+                          <th className="px-1.5 py-1 font-medium">Amazon error</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {j.perSku!.map((row) => (
+                          <tr key={row.sku} className="border-t border-slate-100 dark:border-slate-800">
+                            <td className="px-1.5 py-1 font-mono text-slate-700 dark:text-slate-200">{row.sku}</td>
+                            <td className="px-1.5 py-1 font-mono text-slate-500 dark:text-slate-400">{row.asin ?? '—'}</td>
+                            <td className="px-1.5 py-1 text-center">
+                              {row.accepted ? (
+                                <span className="inline-flex items-center gap-1 text-emerald-700 dark:text-emerald-300">
+                                  <CheckCircle2 className="w-3 h-3" /> OK
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 text-rose-700 dark:text-rose-300">
+                                  <XCircle className="w-3 h-3" /> Rejected
+                                </span>
+                              )}
+                            </td>
+                            <td className="px-1.5 py-1 text-slate-600 dark:text-slate-300">
+                              {row.errors.length === 0 ? (
+                                <span className="text-slate-400">—</span>
+                              ) : (
+                                <ul className="space-y-0.5">
+                                  {row.errors.map((e, i) => (
+                                    <li key={i}>
+                                      <span className="font-mono text-[10px] text-rose-700 dark:text-rose-300">{e.code}</span>
+                                      <span className="text-slate-600 dark:text-slate-300 ml-1">{e.message}</span>
+                                    </li>
+                                  ))}
+                                </ul>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 )}
               </li>
             )
