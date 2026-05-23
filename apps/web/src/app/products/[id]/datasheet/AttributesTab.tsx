@@ -1,37 +1,33 @@
 /**
- * ATM.3 — Master attribute matrix.
+ * ATM.3 + ATM.4 — Master attribute matrix with per-channel expansion.
  *
- * Renders every master attribute on the Attributes tab as a single
- * dense table organised into collapsible groups. Each row carries:
+ * ATM.3 shipped the master column (label / value preview /
+ * completeness / edit pencil). ATM.4 adds the killer expansion:
+ * click any attribute row and the per-channel × per-market value
+ * breakdown drops down inline, sourced from ChannelListing.
  *
- *   - Label (i18n)
- *   - Compact value preview (formatted for type — text truncated,
- *     numbers locale-aware, arrays show count + first item, JSON
- *     shows key count)
- *   - Completeness chip (filled / empty)
- *   - Required flag — visual asterisk + tooltip
+ * Layout switched from <table> to a grid <details> per row because
+ * <details>/<summary> + table-tr don't compose cleanly. The grid
+ * keeps columns aligned across rows and groups; the expansion body
+ * is a child <table> hosted inside the <details> body.
  *
- * Per-attribute "last modified" + "source" badges are surfaced for
- * fields where we have the data; today the schema only carries one
- * Product.updatedAt (no per-field audit), so the header strip's
- * "Updated Xh ago" is the global signal and rows omit a per-row
- * timestamp. ATM.12 (audit timeline) will add per-field history
- * once we have the ChangeLog substrate; this component is designed
- * to extend by adding fields to the Attr type without restructuring.
+ * Master-managed attributes (sku, gtin, brand, weight, …) — fields
+ * with no per-channel override schema — show a single
+ * "Master-managed" line in their expansion instead of a fake
+ * per-channel breakdown.
  *
- * The next phase (ATM.4) attaches per-channel × per-market value
- * expansion to each row: click to drill down. For now each row is
- * read-only display; deep-link to the matching field on /edit by
- * clicking the value cell.
- *
- * Collapsible groups use native <details>/<summary> so no client
- * runtime is needed and the page stays a server component.
+ * The fetch is one Product findUnique with channelListings include;
+ * both wrapped in .catch(() => null) so a schema/DB hiccup degrades
+ * to a friendly panel rather than crashing the hub.
  */
 
 import { prisma } from '@nexus/database'
 import Link from 'next/link'
-import { CheckCircle2, Circle, Edit3 } from 'lucide-react'
+import { CheckCircle2, ChevronDown, Circle, Edit3 } from 'lucide-react'
 import type { getServerT } from '@/lib/i18n/server'
+import ChannelExpansion, {
+  type ChannelListingForExpansion,
+} from './ChannelExpansion'
 
 interface AttributesTabProps {
   productId: string
@@ -46,9 +42,11 @@ interface Attr {
   label: string
   preview: string | null
   required?: boolean
-  /** Optional deep-link target on the edit page (uses a tab + hash
-   *  the edit-page client handles). Falls back to plain /edit. */
-  editHash?: string
+  /** Subset of listings relevant for this attribute's per-channel
+   *  expansion. For ID rows we pre-filter to the matching channel;
+   *  for mapped attrs (name/description/price/quantity/bullets) we
+   *  pass all listings; for master-only rows we pass []. */
+  listings: ChannelListingForExpansion[]
 }
 
 interface AttrGroup {
@@ -62,8 +60,6 @@ export default async function AttributesTab({
   locale,
   t,
 }: AttributesTabProps) {
-  // Full master fetch. Defensive .catch so a stale Prisma client
-  // doesn't crash the whole hub — render a degraded view instead.
   const product = await prisma.product
     .findUnique({
       where: { id: productId },
@@ -102,10 +98,46 @@ export default async function AttributesTab({
         workflowStage: {
           select: { label: true, workflow: { select: { label: true } } },
         },
+        // ATM.4 — per-channel values for the expansion. Filtered to
+        // ACTIVE + published rows so the expansion mirrors the
+        // "Markets active" count in the pulse strip.
+        channelListings: {
+          where: { isPublished: true, listingStatus: 'ACTIVE' },
+          orderBy: [{ channel: 'asc' }, { marketplace: 'asc' }],
+          select: {
+            id: true,
+            channel: true,
+            marketplace: true,
+            listingStatus: true,
+            externalListingId: true,
+            lastSyncedAt: true,
+            validationStatus: true,
+            isPublished: true,
+            title: true,
+            titleOverride: true,
+            followMasterTitle: true,
+            masterTitle: true,
+            description: true,
+            descriptionOverride: true,
+            followMasterDescription: true,
+            masterDescription: true,
+            price: true,
+            priceOverride: true,
+            followMasterPrice: true,
+            masterPrice: true,
+            quantity: true,
+            quantityOverride: true,
+            followMasterQuantity: true,
+            masterQuantity: true,
+            bulletPointsOverride: true,
+            followMasterBulletPoints: true,
+            masterBulletPoints: true,
+          },
+        },
       },
     })
     .catch((e: unknown) => {
-      console.error('[atm.3] product master fetch failed', e)
+      console.error('[atm.4] product master + listings fetch failed', e)
       return null
     })
 
@@ -117,7 +149,11 @@ export default async function AttributesTab({
     )
   }
 
-  // Locale-aware number / currency formatters reused across rows.
+  const allListings = product.channelListings as ChannelListingForExpansion[]
+  const amazonListings = allListings.filter((l) => l.channel === 'AMAZON')
+  const ebayListings = allListings.filter((l) => l.channel === 'EBAY')
+  const shopifyListings = allListings.filter((l) => l.channel === 'SHOPIFY')
+
   const numLocale = locale === 'it' ? 'it-IT' : 'en-GB'
   const fmtCurrency = (v: number | null) =>
     v == null
@@ -129,9 +165,6 @@ export default async function AttributesTab({
   const fmtNum = (v: number | null) =>
     v == null ? null : new Intl.NumberFormat(numLocale).format(v)
 
-  // Country code → display name. Falls back to the code itself when
-  // Intl.DisplayNames doesn't recognise the value (e.g. legacy free-
-  // form entries that aren't ISO-2).
   const countryName = (() => {
     if (!product.countryOfOrigin) return null
     try {
@@ -148,9 +181,6 @@ export default async function AttributesTab({
     }
   })()
 
-  // Truncate long display strings so a single row's value cell
-  // never blows out the column. Operator can click into /edit to
-  // see the full value.
   const truncate = (s: string | null | undefined, max = 80) => {
     if (!s) return null
     if (s.length <= max) return s
@@ -200,32 +230,38 @@ export default async function AttributesTab({
           label: t('products.col.sku'),
           preview: product.sku,
           required: true,
+          listings: [],
         },
         {
           key: 'name',
           label: t('products.col.name'),
           preview: truncate(product.name, 100),
           required: true,
+          listings: allListings,
         },
         {
           key: 'description',
           label: t('products.col.description'),
           preview: truncate(product.description, 120),
+          listings: allListings,
         },
         {
           key: 'brand',
           label: t('products.col.brand'),
           preview: product.brand,
+          listings: [],
         },
         {
           key: 'manufacturer',
           label: t('products.datasheet.specs.manufacturer'),
           preview: product.manufacturer,
+          listings: [],
         },
         {
           key: 'productType',
           label: t('products.col.productType'),
           preview: product.productType,
+          listings: [],
         },
         {
           key: 'family',
@@ -233,6 +269,7 @@ export default async function AttributesTab({
           preview: product.family
             ? `${product.family.label} (${product.family.code})`
             : null,
+          listings: [],
         },
         {
           key: 'workflowStage',
@@ -240,6 +277,7 @@ export default async function AttributesTab({
           preview: product.workflowStage
             ? `${product.workflowStage.label} · ${product.workflowStage.workflow.label}`
             : null,
+          listings: [],
         },
       ],
     },
@@ -254,16 +292,19 @@ export default async function AttributesTab({
             product.basePrice == null ? null : Number(product.basePrice),
           ),
           required: true,
+          listings: allListings,
         },
         {
           key: 'fulfillmentMethod',
           label: t('products.col.fulfillment'),
           preview: product.fulfillmentMethod,
+          listings: [],
         },
         {
           key: 'totalStock',
           label: t('products.col.stock'),
           preview: fmtNum(product.totalStock),
+          listings: allListings,
         },
         {
           key: 'lowStockThreshold',
@@ -272,6 +313,7 @@ export default async function AttributesTab({
             product.lowStockThreshold > 0
               ? fmtNum(product.lowStockThreshold)
               : null,
+          listings: [],
         },
       ],
     },
@@ -279,27 +321,26 @@ export default async function AttributesTab({
       key: 'identifiers',
       label: t('products.datasheetHub.attributes.group.identifiers'),
       attrs: [
-        {
-          key: 'gtin',
-          label: 'GTIN',
-          preview: product.gtin,
-        },
-        { key: 'upc', label: 'UPC', preview: product.upc },
-        { key: 'ean', label: 'EAN', preview: product.ean },
+        { key: 'gtin', label: 'GTIN', preview: product.gtin, listings: [] },
+        { key: 'upc', label: 'UPC', preview: product.upc, listings: [] },
+        { key: 'ean', label: 'EAN', preview: product.ean, listings: [] },
         {
           key: 'amazonAsin',
           label: t('products.datasheet.specs.amazonAsin'),
           preview: product.amazonAsin,
+          listings: amazonListings,
         },
         {
           key: 'ebayItemId',
           label: t('products.datasheet.specs.ebayId'),
           preview: product.ebayItemId,
+          listings: ebayListings,
         },
         {
           key: 'shopifyProductId',
           label: t('products.datasheet.specs.shopifyId'),
           preview: product.shopifyProductId,
+          listings: shopifyListings,
         },
       ],
     },
@@ -311,11 +352,13 @@ export default async function AttributesTab({
           key: 'weight',
           label: t('products.datasheet.specs.weight'),
           preview: weightPreview,
+          listings: [],
         },
         {
           key: 'dimensions',
           label: t('products.datasheet.specs.dimensions'),
           preview: dimsPreview,
+          listings: [],
         },
       ],
     },
@@ -327,11 +370,13 @@ export default async function AttributesTab({
           key: 'bulletPoints',
           label: t('products.datasheet.section.bullets'),
           preview: arrayPreview(product.bulletPoints as string[] | null),
+          listings: allListings,
         },
         {
           key: 'keywords',
           label: t('products.datasheet.section.keywords'),
           preview: arrayPreview(product.keywords as string[] | null),
+          listings: [],
         },
       ],
     },
@@ -343,21 +388,25 @@ export default async function AttributesTab({
           key: 'hsCode',
           label: t('products.datasheet.specs.hsCode'),
           preview: product.hsCode,
+          listings: [],
         },
         {
           key: 'countryOfOrigin',
           label: t('products.datasheet.specs.countryOfOrigin'),
           preview: countryName,
+          listings: [],
         },
         {
           key: 'ppeCategory',
           label: t('products.datasheet.specs.ppeCategory'),
           preview: product.ppeCategory,
+          listings: [],
         },
         {
           key: 'hazmat',
           label: t('products.datasheet.specs.hazmat'),
           preview: hazmatPreview,
+          listings: [],
         },
       ],
     },
@@ -369,6 +418,7 @@ export default async function AttributesTab({
           key: 'categoryAttributes',
           label: t('products.datasheetHub.attributes.customAttrs'),
           preview: categoryAttrsPreview,
+          listings: [],
         },
       ],
     },
@@ -381,6 +431,7 @@ export default async function AttributesTab({
           key={g.key}
           group={g}
           productId={productId}
+          locale={locale}
           t={t}
         />
       ))}
@@ -391,10 +442,12 @@ export default async function AttributesTab({
 function AttributeGroupCard({
   group,
   productId,
+  locale,
   t,
 }: {
   group: AttrGroup
   productId: string
+  locale: 'en' | 'it'
   t: Awaited<ReturnType<typeof getServerT>>
 }) {
   const filled = group.attrs.filter((a) => isFilled(a.preview)).length
@@ -409,9 +462,10 @@ function AttributeGroupCard({
   return (
     <details
       open
-      className="border border-slate-200 dark:border-slate-800 rounded bg-white dark:bg-slate-900"
+      className="border border-slate-200 dark:border-slate-800 rounded bg-white dark:bg-slate-900 group/grp"
     >
       <summary className="flex items-center gap-3 px-3 py-2 cursor-pointer select-none hover:bg-slate-50 dark:hover:bg-slate-800/50 rounded">
+        <ChevronDown className="w-3.5 h-3.5 text-slate-400 transition-transform group-open/grp:rotate-0 -rotate-90" />
         <span className="text-sm font-medium text-slate-900 dark:text-slate-100">
           {group.label}
         </span>
@@ -422,18 +476,17 @@ function AttributeGroupCard({
           })}
         </span>
       </summary>
-      <table className="w-full border-t border-slate-200 dark:border-slate-800 text-sm">
-        <tbody>
-          {group.attrs.map((attr) => (
-            <AttributeRow
-              key={attr.key}
-              attr={attr}
-              productId={productId}
-              t={t}
-            />
-          ))}
-        </tbody>
-      </table>
+      <div className="border-t border-slate-200 dark:border-slate-800">
+        {group.attrs.map((attr) => (
+          <AttributeRow
+            key={attr.key}
+            attr={attr}
+            productId={productId}
+            locale={locale}
+            t={t}
+          />
+        ))}
+      </div>
     </details>
   )
 }
@@ -441,18 +494,25 @@ function AttributeGroupCard({
 function AttributeRow({
   attr,
   productId,
+  locale,
   t,
 }: {
   attr: Attr
   productId: string
+  locale: 'en' | 'it'
   t: Awaited<ReturnType<typeof getServerT>>
 }) {
   const filled = isFilled(attr.preview)
   const tone: CompletenessTone = filled ? 'filled' : 'empty'
   return (
-    <tr className="border-b border-slate-100 dark:border-slate-800 last:border-b-0">
-      <td className="py-2 pl-3 pr-2 w-48 text-slate-600 dark:text-slate-400 align-top">
-        <div className="flex items-center gap-1.5">
+    <details className="border-b border-slate-100 dark:border-slate-800 last:border-b-0 group/row">
+      <summary
+        className={
+          'grid grid-cols-[1rem_12rem_1fr_5rem_1.5rem] items-start gap-2 px-3 py-2 cursor-pointer select-none hover:bg-slate-50 dark:hover:bg-slate-800/50 text-sm'
+        }
+      >
+        <ChevronDown className="w-3.5 h-3.5 text-slate-400 transition-transform group-open/row:rotate-0 -rotate-90 mt-0.5" />
+        <div className="text-slate-600 dark:text-slate-400 flex items-center gap-1.5">
           <span>{attr.label}</span>
           {attr.required && (
             <span
@@ -464,34 +524,47 @@ function AttributeRow({
             </span>
           )}
         </div>
-      </td>
-      <td className="py-2 px-2 text-slate-900 dark:text-slate-100 align-top">
-        {filled ? (
-          <span className="block break-words">{attr.preview}</span>
-        ) : (
-          <span className="text-slate-400 italic">
-            {t('products.datasheetHub.attributes.empty')}
-          </span>
-        )}
-      </td>
-      <td className="py-2 px-2 w-24 align-top">
-        <CompletenessChip tone={tone} t={t} />
-      </td>
-      <td className="py-2 px-3 w-10 align-top text-right">
-        <Link
-          href={`/products/${productId}/edit`}
-          className="inline-flex items-center justify-center w-6 h-6 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:hover:text-slate-200 dark:hover:bg-slate-800"
-          title={t('products.datasheetHub.attributes.editAria', {
-            field: attr.label,
-          })}
-          aria-label={t('products.datasheetHub.attributes.editAria', {
-            field: attr.label,
-          })}
-        >
-          <Edit3 className="w-3 h-3" />
-        </Link>
-      </td>
-    </tr>
+        <div className="text-slate-900 dark:text-slate-100 min-w-0">
+          {filled ? (
+            <span className="block break-words">{attr.preview}</span>
+          ) : (
+            <span className="text-slate-400 italic">
+              {t('products.datasheetHub.attributes.empty')}
+            </span>
+          )}
+        </div>
+        <div>
+          <CompletenessChip tone={tone} t={t} />
+        </div>
+        <div className="text-right">
+          {/* Edit pencil — clicking it both navigates (Link) and
+              toggles the parent summary (browser default). Acceptable
+              since the operator ends up on /edit either way; stopping
+              propagation would require a client component. */}
+          <Link
+            href={`/products/${productId}/edit`}
+            className="inline-flex items-center justify-center w-6 h-6 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:hover:text-slate-200 dark:hover:bg-slate-800"
+            title={t('products.datasheetHub.attributes.editAria', {
+              field: attr.label,
+            })}
+            aria-label={t('products.datasheetHub.attributes.editAria', {
+              field: attr.label,
+            })}
+          >
+            <Edit3 className="w-3 h-3" />
+          </Link>
+        </div>
+      </summary>
+      <div className="bg-slate-50/60 dark:bg-slate-950/30 border-t border-slate-100 dark:border-slate-800">
+        <ChannelExpansion
+          attrKey={attr.key}
+          listings={attr.listings}
+          masterPreview={attr.preview}
+          locale={locale}
+          t={t}
+        />
+      </div>
+    </details>
   )
 }
 
