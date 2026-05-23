@@ -46,6 +46,7 @@ import VariantChannelCoverage, {
 import VariantIdentifiers, {
   type IdentifierVariant,
 } from './VariantIdentifiers'
+import VariantGapPanel, { type GapVariant } from './VariantGapPanel'
 import { Package } from 'lucide-react'
 
 interface VariantsTabProps {
@@ -263,6 +264,25 @@ export default async function VariantsTab({
             channel: l.channel,
             marketplace: l.marketplace,
             externalListingId: l.externalListingId,
+          })),
+        }))}
+        t={t}
+      />
+
+      {/* VR.5 — Variant gap panel. Sibling lens to the coverage
+          matrix: rather than show every cell color-coded, this
+          surfaces ONLY the missing (variant, channel, marketplace)
+          combinations grouped by variant + by market. Deep-links
+          go to /listings/<channel>/<marketplace>. Write actions
+          (bulk stub creation) defer to VR.9. */}
+      <VariantGapPanel
+        variants={children.map<GapVariant>((c) => ({
+          id: c.id,
+          sku: c.sku,
+          name: c.name,
+          listings: c.channelListings.map((l) => ({
+            channel: l.channel,
+            marketplace: l.marketplace,
           })),
         }))}
         t={t}
