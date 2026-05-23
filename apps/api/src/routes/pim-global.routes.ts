@@ -292,6 +292,151 @@ const pimGlobalRoutes: FastifyPluginAsync = async (fastify) => {
     },
   )
 
+  // ── GET /products/:id/channel-listing/:clId/inheritance ─────────
+  // PIM B.2 — Per-SSOT-field inheritance state for one channel
+  // listing. Surfaces to the operator: what value is currently
+  // effective on this marketplace, what value would be inherited if
+  // they reset, and whether an override is active.
+  fastify.get<{ Params: { id: string; clId: string } }>(
+    '/products/:id/channel-listing/:clId/inheritance',
+    async (request, reply) => {
+      const { id, clId } = request.params
+
+      const [product, channelListing] = await Promise.all([
+        prisma.product.findUnique({ where: { id } }),
+        prisma.channelListing.findUnique({ where: { id: clId } }),
+      ])
+      if (!product) return reply.status(404).send({ error: 'Product not found' })
+      if (!channelListing || channelListing.productId !== id) {
+        return reply.status(404).send({ error: 'Channel listing not found for product' })
+      }
+
+      const parent = product.parentId
+        ? await prisma.product.findUnique({ where: { id: product.parentId } })
+        : null
+
+      // Master (no channel context) gives the "what would I inherit
+      // if I reset the override" value per SSOT field.
+      const masterResolved = resolveAttributes({
+        product: product as any,
+        parent: parent as any,
+      })
+      // Effective with channel applied gives the current value.
+      const effectiveResolved = resolveAttributes({
+        product: product as any,
+        parent: parent as any,
+        channelListing: channelListing as any,
+      })
+
+      const ssot = ['title', 'description', 'price', 'quantity', 'bulletPoints'] as const
+      const followFlagMap = {
+        title: 'followMasterTitle',
+        description: 'followMasterDescription',
+        price: 'followMasterPrice',
+        quantity: 'followMasterQuantity',
+        bulletPoints: 'followMasterBulletPoints',
+      } as const
+
+      const fields: Record<string, {
+        effective: unknown
+        master: unknown
+        isOverridden: boolean
+        source: string | null
+      }> = {}
+      for (const key of ssot) {
+        const followFlag = followFlagMap[key]
+        const flagValue = (channelListing as unknown as Record<string, unknown>)[followFlag]
+        const isOverridden = flagValue === false
+        fields[key] = {
+          effective: effectiveResolved[key]?.value ?? null,
+          master: masterResolved[key]?.value ?? null,
+          isOverridden,
+          source: effectiveResolved[key]?.source ?? null,
+        }
+      }
+
+      return reply.send({
+        productId: id,
+        channelListingId: clId,
+        channel: channelListing.channel,
+        marketplace: channelListing.marketplace,
+        fields,
+      })
+    },
+  )
+
+  // ── POST /products/:id/channel-listing/:clId/reset ──────────────
+  // PIM B.2 — Reset one (or all) SSOT fields to inherit from master.
+  // Sets followMasterX=true + nulls xOverride. Idempotent: a field
+  // already inheriting returns ok without a write.
+  fastify.post<{
+    Params: { id: string; clId: string }
+    Body: { field: 'title' | 'description' | 'price' | 'quantity' | 'bulletPoints' | 'all' }
+  }>(
+    '/products/:id/channel-listing/:clId/reset',
+    async (request, reply) => {
+      const { id, clId } = request.params
+      const { field } = request.body
+
+      const VALID = new Set([
+        'title',
+        'description',
+        'price',
+        'quantity',
+        'bulletPoints',
+        'all',
+      ])
+      if (!field || !VALID.has(field)) {
+        return reply
+          .status(400)
+          .send({ error: 'field must be one of title|description|price|quantity|bulletPoints|all' })
+      }
+
+      const cl = await prisma.channelListing.findUnique({ where: { id: clId } })
+      if (!cl || cl.productId !== id) {
+        return reply.status(404).send({ error: 'Channel listing not found for product' })
+      }
+
+      const data: Record<string, unknown> = {}
+      const apply = (key: 'title' | 'description' | 'price' | 'quantity' | 'bulletPoints') => {
+        switch (key) {
+          case 'title':
+            data.followMasterTitle = true
+            data.titleOverride = null
+            break
+          case 'description':
+            data.followMasterDescription = true
+            data.descriptionOverride = null
+            break
+          case 'price':
+            data.followMasterPrice = true
+            data.priceOverride = null
+            break
+          case 'quantity':
+            data.followMasterQuantity = true
+            data.quantityOverride = null
+            break
+          case 'bulletPoints':
+            data.followMasterBulletPoints = true
+            data.bulletPointsOverride = []
+            break
+        }
+      }
+      if (field === 'all') {
+        apply('title')
+        apply('description')
+        apply('price')
+        apply('quantity')
+        apply('bulletPoints')
+      } else {
+        apply(field)
+      }
+
+      await prisma.channelListing.update({ where: { id: clId }, data })
+      return reply.send({ ok: true, field })
+    },
+  )
+
   // ── DELETE /products/:id/global/technical/:key ──────────────────
   // Remove one key from categoryAttributes. Returns 200 with no
   // change when the key wasn't present (idempotent).

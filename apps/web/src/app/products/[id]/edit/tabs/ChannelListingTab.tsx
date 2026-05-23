@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/Badge'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { cn } from '@/lib/utils'
 import ChannelFieldEditor from '../../../_shared/ChannelFieldEditor'
+import InheritancePanel from './_shared/InheritancePanel'
 
 interface MarketInfo {
   code: string
@@ -486,6 +487,15 @@ export default function ChannelListingTab({
 
       {/* ── Readiness checklist (W5.1) ────────────────────────── */}
       <ReadinessChecklist listing={listing} t={t} />
+
+      {/* ── PIM B.2 — Inheritance panel ───────────────────────── */}
+      {listing?.id && (
+        <InheritancePanel
+          productId={activeProductId}
+          channelListingId={listing.id}
+          targetLabel={`${marketInfo.channel} ${marketInfo.code}`}
+        />
+      )}
 
       {/* ── Schema-driven editor (Q.2 + Q.3) ──────────────────── */}
       <ChannelFieldEditor

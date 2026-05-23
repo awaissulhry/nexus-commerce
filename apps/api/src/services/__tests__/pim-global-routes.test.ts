@@ -122,6 +122,88 @@ describe('mergeLocalizedContent', () => {
 // ────────────────────────────────────────────────────────────────────
 // mergeTechnical
 // ────────────────────────────────────────────────────────────────────
+// ────────────────────────────────────────────────────────────────────
+// B.2 — Reset semantics contract (mirrors what the POST endpoint does
+// in app code). Keeps the test self-contained until we lift the
+// helper out of the route file.
+// ────────────────────────────────────────────────────────────────────
+function buildResetPatch(
+  field: 'title' | 'description' | 'price' | 'quantity' | 'bulletPoints' | 'all',
+): Record<string, unknown> {
+  const data: Record<string, unknown> = {}
+  const apply = (key: 'title' | 'description' | 'price' | 'quantity' | 'bulletPoints') => {
+    switch (key) {
+      case 'title':
+        data.followMasterTitle = true
+        data.titleOverride = null
+        break
+      case 'description':
+        data.followMasterDescription = true
+        data.descriptionOverride = null
+        break
+      case 'price':
+        data.followMasterPrice = true
+        data.priceOverride = null
+        break
+      case 'quantity':
+        data.followMasterQuantity = true
+        data.quantityOverride = null
+        break
+      case 'bulletPoints':
+        data.followMasterBulletPoints = true
+        data.bulletPointsOverride = []
+        break
+    }
+  }
+  if (field === 'all') {
+    apply('title')
+    apply('description')
+    apply('price')
+    apply('quantity')
+    apply('bulletPoints')
+  } else {
+    apply(field)
+  }
+  return data
+}
+
+describe('buildResetPatch (B.2 reset semantics)', () => {
+  it('reset title: sets followMasterTitle=true + nulls titleOverride', () => {
+    expect(buildResetPatch('title')).toEqual({
+      followMasterTitle: true,
+      titleOverride: null,
+    })
+  })
+
+  it('reset price: sets followMasterPrice=true + nulls priceOverride', () => {
+    expect(buildResetPatch('price')).toEqual({
+      followMasterPrice: true,
+      priceOverride: null,
+    })
+  })
+
+  it('reset bulletPoints: uses empty array (not null) for the override col', () => {
+    // bulletPointsOverride is String[] in the schema — Prisma rejects
+    // null on a non-nullable array column, so we clear to [] instead.
+    expect(buildResetPatch('bulletPoints')).toEqual({
+      followMasterBulletPoints: true,
+      bulletPointsOverride: [],
+    })
+  })
+
+  it('reset all: includes all 5 SSOT field flags + override clears', () => {
+    const data = buildResetPatch('all')
+    expect(data.followMasterTitle).toBe(true)
+    expect(data.followMasterDescription).toBe(true)
+    expect(data.followMasterPrice).toBe(true)
+    expect(data.followMasterQuantity).toBe(true)
+    expect(data.followMasterBulletPoints).toBe(true)
+    expect(data.titleOverride).toBeNull()
+    expect(data.priceOverride).toBeNull()
+    expect(data.bulletPointsOverride).toEqual([])
+  })
+})
+
 describe('mergeTechnical', () => {
   it('shallow-merges patch onto current', () => {
     const next = mergeTechnical(
