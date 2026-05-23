@@ -162,11 +162,15 @@ export default function ImagePublishHistory({ productId, channel }: Props) {
     }
   }
 
-  async function retry(jobId: string) {
+  async function retry(jobId: string, rejectedOnly = false) {
     setRetryingId(jobId)
     setRetryError(null)
     try {
-      const res = await beFetch(`/api/image-publish-jobs/${jobId}/retry`, { method: 'POST' })
+      const res = await beFetch(`/api/image-publish-jobs/${jobId}/retry`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rejectedOnly }),
+      })
       if (!res.ok) {
         const body = await res.json().catch(() => ({}))
         throw new Error(body?.message ?? body?.error ?? `Retry failed: ${res.status}`)
@@ -342,6 +346,29 @@ export default function ImagePublishHistory({ productId, channel }: Props) {
                     code + message so the operator can debug. */}
                 {hasReceipt && isExpanded && (
                   <div className="px-3 pb-2 pt-1 border-t border-slate-100 dark:border-slate-800">
+                    {/* IA.6 — Retry-rejected-only. Targets the same
+                        publisher path with variantIds filter so
+                        accepted ASINs don't get re-hammered. Shown
+                        only when at least one row was rejected. */}
+                    {rejectedCount > 0 && j.channel === 'AMAZON' && (
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                          {rejectedCount} SKU{rejectedCount === 1 ? '' : 's'} need fixing before re-submit.
+                        </span>
+                        <Button
+                          size="sm"
+                          onClick={() => retry(j.id, true)}
+                          disabled={retryingId !== null}
+                          className="text-[11px] h-6 px-2 gap-1"
+                          title="Re-submit just the rejected SKUs. Accepted ASINs stay as-is."
+                        >
+                          {retryingId === j.id
+                            ? <Loader2 className="w-3 h-3 animate-spin" />
+                            : <RotateCw className="w-3 h-3" />}
+                          Retry {rejectedCount} rejected
+                        </Button>
+                      </div>
+                    )}
                     <table className="w-full text-[11px]">
                       <thead>
                         <tr className="text-left text-slate-500 dark:text-slate-400">

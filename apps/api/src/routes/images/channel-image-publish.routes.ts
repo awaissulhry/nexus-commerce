@@ -183,32 +183,88 @@ const channelImagePublishRoutes: FastifyPluginAsync = async (fastify) => {
   )
 
   // ── POST /api/image-publish-jobs/:jobId/retry ─────────────────────────
-  // IR.9.3 — Find the job (Amazon or channel), mark it CANCELLED,
-  // re-run the publish for the same product + args.
-  fastify.post<{ Params: { jobId: string } }>(
+  // IR.9.3 + IA.6 — Find the job (Amazon or channel), mark CANCELLED,
+  // re-run publish for the same product. IA.6 adds rejectedOnly mode:
+  // when set, the retry targets only SKUs the previous run rejected
+  // (from AmazonImageFeedJob.resultSummary.perSku), so accepted ASINs
+  // don't get re-hammered. Retry-rejected-only is allowed on DONE
+  // jobs since the rejections live inside an otherwise-DONE feed.
+  fastify.post<{
+    Params: { jobId: string }
+    Body: { rejectedOnly?: boolean }
+  }>(
     '/image-publish-jobs/:jobId/retry',
     async (request, reply) => {
       const { jobId } = request.params
+      const rejectedOnly = request.body?.rejectedOnly === true
 
       // Try Amazon first.
       const amazonJob = await prisma.amazonImageFeedJob.findUnique({
         where: { id: jobId },
-        select: { id: true, productId: true, marketplace: true, status: true, skus: true },
+        select: { id: true, productId: true, marketplace: true, status: true, skus: true, resultSummary: true },
       })
       if (amazonJob) {
-        if (['DONE', 'CANCELLED'].includes(amazonJob.status)) {
+        // CANCELLED never retryable. DONE retryable ONLY when
+        // rejectedOnly=true AND the receipt records at least one
+        // rejection — otherwise there's nothing to retry.
+        if (amazonJob.status === 'CANCELLED') {
           return reply.code(400).send({ error: 'JOB_NOT_RETRYABLE', status: amazonJob.status })
         }
-        await prisma.amazonImageFeedJob.update({
-          where: { id: amazonJob.id },
-          data: { status: 'CANCELLED', completedAt: new Date() },
-        })
+        if (amazonJob.status === 'DONE' && !rejectedOnly) {
+          return reply.code(400).send({ error: 'JOB_NOT_RETRYABLE', status: amazonJob.status })
+        }
+
+        // IA.6 — collect rejected SKUs + resolve their variantIds.
+        let variantIds: string[] | undefined
+        if (rejectedOnly) {
+          const rs = amazonJob.resultSummary as { perSku?: Array<{ sku: string; accepted: boolean }> } | null
+          const rejectedSkus = (rs?.perSku ?? []).filter((r) => !r.accepted).map((r) => r.sku)
+          if (rejectedSkus.length === 0) {
+            return reply.code(400).send({ error: 'NOTHING_TO_RETRY', message: 'No rejected SKUs on this feed.' })
+          }
+          // Resolve variantIds — try child Products first then ProductVariation.
+          const [children, pvs] = await Promise.all([
+            prisma.product.findMany({
+              where: { sku: { in: rejectedSkus }, parentId: amazonJob.productId },
+              select: { id: true, sku: true },
+            }),
+            prisma.productVariation.findMany({
+              where: { sku: { in: rejectedSkus }, productId: amazonJob.productId },
+              select: { id: true, sku: true },
+            }),
+          ])
+          const idBySku = new Map<string, string>()
+          for (const c of children) idBySku.set(c.sku, c.id)
+          for (const v of pvs) if (!idBySku.has(v.sku)) idBySku.set(v.sku, v.id)
+          variantIds = rejectedSkus.map((s) => idBySku.get(s)).filter((v): v is string => !!v)
+          if (variantIds.length === 0) {
+            return reply.code(400).send({ error: 'NO_VARIANTS_RESOLVED', message: 'Rejected SKUs no longer match any variant.' })
+          }
+        }
+
+        // For full-batch retries, mark the old job cancelled so the
+        // history shows a clean replacement. Rejected-only retries
+        // leave the DONE row intact since the original publish
+        // wasn't a failure — just a partial accept.
+        if (!rejectedOnly) {
+          await prisma.amazonImageFeedJob.update({
+            where: { id: amazonJob.id },
+            data: { status: 'CANCELLED', completedAt: new Date() },
+          })
+        }
         try {
           const result = await submitAmazonImageFeed({
             productId: amazonJob.productId,
             marketplace: amazonJob.marketplace,
+            variantIds,
           })
-          return reply.send({ ok: true, channel: 'AMAZON', newJobId: result.jobId, status: 'PENDING' })
+          return reply.send({
+            ok: true,
+            channel: 'AMAZON',
+            newJobId: result.jobId,
+            status: 'PENDING',
+            retried: variantIds?.length ?? null,
+          })
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err)
           return reply.code(502).send({ ok: false, channel: 'AMAZON', message: msg })
