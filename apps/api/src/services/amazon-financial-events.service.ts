@@ -84,6 +84,7 @@ interface FinancialSyncSummary {
       transactionDate: string
     }>
   }>
+  rawEventSample?: unknown
 }
 
 async function processOrderEvent(event: AmazonOrderFinancialEvent): Promise<{ created: number; skipped: number }> {
@@ -335,6 +336,11 @@ export async function syncFinancialEvents(
     unmatchedSampleIds: unmatchedIds,
     ourSampleChannelOrderIds: ourSample.map((o) => o.channelOrderId).filter((s): s is string => !!s),
     unmatchedLookup,
+    // DA-RT.17 — raw JSON of first order event, capped at 4kB so we
+    // can see Amazon's actual response shape vs what our parser
+    // expects. Reveals whether ItemChargeList is empty / a different
+    // key name / nested differently.
+    rawEventSample: payload.orderEvents[0] ? JSON.parse(JSON.stringify(payload.orderEvents[0])) : null,
   }
 }
 
