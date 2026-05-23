@@ -41,6 +41,8 @@ import {
   Plus,
   Sparkles,
   Trash2,
+  TrendingDown,
+  TrendingUp,
   X,
 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
@@ -1007,6 +1009,168 @@ function SkuAutocomplete({
         <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
           Free SKU (not in catalog)
         </div>
+      )}
+    </div>
+  )
+}
+
+// ── PO.17 — Per-line cost / EOQ hints ──────────────────────────────
+//
+// Two sources:
+//   - cost-history: avg of trailing-N PO unit costs for (supplier, sku).
+//     Anomaly = current line's cost deviates by > threshold % from avg.
+//   - eoq-hint:    ReplenishmentRecommendation.reorderQuantity for the
+//                  product (when line is bound to a catalog row).
+//
+// Both fetches are debounced on supplierId + sku + productId so a fast-
+// typing operator doesn't fan out N queries.
+
+interface CostHistory {
+  sku: string
+  avgUnitCostCents: number | null
+  lastUnitCostCents: number | null
+  samples: Array<{ poNumber: string; unitCostCents: number; createdAt: string }>
+}
+
+interface EoqHint {
+  found: boolean
+  reorderQuantity?: number
+  eoqUnits?: number | null
+  urgency?: string
+  daysOfStockLeft?: number | null
+  velocity?: string | number
+}
+
+function LineHints({
+  supplierId,
+  line,
+  currency,
+  onApplyCost,
+  onApplyQty,
+}: {
+  supplierId: string
+  line: DraftLine
+  currency: string
+  onApplyCost: (cents: number) => void
+  onApplyQty: (qty: number) => void
+}) {
+  const [costHistory, setCostHistory] = useState<CostHistory | null>(null)
+  const [eoq, setEoq] = useState<EoqHint | null>(null)
+  const debounceRef = useRef<number | null>(null)
+
+  useEffect(() => {
+    if (!line.sku.trim()) {
+      setCostHistory(null)
+      setEoq(null)
+      return
+    }
+    if (debounceRef.current) window.clearTimeout(debounceRef.current)
+    debounceRef.current = window.setTimeout(async () => {
+      try {
+        const histUrl = new URL(
+          `${getBackendUrl()}/api/fulfillment/purchase-orders/cost-history`,
+        )
+        histUrl.searchParams.set('sku', line.sku.trim())
+        if (supplierId) histUrl.searchParams.set('supplierId', supplierId)
+        const histRes = await fetch(histUrl.toString(), { cache: 'no-store' })
+        if (histRes.ok) setCostHistory(await histRes.json())
+        else setCostHistory(null)
+
+        if (line.productId) {
+          const eoqUrl = new URL(
+            `${getBackendUrl()}/api/fulfillment/purchase-orders/eoq-hint`,
+          )
+          eoqUrl.searchParams.set('productId', line.productId)
+          const eoqRes = await fetch(eoqUrl.toString(), { cache: 'no-store' })
+          if (eoqRes.ok) setEoq(await eoqRes.json())
+          else setEoq(null)
+        } else {
+          setEoq(null)
+        }
+      } catch {
+        // Hints are best-effort; swallow errors.
+      }
+    }, 400)
+    return () => {
+      if (debounceRef.current) window.clearTimeout(debounceRef.current)
+    }
+  }, [supplierId, line.sku, line.productId])
+
+  const currentCostCents = parseCentsField(line.unitCostCents)
+  const currentQty = parseInt(line.quantityOrdered, 10) || 0
+
+  const ANOMALY_THRESHOLD_BP = 500 // 5%
+  let costAnomalyBp = 0
+  if (
+    costHistory?.avgUnitCostCents != null &&
+    costHistory.avgUnitCostCents > 0 &&
+    currentCostCents > 0
+  ) {
+    costAnomalyBp = Math.round(
+      ((currentCostCents - costHistory.avgUnitCostCents) /
+        costHistory.avgUnitCostCents) *
+        10000,
+    )
+  }
+  const costAnomalyTriggered = Math.abs(costAnomalyBp) > ANOMALY_THRESHOLD_BP
+
+  const showEoq =
+    eoq?.found &&
+    eoq.reorderQuantity &&
+    eoq.reorderQuantity > 0 &&
+    currentQty !== eoq.reorderQuantity
+
+  if (!costAnomalyTriggered && !showEoq && !costHistory?.avgUnitCostCents) {
+    return null
+  }
+
+  return (
+    <div className="mt-1 flex items-center gap-2 flex-wrap text-xs">
+      {costAnomalyTriggered && costHistory?.avgUnitCostCents != null && (
+        <button
+          type="button"
+          onClick={() => onApplyCost(costHistory.avgUnitCostCents!)}
+          className={cn(
+            'inline-flex items-center gap-1 px-2 py-0.5 rounded border transition-colors',
+            costAnomalyBp > 0
+              ? 'border-red-200 dark:border-red-900 bg-red-50/40 dark:bg-red-950/20 text-red-700 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-950/40'
+              : 'border-green-200 dark:border-green-900 bg-green-50/40 dark:bg-green-950/20 text-green-700 dark:text-green-300 hover:bg-green-50 dark:hover:bg-green-950/40',
+          )}
+          title={`Avg trailing cost: ${(costHistory.avgUnitCostCents / 100).toFixed(2)} ${currency}. Click to apply.`}
+        >
+          {costAnomalyBp > 0 ? (
+            <TrendingUp className="w-3 h-3" />
+          ) : (
+            <TrendingDown className="w-3 h-3" />
+          )}
+          {costAnomalyBp > 0 ? '+' : ''}
+          {(costAnomalyBp / 100).toFixed(1)}% vs avg
+        </button>
+      )}
+
+      {!costAnomalyTriggered &&
+        costHistory?.avgUnitCostCents != null &&
+        currentCostCents === 0 && (
+          <button
+            type="button"
+            onClick={() => onApplyCost(costHistory.avgUnitCostCents!)}
+            className="inline-flex items-center gap-1 px-2 py-0.5 rounded border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800"
+            title="Apply the trailing-N average from prior POs"
+          >
+            avg {(costHistory.avgUnitCostCents / 100).toFixed(2)} {currency}
+          </button>
+        )}
+
+      {showEoq && (
+        <button
+          type="button"
+          onClick={() => onApplyQty(eoq.reorderQuantity!)}
+          className="inline-flex items-center gap-1 px-2 py-0.5 rounded border border-blue-200 dark:border-blue-900 bg-blue-50/40 dark:bg-blue-950/20 text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-950/40"
+          title={`Replenishment recommends ${eoq.reorderQuantity} units (urgency: ${eoq.urgency ?? '—'}; ${eoq.daysOfStockLeft ?? '—'}d stock left). Click to apply.`}
+        >
+          <Sparkles className="w-3 h-3" />
+          EOQ {eoq.reorderQuantity}
+        </button>
       )}
     </div>
   )

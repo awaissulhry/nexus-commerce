@@ -7259,6 +7259,241 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
     return { listenerCount: getPoListenerCount() }
   })
 
+  // ═══════════════════════════════════════════════════════════════════
+  // PO.17 — AI assists.
+  //
+  // Three endpoints:
+  //   1. GET  /cost-history    purely SQL — returns trailing N PO unit
+  //                            costs for a (supplier, sku) pair so the
+  //                            Create modal can flag price anomalies.
+  //   2. GET  /eoq-hint        reads ReplenishmentRecommendation for the
+  //                            product so the qty cell can nudge toward
+  //                            the computed reorderQuantity.
+  //   3. POST /ai-draft        calls the LLM provider to parse a freeform
+  //                            request ("draft a PO for Acme: 50 of
+  //                            XAV-001 by Friday") into a structured PO
+  //                            draft the Create modal can pre-fill.
+  //
+  // The AI kill switch (NEXUS_AI_KILL_SWITCH) gates the /ai-draft path
+  // only — cost-history + eoq-hint are pure data queries.
+  // ═══════════════════════════════════════════════════════════════════
+
+  fastify.get('/fulfillment/purchase-orders/cost-history', async (request, reply) => {
+    try {
+      const q = request.query as { supplierId?: string; sku?: string; limit?: string }
+      if (!q.sku) return reply.code(400).send({ error: 'sku required' })
+      const limit = Math.min(20, Math.max(1, Number(q.limit) || 5))
+
+      const where: any = {
+        sku: q.sku,
+        purchaseOrder: { deletedAt: null },
+      }
+      if (q.supplierId) where.purchaseOrder.supplierId = q.supplierId
+
+      const lines = await prisma.purchaseOrderItem.findMany({
+        where,
+        select: {
+          unitCostCents: true,
+          quantityOrdered: true,
+          purchaseOrder: {
+            select: {
+              id: true,
+              poNumber: true,
+              currencyCode: true,
+              createdAt: true,
+              supplier: { select: { id: true, name: true } },
+            },
+          },
+        },
+        orderBy: { purchaseOrder: { createdAt: 'desc' } },
+        take: limit,
+      })
+      if (lines.length === 0) {
+        return { sku: q.sku, samples: [], avgUnitCostCents: null, lastUnitCostCents: null }
+      }
+
+      // Weighted average by quantityOrdered so a big PO at €10 counts
+      // more than a single-unit PO at €15.
+      let weightedNum = 0
+      let weightedDen = 0
+      for (const l of lines) {
+        weightedNum += l.unitCostCents * l.quantityOrdered
+        weightedDen += l.quantityOrdered
+      }
+      const avgUnitCostCents =
+        weightedDen > 0 ? Math.round(weightedNum / weightedDen) : null
+
+      return {
+        sku: q.sku,
+        avgUnitCostCents,
+        lastUnitCostCents: lines[0].unitCostCents,
+        samples: lines.map((l) => ({
+          poNumber: l.purchaseOrder.poNumber,
+          unitCostCents: l.unitCostCents,
+          quantityOrdered: l.quantityOrdered,
+          currencyCode: l.purchaseOrder.currencyCode,
+          supplierName: l.purchaseOrder.supplier?.name ?? null,
+          createdAt: l.purchaseOrder.createdAt,
+        })),
+      }
+    } catch (err: any) {
+      fastify.log.error({ err }, '[purchase-orders/cost-history] failed')
+      return reply.code(500).send({ error: err?.message ?? String(err) })
+    }
+  })
+
+  fastify.get('/fulfillment/purchase-orders/eoq-hint', async (request, reply) => {
+    try {
+      const q = request.query as { productId?: string; sku?: string }
+      const where: any = {}
+      if (q.productId) where.productId = q.productId
+      else if (q.sku) where.sku = q.sku
+      else return reply.code(400).send({ error: 'productId or sku required' })
+
+      const rec = await prisma.replenishmentRecommendation.findFirst({
+        where,
+        orderBy: { generatedAt: 'desc' },
+        select: {
+          reorderQuantity: true,
+          eoqUnits: true,
+          urgency: true,
+          needsReorder: true,
+          velocity: true,
+          leadTimeDays: true,
+          daysOfStockLeft: true,
+          constraintsApplied: true,
+          generatedAt: true,
+        },
+      })
+      if (!rec) {
+        return { found: false }
+      }
+      return { found: true, ...rec }
+    } catch (err: any) {
+      fastify.log.error({ err }, '[purchase-orders/eoq-hint] failed')
+      return reply.code(500).send({ error: err?.message ?? String(err) })
+    }
+  })
+
+  fastify.post('/fulfillment/purchase-orders/ai-draft', async (request, reply) => {
+    try {
+      const { getProvider, isAiKillSwitchOn } = await import(
+        '../services/ai/providers/index.js'
+      )
+      if (isAiKillSwitchOn()) {
+        return reply.code(503).send({ error: 'AI temporarily disabled (kill switch on)' })
+      }
+      const body = (request.body ?? {}) as { prompt?: string; provider?: string }
+      const prompt = (body.prompt ?? '').trim()
+      if (!prompt) return reply.code(400).send({ error: 'prompt required' })
+
+      // Pull supplier + warehouse lists so the LLM can match by name.
+      const [suppliers, warehouses, brand] = await Promise.all([
+        prisma.supplier.findMany({
+          where: { isActive: true },
+          select: { id: true, name: true, defaultCurrency: true, leadTimeDays: true },
+          orderBy: { name: 'asc' },
+          take: 200,
+        }),
+        prisma.warehouse.findMany({
+          select: { id: true, code: true, name: true, isDefault: true },
+          orderBy: [{ isDefault: 'desc' }, { code: 'asc' }],
+        }),
+        prisma.brandSettings.findFirst({ select: { vatScheme: true } }),
+      ])
+
+      const llm = getProvider(body.provider)
+      if (!llm) {
+        return reply.code(503).send({ error: 'No AI provider configured' })
+      }
+
+      const supplierIndex = suppliers
+        .map((s) => `- "${s.name}" (id=${s.id}, leadTime=${s.leadTimeDays}d, ccy=${s.defaultCurrency ?? 'EUR'})`)
+        .join('\n')
+      const warehouseIndex = warehouses
+        .map((w) => `- "${w.code}"${w.isDefault ? ' (default)' : ''}${w.name ? ` — ${w.name}` : ''}`)
+        .join('\n')
+
+      const todayStr = new Date().toISOString().slice(0, 10)
+      const llmPrompt = `You are a purchase-order drafting assistant. The operator wrote:
+
+"""
+${prompt}
+"""
+
+Today is ${todayStr}. Brand fiscal scheme: ${brand?.vatScheme ?? 'unknown'}.
+
+Available suppliers:
+${supplierIndex || '(none)'}
+
+Available warehouses:
+${warehouseIndex || '(none)'}
+
+Parse the operator's request into a strictly-formatted JSON PO draft.
+Match supplier name fuzzily to the index when possible; if no good
+match, set supplierId to null and include supplierName as a hint.
+Resolve dates like "Friday", "next Tuesday", "by end of month" to
+YYYY-MM-DD relative to today. SKUs are returned verbatim (no
+guessing). Quantities and unit costs in supplier currency cents
+(positive integers).
+
+Return ONLY valid JSON, no prose:
+
+{
+  "supplierId": string | null,
+  "supplierName": string | null,
+  "warehouseId": string | null,
+  "expectedDeliveryDate": "YYYY-MM-DD" | null,
+  "currencyCode": "EUR" | "USD" | ...,
+  "notes": string | null,
+  "items": [
+    {
+      "sku": string,
+      "quantityOrdered": number,
+      "unitCostCents": number,
+      "note": string | null
+    }
+  ],
+  "confidence": "high" | "medium" | "low",
+  "warnings": string[]
+}
+`
+
+      const result = await llm.generate({
+        prompt: llmPrompt,
+        temperature: 0.1,
+        maxOutputTokens: 2000,
+        jsonMode: true,
+        feature: 'po-ai-draft',
+      })
+
+      let parsed: any
+      try {
+        // Some providers wrap with prose despite jsonMode; try to find
+        // the JSON block.
+        const text = result.text.trim()
+        const start = text.indexOf('{')
+        const end = text.lastIndexOf('}')
+        const json = start >= 0 && end > start ? text.slice(start, end + 1) : text
+        parsed = JSON.parse(json)
+      } catch (err) {
+        return reply.code(502).send({
+          error: 'AI returned non-JSON response',
+          rawText: result.text,
+        })
+      }
+
+      return {
+        ok: true,
+        draft: parsed,
+        usage: result.usage,
+      }
+    } catch (err: any) {
+      fastify.log.error({ err }, '[purchase-orders/ai-draft] failed')
+      return reply.code(500).send({ error: err?.message ?? String(err) })
+    }
+  })
+
   // PO.13 — Spend summary aggregation for the dashboard tile on
   // /fulfillment/purchase-orders. Single query, single response. All
   // amounts in PO currency cents; the UI groups by currency or
