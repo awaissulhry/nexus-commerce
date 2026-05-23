@@ -4318,6 +4318,16 @@ model BrandSettings {
   // call; true requires a separate human APPROVE action.
   requireApprovalForPo Boolean @default(false)
 
+  // PO.1 — value-based approval ladder. When poApprovalThresholdCents
+  // is null OR a PO's totalCents is at-or-below it, submit-for-review
+  // auto-approves (matches the legacy requireApprovalForPo=false path).
+  // When totalCents exceeds the threshold, the PO is routed to
+  // poApprovalApproverEmail (notified out-of-band; UI surfaces in the
+  // "Awaiting my approval" saved view in PO.14). Both null = ladder
+  // disabled and only requireApprovalForPo gates the flow.
+  poApprovalThresholdCents Int?
+  poApprovalApproverEmail  String?
+
   // R.20 — operator-entered cash position in EUR cents. Powers the
   // 13-week cash-flow projection card on the replenishment page.
   // Null = card hidden + projection still computes without a starting
@@ -7590,10 +7600,29 @@ model PurchaseOrder {
   cancelledAt       DateTime?
   cancelledReason   String?
 
+  // PO.1 — supplier-confirmed ETA + signed-token ack URL.
+  // When PO.9 emails the supplier we mint a random `supplierAckToken`
+  // and embed it in a public `/po/ack/:token` URL. Supplier opens the
+  // URL, confirms (or proposes a new) ETA → backend writes
+  // `supplierConfirmedDeliveryDate` + `supplierConfirmedAt` and flips
+  // the PO to ACKNOWLEDGED. `supplierAckExpiresAt` caps token lifetime
+  // (default 30d) so stale links can't be re-used. Token rotates on
+  // every "Send" so a revision (PO.8) invalidates the old link.
+  supplierConfirmedDeliveryDate DateTime?
+  supplierConfirmedAt           DateTime?
+  supplierAckToken              String?   @unique
+  supplierAckExpiresAt          DateTime?
+
   supplier         Supplier?           @relation(fields: [supplierId], references: [id])
   warehouse        Warehouse?          @relation(fields: [warehouseId], references: [id])
   items            PurchaseOrderItem[]
   inboundShipments InboundShipment[]
+  // PO.1 — PO-level docs (supplier quote, contract refs, customer art,
+  // EAN labels). Cascade-delete with the parent; survives soft-delete
+  // because the parent does too.
+  attachments      PurchaseOrderAttachment[]
+  revisions        PurchaseOrderRevision[]
+  comments         PoComment[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -7604,6 +7633,10 @@ model PurchaseOrder {
   @@index([supplierId])
   @@index([status])
   @@index([status, deletedAt])
+  // PO.1 — read-side hot path for the "Awaiting my approval" + late-PO
+  // saved views in PO.14. expectedDeliveryDate-without-deletedAt is
+  // common enough to warrant its own composite.
+  @@index([expectedDeliveryDate, deletedAt])
 }
 
 model PurchaseOrderItem {
@@ -9217,10 +9250,21 @@ model Review {
 
   sentiment ReviewSentiment?
 
+  // RV.9.7 — Heuristic attribution back to the ReviewRequest that
+  // likely caused this review. Set at ingest time by the analytics
+  // join logic. Null when no SENT request matched (organic review).
+  attributedRequestId String?
+  attributedRequest   ReviewRequest? @relation("ReviewAttribution", fields: [attributedRequestId], references: [id], onDelete: SetNull)
+  attributedRuleId    String?
+  attributedRule      ReviewRule?    @relation("ReviewRuleAttribution", fields: [attributedRuleId], references: [id], onDelete: SetNull)
+  attributedAt        DateTime?
+
   @@unique([channel, externalReviewId])
   @@index([productId, postedAt])
   @@index([marketplace, postedAt])
   @@index([postedAt])
+  @@index([attributedRequestId])
+  @@index([attributedRuleId])
 }
 
 // SR.1 — Per-review AI classification. 1:1 with Review. Categories
@@ -9342,6 +9386,8 @@ model ReviewRequest {
   order          Order                 @relation(fields: [orderId], references: [id], onDelete: Cascade)
   rule           ReviewRule?           @relation(fields: [ruleId], references: [id], onDelete: SetNull)
   sentimentCheck ReviewSentimentCheck?
+  // RV.9.7 — Reviews heuristically attributed to this request.
+  attributedReviews Review[] @relation("ReviewAttribution")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -9378,6 +9424,9 @@ model ReviewRule {
 
   requests        ReviewRequest[]
   sentimentChecks ReviewSentimentCheck[]
+  // RV.9.7 — Reviews heuristically attributed to a request created
+  // by this rule.
+  attributedReviews Review[] @relation("ReviewRuleAttribution")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -9447,6 +9496,33 @@ model ReviewMailerState {
   pausedAt     DateTime?
   pausedBy     String?
   updatedAt    DateTime  @updatedAt
+}
+
+// RV.9.5 — GDPR/CAN-SPAM email suppression list.
+//
+// Every transactional outbound email checks this table before sending.
+// Sources include:
+//   - 'UNSUBSCRIBE_LINK' — customer clicked the one-click footer link
+//   - 'BOUNCE_HARD'      — Resend webhook reported a hard bounce
+//   - 'COMPLAINT'        — Resend webhook reported a spam complaint
+//   - 'MANUAL'           — operator added via admin UI
+//   - 'GDPR_REQUEST'     — formal erasure / opt-out request
+//
+// `email` is stored lower-cased for case-insensitive matching. Channel
+// is null when the suppression is global (the default for an
+// unsubscribe — they opted out of everything, not just review email).
+model EmailSuppression {
+  id        String   @id @default(uuid())
+  email     String
+  channel   String? // 'review-sentiment-check' | 'review-request' | null=ALL
+  source    String // UNSUBSCRIBE_LINK | BOUNCE_HARD | COMPLAINT | MANUAL | GDPR_REQUEST
+  reason    String?
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  @@unique([email, channel])
+  @@index([email])
 }
 
 model OrderTag {

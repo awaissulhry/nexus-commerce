@@ -100,6 +100,30 @@ export default function RulesClient() {
     refresh()
   }
 
+  // RV.9.1 — detect the state where automation is *configured* but won't
+  // *fire*. Two cases:
+  //   1. No active IT (Xavia primary) rule exists → seed one.
+  //   2. A rule with scope=AMAZON_PER_MARKETPLACE has marketplace=null
+  //      (broken — matches no orders).
+  const activeItRule = rules.find(
+    (r) => r.isActive && r.scope === 'AMAZON_PER_MARKETPLACE' && r.marketplace === 'IT',
+  )
+  const brokenRule = rules.find(
+    (r) => r.scope === 'AMAZON_PER_MARKETPLACE' && !r.marketplace,
+  )
+  const showSetupBanner = rules.length > 0 && !activeItRule
+
+  const seedDefault = async () => {
+    try {
+      const res = await fetch(`${getBackendUrl()}/api/review-rules/seed-default`, { method: 'POST' })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? 'Failed')
+      refresh()
+    } catch (e: any) {
+      alert(`Couldn't seed: ${e.message}`)
+    }
+  }
+
   return (
     <div className="space-y-5">
       <PageHeader
@@ -125,6 +149,45 @@ export default function RulesClient() {
           </div>
         }
       />
+
+      {/* RV.9.1 — setup nudge banner */}
+      {!loading && (rules.length === 0 || showSetupBanner || brokenRule) && (
+        <div className="rounded-md border border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 px-4 py-3 flex items-start gap-3">
+          <Sparkles className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+          <div className="flex-1">
+            {rules.length === 0 ? (
+              <>
+                <div className="text-sm font-semibold text-amber-900 dark:text-amber-100">No automation set up yet</div>
+                <div className="text-xs text-amber-800 dark:text-amber-200 mt-0.5">
+                  Without an active rule, the system never schedules review requests. Click to create a recommended Xavia IT rule (7–25d window, returns/refunds excluded, sentiment diversion on).
+                </div>
+              </>
+            ) : brokenRule ? (
+              <>
+                <div className="text-sm font-semibold text-amber-900 dark:text-amber-100">
+                  Rule &quot;{brokenRule.name}&quot; is misconfigured
+                </div>
+                <div className="text-xs text-amber-800 dark:text-amber-200 mt-0.5">
+                  Scope is <strong>AMAZON_PER_MARKETPLACE</strong> but no marketplace is set — this rule matches zero orders. Click to repair it to <strong>IT</strong> (Xavia primary) or edit manually.
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="text-sm font-semibold text-amber-900 dark:text-amber-100">No active IT rule</div>
+                <div className="text-xs text-amber-800 dark:text-amber-200 mt-0.5">
+                  Xavia&apos;s primary market is Amazon IT, but no active rule scoped to it. The automation won&apos;t fire for IT orders. Click to seed a recommended default.
+                </div>
+              </>
+            )}
+          </div>
+          <button
+            onClick={seedDefault}
+            className="h-8 px-3 text-sm font-medium bg-amber-600 text-white rounded hover:bg-amber-700 shrink-0"
+          >
+            {brokenRule ? 'Repair to IT' : 'Set up Xavia IT default'}
+          </button>
+        </div>
+      )}
 
       {loading && rules.length === 0 ? <Card><Skeleton lines={6} /></Card> :
         rules.length === 0 ? (

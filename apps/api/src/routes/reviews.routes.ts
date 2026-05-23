@@ -484,6 +484,91 @@ const reviewsRoutes: FastifyPluginAsync = async (fastify) => {
     return { ok: true, result }
   })
 
+  // RV.9.6 — End-to-end test mode. Three actions an operator can run
+  // from the dashboard without touching real customer state:
+  //
+  //   action='preview-html'  — render the localized sentiment-check
+  //                            email HTML so the operator can eyeball
+  //                            it. No send, no DB write.
+  //   action='send-test'     — send a real sentiment-check email to
+  //                            `recipient` (an operator-controlled
+  //                            address) with /r/__test__/* URLs that
+  //                            land on the public pages without
+  //                            mutating ReviewRequest. Tagged
+  //                            'review-test' so it doesn't pollute
+  //                            normal logs.
+  //   action='dry-tick'      — run the mailer's tick logic over the
+  //                            current queue, but with sendEmail()
+  //                            replaced by a logging stub. Returns
+  //                            the counters that a real tick would
+  //                            have produced.
+  fastify.post<{
+    Body: {
+      action: 'preview-html' | 'send-test' | 'dry-tick'
+      recipient?: string
+      locale?: 'it' | 'de' | 'fr' | 'es' | 'en'
+      productName?: string | null
+    }
+  }>('/reviews/test', async (request, reply) => {
+    const body = request.body
+    if (!body?.action) return reply.code(400).send({ error: 'action required' })
+
+    const webBase = (process.env.NEXUS_WEB_URL ?? 'https://nexus-commerce-three.vercel.app').replace(/\/$/, '')
+    const testBaseUrl = `${webBase}/r/__test__`
+
+    if (body.action === 'preview-html') {
+      const { renderSentimentCheckPreview } = await import(
+        '../services/reviews/sentiment-check-email.service.js'
+      )
+      const html = renderSentimentCheckPreview({
+        locale: body.locale ?? 'it',
+        productName: body.productName ?? null,
+      })
+      reply.header('content-type', 'text/html; charset=utf-8')
+      return reply.send(html)
+    }
+
+    if (body.action === 'send-test') {
+      if (!body.recipient) return reply.code(400).send({ error: 'recipient required' })
+      const { sendSentimentCheckEmail } = await import(
+        '../services/reviews/sentiment-check-email.service.js'
+      )
+      const result = await sendSentimentCheckEmail({
+        to: body.recipient,
+        customerName: 'Test Operator',
+        productName: body.productName ?? 'Casco Xavia Carbon',
+        baseUrl: testBaseUrl,
+        channelOrderId: 'TEST-' + Date.now().toString(36),
+        locale: body.locale ?? 'it',
+      })
+      return { ok: result.ok, dryRun: result.dryRun, error: result.error, suppressed: result.suppressed }
+    }
+
+    if (body.action === 'dry-tick') {
+      // Count what a real tick would do without actually doing it.
+      // We replicate the mailer's status filter + window logic but stop
+      // short of any side effect.
+      const now = new Date()
+      const dueScheduled = await prisma.reviewRequest.count({
+        where: { status: 'SCHEDULED', scheduledFor: { lte: now } },
+      })
+      const dueRetries = await prisma.reviewRequest.count({
+        where: { status: 'FAILED', nextRetryAt: { not: null, lte: now }, attemptCount: { lt: 3 } },
+      })
+      const mailerState = await prisma.reviewMailerState.findUnique({ where: { id: 'default' } })
+      return {
+        ok: true,
+        wouldProcess: dueScheduled + dueRetries,
+        breakdown: { dueScheduled, dueRetries },
+        mailerPaused: mailerState?.isPaused ?? false,
+        envEnabled: process.env.NEXUS_ENABLE_REVIEW_INGEST === '1',
+        outboundEnabled: process.env.NEXUS_ENABLE_OUTBOUND_EMAILS === 'true',
+      }
+    }
+
+    return reply.code(400).send({ error: 'unknown action' })
+  })
+
   fastify.get('/reviews/requests/stats', async (_request, reply) => {
     const [scheduled, sent, failed, skipped] = await Promise.all([
       prisma.reviewRequest.count({ where: { status: 'SCHEDULED' } }),
@@ -510,6 +595,57 @@ const reviewsRoutes: FastifyPluginAsync = async (fastify) => {
       update: {},
       create: { id: 'default' },
     })
+
+    // RV.9.2 — pipeline health: surface stale/stuck cron rows + age of
+    // the most recent successful mailer tick. Used by the dashboard
+    // banner to warn the operator when automation has silently broken.
+    const watchedCrons = ['review-request-mailer', 'orders-delivered-backfill', 'review-rule-evaluator', 'review-attribution']
+    const recentCrons = await prisma.cronRun.findMany({
+      where: { jobName: { in: watchedCrons } },
+      orderBy: { startedAt: 'desc' },
+      take: 30,
+      select: { jobName: true, status: true, startedAt: true, finishedAt: true, errorMessage: true },
+    })
+    type CronSummary = {
+      jobName: string
+      lastRunAt: Date | null
+      lastSuccessAt: Date | null
+      lastFailureAt: Date | null
+      lastError: string | null
+      stuckRunning: boolean
+    }
+    const summaries: CronSummary[] = watchedCrons.map((name) => {
+      const rows = recentCrons.filter((r) => r.jobName === name)
+      const lastRun = rows[0] ?? null
+      const lastSuccess = rows.find((r) => r.status === 'SUCCESS') ?? null
+      const lastFailure = rows.find((r) => r.status === 'FAILED') ?? null
+      // Stuck = current run started >2h ago and still RUNNING. The
+      // separate orphan-sweeper cron should clean it up within 30 min,
+      // but surface it here in the meantime.
+      const stuckRunning =
+        !!lastRun &&
+        lastRun.status === 'RUNNING' &&
+        Date.now() - lastRun.startedAt.getTime() > 2 * 60 * 60 * 1000
+      return {
+        jobName: name,
+        lastRunAt: lastRun?.startedAt ?? null,
+        lastSuccessAt: lastSuccess?.startedAt ?? null,
+        lastFailureAt: lastFailure?.startedAt ?? null,
+        lastError: lastFailure?.errorMessage ?? null,
+        stuckRunning,
+      }
+    })
+    const mailerSummary = summaries.find((s) => s.jobName === 'review-request-mailer')!
+    // Healthy = mailer ran successfully in the last 8h (cron is every
+    // 4h, so >8h means it has missed at least one tick).
+    const mailerHealthy =
+      !!mailerSummary.lastSuccessAt &&
+      Date.now() - mailerSummary.lastSuccessAt.getTime() < 8 * 60 * 60 * 1000
+    const pipelineHealth = {
+      mailerHealthy,
+      hasStuckCron: summaries.some((s) => s.stuckRunning),
+      crons: summaries,
+    }
     const upcoming = await prisma.reviewRequest.findMany({
       where: { status: 'SCHEDULED', scheduledFor: { gt: new Date() } },
       orderBy: { scheduledFor: 'asc' },
@@ -543,6 +679,7 @@ const reviewsRoutes: FastifyPluginAsync = async (fastify) => {
         pausedAt: mailerState.pausedAt,
         pausedBy: mailerState.pausedBy,
       },
+      pipelineHealth,
     }
   })
 
@@ -584,6 +721,163 @@ const reviewsRoutes: FastifyPluginAsync = async (fastify) => {
     })
     return { ok: true, state }
   })
+
+  // RV.9.2 — manual cron-orphan sweep trigger. The cron runs every 30
+  // min on its own, but operators can poke it from the health banner.
+  fastify.post('/reviews/pipeline/sweep-stuck-crons', async () => {
+    const { runCronOrphanSweepOnce } = await import('../jobs/cron-orphan-sweeper.job.js')
+    const result = await runCronOrphanSweepOnce()
+    return { ok: true, ...result }
+  })
+
+  // RV.9.7 — manual review-attribution trigger.
+  fastify.post<{ Body: { windowDays?: number; attributionWindowDays?: number; limit?: number } }>(
+    '/reviews/attribution/run',
+    async (request) => {
+      const { runReviewAttributionOnce } = await import('../services/reviews/review-attribution.service.js')
+      const result = await runReviewAttributionOnce(request.body ?? {})
+      return { ok: true, ...result }
+    },
+  )
+
+  // RV.9.5 — Public unsubscribe endpoint (no auth — token authenticates
+  // intent). Supports GET (the link in the email; renders a confirmation
+  // page) and POST (RFC 8058 one-click). Both honor the request
+  // immediately by inserting an EmailSuppression row.
+  fastify.get<{ Querystring: { token?: string; channel?: string; email?: string } }>(
+    '/email/unsubscribe',
+    async (request, reply) => {
+      const { token, channel, email } = request.query
+      // Look up the email: token-derived (preferred) OR querystring fallback.
+      const { emailFromUnsubscribeToken, addSuppression } = await import(
+        '../services/reviews/email-suppression.service.js'
+      )
+      let resolvedEmail: string | null = null
+      if (email) {
+        // Validate token matches the email if both provided.
+        const { unsubscribeTokenFor } = await import(
+          '../services/reviews/email-suppression.service.js'
+        )
+        if (token && unsubscribeTokenFor(email) !== token) {
+          return reply.code(400).send({ error: 'token / email mismatch' })
+        }
+        resolvedEmail = email.trim().toLowerCase()
+      } else if (token) {
+        // Walk recent ReviewSentimentCheck rows + ReviewRequest rows for
+        // candidate emails. Caps at 1000 to keep latency bounded.
+        const candidates = await prisma.order.findMany({
+          where: { customerEmail: { not: null } },
+          select: { customerEmail: true },
+          orderBy: { createdAt: 'desc' },
+          take: 1000,
+          distinct: ['customerEmail'],
+        })
+        const emails = candidates.map((c) => c.customerEmail!).filter(Boolean)
+        resolvedEmail = emailFromUnsubscribeToken(token, emails)
+      }
+      if (!resolvedEmail) {
+        return reply.code(400).send({ error: 'invalid or expired unsubscribe link' })
+      }
+      const ch = channel ?? null
+      const ipAddress = request.headers['x-forwarded-for']
+        ? String(request.headers['x-forwarded-for']).split(',')[0].trim()
+        : request.ip
+      await addSuppression({
+        email: resolvedEmail,
+        channel: ch,
+        source: 'UNSUBSCRIBE_LINK',
+        ipAddress,
+        userAgent: request.headers['user-agent'] ?? null,
+      })
+      // Redirect the GET to a friendly confirmation page on the web app.
+      const webBase = (process.env.NEXUS_WEB_URL ?? 'https://nexus-commerce-three.vercel.app').replace(/\/$/, '')
+      reply.code(302).header(
+        'location',
+        `${webBase}/unsubscribed?channel=${encodeURIComponent(ch ?? 'all')}`,
+      )
+      return reply.send()
+    },
+  )
+
+  fastify.post<{ Body: { token?: string; email?: string; channel?: string } }>(
+    '/email/unsubscribe',
+    async (request) => {
+      // RFC 8058 one-click — same logic as GET, returns JSON.
+      const body = request.body ?? {}
+      const channel = body.channel ?? null
+      const { emailFromUnsubscribeToken, addSuppression, unsubscribeTokenFor } = await import(
+        '../services/reviews/email-suppression.service.js'
+      )
+      let resolvedEmail: string | null = null
+      if (body.email) {
+        if (body.token && unsubscribeTokenFor(body.email) !== body.token) {
+          return { ok: false, error: 'token / email mismatch' }
+        }
+        resolvedEmail = body.email.trim().toLowerCase()
+      } else if (body.token) {
+        const candidates = await prisma.order.findMany({
+          where: { customerEmail: { not: null } },
+          select: { customerEmail: true },
+          orderBy: { createdAt: 'desc' },
+          take: 1000,
+          distinct: ['customerEmail'],
+        })
+        const emails = candidates.map((c) => c.customerEmail!).filter(Boolean)
+        resolvedEmail = emailFromUnsubscribeToken(body.token, emails)
+      }
+      if (!resolvedEmail) return { ok: false, error: 'invalid or expired unsubscribe link' }
+      await addSuppression({
+        email: resolvedEmail,
+        channel,
+        source: 'UNSUBSCRIBE_LINK',
+      })
+      return { ok: true }
+    },
+  )
+
+  // RV.9.5 — Admin list + manual add/remove for the suppression table.
+  fastify.get<{ Querystring: { search?: string } }>(
+    '/email/suppressions',
+    async (request) => {
+      const search = request.query.search?.trim().toLowerCase()
+      const rows = await prisma.emailSuppression.findMany({
+        where: search ? { email: { contains: search } } : undefined,
+        orderBy: { createdAt: 'desc' },
+        take: 200,
+      })
+      return { rows }
+    },
+  )
+
+  fastify.post<{ Body: { email: string; channel?: string | null; reason?: string } }>(
+    '/email/suppressions',
+    async (request, reply) => {
+      const body = request.body
+      if (!body?.email) return reply.code(400).send({ error: 'email required' })
+      const { addSuppression } = await import('../services/reviews/email-suppression.service.js')
+      const result = await addSuppression({
+        email: body.email,
+        channel: body.channel ?? null,
+        source: 'MANUAL',
+        reason: body.reason ?? null,
+      })
+      return { ok: true, ...result }
+    },
+  )
+
+  fastify.delete<{ Body: { email: string; channel?: string | null } }>(
+    '/email/suppressions',
+    async (request, reply) => {
+      const body = request.body
+      if (!body?.email) return reply.code(400).send({ error: 'email required' })
+      const { removeSuppression } = await import('../services/reviews/email-suppression.service.js')
+      const result = await removeSuppression({
+        email: body.email,
+        channel: body.channel ?? null,
+      })
+      return { ok: true, ...result }
+    },
+  )
 
   // RV.4.3 — per-request unsuppress + snooze controls.
   fastify.post<{ Params: { id: string } }>(
@@ -683,6 +977,17 @@ const reviewsRoutes: FastifyPluginAsync = async (fastify) => {
     '/r/:token',
     async (request, reply) => {
       const { token } = request.params
+      // RV.9.6 — Test-mode short-circuit. The token '__test__' is used
+      // by the dashboard's "send-test" action; render demo state.
+      if (token === '__test__') {
+        return {
+          token,
+          response: 'NONE',
+          respondedAt: null,
+          order: { customerName: 'Test Operator', channelOrderId: 'TEST', marketplace: 'IT' },
+          testMode: true,
+        }
+      }
       const check = await prisma.reviewSentimentCheck.findUnique({
         where: { token },
         include: {
@@ -708,6 +1013,10 @@ const reviewsRoutes: FastifyPluginAsync = async (fastify) => {
     '/r/:token/positive',
     async (request, reply) => {
       const { token } = request.params
+      // RV.9.6 — Test-mode short-circuit: no DB writes, no Solicitations fire.
+      if (token === '__test__') {
+        return { ok: true, response: 'POSITIVE', testMode: true }
+      }
       const ip = (request.headers['x-forwarded-for']?.toString().split(',')[0] ?? request.ip ?? '').slice(0, 64)
       const ua = (request.headers['user-agent'] ?? '').slice(0, 256)
 
@@ -752,6 +1061,10 @@ const reviewsRoutes: FastifyPluginAsync = async (fastify) => {
     '/r/:token/negative',
     async (request, reply) => {
       const { token } = request.params
+      // RV.9.6 — Test-mode short-circuit: no DB writes, no support email.
+      if (token === '__test__') {
+        return { ok: true, response: 'NEGATIVE', testMode: true }
+      }
       const body = (request.body ?? {}) as { feedback?: string; name?: string }
       const feedback = (body.feedback ?? '').toString().slice(0, 4000)
       const ip = (request.headers['x-forwarded-for']?.toString().split(',')[0] ?? request.ip ?? '').slice(0, 64)

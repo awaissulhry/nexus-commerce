@@ -30,7 +30,7 @@ import {
   isBenignFailure,
   benignSuppressedReason,
 } from '../services/reviews/amazon-solicitations.service.js'
-import { sendSentimentCheckEmail } from '../services/reviews/sentiment-check-email.service.js'
+import { sendSentimentCheckEmail, resolveLocaleForMarketplace } from '../services/reviews/sentiment-check-email.service.js'
 
 let scheduledTask: ReturnType<typeof cron.schedule> | null = null
 let lastRunAt: Date | null = null
@@ -181,7 +181,9 @@ export async function runReviewMailerOnce(): Promise<MailerTickResult> {
               productName: order.items[0]?.product?.name ?? null,
               baseUrl: `${baseUrl}/r/${sentimentCheck.token}`,
               channelOrderId: order.channelOrderId,
-              locale: (order.marketplace ?? 'IT').toUpperCase() === 'IT' ? 'it' : 'en',
+              // RV.9.3 — locale resolved from Amazon marketplace code
+              // (IT/DE/FR/ES → native; UK/IE → en; unknown → it).
+              locale: resolveLocaleForMarketplace(order.marketplace),
             })
             if (result.ok) {
               await prisma.reviewSentimentCheck.update({
@@ -199,6 +201,21 @@ export async function runReviewMailerOnce(): Promise<MailerTickResult> {
               sentimentEmailsSent += 1
               continue
             } else if (result.dryRun) {
+              skipped += 1
+              continue
+            } else if (result.suppressed) {
+              // RV.9.5 — recipient is on the suppression list. Mark
+              // SKIPPED, never retry.
+              await prisma.reviewRequest.update({
+                where: { id: req.id },
+                data: {
+                  status: 'SKIPPED',
+                  suppressedReason: `Suppressed: ${result.error ?? 'unsubscribed'}`,
+                  providerResponseCode: 'SUPPRESSED',
+                  attemptCount,
+                  lastAttemptAt: new Date(),
+                },
+              })
               skipped += 1
               continue
             } else {
@@ -331,6 +348,19 @@ export async function runReviewMailerOnce(): Promise<MailerTickResult> {
           sent += 1
         } else if (result.dryRun) {
           skipped += 1 // stay SCHEDULED in dry-run
+        } else if (result.suppressed) {
+          // RV.9.5 — recipient is suppressed; SKIPPED, no retry.
+          await prisma.reviewRequest.update({
+            where: { id: req.id },
+            data: {
+              status: 'SKIPPED',
+              suppressedReason: `Suppressed: ${result.error ?? 'unsubscribed'}`,
+              providerResponseCode: 'SUPPRESSED',
+              attemptCount,
+              lastAttemptAt: new Date(),
+            },
+          })
+          skipped += 1
         } else {
           const nextRetryAt = backoffNextRetryAt(attemptCount)
           await prisma.reviewRequest.update({

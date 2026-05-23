@@ -207,7 +207,16 @@ export async function sendReviewRequestEmail(ctx: ReviewEmailContext): Promise<{
   ok: boolean
   dryRun: boolean
   error?: string
+  suppressed?: boolean
 }> {
+  // RV.9.5 — Suppression check before sending.
+  const { isEmailSuppressed, unsubscribeTokenFor } = await import('./email-suppression.service.js')
+  const sup = await isEmailSuppressed(ctx.to, 'review-request')
+  if (sup.suppressed) {
+    return { ok: false, dryRun: false, suppressed: true, error: `suppressed (${sup.source})` }
+  }
+  const webBase = (process.env.NEXUS_WEB_URL ?? 'https://nexus-commerce-three.vercel.app').replace(/\/$/, '')
+  const unsubUrl = `${webBase}/api/email/unsubscribe?token=${unsubscribeTokenFor(ctx.to)}&channel=review-request`
   const rendered = renderHtml(ctx)
   const result = await sendEmail({
     to: ctx.to,
@@ -215,6 +224,10 @@ export async function sendReviewRequestEmail(ctx: ReviewEmailContext): Promise<{
     html: rendered.html,
     text: rendered.text,
     tag: 'review-request',
+    headers: {
+      'List-Unsubscribe': `<${unsubUrl}>, <mailto:unsubscribe@xavia.it?subject=unsubscribe>`,
+      'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+    },
   })
   return { ok: result.ok, dryRun: result.dryRun, error: result.error }
 }

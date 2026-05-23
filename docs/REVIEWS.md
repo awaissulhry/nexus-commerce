@@ -173,7 +173,8 @@ The **Sentiment funnel** tile on the dashboard shows pending / positive / negati
 | RV.4 | `c9a7d86c` | 2026-05-23 | Operator UX: pause/resume toggle, per-row unsuppress + snooze, bulk drill-down modal, retrying KPI. |
 | RV.6 | `ab415d4e` | 2026-05-23 | Negative-feedback diversion: ReviewSentimentCheck model, `/r/[token]/positive` + `/negative` public pages, bilingual "How was it?" email, mailer state machine, sentiment funnel UI. |
 | RV.7 | `a2f84aaa` | 2026-05-23 | Real Amazon-report-driven `deliveredAt` via `GET_FLAT_FILE_ALL_ORDERS_DATA_BY_LAST_UPDATE_GENERAL`. Daily 03:30 UTC cron. |
-| RV.8 | (this commit) | 2026-05-23 | Conversion-rate analytics + per-marketplace + per-productType breakdowns + 30d sparkline + operator manual. |
+| RV.8 | `6cdef63a` | 2026-05-23 | Conversion-rate analytics + per-marketplace + per-productType breakdowns + 30d sparkline + operator manual. |
+| RV.9 | (this commit) | 2026-05-23 | Operational polish: first-run nudge (RV.9.1), stuck-cron sweeper + pipeline health banner (RV.9.2), DE/FR/ES email localization (RV.9.3), per-rule conversion analytics (RV.9.4), GDPR/CAN-SPAM EmailSuppression + unsubscribe (RV.9.5), end-to-end test mode (RV.9.6), Review → ReviewRequest/Rule attribution persistence (RV.9.7). |
 
 ---
 
@@ -185,3 +186,36 @@ The **Sentiment funnel** tile on the dashboard shows pending / positive / negati
 - Webhook for "review left" → automated thank-you email to repeat-customer programs.
 
 Ask in `#orders-eng` if you need any of these prioritized.
+
+---
+
+## 11. RV.9 — Operational polish notes
+
+**Setup nudge (RV.9.1).** If `/orders/reviews/rules` shows no active Xavia-IT rule (the most common first-run mistake), an amber banner offers a one-click "Set up Xavia IT default" — creates a rule with the 7–25d window, returns/refunds exclusions, sentiment diversion on. Same banner repairs misconfigured rules (scope=AMAZON_PER_MARKETPLACE but marketplace=null).
+
+**Pipeline health (RV.9.2).** `/marketing/reviews/requests` shows a green "healthy" chip when crons are running, or a rose banner when:
+  - Mailer hasn't successfully run in >8h (cron stuck / env unset)
+  - One or more watched crons stuck in `RUNNING` >2h (process crash mid-tick)
+  - Any watched cron's most recent attempt failed
+
+The orphan-sweeper cron (always-on, every 30 min) auto-marks stuck RUNNING rows as FAILED. Operators can also poke "Sweep stale" on the banner.
+
+**Email localization (RV.9.3).** "How was it?" emails now match the Amazon marketplace's primary language: IT/DE/FR/ES native + English secondary. IT/DE/AT/FR/BE/ES/UK/IE all covered. Unknown markets fall back to Italian. Resolved at send time via `resolveLocaleForMarketplace(order.marketplace)`.
+
+**Per-rule analytics (RV.9.4).** New "By rule" table on the dashboard analytics section. Compare conversion rates across active rules so winners can be kept and laggards retired. Requests created before RV.3 (no ruleId) show as "fallback" — exclude them from rule-vs-rule comparisons.
+
+**GDPR/CAN-SPAM (RV.9.5).** Every outbound email (sentiment + reviewer outreach) checks `EmailSuppression` before sending. Suppressed sends record SKIPPED with `providerResponseCode=SUPPRESSED`, never retry. RFC 8058 List-Unsubscribe + List-Unsubscribe-Post headers unlock the Gmail/Apple Mail one-click button. Customer-facing landing at `/unsubscribed` confirms in their locale. Admin API: `GET/POST/DELETE /api/email/suppressions`.
+
+**Test mode (RV.9.6).** Dashboard "Test mode" panel:
+  - **Preview HTML** — iframe rendering of the localized email; flip locales without sending.
+  - **Send test email** — real Resend send to an operator-controlled address; `__test__` token short-circuits all DB writes on landing pages.
+  - **Dry tick** — counts what a real mailer tick would process right now, surfaces env-flag and pause-state.
+
+**Review attribution persistence (RV.9.7).** The analytics view already joined reviews to sent requests in-memory. RV.9.7 promotes the same heuristic to a 6h cron that writes `Review.attributedRequestId` + `Review.attributedRuleId` back to disk. Idempotent — only fills nulls. Exposes the attribution to downstream consumers (exports, ML, future per-rule revenue calcs) without re-computing.
+
+| Env var | Effect | Default |
+|---|---|---|
+| `NEXUS_UNSUBSCRIBE_SECRET` | Salts unsubscribe tokens so they aren't trivial-guess. Used for both sentiment + reviewer emails. | `xavia-default-secret` — change in prod. |
+| `NEXUS_CRON_ORPHAN_SWEEPER_SCHEDULE` | Cron for stale-RUNNING sweeper. | `*/30 * * * *` |
+| `NEXUS_REVIEW_ATTRIBUTION_SCHEDULE` | Cron for review→rule attribution. | `0 */6 * * *` |
+

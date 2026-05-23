@@ -15,12 +15,24 @@ import { getBackendUrl } from '@/lib/backend-url'
 import { ReviewsNav } from '../_shared/ReviewsNav'
 import { RequestsActionsClient } from './RequestsActionsClient'
 import { RequestRowActions } from './RequestRowActions'
+import { PipelineHealthBanner, type PipelineHealth } from './PipelineHealthBanner'
+import { TestModeClient } from './test/TestModeClient'
 
 interface Analytics {
   window: { since: string; until: string; days: number }
   overall: { sent: number; reviewedAfter: number; conversionRate: number }
   perMarketplace: Array<{ marketplace: string; sent: number; reviewedAfter: number; conversionRate: number }>
   perProductType: Array<{ productType: string; sent: number; reviewedAfter: number; conversionRate: number }>
+  perRule?: Array<{
+    ruleId: string | null
+    ruleName: string
+    ruleScope: string | null
+    ruleMarketplace: string | null
+    ruleActive: boolean
+    sent: number
+    reviewedAfter: number
+    conversionRate: number
+  }>
   daily: Array<{ date: string; sent: number; reviewedAfter: number }>
 }
 
@@ -68,6 +80,7 @@ interface Stats {
     pausedAt: string | null
     pausedBy: string | null
   }
+  pipelineHealth?: PipelineHealth
 }
 
 async function fetchStats(): Promise<Stats> {
@@ -119,6 +132,9 @@ export default async function ReviewRequestsPage() {
       </div>
 
       <RequestsActionsClient mailer={stats.mailer} />
+
+      {/* RV.9.2 — pipeline health banner */}
+      {stats.pipelineHealth && <PipelineHealthBanner health={stats.pipelineHealth} />}
 
       {/* RV.6.5 — sentiment-check funnel tiles */}
       {stats.sentiment && (stats.sentiment.pending + stats.sentiment.positive + stats.sentiment.negative > 0) && (
@@ -212,6 +228,13 @@ export default async function ReviewRequestsPage() {
               labelKey="productType"
             />
           </div>
+
+          {/* RV.9.4 — Per-rule conversion */}
+          {analytics.perRule && analytics.perRule.length > 0 && (
+            <div className="mt-3">
+              <PerRuleTable rows={analytics.perRule} />
+            </div>
+          )}
         </section>
       )}
 
@@ -321,6 +344,9 @@ export default async function ReviewRequestsPage() {
         </p>
       </section>
 
+      {/* RV.9.6 — Test mode */}
+      <TestModeClient />
+
       {/* Env/config notice */}
       <div className="bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 rounded-md px-3 py-2 flex items-start gap-2">
         <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" aria-hidden="true" />
@@ -386,6 +412,82 @@ function Stat({
         {label}
       </div>
       <div className={`text-base font-semibold tabular-nums ${valueClass}`}>{value}</div>
+    </div>
+  )
+}
+
+function PerRuleTable({
+  rows,
+}: {
+  rows: Array<{
+    ruleId: string | null
+    ruleName: string
+    ruleScope: string | null
+    ruleMarketplace: string | null
+    ruleActive: boolean
+    sent: number
+    reviewedAfter: number
+    conversionRate: number
+  }>
+}) {
+  return (
+    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md overflow-hidden">
+      <div className="px-3 py-2 border-b border-slate-200 dark:border-slate-800 text-[11px] uppercase tracking-wider text-slate-500 font-medium flex items-center justify-between">
+        <span>By rule</span>
+        <span className="text-[10px] normal-case text-slate-400">
+          Compare conversion across active rules — keep the winners, retire the rest
+        </span>
+      </div>
+      <table className="w-full text-xs">
+        <thead className="bg-slate-50 dark:bg-slate-950/40">
+          <tr className="text-left text-[10px] uppercase tracking-wider text-slate-500">
+            <th className="px-3 py-1.5">Rule</th>
+            <th className="px-3 py-1.5">Scope / Mkt</th>
+            <th className="px-3 py-1.5 text-right">Sent</th>
+            <th className="px-3 py-1.5 text-right">Reviewed</th>
+            <th className="px-3 py-1.5 text-right">Rate</th>
+            <th className="px-3 py-1.5">Status</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+          {rows.map((r) => {
+            const pct = (r.conversionRate * 100).toFixed(1)
+            const tone =
+              r.conversionRate >= 0.1 ? 'text-emerald-700 dark:text-emerald-300'
+              : r.conversionRate >= 0.05 ? 'text-blue-700 dark:text-blue-300'
+              : 'text-slate-600 dark:text-slate-400'
+            return (
+              <tr key={r.ruleId ?? '__nullrule__'}>
+                <td className="px-3 py-1.5 font-medium text-slate-700 dark:text-slate-300">
+                  {r.ruleName}
+                </td>
+                <td className="px-3 py-1.5 text-slate-500 font-mono text-[10px]">
+                  {r.ruleScope ?? '—'}
+                  {r.ruleMarketplace ? ` · ${r.ruleMarketplace}` : ''}
+                </td>
+                <td className="px-3 py-1.5 text-right tabular-nums">{r.sent}</td>
+                <td className="px-3 py-1.5 text-right tabular-nums text-emerald-700 dark:text-emerald-300">{r.reviewedAfter}</td>
+                <td className={`px-3 py-1.5 text-right tabular-nums font-semibold ${tone}`}>{pct}%</td>
+                <td className="px-3 py-1.5">
+                  {r.ruleId === null ? (
+                    <span className="inline-block text-[10px] px-1.5 py-0.5 rounded ring-1 ring-inset bg-slate-50 text-slate-500 ring-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:ring-slate-700">
+                      fallback
+                    </span>
+                  ) : r.ruleActive ? (
+                    <span className="inline-block text-[10px] px-1.5 py-0.5 rounded ring-1 ring-inset bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:ring-emerald-900">
+                      active
+                    </span>
+                  ) : (
+                    <span className="inline-block text-[10px] px-1.5 py-0.5 rounded ring-1 ring-inset bg-amber-50 text-amber-700 ring-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:ring-amber-900">
+                      inactive
+                    </span>
+                  )}
+                </td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
     </div>
   )
 }

@@ -34,6 +34,17 @@ export interface ReviewAnalyticsResult {
   }
   perMarketplace: Array<{ marketplace: string; sent: number; reviewedAfter: number; conversionRate: number }>
   perProductType: Array<{ productType: string; sent: number; reviewedAfter: number; conversionRate: number }>
+  // RV.9.4 — per-rule rollup so operators can A/B compare rule configs.
+  perRule: Array<{
+    ruleId: string | null
+    ruleName: string
+    ruleScope: string | null
+    ruleMarketplace: string | null
+    ruleActive: boolean
+    sent: number
+    reviewedAfter: number
+    conversionRate: number
+  }>
   daily: Array<{ date: string; sent: number; reviewedAfter: number }>
 }
 
@@ -67,6 +78,7 @@ export async function computeReviewAnalytics(
       channel: true,
       marketplace: true,
       orderId: true,
+      ruleId: true,
       order: {
         select: {
           items: {
@@ -77,6 +89,17 @@ export async function computeReviewAnalytics(
       },
     },
   })
+
+  // RV.9.4 — load rule metadata in one go so the per-rule rollup can
+  // surface name/scope/marketplace without N+1.
+  const ruleIds = Array.from(new Set(sentRequests.map((r) => r.ruleId).filter((v): v is string => !!v)))
+  const ruleMeta = ruleIds.length
+    ? await prisma.reviewRule.findMany({
+        where: { id: { in: ruleIds } },
+        select: { id: true, name: true, scope: true, marketplace: true, isActive: true },
+      })
+    : []
+  const ruleMetaById = new Map(ruleMeta.map((r) => [r.id, r]))
 
   // 2. Pull all Reviews posted in the window (slightly extended by
   //    attributionWindow on the front so we catch ones from earlier
@@ -136,9 +159,12 @@ export async function computeReviewAnalytics(
     }
   }
 
-  // 4. Roll up overall + per-marketplace + per-productType + daily.
+  // 4. Roll up overall + per-marketplace + per-productType + per-rule + daily.
   const perMarketplaceMap = new Map<string, { sent: number; reviewedAfter: number }>()
   const perProductTypeMap = new Map<string, { sent: number; reviewedAfter: number }>()
+  // Key '__nullrule__' captures requests that ran without an active rule
+  // (pre-RV.3 traffic or fallback path).
+  const perRuleMap = new Map<string, { sent: number; reviewedAfter: number }>()
   const dailyMap = new Map<string, { sent: number; reviewedAfter: number }>()
   // Seed daily buckets so empty days show 0
   for (let i = 0; i < windowDays; i++) {
@@ -164,6 +190,12 @@ export async function computeReviewAnalytics(
     p.sent++
     p.reviewedAfter += converted
     perProductTypeMap.set(pt, p)
+
+    const ruleKey = req.ruleId ?? '__nullrule__'
+    const ru = perRuleMap.get(ruleKey) ?? { sent: 0, reviewedAfter: 0 }
+    ru.sent++
+    ru.reviewedAfter += converted
+    perRuleMap.set(ruleKey, ru)
 
     if (req.sentAt) {
       const day = req.sentAt.toISOString().slice(0, 10)
@@ -193,6 +225,22 @@ export async function computeReviewAnalytics(
     .sort((a, b) => b.sent - a.sent)
     .slice(0, 10) // top 10
 
+  const perRule = Array.from(perRuleMap.entries())
+    .map(([key, v]) => {
+      const meta = key === '__nullrule__' ? null : ruleMetaById.get(key) ?? null
+      return {
+        ruleId: key === '__nullrule__' ? null : key,
+        ruleName: meta?.name ?? (key === '__nullrule__' ? '(no rule — fallback path)' : '(deleted rule)'),
+        ruleScope: meta?.scope ?? null,
+        ruleMarketplace: meta?.marketplace ?? null,
+        ruleActive: meta?.isActive ?? false,
+        sent: v.sent,
+        reviewedAfter: v.reviewedAfter,
+        conversionRate: v.sent > 0 ? v.reviewedAfter / v.sent : 0,
+      }
+    })
+    .sort((a, b) => b.sent - a.sent)
+
   const daily = Array.from(dailyMap.entries())
     .map(([date, v]) => ({ date, sent: v.sent, reviewedAfter: v.reviewedAfter }))
     .sort((a, b) => a.date.localeCompare(b.date))
@@ -214,6 +262,7 @@ export async function computeReviewAnalytics(
     },
     perMarketplace,
     perProductType,
+    perRule,
     daily,
   }
 }

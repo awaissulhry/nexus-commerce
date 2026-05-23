@@ -155,6 +155,64 @@ const ordersReviewsRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // RV.9.1 — Seed Xavia recommended-default rule (idempotent).
+  // POST /api/review-rules/seed-default
+  //   Creates "Xavia IT default" if no IT rule exists yet. If a rule
+  //   with scope=AMAZON_PER_MARKETPLACE has marketplace=null (broken
+  //   from earlier RV.3 testing), patches it to mp='IT' instead of
+  //   creating a duplicate. Returns the rule that's now active.
+  fastify.post('/review-rules/seed-default', async (_request, reply) => {
+    try {
+      const existingIt = await prisma.reviewRule.findFirst({
+        where: { scope: 'AMAZON_PER_MARKETPLACE', marketplace: 'IT' },
+      })
+      if (existingIt) {
+        // Make sure it's active + has sane settings.
+        const updated = await prisma.reviewRule.update({
+          where: { id: existingIt.id },
+          data: {
+            isActive: true,
+            useSentimentDiversion: true,
+          },
+        })
+        return { ok: true, rule: updated, action: 'existing-activated' }
+      }
+      // Detect + repair a broken AMAZON_PER_MARKETPLACE rule with null marketplace.
+      const broken = await prisma.reviewRule.findFirst({
+        where: { scope: 'AMAZON_PER_MARKETPLACE', marketplace: null },
+      })
+      if (broken) {
+        const fixed = await prisma.reviewRule.update({
+          where: { id: broken.id },
+          data: {
+            marketplace: 'IT',
+            isActive: true,
+            useSentimentDiversion: true,
+          },
+        })
+        return { ok: true, rule: fixed, action: 'repaired' }
+      }
+      // Fresh create.
+      const created = await prisma.reviewRule.create({
+        data: {
+          name: 'Xavia IT default',
+          scope: 'AMAZON_PER_MARKETPLACE',
+          marketplace: 'IT',
+          isActive: true,
+          minDaysSinceDelivery: 7,
+          maxDaysSinceDelivery: 25,
+          exclusions: ['has_active_return', 'has_refund'],
+          useSentimentDiversion: true,
+          notes: 'Recommended starting point — created automatically by /api/review-rules/seed-default. Tweak timing, exclusions, or duplicate for other marketplaces.',
+          createdBy: 'system-seed',
+        },
+      })
+      return { ok: true, rule: created, action: 'created' }
+    } catch (err: any) {
+      return reply.code(500).send({ error: err.message })
+    }
+  })
+
   // ═══════════════════════════════════════════════════════════════════
   // RULES — DRY-RUN + RUN (eager enqueue)
   // ═══════════════════════════════════════════════════════════════════

@@ -43,6 +43,10 @@ export interface EmailMessage {
    *  'return-received', 'alert-critical'). Aids debugging when
    *  outbound is disabled. */
   tag?: string
+  /** Optional extra SMTP headers. Used for RFC 8058 List-Unsubscribe
+   *  + List-Unsubscribe-Post so Gmail/Apple Mail show the one-click
+   *  Unsubscribe button. */
+  headers?: Record<string, string>
 }
 
 export interface SendResult {
@@ -106,6 +110,11 @@ export async function sendEmail(msg: EmailMessage): Promise<SendResult> {
   if (msg.text) payload.text = msg.text
   if (msg.attachments?.length) {
     payload.attachments = msg.attachments.map(encodeAttachment)
+  }
+  // RV.9.5 — Resend forwards `headers` as raw SMTP headers, which is
+  // how List-Unsubscribe + List-Unsubscribe-Post get to the inbox.
+  if (msg.headers && Object.keys(msg.headers).length > 0) {
+    payload.headers = msg.headers
   }
 
   let res: Response

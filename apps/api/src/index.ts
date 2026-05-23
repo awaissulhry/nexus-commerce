@@ -1070,6 +1070,17 @@ async function start() {
       // RV.7 — orders-delivered backfill (real Amazon report → deliveredAt; same gate).
       const { startOrdersDeliveredBackfillCron } = await import('./jobs/orders-delivered-backfill.job.js');
       startOrdersDeliveredBackfillCron();
+      // RV.9.7 — review → request/rule attribution (same gate).
+      const { startReviewAttributionCron } = await import('./jobs/review-attribution.job.js');
+      startReviewAttributionCron();
+    }
+
+    // RV.9.2 — Stale CronRun sweeper. Always-on (not gated). Marks
+    // status='RUNNING' rows stuck for >2h as FAILED so the dashboard
+    // doesn't show false-positive "still running" states after a crash.
+    {
+      const { startCronOrphanSweeperCron } = await import('./jobs/cron-orphan-sweeper.job.js');
+      startCronOrphanSweeperCron();
     }
 
     // MB.1 — Brand Brain embedding ingester. Gated by NEXUS_ENABLE_BRAND_BRAIN=1.
