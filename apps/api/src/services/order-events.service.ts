@@ -108,21 +108,35 @@ export type OrderEvent =
       message?: string
       ts: number
     }
-  // DA-RT.5 — fired by the nightly sales-drift detector cron when
-  // the per-(day, marketplace) sums in two stores disagree beyond
-  // tolerance: Order.totalPrice sum vs DailySalesAggregate.grossRevenue.
+  // DA-RT.5 / DA-RT.10 — fired by the nightly sales-drift detector
+  // cron when per-(day, marketplace) sums in any of the 3 stores
+  // disagree beyond tolerance:
+  //   Order.totalPrice sum (live DB)
+  //   DailySalesAggregate.grossRevenue (cron-materialised)
+  //   FinancialTransaction.grossRevenue (Amazon-confirmed)
   // Surfaces in operator alerts so the gap doesn't accumulate
-  // invisibly across multiple days/markets/months. payload carries
-  // the delta + which day + which marketplace so the operator can
-  // drill into the specific drift.
+  // invisibly. payload carries the delta + which pair disagrees +
+  // which day + which marketplace so operator can drill into the
+  // specific drift.
   | {
       type: 'sales.drift.detected'
       day: string                    // 'YYYY-MM-DD' (Europe/Rome)
       marketplace: string | null     // null = global (no marketplace breakdown for this day)
+      // DA-RT.5 legacy fields (Order vs Aggregate). Kept for
+      // backwards compat with frontend consumers that subscribed
+      // before DA-RT.10 added the 3-way comparison.
       orderSumCents: number
       aggregateSumCents: number
       deltaCents: number             // orderSumCents - aggregateSumCents
       deltaPct: number               // relative to max(orderSumCents, aggregateSumCents)
+      // DA-RT.10 — third store + per-pair breakdown.
+      financialSumCents?: number     // null when no FinancialTransaction rows yet (e.g. recent days)
+      driftPairs?: Array<{
+        a: 'order' | 'aggregate' | 'financial'
+        b: 'order' | 'aggregate' | 'financial'
+        deltaCents: number
+        deltaPct: number
+      }>
       ts: number
     }
   | { type: 'ping'; ts: number }
