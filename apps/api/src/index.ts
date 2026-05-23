@@ -1067,6 +1067,9 @@ async function start() {
       // SR.4 — post-purchase review request mailer (same gate).
       const { startReviewMailerCron } = await import('./jobs/review-request-mailer.job.js');
       startReviewMailerCron();
+      // RV.7 — orders-delivered backfill (real Amazon report → deliveredAt; same gate).
+      const { startOrdersDeliveredBackfillCron } = await import('./jobs/orders-delivered-backfill.job.js');
+      startOrdersDeliveredBackfillCron();
     }
 
     // MB.1 — Brand Brain embedding ingester. Gated by NEXUS_ENABLE_BRAND_BRAIN=1.

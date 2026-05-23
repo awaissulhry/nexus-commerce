@@ -93,6 +93,8 @@ import {
 import { runReviewRuleEvaluatorCron } from './review-rule-evaluator.job.js'
 // SR.4 — post-purchase review request mailer.
 import { runReviewMailerCron } from './review-request-mailer.job.js'
+// RV.7 — orders-delivered backfill via SP-API GET_FLAT_FILE_ALL_ORDERS_DATA_BY_LAST_UPDATE_GENERAL.
+import { runOrdersDeliveredBackfillCron } from './orders-delivered-backfill.job.js'
 // MB.1 — Brand Brain embedding ingester.
 import { runEmbeddingIngesterCron } from './embedding-ingester.job.js'
 // CE.2 — Browse node predictor.
@@ -200,6 +202,8 @@ export const CRON_REGISTRY: Record<string, () => Promise<unknown>> = {
   'review-rule-evaluator': () => runReviewRuleEvaluatorCron(),
   // SR.4 — post-purchase review request mailer (same gate).
   'review-request-mailer': () => runReviewMailerCron(),
+  // RV.7 — orders-delivered backfill (real Amazon report → deliveredAt).
+  'orders-delivered-backfill': () => runOrdersDeliveredBackfillCron(),
   // MB.1 — Brand Brain embedding ingester. Gate: NEXUS_ENABLE_BRAND_BRAIN=1.
   'embedding-ingester': () => runEmbeddingIngesterCron(),
   // CE.2 — Browse node predictor. Gate: NEXUS_ENABLE_BRAND_BRAIN=1.
