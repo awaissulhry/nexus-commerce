@@ -206,21 +206,6 @@ export default async function ProductDatasheetPage({
         where: { isPublished: true, listingStatus: 'ACTIVE' },
         select: { channel: true, marketplace: true },
       },
-      // DS.4 — compliance certificates (CE, EN_13595, REACH, …).
-      // Sorted with currently-valid certs first so a B2B handout
-      // never leads with an expired CE marking.
-      certificates: {
-        select: {
-          certType: true,
-          certNumber: true,
-          standard: true,
-          issuingBody: true,
-          issuedAt: true,
-          expiresAt: true,
-        },
-        orderBy: [{ expiresAt: 'desc' }, { issuedAt: 'desc' }],
-        take: 6,
-      },
       // W5.48 — variations table for parent products
       children: {
         select: {
@@ -239,36 +224,82 @@ export default async function ProductDatasheetPage({
 
   if (!product) notFound()
 
-  // DS.9 — BrandKit tagline + review aggregate run in parallel with
-  // BrandSettings. BrandKit is keyed by Product.brand (e.g. "Xavia").
-  // Review aggregate hits the per-product index and is cheap; the
-  // _avg/_count call is one round-trip.
-  const [brand, brandKit, reviewStats] = await Promise.all([
-    prisma.brandSettings.findFirst({
-      // DS.4 — pull address + VAT fields so the compliance block can
-      // render the EU Responsible Person (GPSR Art. 16). For Xavia,
-      // they're an Italian-established brand so BrandSettings IS the
-      // responsible person.
-      select: {
-        companyName: true,
-        logoUrl: true,
-        addressLines: true,
-        piva: true,
-        taxId: true,
-        contactEmail: true,
-      },
-    }),
+  // DS.9 + DS.4 — Defensive parallel fetches. Each query is wrapped
+  // in .catch(() => fallback) so a missing-table P2021 (e.g.
+  // BrandKit migration not deployed yet) degrades to "no tagline"
+  // rather than crashing the whole datasheet. The page is the most
+  // common entry point for B2B handouts; brittleness here would
+  // block the operator from printing on the dependency of a single
+  // optional feature.
+  const [brand, brandKit, reviewStats, certificates] = await Promise.all([
+    prisma.brandSettings
+      .findFirst({
+        // DS.4 — pull address + VAT fields so the compliance block can
+        // render the EU Responsible Person (GPSR Art. 16). For Xavia,
+        // they're an Italian-established brand so BrandSettings IS the
+        // responsible person.
+        select: {
+          companyName: true,
+          logoUrl: true,
+          addressLines: true,
+          piva: true,
+          taxId: true,
+          contactEmail: true,
+        },
+      })
+      .catch((e: unknown) => {
+        console.error('[datasheet] brandSettings query failed', e)
+        return null
+      }),
     product.brand
-      ? prisma.brandKit.findUnique({
-          where: { brand: product.brand },
-          select: { tagline: true },
-        })
+      ? prisma.brandKit
+          .findUnique({
+            where: { brand: product.brand },
+            select: { tagline: true },
+          })
+          .catch((e: unknown) => {
+            console.error('[datasheet] brandKit query failed', e)
+            return null
+          })
       : Promise.resolve(null),
-    prisma.review.aggregate({
-      where: { productId: product.id, rating: { not: null } },
-      _avg: { rating: true },
-      _count: { _all: true },
-    }),
+    prisma.review
+      .aggregate({
+        where: { productId: product.id, rating: { not: null } },
+        _avg: { rating: true },
+        _count: { _all: true },
+      })
+      .catch((e: unknown) => {
+        console.error('[datasheet] review aggregate failed', e)
+        return null
+      }),
+    // DS.4 — compliance certificates (CE, EN_13595, REACH, …) pulled
+    // as a SEPARATE query so a missing ProductCertificate migration
+    // doesn't take down the main product fetch. Sorted valid-first.
+    prisma.productCertificate
+      .findMany({
+        where: { productId: id },
+        select: {
+          certType: true,
+          certNumber: true,
+          standard: true,
+          issuingBody: true,
+          issuedAt: true,
+          expiresAt: true,
+        },
+        orderBy: [{ expiresAt: 'desc' }, { issuedAt: 'desc' }],
+        take: 6,
+      })
+      .catch((e: unknown) => {
+        console.error('[datasheet] productCertificate query failed', e)
+        return [] as Array<{
+          certType: string
+          certNumber: string | null
+          standard: string | null
+          issuingBody: string | null
+          issuedAt: Date | null
+          expiresAt: Date | null
+        }>
+      }),
   ])
 
   // W5.48 — pick translation matching the operator's locale; fall
@@ -438,8 +469,8 @@ export default async function ProductDatasheetPage({
   // SR.* series. Both render only when present — empty product gets
   // no awkward "★ — · 0 reviews" stub.
   const tagline = brandKit?.tagline?.trim() || null
-  const avgRating = reviewStats._avg.rating
-  const reviewCount = reviewStats._count._all
+  const avgRating = reviewStats?._avg.rating ?? null
+  const reviewCount = reviewStats?._count._all ?? 0
   const showReviewBadge = avgRating != null && reviewCount > 0
   const ratingFormatted = avgRating
     ? new Intl.NumberFormat(currencyLocale, {
@@ -493,7 +524,7 @@ export default async function ProductDatasheetPage({
     !!countryDisplay ||
     !!ppeLabel ||
     !!hazmatLabel ||
-    product.certificates.length > 0 ||
+    certificates.length > 0 ||
     hasResponsiblePerson
 
   return (
@@ -1014,13 +1045,13 @@ export default async function ProductDatasheetPage({
                     </div>
                   </div>
                 )}
-                {product.certificates.length > 0 && (
+                {certificates.length > 0 && (
                   <div>
                     <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-1">
                       {t('products.datasheet.compliance.certificates')}
                     </div>
                     <ul className="space-y-1">
-                      {product.certificates.map((c, i) => {
+                      {certificates.map((c, i) => {
                         const expired =
                           c.expiresAt != null && c.expiresAt < new Date()
                         return (
