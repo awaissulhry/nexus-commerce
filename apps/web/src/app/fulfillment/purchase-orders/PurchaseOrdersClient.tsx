@@ -5,6 +5,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import {
   AlertCircle,
   Ban,
+  Check,
   CheckCircle2,
   ChevronDown,
   ChevronRight,
@@ -321,9 +322,15 @@ function AuditTrailPanel({ poId }: { poId: string }) {
 function PoCard({
   po,
   onTransition,
+  isSelected,
+  onToggleSelect,
 }: {
   po: PORow
   onTransition: (poId: string, transition: string, reason?: string) => Promise<void>
+  // PO-FIX — checkbox for multi-select. Optional so existing callers
+  // that don't wire it (none today, but future) still render fine.
+  isSelected?: boolean
+  onToggleSelect?: (id: string) => void
 }) {
   const { t } = useTranslations()
   const [expanded, setExpanded] = useState(false)
@@ -354,12 +361,50 @@ function PoCard({
   }
 
   return (
-    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
+    <div
+      className={`bg-white dark:bg-slate-900 border rounded-lg overflow-hidden transition-colors ${
+        isSelected
+          ? 'border-blue-400 dark:border-blue-500 bg-blue-50/30 dark:bg-blue-950/20'
+          : 'border-slate-200 dark:border-slate-700'
+      }`}
+    >
       <button
         type="button"
         onClick={() => setExpanded((v) => !v)}
         className="w-full px-5 py-3 flex items-center gap-4 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors text-left"
       >
+        {/* PO-FIX — multi-select checkbox. Click stops propagation so
+            it doesn't also toggle the card's expand state. Rendered
+            even when onToggleSelect is undefined (defensive empty
+            div keeps the layout stable). */}
+        {onToggleSelect ? (
+          <span
+            role="checkbox"
+            aria-checked={!!isSelected}
+            tabIndex={0}
+            onClick={(e) => {
+              e.stopPropagation()
+              onToggleSelect(po.id)
+            }}
+            onKeyDown={(e) => {
+              if (e.key === ' ' || e.key === 'Enter') {
+                e.preventDefault()
+                e.stopPropagation()
+                onToggleSelect(po.id)
+              }
+            }}
+            className={`w-4 h-4 rounded border-2 flex-shrink-0 inline-flex items-center justify-center cursor-pointer transition-colors ${
+              isSelected
+                ? 'bg-blue-600 border-blue-600 text-white'
+                : 'border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 hover:border-slate-400'
+            }`}
+            aria-label={isSelected ? 'Deselect purchase order' : 'Select purchase order'}
+          >
+            {isSelected && <Check className="w-3 h-3" strokeWidth={3} />}
+          </span>
+        ) : (
+          <div className="w-4 h-4 flex-shrink-0" />
+        )}
         <div className="flex-shrink-0">
           {expanded ? (
             <ChevronDown className="w-4 h-4 text-slate-400 dark:text-slate-500" />
@@ -605,6 +650,51 @@ export default function PurchaseOrdersClient() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
+  // PO-FIX (2026-05-23) — multi-select state + bulk delete. The
+  // backend already exposes /fulfillment/purchase-orders/bulk-soft-
+  // delete (ids[]); the UI just didn't surface a way to select POs.
+  // Operators reported "no checkboxes to select and delete on
+  // /fulfillment/purchase-orders" — this patch adds the missing
+  // affordance on the existing card layout.
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [bulkDeleting, setBulkDeleting] = useState(false)
+  const [confirmBulkDelete, setConfirmBulkDelete] = useState(false)
+  const toggleSelected = useCallback((id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }, [])
+  const clearSelection = useCallback(() => setSelected(new Set()), [])
+  const handleBulkDelete = useCallback(async () => {
+    const ids = Array.from(selected)
+    if (ids.length === 0) return
+    setBulkDeleting(true)
+    setActionError(null)
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/fulfillment/purchase-orders/bulk-soft-delete`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ids }),
+        },
+      )
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body?.error ?? `HTTP ${res.status}`)
+      }
+      setSelected(new Set())
+      setConfirmBulkDelete(false)
+      await fetchPos()
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setBulkDeleting(false)
+    }
+  }, [selected])
   // F2.8 — search across poNumber + supplier name + line SKU. Local
   // filter (no server round-trip) since lists are small (<200 active).
   const [search, setSearch] = useState('')
@@ -847,11 +937,71 @@ export default function PurchaseOrdersClient() {
         </div>
       )}
 
+      {/* PO-FIX — bulk action bar. Visible only when one or more POs
+          are selected. Shows a count, a destructive Delete button
+          (soft-delete; rows land in the recycle bin and can be
+          restored from /admin?deleted=true), and a Clear button. */}
+      {selected.size > 0 && (
+        <div className="sticky top-0 z-20 -mx-2 px-3 py-2 bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900 rounded-lg flex items-center gap-3 shadow-sm">
+          <span className="text-sm font-medium text-slate-800 dark:text-slate-200">
+            {selected.size} selected
+          </span>
+          <div className="flex-1" />
+          {confirmBulkDelete ? (
+            <>
+              <span className="text-xs text-slate-600 dark:text-slate-400">
+                Delete {selected.size} purchase order{selected.size === 1 ? '' : 's'}?
+              </span>
+              <button
+                type="button"
+                onClick={handleBulkDelete}
+                disabled={bulkDeleting}
+                className="h-7 px-3 text-xs rounded bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 inline-flex items-center gap-1.5"
+              >
+                {bulkDeleting && <Loader2 size={12} className="animate-spin" />}
+                Yes, delete
+              </button>
+              <button
+                type="button"
+                onClick={() => setConfirmBulkDelete(false)}
+                disabled={bulkDeleting}
+                className="h-7 px-3 text-xs rounded border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
+              >
+                Cancel
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={() => setConfirmBulkDelete(true)}
+                className="h-7 px-3 text-xs rounded border border-red-200 dark:border-red-900 text-red-700 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 inline-flex items-center gap-1.5"
+              >
+                <Trash2 size={12} /> Delete
+              </button>
+              <button
+                type="button"
+                onClick={clearSelection}
+                className="h-7 px-3 text-xs rounded border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
+              >
+                Clear
+              </button>
+            </>
+          )}
+        </div>
+      )}
+
       {/* PO list */}
       {filteredPos && filteredPos.length > 0 && (
         <div className="space-y-2">
           {filteredPos.map((po) => (
-            <PoCard key={po.id} po={po} onTransition={handleTransition} />
+            <PoCard
+              key={po.id}
+              po={po}
+              onTransition={handleTransition}
+              isSelected={selected.has(po.id)}
+              onToggleSelect={toggleSelected}
+            />
           ))}
         </div>
       )}
