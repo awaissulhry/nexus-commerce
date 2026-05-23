@@ -13,7 +13,7 @@
 // one-click affordance that doesn't require scrolling into a panel.
 
 import { useEffect, useRef, useState } from 'react'
-import { Loader2, Save, X, Send, ChevronDown, LayoutGrid } from 'lucide-react'
+import { Loader2, Save, X, Send, ChevronDown, LayoutGrid, Zap } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { cn } from '@/lib/utils'
@@ -59,6 +59,42 @@ function elapsed(ts: string | null): string {
   return `${Math.floor(h / 24)}d ago`
 }
 
+// PB.6 — localStorage key for the operator's remembered "Save &
+// publish to…" target. JSON-encoded PublishTarget.
+const SAVE_PUBLISH_TARGET_KEY = 'nexus.images.savePublishTarget'
+
+function readStoredTarget(): PublishTarget | null {
+  if (typeof window === 'undefined') return null
+  try {
+    const raw = window.localStorage.getItem(SAVE_PUBLISH_TARGET_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as PublishTarget
+    if (!parsed || typeof parsed !== 'object') return null
+    if (parsed.channel === 'AMAZON' && parsed.marketplace) return parsed
+    if (parsed.channel === 'EBAY' || parsed.channel === 'SHOPIFY') return parsed
+    return null
+  } catch {
+    return null
+  }
+}
+
+function storeTarget(target: PublishTarget) {
+  if (typeof window === 'undefined') return
+  try {
+    window.localStorage.setItem(SAVE_PUBLISH_TARGET_KEY, JSON.stringify(target))
+  } catch {
+    // localStorage may be unavailable (private browsing, quota). Non-fatal.
+  }
+}
+
+function describeTarget(target: PublishTarget): string {
+  if (target.channel === 'AMAZON') {
+    return target.marketplace === 'ALL' ? 'all Amazon markets' : `Amazon ${target.marketplace}`
+  }
+  if (target.channel === 'EBAY') return 'eBay'
+  return 'Shopify'
+}
+
 export default function ImageActionBar({
   dirtyCount,
   saving,
@@ -72,6 +108,11 @@ export default function ImageActionBar({
   const { t } = useTranslations()
   const [open, setOpen] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
+  // PB.6 — combo button state.
+  const [comboOpen, setComboOpen] = useState(false)
+  const comboRef = useRef<HTMLDivElement>(null)
+  const [storedTarget, setStoredTarget] = useState<PublishTarget | null>(null)
+  useEffect(() => { setStoredTarget(readStoredTarget()) }, [])
 
   useEffect(() => {
     if (!open) return
@@ -89,6 +130,23 @@ export default function ImageActionBar({
     }
   }, [open])
 
+  // PB.6 — outside-click + Esc for the combo dropdown.
+  useEffect(() => {
+    if (!comboOpen) return
+    function onMouseDown(e: MouseEvent) {
+      if (!comboRef.current?.contains(e.target as Node)) setComboOpen(false)
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') setComboOpen(false)
+    }
+    window.addEventListener('mousedown', onMouseDown)
+    window.addEventListener('keydown', onKey)
+    return () => {
+      window.removeEventListener('mousedown', onMouseDown)
+      window.removeEventListener('keydown', onKey)
+    }
+  }, [comboOpen])
+
   const anyPublishable =
     channelStatus.amazon.hasContent ||
     channelStatus.ebay.hasContent ||
@@ -96,6 +154,38 @@ export default function ImageActionBar({
 
   // Nothing dirty and no content to publish → don't render the bar.
   if (dirtyCount === 0 && !anyPublishable) return null
+
+  // PB.6 — Compute the effective Save & publish target. Honor the
+  // stored target when its channel still has content; otherwise
+  // pick the channel with the most recent lastPublishedAt; otherwise
+  // first available (Amazon → eBay → Shopify, Amazon defaults to ALL).
+  function targetIsAvailable(t: PublishTarget): boolean {
+    if (t.channel === 'AMAZON') return channelStatus.amazon.hasContent
+    if (t.channel === 'EBAY') return channelStatus.ebay.hasContent
+    return channelStatus.shopify.hasContent
+  }
+  function defaultTarget(): PublishTarget | null {
+    if (storedTarget && targetIsAvailable(storedTarget)) return storedTarget
+    const candidates: Array<{ target: PublishTarget; lastPub: string | null }> = []
+    if (channelStatus.amazon.hasContent) candidates.push({ target: { channel: 'AMAZON', marketplace: 'ALL' }, lastPub: channelStatus.amazon.lastPublishedAt })
+    if (channelStatus.ebay.hasContent)   candidates.push({ target: { channel: 'EBAY' },                       lastPub: channelStatus.ebay.lastPublishedAt })
+    if (channelStatus.shopify.hasContent) candidates.push({ target: { channel: 'SHOPIFY' },                   lastPub: channelStatus.shopify.lastPublishedAt })
+    if (candidates.length === 0) return null
+    candidates.sort((a, b) => {
+      if (a.lastPub && b.lastPub) return b.lastPub.localeCompare(a.lastPub)
+      if (a.lastPub) return -1
+      if (b.lastPub) return 1
+      return 0
+    })
+    return candidates[0]!.target
+  }
+  const effectiveTarget = defaultTarget()
+
+  function fireComboPublish(target: PublishTarget) {
+    storeTarget(target)
+    setStoredTarget(target)
+    onPublish(target)
+  }
 
   return (
     <div className="mt-4 flex items-center gap-2 py-3 px-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl">
@@ -122,6 +212,84 @@ export default function ImageActionBar({
           >
             <X className="w-3.5 h-3.5" /> {t('products.edit.images.actionBar.discard')}
           </Button>
+
+          {/* PB.6 — Save & publish combo. Split button: main face fires
+              save + publish to the remembered (or smart-default) target;
+              chevron opens a small picker to change it. */}
+          {effectiveTarget && (
+            <div className="relative" ref={comboRef}>
+              <div className="inline-flex">
+                <Button
+                  size="sm"
+                  variant="primary"
+                  onClick={() => fireComboPublish(effectiveTarget)}
+                  disabled={saving || publishing}
+                  className="gap-1.5 rounded-r-none border-r border-blue-500/30"
+                  title={`Save and publish to ${describeTarget(effectiveTarget)} in one click`}
+                >
+                  {publishing
+                    ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    : <Zap className="w-3.5 h-3.5" />}
+                  Save & publish to {describeTarget(effectiveTarget)}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="primary"
+                  onClick={() => setComboOpen((p) => !p)}
+                  disabled={saving || publishing}
+                  className="px-1.5 rounded-l-none"
+                  aria-label="Change publish target"
+                >
+                  <ChevronDown className="w-3.5 h-3.5" />
+                </Button>
+              </div>
+              {comboOpen && (
+                <div
+                  role="menu"
+                  className="absolute left-0 bottom-10 z-30 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl py-1 min-w-[260px] text-sm"
+                >
+                  <div className="px-3 py-1 text-[10px] uppercase font-semibold tracking-wide text-slate-500 dark:text-slate-400">
+                    Save & publish target
+                  </div>
+                  {channelStatus.amazon.hasContent && (
+                    <>
+                      <Divider />
+                      {AMAZON_MARKETS.map((m) => (
+                        <DropdownItem
+                          key={`combo-amz-${m}`}
+                          label={`Amazon ${m}`}
+                          onClick={() => { setComboOpen(false); fireComboPublish({ channel: 'AMAZON', marketplace: m }) }}
+                        />
+                      ))}
+                      <DropdownItem
+                        label="All Amazon markets"
+                        primary
+                        onClick={() => { setComboOpen(false); fireComboPublish({ channel: 'AMAZON', marketplace: 'ALL' }) }}
+                      />
+                    </>
+                  )}
+                  {channelStatus.ebay.hasContent && (
+                    <>
+                      <Divider />
+                      <DropdownItem
+                        label="eBay"
+                        onClick={() => { setComboOpen(false); fireComboPublish({ channel: 'EBAY' }) }}
+                      />
+                    </>
+                  )}
+                  {channelStatus.shopify.hasContent && (
+                    <>
+                      <Divider />
+                      <DropdownItem
+                        label="Shopify"
+                        onClick={() => { setComboOpen(false); fireComboPublish({ channel: 'SHOPIFY' }) }}
+                      />
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
         </>
       )}
 
