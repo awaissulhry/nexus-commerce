@@ -883,21 +883,28 @@ export default function MasterPanel({
                   // ~250px is a safe estimate for our aspect-square cards
                   // at the smallest viewport (250 wide × 250 tall + footer).
                   style={{ contentVisibility: 'auto', containIntrinsicSize: '250px 350px' }}
+                  // IA.13 — cursor-grab signals the whole card is draggable.
+                  // Inner buttons (checkbox, menu, edit form) override with
+                  // their own cursor; clicks on them still fire normally
+                  // because they capture pointer-up before any drag movement.
                   className={cn(
-                    'group relative rounded-xl border bg-slate-50 dark:bg-slate-800 overflow-hidden transition-all',
+                    'group relative rounded-xl border bg-slate-50 dark:bg-slate-800 overflow-hidden transition-all cursor-grab active:cursor-grabbing',
                     selectedIds.has(img.id)
                       ? 'border-blue-500 ring-2 ring-blue-300 dark:ring-blue-600'
                       : dragOverIndex === index
                         ? 'border-blue-400 dark:border-blue-500 ring-2 ring-blue-300 dark:ring-blue-600'
                         : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600',
                   )}
+                  title="Drag to reorder, or drop on a channel cell to assign"
                 >
-                  {/* Thumbnail — click anywhere outside the corner buttons opens lightbox */}
+                  {/* Thumbnail — click opens lightbox; drag from anywhere
+                      on the card still fires because the parent is
+                      draggable. IA.13 dropped the cursor-zoom-in
+                      override so the card-wide cursor-grab is visible —
+                      operators were confused that only the checkbox
+                      area looked draggable. */}
                   <div
-                    className={cn(
-                      'aspect-square relative bg-slate-100 dark:bg-slate-700',
-                      onOpenLightbox && 'cursor-zoom-in',
-                    )}
+                    className="aspect-square relative bg-slate-100 dark:bg-slate-700"
                     onClick={() => onOpenLightbox?.(img)}
                   >
                     {/* IR.11.2 — Skeleton placeholder shimmers under the
