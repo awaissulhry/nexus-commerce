@@ -4230,6 +4230,8 @@
   "products.datasheet.downloadPdf": "Scarica PDF",
   "products.datasheetHub.backToProduct": "Torna al prodotto",
   "products.datasheetHub.print": "Scheda stampabile",
+  "products.datasheetHub.exportJson": "Esporta JSON",
+  "products.datasheetHub.exportJsonTooltip": "Scarica un singolo file JSON con master + traduzioni + canali + certificati + recensioni + varianti. Qualità audit.",
   "products.datasheetHub.tabsAria": "Sezioni della scheda",
   "products.datasheetHub.tab.overview": "Panoramica",
   "products.datasheetHub.tab.attributes": "Attributi",

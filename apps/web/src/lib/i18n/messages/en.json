@@ -4209,6 +4209,8 @@
   "products.datasheet.downloadPdf": "Download PDF",
   "products.datasheetHub.backToProduct": "Back to product",
   "products.datasheetHub.print": "Printable spec sheet",
+  "products.datasheetHub.exportJson": "Export JSON",
+  "products.datasheetHub.exportJsonTooltip": "Download a single JSON file with master + translations + channels + certificates + reviews + variants. Audit-grade.",
   "products.datasheetHub.tabsAria": "Datasheet sections",
   "products.datasheetHub.tab.overview": "Overview",
   "products.datasheetHub.tab.attributes": "Attributes",

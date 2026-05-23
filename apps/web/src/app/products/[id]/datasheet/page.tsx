@@ -32,7 +32,7 @@
 import { prisma } from '@nexus/database'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, FileText } from 'lucide-react'
+import { ArrowLeft, Download, FileText } from 'lucide-react'
 import { getServerLocale, getServerT } from '@/lib/i18n/server'
 import HeaderHealthPulse from './HeaderHealthPulse'
 import AttributesTab from './AttributesTab'
@@ -158,6 +158,14 @@ export default async function ProductDatasheetHubPage({
           </div>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
+          <Link
+            href={`/products/${product.id}/datasheet/export.json`}
+            className="inline-flex items-center gap-1.5 h-8 px-3 text-md text-slate-700 border border-slate-300 rounded-md hover:bg-slate-100 dark:text-slate-200 dark:border-slate-700 dark:hover:bg-slate-800"
+            title={t('products.datasheetHub.exportJsonTooltip')}
+          >
+            <Download className="w-4 h-4" />
+            {t('products.datasheetHub.exportJson')}
+          </Link>
           <Link
             href={`/products/${product.id}/datasheet/print`}
             className="inline-flex items-center gap-1.5 h-8 px-3 text-md text-slate-700 border border-slate-300 rounded-md hover:bg-slate-100 dark:text-slate-200 dark:border-slate-700 dark:hover:bg-slate-800"
