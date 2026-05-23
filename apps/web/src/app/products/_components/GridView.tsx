@@ -69,8 +69,10 @@ import {
   VirtualizedGrid as SharedVirtualizedGrid,
   SearchContext,
   RiskFlaggedContext,
+  DensityContext,
 } from '@/app/_shared/grid-lens/VirtualizedGrid'
 import { ProductIdentityCell, StockSplit } from '@/app/_shared/grid-lens'
+import { DENSITY_THUMB_ICON_PX, DENSITY_THUMB_PX } from '@/lib/theme'
 
 // Italian terminology lookup — falls back to English when not in the
 // glossary. Mirrored from packages/database seed data for the brand
@@ -412,14 +414,24 @@ function RowContextMenuContent({
 
 // PG.1c — Thumbnail with broken-URL fallback. Used by the standalone
 // 'thumb' column. Without an onError handler, a 404 from the Amazon
-// CDN left the cell as an empty 48 px box — visually indistinguishable
+// CDN left the cell as an empty box — visually indistinguishable
 // from "no image at all" but with different intent.
-function ThumbImage({ src }: { src: string }) {
+// PG.3 — size now follows the toolbar's DensityToggle via DensityContext
+// (32 / 40 / 56 px for compact / comfortable / spacious). Accepts null
+// so a missing URL renders the same placeholder as a broken URL.
+function ThumbImage({ src }: { src: string | null }) {
   const [failed, setFailed] = useState(false)
-  if (failed) {
+  const density = useContext(DensityContext)
+  const thumbPx = DENSITY_THUMB_PX[density]
+  const iconPx = DENSITY_THUMB_ICON_PX[density]
+  const style = { width: thumbPx, height: thumbPx }
+  if (!src || failed) {
     return (
-      <div className="w-12 h-12 rounded bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 dark:text-slate-500">
-        <ImageIcon size={16} />
+      <div
+        style={style}
+        className="rounded bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 dark:text-slate-500"
+      >
+        <ImageIcon size={iconPx} />
       </div>
     )
   }
@@ -431,7 +443,8 @@ function ThumbImage({ src }: { src: string }) {
       loading="lazy"
       decoding="async"
       onError={() => setFailed(true)}
-      className="w-12 h-12 rounded object-cover bg-slate-100 dark:bg-slate-800"
+      style={style}
+      className="rounded object-cover bg-slate-100 dark:bg-slate-800"
     />
   )
 }
@@ -1297,18 +1310,11 @@ const ProductCell = memo(function ProductCell({
       )
 
     case 'thumb':
-      // U.35 — bumped from w-10/h-10 (40px) to w-12/h-12 (48px) so
-      // the product photo reads at a glance without the operator
-      // having to open the drawer. Column width raised to match in
-      // _columns.ts. PG.1c — broken-URL fallback now lives in
-      // <ThumbImage>; placeholder branch kept for missing imageUrl.
-      return p.imageUrl ? (
-        <ThumbImage src={p.imageUrl} />
-      ) : (
-        <div className="w-12 h-12 rounded bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 dark:text-slate-500">
-          <ImageIcon size={16} />
-        </div>
-      )
+      // PG.1c + PG.3 — ThumbImage owns both the broken-URL fallback and
+      // the null-URL placeholder, sized by DensityContext so the cell
+      // breathes correctly at compact / comfortable / spacious.
+      return <ThumbImage src={p.imageUrl ?? null} />
+
     case 'sku':
       return (
         <div className="inline-flex items-center gap-1.5 min-w-0">

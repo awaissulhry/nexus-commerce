@@ -40,6 +40,30 @@ export const DENSITY_ROW_HEIGHT: Record<Density, number> = {
   spacious:    64,
 }
 
+/**
+ * PG.3 — Thumbnail size (px square) tied to row density. The previous
+ * fixed 48 px thumb overflowed a 44 px compact row and looked lost in
+ * a 64 px spacious row. Each value leaves ~8-12 px breathing room
+ * inside the row so the cell's vertical-center looks deliberate at
+ * every density.
+ *
+ * Read via DensityContext (set by VirtualizedGrid) so ProductIdentityCell
+ * + ThumbImage stay in sync with the toolbar's DensityToggle without
+ * prop-drilling through the renderCell callback.
+ */
+export const DENSITY_THUMB_PX: Record<Density, number> = {
+  compact:     32,
+  comfortable: 40,
+  spacious:    56,
+}
+
+/** Lucide icon size for the empty-thumb placeholder, scaled per density. */
+export const DENSITY_THUMB_ICON_PX: Record<Density, number> = {
+  compact:     12,
+  comfortable: 14,
+  spacious:    18,
+}
+
 // ── Status / channel mappings (P.4 originals, preserved verbatim) ──
 
 /** Map a Product.status to a Badge variant. */

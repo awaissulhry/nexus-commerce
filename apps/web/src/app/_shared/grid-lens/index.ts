@@ -5,7 +5,7 @@
  * Consumers: /products (and future pages).
  */
 
-export { VirtualizedGrid, SearchContext, RiskFlaggedContext, ColumnResizeHandle } from './VirtualizedGrid'
+export { VirtualizedGrid, SearchContext, RiskFlaggedContext, DensityContext, ColumnResizeHandle } from './VirtualizedGrid'
 export { SavedViewsButton } from './SavedViewsButton'
 export { GridFooter } from './GridFooter'
 export { ProductIdentityCell } from './ProductIdentityCell'

@@ -58,6 +58,14 @@ export const SearchContext = createContext<string>('')
 // badge. Same context-not-prop reasoning as SearchContext.
 export const RiskFlaggedContext = createContext<Set<string>>(new Set())
 
+// PG.3 — active density context. VirtualizedGrid is the single owner of
+// the Density value (passed in via the `density` prop from the workspace
+// toolbar); cells like ProductIdentityCell + ThumbImage consume it to
+// scale their thumbnail size + placeholder icon. Comfortable is the
+// default so cells outside a VirtualizedGrid (e.g. drawer, future
+// previews) render with the historical 40 px thumb.
+export const DensityContext = createContext<Density>('comfortable')
+
 // ── FlatRow ─────────────────────────────────────────────────────────────────
 type FlatRow<T extends GridLensRow> =
   | { kind: 'parent'; product: T }
@@ -306,6 +314,7 @@ export function VirtualizedGrid<T extends GridLensRow>({
   return (
     <SearchContext.Provider value={searchTerm}>
       <RiskFlaggedContext.Provider value={riskFlaggedSkus}>
+        <DensityContext.Provider value={density}>
         <Card noPadding>
           <div
             ref={containerRef}
@@ -578,6 +587,7 @@ export function VirtualizedGrid<T extends GridLensRow>({
             )
           })()}
         </Card>
+        </DensityContext.Provider>
       </RiskFlaggedContext.Provider>
     </SearchContext.Provider>
   )

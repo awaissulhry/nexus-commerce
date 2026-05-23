@@ -1,8 +1,13 @@
 'use client'
 
-import { useState } from 'react'
+import { useContext, useState } from 'react'
 import Link from 'next/link'
 import { Image as ImageIcon } from 'lucide-react'
+import {
+  DENSITY_THUMB_ICON_PX,
+  DENSITY_THUMB_PX,
+} from '@/lib/theme'
+import { DensityContext } from './VirtualizedGrid'
 
 export type ProductIdentityCellProps = {
   id: string
@@ -76,6 +81,15 @@ export function ProductIdentityCell(props: ProductIdentityCellProps) {
   const [imgFailed, setImgFailed] = useState(false)
   const showImage = imageUrl && !imgFailed
 
+  // PG.3 — thumb size follows the toolbar's DensityToggle so a
+  // compact row (44 px tall) renders a 32 px thumb, comfortable → 40 px,
+  // spacious → 56 px. Read via DensityContext set by VirtualizedGrid;
+  // cells rendered outside one fall back to comfortable.
+  const density = useContext(DensityContext)
+  const thumbPx = DENSITY_THUMB_PX[density]
+  const thumbIconPx = DENSITY_THUMB_ICON_PX[density]
+  const thumbStyle = { width: thumbPx, height: thumbPx }
+
   const handleThumbClick = () => {
     if (onThumbClick) {
       onThumbClick(id)
@@ -87,18 +101,17 @@ export function ProductIdentityCell(props: ProductIdentityCellProps) {
   }
 
   return (
-    <div className="flex items-start gap-2.5 min-w-0 py-0.5">
+    <div className="flex items-center gap-2.5 min-w-0 py-0.5">
       {showThumb && (
         <button
           type="button"
-          className="flex-shrink-0 mt-0.5 cursor-pointer rounded focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none"
+          className="flex-shrink-0 cursor-pointer rounded focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none"
           title="Open product drawer"
           aria-label={`Open drawer for ${name}`}
           onClick={handleThumbClick}
         >
           {showImage ? (
-            // PG.1c — bumped from w-10/h-10 to w-12/h-12 so the inline
-            // thumbnail matches the standalone 'thumb' column (48 px).
+            // PG.3 — size driven by DensityContext (was hard-coded 48 px).
             // loading=lazy + decoding=async keep the initial paint snappy
             // when 100+ rows render at once.
             // eslint-disable-next-line @next/next/no-img-element
@@ -108,11 +121,15 @@ export function ProductIdentityCell(props: ProductIdentityCellProps) {
               loading="lazy"
               decoding="async"
               onError={() => setImgFailed(true)}
-              className="w-12 h-12 rounded object-cover bg-slate-100 dark:bg-slate-800"
+              style={thumbStyle}
+              className="rounded object-cover bg-slate-100 dark:bg-slate-800"
             />
           ) : (
-            <div className="w-12 h-12 rounded bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-300 dark:text-slate-600 flex-shrink-0">
-              <ImageIcon size={16} />
+            <div
+              style={thumbStyle}
+              className="rounded bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-300 dark:text-slate-600 flex-shrink-0"
+            >
+              <ImageIcon size={thumbIconPx} />
             </div>
           )}
         </button>
