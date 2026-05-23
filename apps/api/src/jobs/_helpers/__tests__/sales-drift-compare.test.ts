@@ -167,3 +167,73 @@ describe('buildDriftPairs', () => {
     expect(pairs[0]!.deltaCents).toBeGreaterThan(0)
   })
 })
+
+// DA-RT.20 — settlement-pending classification.
+describe('buildDriftPairs — kind classification (DA-RT.20)', () => {
+  it('without windowAgeDays, all pairs are true-drift', () => {
+    const pairs = buildDriftPairs({
+      orderCents: 100_000,
+      aggregateCents: 100_000,
+      financialCents: 80_000, // F undershoots O+A by 20%
+    })
+    expect(pairs).toHaveLength(2) // O↔F + A↔F
+    for (const p of pairs) expect(p.kind).toBe('true-drift')
+  })
+
+  it('recent window + F < O → settlement-pending on F-side pairs', () => {
+    const pairs = buildDriftPairs(
+      { orderCents: 100_000, aggregateCents: 100_000, financialCents: 30_000 },
+      5, // 5 days old, well inside settlement window
+    )
+    // Both F-side pairs should be settlement-pending
+    const oF = pairs.find((p) => p.a === 'order' && p.b === 'financial')!
+    const aF = pairs.find((p) => p.a === 'aggregate' && p.b === 'financial')!
+    expect(oF.kind).toBe('settlement-pending')
+    expect(aF.kind).toBe('settlement-pending')
+  })
+
+  it('recent window + F > O → still true-drift (Amazon settling more = real bug)', () => {
+    const pairs = buildDriftPairs(
+      { orderCents: 50_000, aggregateCents: 50_000, financialCents: 80_000 },
+      5,
+    )
+    for (const p of pairs.filter((p) => p.b === 'financial' || p.a === 'financial')) {
+      expect(p.kind).toBe('true-drift')
+    }
+  })
+
+  it('older window (>=14d) + F < O → true-drift (settlement should have happened)', () => {
+    const pairs = buildDriftPairs(
+      { orderCents: 100_000, aggregateCents: 100_000, financialCents: 30_000 },
+      20,
+    )
+    for (const p of pairs.filter((p) => p.b === 'financial' || p.a === 'financial')) {
+      expect(p.kind).toBe('true-drift')
+    }
+  })
+
+  it('order↔aggregate pair is never settlement-pending (no F involvement)', () => {
+    const pairs = buildDriftPairs(
+      { orderCents: 100_000, aggregateCents: 80_000, financialCents: 30_000 },
+      5, // recent window
+    )
+    const oA = pairs.find((p) => p.a === 'order' && p.b === 'aggregate')!
+    expect(oA.kind).toBe('true-drift')
+  })
+
+  it('14d boundary is exclusive on the settlement-pending side', () => {
+    // Exactly 14 days = NOT settlement-pending (settlement should be done by now)
+    const pairs14 = buildDriftPairs(
+      { orderCents: 100_000, aggregateCents: 100_000, financialCents: 50_000 },
+      14,
+    )
+    expect(pairs14.find((p) => p.b === 'financial')!.kind).toBe('true-drift')
+
+    // 13 days = settlement-pending
+    const pairs13 = buildDriftPairs(
+      { orderCents: 100_000, aggregateCents: 100_000, financialCents: 50_000 },
+      13,
+    )
+    expect(pairs13.find((p) => p.b === 'financial')!.kind).toBe('settlement-pending')
+  })
+})

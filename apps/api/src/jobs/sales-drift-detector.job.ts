@@ -66,15 +66,20 @@ export async function runSalesDriftDetector(): Promise<void> {
 
       const nowTs = Date.now()
       for (const w of audit.windows) {
-        if (w.driftPairs.length === 0) continue
+        // DA-RT.20 — only publish on TRUE drifts. Settlement-pending
+        // pairs (F < O on recent windows) are Amazon's normal lag,
+        // not bugs, so they stay visible in the audit endpoint but
+        // don't fire the operator alert.
+        const truePairs = w.driftPairs.filter((p) => p.kind === 'true-drift')
+        if (truePairs.length === 0) continue
 
         // Backwards-compat: legacy `delta*` fields surface the
         // order-vs-aggregate pair (DA-RT.5 semantics) when present;
-        // otherwise the first drifting pair so subscribers built
+        // otherwise the first true-drifting pair so subscribers built
         // before DA-RT.10 still get a usable signal.
         const legacyPair =
-          w.driftPairs.find((p) => p.a === 'order' && p.b === 'aggregate') ??
-          w.driftPairs[0]!
+          truePairs.find((p) => p.a === 'order' && p.b === 'aggregate') ??
+          truePairs[0]!
 
         publishOrderEvent({
           type: 'sales.drift.detected',
@@ -85,7 +90,7 @@ export async function runSalesDriftDetector(): Promise<void> {
           financialSumCents: w.financialCents ?? undefined,
           deltaCents: legacyPair.deltaCents,
           deltaPct: legacyPair.deltaPct,
-          driftPairs: w.driftPairs,
+          driftPairs: truePairs,
           ts: nowTs,
         })
         logger.warn('[sales-drift-detector] drift detected', {
@@ -94,7 +99,7 @@ export async function runSalesDriftDetector(): Promise<void> {
           orderSumCents: w.orderCents,
           aggregateSumCents: w.aggregateCents,
           financialSumCents: w.financialCents,
-          driftPairs: w.driftPairs.map(
+          driftPairs: truePairs.map(
             (p) => `${p.a}↔${p.b}: ${p.deltaCents}¢ (${p.deltaPct.toFixed(2)}%)`,
           ),
         })

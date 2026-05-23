@@ -62,8 +62,12 @@ export interface DriftAuditResult {
    *  newest-day-first order. Includes both drifting AND in-tolerance
    *  windows so the operator can see "everything is fine" vs "no data". */
   windows: DriftAuditWindow[]
-  /** Count of windows with at least one drifting pair. */
+  /** Count of windows with at least one TRUE-drift pair. Settlement-
+   *  pending pairs (F < O on a recent window) don't count. */
   driftedCount: number
+  /** Count of windows with at least one settlement-pending pair —
+   *  separated so operator can see "waiting on Amazon" vs "real bug". */
+  settlementPendingCount: number
   generatedAt: string
 }
 
@@ -163,9 +167,16 @@ export async function auditSalesDrift(
   }
 
   const windows: DriftAuditWindow[] = []
+  const todayMs = new Date(`${todayIso}T00:00:00Z`).getTime()
   for (const [key, sums] of merged.entries()) {
     const [day, mktRaw] = key.split('|')
-    const driftPairs = buildDriftPairs(sums)
+    // DA-RT.20 — pass window age in days so buildDriftPairs can
+    // classify F-side undershoot in recent windows as
+    // 'settlement-pending' rather than 'true-drift'.
+    const windowAgeDays = day
+      ? Math.floor((todayMs - new Date(`${day}T00:00:00Z`).getTime()) / 86_400_000)
+      : undefined
+    const driftPairs = buildDriftPairs(sums, windowAgeDays)
     windows.push({
       day: day ?? '',
       marketplace: mktRaw === 'NULL' ? null : mktRaw ?? null,
@@ -186,7 +197,16 @@ export async function auditSalesDrift(
     dayRangeStart: isoLocalDay(dayRangeStart),
     dayRangeEnd: todayIso,
     windows,
-    driftedCount: windows.filter((w) => w.driftPairs.length > 0).length,
+    // DA-RT.20 — drifted counts ONLY windows with at least one
+    // 'true-drift' pair. Settlement-pending pairs are visible in
+    // each window's driftPairs[] for transparency but don't count
+    // as drift (Amazon hasn't fully settled yet — expected).
+    driftedCount: windows.filter(
+      (w) => w.driftPairs.some((p) => p.kind === 'true-drift'),
+    ).length,
+    settlementPendingCount: windows.filter(
+      (w) => w.driftPairs.some((p) => p.kind === 'settlement-pending'),
+    ).length,
     generatedAt: now.toISOString(),
   }
 }

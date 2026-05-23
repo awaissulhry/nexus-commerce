@@ -16,11 +16,20 @@
 
 export type DriftStore = 'order' | 'aggregate' | 'financial'
 
+/** DA-RT.20 — pair classification.
+ *  - `true-drift`: real disagreement worth investigating. Fires alerts.
+ *  - `settlement-pending`: F-side pair where F < O on a recent window
+ *    (< 14 days old). Amazon's ListFinancialEvents settles T+1..T+14,
+ *    so partial F-side coverage is expected, not a bug. Surfaced in
+ *    the audit endpoint but skipped by the cron's publish path. */
+export type DriftKind = 'true-drift' | 'settlement-pending'
+
 export interface DriftPair {
   a: DriftStore
   b: DriftStore
   deltaCents: number
   deltaPct: number
+  kind: DriftKind
 }
 
 export interface ThreeWaySums {
@@ -53,18 +62,42 @@ export function checkPair(
 }
 
 /** Builds the drifting-pair list for a single (day, marketplace)
- *  window. Returns an empty array when nothing drifts. */
-export function buildDriftPairs(sums: ThreeWaySums): DriftPair[] {
+ *  window. Returns an empty array when nothing drifts.
+ *  windowAgeDays — when provided AND < 14, F-side pairs where F < O
+ *  are classified as `settlement-pending` (Amazon's normal settlement
+ *  lag). Pairs where F > O always classify as `true-drift` regardless
+ *  of age — Amazon settling more than we sold is a real bug. */
+export function buildDriftPairs(
+  sums: ThreeWaySums,
+  windowAgeDays?: number,
+): DriftPair[] {
   const candidates: Array<{ a: DriftStore; b: DriftStore; aVal: number | null; bVal: number | null }> = [
     { a: 'order',     b: 'aggregate', aVal: sums.orderCents,     bVal: sums.aggregateCents },
     { a: 'order',     b: 'financial', aVal: sums.orderCents,     bVal: sums.financialCents },
     { a: 'aggregate', b: 'financial', aVal: sums.aggregateCents, bVal: sums.financialCents },
   ]
+  const SETTLEMENT_DAYS = 14
+  const inSettlementWindow =
+    typeof windowAgeDays === 'number' && windowAgeDays < SETTLEMENT_DAYS
+
   const out: DriftPair[] = []
   for (const c of candidates) {
     const delta = checkPair(c.aVal, c.bVal)
     if (!delta) continue
-    out.push({ a: c.a, b: c.b, deltaCents: delta.deltaCents, deltaPct: delta.deltaPct })
+    const isFinancialPair = c.b === 'financial' || c.a === 'financial'
+    // deltaCents = c.aVal - c.bVal. For order↔financial + aggregate↔financial,
+    // a-side is the local store, b-side is financial. Positive delta means
+    // local > financial (= financial hasn't fully settled = settlement-pending).
+    const fIsLow = isFinancialPair && delta.deltaCents > 0
+    const kind: DriftKind =
+      inSettlementWindow && fIsLow ? 'settlement-pending' : 'true-drift'
+    out.push({
+      a: c.a,
+      b: c.b,
+      deltaCents: delta.deltaCents,
+      deltaPct: delta.deltaPct,
+      kind,
+    })
   }
   return out
 }
