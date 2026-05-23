@@ -2156,6 +2156,51 @@ function CellRenderer({ col, listing, isParentRow = false, onOpenDrawer, onResyn
 }) {
   const l = listing
   const searchQuery = useContext(SearchContext)
+  const { toast } = useToast()
+
+  // XG.7 — drag-drop upload on the product thumbnail. Posts to the
+  // MASTER gallery endpoint (POST /api/products/:productId/images)
+  // rather than per-listing — the master image cascades to channel
+  // listings via existing IMAGES_UPDATED + followMasterImages, so
+  // the operator gets cross-channel coverage from one drop. Operators
+  // who want channel-specific overrides go through the per-product
+  // images tab → channel panels.
+  const handleThumbUpload = useCallback(
+    async (files: File[]) => {
+      let okCount = 0
+      let failCount = 0
+      for (const file of files) {
+        const fd = new FormData()
+        fd.append('file', file, file.name)
+        try {
+          const res = await fetch(
+            `${getBackendUrl()}/api/products/${l.product.id}/images?type=ALT`,
+            { method: 'POST', body: fd },
+          )
+          if (!res.ok) throw new Error(`HTTP ${res.status}`)
+          okCount++
+        } catch (err) {
+          failCount++
+          toast.error(
+            `Upload failed for ${file.name}: ${err instanceof Error ? err.message : String(err)}`,
+          )
+        }
+      }
+      if (okCount > 0) {
+        toast.success(
+          okCount === 1
+            ? 'Photo uploaded'
+            : `${okCount} photos uploaded${failCount > 0 ? ` (${failCount} failed)` : ''}`,
+        )
+        emitInvalidation({
+          type: 'product.updated',
+          meta: { productIds: [l.product.id], source: 'listings-thumb-drop' },
+        })
+        onListingChanged()
+      }
+    },
+    [l.product.id, toast, onListingChanged],
+  )
   switch (col) {
     case 'thumb':
       return l.product.thumbnailUrl ? (
@@ -2182,6 +2227,7 @@ function CellRenderer({ col, listing, isParentRow = false, onOpenDrawer, onResyn
           showThumb
           onThumbClick={() => onOpenDrawer(l.id)}
           fulfillmentMethod={l.product.fulfillmentMethod}
+          onUploadFiles={handleThumbUpload}
         />
       )
     case 'channel':
