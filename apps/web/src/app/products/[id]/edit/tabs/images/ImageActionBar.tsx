@@ -32,6 +32,13 @@ export interface ChannelPublishStatus {
 }
 
 interface Props {
+  /** DSP.6 — scopes the "remembered publish target" localStorage key
+   *  per product so switching products doesn't carry over the
+   *  previous product's channel selection. Pre-DSP.6 the key was
+   *  global, which surfaced as a real bug: operator edited product A's
+   *  Amazon DE images, switched to product B (which sells eBay-only),
+   *  saw "Save & publish to Amazon DE" as the default action — wrong. */
+  productId: string
   dirtyCount: number
   saving: boolean
   publishing: boolean
@@ -72,14 +79,19 @@ function elapsed(ts: string | null): string {
   return `${Math.floor(h / 24)}d ago`
 }
 
-// PB.6 — localStorage key for the operator's remembered "Save &
-// publish to…" target. JSON-encoded PublishTarget.
-const SAVE_PUBLISH_TARGET_KEY = 'nexus.images.savePublishTarget'
+// PB.6 / DSP.6 — localStorage key for the operator's remembered
+// "Save & publish to…" target. JSON-encoded PublishTarget. Scoped
+// per product so each product remembers its own preferred channel
+// independently — switching products no longer carries over the
+// previous selection.
+function targetKeyForProduct(productId: string): string {
+  return `nexus.images.savePublishTarget:${productId}`
+}
 
-function readStoredTarget(): PublishTarget | null {
+function readStoredTarget(productId: string): PublishTarget | null {
   if (typeof window === 'undefined') return null
   try {
-    const raw = window.localStorage.getItem(SAVE_PUBLISH_TARGET_KEY)
+    const raw = window.localStorage.getItem(targetKeyForProduct(productId))
     if (!raw) return null
     const parsed = JSON.parse(raw) as PublishTarget
     if (!parsed || typeof parsed !== 'object') return null
@@ -91,10 +103,10 @@ function readStoredTarget(): PublishTarget | null {
   }
 }
 
-function storeTarget(target: PublishTarget) {
+function storeTarget(productId: string, target: PublishTarget) {
   if (typeof window === 'undefined') return
   try {
-    window.localStorage.setItem(SAVE_PUBLISH_TARGET_KEY, JSON.stringify(target))
+    window.localStorage.setItem(targetKeyForProduct(productId), JSON.stringify(target))
   } catch {
     // localStorage may be unavailable (private browsing, quota). Non-fatal.
   }
@@ -109,6 +121,7 @@ function describeTarget(target: PublishTarget): string {
 }
 
 export default function ImageActionBar({
+  productId,
   dirtyCount,
   saving,
   publishing,
@@ -130,7 +143,10 @@ export default function ImageActionBar({
   const [comboOpen, setComboOpen] = useState(false)
   const comboRef = useRef<HTMLDivElement>(null)
   const [storedTarget, setStoredTarget] = useState<PublishTarget | null>(null)
-  useEffect(() => { setStoredTarget(readStoredTarget()) }, [])
+  // DSP.6 — re-read when productId changes so navigating product → product
+  // picks up the correct per-product preference rather than the stale one
+  // from the previous product.
+  useEffect(() => { setStoredTarget(readStoredTarget(productId)) }, [productId])
 
   useEffect(() => {
     if (!open) return
@@ -200,7 +216,7 @@ export default function ImageActionBar({
   const effectiveTarget = defaultTarget()
 
   function fireComboPublish(target: PublishTarget) {
-    storeTarget(target)
+    storeTarget(productId, target)
     setStoredTarget(target)
     onPublish(target)
   }
@@ -266,6 +282,20 @@ export default function ImageActionBar({
                   role="menu"
                   className="absolute left-0 bottom-10 z-30 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl py-1 min-w-[260px] text-sm"
                 >
+                  {/* DSP.6 — "Save only" option sits at the top so the
+                      operator can save without publishing in one click.
+                      Pre-DSP.6 the dropdown only offered publish targets,
+                      and Save-only required clicking the separate Save
+                      button to the left — easy to miss when scanning the
+                      combo. */}
+                  <div className="px-3 py-1 text-[10px] uppercase font-semibold tracking-wide text-slate-500 dark:text-slate-400">
+                    Save options
+                  </div>
+                  <DropdownItem
+                    label="Save without publishing"
+                    onClick={() => { setComboOpen(false); onSave() }}
+                  />
+                  <Divider />
                   <div className="px-3 py-1 text-[10px] uppercase font-semibold tracking-wide text-slate-500 dark:text-slate-400">
                     Save & publish target
                   </div>

@@ -772,6 +772,7 @@ export default function ImagesTab({ product, discardSignal, onDirtyChange, onPre
 
       {/* ── Action bar ───────────────────────────────────────────────── */}
       <ImageActionBar
+        productId={product.id}
         dirtyCount={dirtyCount}
         saving={saving}
         publishing={publishing}
