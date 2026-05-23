@@ -32,6 +32,7 @@
  */
 
 import prisma from '../../db.js'
+import { getFxRate } from '../fx-rate.service.js'
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -78,9 +79,33 @@ export interface PriceLookup {
   byProduct: Map<string, number>
 }
 
+/**
+ * DA-RT.8 — currency code → "how many EUR cents per 100 source-currency
+ * cents" multiplier. EUR → 1.0. Other → from FxRate cache (refreshed
+ * daily by pricing-fx-refresh cron). When a currency is missing from
+ * the map the helper treats it as "no FX available" and emits the
+ * native cents under the `nativeCents` field WITHOUT folding into
+ * the EUR total — operator sees the gap explicitly.
+ */
+export interface FxLookup {
+  /** Map<currencyCode, EUR-per-unit rate>. EUR is implicit 1.0. */
+  rates: Map<string, number>
+  /** Date used for the lookup; surfaced in telemetry. */
+  asOf: Date
+}
+
 export interface RevenueComputation {
-  /** Final cents amount the caller should use for display + aggregation. */
+  /** Final cents amount the caller should use for display + aggregation.
+   *  In NATIVE currency (matches order.currencyCode) by default.
+   *  When FxLookup is provided, this is the EUR-equivalent cents. */
   cents: number
+  /** DA-RT.8 — when FxLookup applied, this carries the original
+   *  native-currency cents so the UI can render a chip beside the
+   *  EUR total ("Also: £100"). Equal to `cents` when no conversion
+   *  was needed (EUR orders OR FxLookup absent). */
+  nativeCents: number
+  /** Original currency code (e.g. 'EUR', 'GBP'). */
+  currency: string
   /** Which waterfall tier produced the number. */
   source: RevenueSource
   /** True when the number is not Order.totalPrice (downstream tiers). */
@@ -88,6 +113,9 @@ export interface RevenueComputation {
   /** True when we couldn't get any positive amount — operator may need to
    *  manually override or wait for Amazon to release OrderTotal. */
   awaitingPrice: boolean
+  /** True when FX conversion was requested but the rate was missing
+   *  for the order's currency. cents stays native; UI should flag. */
+  fxMissing: boolean
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────
@@ -104,9 +132,32 @@ function toNumber(v: DecimalLike): number {
 
 const ZERO: RevenueComputation = {
   cents: 0,
+  nativeCents: 0,
+  currency: 'EUR',
   source: 'none',
   estimated: false,
   awaitingPrice: true,
+  fxMissing: false,
+}
+
+/**
+ * DA-RT.8 — convert native cents into EUR cents using the FxLookup
+ * map. Returns { cents, fxMissing } so the caller knows whether
+ * the result is real EUR or fallback native.
+ */
+function applyFx(
+  nativeCents: number,
+  currency: string,
+  fx?: FxLookup,
+): { cents: number; fxMissing: boolean } {
+  if (!fx) return { cents: nativeCents, fxMissing: false }
+  if (currency === 'EUR') return { cents: nativeCents, fxMissing: false }
+  const rate = fx.rates.get(currency)
+  if (rate == null || !Number.isFinite(rate) || rate <= 0) {
+    return { cents: nativeCents, fxMissing: true }
+  }
+  // rates map is "EUR per 1 unit of source-currency"
+  return { cents: Math.round(nativeCents * rate), fxMissing: false }
 }
 
 // ── Single-order computation ─────────────────────────────────────────
@@ -120,15 +171,23 @@ const ZERO: RevenueComputation = {
 export function computeOrderRevenue(
   order: OrderForRevenue,
   priceLookup?: PriceLookup,
+  fxLookup?: FxLookup,
 ): RevenueComputation {
+  const currency = (order.currencyCode ?? 'EUR') as string
+
   // ── Tier 1: Order.totalPrice ─────────────────────────────────
   const direct = toNumber(order.totalPrice)
   if (direct > 0) {
+    const nativeCents = Math.round(direct * 100)
+    const { cents, fxMissing } = applyFx(nativeCents, currency, fxLookup)
     return {
-      cents: Math.round(direct * 100),
+      cents,
+      nativeCents,
+      currency,
       source: 'order_total',
       estimated: false,
       awaitingPrice: false,
+      fxMissing,
     }
   }
 
@@ -150,11 +209,15 @@ export function computeOrderRevenue(
       }
     }
     if (allHavePrice && itemSumCents > 0) {
+      const { cents, fxMissing } = applyFx(itemSumCents, currency, fxLookup)
       return {
-        cents: itemSumCents,
+        cents,
+        nativeCents: itemSumCents,
+        currency,
         source: 'item_sum',
         estimated: false,
         awaitingPrice: false,
+        fxMissing,
       }
     }
   }
@@ -195,14 +258,18 @@ export function computeOrderRevenue(
         : hasListing
         ? 'channel_listing'
         : 'base_price'
+      const { cents, fxMissing } = applyFx(estCents, currency, fxLookup)
       return {
-        cents: estCents,
+        cents,
+        nativeCents: estCents,
+        currency,
         source,
         estimated: true,
         // Estimate exists but we still don't know the real Amazon-side
         // value → keep `awaitingPrice` so reconciliation banners +
         // alerts can flag for operator review.
         awaitingPrice: true,
+        fxMissing,
       }
     }
   }
@@ -263,14 +330,47 @@ export async function buildPriceLookup(
 }
 
 /**
+ * DA-RT.8 — Pre-fetch FX rates for a set of currencies. Looks up
+ * EUR → other-currency rates from FxRate (refreshed daily by the
+ * pricing-fx-refresh cron). Returns a map keyed by currency code
+ * with the inverse rate (EUR per 1 unit of source-currency) so
+ * applyFx in computeOrderRevenue can multiply native cents
+ * directly without per-order math.
+ */
+export async function buildFxLookup(
+  currencies: string[],
+  asOf: Date = new Date(),
+): Promise<FxLookup> {
+  const rates = new Map<string, number>()
+  const distinct = Array.from(new Set(currencies)).filter((c) => c && c !== 'EUR')
+  for (const c of distinct) {
+    // getFxRate('EUR', X) returns "1 EUR = X units of source" — invert
+    // for "EUR per 1 unit of source" so the helper can multiply
+    // native cents to get EUR cents.
+    const rate = await getFxRate(prisma, 'EUR', c, asOf)
+    if (rate != null && Number.isFinite(rate) && rate > 0) {
+      rates.set(c, 1 / rate)
+    }
+  }
+  return { rates, asOf }
+}
+
+/**
  * Compute revenue for an array of orders in a single batch. Builds
- * the price lookup once, then runs computeOrderRevenue per order.
- * Returns the inputs with the computation attached so callers don't
- * need a separate merge step.
+ * the price lookup + (optionally) the FX lookup once, then runs
+ * computeOrderRevenue per order. Returns the inputs with the
+ * computation attached so callers don't need a separate merge step.
  */
 export async function computeOrdersRevenue<T extends OrderForRevenue & { id?: string }>(
   orders: T[],
-  options: { channel?: 'AMAZON' | 'EBAY' | 'SHOPIFY' } = {},
+  options: {
+    channel?: 'AMAZON' | 'EBAY' | 'SHOPIFY'
+    // DA-RT.8 — opt into EUR conversion. When true, the cents field
+    // in each result is EUR-equivalent; nativeCents holds the
+    // original. Omit / false → all orders return native cents,
+    // nativeCents == cents.
+    convertToEur?: boolean
+  } = {},
 ): Promise<Array<T & { revenue: RevenueComputation }>> {
   const channel = options.channel ?? 'AMAZON'
 
@@ -293,9 +393,24 @@ export async function computeOrdersRevenue<T extends OrderForRevenue & { id?: st
     ? await buildPriceLookup(productIds, channel)
     : { byChannelListing: new Map(), byProduct: new Map() }
 
+  // DA-RT.8 — only fetch FX when the operator wants EUR rollup AND
+  // there's at least one non-EUR order in the batch. EUR-homogenous
+  // batches skip the FX query entirely.
+  let fxLookup: FxLookup | undefined
+  if (options.convertToEur) {
+    const distinctCurrencies = Array.from(
+      new Set(
+        orders.map((o) => (o.currencyCode ?? 'EUR') as string).filter((c) => c !== 'EUR'),
+      ),
+    )
+    if (distinctCurrencies.length > 0) {
+      fxLookup = await buildFxLookup(distinctCurrencies)
+    }
+  }
+
   return orders.map((o) => ({
     ...o,
-    revenue: computeOrderRevenue(o, lookup),
+    revenue: computeOrderRevenue(o, lookup, fxLookup),
   }))
 }
 
@@ -312,6 +427,11 @@ export interface RevenueRollup {
   awaitingPriceCount: number
   /** Count of orders that produced 0 (no estimate either). */
   zeroCount: number
+  /** DA-RT.8 — count of orders where FX conversion was requested
+   *  but the rate was missing. Their cents stayed native; rollup
+   *  totals exclude their contribution to keep "EUR equivalent"
+   *  honest. UI should flag the count. */
+  fxMissingCount: number
 }
 
 /**
@@ -327,9 +447,18 @@ export function rollupRevenue(
     totalCents: 0,
     awaitingPriceCount: 0,
     zeroCount: 0,
+    fxMissingCount: 0,
   }
   for (const r of results) {
     const c = r.revenue
+    // DA-RT.8 — exclude fxMissing orders from the EUR-rollup so
+    // operator doesn't see a misleadingly-low total that secretly
+    // mixes native currencies. UI can show a separate "+ N orders
+    // awaiting FX" annotation.
+    if (c.fxMissing) {
+      out.fxMissingCount += 1
+      continue
+    }
     if (c.source === 'order_total' || c.source === 'item_sum') {
       out.confirmedCents += c.cents
     } else if (

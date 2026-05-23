@@ -22,9 +22,12 @@ describe('computeOrderRevenue — Tier 1: Order.totalPrice', () => {
     const r = computeOrderRevenue({ totalPrice: 42.50 })
     expect(r).toEqual({
       cents: 4250,
+      nativeCents: 4250,
+      currency: 'EUR',
       source: 'order_total',
       estimated: false,
       awaitingPrice: false,
+      fxMissing: false,
     })
   })
 
@@ -234,6 +237,63 @@ describe('rollupRevenue', () => {
       totalCents: 0,
       awaitingPriceCount: 0,
       zeroCount: 0,
+      fxMissingCount: 0,
     })
+  })
+})
+
+// DA-RT.8 — FX conversion via FxLookup. EUR-only batches skip the FX
+// path entirely; non-EUR batches multiply native cents by the rate.
+describe('computeOrderRevenue — Tier FX (DA-RT.8)', () => {
+  it('passes through EUR unchanged when FxLookup provided', () => {
+    const fx = { rates: new Map([['GBP', 1.15]]), asOf: new Date() }
+    const r = computeOrderRevenue({ totalPrice: 100, currencyCode: 'EUR' }, undefined, fx)
+    expect(r.cents).toBe(10000)
+    expect(r.nativeCents).toBe(10000)
+    expect(r.fxMissing).toBe(false)
+  })
+
+  it('converts GBP cents to EUR via the lookup', () => {
+    const fx = { rates: new Map([['GBP', 1.15]]), asOf: new Date() }
+    const r = computeOrderRevenue({ totalPrice: 100, currencyCode: 'GBP' }, undefined, fx)
+    expect(r.nativeCents).toBe(10000)
+    expect(r.cents).toBe(11500) // 100 GBP × 1.15 = 115 EUR
+    expect(r.currency).toBe('GBP')
+    expect(r.fxMissing).toBe(false)
+  })
+
+  it('flags fxMissing when the currency is absent from the lookup', () => {
+    const fx = { rates: new Map([['GBP', 1.15]]), asOf: new Date() }
+    const r = computeOrderRevenue({ totalPrice: 100, currencyCode: 'TRY' }, undefined, fx)
+    // Falls back to native; UI should flag
+    expect(r.cents).toBe(10000)
+    expect(r.nativeCents).toBe(10000)
+    expect(r.fxMissing).toBe(true)
+  })
+
+  it('Tier 2 item_sum also gets FX applied', () => {
+    const fx = { rates: new Map([['GBP', 1.15]]), asOf: new Date() }
+    const o = {
+      totalPrice: 0,
+      currencyCode: 'GBP',
+      items: [{ productId: 'p1', quantity: 2, price: 10 }],
+    }
+    const r = computeOrderRevenue(o, undefined, fx)
+    expect(r.source).toBe('item_sum')
+    expect(r.nativeCents).toBe(2000) // 2 × 10 GBP × 100 = 2000 GBP cents
+    expect(r.cents).toBe(2300)        // × 1.15 = 23.00 EUR
+  })
+})
+
+describe('rollupRevenue — FX missing exclusion (DA-RT.8)', () => {
+  it('excludes fxMissing orders from totals but counts them', () => {
+    const results = [
+      { revenue: { cents: 5000, nativeCents: 5000, currency: 'EUR', source: 'order_total' as const, estimated: false, awaitingPrice: false, fxMissing: false } },
+      { revenue: { cents: 3000, nativeCents: 3000, currency: 'TRY', source: 'order_total' as const, estimated: false, awaitingPrice: false, fxMissing: true } },
+    ]
+    const r = rollupRevenue(results)
+    expect(r.confirmedCents).toBe(5000) // only the EUR order
+    expect(r.fxMissingCount).toBe(1)
+    expect(r.totalCents).toBe(5000)
   })
 })
