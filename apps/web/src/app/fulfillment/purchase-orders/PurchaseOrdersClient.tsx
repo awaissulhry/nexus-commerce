@@ -87,6 +87,7 @@ import {
   type SavedView,
 } from './_shared/AdvancedFilters'
 import { CsvImportModal, ExportCsvButton } from './_shared/CsvImportModal'
+import { BulkReassignSupplierModal, BulkMergeModal } from './_shared/BulkOpsModals'
 
 // ── Audit-trail panel (still used by the card lens) ────────────────
 
@@ -519,6 +520,11 @@ export default function PurchaseOrdersClient() {
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [bulkDeleting, setBulkDeleting] = useState(false)
   const [confirmBulkDelete, setConfirmBulkDelete] = useState(false)
+  // PO-Plus.5 — bulk reassign + merge modal state. Mirror selected
+  // rows into a snapshot so the modal pre-validates without
+  // re-fetching.
+  const [bulkReassignOpen, setBulkReassignOpen] = useState(false)
+  const [bulkMergeOpen, setBulkMergeOpen] = useState(false)
   const toggleSelected = useCallback((id: string) => {
     setSelected((prev) => {
       const next = new Set(prev)
@@ -1040,6 +1046,29 @@ export default function PurchaseOrdersClient() {
               >
                 Export selected
               </a>
+              {/* PO-Plus.5 — bulk re-assign + merge. Modals do their
+                  own constraint checks (DRAFT/REVIEW for reassign;
+                  DRAFT + same supplier/currency/warehouse for merge),
+                  so the buttons stay live and the modal explains why
+                  if the selection isn't eligible. */}
+              <button
+                type="button"
+                onClick={() => setBulkReassignOpen(true)}
+                disabled={bulkTxBusy !== null}
+                className="h-7 px-3 text-xs rounded border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5 disabled:opacity-50"
+                title="Re-assign supplier on selected DRAFT/REVIEW POs"
+              >
+                Re-assign
+              </button>
+              <button
+                type="button"
+                onClick={() => setBulkMergeOpen(true)}
+                disabled={bulkTxBusy !== null || selected.size < 2}
+                className="h-7 px-3 text-xs rounded border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5 disabled:opacity-50"
+                title={selected.size < 2 ? 'Select ≥2 POs to merge' : 'Merge selected POs into one DRAFT'}
+              >
+                Merge
+              </button>
               <button
                 type="button"
                 onClick={() => setConfirmBulkDelete(true)}
@@ -1148,6 +1177,30 @@ export default function PurchaseOrdersClient() {
         <CsvImportModal
           onClose={() => setImportOpen(false)}
           onImported={fetchPos}
+        />
+      )}
+
+      {/* PO-Plus.5 — bulk reassign + merge modals. Each takes the
+          current selection snapshot so it can pre-validate without
+          a network round-trip on cancel. */}
+      {bulkReassignOpen && (
+        <BulkReassignSupplierModal
+          selectedRows={(filteredPos ?? []).filter((p) => selected.has(p.id))}
+          onClose={() => setBulkReassignOpen(false)}
+          onDone={async () => {
+            setSelected(new Set())
+            await fetchPos()
+          }}
+        />
+      )}
+      {bulkMergeOpen && (
+        <BulkMergeModal
+          selectedRows={(filteredPos ?? []).filter((p) => selected.has(p.id))}
+          onClose={() => setBulkMergeOpen(false)}
+          onDone={async () => {
+            setSelected(new Set())
+            await fetchPos()
+          }}
         />
       )}
 

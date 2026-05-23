@@ -14444,6 +14444,275 @@ Return ONLY valid JSON, no prose:
   // Bulk 'send' fans out po-supplier-email per id; the response
   // includes the freshly-minted ack URL per PO so the operator can
   // copy/share if Resend dryRun is on or email bounces.
+  // PO-Plus.5 — Bulk re-assign supplier. DRAFT/REVIEW only (the
+  // supplier is committed once APPROVED+; later changes require a
+  // revision). Updates supplierId atomically per ID and returns a
+  // per-id result split so the operator sees what succeeded.
+  //
+  // Currency/lead-time defaults are intentionally NOT recalculated
+  // here — bulk-reassign is for "operator picked the wrong supplier
+  // on creation" cases. PO.18 polish can add a "recalculate from new
+  // supplier" mode if real demand surfaces.
+  fastify.post(
+    '/fulfillment/purchase-orders/bulk-reassign-supplier',
+    async (request, reply) => {
+      try {
+        const body = (request.body ?? {}) as { ids?: string[]; supplierId?: string | null }
+        const ids = Array.isArray(body.ids) ? body.ids.filter(Boolean) : []
+        if (ids.length === 0) return reply.code(400).send({ error: 'ids[] required' })
+        const targetSupplierId = body.supplierId ?? null
+
+        if (targetSupplierId) {
+          const supplier = await prisma.supplier.findUnique({
+            where: { id: targetSupplierId },
+            select: { id: true },
+          })
+          if (!supplier) {
+            return reply.code(404).send({ error: 'Target supplier not found' })
+          }
+        }
+
+        const succeeded: Array<{ poId: string; poNumber: string }> = []
+        const skipped: Array<{ poId: string; reason: string }> = []
+        const failed: Array<{ poId: string; error: string }> = []
+
+        for (const id of ids) {
+          try {
+            const po = await prisma.purchaseOrder.findUnique({
+              where: { id },
+              select: { id: true, poNumber: true, status: true, supplierId: true },
+            })
+            if (!po) {
+              failed.push({ poId: id, error: 'PO not found' })
+              continue
+            }
+            if (po.status !== 'DRAFT' && po.status !== 'REVIEW') {
+              skipped.push({
+                poId: id,
+                reason: `${po.status} — re-assign requires DRAFT or REVIEW (open a revision instead)`,
+              })
+              continue
+            }
+            if (po.supplierId === targetSupplierId) {
+              skipped.push({ poId: id, reason: 'already assigned to that supplier' })
+              continue
+            }
+            await prisma.purchaseOrder.update({
+              where: { id },
+              data: {
+                supplierId: targetSupplierId,
+                version: { increment: 1 },
+              },
+            })
+            publishPoEvent({
+              type: 'po.updated',
+              poId: id,
+              reason: 'supplier-reassigned',
+              ts: Date.now(),
+            })
+            succeeded.push({ poId: id, poNumber: po.poNumber })
+          } catch (err: any) {
+            failed.push({ poId: id, error: err?.message ?? String(err) })
+          }
+        }
+        return { targetSupplierId, succeeded, skipped, failed, total: ids.length }
+      } catch (err: any) {
+        fastify.log.error({ err }, '[purchase-orders/bulk-reassign-supplier] failed')
+        return reply.code(500).send({ error: err?.message ?? String(err) })
+      }
+    },
+  )
+
+  // PO-Plus.5 — Bulk merge POs into a single new DRAFT.
+  //
+  // Constraints (refuses with 409 + the offending field on first
+  // failure so the operator sees exactly why):
+  //   - All POs must be DRAFT (sent POs would need a revision)
+  //   - Same supplierId across the set
+  //   - Same currencyCode across the set
+  //   - Same warehouseId across the set
+  //   - At least 2 ids
+  //
+  // Merge semantics:
+  //   - Line items dedup by (sku, productId) — when two POs both
+  //     have SKU "XAV-001", combine into one line with qty = sum,
+  //     unitCostCents = qty-weighted average (rounded), note = first
+  //     non-empty note (operator can edit after).
+  //   - Origin POs marked CANCELLED with cancelledReason =
+  //     "Merged into <new poNumber>".
+  //   - New PO created in DRAFT, version=1, expectedDeliveryDate =
+  //     earliest of inputs (most urgent wins).
+  fastify.post('/fulfillment/purchase-orders/bulk-merge', async (request, reply) => {
+    try {
+      const body = (request.body ?? {}) as {
+        ids?: string[]
+        targetNotes?: string
+        targetExpectedDeliveryDate?: string
+      }
+      const ids = Array.isArray(body.ids) ? body.ids.filter(Boolean) : []
+      if (ids.length < 2) {
+        return reply.code(400).send({ error: 'merge requires ≥2 ids' })
+      }
+
+      const pos = await prisma.purchaseOrder.findMany({
+        where: { id: { in: ids }, deletedAt: null },
+        include: { items: { orderBy: [{ lineOrder: 'asc' }, { id: 'asc' }] } },
+      })
+      if (pos.length !== ids.length) {
+        const found = new Set(pos.map((p) => p.id))
+        const missing = ids.filter((id) => !found.has(id))
+        return reply.code(404).send({
+          error: 'Some PO ids were not found',
+          missing,
+        })
+      }
+
+      // Constraint checks.
+      const nonDraft = pos.filter((p) => p.status !== 'DRAFT')
+      if (nonDraft.length > 0) {
+        return reply.code(409).send({
+          error: `Bulk merge requires every PO to be DRAFT; ${nonDraft.length} are not (${nonDraft.map((p) => p.poNumber).join(', ')})`,
+        })
+      }
+      const supplierIds = [...new Set(pos.map((p) => p.supplierId))]
+      if (supplierIds.length > 1 || supplierIds[0] === null) {
+        return reply.code(409).send({
+          error: 'All POs must share the same (non-null) supplier to merge',
+          supplierIds,
+        })
+      }
+      const currencies = [...new Set(pos.map((p) => p.currencyCode))]
+      if (currencies.length > 1) {
+        return reply.code(409).send({
+          error: `All POs must share the same currency. Found: ${currencies.join(', ')}`,
+          currencies,
+        })
+      }
+      const warehouseIds = [...new Set(pos.map((p) => p.warehouseId))]
+      if (warehouseIds.length > 1) {
+        return reply.code(409).send({
+          error: 'All POs must ship to the same warehouse',
+          warehouseIds,
+        })
+      }
+
+      // Dedup line items by (sku, productId) — weighted-avg cost by qty.
+      type Bucket = {
+        sku: string
+        productId: string | null
+        supplierSku: string | null
+        qty: number
+        weightedCost: number // accumulator of unitCostCents * qty
+        note: string | null
+      }
+      const buckets = new Map<string, Bucket>()
+      for (const po of pos) {
+        for (const it of po.items) {
+          const key = `${it.productId ?? '<null>'}|${it.sku}`
+          const prev = buckets.get(key) ?? {
+            sku: it.sku,
+            productId: it.productId,
+            supplierSku: it.supplierSku,
+            qty: 0,
+            weightedCost: 0,
+            note: it.note,
+          }
+          prev.qty += it.quantityOrdered
+          prev.weightedCost += it.unitCostCents * it.quantityOrdered
+          // First non-empty note wins (operator can edit post-merge).
+          if (!prev.note && it.note) prev.note = it.note
+          // First non-empty supplierSku wins (same logic).
+          if (!prev.supplierSku && it.supplierSku) prev.supplierSku = it.supplierSku
+          buckets.set(key, prev)
+        }
+      }
+      const mergedItems = Array.from(buckets.values()).map((b, idx) => ({
+        productId: b.productId,
+        sku: b.sku,
+        supplierSku: b.supplierSku,
+        quantityOrdered: b.qty,
+        unitCostCents: b.qty > 0 ? Math.round(b.weightedCost / b.qty) : 0,
+        note: b.note,
+        lineOrder: idx,
+      }))
+      const totalCents = mergedItems.reduce(
+        (s, it) => s + it.unitCostCents * it.quantityOrdered,
+        0,
+      )
+
+      // Earliest expectedDeliveryDate wins, unless the operator
+      // explicitly supplied one.
+      let expectedDeliveryDate: Date | null = null
+      if (body.targetExpectedDeliveryDate) {
+        const d = new Date(body.targetExpectedDeliveryDate)
+        if (!isNaN(d.getTime())) expectedDeliveryDate = d
+      } else {
+        const eds = pos
+          .map((p) => p.expectedDeliveryDate)
+          .filter((d): d is Date => d != null)
+          .sort((a, b) => a.getTime() - b.getTime())
+        expectedDeliveryDate = eds[0] ?? null
+      }
+
+      // Atomic merge: create new + cancel originals.
+      const newPo = await prisma.$transaction(async (tx) => {
+        const created = await tx.purchaseOrder.create({
+          data: {
+            poNumber: generatePoNumber(),
+            supplierId: supplierIds[0],
+            warehouseId: warehouseIds[0],
+            status: 'DRAFT',
+            expectedDeliveryDate,
+            currencyCode: currencies[0],
+            totalCents,
+            notes:
+              body.targetNotes?.trim() ||
+              `Merged from ${pos.map((p) => p.poNumber).join(', ')}`,
+            items: { create: mergedItems },
+          },
+        })
+        await tx.purchaseOrder.updateMany({
+          where: { id: { in: ids } },
+          data: {
+            status: 'CANCELLED',
+            cancelledAt: new Date(),
+            cancelledReason: `Merged into ${created.poNumber}`,
+          },
+        })
+        return created
+      })
+
+      publishPoEvent({
+        type: 'po.created',
+        poId: newPo.id,
+        poNumber: newPo.poNumber,
+        ts: Date.now(),
+      })
+      for (const p of pos) {
+        publishPoEvent({
+          type: 'po.transitioned',
+          poId: p.id,
+          poNumber: p.poNumber,
+          fromStatus: 'DRAFT',
+          toStatus: 'CANCELLED',
+          ts: Date.now(),
+        })
+      }
+
+      return {
+        ok: true,
+        newPoId: newPo.id,
+        newPoNumber: newPo.poNumber,
+        mergedFromCount: ids.length,
+        mergedLines: mergedItems.length,
+        totalCents,
+      }
+    } catch (err: any) {
+      fastify.log.error({ err }, '[purchase-orders/bulk-merge] failed')
+      return reply.code(500).send({ error: err?.message ?? String(err) })
+    }
+  })
+
   fastify.post('/fulfillment/purchase-orders/bulk-transition', async (request, reply) => {
     try {
       const body = (request.body ?? {}) as {
