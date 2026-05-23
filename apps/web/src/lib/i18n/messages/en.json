@@ -4216,6 +4216,8 @@
   "products.datasheetHub.variants.summary.axes": "Detected axes: {axes}",
   "products.datasheetHub.variants.summary.noAxes": "No clear variation axes detected — review on the edit page.",
   "products.datasheetHub.variants.col.markets": "Markets",
+  "products.datasheetHub.variants.col.variant": "Variant",
+  "products.datasheetHub.variants.cell.empty": "Not configured",
   "products.datasheetHub.variants.markets.one": "{count} market",
   "products.datasheetHub.variants.markets.other": "{count} markets",
   "products.datasheetHub.variants.markets.none": "—",
