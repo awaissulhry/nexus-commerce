@@ -30,7 +30,8 @@ import ChannelPublishPreviewModal from '../ChannelPublishPreviewModal'
 import ChannelStaleBanner from '../ChannelStaleBanner'
 import ImagePublishHistory from '../ImagePublishHistory'
 import RecentChannelJobsStrip from '../RecentChannelJobsStrip'
-import type { ListingImage, PendingUpsert, ProductImage, VariantSummary, WorkspaceProduct } from '../types'
+import LiveChannelStrip from '../LiveChannelStrip'
+import type { ChannelLiveImage, ListingImage, PendingUpsert, ProductImage, VariantSummary, WorkspaceProduct } from '../types'
 
 interface CopyResult { copied: number; skipped: number }
 
@@ -64,6 +65,10 @@ interface Props {
   onCopyFromAmazonColorSets: () => CopyResult
   publishedCount: number
   onPublish: () => Promise<{ success: boolean; message: string }>
+  // PB.8a — live channel strip props (mirrors AmazonPanel).
+  channelLiveImages?: ChannelLiveImage[]
+  onReload?: () => void
+  onAdoptToMaster?: (url: string) => void | Promise<void>
 }
 
 interface DisplayItem {
@@ -98,6 +103,9 @@ export default function EbayPanel({
   onCopyFromAmazonColorSets,
   publishedCount,
   onPublish,
+  channelLiveImages = [],
+  onReload,
+  onAdoptToMaster,
 }: Props) {
   const [previewOpen, setPreviewOpen] = useState(false)
   const [publishPreviewOpen, setPublishPreviewOpen] = useState(false)
@@ -335,6 +343,23 @@ export default function EbayPanel({
           <input ref={fileInputRef} type="file" accept="image/*" multiple className="sr-only" onChange={(e) => handleFiles(Array.from(e.target.files ?? []))} />
         </div>
       </div>
+
+      {/* PB.8a — Live channel strip (eBay) */}
+      {onReload && (
+        <div className="px-5 pt-3">
+          <LiveChannelStrip
+            productId={productId}
+            channel="EBAY"
+            marketplaces={['GLOBAL']}
+            liveImages={channelLiveImages}
+            listingImages={listingImages}
+            onRefreshed={onReload}
+            {...(onAdoptToMaster
+              ? { onAdoptToMaster: (url: string) => { void onAdoptToMaster(url) } }
+              : {})}
+          />
+        </div>
+      )}
 
       {/* PB.3a — Pre-publish validation gate */}
       <ChannelValidationBanner

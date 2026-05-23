@@ -50,6 +50,7 @@ import {
   sha256Buffer,
 } from '../services/images/image-hash.service.js'
 import { refreshAmazonLiveImages } from '../services/images/amazon-live-images.service.js'
+import { refreshEbayLiveImages } from '../services/images/ebay-live-images.service.js'
 import { productEventService } from '../services/product-event.service.js'
 
 // PG.1b — fire IMAGES_UPDATED to refresh ProductReadCache.imageUrl
@@ -928,27 +929,43 @@ const productImagesCrudRoutes: FastifyPluginAsync = async (fastify) => {
     async (req, reply) => {
       const { id } = req.params
       const channel = (req.body?.channel ?? 'AMAZON').toUpperCase()
-      if (channel !== 'AMAZON') {
-        return reply.status(501).send({
-          error: 'CHANNEL_NOT_IMPLEMENTED',
-          message: 'Only AMAZON refresh is wired in IE.4. eBay + Shopify follow in IE.4b.',
-        })
+
+      if (channel === 'AMAZON') {
+        const marketplace = req.body?.marketplace
+        if (!marketplace) {
+          return reply.status(400).send({ error: 'MARKETPLACE_REQUIRED' })
+        }
+        try {
+          const result = await refreshAmazonLiveImages({
+            productId: id,
+            marketplaceCode: marketplace,
+            skus: req.body?.skus,
+          })
+          return reply.send(result)
+        } catch (err) {
+          const message = err instanceof Error ? err.message : 'Refresh failed'
+          return reply.status(500).send({ error: 'REFRESH_FAILED', message })
+        }
       }
-      const marketplace = req.body?.marketplace
-      if (!marketplace) {
-        return reply.status(400).send({ error: 'MARKETPLACE_REQUIRED' })
+
+      // PB.8a — eBay live-image refresh. No marketplace dimension
+      // (eBay site is configured at the store level), no SKUs filter
+      // (one ItemID per parent product). Skipped/no-op codes are
+      // surfaced in the result so the UI can show the right hint.
+      if (channel === 'EBAY') {
+        try {
+          const result = await refreshEbayLiveImages({ productId: id })
+          return reply.send(result)
+        } catch (err) {
+          const message = err instanceof Error ? err.message : 'Refresh failed'
+          return reply.status(500).send({ error: 'REFRESH_FAILED', message })
+        }
       }
-      try {
-        const result = await refreshAmazonLiveImages({
-          productId: id,
-          marketplaceCode: marketplace,
-          skus: req.body?.skus,
-        })
-        return reply.send(result)
-      } catch (err) {
-        const message = err instanceof Error ? err.message : 'Refresh failed'
-        return reply.status(500).send({ error: 'REFRESH_FAILED', message })
-      }
+
+      return reply.status(501).send({
+        error: 'CHANNEL_NOT_IMPLEMENTED',
+        message: `Live-image refresh for ${channel} not yet wired. PB.8b will add Shopify.`,
+      })
     },
   )
 }
