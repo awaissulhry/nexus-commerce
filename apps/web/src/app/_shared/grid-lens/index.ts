@@ -13,6 +13,14 @@ export { Thumbnail } from './Thumbnail'
 export type { ThumbnailProps } from './Thumbnail'
 export { PreferencesModal, PREFERENCES_DEFAULTS } from './PreferencesModal'
 export type { PreferencesModalProps, PreferencesValue, PreferencesColumnSpec } from './PreferencesModal'
+export { ActionCluster } from './ActionCluster'
+export type {
+  ActionClusterProps,
+  ActionClusterVariant,
+  ActionDef,
+  ActionIcon,
+  MenuItemDef,
+} from './ActionCluster'
 export { StockSplit } from './StockSplit'
 export { DensityToggle } from './DensityToggle'
 export { AutoRefreshSelect } from './AutoRefreshSelect'

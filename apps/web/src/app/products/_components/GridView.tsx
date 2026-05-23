@@ -30,16 +30,13 @@ import {
   memo,
   useCallback,
   useContext,
-  useEffect,
-  useRef,
+  useMemo,
   useState,
 } from 'react'
-import { createPortal } from 'react-dom'
 import Link from 'next/link'
 import {
   AlertCircle,
   CheckCircle2,
-  ChevronDown,
   Copy,
   Eye,
   EyeOff,
@@ -69,7 +66,14 @@ import {
   SearchContext,
   RiskFlaggedContext,
 } from '@/app/_shared/grid-lens/VirtualizedGrid'
-import { ProductIdentityCell, StockSplit, Thumbnail } from '@/app/_shared/grid-lens'
+import {
+  ProductIdentityCell,
+  StockSplit,
+  Thumbnail,
+  ActionCluster,
+  type ActionDef,
+  type MenuItemDef,
+} from '@/app/_shared/grid-lens'
 
 // Italian terminology lookup — falls back to English when not in the
 // glossary. Mirrored from packages/database seed data for the brand
@@ -877,10 +881,14 @@ function EditableCell({
 
 // AM.1 — "Edit ▼" split button. Extracted as its own component so
 // it can hold its own useState (calling useState inside a switch case
-// in ProductCell would violate the rules of hooks).
-// Parent: 4 actions. Child/standalone: 10 actions.
-// Dropdown renders via portal so it escapes overflow:hidden on grid cells/rows.
-// Smooth delete: inline confirm → spinner → POST bulk-soft-delete → onChanged().
+// XG.2 — /products action recipe assembled for the shared ActionCluster.
+// Inline cluster: Eye → drawer, Copy → duplicate.
+// Primary: Edit (or "Fix" when status=ACTIVE && channelCount=0).
+// Dropdown: 4 items for parents, 10 for child/standalone (PG.8 baseline).
+// Pre-XG.2 this was a 200-line bespoke component owning portal + menu +
+// outside-click + scroll-close + Cmd+. listener + delete-confirm. All
+// that infrastructure now lives in the shared ActionCluster; this
+// component is just the recipe + workspace-specific handlers.
 function EditSplitButton({
   product,
   onChanged,
@@ -888,102 +896,23 @@ function EditSplitButton({
   product: ProductRowType
   onChanged: () => void
 }) {
-  const [open, setOpen] = useState(false)
-  const [confirmDelete, setConfirmDelete] = useState(false)
-  const [isDeleting, setIsDeleting] = useState(false)
-  const [menuPos, setMenuPos] = useState<{ top: number; right: number } | null>(null)
-  const chevronRef = useRef<HTMLButtonElement>(null)
-  const menuRef = useRef<HTMLDivElement>(null)
   const { toast } = useToast()
   const { t } = useTranslations()
 
-  const needsFix = !product.isParent && product.status === 'ACTIVE' && (product.channelCount ?? 0) === 0
-  const label = needsFix ? 'Fix' : 'Edit'
-  // PG.8 — promoted inline icon buttons sit BEFORE the Edit label so
-  // the operator's most-common follow-ups (peek in drawer, duplicate)
-  // are one click, not a chevron+scan. Borders join the cluster into
-  // a single segmented control.
-  const inlineIconCls = 'h-7 w-7 inline-flex items-center justify-center bg-white dark:bg-slate-800 border-l-0 first:border-l first:rounded-l-md border-y border-slate-300 dark:border-slate-600 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 hover:text-slate-700 transition-colors'
-  const splitBtnCls = 'h-7 px-3 text-sm font-medium bg-white dark:bg-slate-800 border-l-0 border-y border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 inline-flex items-center transition-colors'
-  const itemCls = 'w-full text-left px-3 py-1.5 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed'
-  const linkCls = 'block px-3 py-1.5 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800'
-  const deleteCls = 'w-full text-left px-3 py-1.5 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 disabled:opacity-50 disabled:cursor-not-allowed'
+  const needsFix =
+    !product.isParent &&
+    product.status === 'ACTIVE' &&
+    (product.channelCount ?? 0) === 0
 
-  // Close on outside click or scroll
-  useEffect(() => {
-    if (!open) return
-    const close = (e: MouseEvent) => {
-      if (
-        menuRef.current && !menuRef.current.contains(e.target as Node) &&
-        chevronRef.current && !chevronRef.current.contains(e.target as Node)
-      ) {
-        setOpen(false)
-        setConfirmDelete(false)
-      }
-    }
-    const closeOnScroll = () => { setOpen(false); setConfirmDelete(false) }
-    document.addEventListener('mousedown', close)
-    window.addEventListener('scroll', closeOnScroll, true)
-    return () => {
-      document.removeEventListener('mousedown', close)
-      window.removeEventListener('scroll', closeOnScroll, true)
-    }
-  }, [open])
+  const handlePeek = useCallback(() => {
+    window.dispatchEvent(
+      new CustomEvent('nexus:open-product-drawer', {
+        detail: { productId: product.id },
+      }),
+    )
+  }, [product.id])
 
-  const handleChevron = (e: React.MouseEvent) => {
-    e.stopPropagation()
-    if (open) {
-      setOpen(false)
-      setConfirmDelete(false)
-      return
-    }
-    const rect = chevronRef.current?.getBoundingClientRect()
-    if (rect) {
-      setMenuPos({ top: rect.bottom + 4, right: window.innerWidth - rect.right })
-    }
-    setOpen(true)
-    setConfirmDelete(false)
-  }
-
-  const handleDelete = async () => {
-    setIsDeleting(true)
-    try {
-      const res = await fetch(`${getBackendUrl()}/api/products/bulk-soft-delete`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ productIds: [product.id] }),
-      })
-      if (!res.ok) {
-        const j = await res.json().catch(() => ({}))
-        throw new Error(j.error ?? `HTTP ${res.status}`)
-      }
-      emitInvalidation({ type: 'product.updated', meta: { productIds: [product.id], source: 'delete' } })
-      onChanged()
-    } catch (e) {
-      toast.error(`Delete failed: ${e instanceof Error ? e.message : String(e)}`)
-      setIsDeleting(false)
-      setConfirmDelete(false)
-    }
-  }
-
-  const handleClose = async () => {
-    setOpen(false)
-    try {
-      const res = await fetch(`${getBackendUrl()}/api/products/${product.id}/offer-availability`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ offerActive: false }),
-      })
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      emitInvalidation({ type: 'product.updated', meta: { productIds: [product.id], source: 'close-listing' } })
-      onChanged()
-    } catch (e) {
-      toast.error(`Close failed: ${e instanceof Error ? e.message : String(e)}`)
-    }
-  }
-
-  const handleCopy = async () => {
-    setOpen(false)
+  const handleCopy = useCallback(async () => {
     try {
       const res = await fetch(`${getBackendUrl()}/api/products/bulk-duplicate`, {
         method: 'POST',
@@ -994,165 +923,161 @@ function EditSplitButton({
       onChanged()
       toast.success('Product copied')
     } catch (e) {
-      toast.error(`Copy failed: ${e instanceof Error ? e.message : String(e)}`)
+      toast.error(
+        `Copy failed: ${e instanceof Error ? e.message : String(e)}`,
+      )
     }
-  }
+  }, [product.id, onChanged, toast])
 
-  const divider = <div className="border-t border-slate-100 dark:border-slate-800 my-1" />
+  const handleClose = useCallback(async () => {
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/products/${product.id}/offer-availability`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ offerActive: false }),
+        },
+      )
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      emitInvalidation({
+        type: 'product.updated',
+        meta: { productIds: [product.id], source: 'close-listing' },
+      })
+      onChanged()
+    } catch (e) {
+      toast.error(
+        `Close failed: ${e instanceof Error ? e.message : String(e)}`,
+      )
+    }
+  }, [product.id, onChanged, toast])
 
-  const deleteBlock = confirmDelete ? (
-    <div className="px-3 py-1.5 space-y-1.5">
-      <p className="text-xs text-slate-500 dark:text-slate-400">Delete this product?</p>
-      <div className="flex gap-2">
-        <button
-          type="button"
-          disabled={isDeleting}
-          onClick={handleDelete}
-          className="flex-1 text-xs h-6 rounded bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 inline-flex items-center justify-center gap-1"
-        >
-          {isDeleting && <span className="animate-spin inline-block w-3 h-3 border border-white border-t-transparent rounded-full" />}
-          Yes, delete
-        </button>
-        <button
-          type="button"
-          onClick={() => setConfirmDelete(false)}
-          className="flex-1 text-xs h-6 rounded border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
-        >
-          Cancel
-        </button>
-      </div>
-    </div>
-  ) : (
-    <button type="button" className={deleteCls} onClick={() => setConfirmDelete(true)}>
-      Delete
-    </button>
+  const handleDelete = useCallback(async () => {
+    try {
+      const res = await fetch(`${getBackendUrl()}/api/products/bulk-soft-delete`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ productIds: [product.id] }),
+      })
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}))
+        throw new Error(j.error ?? `HTTP ${res.status}`)
+      }
+      emitInvalidation({
+        type: 'product.updated',
+        meta: { productIds: [product.id], source: 'delete' },
+      })
+      onChanged()
+    } catch (e) {
+      toast.error(
+        `Delete failed: ${e instanceof Error ? e.message : String(e)}`,
+      )
+    }
+  }, [product.id, onChanged, toast])
+
+  const inlineActions: ActionDef[] = useMemo(
+    () => [
+      {
+        id: 'peek',
+        icon: Eye,
+        label: t('products.actions.openInDrawer'),
+        onClick: handlePeek,
+      },
+      {
+        id: 'duplicate',
+        icon: Copy,
+        label: t('products.actions.duplicate'),
+        onClick: handleCopy,
+      },
+    ],
+    [t, handlePeek, handleCopy],
   )
 
-  const menu = open && menuPos ? createPortal(
-    <div
-      ref={menuRef}
-      style={{ position: 'fixed', top: menuPos.top, right: menuPos.right, zIndex: 9999 }}
-      className="w-52 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md shadow-xl py-1 text-sm"
-    >
-      {product.isParent ? (
-        // ── Parent: 4 actions ──────────────────────────────────────
-        <>
-          <Link href={`/products/${product.id}/edit?tab=images`} className={linkCls} onClick={() => setOpen(false)}>
-            Edit images
-          </Link>
-          <button type="button" className={itemCls} onClick={handleCopy}>
-            Copy
-          </button>
-          {divider}
-          <Link href={`/marketing/content?productId=${product.id}`} className={linkCls} onClick={() => setOpen(false)}>
-            Create ad
-          </Link>
-          {divider}
-          {deleteBlock}
-        </>
-      ) : (
-        // ── Child / standalone: 10 actions ────────────────────────
-        <>
-          <Link href={`/products/${product.id}/edit`} className={linkCls} onClick={() => setOpen(false)}>
-            Edit
-          </Link>
-          <Link href={`/products/${product.id}/edit?tab=images`} className={linkCls} onClick={() => setOpen(false)}>
-            Edit images
-          </Link>
-          <button type="button" className={itemCls} onClick={handleCopy}>
-            Copy
-          </button>
-          {divider}
-          <Link href={`/products/${product.id}/edit?tab=condition`} className={linkCls} onClick={() => setOpen(false)}>
-            Add condition
-          </Link>
-          <Link href={`/products/${product.id}/edit?tab=fulfillment`} className={linkCls} onClick={() => setOpen(false)}>
-            Switch to FBA
-          </Link>
-          <Link href={`/products/${product.id}/edit?tab=labels`} className={linkCls} onClick={() => setOpen(false)}>
-            Print labels
-          </Link>
-          <button type="button" className={itemCls} onClick={handleClose}>
-            Close
-          </button>
-          {divider}
-          <Link href={`/marketing/content?productId=${product.id}`} className={linkCls} onClick={() => setOpen(false)}>
-            Create ad
-          </Link>
-          <Link href={`/products/${product.id}/edit?tab=shipping`} className={linkCls} onClick={() => setOpen(false)}>
-            Edit shipping
-          </Link>
-          {divider}
-          {deleteBlock}
-        </>
-      )}
-    </div>,
-    document.body,
-  ) : null
-
-  const handlePeek = (e: React.MouseEvent) => {
-    e.stopPropagation()
-    e.preventDefault()
-    window.dispatchEvent(
-      new CustomEvent('nexus:open-product-drawer', {
-        detail: { productId: product.id },
-      }),
-    )
-  }
-
-  // PG.8 — listen for the workspace's Cmd+. shortcut. When fired with
-  // a matching productId, open this row's chevron menu programmatically
-  // (positioned next to the row's chevron). Lets keyboard-driven
-  // operators reach the long-tail action menu without leaving J/K.
-  useEffect(() => {
-    const onOpen = (e: Event) => {
-      const detail = (e as CustomEvent).detail as { productId?: string } | undefined
-      if (!detail?.productId || detail.productId !== product.id) return
-      const rect = chevronRef.current?.getBoundingClientRect()
-      if (!rect) return
-      setMenuPos({ top: rect.bottom + 4, right: window.innerWidth - rect.right })
-      setOpen(true)
-      setConfirmDelete(false)
+  const dropdownItems: MenuItemDef[] = useMemo(() => {
+    const deleteItem: MenuItemDef = {
+      id: 'delete',
+      label: 'Delete',
+      destructive: true,
+      onClick: handleDelete,
+      confirm: {
+        question: 'Delete this product?',
+        confirmLabel: 'Yes, delete',
+      },
+      dividerBefore: true,
     }
-    window.addEventListener('nexus:open-product-actions', onOpen as EventListener)
-    return () => window.removeEventListener('nexus:open-product-actions', onOpen as EventListener)
-  }, [product.id])
+    if (product.isParent) {
+      return [
+        {
+          id: 'edit-images',
+          label: 'Edit images',
+          href: `/products/${product.id}/edit?tab=images`,
+        },
+        { id: 'copy', label: 'Copy', onClick: handleCopy },
+        {
+          id: 'create-ad',
+          label: 'Create ad',
+          href: `/marketing/content?productId=${product.id}`,
+          dividerBefore: true,
+        },
+        deleteItem,
+      ]
+    }
+    return [
+      {
+        id: 'edit',
+        label: 'Edit',
+        href: `/products/${product.id}/edit`,
+      },
+      {
+        id: 'edit-images',
+        label: 'Edit images',
+        href: `/products/${product.id}/edit?tab=images`,
+      },
+      { id: 'copy', label: 'Copy', onClick: handleCopy },
+      {
+        id: 'add-condition',
+        label: 'Add condition',
+        href: `/products/${product.id}/edit?tab=condition`,
+        dividerBefore: true,
+      },
+      {
+        id: 'switch-fba',
+        label: 'Switch to FBA',
+        href: `/products/${product.id}/edit?tab=fulfillment`,
+      },
+      {
+        id: 'print-labels',
+        label: 'Print labels',
+        href: `/products/${product.id}/edit?tab=labels`,
+      },
+      { id: 'close', label: 'Close', onClick: handleClose },
+      {
+        id: 'create-ad',
+        label: 'Create ad',
+        href: `/marketing/content?productId=${product.id}`,
+        dividerBefore: true,
+      },
+      {
+        id: 'edit-shipping',
+        label: 'Edit shipping',
+        href: `/products/${product.id}/edit?tab=shipping`,
+      },
+      deleteItem,
+    ]
+  }, [product.id, product.isParent, handleCopy, handleClose, handleDelete])
 
   return (
-    <div className="inline-flex rounded-md shadow-sm">
-      <button
-        type="button"
-        onClick={handlePeek}
-        className={inlineIconCls}
-        title={t('products.actions.openInDrawer')}
-        aria-label={t('products.actions.openInDrawer')}
-      >
-        <Eye size={13} />
-      </button>
-      <button
-        type="button"
-        onClick={(e) => { e.stopPropagation(); void handleCopy() }}
-        className={inlineIconCls}
-        title={t('products.actions.duplicate')}
-        aria-label={t('products.actions.duplicateProduct')}
-      >
-        <Copy size={13} />
-      </button>
-      <Link href={`/products/${product.id}/edit`} className={splitBtnCls}>
-        {label}
-      </Link>
-      <button
-        ref={chevronRef}
-        type="button"
-        onClick={handleChevron}
-        className="h-7 px-1.5 bg-white dark:bg-slate-800 border border-l-0 border-slate-300 dark:border-slate-600 rounded-r-md text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 inline-flex items-center transition-colors"
-        aria-label={t('products.actions.moreActions')}
-        title={t('products.actions.moreActionsShortcut')}
-      >
-        <ChevronDown size={12} />
-      </button>
-      {menu}
-    </div>
+    <ActionCluster
+      rowId={product.id}
+      inlineActions={inlineActions}
+      primaryAction={{
+        label: needsFix ? 'Fix' : 'Edit',
+        href: `/products/${product.id}/edit`,
+      }}
+      dropdownItems={dropdownItems}
+      moreActionsAriaLabel={t('products.actions.moreActions')}
+      moreActionsTitle={t('products.actions.moreActionsShortcut')}
+    />
   )
 }
 

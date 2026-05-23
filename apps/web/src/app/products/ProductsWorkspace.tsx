@@ -950,16 +950,18 @@ export default function ProductsWorkspace() {
         handleRowToggle(focusedRowId, e.shiftKey)
         return
       }
-      // PG.8 — Cmd+. (Mac) / Ctrl+. (others) opens the focused row's
-      // chevron menu via CustomEvent. Same mnemonic that Excel /
+      // PG.8 + XG.2 — Cmd+. (Mac) / Ctrl+. (others) opens the focused
+      // row's chevron menu via CustomEvent. Same mnemonic that Excel /
       // Numbers / Figma use for "open contextual menu"; lets a
       // keyboard-driven operator reach the long-tail actions without
-      // leaving J/K navigation.
+      // leaving J/K navigation. XG.2 renamed nexus:open-product-actions
+      // → nexus:open-row-actions and the detail key from productId →
+      // rowId so the event works across every workspace.
       if ((e.metaKey || e.ctrlKey) && e.key === '.' && focusedRowId) {
         e.preventDefault()
         window.dispatchEvent(
-          new CustomEvent('nexus:open-product-actions', {
-            detail: { productId: focusedRowId },
+          new CustomEvent('nexus:open-row-actions', {
+            detail: { rowId: focusedRowId },
           }),
         )
         return
