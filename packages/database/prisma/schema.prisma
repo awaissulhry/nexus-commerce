@@ -7649,11 +7649,97 @@ model PurchaseOrderItem {
   quantityReceived Int     @default(0)
   unitCostCents    Int     @default(0)
 
+  // PO.1 — per-line operator note (lot code requested, defect spec,
+  // colour-match reference). Surfaces in the PO.6 edit-in-place row
+  // expander and rides through to the factory PDF in PO.12.
+  note      String?
+  // PO.1 — explicit display order so PO.6 drag-reorder is durable.
+  // Falls back to id-tie-break when two rows share lineOrder.
+  lineOrder Int     @default(0)
+
   purchaseOrder        PurchaseOrder         @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
   inboundShipmentItems InboundShipmentItem[]
 
   @@index([purchaseOrderId])
   @@index([productId])
+  // PO.1 — supports `ORDER BY lineOrder, id` reads for the edit grid.
+  @@index([purchaseOrderId, lineOrder])
+}
+
+// PO.1 — PO-level attachments (supplier quote PDF, signed contract,
+// customer art file, EAN label sheet). Distinct from
+// InboundShipmentAttachment which is receive-side (invoice, packing
+// list, photos). Cascade-deletes with the parent PO.
+model PurchaseOrderAttachment {
+  id              String   @id @default(cuid())
+  purchaseOrderId String
+  // QUOTE | CONTRACT | ART | LABEL | EMAIL | OTHER
+  kind            String
+  url             String
+  filename        String?
+  contentType     String?
+  sizeBytes       Int?
+  uploadedBy      String?
+  uploadedAt      DateTime @default(now())
+
+  purchaseOrder PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+
+  @@index([purchaseOrderId])
+  @@index([kind])
+}
+
+// PO.1 — post-SUBMITTED revisions. PO.8 lets the operator open a
+// revision (qty change, price re-quote, ETA slip). The revision row
+// freezes a JSON snapshot of items at the moment of creation so the
+// diff UI can render side-by-side without resurrecting historical
+// state. supplier re-ack is required → status flow:
+//   PENDING            (revision drafted, not yet sent)
+//   SUPPLIER_NOTIFIED  (PO.9 emailed the supplier the change order)
+//   SUPPLIER_ACKED     (supplier confirmed via ack URL or operator manual)
+//   SUPERSEDED         (a newer revision replaced this one)
+//   CANCELLED          (operator abandoned the revision)
+//
+// snapshotJson shape (frozen at create time):
+//   { items: [{ sku, qty, unitCostCents, note }], total, currency }
+// Stored as Json so future fields can land without a migration.
+model PurchaseOrderRevision {
+  id              String   @id @default(cuid())
+  purchaseOrderId String
+  version         Int // monotonic per parent PO; starts at 2 (v1 = the original)
+  reason          String?
+  status          String   @default("PENDING") // see comment above
+  snapshotJson    Json
+  createdBy       String?
+  createdAt       DateTime @default(now())
+  supplierNotifiedAt DateTime?
+  supplierAckedAt    DateTime?
+  cancelledAt        DateTime?
+
+  purchaseOrder PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+
+  @@unique([purchaseOrderId, version])
+  @@index([purchaseOrderId])
+  @@index([status])
+}
+
+// PO.1 — threaded comments on a PO. Powers PO.7 approval routing
+// ("Approve please" → @cfo) and PO.6/8 collaboration ("supplier
+// quoted us 12 not 10 → opening revision"). mentions[] stores
+// resolved user IDs / emails for the notification fan-out; the raw
+// markdown body keeps the @-mention text for re-render.
+model PoComment {
+  id              String   @id @default(cuid())
+  purchaseOrderId String
+  userId          String?
+  body            String
+  // Either userIds or email strings — whichever the @-picker resolved.
+  mentions        String[] @default([])
+  createdAt       DateTime @default(now())
+  editedAt        DateTime?
+
+  purchaseOrder PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+
+  @@index([purchaseOrderId, createdAt])
 }
 
 model InboundShipment {
