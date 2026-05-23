@@ -101,6 +101,47 @@ body {
   }
 }
 
+/* DS.1 — Product datasheet print stylesheet. Scoped to
+   body[data-print-datasheet] so it only fires when the datasheet
+   page mounts (toggled by a client effect). Hides the entire app
+   shell — sidebar (<aside>), MobileTopBar, global banners,
+   NotificationsBell, CommandPalette, CommandMatrixPanel — anything
+   marked [data-print-hide]. Neutralizes the main padding wrapper
+   and force-lights colors so dark mode prints clean. @page sets
+   A4 with 14mm margins to match Italian A4 paper conventions. */
+@media print {
+  body[data-print-datasheet] aside,
+  body[data-print-datasheet] [data-print-hide] {
+    display: none !important;
+  }
+  body[data-print-datasheet] {
+    background: white !important;
+  }
+  /* App shell uses flex h-[100dvh] overflow-hidden; on print we want
+     the document to flow naturally across pages. */
+  body[data-print-datasheet] main {
+    overflow: visible !important;
+    flex: none !important;
+  }
+  body[data-print-datasheet] main > div {
+    padding: 0 !important;
+  }
+  body[data-print-datasheet] [data-print-region="datasheet"] {
+    margin: 0 !important;
+    background: white !important;
+    color: black !important;
+    max-width: none !important;
+    box-shadow: none !important;
+  }
+  body[data-print-datasheet] [data-print-region="datasheet"] img {
+    page-break-inside: avoid;
+  }
+  @page {
+    size: A4;
+    margin: 14mm;
+  }
+}
+
 /* DO.44 — Command Center sparkline tick. Fires on each card's
    MiniSpark when the series shifts (Live mode refetch landed). A
    small endpoint dot scales up + fades, drawing the operator's

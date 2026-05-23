@@ -70,3 +70,62 @@ export function marketplaceCountryName(mp: string | null | undefined): string {
   const code = marketplaceCode(mp)
   return COUNTRY_NAME[code] ?? code
 }
+
+/**
+ * DS.3 — Pretty channel name. Maps the storage code to the brand
+ * casing operators (and B2B buyers) expect to read on a printed
+ * handout. Unknown channels fall back to title-case.
+ */
+const CHANNEL_PRETTY: Record<string, string> = {
+  AMAZON: 'Amazon',
+  EBAY: 'eBay',
+  SHOPIFY: 'Shopify',
+  WOOCOMMERCE: 'WooCommerce',
+  ETSY: 'Etsy',
+}
+
+export function prettyChannelName(channel: string | null | undefined): string {
+  if (!channel) return '—'
+  return (
+    CHANNEL_PRETTY[channel] ??
+    channel.charAt(0) + channel.slice(1).toLowerCase()
+  )
+}
+
+/**
+ * DS.3 — Combined "Amazon Italy" / "eBay Germany" / "Shopify"
+ * label. Single-store channels (Shopify / Woo / Etsy) typically
+ * carry marketplace="GLOBAL" or "DEFAULT" — in those cases we
+ * collapse the suffix so the label reads as "Shopify" rather than
+ * "Shopify Global".
+ */
+export function prettyChannelMarketplace(
+  channel: string | null | undefined,
+  marketplace: string | null | undefined,
+): string {
+  const ch = prettyChannelName(channel)
+  if (!marketplace) return ch
+  const code = marketplaceCode(marketplace)
+  if (code === 'GLOBAL' || code === 'DEFAULT' || code === '—') return ch
+  const name = COUNTRY_NAME[code] ?? code
+  return `${ch} ${name}`
+}
+
+/**
+ * DS.3 — Amazon TLD by marketplace, used to build the customer-
+ * facing listing URL for the QR code on the datasheet. Falls back
+ * to ".it" (Xavia's primary market) when the marketplace is
+ * unrecognised so the QR still scans to a working storefront.
+ */
+const AMAZON_TLD: Record<string, string> = {
+  IT: 'it', DE: 'de', FR: 'fr', ES: 'es', UK: 'co.uk',
+  NL: 'nl', SE: 'se', BE: 'com.be', PL: 'pl', CZ: 'com',
+  TR: 'com.tr', EG: 'eg', AE: 'ae', SA: 'sa', IN: 'in',
+  US: 'com', CA: 'ca', MX: 'com.mx', BR: 'com.br',
+  JP: 'co.jp', AU: 'com.au', SG: 'sg',
+}
+
+export function amazonTld(mp: string | null | undefined): string {
+  const code = marketplaceCode(mp)
+  return AMAZON_TLD[code] ?? 'it'
+}

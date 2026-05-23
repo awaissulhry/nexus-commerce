@@ -25,6 +25,7 @@
     "immer": "^10.2.0",
     "lucide-react": "^0.263.1",
     "next": "^16.2.4",
+    "qrcode": "^1.5.4",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-dropzone": "^15.0.0",
@@ -37,6 +38,7 @@
   "devDependencies": {
     "@playwright/test": "^1.60.0",
     "@types/node": "^20.0.0",
+    "@types/qrcode": "^1.5.5",
     "@types/react": "^18.2.0",
     "@types/react-dom": "^18.2.0",
     "autoprefixer": "^10.4.0",

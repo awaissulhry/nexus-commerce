@@ -47,7 +47,9 @@ export default async function RootLayout({
             <div className="flex h-[100dvh] bg-slate-50 dark:bg-slate-950 overflow-hidden">
               <AppSidebar />
               <div className="flex-1 flex flex-col overflow-hidden">
-                <MobileTopBar />
+                <div data-print-hide>
+                  <MobileTopBar />
+                </div>
                 <main
                   id="main-content"
                   className="flex-1 overflow-auto"
@@ -56,20 +58,26 @@ export default async function RootLayout({
                   {/* RT.16 — account-health banner FIRST (top of stack)
                       because account-level outages take priority over
                       everything else. */}
-                  <GlobalAccountHealthBanner />
+                  <div data-print-hide>
+                    <GlobalAccountHealthBanner />
+                  </div>
                   {/* RT.2 — global DLQ alert. Hidden when depth=0;
                       sticks to top of main when a breach is active. */}
-                  <GlobalDlqBanner />
+                  <div data-print-hide>
+                    <GlobalDlqBanner />
+                  </div>
                   <div className="p-3 md:p-6">{children}</div>
                 </main>
               </div>
             </div>
-            <CommandPalette />
-            <CommandMatrixPanel />
-            <NotificationsBell />
-            {/* RT.13 — Buy Box loss alert listener (no visual UI;
-                fires browser notification + console.info per alert). */}
-            <CompetitiveAlertWatcher />
+            <div data-print-hide>
+              <CommandPalette />
+              <CommandMatrixPanel />
+              <NotificationsBell />
+              {/* RT.13 — Buy Box loss alert listener (no visual UI;
+                  fires browser notification + console.info per alert). */}
+              <CompetitiveAlertWatcher />
+            </div>
           </ConfirmProvider>
         </ToastProvider>
       </body>

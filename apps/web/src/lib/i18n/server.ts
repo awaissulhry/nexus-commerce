@@ -64,10 +64,13 @@ function translate(
 
 /**
  * Resolve the server-side locale once and return a bound translator
- * for the rest of the page render.
+ * for the rest of the page render. Pass `localeOverride` (DS.8) to
+ * pin the translator to a specific language regardless of cookie —
+ * used by the datasheet `?locale=` query so an Italian operator can
+ * print English handouts without flipping the app-wide language.
  */
-export async function getServerT() {
-  const locale = await getServerLocale()
+export async function getServerT(localeOverride?: Locale) {
+  const locale = localeOverride ?? (await getServerLocale())
   return (key: string, vars?: Record<string, string | number>) =>
     translate(locale, key, vars)
 }
