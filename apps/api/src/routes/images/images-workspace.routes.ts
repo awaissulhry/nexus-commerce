@@ -56,6 +56,8 @@ interface ListingImageUpsert {
   fileSize?: number | null
   mimeType?: string | null
   hasWhiteBackground?: boolean | null
+  // IE.6 — per-row alt-text override. NULL means "inherit from master".
+  altOverride?: string | null
 }
 
 function normalizeScopeFields(
@@ -314,6 +316,7 @@ const imagesWorkspaceRoutes: FastifyPluginAsync = async (fastify) => {
             role: (u.role ?? 'GALLERY') as any,
             position: u.position ?? 0,
             sourceProductImageId: u.sourceProductImageId ?? null,
+            altOverride: u.altOverride ?? null,
             width: u.width ?? null,
             height: u.height ?? null,
             fileSize: u.fileSize ?? null,

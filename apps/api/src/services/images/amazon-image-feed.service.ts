@@ -92,8 +92,10 @@ export async function resolveAmazonImages(
 
   if (variants.length === 0) return []
 
-  // Load all listing images in one query — includes group-based rows
-  const allImages = await prisma.listingImage.findMany({
+  // Load all listing images in one query — includes group-based rows.
+  // IE.6 — also pull sourceProductImageId so the effective-url
+  // resolver can re-route to the master gallery's current URL.
+  const allImagesRaw = await prisma.listingImage.findMany({
     where: {
       productId,
       platform: { in: [platform, null] },
@@ -109,7 +111,27 @@ export async function resolveAmazonImages(
       url: true,
       variantGroupKey: true,
       variantGroupValue: true,
+      sourceProductImageId: true,
+      altOverride: true,
     },
+  })
+
+  // IE.6 — load master gallery once so the effective-url resolver
+  // can swap stale ListingImage.url values for the master's current
+  // URL. Single batched query keyed by productId.
+  const masters = await prisma.productImage.findMany({
+    where: { productId },
+    select: { id: true, url: true, alt: true },
+  })
+  const masterById = new Map(masters.map((m) => [m.id, m]))
+  const allImages = allImagesRaw.map((img) => {
+    if (!img.sourceProductImageId) return img
+    const m = masterById.get(img.sourceProductImageId)
+    if (!m) return img
+    // Override url with master's authoritative URL. Leave id +
+    // variant/marketplace/slot fields alone so the resolver still
+    // matches them in the cascade.
+    return { ...img, url: m.url }
   })
 
   const results: ResolvedVariantImages[] = []
@@ -145,6 +167,10 @@ type ImageRow = {
   url: string
   variantGroupKey: string | null
   variantGroupValue: string | null
+  // IE.6 — present on rows linked to a master; resolver above swaps
+  // url with master.url and the publisher reads that.
+  sourceProductImageId?: string | null
+  altOverride?: string | null
 }
 
 function resolveSlot(

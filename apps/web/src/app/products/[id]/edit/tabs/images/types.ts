@@ -58,6 +58,8 @@ export interface ListingImage {
   publishedAt: string | null
   publishError: string | null
   uploadedAt: string
+  // IE.6 — per-row alt-text override; NULL inherits from master.
+  altOverride: string | null
 }
 
 export interface VariantSummary {
@@ -148,4 +150,6 @@ export interface PendingUpsert {
   fileSize?: number | null
   mimeType?: string | null
   hasWhiteBackground?: boolean | null
+  // IE.6 — per-row alt-text override (NULL inherits from master).
+  altOverride?: string | null
 }

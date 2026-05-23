@@ -6183,6 +6183,14 @@ model ListingImage {
   // points back at the source. NULL for direct uploads.
   sourceProductImageId String?
 
+  // IE.6 — Per-variant alt-text override. When set, the publisher
+  // uses this string instead of the master ProductImage.alt for the
+  // (variantGroupKey, variantGroupValue, slot, marketplace) cell.
+  // Lets the operator say "the Giallo lifestyle alt is different
+  // from the master alt" without uploading a new image. NULL means
+  // inherit from master.
+  altOverride String?
+
   uploadedAt DateTime @default(now())
   uploadedBy String?
 
