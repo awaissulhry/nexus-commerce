@@ -49,6 +49,7 @@ import {
   type ImageSlot,
 } from '../services/products/image-resolver.service.js'
 import { auditLogService } from '../services/audit-log.service.js'
+import { productEventService } from '../services/product-event.service.js'
 
 const MAX_RESOLVE_FILENAMES = 1000
 
@@ -290,6 +291,15 @@ const productsImagesRoutes: FastifyPluginAsync = async (fastify) => {
           height: uploaded.height,
           bytes: uploaded.bytes,
         },
+      })
+
+      // PG.1b — refresh ProductReadCache.imageUrl so the /products grid
+      // thumbnail catches up within ~2s of the bulk upload landing.
+      void productEventService.emit({
+        aggregateId: product.id,
+        aggregateType: 'Product',
+        eventType: 'IMAGES_UPDATED',
+        data: { source: 'bulk-image-upload', imageId: created.id, type, filename },
       })
 
       return {

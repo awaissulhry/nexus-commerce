@@ -23,6 +23,7 @@
 
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
+import { productEventService } from '../product-event.service.js'
 
 export interface BulkApplyInput {
   sourceProductId: string
@@ -152,6 +153,17 @@ export async function applyImagesToProducts(input: BulkApplyInput): Promise<Bulk
         result.targetsUpdated++
         result.imagesCreated += createdCount
         result.imagesDeleted += deletedCount
+      })
+
+      // PG.1b — fire IMAGES_UPDATED after the per-target txn commits so
+      // the target's ProductReadCache.imageUrl refreshes within ~2s.
+      // Outside the txn so a slow event write can't roll back the bulk
+      // copy; void-cast because emit() is fail-open by design.
+      void productEventService.emit({
+        aggregateId: targetProductId,
+        aggregateType: 'Product',
+        eventType: 'IMAGES_UPDATED',
+        data: { source: 'bulk-image-apply', sourceProductId, mode },
       })
     } catch (err) {
       const message = err instanceof Error ? err.message : 'unknown error'

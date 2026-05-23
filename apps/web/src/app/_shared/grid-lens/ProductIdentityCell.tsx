@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import Link from 'next/link'
 import { Image as ImageIcon } from 'lucide-react'
 
@@ -68,6 +69,13 @@ export function ProductIdentityCell(props: ProductIdentityCellProps) {
   const editHref = productHref ?? `/products/${id}/edit`
   const childDetailHref = variantDetailHref ?? `/products/${id}/edit`
 
+  // PG.1c — track broken image URLs so we fall back to the placeholder
+  // instead of an empty <img>. Amazon CDN URLs occasionally 404 when an
+  // ASIN's image set is rotated; without this, the row showed a blank
+  // box and looked indistinguishable from "no image at all".
+  const [imgFailed, setImgFailed] = useState(false)
+  const showImage = imageUrl && !imgFailed
+
   const handleThumbClick = () => {
     if (onThumbClick) {
       onThumbClick(id)
@@ -88,16 +96,23 @@ export function ProductIdentityCell(props: ProductIdentityCellProps) {
           aria-label={`Open drawer for ${name}`}
           onClick={handleThumbClick}
         >
-          {imageUrl ? (
+          {showImage ? (
+            // PG.1c — bumped from w-10/h-10 to w-12/h-12 so the inline
+            // thumbnail matches the standalone 'thumb' column (48 px).
+            // loading=lazy + decoding=async keep the initial paint snappy
+            // when 100+ rows render at once.
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={imageUrl}
               alt=""
-              className="w-10 h-10 rounded object-cover bg-slate-100 dark:bg-slate-800"
+              loading="lazy"
+              decoding="async"
+              onError={() => setImgFailed(true)}
+              className="w-12 h-12 rounded object-cover bg-slate-100 dark:bg-slate-800"
             />
           ) : (
-            <div className="w-10 h-10 rounded bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-300 dark:text-slate-600 flex-shrink-0">
-              <ImageIcon size={14} />
+            <div className="w-12 h-12 rounded bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-300 dark:text-slate-600 flex-shrink-0">
+              <ImageIcon size={16} />
             </div>
           )}
         </button>

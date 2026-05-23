@@ -410,6 +410,32 @@ function RowContextMenuContent({
   )
 }
 
+// PG.1c — Thumbnail with broken-URL fallback. Used by the standalone
+// 'thumb' column. Without an onError handler, a 404 from the Amazon
+// CDN left the cell as an empty 48 px box — visually indistinguishable
+// from "no image at all" but with different intent.
+function ThumbImage({ src }: { src: string }) {
+  const [failed, setFailed] = useState(false)
+  if (failed) {
+    return (
+      <div className="w-12 h-12 rounded bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 dark:text-slate-500">
+        <ImageIcon size={16} />
+      </div>
+    )
+  }
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={src}
+      alt=""
+      loading="lazy"
+      decoding="async"
+      onError={() => setFailed(true)}
+      className="w-12 h-12 rounded object-cover bg-slate-100 dark:bg-slate-800"
+    />
+  )
+}
+
 // R7.2 — small inline badge surfaced on flagged SKUs. Click jumps to
 // the returns analytics page where the operator sees the bucket math
 // (rate vs mean, σ above) and decides whether to act on the listing
@@ -1274,14 +1300,10 @@ const ProductCell = memo(function ProductCell({
       // U.35 — bumped from w-10/h-10 (40px) to w-12/h-12 (48px) so
       // the product photo reads at a glance without the operator
       // having to open the drawer. Column width raised to match in
-      // _columns.ts.
+      // _columns.ts. PG.1c — broken-URL fallback now lives in
+      // <ThumbImage>; placeholder branch kept for missing imageUrl.
       return p.imageUrl ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={p.imageUrl}
-          alt=""
-          className="w-12 h-12 rounded object-cover bg-slate-100 dark:bg-slate-800"
-        />
+        <ThumbImage src={p.imageUrl} />
       ) : (
         <div className="w-12 h-12 rounded bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 dark:text-slate-500">
           <ImageIcon size={16} />

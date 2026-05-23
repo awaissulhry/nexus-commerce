@@ -23,6 +23,7 @@
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
 import { AmazonService, AMAZON_MARKETPLACE_CODE_TO_ID } from './marketplaces/amazon.service.js'
+import { productEventService } from './product-event.service.js'
 const amazonService = new AmazonService()
 
 export interface ImageBackfillResult {
@@ -167,6 +168,8 @@ export async function backfillProductImagesFromCatalog(opts: {
 
       productsWithImagesFetched++
 
+      let perProductCreated = 0
+      let perProductUpdated = 0
       for (let idx = 0; idx < imgList.length; idx++) {
         const img = imgList[idx]!
         const url = img.link ?? img.url ?? ''
@@ -193,6 +196,7 @@ export async function backfillProductImagesFromCatalog(opts: {
             },
           })
           imagesUpdated++
+          perProductUpdated++
         } else {
           await prisma.productImage.create({
             data: {
@@ -206,7 +210,21 @@ export async function backfillProductImagesFromCatalog(opts: {
             },
           })
           imagesCreated++
+          perProductCreated++
         }
+      }
+
+      // PG.1b — fire IMAGES_UPDATED so ProductReadCache.imageUrl picks
+      // up the new MAIN within ~2s. Without this the /products grid
+      // would show empty thumbs until something else triggered a
+      // cache refresh for the row.
+      if (perProductCreated > 0 || perProductUpdated > 0) {
+        void productEventService.emit({
+          aggregateId: product.id,
+          aggregateType: 'Product',
+          eventType: 'IMAGES_UPDATED',
+          data: { source: 'amazon-image-backfill', created: perProductCreated, updated: perProductUpdated },
+        })
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)

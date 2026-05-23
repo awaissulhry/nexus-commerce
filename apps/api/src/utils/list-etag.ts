@@ -101,11 +101,28 @@ export async function listEtag(
       `listEtag: prisma.${input.model} is not a queryable model accessor`,
     )
   }
-  const agg = await modelClient.aggregate({
-    where: input.where,
-    _count: { _all: true },
-    _max: { [tsField]: true },
-  })
+  let agg
+  try {
+    agg = await modelClient.aggregate({
+      where: input.where,
+      _count: { _all: true },
+      _max: { [tsField]: true },
+    })
+  } catch (e) {
+    // PG.1d — Prisma's default error wraps the SDK call site and the
+    // Fastify default error reply truncates after the file/line header,
+    // hiding the real cause (ECONNREFUSED, P2002, …). Re-throw with
+    // code + meta so the 500 carries actionable signal instead of
+    // "Invalid aggregate() invocation in …".
+    const msg = (e instanceof Error ? e.message : String(e))
+      .replace(/\x1b\[[0-9;]*m/g, '')
+      .replace(/\n/g, ' | ')
+    const code = (e as { code?: string })?.code
+    const meta = (e as { meta?: unknown })?.meta
+    throw new Error(
+      `listEtag(${input.model}) aggregate failed: code=${code ?? '?'} meta=${JSON.stringify(meta ?? null).slice(0, 200)} | ${msg.slice(0, 1200)}`,
+    )
+  }
 
   const count: number = agg._count?._all ?? 0
   const rawMax = agg._max?.[tsField]
