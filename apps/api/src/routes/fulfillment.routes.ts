@@ -8376,6 +8376,153 @@ Return ONLY valid JSON, no prose:
   })
 
   // ═══════════════════════════════════════════════════════════════════
+  // PO-Plus.2 — Public approver endpoints. Token-gated, no auth.
+  //
+  // Bound to PurchaseOrder.approverAckToken (minted by
+  // po-approver-email.service.notifyApprover when submit-for-review
+  // stops at REVIEW). Distinct from the PO.9 supplier ack pair so a
+  // supplier link can't accidentally approve a PO and vice versa.
+  // ═══════════════════════════════════════════════════════════════════
+
+  async function findPoByApproverToken(token: string) {
+    if (!token) return null
+    const po = await prisma.purchaseOrder.findFirst({
+      where: { approverAckToken: token },
+      include: {
+        supplier: { select: { name: true, email: true } },
+        items: { orderBy: [{ lineOrder: 'asc' }, { id: 'asc' }] },
+      },
+    })
+    if (!po) return null
+    if (po.approverAckExpiresAt && po.approverAckExpiresAt < new Date()) {
+      return { ...po, expired: true as const }
+    }
+    return { ...po, expired: false as const }
+  }
+
+  fastify.get('/po/approve/:token', async (request, reply) => {
+    try {
+      const { token } = request.params as { token: string }
+      const po = await findPoByApproverToken(token)
+      if (!po) return reply.code(404).send({ error: 'Invalid or revoked link' })
+      return {
+        poNumber: po.poNumber,
+        status: po.status,
+        currencyCode: po.currencyCode,
+        totalCents: po.totalCents,
+        expectedDeliveryDate: po.expectedDeliveryDate,
+        notes: po.notes,
+        expired: po.expired,
+        approverAckExpiresAt: po.approverAckExpiresAt,
+        supplier: po.supplier
+          ? { name: po.supplier.name, email: po.supplier.email }
+          : null,
+        items: po.items.map((it) => ({
+          sku: it.sku,
+          quantityOrdered: it.quantityOrdered,
+          unitCostCents: it.unitCostCents,
+          note: it.note,
+        })),
+      }
+    } catch (err: any) {
+      fastify.log.error({ err }, '[po/approve/:token GET] failed')
+      return reply.code(500).send({ error: err?.message ?? String(err) })
+    }
+  })
+
+  fastify.post('/po/approve/:token/approve', async (request, reply) => {
+    try {
+      const { token } = request.params as { token: string }
+      const po = await findPoByApproverToken(token)
+      if (!po) return reply.code(404).send({ error: 'Invalid or revoked link' })
+      if (po.expired) {
+        return reply.code(410).send({
+          error: 'Link has expired. Please ask the buyer to re-submit for review.',
+        })
+      }
+      if (po.status !== 'REVIEW') {
+        return reply.code(409).send({
+          error: `PO is currently ${po.status}; nothing to approve.`,
+        })
+      }
+      const now = new Date()
+      await prisma.purchaseOrder.update({
+        where: { id: po.id },
+        data: {
+          status: 'APPROVED',
+          approvedAt: now,
+          // No userId since this is an out-of-band approver; we capture
+          // the email instead so the audit trail shows where the
+          // approval came from.
+          approvedByUserId: 'approver-email',
+          // Invalidate the token so re-clicks are no-ops.
+          approverAckToken: null,
+          approverAckExpiresAt: null,
+        },
+      })
+      publishPoEvent({
+        type: 'po.transitioned',
+        poId: po.id,
+        poNumber: po.poNumber,
+        fromStatus: po.status,
+        toStatus: 'APPROVED',
+        ts: Date.now(),
+      })
+      return { ok: true, approvedAt: now }
+    } catch (err: any) {
+      fastify.log.error({ err }, '[po/approve/:token/approve] failed')
+      return reply.code(500).send({ error: err?.message ?? String(err) })
+    }
+  })
+
+  fastify.post('/po/approve/:token/decline', async (request, reply) => {
+    try {
+      const { token } = request.params as { token: string }
+      const body = (request.body ?? {}) as { reason?: string }
+      const po = await findPoByApproverToken(token)
+      if (!po) return reply.code(404).send({ error: 'Invalid or revoked link' })
+      if (po.expired) {
+        return reply.code(410).send({ error: 'Link has expired.' })
+      }
+      if (po.status !== 'REVIEW') {
+        return reply.code(409).send({
+          error: `PO is currently ${po.status}; nothing to decline.`,
+        })
+      }
+      // Decline sends the PO back to DRAFT so the operator can edit
+      // + re-submit. Captures the reason in cancelledReason (re-used
+      // since there's no dedicated declineReason column; a DRAFT
+      // PO doesn't otherwise read this field).
+      const now = new Date()
+      await prisma.purchaseOrder.update({
+        where: { id: po.id },
+        data: {
+          status: 'DRAFT',
+          reviewedAt: null,
+          reviewedByUserId: null,
+          cancelledReason: body.reason?.trim()
+            ? `Approver declined: ${body.reason.trim()}`
+            : 'Approver declined via email link',
+          approverAckToken: null,
+          approverAckExpiresAt: null,
+        },
+      })
+      publishPoEvent({
+        type: 'po.transitioned',
+        poId: po.id,
+        poNumber: po.poNumber,
+        fromStatus: po.status,
+        toStatus: 'DRAFT',
+        ts: Date.now(),
+      })
+      return { ok: true }
+    } catch (err: any) {
+      fastify.log.error({ err }, '[po/approve/:token/decline] failed')
+      return reply.code(500).send({ error: err?.message ?? String(err) })
+    }
+  })
+
+  // ═══════════════════════════════════════════════════════════════════
   // WORK ORDERS (in-house manufacturing)
   // ═══════════════════════════════════════════════════════════════════
 

@@ -111,6 +111,8 @@ export async function transitionPo(args: {
   autoAdvanced: PurchaseOrderStatus[]
   // PO.9 — populated only on the APPROVED → SUBMITTED edge.
   supplierEmail?: import('./po-supplier-email.service.js').PoSupplierEmailResult
+  // PO-Plus.2 — populated only when submit-for-review stops at REVIEW.
+  approverEmail?: import('./po-approver-email.service.js').PoApproverEmailResult
 }> {
   const po = await prisma.purchaseOrder.findUnique({
     where: { id: args.poId },
@@ -225,6 +227,38 @@ export async function transitionPo(args: {
     }
   }
 
+  // PO-Plus.2 — when 'submit-for-review' lands at REVIEW (i.e. did
+  // NOT auto-advance to APPROVED), notify the approver email. This is
+  // the close-out of the PO.7 ladder: the value threshold trips,
+  // the PO stops at REVIEW, and now an approver gets a tokenized
+  // one-click URL in their inbox.
+  let approverEmail: import('./po-approver-email.service.js').PoApproverEmailResult | undefined
+  if (
+    args.transition === 'submit-for-review' &&
+    updated.status === 'REVIEW'
+  ) {
+    try {
+      const { notifyApprover } = await import('./po-approver-email.service.js')
+      approverEmail = await notifyApprover(po.id)
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.warn(
+        `[po-workflow] approver notification failed for ${updated.poNumber}:`,
+        err,
+      )
+      approverEmail = {
+        ok: false,
+        token: '',
+        approveUrl: '',
+        emailDelivery: {
+          sent: false,
+          dryRun: false,
+          error: err instanceof Error ? err.message : String(err),
+        },
+      }
+    }
+  }
+
   return {
     poId: updated.id,
     poNumber: updated.poNumber,
@@ -232,6 +266,7 @@ export async function transitionPo(args: {
     toStatus: updated.status,
     autoAdvanced: result.autoAdvanced,
     supplierEmail,
+    approverEmail,
   }
 }
 

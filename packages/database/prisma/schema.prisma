@@ -7655,6 +7655,17 @@ model PurchaseOrder {
   supplierAckToken              String?   @unique
   supplierAckExpiresAt          DateTime?
 
+  // PO-Plus.2 — approver-side signed-token URL. Parallel to the
+  // supplier ack columns but bound to the approval workflow: minted
+  // by po-workflow.service when submit-for-review lands at REVIEW
+  // because totalCents exceeds BrandSettings.poApprovalThresholdCents.
+  // The approver clicks the URL in their inbox → public
+  // `/po/approve/:token` page → Approve / Decline → backend flips PO
+  // to APPROVED (or back to DRAFT). Token rotates on every fresh
+  // submit-for-review so a stale email can't double-approve.
+  approverAckToken     String?   @unique
+  approverAckExpiresAt DateTime?
+
   supplier         Supplier?           @relation(fields: [supplierId], references: [id])
   warehouse        Warehouse?          @relation(fields: [warehouseId], references: [id])
   items            PurchaseOrderItem[]
