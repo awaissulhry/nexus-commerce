@@ -175,6 +175,10 @@ const brandSettingsRoutes: FastifyPluginAsync = async (fastify) => {
         sdiCode?: string | null
         pecEmail?: string | null
         vatScheme?: string | null
+        // PO.7 — purchase-order approval ladder.
+        requireApprovalForPo?: boolean
+        poApprovalThresholdCents?: number | null
+        poApprovalApproverEmail?: string | null
       }
 
       // Sanitize: trim strings, drop unknown keys, coerce addressLines.
@@ -207,6 +211,22 @@ const brandSettingsRoutes: FastifyPluginAsync = async (fastify) => {
         update.addressLines = body.addressLines
           .map((s) => (typeof s === 'string' ? s.trim() : ''))
           .filter((s) => s.length > 0)
+      }
+
+      // PO.7 — approval ladder fields, written through with the same
+      // null-out-on-empty contract used by the string columns above.
+      if ('requireApprovalForPo' in body) {
+        update.requireApprovalForPo = !!body.requireApprovalForPo
+      }
+      if ('poApprovalThresholdCents' in body) {
+        const v = body.poApprovalThresholdCents
+        update.poApprovalThresholdCents =
+          v == null ? null : Math.max(0, Math.round(Number(v)))
+      }
+      if ('poApprovalApproverEmail' in body) {
+        const v = body.poApprovalApproverEmail
+        update.poApprovalApproverEmail =
+          v == null || v === '' ? null : String(v).trim().toLowerCase()
       }
 
       // Phase D — strict fiscal validation. Per the operator's

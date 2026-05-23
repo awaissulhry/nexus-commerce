@@ -5983,6 +5983,72 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // PO.7 — Add a comment to a PO. body[] is required (≥1 char after
+  // trim); mentions[] is optional (resolved emails or user ids that
+  // future notification fan-out will read). Emits po.updated so the
+  // SSE pipe refreshes the count in the tab badge.
+  fastify.post('/fulfillment/purchase-orders/:id/comments', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const body = (request.body ?? {}) as {
+        body?: string
+        userId?: string
+        mentions?: string[]
+      }
+      const trimmed = (body.body ?? '').trim()
+      if (!trimmed) return reply.code(400).send({ error: 'body is required' })
+
+      const exists = await prisma.purchaseOrder.findUnique({
+        where: { id },
+        select: { id: true },
+      })
+      if (!exists) return reply.code(404).send({ error: 'PO not found' })
+
+      const comment = await prisma.poComment.create({
+        data: {
+          purchaseOrderId: id,
+          userId: body.userId ?? null,
+          body: trimmed,
+          mentions: Array.isArray(body.mentions)
+            ? body.mentions.map((m) => String(m).trim()).filter(Boolean)
+            : [],
+        },
+      })
+      publishPoEvent({ type: 'po.updated', poId: id, reason: 'comment', ts: Date.now() })
+      return comment
+    } catch (err: any) {
+      fastify.log.error({ err }, '[purchase-orders/:id/comments POST] failed')
+      return reply.code(500).send({ error: err?.message ?? String(err) })
+    }
+  })
+
+  // PO.7 — Delete a comment. Soft-delete is overkill for comments; we
+  // hard-delete and rely on the comment audit log (not built yet) for
+  // forensics. Authorization is intentionally permissive in v0 — any
+  // operator can delete any PO comment.
+  fastify.delete(
+    '/fulfillment/purchase-orders/:id/comments/:commentId',
+    async (request, reply) => {
+      try {
+        const { id, commentId } = request.params as {
+          id: string
+          commentId: string
+        }
+        const result = await prisma.poComment.deleteMany({
+          where: { id: commentId, purchaseOrderId: id },
+        })
+        if (result.count === 0) {
+          return reply.code(404).send({ error: 'Comment not found' })
+        }
+        publishPoEvent({ type: 'po.updated', poId: id, reason: 'comment-deleted', ts: Date.now() })
+        return { ok: true }
+      } catch (err: any) {
+        fastify.log.error({ err }, '[purchase-orders/:id/comments DELETE] failed')
+        return reply.code(500).send({ error: err?.message ?? String(err) })
+      }
+    },
+  )
+
   // F.6 — Factory-ready PDF for a PO. Renders letterhead with company
   // branding (BrandSettings), per-product groups with images and Size×
   // Color matrix when applicable, totals, and a signature block.

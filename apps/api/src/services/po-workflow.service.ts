@@ -112,7 +112,9 @@ export async function transitionPo(args: {
 }> {
   const po = await prisma.purchaseOrder.findUnique({
     where: { id: args.poId },
-    select: { id: true, poNumber: true, status: true },
+    // PO.7 — read totalCents alongside status so the value-based
+    // approval ladder can decide whether to auto-advance.
+    select: { id: true, poNumber: true, status: true, totalCents: true },
   })
   if (!po) throw new Error(`PO not found: ${args.poId}`)
 
@@ -135,9 +137,21 @@ export async function transitionPo(args: {
   }
 
   const settings = await prisma.brandSettings.findFirst({
-    select: { requireApprovalForPo: true },
+    select: {
+      requireApprovalForPo: true,
+      // PO.7 — value threshold + approver email. When threshold is set
+      // and the PO total exceeds it, treat the workflow as if explicit
+      // approval were required, regardless of the boolean flag.
+      poApprovalThresholdCents: true,
+    },
   })
-  const requireApproval = settings?.requireApprovalForPo ?? false
+  // PO.7 — value-based ladder. Either the legacy boolean OR a
+  // threshold breach blocks the auto-advance through REVIEW. Threshold
+  // null means "no ceiling" and the legacy boolean alone gates.
+  const thresholdHit =
+    settings?.poApprovalThresholdCents != null &&
+    po.totalCents > settings.poApprovalThresholdCents
+  const requireApproval = (settings?.requireApprovalForPo ?? false) || thresholdHit
 
   const result = nextStatus({
     current: po.status,

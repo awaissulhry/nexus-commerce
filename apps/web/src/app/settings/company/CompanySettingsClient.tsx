@@ -68,6 +68,10 @@ interface BrandSettings {
   sdiCode: string | null
   pecEmail: string | null
   vatScheme: string | null
+  // PO.7 — purchase-order approval ladder.
+  requireApprovalForPo: boolean
+  poApprovalThresholdCents: number | null
+  poApprovalApproverEmail: string | null
 }
 
 const EMPTY: BrandSettings = {
@@ -86,6 +90,9 @@ const EMPTY: BrandSettings = {
   sdiCode: null,
   pecEmail: null,
   vatScheme: null,
+  requireApprovalForPo: false,
+  poApprovalThresholdCents: null,
+  poApprovalApproverEmail: null,
 }
 
 // Fields that contribute to dirty-state. Sorted by section so the
@@ -106,6 +113,9 @@ const DIRTY_KEYS: Array<keyof BrandSettings> = [
   'sdiCode',
   'pecEmail',
   'vatScheme',
+  'requireApprovalForPo',
+  'poApprovalThresholdCents',
+  'poApprovalApproverEmail',
 ]
 
 function equalish(a: unknown, b: unknown): boolean {
@@ -309,6 +319,7 @@ export default function CompanySettingsClient() {
       />
       <FiscalSection draft={draft} setDraft={setDraft} errors={errs} />
       <DocumentsSection draft={draft} setDraft={setDraft} />
+      <PoApprovalSection draft={draft} setDraft={setDraft} />
     </div>
   )
 }
@@ -846,6 +857,121 @@ function DocumentsSection({
             }
             className={INPUT_CLS}
             placeholder="Xavia Racing <po@xaviaracing.it>"
+          />
+        </Field>
+      </div>
+    </Card>
+  )
+}
+
+// PO.7 — Purchase-order approval ladder.
+//
+// Three orthogonal controls:
+//   1. requireApprovalForPo — legacy boolean. When true, every PO
+//      stops at REVIEW until an approver clicks Approve, regardless
+//      of value.
+//   2. poApprovalThresholdCents — value ceiling. POs with totalCents
+//      at-or-below auto-advance through REVIEW → APPROVED on
+//      submit-for-review. POs above stop at REVIEW.
+//   3. poApprovalApproverEmail — operator-known approver address.
+//      Currently surfaces in the UI only; PO.9 will wire it into an
+//      actual email notification.
+function PoApprovalSection({
+  draft,
+  setDraft,
+}: {
+  draft: BrandSettings
+  setDraft: React.Dispatch<React.SetStateAction<BrandSettings>>
+}) {
+  const thresholdEuros =
+    draft.poApprovalThresholdCents == null
+      ? ''
+      : (draft.poApprovalThresholdCents / 100).toFixed(2)
+
+  return (
+    <Card
+      title="Purchase order approval"
+      description="Value-based ladder for /fulfillment/purchase-orders. POs above the threshold stop at REVIEW until approved."
+      icon={<FileText size={14} />}
+    >
+      <div className="space-y-4">
+        <Field
+          label="Always require approval"
+          htmlFor="requireApprovalForPo"
+          hint="When on, every PO sits in REVIEW until an approver clicks Approve — threshold ignored."
+        >
+          <label className="inline-flex items-center gap-2 cursor-pointer">
+            <input
+              id="requireApprovalForPo"
+              type="checkbox"
+              checked={draft.requireApprovalForPo}
+              onChange={(e) =>
+                setDraft((d) => ({
+                  ...d,
+                  requireApprovalForPo: e.target.checked,
+                }))
+              }
+              className="w-4 h-4 accent-slate-900 dark:accent-slate-100"
+            />
+            <span className="text-base text-slate-700 dark:text-slate-300">
+              {draft.requireApprovalForPo ? 'On' : 'Off'}
+            </span>
+          </label>
+        </Field>
+
+        <Field
+          label="Auto-approve threshold (EUR)"
+          htmlFor="poApprovalThresholdCents"
+          hint="POs at-or-below this total auto-advance through REVIEW → APPROVED. POs above stop at REVIEW. Leave empty to disable the threshold (legacy boolean alone gates)."
+        >
+          <div className="relative">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 text-base pointer-events-none">
+              €
+            </span>
+            <input
+              id="poApprovalThresholdCents"
+              type="number"
+              min="0"
+              step="0.01"
+              value={thresholdEuros}
+              onChange={(e) => {
+                const raw = e.target.value
+                if (raw === '') {
+                  setDraft((d) => ({ ...d, poApprovalThresholdCents: null }))
+                  return
+                }
+                const n = parseFloat(raw)
+                setDraft((d) => ({
+                  ...d,
+                  poApprovalThresholdCents: Number.isFinite(n)
+                    ? Math.max(0, Math.round(n * 100))
+                    : null,
+                }))
+              }}
+              placeholder="5000.00"
+              className={`${INPUT_CLS} pl-6`}
+              disabled={draft.requireApprovalForPo}
+            />
+          </div>
+        </Field>
+
+        <Field
+          label="Approver email"
+          htmlFor="poApprovalApproverEmail"
+          hint="Used by PO.9 to email the approver when a PO exceeds the threshold. Optional — until PO.9 ships, this is operator-known reference only."
+        >
+          <input
+            id="poApprovalApproverEmail"
+            type="email"
+            value={draft.poApprovalApproverEmail ?? ''}
+            onChange={(e) =>
+              setDraft((d) => ({
+                ...d,
+                poApprovalApproverEmail: e.target.value || null,
+              }))
+            }
+            placeholder="cfo@xaviaracing.it"
+            className={INPUT_CLS}
           />
         </Field>
       </div>

@@ -654,7 +654,7 @@ export default function PurchaseOrderDetailClient({ id }: { id: string }) {
           <RevisionsPane revisions={po.revisions} />
         </section>
         <section data-tab-pane className={cn(tab !== 'comments' && 'po-detail-no-print')}>
-          <CommentsPane comments={po.comments} />
+          <CommentsPane poId={po.id} comments={po.comments} onRefresh={refresh} />
         </section>
       </div>
     </div>
@@ -1014,31 +1014,214 @@ function RevisionsPane({ revisions }: { revisions: PORevision[] }) {
   )
 }
 
-function CommentsPane({ comments }: { comments: POComment[] }) {
-  if (comments.length === 0) {
-    return (
-      <EmptyState
-        icon={MessageSquare}
-        title="No comments"
-        description="Operators can leave notes and @-mention teammates here. Compose UI ships in PO.7."
-      />
-    )
+function CommentsPane({
+  poId,
+  comments,
+  onRefresh,
+}: {
+  poId: string
+  comments: POComment[]
+  onRefresh: () => void | Promise<void>
+}) {
+  const [body, setBody] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  // Lightweight @-mention extractor. Matches '@' followed by an email
+  // address OR a contiguous word (the user types either a teammate's
+  // email or a free-form @handle that future user-resolution can map).
+  const extractMentions = useCallback((text: string): string[] => {
+    const out = new Set<string>()
+    const re = /@([\w.+-]+(?:@[\w.-]+)?)/g
+    let m: RegExpExecArray | null
+    while ((m = re.exec(text)) !== null) {
+      out.add(m[1])
+    }
+    return [...out]
+  }, [])
+
+  const submit = async () => {
+    const trimmed = body.trim()
+    if (!trimmed) return
+    setSubmitting(true)
+    setError(null)
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/fulfillment/purchase-orders/${poId}/comments`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            body: trimmed,
+            mentions: extractMentions(trimmed),
+          }),
+        },
+      )
+      if (!res.ok) {
+        const b = await res.json().catch(() => ({}))
+        throw new Error(b?.error ?? `HTTP ${res.status}`)
+      }
+      setBody('')
+      await onRefresh()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const remove = async (commentId: string) => {
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/fulfillment/purchase-orders/${poId}/comments/${commentId}`,
+        { method: 'DELETE' },
+      )
+      if (!res.ok) {
+        const b = await res.json().catch(() => ({}))
+        throw new Error(b?.error ?? `HTTP ${res.status}`)
+      }
+      await onRefresh()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    }
+  }
+
+  return (
+    <div className="space-y-3">
+      {/* Composer */}
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-3">
+        <textarea
+          value={body}
+          onChange={(e) => setBody(e.target.value)}
+          onKeyDown={(e) => {
+            if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+              e.preventDefault()
+              submit()
+            }
+          }}
+          placeholder="Add a comment… (@-mention to ping a teammate)"
+          rows={2}
+          disabled={submitting}
+          className="w-full px-2 py-1.5 text-base border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500"
+        />
+        <div className="flex items-center justify-between mt-2">
+          <span className="text-sm text-slate-500 dark:text-slate-400">
+            ⌘+Enter to post
+          </span>
+          <button
+            type="button"
+            onClick={submit}
+            disabled={submitting || !body.trim()}
+            className="h-8 px-3 inline-flex items-center gap-1.5 text-base font-medium rounded border transition-colors disabled:opacity-50 bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 border-slate-900 dark:border-slate-100 hover:bg-slate-800 dark:hover:bg-slate-200"
+          >
+            {submitting ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <MessageSquare className="w-3.5 h-3.5" />
+            )}
+            Post
+          </button>
+        </div>
+        {error && (
+          <div className="text-sm text-red-700 dark:text-red-300 mt-2 inline-flex items-center gap-1">
+            <AlertCircle className="w-3 h-3" /> {error}
+          </div>
+        )}
+      </div>
+
+      {/* Thread */}
+      {comments.length === 0 ? (
+        <EmptyState
+          icon={MessageSquare}
+          title="No comments yet"
+          description="The first comment lands here."
+        />
+      ) : (
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-4 space-y-3">
+          {comments.map((c) => (
+            <CommentRow key={c.id} comment={c} onDelete={() => remove(c.id)} />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function CommentRow({
+  comment,
+  onDelete,
+}: {
+  comment: POComment
+  onDelete: () => void | Promise<void>
+}) {
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  // Render the body with @-mentions highlighted as inline chips.
+  const renderBody = (text: string) => {
+    const parts: React.ReactNode[] = []
+    let lastIdx = 0
+    const re = /@([\w.+-]+(?:@[\w.-]+)?)/g
+    let m: RegExpExecArray | null
+    let key = 0
+    while ((m = re.exec(text)) !== null) {
+      if (m.index > lastIdx) parts.push(text.slice(lastIdx, m.index))
+      parts.push(
+        <span
+          key={key++}
+          className="inline-block px-1.5 py-0.5 mx-0.5 text-sm font-medium bg-blue-100 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 rounded"
+        >
+          @{m[1]}
+        </span>,
+      )
+      lastIdx = m.index + m[0].length
+    }
+    if (lastIdx < text.length) parts.push(text.slice(lastIdx))
+    return parts
   }
   return (
-    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-4 space-y-3">
-      {comments.map((c) => (
-        <div key={c.id} className="border-b border-slate-100 dark:border-slate-800 last:border-0 pb-2 last:pb-0">
-          <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
-            <span className="font-medium text-slate-700 dark:text-slate-300">
-              {c.userId ?? 'unknown'}
-            </span>
-            <span title={new Date(c.createdAt).toLocaleString()}>{relativeTime(c.createdAt)}</span>
-          </div>
-          <div className="text-base text-slate-900 dark:text-slate-100 whitespace-pre-wrap mt-1">
-            {c.body}
-          </div>
-        </div>
-      ))}
+    <div className="border-b border-slate-100 dark:border-slate-800 last:border-0 pb-2 last:pb-0 group">
+      <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+        <span className="font-medium text-slate-700 dark:text-slate-300">
+          {comment.userId ?? 'operator'}
+        </span>
+        <span title={new Date(comment.createdAt).toLocaleString()}>
+          {relativeTime(comment.createdAt)}
+        </span>
+        {comment.mentions.length > 0 && (
+          <span className="text-slate-400 dark:text-slate-500">
+            · pinged {comment.mentions.length}
+          </span>
+        )}
+        <span className="flex-1" />
+        {confirmDelete ? (
+          <span className="inline-flex items-center gap-1">
+            <button
+              type="button"
+              onClick={onDelete}
+              className="text-sm text-red-700 dark:text-red-300 hover:underline"
+            >
+              Delete?
+            </button>
+            <button
+              type="button"
+              onClick={() => setConfirmDelete(false)}
+              className="text-sm text-slate-500 dark:text-slate-400 hover:underline"
+            >
+              Cancel
+            </button>
+          </span>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setConfirmDelete(true)}
+            className="opacity-0 group-hover:opacity-100 text-sm text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-200 transition-opacity"
+          >
+            Delete
+          </button>
+        )}
+      </div>
+      <div className="text-base text-slate-900 dark:text-slate-100 whitespace-pre-wrap mt-1">
+        {renderBody(comment.body)}
+      </div>
     </div>
   )
 }
