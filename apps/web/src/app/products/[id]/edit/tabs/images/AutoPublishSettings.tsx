@@ -13,6 +13,10 @@ import {
   getAutoPublishEnabled,
   setAutoPublishEnabled,
 } from './autoPublishPrefs'
+import {
+  isApprovalRequired,
+  setApprovalRequired,
+} from './approvalPrefs'
 
 interface Props {
   productId: string
@@ -38,6 +42,7 @@ export default function AutoPublishSettings({ productId, availableChannels, onCh
     EBAY: false,
     SHOPIFY: false,
   })
+  const [approvalRequired, setApprovalRequiredState] = useState(false)
 
   function refresh() {
     setPrefs({
@@ -45,6 +50,7 @@ export default function AutoPublishSettings({ productId, availableChannels, onCh
       EBAY: getAutoPublishEnabled(productId, 'EBAY'),
       SHOPIFY: getAutoPublishEnabled(productId, 'SHOPIFY'),
     })
+    setApprovalRequiredState(isApprovalRequired(productId))
   }
 
   useEffect(() => { refresh() }, [productId])
@@ -72,7 +78,15 @@ export default function AutoPublishSettings({ productId, availableChannels, onCh
     onChanged?.()
   }
 
-  const armedCount = Object.values(prefs).filter(Boolean).length
+  function toggleApproval() {
+    const next = !approvalRequired
+    setApprovalRequired(productId, next)
+    setApprovalRequiredState(next)
+    onChanged?.()
+  }
+
+  const armedCount =
+    Object.values(prefs).filter(Boolean).length + (approvalRequired ? 1 : 0)
 
   return (
     <div className="relative" ref={ref}>
@@ -84,7 +98,7 @@ export default function AutoPublishSettings({ productId, availableChannels, onCh
         title="Auto-publish settings"
       >
         <Settings className="w-3.5 h-3.5" />
-        Auto-publish
+        Publish settings
         {armedCount > 0 && (
           <span className="text-[10px] font-medium px-1.5 py-px rounded bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 inline-flex items-center gap-0.5">
             <Zap className="w-2.5 h-2.5" />
@@ -131,8 +145,27 @@ export default function AutoPublishSettings({ productId, availableChannels, onCh
               </label>
             )
           })}
-          <div className="border-t border-slate-100 dark:border-slate-700 mt-2 pt-2 px-3 text-[10px] text-slate-400 leading-snug">
-            Per-browser preference. Cleared when you clear site data.
+          <div className="border-t border-slate-100 dark:border-slate-700 mt-2 pt-2">
+            <div className="px-3 pb-1 text-[10px] uppercase font-semibold tracking-wide text-slate-500 dark:text-slate-400">
+              Approval gate
+            </div>
+            <label className="flex items-center gap-2 px-3 py-1.5 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700">
+              <input
+                type="checkbox"
+                checked={approvalRequired}
+                onChange={toggleApproval}
+                className="w-4 h-4 rounded border-slate-300 dark:border-slate-600 text-blue-600 focus:ring-blue-500"
+              />
+              <span className="flex-1 text-slate-700 dark:text-slate-300">
+                Require approval before publishing
+              </span>
+            </label>
+            <div className="px-3 pt-1 pb-2 text-[10px] text-slate-400 leading-snug">
+              Every publish becomes a deferred queue entry. Open the approval modal to fire or reject.
+            </div>
+          </div>
+          <div className="border-t border-slate-100 dark:border-slate-700 pt-2 px-3 pb-1 text-[10px] text-slate-400 leading-snug">
+            Per-browser preferences. Cleared when you clear site data.
           </div>
         </div>
       )}

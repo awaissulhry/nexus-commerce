@@ -31,8 +31,14 @@ import CrossChannelPublishModal from './images/CrossChannelPublishModal'
 import RollbackModal from './images/RollbackModal'
 import SchedulePublishModal from './images/SchedulePublishModal'
 import AutoPublishSettings from './images/AutoPublishSettings'
+import ApprovalModal from './images/ApprovalModal'
 import { captureSnapshot, type SnapshotChannel } from './images/publishSnapshotStorage'
 import { readAllPrefs, type AutoPublishChannel } from './images/autoPublishPrefs'
+import {
+  isApprovalRequired,
+  pushPendingApproval,
+  readPendingApprovals,
+} from './images/approvalPrefs'
 import { fromListing, fromMaster, useLightbox } from './images/useLightbox'
 import type { LightboxImage } from './images/useLightbox'
 import type { ProductImage } from './images/types'
@@ -69,6 +75,13 @@ export default function ImagesTab({ product, discardSignal, onDirtyChange }: Pro
   // PB.10 — Schedule-publish modal state + pending count badge.
   const [scheduleOpen, setScheduleOpen] = useState(false)
   const [pendingScheduleCount, setPendingScheduleCount] = useState(0)
+  // PB.12 — Approval modal state + pending count badge.
+  const [approvalOpen, setApprovalOpen] = useState(false)
+  const [pendingApprovalCount, setPendingApprovalCount] = useState(0)
+  function refreshApprovalCount() {
+    setPendingApprovalCount(readPendingApprovals(product.id).length)
+  }
+  useEffect(() => { refreshApprovalCount() }, [product.id])
   const lightbox = useLightbox()
   const { t } = useTranslations()
 
@@ -303,7 +316,29 @@ export default function ImagesTab({ product, discardSignal, onDirtyChange }: Pro
   // per-channel publish endpoint. Per-channel panels keep their own
   // publish bars for fine-grained control; this is the always-visible
   // one-click affordance.
-  async function handlePublish(target: PublishTarget): Promise<void> {
+  async function handlePublish(target: PublishTarget, bypassApproval = false): Promise<void> {
+    // PB.12 — Approval gate. If the per-product flag is set AND the
+    // caller didn't bypass (approval modal does), queue the publish
+    // instead of firing. Save is still attempted so pending changes
+    // don't pile up; the approver sees the already-saved state when
+    // they approve.
+    if (!bypassApproval && isApprovalRequired(product.id)) {
+      if (workspace.dirtyCount > 0) {
+        const ok = await savePending()
+        if (!ok) {
+          showToast('Save failed — fix errors before queueing approval')
+          return
+        }
+      }
+      pushPendingApproval({ productId: product.id, target })
+      refreshApprovalCount()
+      const label = target.channel === 'AMAZON'
+        ? (target.marketplace === 'ALL' ? 'all Amazon markets' : `Amazon ${target.marketplace}`)
+        : target.channel === 'EBAY' ? 'eBay' : 'Shopify'
+      showToast(`Queued for approval: publish to ${label}`)
+      return
+    }
+
     setPublishing(true)
     try {
       if (workspace.dirtyCount > 0) {
@@ -725,8 +760,24 @@ export default function ImagesTab({ product, discardSignal, onDirtyChange }: Pro
               ...(channelStatus.ebay.hasContent ? (['EBAY'] as const) : []),
               ...(channelStatus.shopify.hasContent ? (['SHOPIFY'] as const) : []),
             ]}
+            onChanged={refreshApprovalCount}
           />
         }
+        onOpenApprovals={() => setApprovalOpen(true)}
+        pendingApprovalCount={pendingApprovalCount}
+      />
+
+      {/* PB.12 — Approval queue modal */}
+      <ApprovalModal
+        open={approvalOpen}
+        productId={product.id}
+        onPublish={async (target) => {
+          // bypass=true so the approval gate doesn't re-queue.
+          await handlePublish(target, true)
+        }}
+        onToast={showToast}
+        onClose={() => setApprovalOpen(false)}
+        onChanged={refreshApprovalCount}
       />
 
       {/* PB.10 — Schedule publish modal */}

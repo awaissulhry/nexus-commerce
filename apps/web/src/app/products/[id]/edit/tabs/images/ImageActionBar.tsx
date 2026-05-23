@@ -13,7 +13,7 @@
 // one-click affordance that doesn't require scrolling into a panel.
 
 import { useEffect, useRef, useState } from 'react'
-import { Loader2, Save, X, Send, ChevronDown, LayoutGrid, Zap, Calendar } from 'lucide-react'
+import { Loader2, Save, X, Send, ChevronDown, LayoutGrid, Zap, Calendar, Inbox } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { cn } from '@/lib/utils'
@@ -55,6 +55,10 @@ interface Props {
   // presentation-only and the parent can wire the toggles to its
   // own save handler.
   autoPublishSlot?: React.ReactNode
+  // PB.12 — Approval queue. When > 0, renders a badge button left
+  // of the auto-publish slot.
+  onOpenApprovals?: () => void
+  pendingApprovalCount?: number
 }
 
 function elapsed(ts: string | null): string {
@@ -116,6 +120,8 @@ export default function ImageActionBar({
   onOpenSchedule,
   pendingScheduleCount = 0,
   autoPublishSlot,
+  onOpenApprovals,
+  pendingApprovalCount = 0,
 }: Props) {
   const { t } = useTranslations()
   const [open, setOpen] = useState(false)
@@ -305,11 +311,28 @@ export default function ImageActionBar({
         </>
       )}
 
+      {/* PB.12 — Approval queue badge button. Shown only when there
+          are pending approvals so the bar stays uncluttered when the
+          approval flow isn't in use. */}
+      {onOpenApprovals && pendingApprovalCount > 0 && (
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={onOpenApprovals}
+          disabled={publishing || saving}
+          className="gap-1.5 border border-amber-300 dark:border-amber-700 ml-auto text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/30"
+          title={`${pendingApprovalCount} publish${pendingApprovalCount === 1 ? '' : 'es'} awaiting approval`}
+        >
+          <Inbox className="w-3.5 h-3.5" />
+          {pendingApprovalCount} awaiting approval
+        </Button>
+      )}
+
       {/* PB.11 — Auto-publish settings slot. Wrapper around the
           dropdown lives in the parent; we just render it inline so
           it sits next to the cross-channel button. */}
       {anyPublishable && autoPublishSlot && (
-        <div className="ml-auto">
+        <div className={cn(!(onOpenApprovals && pendingApprovalCount > 0) && 'ml-auto')}>
           {autoPublishSlot}
         </div>
       )}
