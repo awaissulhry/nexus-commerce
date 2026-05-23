@@ -345,6 +345,7 @@ export default function ImagesTab({ product, discardSignal, onDirtyChange }: Pro
               channelLiveImages={channelLiveImages}
               onAdoptToMaster={(url) => handleAdoptToMaster(url)}
               addPendingDelete={workspace.addPendingDelete}
+              pendingDeletes={workspace.pendingDeletes}
             />
           )}
           {activeChannel === 'ebay' && (

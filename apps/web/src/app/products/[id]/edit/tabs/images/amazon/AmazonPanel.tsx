@@ -54,6 +54,10 @@ interface Props {
   // whether to drop a pending upsert (unsaved override) or queue a
   // delete (committed override) here in the panel.
   addPendingDelete?: (listingImageId: string) => void
+  // IA.10 — Server rows queued for deletion. Threaded into the
+  // resolver so cell-move source-delete + revert reflect in the UI
+  // immediately, not after Save+reload.
+  pendingDeletes?: Set<string>
   amazonJobs: AmazonJobSummary[]
   dirtyCount: number
   onSavePending: () => Promise<boolean>
@@ -93,6 +97,7 @@ export default function AmazonPanel({
   onCopyToShopifyAssignments,
   removePendingUpsert,
   addPendingDelete,
+  pendingDeletes,
   amazonJobs,
   dirtyCount,
   onSavePending,
@@ -124,6 +129,7 @@ export default function AmazonPanel({
     masterImages,
     activeAxis,
     pendingUpserts,
+    pendingDeletes,
     addPendingUpsert,
     amazonJobs,
     onSavePending,

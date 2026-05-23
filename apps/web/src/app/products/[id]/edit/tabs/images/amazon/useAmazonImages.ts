@@ -86,6 +86,10 @@ interface UseAmazonImagesInput {
   masterImages: ProductImage[]
   activeAxis: string
   pendingUpserts: Map<string, PendingUpsert>
+  /** IA.10 — Server rows queued for deletion. Resolver skips these
+   *  so a "revert" or cell-move "source delete" reflects in the UI
+   *  immediately, not after Save+reload. */
+  pendingDeletes?: Set<string>
   addPendingUpsert: (u: Omit<PendingUpsert, '_tempId'>) => void
   amazonJobs: AmazonJobSummary[]
   onSavePending: () => Promise<boolean>
@@ -99,6 +103,7 @@ export function useAmazonImages({
   masterImages,
   activeAxis,
   pendingUpserts,
+  pendingDeletes,
   addPendingUpsert,
   amazonJobs,
   onSavePending,
@@ -205,13 +210,14 @@ export function useAmazonImages({
       return { url: u.url, origin: 'own', isPending: true }
     }
 
-    // 2. Server (exact scope/marketplace)
+    // 2. Server (exact scope/marketplace) — skip rows queued for delete.
     const serverOwn = listingImages.find((img) =>
       img.platform === 'AMAZON' &&
       img.amazonSlot === slot &&
       img.scope === targetScope &&
       img.marketplace === targetMkt &&
-      matchesGroup(img),
+      matchesGroup(img) &&
+      !pendingDeletes?.has(img.id),
     )
     if (serverOwn) {
       return {
@@ -230,10 +236,11 @@ export function useAmazonImages({
         if (!matchesGroup(u as any)) continue
         return { url: u.url, origin: 'inherited', isPending: true }
       }
-      // Server All Markets
+      // Server All Markets — skip pending deletes
       const serverPlatform = listingImages.find((img) =>
         img.platform === 'AMAZON' && img.amazonSlot === slot &&
-        img.scope === 'PLATFORM' && !img.marketplace && matchesGroup(img),
+        img.scope === 'PLATFORM' && !img.marketplace && matchesGroup(img) &&
+        !pendingDeletes?.has(img.id),
       )
       if (serverPlatform) {
         return {
@@ -274,7 +281,7 @@ export function useAmazonImages({
     }
 
     return null
-  }, [activeMarketplace, activeAxis, listingImages, pendingUpserts, resolveMasterForSlot])
+  }, [activeMarketplace, activeAxis, listingImages, pendingUpserts, pendingDeletes, resolveMasterForSlot])
 
   // ── Cell assignment ────────────────────────────────────────────────
   const assignCell = useCallback((
