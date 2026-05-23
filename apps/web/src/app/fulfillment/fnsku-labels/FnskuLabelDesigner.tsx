@@ -602,11 +602,6 @@ export default function FnskuLabelDesigner() {
   const moduleWidthMm  = barWidthMm / 165
   const moduleWarn     = moduleWidthMm < 0.25 || barWidthMm < 20
 
-  const fillSheet = () => {
-    if (items.length === 0) return
-    setItems(prev => prev.map((it, i) => i === selectedIdx ? { ...it, quantity: labelsPerSheet } : it))
-  }
-
   // Scale each item's quantity proportionally so the total labels fill
   // exactly `n` A4 sheets. Preserves ratios — a SKU with 10× the qty of
   // another still has 10×. Rounding remainder lands on the last item.
@@ -633,26 +628,30 @@ export default function FnskuLabelDesigner() {
 
   return (
     <div className="flex flex-col h-screen bg-slate-100 dark:bg-slate-950">
-      {/* Top bar */}
-      <div className="flex items-center gap-3 px-4 py-2.5 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 shrink-0">
+      {/* Top bar — three logical zones separated by thin dividers:
+            1. left: nav + title + shipment chip
+            2. center: destination + status chips (module warning, label count)
+            3. right: action cluster (fill, exports) */}
+      <div className="flex items-center gap-2 px-3 py-2 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 shrink-0 flex-wrap">
+        {/* ── Zone 1: nav + title ── */}
         <button
           onClick={() => window.close()}
-          className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-900 dark:hover:text-slate-100"
+          className="inline-flex items-center gap-1 text-xs text-slate-500 hover:text-slate-900 dark:hover:text-slate-100 shrink-0"
         >
-          <ArrowLeft size={14} /> Back to Inbound
+          <ArrowLeft size={13} /> Back
         </button>
-        <div className="h-4 w-px bg-slate-200 dark:bg-slate-700" />
-        <span className="font-semibold text-slate-900 dark:text-slate-100">FNSKU Label Designer</span>
+        <span className="font-semibold text-sm text-slate-900 dark:text-slate-100 whitespace-nowrap shrink-0">
+          FNSKU Labels
+        </span>
         {shipmentContext && (
           <span
-            className="inline-flex items-center gap-1 h-6 px-2 rounded text-[11px] font-medium bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800"
+            className="inline-flex items-center gap-1 h-6 px-1.5 rounded text-[11px] font-medium bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 whitespace-nowrap"
             title={`Pre-filled from inbound shipment ${shipmentContext.reference ?? shipmentContext.id}. Click × to detach.`}
           >
-            <Package size={11} /> Shipment {shipmentContext.reference ?? shipmentContext.id.slice(-8)}
+            <Package size={10} /> {shipmentContext.reference ?? shipmentContext.id.slice(-8)}
             <button
               onClick={() => {
                 setShipmentContext(null)
-                // Remove from URL without reload so refresh doesn't re-import.
                 const url = new URL(window.location.href)
                 url.searchParams.delete('shipmentId')
                 window.history.replaceState({}, '', url.toString())
@@ -660,24 +659,27 @@ export default function FnskuLabelDesigner() {
               className="ml-0.5 hover:text-emerald-900 dark:hover:text-emerald-200"
               aria-label="Detach shipment"
             >
-              <XIcon size={11} />
+              <XIcon size={10} />
             </button>
           </span>
         )}
         {shipmentLoading && (
-          <span className="inline-flex items-center gap-1 text-[11px] text-slate-500">
-            <Loader2 size={11} className="animate-spin" /> Loading shipment…
+          <span className="inline-flex items-center gap-1 text-[11px] text-slate-500 shrink-0">
+            <Loader2 size={10} className="animate-spin" /> Loading…
           </span>
         )}
         {shipmentError && (
-          <span className="inline-flex items-center gap-1 text-[11px] text-amber-600 dark:text-amber-400" title={shipmentError}>
-            <AlertTriangle size={11} /> {shipmentError}
+          <span className="inline-flex items-center gap-1 text-[11px] text-amber-600 dark:text-amber-400 shrink-0" title={shipmentError}>
+            <AlertTriangle size={10} /> {shipmentError}
           </span>
         )}
-        <div className="h-4 w-px bg-slate-200 dark:bg-slate-700 ml-3" />
-        <label className="inline-flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400" title="Destination Amazon marketplace — controls which listing title appears on the label">
+
+        {/* divider */}
+        <div className="h-5 w-px bg-slate-200 dark:bg-slate-700 mx-1" />
+
+        {/* ── Zone 2: destination + status ── */}
+        <label className="inline-flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400 shrink-0" title="Destination Amazon marketplace — controls which listing title appears on the label">
           <Globe size={12} />
-          <span className="hidden sm:inline">Destination</span>
           <select
             value={marketplace}
             onChange={e => handleMarketplaceChange(e.target.value)}
@@ -688,128 +690,127 @@ export default function FnskuLabelDesigner() {
             ))}
           </select>
         </label>
-        <div className="flex-1" />
         {moduleWarn && (
           <span
-            className="inline-flex items-center gap-1 h-6 px-2 rounded text-[11px] font-medium bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-700"
+            className="inline-flex items-center gap-1 h-6 px-1.5 rounded text-[11px] font-medium bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-700 whitespace-nowrap shrink-0"
             title={`Barcode module width ~${(moduleWidthMm * 1000).toFixed(0)}µm (recommended ≥250µm). Below this, scanners may fail. Adjust barcode width % or label size in the right panel.`}
           >
-            <AlertTriangle size={12} /> Module {(moduleWidthMm * 1000).toFixed(0)}µm
+            <AlertTriangle size={11} /> {(moduleWidthMm * 1000).toFixed(0)}µm
           </span>
         )}
         <span
-          className={`text-xs tabular-nums ${
+          className={`text-[11px] tabular-nums whitespace-nowrap shrink-0 ${
             totalLabelCount > MAX_LABELS_PER_PDF
               ? 'text-red-600 dark:text-red-400 font-semibold'
               : totalLabelCount > MAX_LABELS_PER_PDF * 0.8
                 ? 'text-amber-600 dark:text-amber-400'
-                : 'text-slate-400'
+                : 'text-slate-500 dark:text-slate-400'
           }`}
           title={totalLabelCount > MAX_LABELS_PER_PDF
             ? `Above ${MAX_LABELS_PER_PDF.toLocaleString()} cap — generation will be blocked`
-            : `${MAX_LABELS_PER_PDF.toLocaleString()} max per PDF`}
+            : `${MAX_LABELS_PER_PDF.toLocaleString()} max per PDF · ${labelsPerSheet} fit on one A4 sheet (${a4Cols}×${a4Rows})`}
         >
-          {totalLabelCount.toLocaleString()} label{totalLabelCount !== 1 ? 's' : ''} total
+          {totalLabelCount.toLocaleString()} / {labelsPerSheet}/sheet
         </span>
-        <span className="text-xs text-slate-400 hidden sm:inline">·</span>
-        <span className="text-xs text-slate-400 hidden sm:inline">{a4Cols}×{a4Rows} = {labelsPerSheet}/sheet</span>
+
+        {/* spacer pushes actions to the right */}
+        <div className="flex-1 min-w-2" />
+
+        {/* ── Zone 3: actions ── */}
         {items.length > 0 && (
-          <>
+          <span className="inline-flex items-center gap-1 h-7 px-1.5 rounded border border-slate-300 dark:border-slate-600 shrink-0" title="Scale all SKU quantities proportionally to fill exactly N A4 sheets">
+            <Layers size={12} className="text-slate-500" />
+            <input
+              type="number"
+              min={1}
+              max={Math.max(1, Math.floor(MAX_LABELS_PER_PDF / Math.max(1, labelsPerSheet)))}
+              value={fillSheetsN}
+              onChange={e => setFillSheetsN(Math.max(1, parseInt(e.target.value) || 1))}
+              className="w-8 h-5 px-1 text-xs text-center font-mono tabular-nums rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 focus:outline-none focus:ring-1 focus:ring-violet-500"
+              aria-label="Number of A4 sheets to fill"
+            />
             <button
-              onClick={fillSheet}
-              title={`Set selected SKU qty to ${labelsPerSheet} to fill one A4 sheet`}
-              className="text-xs h-7 px-2 rounded border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800"
+              onClick={() => fillSheets(fillSheetsN)}
+              className="text-xs px-1 text-slate-600 dark:text-slate-300 hover:text-violet-700 dark:hover:text-violet-300"
             >
-              Fill sheet
+              Fill
             </button>
-            <span className="inline-flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400 h-7 px-1.5 rounded border border-slate-300 dark:border-slate-600">
-              <Layers size={12} />
-              <input
-                type="number"
-                min={1}
-                max={Math.max(1, Math.floor(MAX_LABELS_PER_PDF / Math.max(1, labelsPerSheet)))}
-                value={fillSheetsN}
-                onChange={e => setFillSheetsN(Math.max(1, parseInt(e.target.value) || 1))}
-                className="w-9 h-5 px-1 text-xs text-center font-mono tabular-nums rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 focus:outline-none focus:ring-1 focus:ring-violet-500"
-                aria-label="Number of A4 sheets to fill"
-              />
-              <button
-                onClick={() => fillSheets(fillSheetsN)}
-                title={`Scale all SKU quantities proportionally so total = ${(fillSheetsN * labelsPerSheet).toLocaleString()} labels (${fillSheetsN} A4 sheet${fillSheetsN > 1 ? 's' : ''})`}
-                className="px-1.5 rounded hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400"
-              >
-                Fill {fillSheetsN} sheet{fillSheetsN > 1 ? 's' : ''}
-              </button>
-            </span>
-          </>
+          </span>
         )}
-        <div className="flex items-center gap-1.5">
-          <button
-            onClick={() => setShortcutsOpen(true)}
-            title="Keyboard shortcuts (?)"
-            aria-label="Keyboard shortcuts"
-            className="h-8 w-8 flex items-center justify-center rounded border border-slate-300 dark:border-slate-600 text-slate-500 hover:text-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"
-          >
-            <Keyboard size={13} />
-          </button>
+
+        <button
+          onClick={() => setShortcutsOpen(true)}
+          title="Keyboard shortcuts (?)"
+          aria-label="Keyboard shortcuts"
+          className="h-8 w-8 flex items-center justify-center rounded border border-slate-300 dark:border-slate-600 text-slate-500 hover:text-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 shrink-0"
+        >
+          <Keyboard size={13} />
+        </button>
+
+        {/* Export cluster — joined visually with a tiny gap */}
+        <div className="inline-flex items-center gap-1 shrink-0">
           <button
             onClick={handlePrint}
             disabled={items.length === 0}
-            className="inline-flex items-center gap-1.5 h-8 px-3 rounded border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 text-sm hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed"
+            title="Open print dialog (HTML, one label per page)"
+            aria-label="Print"
+            className="h-8 w-8 flex items-center justify-center rounded border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            <Printer size={13} /> Print
+            <Printer size={13} />
           </button>
           <button
             onClick={() => handleDownloadPdf('label', 'preview')}
             disabled={items.length === 0 || pdfLoading !== null}
-            title="Preview PDF in a new tab — visual QA before downloading"
-            className="inline-flex items-center justify-center h-8 w-8 rounded border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed"
-            aria-label="Preview PDF (label) in new tab"
+            title="Preview PDF in a new tab"
+            aria-label="Preview PDF in new tab"
+            className="h-8 w-8 flex items-center justify-center rounded border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {pdfLoading === 'label' ? <Loader2 size={13} className="animate-spin" /> : <Eye size={13} />}
           </button>
           <button
             onClick={() => handleDownloadPdf('label')}
             disabled={items.length === 0 || pdfLoading !== null}
-            title="One label per page at exact label dimensions — ideal for thermal label printers"
-            className="inline-flex items-center gap-1.5 h-8 px-3 rounded border border-violet-300 dark:border-violet-700 text-violet-700 dark:text-violet-300 text-sm hover:bg-violet-50 dark:hover:bg-violet-950/30 disabled:opacity-40 disabled:cursor-not-allowed"
+            title="Download PDF — one label per page at exact dimensions (thermal printers)"
+            className="inline-flex items-center gap-1 h-8 px-2.5 rounded border border-violet-300 dark:border-violet-700 text-violet-700 dark:text-violet-300 text-xs font-medium hover:bg-violet-50 dark:hover:bg-violet-950/30 disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            {pdfLoading === 'label' ? <Loader2 size={13} className="animate-spin" /> : <FileDown size={13} />}
-            PDF (label)
+            {pdfLoading === 'label' ? <Loader2 size={12} className="animate-spin" /> : <FileDown size={12} />}
+            Label
           </button>
           <button
             onClick={() => handleDownloadPdf('a4')}
             disabled={items.length === 0 || pdfLoading !== null}
-            title="Labels tiled on A4 sheets — print on a regular printer and cut"
-            className="inline-flex items-center gap-1.5 h-8 px-3 rounded bg-violet-600 text-white text-sm font-medium hover:bg-violet-700 disabled:opacity-40 disabled:cursor-not-allowed"
+            title="Download PDF — labels tiled on A4 sheets (regular printer + cut)"
+            className="inline-flex items-center gap-1 h-8 px-2.5 rounded bg-violet-600 text-white text-xs font-medium hover:bg-violet-700 disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            {pdfLoading === 'a4' ? <Loader2 size={13} className="animate-spin" /> : <FileDown size={13} />}
-            PDF (A4)
+            {pdfLoading === 'a4' ? <Loader2 size={12} className="animate-spin" /> : <FileDown size={12} />}
+            A4
           </button>
           <button
             onClick={handleDownloadSvg}
             disabled={items.length === 0 || pdfLoading !== null}
-            title="Vector SVG — useful for designers / outsourced print. Modern editors handle the embedded HTML layer."
-            className="inline-flex items-center gap-1.5 h-8 px-3 rounded border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 text-sm hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed"
+            title="SVG export — vector for designers / outsourced print"
+            aria-label="Download SVG"
+            className="h-8 px-2 text-[11px] font-medium flex items-center justify-center rounded border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            <FileDown size={13} /> SVG
+            SVG
           </button>
           <button
             onClick={handleDownloadZpl}
             disabled={items.length === 0 || pdfLoading !== null}
-            title="Zebra ZPL II for direct thermal printer drop — no rasterization, printer handles bars + glyphs. 203 dpi."
-            className="inline-flex items-center gap-1.5 h-8 px-3 rounded border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 text-sm hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed"
+            title="Zebra ZPL II export — direct thermal printer drop (203 dpi)"
+            aria-label="Download ZPL"
+            className="h-8 px-2 text-[11px] font-medium flex items-center justify-center rounded border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            <FileDown size={13} /> ZPL
+            ZPL
           </button>
-          {pdfLoading !== null && pdfBytesReceived > 0 && (
-            <span className="text-[11px] text-slate-500 dark:text-slate-400 tabular-nums" title="Bytes received from streaming PDF render">
-              {pdfBytesReceived > 1024 * 1024
-                ? `${(pdfBytesReceived / 1024 / 1024).toFixed(1)} MB`
-                : `${(pdfBytesReceived / 1024).toFixed(0)} KB`}
-            </span>
-          )}
         </div>
+        {pdfLoading !== null && pdfBytesReceived > 0 && (
+          <span className="text-[11px] text-slate-500 dark:text-slate-400 tabular-nums shrink-0" title="Bytes received from streaming PDF render">
+            {pdfBytesReceived > 1024 * 1024
+              ? `${(pdfBytesReceived / 1024 / 1024).toFixed(1)}MB`
+              : `${(pdfBytesReceived / 1024).toFixed(0)}KB`}
+          </span>
+        )}
       </div>
 
       {/* 3-panel body */}
