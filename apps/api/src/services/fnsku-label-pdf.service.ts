@@ -379,10 +379,13 @@ async function drawLabel(
 
     const valueFs = c.valueFs * shrink
     const valueX  = lx + badgeW + colGap * shrink
-    const valueW  = Math.max(mm(4), leftInnerW - badgeW - colGap * shrink)
     const valueY  = rowMidY - valueFs / 2
+    // fitTextSize has already shrunk valueFs so the text fits the column
+    // width. We pass NO `width` option here because pdfkit's `lineBreak: false`
+    // still wraps when a width constraint is set — that bug caused "ITEM TWO"
+    // and any 2-word value to wrap at the space and bleed into the next row.
     doc.font(c.vFont).fontSize(valueFs).fillColor('#000000')
-       .text(c.value, valueX, valueY, { width: valueW, lineBreak: false })
+       .text(c.value, valueX, valueY, { lineBreak: false })
 
     curRowY += rowH + (i < N - 1 ? finalRowGap : 0)
   })
