@@ -2643,6 +2643,7 @@
   "products.col.estimatedFees": "Commissioni stimate",
   "products.col.sku": "SKU",
   "products.col.name": "Nome",
+  "products.col.description": "Descrizione",
   "products.col.status": "Stato",
   "products.col.price": "Prezzo",
   "products.col.stock": "Stock",

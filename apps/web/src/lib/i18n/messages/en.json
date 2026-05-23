@@ -2656,6 +2656,7 @@
   "products.col.estimatedFees": "Estimated fees",
   "products.col.sku": "SKU",
   "products.col.name": "Name",
+  "products.col.description": "Description",
   "products.col.status": "Status",
   "products.col.price": "Price",
   "products.col.stock": "Stock",
