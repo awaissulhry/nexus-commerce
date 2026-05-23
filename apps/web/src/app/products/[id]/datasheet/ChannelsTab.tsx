@@ -40,6 +40,12 @@ import {
   prettyChannelMarketplace,
 } from '@/lib/marketplace-code'
 import type { getServerT } from '@/lib/i18n/server'
+import {
+  validateListing,
+  type ListingForValidation,
+  type MasterForValidation,
+  type ValidationIssue,
+} from './validationRules'
 
 interface ChannelsTabProps {
   productId: string
@@ -52,7 +58,27 @@ export default async function ChannelsTab({
   locale,
   t,
 }: ChannelsTabProps) {
-  const [listings, snapshots, reviewStats] = await Promise.all([
+  const [master, listings, snapshots, reviewStats] = await Promise.all([
+    // ATM.6 — master fields the validation engine needs.
+    prisma.product
+      .findUnique({
+        where: { id: productId },
+        select: {
+          name: true,
+          description: true,
+          bulletPoints: true,
+          basePrice: true,
+          totalStock: true,
+          gtin: true,
+          upc: true,
+          ean: true,
+          _count: { select: { images: true } },
+        },
+      })
+      .catch((e: unknown) => {
+        console.error('[atm.6] master fetch for validation failed', e)
+        return null
+      }),
     prisma.channelListing
       .findMany({
         where: { productId },
@@ -72,26 +98,28 @@ export default async function ChannelsTab({
           lastSyncedAt: true,
           lastSyncStatus: true,
           lastSyncError: true,
+          // ATM.6 — effective-value resolution inputs.
+          title: true,
+          titleOverride: true,
+          followMasterTitle: true,
+          description: true,
+          descriptionOverride: true,
+          followMasterDescription: true,
+          price: true,
+          priceOverride: true,
+          followMasterPrice: true,
+          quantity: true,
+          quantityOverride: true,
+          followMasterQuantity: true,
+          bulletPointsOverride: true,
+          followMasterBulletPoints: true,
         },
       })
       .catch((e: unknown) => {
         console.error('[atm.5] channelListings fetch failed', e)
-        return [] as Array<{
-          id: string
-          channel: string
-          marketplace: string
-          externalListingId: string | null
-          listingStatus: string
-          isPublished: boolean
-          offerActive: boolean
-          syncFromMaster: boolean
-          syncLocked: boolean
-          validationStatus: string
-          validationErrors: string[]
-          lastSyncedAt: Date | null
-          lastSyncStatus: string | null
-          lastSyncError: string | null
-        }>
+        // Type-only fallback — never mutated, just satisfies the
+        // tuple inference for the downstream Promise.all destruct.
+        return [] as never[]
       }),
     prisma.listingQualitySnapshot
       .findMany({
@@ -206,6 +234,50 @@ export default async function ChannelsTab({
           maximumFractionDigits: 1,
         }).format(v)
 
+  // ATM.6 — Compute per-listing validation issues once. The master
+  // shape adapts the Product query result into the pure rule
+  // module's MasterForValidation. Cached in a Map by listing id so
+  // both the summary tally and per-card render hit the same data.
+  const masterForVal: MasterForValidation | null = master
+    ? {
+        name: master.name,
+        description: master.description,
+        bulletPoints: master.bulletPoints as string[] | null,
+        basePrice:
+          master.basePrice == null ? null : Number(master.basePrice),
+        totalStock: master.totalStock,
+        gtin: master.gtin,
+        upc: master.upc,
+        ean: master.ean,
+        hasAnyImage: master._count.images > 0,
+      }
+    : null
+  const issuesByListing = new Map<string, ValidationIssue[]>()
+  if (masterForVal != null) {
+    for (const l of listings) {
+      const listingShape: ListingForValidation = {
+        channel: l.channel,
+        marketplace: l.marketplace,
+        title: l.title,
+        titleOverride: l.titleOverride,
+        followMasterTitle: l.followMasterTitle,
+        description: l.description,
+        descriptionOverride: l.descriptionOverride,
+        followMasterDescription: l.followMasterDescription,
+        price: l.price == null ? null : Number(l.price),
+        priceOverride:
+          l.priceOverride == null ? null : Number(l.priceOverride),
+        followMasterPrice: l.followMasterPrice,
+        quantity: l.quantity,
+        quantityOverride: l.quantityOverride,
+        followMasterQuantity: l.followMasterQuantity,
+        bulletPointsOverride: l.bulletPointsOverride,
+        followMasterBulletPoints: l.followMasterBulletPoints,
+      }
+      issuesByListing.set(l.id, validateListing(masterForVal, listingShape))
+    }
+  }
+
   // Roll-up summary line: live count, avg quality, warnings,
   // errors. Operator scans this first.
   let liveCount = 0
@@ -215,8 +287,15 @@ export default async function ChannelsTab({
   let qualityN = 0
   for (const l of listings) {
     if (l.isPublished && l.listingStatus === 'ACTIVE') liveCount++
-    if (l.validationStatus === 'WARNING') validationWarn++
-    if (l.validationStatus === 'ERROR') validationError++
+    // ATM.6 — Prefer the live ruleset count over the persisted
+    // ChannelListing.validationStatus, since the rules are the
+    // source of truth. The stored status updates lazily (on next
+    // publish attempt) so it can lag.
+    const computed = issuesByListing.get(l.id) ?? []
+    const errs = computed.filter((i) => i.severity === 'error').length
+    const warns = computed.filter((i) => i.severity === 'warn').length
+    if (errs > 0) validationError++
+    else if (warns > 0) validationWarn++
     const snap = latestSnapByKey.get(`${l.channel}|${l.marketplace}`)
     if (snap) {
       qualitySum += snap.overallScore
@@ -285,6 +364,7 @@ export default async function ChannelsTab({
               liveUrl={liveUrl}
               snapshot={snap}
               reviews={reviews}
+              issues={issuesByListing.get(l.id) ?? []}
               relSync={relSync}
               fmtRating={fmtRating}
               t={t}
@@ -323,6 +403,10 @@ interface ChannelCardProps {
       }
     | undefined
   reviews: { avg: number | null; count: number } | undefined
+  /** ATM.6 — Live-computed issues from the validation engine.
+   *  Replaces the persisted ChannelListing.validationStatus for
+   *  the per-card UI (the engine is the source of truth). */
+  issues: ValidationIssue[]
   relSync: (d: Date | null) => string | null
   fmtRating: (v: number | null) => string | null
   t: Awaited<ReturnType<typeof getServerT>>
@@ -334,6 +418,7 @@ function ChannelCard({
   liveUrl,
   snapshot,
   reviews,
+  issues,
   relSync,
   fmtRating,
   t,
@@ -345,10 +430,16 @@ function ChannelCard({
       ? 'bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-300'
       : 'bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300'
 
+  // ATM.6 — Derive validation tone from the live-computed issues
+  // rather than the persisted ChannelListing.validationStatus.
+  const errorCount = issues.filter((i) => i.severity === 'error').length
+  const warnCount = issues.filter((i) => i.severity === 'warn').length
+  const validationLevel: 'error' | 'warn' | 'valid' =
+    errorCount > 0 ? 'error' : warnCount > 0 ? 'warn' : 'valid'
   const validationTone =
-    listing.validationStatus === 'ERROR'
+    validationLevel === 'error'
       ? 'bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-300'
-      : listing.validationStatus === 'WARNING'
+      : validationLevel === 'warn'
         ? 'bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300'
         : 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
 
@@ -462,19 +553,24 @@ function ChannelCard({
         <span
           className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded uppercase tracking-wider font-semibold ${validationTone}`}
         >
-          {listing.validationStatus === 'ERROR' && (
-            <XCircle className="w-3 h-3" />
-          )}
-          {listing.validationStatus === 'WARNING' && (
+          {validationLevel === 'error' && <XCircle className="w-3 h-3" />}
+          {validationLevel === 'warn' && (
             <AlertTriangle className="w-3 h-3" />
           )}
-          {listing.validationStatus === 'VALID' && (
+          {validationLevel === 'valid' && (
             <CheckCircle2 className="w-3 h-3" />
           )}
-          <span>{listing.validationStatus}</span>
-          {listing.validationErrors.length > 0 && (
-            <span>({listing.validationErrors.length})</span>
-          )}
+          <span>
+            {validationLevel === 'valid'
+              ? t('products.datasheetHub.channels.validation.valid')
+              : validationLevel === 'warn'
+                ? t('products.datasheetHub.channels.validation.warn', {
+                    count: warnCount,
+                  })
+                : t('products.datasheetHub.channels.validation.error', {
+                    count: errorCount,
+                  })}
+          </span>
         </span>
         {!listing.offerActive && (
           <span
@@ -498,6 +594,44 @@ function ChannelCard({
           </span>
         )}
       </div>
+
+      {/* ATM.6 — Inline issue list. Collapsed by default to keep
+          the card compact; expanded via native <details> so no
+          client runtime is needed. Errors render before warnings. */}
+      {issues.length > 0 && (
+        <details className="text-[10px]">
+          <summary className="cursor-pointer text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-slate-100 select-none">
+            {t('products.datasheetHub.channels.issues.toggle', {
+              count: issues.length,
+            })}
+          </summary>
+          <ul className="mt-1 space-y-0.5 pl-3">
+            {issues.map((iss) => (
+              <li
+                key={iss.ruleId}
+                className={
+                  iss.severity === 'error'
+                    ? 'text-red-700 dark:text-red-400'
+                    : 'text-amber-700 dark:text-amber-400'
+                }
+              >
+                <span
+                  className="inline-block w-3 text-center"
+                  aria-hidden
+                >
+                  {iss.severity === 'error' ? '✗' : '⚠'}
+                </span>{' '}
+                <span>{t(iss.messageKey)}</span>
+                {iss.detail && (
+                  <span className="text-slate-500 dark:text-slate-400 ml-1">
+                    ({iss.detail})
+                  </span>
+                )}
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
 
       {/* Last-sync footer */}
       <div className="flex items-center gap-1.5 text-[10px] text-slate-500 dark:text-slate-400 border-t border-slate-100 dark:border-slate-800 pt-1.5">
