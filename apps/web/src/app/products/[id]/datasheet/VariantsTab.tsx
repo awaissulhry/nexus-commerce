@@ -47,6 +47,10 @@ import VariantIdentifiers, {
   type IdentifierVariant,
 } from './VariantIdentifiers'
 import VariantGapPanel, { type GapVariant } from './VariantGapPanel'
+import VariantPricingPanel, {
+  type PricingVariant,
+  type PricingListing,
+} from './VariantPricingPanel'
 import { Package } from 'lucide-react'
 
 interface VariantsTabProps {
@@ -62,7 +66,22 @@ export default async function VariantsTab({
   locale,
   t,
 }: VariantsTabProps) {
-  const children = await prisma.product
+  // VR.6 — Parent's basePrice is needed as the reference for the
+  // per-variant pricing-delta heatmap. Fetched in parallel with the
+  // children list to keep the page's TTFB unchanged. Defensive
+  // .catch so a stale parent fetch doesn't take down the children
+  // view — the panel just hides if the parent is unreachable.
+  const [parent, children] = await Promise.all([
+    prisma.product
+      .findUnique({
+        where: { id: parentId },
+        select: { basePrice: true },
+      })
+      .catch((e: unknown) => {
+        console.error('[vr.6] parent basePrice fetch failed', e)
+        return null
+      }),
+    prisma.product
     .findMany({
       where: { parentId },
       orderBy: { sku: 'asc' },
@@ -95,6 +114,14 @@ export default async function VariantsTab({
             listingStatus: true,
             isPublished: true,
             lastSyncedAt: true,
+            // VR.6 — per-channel pricing + stock for the variant
+            // delta heatmap.
+            price: true,
+            priceOverride: true,
+            followMasterPrice: true,
+            quantity: true,
+            quantityOverride: true,
+            followMasterQuantity: true,
           },
         },
         images: {
@@ -114,7 +141,8 @@ export default async function VariantsTab({
     .catch((e: unknown) => {
       console.error('[vr.2] children fetch failed', e)
       return null
-    })
+    }),
+  ])
 
   if (children == null) {
     return (
@@ -266,6 +294,37 @@ export default async function VariantsTab({
             externalListingId: l.externalListingId,
           })),
         }))}
+        t={t}
+      />
+
+      {/* VR.6 — Per-variant pricing & inventory delta panel.
+          Mounted above the gap panel because pricing typos block
+          publishing — operator's "fix this first" eye-track. */}
+      <VariantPricingPanel
+        parentBasePrice={
+          parent?.basePrice == null ? null : Number(parent.basePrice)
+        }
+        variants={children.map<PricingVariant>((c) => ({
+          id: c.id,
+          sku: c.sku,
+          name: c.name,
+          basePrice: c.basePrice,
+          totalStock: c.totalStock,
+          listings: c.channelListings.map<PricingListing>((l) => ({
+            channel: l.channel,
+            marketplace: l.marketplace,
+            externalListingId: l.externalListingId,
+            price: l.price,
+            priceOverride: l.priceOverride,
+            followMasterPrice: l.followMasterPrice,
+            quantity: l.quantity,
+            quantityOverride: l.quantityOverride,
+            followMasterQuantity: l.followMasterQuantity,
+            isPublished: l.isPublished,
+            listingStatus: l.listingStatus,
+          })),
+        }))}
+        locale={locale}
         t={t}
       />
 
