@@ -39,6 +39,7 @@ import {
   Loader2,
   Package,
   Plus,
+  Sparkles,
   Trash2,
   X,
 } from 'lucide-react'
@@ -170,6 +171,14 @@ export function CreatePoModal({
   const [fxToEur, setFxToEur] = useState<number | null>(null)
   const [fxLoading, setFxLoading] = useState(false)
 
+  // PO.17 — AI draft state. Operator types a freeform request, the
+  // server calls Claude/Gemini to parse it into a structured draft
+  // that we then merge into the existing modal state.
+  const [aiPrompt, setAiPrompt] = useState('')
+  const [aiBusy, setAiBusy] = useState(false)
+  const [aiError, setAiError] = useState<string | null>(null)
+  const [aiWarnings, setAiWarnings] = useState<string[]>([])
+
   // ── Load suppliers + warehouses + default warehouse ─────────────
   useEffect(() => {
     let cancelled = false
@@ -292,6 +301,70 @@ export function CreatePoModal({
     [updateLine],
   )
 
+  // ── PO.17 — AI draft handler ───────────────────────────────────
+  const runAiDraft = useCallback(async () => {
+    if (!aiPrompt.trim()) return
+    setAiBusy(true)
+    setAiError(null)
+    setAiWarnings([])
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/fulfillment/purchase-orders/ai-draft`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ prompt: aiPrompt }),
+        },
+      )
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body?.error ?? `HTTP ${res.status}`)
+      }
+      const data = await res.json()
+      const draft = data.draft ?? {}
+      if (Array.isArray(draft.warnings)) setAiWarnings(draft.warnings)
+
+      // Merge into form state.
+      if (typeof draft.supplierId === 'string' && draft.supplierId) {
+        setSupplierId(draft.supplierId)
+      }
+      if (typeof draft.warehouseId === 'string' && draft.warehouseId) {
+        setWarehouseId(draft.warehouseId)
+      }
+      if (typeof draft.expectedDeliveryDate === 'string') {
+        setExpectedDate(draft.expectedDeliveryDate)
+      }
+      if (typeof draft.currencyCode === 'string') {
+        setCurrency(String(draft.currencyCode).toUpperCase())
+      }
+      if (typeof draft.notes === 'string') {
+        setNotes(draft.notes)
+      }
+      if (Array.isArray(draft.items) && draft.items.length > 0) {
+        const newLines: DraftLine[] = draft.items.map((it: any) => ({
+          uid: `l${++lineSeq}`,
+          productId: null,
+          supplierSku: null,
+          sku: String(it.sku ?? '').trim(),
+          moq: 1,
+          casePack: null,
+          quantityOrdered: String(it.quantityOrdered ?? ''),
+          unitCostCents:
+            typeof it.unitCostCents === 'number' && it.unitCostCents > 0
+              ? (it.unitCostCents / 100).toFixed(2)
+              : '',
+          note: typeof it.note === 'string' ? it.note : '',
+          noteEditing: !!it.note,
+        }))
+        setLines(newLines)
+      }
+    } catch (err) {
+      setAiError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setAiBusy(false)
+    }
+  }, [aiPrompt])
+
   // ── Submit ──────────────────────────────────────────────────────
   const submit = async () => {
     setError(null)
@@ -367,6 +440,60 @@ export function CreatePoModal({
         </div>
 
         <div className="p-5 space-y-4">
+          {/* PO.17 — AI draft entry. Operator types a freeform request,
+              the server parses it into a structured draft that we
+              merge into the form. Errors / warnings render inline. */}
+          <div className="bg-purple-50/40 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-900 rounded p-3">
+            <div className="flex items-baseline justify-between mb-1">
+              <label className="text-sm font-medium text-purple-700 dark:text-purple-300 inline-flex items-center gap-1">
+                <Sparkles className="w-3 h-3" />
+                Draft with AI
+              </label>
+              <span className="text-xs text-slate-500 dark:text-slate-400">
+                Powered by the brand's configured AI provider
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={aiPrompt}
+                onChange={(e) => setAiPrompt(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !aiBusy && aiPrompt.trim()) {
+                    e.preventDefault()
+                    runAiDraft()
+                  }
+                }}
+                disabled={aiBusy}
+                placeholder="e.g. draft a PO with Acme Fabrics for 50 XAV-001 and 30 XAV-002 by next Friday"
+                className="flex-1 h-9 px-2 text-base border border-purple-200 dark:border-purple-900 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+              />
+              <button
+                type="button"
+                onClick={runAiDraft}
+                disabled={aiBusy || !aiPrompt.trim()}
+                className="h-9 px-3 inline-flex items-center gap-1.5 text-base font-medium rounded bg-purple-600 text-white border border-purple-600 hover:bg-purple-700 disabled:opacity-50"
+              >
+                {aiBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+                Draft
+              </button>
+            </div>
+            {aiError && (
+              <div className="mt-2 text-sm text-red-700 dark:text-red-300 inline-flex items-center gap-1">
+                <AlertCircle className="w-3 h-3" /> {aiError}
+              </div>
+            )}
+            {aiWarnings.length > 0 && (
+              <div className="mt-2 text-sm text-amber-700 dark:text-amber-300 space-y-0.5">
+                {aiWarnings.map((w, i) => (
+                  <div key={i} className="inline-flex items-center gap-1">
+                    <AlertCircle className="w-3 h-3" /> {w}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
           {/* Header — supplier / warehouse / expected / currency */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <div>
@@ -639,6 +766,16 @@ function LineRow({
             })
           }
           onPick={onCatalogPick}
+        />
+        {/* PO.17 — cost-anomaly + EOQ hints. Renders inline below the
+            SKU when the line is bound to a catalog product (productId)
+            or a supplier+SKU combo with prior PO history. */}
+        <LineHints
+          supplierId={supplierId}
+          line={line}
+          currency={currency}
+          onApplyCost={(cents) => onUpdate(line.uid, { unitCostCents: (cents / 100).toFixed(2) })}
+          onApplyQty={(qty) => onUpdate(line.uid, { quantityOrdered: String(qty) })}
         />
         {/* Per-line note row — collapsed into a "+ note" pill until clicked. */}
         {line.noteEditing || line.note ? (
