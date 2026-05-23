@@ -688,21 +688,28 @@ function SnapshotTile({
   // refs without compile-time mismatch.
   buttonRef?: React.Ref<HTMLButtonElement>
 }) {
-  // GP-RT.1 — tile is a button that OPENS A POPOVER. aria-haspopup
-  // "dialog" communicates the pattern to AT users; aria-expanded
-  // reflects open/closed. The arrow-up-right icon signals "opens
-  // detail" without implying inline expansion.
+  // GP-RT.1 + PV-RT.2b — whole tile is clickable, not just the arrow.
+  // Stretched-link pattern: outer wrapper has a position:absolute
+  // button covering the whole tile area; visual content sits
+  // above it (relative z-10) so it's not blocked from rendering, and
+  // interactive children (SubLine <Link>s, chips) are also above so
+  // clicks on them navigate as expected — clicks on empty space fall
+  // through to the absolute button beneath and open the popover.
   return (
-    <div className="p-4">
+    <div className="p-4 relative group hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors cursor-pointer">
       <button
         ref={buttonRef}
         type="button"
         onClick={onToggle}
         aria-haspopup="dialog"
         aria-expanded={expanded}
+        aria-label={`Open ${label} detail`}
         title={`Open ${label} detail`}
-        className="w-full flex items-start justify-between gap-2 text-left group hover:opacity-90 transition-opacity"
-      >
+        className="absolute inset-0 z-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-inset rounded"
+      />
+      {/* Visual chrome — pointer-events-none so clicks fall through
+          to the absolute button beneath, not absorbed by header text. */}
+      <div className="relative z-10 pointer-events-none flex items-start justify-between gap-2">
         <div className="flex items-center gap-1.5 text-sm font-semibold text-slate-700 dark:text-slate-200">
           <Icon size={13} className="text-slate-500 dark:text-slate-400" aria-hidden="true" />
           {label}
@@ -710,8 +717,29 @@ function SnapshotTile({
         <span className="text-slate-400 dark:text-slate-500 group-hover:text-slate-600 dark:group-hover:text-slate-300 transition-colors">
           <ArrowUpRight size={14} aria-hidden="true" />
         </span>
-      </button>
-      <div className="mt-2">{children}</div>
+      </div>
+      {/* Body sits above the stretched button so embedded <Link>s
+          (e.g. Open Orders sub-lines) stay clickable. Pointer events
+          default to auto here so clicks land on the actual link OR
+          on the body's empty space — empty space then bubbles? No:
+          the body div absorbs the click. So we ALSO need clicks on
+          body empty space to open the popover. Solution: forward such
+          clicks to onToggle when the event target isn't an
+          interactive element. */}
+      <div
+        className="relative z-10 mt-2"
+        onClick={(e) => {
+          const t = e.target as HTMLElement
+          // If the click landed on an interactive descendant (link,
+          // button, input) — leave it alone, let it do its job.
+          if (t.closest('a, button, input, select, textarea')) return
+          // Otherwise treat the click as "open the popover" — same
+          // behaviour as clicking the tile chrome above.
+          onToggle()
+        }}
+      >
+        {children}
+      </div>
     </div>
   )
 }
