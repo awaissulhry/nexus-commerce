@@ -7409,6 +7409,134 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // PO-Plus.3 — One-shot receive from the PO detail page. Creates the
+  // InboundShipment AND immediately applies receive quantities so the
+  // operator doesn't have to leave the PO detail and re-traverse to
+  // /fulfillment/inbound. Body shape:
+  //
+  //   {
+  //     items: [{ purchaseOrderItemId, quantityReceived }],
+  //     reference?, carrierCode?, trackingNumber?, arrivedAt?, notes?
+  //   }
+  //
+  // Each non-zero quantityReceived rides through receiveItems() (the
+  // canonical receive entry from H.2), which propagates stock
+  // movements, updates PurchaseOrderItem.quantityReceived, and
+  // auto-transitions the PO via syncPoState (PARTIAL / RECEIVED
+  // honoring NEXUS_PO_AUTO_CLOSE_TOLERANCE_UNITS).
+  fastify.post('/fulfillment/purchase-orders/:id/quick-receive', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const body = (request.body ?? {}) as {
+        items?: Array<{ purchaseOrderItemId: string; quantityReceived: number }>
+        reference?: string
+        carrierCode?: string
+        trackingNumber?: string
+        arrivedAt?: string
+        notes?: string
+      }
+      const reqItems = Array.isArray(body.items) ? body.items : []
+      if (reqItems.length === 0) {
+        return reply.code(400).send({ error: 'items[] required' })
+      }
+      const po = await prisma.purchaseOrder.findUnique({
+        where: { id },
+        include: { items: true },
+      })
+      if (!po) return reply.code(404).send({ error: 'PO not found' })
+
+      // Build the InboundShipment with quantityExpected = open qty
+      // (ordered − received) per line, and a parallel array of
+      // receive quantities we'll feed to receiveItems after create.
+      const openByPoi = new Map(
+        po.items.map((it) => [it.id, Math.max(0, it.quantityOrdered - (it.quantityReceived ?? 0))]),
+      )
+
+      const arrivedAt = body.arrivedAt ? new Date(body.arrivedAt) : new Date()
+
+      const inbound = await prisma.inboundShipment.create({
+        data: {
+          type: 'SUPPLIER',
+          status: 'ARRIVED', // receiveItems() handles RECEIVING/RECEIVED transitions
+          warehouseId: po.warehouseId,
+          purchaseOrderId: po.id,
+          reference: body.reference?.trim() || `Receipt for ${po.poNumber}`,
+          carrierCode: body.carrierCode?.trim() || null,
+          trackingNumber: body.trackingNumber?.trim() || null,
+          arrivedAt,
+          notes: body.notes?.trim() || null,
+          currencyCode: po.currencyCode ?? 'EUR',
+          items: {
+            create: po.items.map((it) => ({
+              productId: it.productId,
+              sku: it.sku,
+              quantityExpected: openByPoi.get(it.id) ?? 0,
+              purchaseOrderItemId: it.id,
+              unitCostCents: it.unitCostCents ?? null,
+            })),
+          },
+        },
+        include: { items: true },
+      })
+
+      // Map purchaseOrderItemId → freshly-created InboundShipmentItem.id
+      // so we can feed receiveItems() with item ids.
+      const shipmentItemByPoi = new Map(
+        inbound.items
+          .filter((it) => it.purchaseOrderItemId)
+          .map((it) => [it.purchaseOrderItemId as string, it.id]),
+      )
+
+      const receiveInputs = reqItems
+        .map((row) => {
+          const shipmentItemId = shipmentItemByPoi.get(row.purchaseOrderItemId)
+          const qty = Math.max(0, Math.floor(Number(row.quantityReceived) || 0))
+          if (!shipmentItemId || qty <= 0) return null
+          return { itemId: shipmentItemId, quantityReceived: qty }
+        })
+        .filter((x): x is { itemId: string; quantityReceived: number } => x !== null)
+
+      if (receiveInputs.length === 0) {
+        return reply.code(400).send({
+          error: 'No valid receive lines (every quantityReceived was 0 or the POI ids did not match)',
+        })
+      }
+
+      const { receiveItems } = await import('../services/inbound.service.js')
+      const receiveResult = await receiveItems({
+        shipmentId: inbound.id,
+        items: receiveInputs,
+        actor: 'po-quick-receive',
+      })
+
+      publishPoEvent({
+        type: 'po.received',
+        poId: po.id,
+        shipmentId: inbound.id,
+        ts: Date.now(),
+      })
+      publishInboundEvent({
+        type: 'inbound.created',
+        shipmentId: inbound.id,
+        ts: Date.now(),
+      })
+      publishInboundEvent({
+        type: 'inbound.received',
+        shipmentId: inbound.id,
+        ts: Date.now(),
+      })
+
+      return {
+        ok: true,
+        inboundShipmentId: inbound.id,
+        receiveResult,
+      }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[po/:id/quick-receive] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
   // PO.4 — Server-sent events for purchase orders. Mirrors the inbound
   // SSE handler above. Subscribers connect via EventSource at
   // /api/fulfillment/purchase-orders/events; named events fire as

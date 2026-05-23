@@ -25,6 +25,7 @@ import {
   Loader2,
   Mail,
   MessageSquare,
+  PackageCheck,
   Plus,
   Printer,
   ShoppingCart,
@@ -54,6 +55,7 @@ import {
 import { PoLiveSyncChip } from '../_shared/PoLiveSyncChip'
 import { EditableSummaryPane, isEditableStatus } from '../_shared/EditableSummaryPane'
 import { ThreeWayMatchPanel } from '../_shared/ThreeWayMatchPanel'
+import { QuickReceiveModal } from '../_shared/QuickReceiveModal'
 
 // ── Types ──────────────────────────────────────────────────────────
 
@@ -317,6 +319,9 @@ export default function PurchaseOrderDetailClient({ id }: { id: string }) {
     emailDelivery: { sent: boolean; dryRun: boolean; error?: string; skipped?: boolean }
   } | null>(null)
 
+  // PO-Plus.3 — quick-receive modal state.
+  const [quickReceiveOpen, setQuickReceiveOpen] = useState(false)
+
   const handleTransition = useCallback(
     async (transition: string, reason?: string) => {
       setActionError(null)
@@ -470,6 +475,23 @@ export default function PurchaseOrderDetailClient({ id }: { id: string }) {
 
           {/* Action cluster — primary transitions inline (visibility over minimalism). */}
           <div className="flex items-center gap-2 flex-wrap po-detail-no-print">
+            {/* PO-Plus.3 — quick-receive action. Available once the
+                supplier has the PO and at least until it's fully
+                received. Receiving a CANCELLED or RECEIVED PO doesn't
+                make sense; the button hides for those. */}
+            {(po.status === 'SUBMITTED' ||
+              po.status === 'ACKNOWLEDGED' ||
+              po.status === 'CONFIRMED' ||
+              po.status === 'PARTIAL') && (
+              <button
+                type="button"
+                onClick={() => setQuickReceiveOpen(true)}
+                className="h-8 px-3 inline-flex items-center gap-1.5 text-base font-medium rounded border bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"
+              >
+                <PackageCheck className="w-3.5 h-3.5" />
+                Create receipt
+              </button>
+            )}
             {transitions.map((tr) => {
               const Icon = tr.icon
               if (tr.key === 'cancel' && showCancelConfirm) return null
@@ -811,6 +833,23 @@ export default function PurchaseOrderDetailClient({ id }: { id: string }) {
           <CommentsPane poId={po.id} comments={po.comments} onRefresh={refresh} />
         </section>
       </div>
+
+      {/* PO-Plus.3 — Quick-receive modal. Opens from the action
+          cluster's "Create receipt" button. Submit creates the
+          inbound shipment + applies the receive in one shot. */}
+      {quickReceiveOpen && (
+        <QuickReceiveModal
+          poId={po.id}
+          poNumber={po.poNumber}
+          poCurrency={po.currencyCode}
+          items={po.items}
+          onClose={() => setQuickReceiveOpen(false)}
+          onReceived={async () => {
+            setQuickReceiveOpen(false)
+            await refresh()
+          }}
+        />
+      )}
     </div>
   )
 }
