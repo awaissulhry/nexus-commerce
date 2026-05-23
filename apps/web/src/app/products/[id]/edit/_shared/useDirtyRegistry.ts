@@ -74,8 +74,13 @@ export function useDirtyRegistry(): DirtyRegistry {
 
   const register = useCallback((tabKey: string, entry: Partial<DirtyEntry>) => {
     const existing = entries.current.get(tabKey)
+    // Preserve existing values when the key is not in `entry` (i.e.
+    // the caller is updating only one slice). Explicit `undefined`
+    // still clears via `'key' in entry`. Lets tabs register handlers
+    // once on mount + report count via separate calls without
+    // clobbering each other.
     const next: DirtyEntry = {
-      count: entry.count ?? 0,
+      count: 'count' in entry ? (entry.count ?? 0) : (existing?.count ?? 0),
       flush: 'flush' in entry ? entry.flush : existing?.flush,
       discard: 'discard' in entry ? entry.discard : existing?.discard,
       label: 'label' in entry ? entry.label : existing?.label,

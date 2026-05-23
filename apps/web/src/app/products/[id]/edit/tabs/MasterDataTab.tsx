@@ -27,11 +27,20 @@ interface Props {
   onDirtyChange: (count: number) => void
   /** W1.1 — bumped by parent's "Discard" handler. */
   discardSignal: number
+  /** DSP.2 — registers this tab's flush() + discard() with the
+   *  parent's dirty registry so header "Save All" can await this
+   *  tab's pending changes atomically. When this prop is provided
+   *  the tab switches from auto-save-on-debounce to explicit save
+   *  triggered by the header. Falls back to legacy auto-save when
+   *  the prop is omitted (still useful for any caller that doesn't
+   *  yet thread the registry through). */
+  onRegister?: (handlers: {
+    flush: () => Promise<void>
+    discard: () => void
+  }) => void
 }
 
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error'
-
-const SAVE_DEBOUNCE_MS = 600
 
 const MASTER_FIELDS = [
   'sku',
@@ -62,6 +71,7 @@ export default function MasterDataTab({
   product,
   onDirtyChange,
   discardSignal,
+  onRegister,
 }: Props) {
   const { t } = useTranslations()
   const { toast } = useToast()
@@ -83,10 +93,11 @@ export default function MasterDataTab({
   const [error, setError] = useState<string | null>(null)
   const dirtyRef = useRef<Set<MasterField>>(new Set())
   // Always holds the latest data so flush() doesn't read a stale
-  // closure snapshot from the render that set the debounce timer.
+  // closure snapshot.
   const dataRef = useRef(data)
   useEffect(() => { dataRef.current = data }, [data])
-  const saveTimer = useRef<number | null>(null)
+  // DSP.2 — kept as a no-op placeholder; the auto-save debounce path
+  // is removed but the ref name is referenced in flush() below.
   const reportDirty = () => onDirtyChange(dirtyRef.current.size)
 
   // IN.3 — per-field cascade state
@@ -100,10 +111,14 @@ export default function MasterDataTab({
     setData((prev) => ({ ...prev, [field]: value }))
     dirtyRef.current.add(field)
     reportDirty()
-    setStatus('saving')
+    // DSP.2 — pre-DSP.2 the change auto-saved via a 600ms debounce.
+    // Now: just mark dirty + clear any stale error. The save fires
+    // only when the operator clicks header Save All (via flush()
+    // registered with the dirty registry below). Header status pill
+    // moves from idle → saving → saved/error during the explicit
+    // save, not on each keystroke.
+    if (status === 'saved' || status === 'error') setStatus('idle')
     setError(null)
-    if (saveTimer.current) window.clearTimeout(saveTimer.current)
-    saveTimer.current = window.setTimeout(() => { void flush() }, SAVE_DEBOUNCE_MS)
   }
 
   // AI suggest for the product name (title generation, IT primary market).
@@ -139,6 +154,11 @@ export default function MasterDataTab({
   const flush = async () => {
     const fields = Array.from(dirtyRef.current)
     if (fields.length === 0) { setStatus('idle'); return }
+    // DSP.2 — saving state now set inside flush (no longer at
+    // keystroke time), so the operator only sees "saving" while a
+    // real network call is in flight.
+    setStatus('saving')
+    setError(null)
     const changes = fields.map((field) => {
       const raw = dataRef.current[field]
       return { id: product.id, field, value: raw === '' ? null : raw }
@@ -216,21 +236,14 @@ export default function MasterDataTab({
     }
   }, [product.id, childCount, toast])
 
-  // Flush on unmount so an in-flight debounce doesn't drop the last edit.
-  useEffect(() => {
-    return () => {
-      if (saveTimer.current) window.clearTimeout(saveTimer.current)
-      if (dirtyRef.current.size > 0) void flush()
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  // W1.1 — react to parent Discard.
-  const discardSeen = useRef(discardSignal)
-  useEffect(() => {
-    if (discardSignal === discardSeen.current) return
-    discardSeen.current = discardSignal
-    if (saveTimer.current) { window.clearTimeout(saveTimer.current); saveTimer.current = null }
+  // DSP.2 — stable references for registry callbacks. Without these,
+  // re-rendering the tab (which redefines flush/discardLocal) would
+  // re-register on every render with new identities and trigger
+  // stamp bumps in the registry. Refs let the registered functions
+  // always call the latest closure.
+  const flushRef = useRef<() => Promise<void>>(async () => {})
+  flushRef.current = flush
+  const discardLocal = useCallback(() => {
     dirtyRef.current = new Set()
     setData(seedFromProduct(product))
     setStatus('idle')
@@ -239,7 +252,42 @@ export default function MasterDataTab({
     setVersion(typeof product.version === 'number' ? product.version : null)
     reportDirty()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [discardSignal, product])
+  }, [product])
+  const discardRef = useRef<() => void>(() => {})
+  discardRef.current = discardLocal
+
+  // DSP.2 — register flush/discard with the parent registry once.
+  // The refs above keep these handlers pointing at the latest
+  // closure even though the registration runs only on mount.
+  useEffect(() => {
+    if (!onRegister) return
+    onRegister({
+      flush: () => flushRef.current(),
+      discard: () => discardRef.current(),
+    })
+  }, [onRegister])
+
+  // DSP.2 safety net — when the tab unmounts (e.g. operator switches
+  // away while a dirty change is pending), fire flush to persist.
+  // This is NOT auto-save-on-keystroke (which the spec forbids);
+  // it's anti-data-loss insurance for tab-switching since each tab
+  // currently mounts/unmounts on selection. If tab rendering ever
+  // moves to display:none for inactive tabs, this can be removed.
+  useEffect(() => {
+    return () => {
+      if (dirtyRef.current.size > 0) void flushRef.current()
+    }
+  }, [])
+
+  // W1.1 / DSP.2 — react to parent Discard. Reuses discardLocal which
+  // is the same function registered with the parent registry, so the
+  // legacy signal path and the registry path stay in sync.
+  const discardSeen = useRef(discardSignal)
+  useEffect(() => {
+    if (discardSignal === discardSeen.current) return
+    discardSeen.current = discardSignal
+    discardLocal()
+  }, [discardSignal, discardLocal])
 
   const cascadableDirtyFields = Array.from(dirtyRef.current).filter((f) => CASCADE_FIELDS.has(f)) as MasterField[]
 

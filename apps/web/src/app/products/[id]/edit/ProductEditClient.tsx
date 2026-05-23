@@ -924,6 +924,12 @@ export default function ProductEditClient({
               product={product}
               discardSignal={discardSignal}
               onDirtyChange={(count) => setTabDirty('master', count)}
+              onRegister={(handlers) =>
+                registry.register('master', {
+                  label: t('products.edit.tab.master'),
+                  ...handlers,
+                })
+              }
             />
           </div>
         )}
