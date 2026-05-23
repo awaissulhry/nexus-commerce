@@ -30,7 +30,9 @@ import LifestyleGenerationModal from './images/LifestyleGenerationModal'
 import CrossChannelPublishModal from './images/CrossChannelPublishModal'
 import RollbackModal from './images/RollbackModal'
 import SchedulePublishModal from './images/SchedulePublishModal'
+import AutoPublishSettings from './images/AutoPublishSettings'
 import { captureSnapshot, type SnapshotChannel } from './images/publishSnapshotStorage'
+import { readAllPrefs, type AutoPublishChannel } from './images/autoPublishPrefs'
 import { fromListing, fromMaster, useLightbox } from './images/useLightbox'
 import type { LightboxImage } from './images/useLightbox'
 import type { ProductImage } from './images/types'
@@ -675,8 +677,37 @@ export default function ImagesTab({ product, discardSignal, onDirtyChange }: Pro
         publishing={publishing}
         channelStatus={channelStatus}
         onSave={async () => {
+          // PB.11 — Snapshot which channels were dirty BEFORE save,
+          // so we can fire auto-publish for them after save succeeds.
+          const dirtyChannels = new Set<AutoPublishChannel>()
+          for (const u of workspace.pendingUpserts.values()) {
+            if (u.platform === 'AMAZON' || u.platform === 'EBAY' || u.platform === 'SHOPIFY') {
+              dirtyChannels.add(u.platform)
+            }
+          }
+          for (const id of workspace.pendingDeletes) {
+            const li = listing.find((l) => l.id === id)
+            if (li?.platform === 'AMAZON' || li?.platform === 'EBAY' || li?.platform === 'SHOPIFY') {
+              dirtyChannels.add(li.platform)
+            }
+          }
           const ok = await savePending()
-          if (ok) showToast(t('products.edit.images.toasts.changesSaved'))
+          if (!ok) return
+          showToast(t('products.edit.images.toasts.changesSaved'))
+          // Auto-publish dispatch — sequential to keep error reporting clear.
+          const prefs = readAllPrefs(product.id)
+          for (const c of dirtyChannels) {
+            if (!prefs[c]) continue
+            try {
+              await handlePublish(
+                c === 'AMAZON'
+                  ? { channel: 'AMAZON', marketplace: 'ALL' }
+                  : { channel: c },
+              )
+            } catch {
+              // handlePublish surfaces toasts internally; swallow here.
+            }
+          }
         }}
         onDiscard={() => {
           discardPending()
@@ -686,6 +717,16 @@ export default function ImagesTab({ product, discardSignal, onDirtyChange }: Pro
         onOpenCrossChannel={() => setCrossChannelOpen(true)}
         onOpenSchedule={() => setScheduleOpen(true)}
         pendingScheduleCount={pendingScheduleCount}
+        autoPublishSlot={
+          <AutoPublishSettings
+            productId={product.id}
+            availableChannels={[
+              ...(channelStatus.amazon.hasContent ? (['AMAZON'] as const) : []),
+              ...(channelStatus.ebay.hasContent ? (['EBAY'] as const) : []),
+              ...(channelStatus.shopify.hasContent ? (['SHOPIFY'] as const) : []),
+            ]}
+          />
+        }
       />
 
       {/* PB.10 — Schedule publish modal */}

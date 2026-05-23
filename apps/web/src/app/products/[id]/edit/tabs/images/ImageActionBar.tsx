@@ -50,6 +50,11 @@ interface Props {
   // when there are pending scheduled rows.
   onOpenSchedule?: () => void
   pendingScheduleCount?: number
+  // PB.11 — Mount slot for the AutoPublishSettings popover. Lives
+  // here instead of being a state inside the bar so the bar stays
+  // presentation-only and the parent can wire the toggles to its
+  // own save handler.
+  autoPublishSlot?: React.ReactNode
 }
 
 function elapsed(ts: string | null): string {
@@ -110,6 +115,7 @@ export default function ImageActionBar({
   onOpenCrossChannel,
   onOpenSchedule,
   pendingScheduleCount = 0,
+  autoPublishSlot,
 }: Props) {
   const { t } = useTranslations()
   const [open, setOpen] = useState(false)
@@ -299,6 +305,15 @@ export default function ImageActionBar({
         </>
       )}
 
+      {/* PB.11 — Auto-publish settings slot. Wrapper around the
+          dropdown lives in the parent; we just render it inline so
+          it sits next to the cross-channel button. */}
+      {anyPublishable && autoPublishSlot && (
+        <div className="ml-auto">
+          {autoPublishSlot}
+        </div>
+      )}
+
       {/* PB.5 — Cross-channel summary trigger. Sits to the left of
           the Publish dropdown when at least one channel is publishable. */}
       {anyPublishable && onOpenCrossChannel && (
@@ -307,7 +322,10 @@ export default function ImageActionBar({
           variant="ghost"
           onClick={onOpenCrossChannel}
           disabled={publishing || saving}
-          className="gap-1.5 border border-slate-200 dark:border-slate-700 ml-auto"
+          className={cn(
+            'gap-1.5 border border-slate-200 dark:border-slate-700',
+            !autoPublishSlot && 'ml-auto',
+          )}
           title="Plan a publish across Amazon + eBay + Shopify in one pass"
         >
           <LayoutGrid className="w-3.5 h-3.5" />
