@@ -1,13 +1,31 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ArrowLeft, Printer, FileDown, Loader2 } from 'lucide-react'
+import { ArrowLeft, Printer, FileDown, Loader2, Globe, AlertTriangle } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { SkuPanel } from './SkuPanel'
 import { LabelPreview } from './LabelPreview'
 import { TemplateSidebar } from './TemplateSidebar'
 import { buildPrintHtml } from './print-utils'
+import { isValidFnskuFormat } from './fnsku-validation'
 import type { LabelItem, TemplateConfig, SavedTemplate } from './types'
+
+// Amazon EU FBA destination markets — Xavia's primary IT first, then
+// the most common 2nd/3rd-order destinations (DE/FR/ES/NL). UK is post-Brexit
+// separate. The label's listing title is loaded per selected marketplace so
+// it matches the destination FC's listing exactly (FBA requirement).
+const MARKETPLACES: Array<{ code: string; label: string }> = [
+  { code: 'IT', label: 'Italy (IT)' },
+  { code: 'DE', label: 'Germany (DE)' },
+  { code: 'FR', label: 'France (FR)' },
+  { code: 'ES', label: 'Spain (ES)' },
+  { code: 'NL', label: 'Netherlands (NL)' },
+  { code: 'BE', label: 'Belgium (BE)' },
+  { code: 'PL', label: 'Poland (PL)' },
+  { code: 'SE', label: 'Sweden (SE)' },
+  { code: 'IE', label: 'Ireland (IE)' },
+  { code: 'UK', label: 'United Kingdom (UK)' },
+]
 
 const DEFAULT_TEMPLATE: TemplateConfig = {
   labelSize: { widthMm: 101.6, heightMm: 76.2, preset: '4x3in' },
@@ -73,6 +91,10 @@ export default function FnskuLabelDesigner() {
   const [activeTemplateId, setActiveTemplateId] = useState<string | null>(null)
   const [fetchingFnskus, setFetchingFnskus] = useState(false)
   const [pdfLoading, setPdfLoading] = useState<'label' | 'a4' | null>(null)
+  const [marketplace, setMarketplace] = useState<string>(() => {
+    try { return localStorage.getItem('fnsku-label-marketplace') || 'IT' }
+    catch { return 'IT' }
+  })
   const printRef = useRef<HTMLDivElement>(null)
 
   // On mount: fetch metadata for localStorage-restored items missing FNSKU or listing title
@@ -102,7 +124,8 @@ export default function FnskuLabelDesigner() {
   // from overwriting manual edits when multiple lookups race.
   const lookupAbortRef = useRef<AbortController | null>(null)
 
-  const fetchFnskus = useCallback(async (targetItems: LabelItem[], force = false) => {
+  const fetchFnskus = useCallback(async (targetItems: LabelItem[], force = false, mpOverride?: string) => {
+    const mp = mpOverride ?? marketplace
     const needsFnsku = force
       ? targetItems.filter(it => it.sku)
       : targetItems.filter(it => (!it.fnsku || !it.listingTitle) && it.sku)
@@ -121,7 +144,7 @@ export default function FnskuLabelDesigner() {
       const res = await fetch(`${getBackendUrl()}/api/fulfillment/fnsku/lookup`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ skus: needsFnsku.map(it => it.sku) }),
+        body: JSON.stringify({ skus: needsFnsku.map(it => it.sku), marketplace: mp }),
         signal: controller.signal,
       })
       const data = await res.json()
@@ -139,7 +162,9 @@ export default function FnskuLabelDesigner() {
           asin: it.asin ?? hit.asin ?? null,
           fnskuError: hit.error,
           productName: it.productName ?? hit.productName,
-          listingTitle: it.listingTitle ?? hit.listingTitle,
+          // Force re-fetch overwrites listing title — needed when the user
+          // changes destination marketplace and titles must reload for that mp.
+          listingTitle: force ? (hit.listingTitle ?? it.listingTitle) : (it.listingTitle ?? hit.listingTitle),
           variationAttributes: Object.keys(it.variationAttributes).length > 0
             ? it.variationAttributes
             : (hit.variationAttributes ?? {}),
@@ -153,7 +178,15 @@ export default function FnskuLabelDesigner() {
     } finally {
       if (!controller.signal.aborted) setFetchingFnskus(false)
     }
-  }, [])
+  }, [marketplace])
+
+  const handleMarketplaceChange = (next: string) => {
+    setMarketplace(next)
+    try { localStorage.setItem('fnsku-label-marketplace', next) } catch {}
+    // Force re-fetch with the new marketplace explicitly — don't wait for the
+    // closure to refresh on next render.
+    if (items.length > 0) fetchFnskus(items, true, next)
+  }
 
   const handleItemsChange = useCallback((next: LabelItem[]) => {
     setItems(next)
@@ -183,7 +216,7 @@ export default function FnskuLabelDesigner() {
   }
 
   const handleDownloadPdf = async (mode: 'label' | 'a4') => {
-    // Pre-flight compliance check
+    // Pre-flight: missing listing title (FBA requirement)
     if (template.showListingTitle) {
       const missingTitle = items.filter(it => !it.listingTitle)
       if (missingTitle.length > 0) {
@@ -195,6 +228,18 @@ export default function FnskuLabelDesigner() {
         )
         if (!proceed) return
       }
+    }
+
+    // Pre-flight: malformed FNSKU (must be X + 9 alphanumeric)
+    const malformed = items.filter(it => it.fnsku && !isValidFnskuFormat(it.fnsku))
+    if (malformed.length > 0) {
+      const skus = malformed.map(it => `${it.sku}: "${it.fnsku}"`).join('\n')
+      const proceed = window.confirm(
+        `${malformed.length} FNSKU${malformed.length > 1 ? 's' : ''} look${malformed.length === 1 ? 's' : ''} invalid:\n\n${skus}\n\n` +
+        `Amazon FNSKUs are exactly 10 alphanumeric chars starting with X (e.g. X0029S704D).\n\n` +
+        `Click OK to generate anyway, or Cancel to fix first.`,
+      )
+      if (!proceed) return
     }
 
     const allLabels: LabelItem[] = []
@@ -267,6 +312,19 @@ export default function FnskuLabelDesigner() {
   const a4Rows        = Math.max(1, Math.floor((297 - 2 * sheetMarginMm + sheetGapMm) / (heightMm + sheetGapMm)))
   const labelsPerSheet = a4Cols * a4Rows
 
+  // Barcode module-width check — surfaces a warning chip on the topbar when the
+  // current settings would render barcodes below the 250µm scannable minimum.
+  // Computed for *label* mode (single label per page) and updated whenever the
+  // template changes. The A4 sidebar has a per-cols clamp; this covers label mode.
+  const colSplit       = template.columnSplitPct ?? 38
+  const padMm          = template.paddingMm ?? 2
+  const rightColMm     = widthMm * (colSplit / 100)
+  const innerMm        = rightColMm - padMm * 2
+  const barWidthMm     = Math.max(5, innerMm * ((template.barcodeWidthPct ?? 100) / 100))
+  // 10 quiet + START 11 + 10×11 + CHECKSUM 11 + STOP 13 + 10 quiet = 165 modules.
+  const moduleWidthMm  = barWidthMm / 165
+  const moduleWarn     = moduleWidthMm < 0.25 || barWidthMm < 20
+
   const fillSheet = () => {
     if (items.length === 0) return
     setItems(prev => prev.map((it, i) => i === selectedIdx ? { ...it, quantity: labelsPerSheet } : it))
@@ -284,7 +342,29 @@ export default function FnskuLabelDesigner() {
         </button>
         <div className="h-4 w-px bg-slate-200 dark:bg-slate-700" />
         <span className="font-semibold text-slate-900 dark:text-slate-100">FNSKU Label Designer</span>
+        <div className="h-4 w-px bg-slate-200 dark:bg-slate-700 ml-3" />
+        <label className="inline-flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400" title="Destination Amazon marketplace — controls which listing title appears on the label">
+          <Globe size={12} />
+          <span className="hidden sm:inline">Destination</span>
+          <select
+            value={marketplace}
+            onChange={e => handleMarketplaceChange(e.target.value)}
+            className="h-7 px-1.5 text-xs rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 focus:outline-none focus:ring-1 focus:ring-violet-500"
+          >
+            {MARKETPLACES.map(m => (
+              <option key={m.code} value={m.code}>{m.label}</option>
+            ))}
+          </select>
+        </label>
         <div className="flex-1" />
+        {moduleWarn && (
+          <span
+            className="inline-flex items-center gap-1 h-6 px-2 rounded text-[11px] font-medium bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-700"
+            title={`Barcode module width ~${(moduleWidthMm * 1000).toFixed(0)}µm (recommended ≥250µm). Below this, scanners may fail. Adjust barcode width % or label size in the right panel.`}
+          >
+            <AlertTriangle size={12} /> Module {(moduleWidthMm * 1000).toFixed(0)}µm
+          </span>
+        )}
         <span className="text-xs text-slate-400">{totalLabelCount} label{totalLabelCount !== 1 ? 's' : ''} total</span>
         <span className="text-xs text-slate-400 hidden sm:inline">·</span>
         <span className="text-xs text-slate-400 hidden sm:inline">{a4Cols}×{a4Rows} = {labelsPerSheet}/sheet</span>

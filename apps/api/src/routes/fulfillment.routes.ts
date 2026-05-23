@@ -11279,11 +11279,11 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
 
   fastify.post('/fulfillment/fnsku/lookup', async (request, reply) => {
     try {
-      const { skus } = request.body as { skus: string[] }
+      const { skus, marketplace } = request.body as { skus: string[]; marketplace?: string }
       if (!Array.isArray(skus) || skus.length === 0) {
         return reply.code(400).send({ error: 'skus[] required' })
       }
-      const results = await lookupFnskus(skus)
+      const results = await lookupFnskus(skus, marketplace ?? 'IT')
       return { results }
     } catch (err: any) {
       fastify.log.error({ err }, '[fnsku/lookup] failed')

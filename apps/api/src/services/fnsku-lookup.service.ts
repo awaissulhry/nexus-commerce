@@ -25,10 +25,14 @@ function extractAttrs(p: { variantAttributes: unknown; categoryAttributes: unkno
   return {}
 }
 
-export async function lookupFnskus(skus: string[]): Promise<FnskuLookupResult[]> {
+export async function lookupFnskus(skus: string[], marketplace = 'IT'): Promise<FnskuLookupResult[]> {
   if (skus.length === 0) return []
 
-  // Variants are stored as child Product rows (parentId IS NOT NULL)
+  // Variants are stored as child Product rows (parentId IS NOT NULL).
+  // channelListings is filtered to the requested Amazon marketplace so the
+  // label carries the *destination* marketplace's listing title (Amazon FBA
+  // requires this to match exactly per shipment).
+  const mp = marketplace.trim().toUpperCase() || 'IT'
   const products = await prisma.product.findMany({
     where: { sku: { in: skus } },
     select: {
@@ -46,7 +50,7 @@ export async function lookupFnskus(skus: string[]): Promise<FnskuLookupResult[]>
         },
       },
       channelListings: {
-        where: { channel: 'AMAZON', marketplace: 'IT' },
+        where: { channel: 'AMAZON', marketplace: mp },
         select: { title: true },
         take: 1,
       },

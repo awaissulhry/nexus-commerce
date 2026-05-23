@@ -28,6 +28,21 @@ const FONT_FAMILIES = [
   { value: 'Times-Roman', label: 'Times Roman (Serif)' },
 ]
 
+// Amazon FBA accepted condition strings — exact match required by Amazon.
+// "Custom" is an escape hatch for off-spec internal use only.
+const FBA_CONDITIONS = [
+  'New',
+  'Used - Like New',
+  'Used - Very Good',
+  'Used - Good',
+  'Used - Acceptable',
+  'Collectible - Like New',
+  'Collectible - Very Good',
+  'Collectible - Good',
+  'Collectible - Acceptable',
+  'Refurbished',
+]
+
 interface Props {
   template: TemplateConfig
   onChange: (t: TemplateConfig) => void
@@ -353,10 +368,33 @@ export function TemplateSidebar({ template, onChange, savedTemplates, activeTemp
               </div>
             )}
           </div>
-          {template.showCondition && (
-            <input value={template.condition} onChange={e => patch({ condition: e.target.value })}
-              className="w-full h-6 px-2 text-xs mt-1.5 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 focus:outline-none focus:ring-1 focus:ring-violet-500" />
-          )}
+          {template.showCondition && (() => {
+            const isStandard = FBA_CONDITIONS.includes(template.condition)
+            return (
+              <div className="mt-1.5 flex items-center gap-1.5">
+                <select
+                  value={isStandard ? template.condition : '__custom__'}
+                  onChange={e => {
+                    if (e.target.value === '__custom__') patch({ condition: template.condition || '' })
+                    else patch({ condition: e.target.value })
+                  }}
+                  className="flex-1 h-6 px-2 text-xs rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 focus:outline-none focus:ring-1 focus:ring-violet-500"
+                  title="Amazon FBA accepted condition strings — must match exactly per Amazon spec"
+                >
+                  {FBA_CONDITIONS.map(c => <option key={c} value={c}>{c}</option>)}
+                  <option value="__custom__">Custom…</option>
+                </select>
+                {!isStandard && (
+                  <input
+                    value={template.condition}
+                    onChange={e => patch({ condition: e.target.value })}
+                    placeholder="Custom condition"
+                    className="flex-1 h-6 px-2 text-xs rounded border border-amber-400 dark:border-amber-600 bg-white dark:bg-slate-800 focus:outline-none focus:ring-1 focus:ring-violet-500"
+                  />
+                )}
+              </div>
+            )
+          })()}
           {template.showColumnDivider === undefined || true ? null : null}
         </Section>
 

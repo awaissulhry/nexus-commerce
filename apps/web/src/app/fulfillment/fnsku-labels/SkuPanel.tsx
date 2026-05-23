@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Search, X, Loader2, RefreshCw, Plus, Minus, ClipboardList, AlertTriangle } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { pickAttr } from './LabelPreview'
+import { fnskuFormatHint } from './fnsku-validation'
 import type { LabelItem } from './types'
 
 interface Props {
@@ -340,23 +341,36 @@ export function SkuPanel({ items, onChange, onFetchFnskus, fetchingFnskus }: Pro
 
               {/* FNSKU input */}
               <div className="mt-1.5">
-                <div className="flex items-center justify-between mb-0.5">
-                  <label className="text-xs text-slate-400">FNSKU</label>
-                  {it.fnskuError && (
-                    <span className="flex items-center gap-0.5 text-[10px] text-amber-600 dark:text-amber-400">
-                      <AlertTriangle size={9} /> {it.fnskuError.includes('not configured') ? 'SP-API off' : it.fnskuError.includes('not found') ? 'Not in DB' : 'API failed'}
-                    </span>
-                  )}
-                </div>
-                <div className="relative flex items-center">
-                  <input
-                    value={it.fnsku}
-                    onChange={e => updateFnsku(idx, e.target.value)}
-                    placeholder={it.fnskuLoading ? 'Fetching…' : 'e.g. X0029S704D'}
-                    className={`w-full h-6 px-2 text-xs font-mono rounded border bg-white dark:bg-slate-800 focus:outline-none focus:ring-1 focus:ring-violet-500 ${it.fnskuError && !it.fnsku ? 'border-amber-400 dark:border-amber-600' : 'border-slate-300 dark:border-slate-700'}`}
-                  />
-                  {it.fnskuLoading && <Loader2 size={11} className="absolute right-1.5 text-slate-400 animate-spin" />}
-                </div>
+                {(() => {
+                  const formatHint = fnskuFormatHint(it.fnsku)
+                  const showFormatWarn = !!it.fnsku && !!formatHint
+                  return (
+                    <>
+                      <div className="flex items-center justify-between mb-0.5">
+                        <label className="text-xs text-slate-400">FNSKU</label>
+                        {it.fnskuError && (
+                          <span className="flex items-center gap-0.5 text-[10px] text-amber-600 dark:text-amber-400">
+                            <AlertTriangle size={9} /> {it.fnskuError.includes('not configured') ? 'SP-API off' : it.fnskuError.includes('not found') ? 'Not in DB' : 'API failed'}
+                          </span>
+                        )}
+                        {!it.fnskuError && showFormatWarn && (
+                          <span className="flex items-center gap-0.5 text-[10px] text-amber-600 dark:text-amber-400" title={formatHint!}>
+                            <AlertTriangle size={9} /> {formatHint}
+                          </span>
+                        )}
+                      </div>
+                      <div className="relative flex items-center">
+                        <input
+                          value={it.fnsku}
+                          onChange={e => updateFnsku(idx, e.target.value)}
+                          placeholder={it.fnskuLoading ? 'Fetching…' : 'e.g. X0029S704D'}
+                          className={`w-full h-6 px-2 text-xs font-mono rounded border bg-white dark:bg-slate-800 focus:outline-none focus:ring-1 focus:ring-violet-500 ${(it.fnskuError && !it.fnsku) || showFormatWarn ? 'border-amber-400 dark:border-amber-600' : 'border-slate-300 dark:border-slate-700'}`}
+                        />
+                        {it.fnskuLoading && <Loader2 size={11} className="absolute right-1.5 text-slate-400 animate-spin" />}
+                      </div>
+                    </>
+                  )
+                })()}
               </div>
 
               {/* Qty control */}
