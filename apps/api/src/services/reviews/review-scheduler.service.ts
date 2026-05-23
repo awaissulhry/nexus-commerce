@@ -81,11 +81,17 @@ export async function schedulePendingOrders(): Promise<ScheduleResult> {
   const result: ScheduleResult = { examined: 0, scheduled: 0, skipped: 0, errors: 0 }
 
   // Find delivered orders in the last 30 days with no ReviewRequest yet.
+  // RV.2.5 — key off deliveredAt alone, not status. The deliveredAt field
+  // is the authoritative signal for the review pipeline; status='DELIVERED'
+  // is a separate metadata transition that lags (SP-API rarely transitions
+  // FBA orders past Shipped, even when delivery is confirmed). The
+  // HEURISTIC_FBA_3D writer + CARRIER_WEBHOOK + MCF_API all set deliveredAt
+  // without necessarily touching status — gating on both would re-create
+  // the bug RV.2 set out to fix.
   const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
   const orders = await prisma.order.findMany({
     where: {
       deliveredAt: { gte: since, not: null },
-      status: 'DELIVERED',
       reviewRequests: { none: {} },
       // Only channels we can action — Amazon (Solicitations) + eBay/Shopify (email)
       channel: { in: ['AMAZON', 'EBAY', 'SHOPIFY'] },
