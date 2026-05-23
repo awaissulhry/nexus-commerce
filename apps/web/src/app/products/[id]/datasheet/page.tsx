@@ -41,6 +41,7 @@ import ChannelsTab from './ChannelsTab'
 import OverviewTab from './OverviewTab'
 import PricingTab from './PricingTab'
 import TranslationsTab from './TranslationsTab'
+import CompliancePerMarketTab from './CompliancePerMarketTab'
 
 export const dynamic = 'force-dynamic'
 
@@ -222,6 +223,12 @@ export default async function ProductDatasheetHubPage({
           <PricingTab productId={product.id} locale={locale} t={t} />
         ) : tab === 'translations' ? (
           <TranslationsTab productId={product.id} locale={locale} t={t} />
+        ) : tab === 'compliance' ? (
+          <CompliancePerMarketTab
+            productId={product.id}
+            locale={locale}
+            t={t}
+          />
         ) : (
           <TabStub tab={tab} t={t} />
         )}
