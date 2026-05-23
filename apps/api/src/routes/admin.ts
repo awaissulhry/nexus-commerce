@@ -11,6 +11,7 @@ import type { FastifyInstance } from 'fastify'
 import { DataValidationService } from '../services/sync/data-validation.service.js'
 import { BatchRepairService } from '../services/sync/batch-repair.service.js'
 import { auditSalesDrift } from '../services/revenue/drift-audit.service.js'
+import { syncFinancialEvents } from '../services/amazon-financial-events.service.js'
 import prisma from '../db.js'
 
 // RB.1 — entities tracked by /admin/recycle-bin. Each maps to a Prisma
@@ -281,6 +282,41 @@ export async function adminRoutes(app: FastifyInstance) {
           Number.isFinite(raw) ? Math.min(90, Math.max(1, Math.trunc(raw))) : 7
         const audit = await auditSalesDrift({ lookbackDays })
         return reply.send(audit)
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unknown error'
+        return reply.status(500).send({ error: message })
+      }
+    },
+  )
+
+  /**
+   * DA-RT.13 — POST /admin/sales-drift/backfill-financial-events?days=7
+   *
+   * One-shot backfill of Amazon FinancialTransaction (Store C) over a
+   * configurable window. The default amazon-financial-sync cron only
+   * pulls yesterday — without a backfill, the 3-way drift audit can't
+   * compare Store C against the existing 7-day Order/Aggregate windows.
+   *
+   * Synchronous on the request thread — pagination + ~0.5 req/s
+   * limiter means a 7-day window takes seconds, not minutes. For
+   * windows >30 days expect 1-2 minutes; bump the client timeout.
+   *
+   * Query param: days (default 7, min 1, max 60).
+   */
+  app.post<{ Querystring: { days?: string } }>(
+    '/admin/sales-drift/backfill-financial-events',
+    async (request, reply) => {
+      try {
+        const raw = Number(request.query.days ?? 7)
+        const days =
+          Number.isFinite(raw) ? Math.min(60, Math.max(1, Math.trunc(raw))) : 7
+
+        const now = new Date()
+        const end = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+        const start = new Date(end.getTime() - days * 24 * 60 * 60 * 1000)
+
+        const summary = await syncFinancialEvents(start, end)
+        return reply.send({ days, ...summary })
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Unknown error'
         return reply.status(500).send({ error: message })
