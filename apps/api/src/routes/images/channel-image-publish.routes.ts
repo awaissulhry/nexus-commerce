@@ -24,6 +24,7 @@ import type { FastifyPluginAsync } from 'fastify'
 import { publishEbayImages } from '../../services/images/ebay-image-publish.service.js'
 import { publishShopifyImages } from '../../services/images/shopify-image-publish.service.js'
 import { submitAmazonImageFeed } from '../../services/images/amazon-image-feed.service.js'
+import { recordImagePublishAudit } from '../../utils/image-publish-audit.js'
 import prisma from '../../db.js'
 
 interface UnifiedJob {
@@ -66,9 +67,26 @@ const channelImagePublishRoutes: FastifyPluginAsync = async (fastify) => {
 
       try {
         const result = await publishEbayImages(productId, activeAxis)
+        // PB.16 — Audit log.
+        void recordImagePublishAudit({
+          productId,
+          action: result.success ? 'imagePublishCompleted' : 'imagePublishFailed',
+          channel: 'EBAY',
+          metadata: {
+            pictureCount: result.pictureCount,
+            colorSetCount: result.colorSetCount,
+            ...(result.success ? {} : { error: (result.message ?? '').slice(0, 500) }),
+          },
+        })
         return reply.code(result.success ? 200 : 422).send(result)
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
+        void recordImagePublishAudit({
+          productId,
+          action: 'imagePublishFailed',
+          channel: 'EBAY',
+          metadata: { error: msg.slice(0, 500) },
+        })
         return reply.code(500).send({ success: false, message: msg, error: msg, pictureCount: 0, colorSetCount: 0 })
       }
     },
@@ -92,9 +110,26 @@ const channelImagePublishRoutes: FastifyPluginAsync = async (fastify) => {
 
       try {
         const result = await publishShopifyImages(productId, activeAxis)
+        // PB.16 — Audit log.
+        void recordImagePublishAudit({
+          productId,
+          action: result.success ? 'imagePublishCompleted' : 'imagePublishFailed',
+          channel: 'SHOPIFY',
+          metadata: {
+            poolImagesPublished: result.poolImagesPublished,
+            variantsAssigned: result.variantsAssigned,
+            ...(result.success ? {} : { error: (result.message ?? '').slice(0, 500) }),
+          },
+        })
         return reply.code(result.success ? 200 : 422).send(result)
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
+        void recordImagePublishAudit({
+          productId,
+          action: 'imagePublishFailed',
+          channel: 'SHOPIFY',
+          metadata: { error: msg.slice(0, 500) },
+        })
         return reply.code(500).send({ success: false, message: msg, error: msg, poolImagesPublished: 0, variantsAssigned: 0 })
       }
     },

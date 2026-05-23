@@ -17,6 +17,7 @@
 
 import type { FastifyPluginAsync } from 'fastify'
 import prisma from '../db.js'
+import { recordImagePublishAudit } from '../utils/image-publish-audit.js'
 
 const VALID_CHANNELS = new Set(['AMAZON', 'EBAY', 'SHOPIFY'])
 const VALID_AMAZON_MARKETS = new Set(['IT', 'DE', 'FR', 'ES', 'UK', 'ALL'])
@@ -70,6 +71,17 @@ const scheduledImagePublishesRoutes: FastifyPluginAsync = async (fastify) => {
           marketplace: channel === 'AMAZON' ? marketplace : null,
           scheduledFor,
           status: 'PENDING',
+        },
+      })
+      // PB.16 — Audit log on schedule creation.
+      void recordImagePublishAudit({
+        productId,
+        action: 'imagePublishScheduled',
+        channel: channel as 'AMAZON' | 'EBAY' | 'SHOPIFY',
+        marketplace: row.marketplace,
+        metadata: {
+          scheduleId: row.id,
+          scheduledFor: scheduledFor.toISOString(),
         },
       })
       return reply.send(row)

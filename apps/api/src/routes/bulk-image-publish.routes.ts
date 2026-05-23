@@ -20,6 +20,7 @@ import prisma from '../db.js'
 import { submitAmazonImageFeed } from '../services/images/amazon-image-feed.service.js'
 import { publishEbayImages } from '../services/images/ebay-image-publish.service.js'
 import { publishShopifyImages } from '../services/images/shopify-image-publish.service.js'
+import { recordImagePublishAudit } from '../utils/image-publish-audit.js'
 
 const MAX_PER_CALL = 50
 
@@ -77,6 +78,15 @@ const bulkImagePublishRoutes: FastifyPluginAsync = async (fastify) => {
           results.push({ productId, ok: false, message: 'Product not found' })
           continue
         }
+        // PB.16 — Audit log on bulk publish entry. One row per (productId,
+        // channel) so the operator can filter by action='imagePublishBulk'.
+        void recordImagePublishAudit({
+          productId,
+          action: 'imagePublishBulk',
+          channel: channel as 'AMAZON' | 'EBAY' | 'SHOPIFY',
+          marketplace,
+          metadata: { batchSize: productIds.length },
+        })
         try {
           if (channel === 'AMAZON') {
             const markets = marketplace === 'ALL'

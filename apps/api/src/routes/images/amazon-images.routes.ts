@@ -30,6 +30,7 @@ import { generateAmazonZip } from '../../services/images/amazon-image-zip.servic
 import { buildAmazonImagePreview } from '../../services/images/amazon-image-preview.service.js'
 import { validateAmazonPublish } from '../../services/images/amazon-publish-validator.service.js'
 import { findStaleListingImages } from '../../services/images/amazon-stale.service.js'
+import { recordImagePublishAudit } from '../../utils/image-publish-audit.js'
 import prisma from '../../db.js'
 
 const VALID_MARKETPLACES = new Set(['IT', 'DE', 'FR', 'ES', 'UK'])
@@ -100,9 +101,33 @@ const amazonImagesRoutes: FastifyPluginAsync = async (fastify) => {
           activeAxis,
           dryRun,
         })
+        // PB.16 — Audit log on the route entry. The async feed terminal
+        // status (DONE / FATAL) writes a follow-up audit row from
+        // pollAndUpdateFeedJob if/when we wire that.
+        void recordImagePublishAudit({
+          productId,
+          action: 'imagePublishStarted',
+          channel: 'AMAZON',
+          marketplace: mkt,
+          metadata: {
+            jobId: result.jobId,
+            feedId: result.feedId,
+            skuCount: result.skus.length,
+            dryRun,
+            forced: force,
+            variantIds: variantIds && variantIds.length > 0 ? variantIds : undefined,
+          },
+        })
         return result
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
+        void recordImagePublishAudit({
+          productId,
+          action: 'imagePublishFailed',
+          channel: 'AMAZON',
+          marketplace: mkt,
+          metadata: { error: msg.slice(0, 500) },
+        })
         return reply.code(500).send({ error: msg })
       }
     },

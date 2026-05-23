@@ -33,6 +33,7 @@ import SchedulePublishModal from './images/SchedulePublishModal'
 import AutoPublishSettings from './images/AutoPublishSettings'
 import ApprovalModal from './images/ApprovalModal'
 import PublishHealthCards from './images/PublishHealthCards'
+import PublishAuditLog from './images/PublishAuditLog'
 import { captureSnapshot, type SnapshotChannel } from './images/publishSnapshotStorage'
 import { readAllPrefs, type AutoPublishChannel } from './images/autoPublishPrefs'
 import {
@@ -734,6 +735,11 @@ export default function ImagesTab({ product, discardSignal, onDirtyChange }: Pro
             variants={variants}
           />
         </div>
+      </div>
+
+      {/* PB.16 — Image-publish audit log */}
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden">
+        <PublishAuditLog productId={product.id} refreshKey={healthRefreshKey} />
       </div>
 
       {/* ── Action bar ───────────────────────────────────────────────── */}
