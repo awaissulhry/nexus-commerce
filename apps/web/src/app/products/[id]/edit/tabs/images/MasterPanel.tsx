@@ -401,6 +401,42 @@ export default function MasterPanel({
     }
   }
 
+  // ── PG.4 — Set / clear the operator-curated hero image ──────────────
+  // The catalog thumbnail picker (pickFaceImage) prefers isPrimary over
+  // type=MAIN + sortOrder, so clicking the ★ flips the /products row
+  // thumb within ~2s of the API round-trip. Optimistic update so the
+  // gold ★ moves immediately; rollback on failure.
+  const [settingPrimaryId, setSettingPrimaryId] = useState<string | null>(null)
+  async function handleTogglePrimary(img: ProductImage) {
+    const nextValue = !img.isPrimary
+    setSettingPrimaryId(img.id)
+
+    // Optimistic: at most one row may be primary at a time.
+    const optimistic = images.map((i) => ({
+      ...i,
+      isPrimary: i.id === img.id ? nextValue : nextValue ? false : i.isPrimary,
+    }))
+    onImagesChange(optimistic)
+
+    try {
+      const res = await beFetch(
+        `/api/products/${product.id}/images/${img.id}/primary`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ isPrimary: nextValue }),
+        },
+      )
+      if (!res.ok) throw new Error(`set-primary failed: ${res.status}`)
+    } catch (err) {
+      // Roll back to the server-of-record state.
+      onImagesChange(images)
+      onToast?.(err instanceof Error ? err.message : 'Set primary failed')
+    } finally {
+      setSettingPrimaryId(null)
+    }
+  }
+
   // ── DnD reorder ──────────────────────────────────────────────────────
   function onDragStart(e: React.DragEvent, index: number) {
     if (e.dataTransfer.types.includes('Files')) return
@@ -726,12 +762,56 @@ export default function MasterPanel({
                       {index + 1}
                     </div>
 
-                    {/* MAIN star — bottom-right (only when type=MAIN) */}
+                    {/* PG.4 — Curated "hero image" ★ — bottom-right.
+                        Gold fill when isPrimary=true (always visible);
+                        outlined + hover-only when not primary. Single
+                        click toggles; the API clears siblings atomically.
+                        This row wins the /products thumbnail picker over
+                        type=MAIN. Separate from the type=MAIN indicator
+                        (which is now the small pill in the footer). */}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        if (settingPrimaryId === img.id) return
+                        void handleTogglePrimary(img)
+                      }}
+                      aria-label={img.isPrimary ? 'Clear catalog hero' : 'Set as catalog hero'}
+                      aria-pressed={img.isPrimary}
+                      title={
+                        img.isPrimary
+                          ? 'Catalog hero — wins the /products thumbnail. Click to clear.'
+                          : 'Set as catalog hero — wins the /products thumbnail.'
+                      }
+                      disabled={settingPrimaryId === img.id}
+                      className={cn(
+                        'absolute bottom-1 right-1 rounded p-0.5 transition-all',
+                        img.isPrimary
+                          ? 'bg-amber-500 opacity-100 shadow'
+                          : 'bg-white/80 dark:bg-slate-900/80 opacity-0 group-hover:opacity-100 hover:bg-amber-50 dark:hover:bg-amber-950/40',
+                        settingPrimaryId === img.id && 'cursor-wait',
+                      )}
+                    >
+                      <Star
+                        className={cn(
+                          'w-3 h-3',
+                          img.isPrimary
+                            ? 'text-white fill-white'
+                            : 'text-amber-500',
+                        )}
+                      />
+                    </button>
+
+                    {/* MAIN type indicator — small, bottom-center-left.
+                        Distinct from the PG.4 ★ above: this is the
+                        type=MAIN tag (channel-required), the ★ is the
+                        operator's curated catalog pick. */}
                     {img.type === 'MAIN' && (
-                      <div className="absolute bottom-1 right-1" title="Main image">
-                        <div className="bg-blue-500 rounded p-0.5">
-                          <Star className="w-3 h-3 text-white fill-white" />
-                        </div>
+                      <div
+                        className="absolute bottom-1 left-7 text-[9px] font-bold uppercase tracking-wider bg-blue-500 text-white rounded px-1 py-px"
+                        title="Channel MAIN — required by Amazon/eBay/Shopify"
+                      >
+                        MAIN
                       </div>
                     )}
 

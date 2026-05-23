@@ -13,36 +13,39 @@ import type { Prisma } from '@prisma/client'
 import { deriveFulfillmentMethod } from './fulfillment-derivation.service.js'
 
 /**
- * PG.2 — Catalog thumbnail picker.
+ * PG.2 + PG.4 — Catalog thumbnail picker.
  *
  * Selects the single "face" image for a product row in priority order:
- *   1. type='MAIN' with the lowest sortOrder
- *   2. lowest sortOrder regardless of type
- *   3. lowest createdAt (final tiebreaker for batch-inserted images that
- *      share sortOrder=0)
+ *   1. isPrimary=true             (operator-curated hero, PG.4)
+ *   2. type='MAIN' with lowest sortOrder
+ *   3. lowest sortOrder regardless of type
+ *   4. lowest createdAt           (tiebreaker for batch-inserted sets
+ *      that share sortOrder=0)
  *
  * Pre-PG.2 we picked by createdAt ASC alone, which made the chosen
  * thumbnail random whenever Amazon's catalog backfill batch-inserted
- * a parent's image set (all rows share createdAt to the ms — Prisma's
- * internal id ordering broke the tie, and the operator could never
- * curate). The new order respects the operator's drag-reorder on the
- * per-product images tab (sortOrder) and the schema-level type field.
+ * a parent's image set (all rows share createdAt to the ms). PG.2
+ * added type+sortOrder respect; PG.4 lets the operator override the
+ * derived choice with an explicit ★ on the per-product images tab.
  *
- * Pass an already-sorted array if you have one; else use pickFaceImage
- * with images: { take: ≥1, orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }] }.
+ * Pass an already-sorted array (FACE_IMAGE_ORDER_BY); the helper folds
+ * the isPrimary + MAIN preferences on top of the sort.
  */
 export type FaceImageCandidate = {
   url: string
   type: string
   sortOrder: number
   createdAt: Date
+  isPrimary: boolean
 }
 
 export function pickFaceImage(images: FaceImageCandidate[]): string | null {
   if (images.length === 0) return null
-  // The caller already sorted by [sortOrder ASC, createdAt ASC], so the
-  // first MAIN we encounter is the right one. Falling through gives us
-  // the lowest-sortOrder row of any type.
+  // The caller sorted by [sortOrder ASC, createdAt ASC]. Operator-set
+  // isPrimary wins outright; then we fall back to the first MAIN-type
+  // we see; finally the lowest-sortOrder row of any type.
+  const primary = images.find((i) => i.isPrimary)
+  if (primary) return primary.url
   const main = images.find((i) => i.type === 'MAIN')
   return main?.url ?? images[0]?.url ?? null
 }
@@ -51,6 +54,15 @@ export const FACE_IMAGE_ORDER_BY: Prisma.ProductImageOrderByWithRelationInput[] 
   { sortOrder: 'asc' },
   { createdAt: 'asc' },
 ]
+
+/** Common select shape so cache + direct paths pull the same columns. */
+export const FACE_IMAGE_SELECT = {
+  url: true,
+  type: true,
+  sortOrder: true,
+  createdAt: true,
+  isPrimary: true,
+} as const satisfies Prisma.ProductImageSelect
 
 export class ProductReadCacheService {
   async refresh(productId: string): Promise<void> {
@@ -92,12 +104,13 @@ export class ProductReadCacheService {
           },
         },
         images: {
-          // PG.2 — take enough rows to find a MAIN if one exists. The
-          // picker prefers MAIN, then lowest sortOrder, then createdAt.
-          // 12 covers Amazon's max main+alt set; we don't need more.
+          // PG.2 + PG.4 — take enough rows to find a primary / MAIN if
+          // one exists. The picker prefers isPrimary, then MAIN, then
+          // lowest sortOrder, then createdAt. 12 covers Amazon's max
+          // main+alt set; we don't need more.
           take: 12,
           orderBy: FACE_IMAGE_ORDER_BY,
-          select: { url: true, type: true, sortOrder: true, createdAt: true },
+          select: FACE_IMAGE_SELECT,
         },
         _count: {
           select: {
@@ -185,7 +198,7 @@ export class ProductReadCacheService {
           images: {
             take: 12,
             orderBy: FACE_IMAGE_ORDER_BY,
-            select: { url: true, type: true, sortOrder: true, createdAt: true },
+            select: FACE_IMAGE_SELECT,
           },
         },
       })

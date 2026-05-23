@@ -20,6 +20,13 @@
  *     body: { order: Array<{ id: string; sortOrder: number }> }
  *     Writes each row's new sortOrder. Client sends the complete new sequence.
  *     → { updated: number }
+ *
+ *   PATCH  /api/products/:id/images/:imageId/primary
+ *     body: { isPrimary?: boolean }  (default true)
+ *     PG.4 — Operator-curated hero image. Wins the catalog thumbnail
+ *     picker over type=MAIN + sortOrder. Transactional set+clear so
+ *     at most one row per product is primary.
+ *     → updated ProductImage row
  */
 
 import type { FastifyPluginAsync } from 'fastify'
@@ -802,6 +809,64 @@ const productImagesCrudRoutes: FastifyPluginAsync = async (fastify) => {
         const message = err instanceof Error ? err.message : 'Generation failed'
         return reply.status(502).send({ error: 'GENERATION_FAILED', message })
       }
+    },
+  )
+
+  // ── PATCH /api/products/:id/images/:imageId/primary ──────────────────
+  // PG.4 — Mark this image as the operator-curated hero for the product.
+  // The catalog thumbnail picker (pickFaceImage) prefers isPrimary over
+  // type=MAIN + sortOrder, so flipping the ★ changes the /products row
+  // thumb within ~2s.
+  //
+  // Body { isPrimary: true }  →  set this image's isPrimary=true and
+  //                              clear every sibling on the same product
+  // Body { isPrimary: false } →  clear this image only (picker falls
+  //                              through to MAIN/sortOrder/createdAt)
+  //
+  // Wrapped in a transaction so concurrent operators racing the ★ can't
+  // leave the catalog with two primaries. The DB-level partial UNIQUE
+  // index ("ProductImage_productId_isPrimary_unique_true") would catch
+  // it anyway — this just avoids the 500 round-trip.
+  fastify.patch<{
+    Params: { id: string; imageId: string }
+    Body: { isPrimary?: boolean }
+  }>(
+    '/products/:id/images/:imageId/primary',
+    async (req, reply) => {
+      const { id, imageId } = req.params
+      const setTo = req.body?.isPrimary ?? true
+
+      const existing = await prisma.productImage.findFirst({
+        where: { id: imageId, productId: id },
+        select: { id: true, isPrimary: true },
+      })
+      if (!existing) return reply.status(404).send({ error: 'IMAGE_NOT_FOUND' })
+
+      const updated = await prisma.$transaction(async (tx) => {
+        if (setTo) {
+          // Clear any current primary on this product, THEN set the
+          // target. Order matters: setting first then clearing siblings
+          // would briefly violate the partial unique constraint inside
+          // the txn (Postgres defers it to end-of-txn anyway, but doing
+          // the clear first keeps the intent obvious).
+          await tx.productImage.updateMany({
+            where: { productId: id, isPrimary: true, NOT: { id: imageId } },
+            data: { isPrimary: false },
+          })
+          return tx.productImage.update({
+            where: { id: imageId },
+            data: { isPrimary: true },
+          })
+        }
+        // Explicit clear-mine path.
+        return tx.productImage.update({
+          where: { id: imageId },
+          data: { isPrimary: false },
+        })
+      })
+
+      emitImagesUpdated(id, 'set-primary', { imageId, isPrimary: setTo })
+      return reply.send(updated)
     },
   )
 

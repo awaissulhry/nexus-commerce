@@ -27,6 +27,10 @@ export interface ProductImage {
   aiHasTextOverlay: boolean | null
   aiOffCenterScore: number | null
   aiNotes: { rationale?: string; error?: string; model?: string } | null
+  // PG.4 — operator-curated hero flag. When true, this row wins the
+  // /products catalog thumbnail picker over type=MAIN + sortOrder.
+  // At most one row per product is allowed (DB partial unique index).
+  isPrimary: boolean
   createdAt: string
 }
 
