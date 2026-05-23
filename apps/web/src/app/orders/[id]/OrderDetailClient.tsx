@@ -95,6 +95,27 @@ export default function OrderDetailClient({ id }: { id: string }) {
     } finally { setReviewBusy(false) }
   }
 
+  // RV.2.4 — operator manual override for deliveredAt. Unblocks the
+  // review-request pipeline for an order Amazon hasn't yet marked
+  // Delivered themselves. Writes source=MANUAL so the heuristic in
+  // amazon-orders.service never reverts it.
+  const markDeliveredNow = async () => {
+    if (!window.confirm('Mark this order as DELIVERED now? This will unlock the review-request flow for it.')) return
+    try {
+      const res = await fetch(`${getBackendUrl()}/api/orders/${id}/mark-delivered`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? 'mark-delivered failed')
+      toast.success('Marked delivered')
+      refresh()
+    } catch (e: any) {
+      toast.error(e.message)
+    }
+  }
+
   // RB.1 — per-row delete + restore. Calls the bulk endpoints with a
   // 1-element array so there's a single backend code path.
   const moveToBin = async () => {
@@ -181,6 +202,15 @@ export default function OrderDetailClient({ id }: { id: string }) {
                 </a>
               )
             })()}
+            {!order.deliveredAt && (order.status === 'SHIPPED' || order.status === 'PARTIALLY_SHIPPED') && (
+              <button
+                onClick={markDeliveredNow}
+                title="Manually mark this order as delivered now — unlocks the review request flow. Use when Amazon hasn't yet transitioned the order."
+                className="h-8 px-3 text-base bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-900 rounded hover:bg-emerald-100 dark:hover:bg-emerald-900/60 inline-flex items-center gap-1.5"
+              >
+                <Star size={12} /> Mark delivered
+              </button>
+            )}
             <button
               onClick={requestReviewNow}
               disabled={reviewBusy || !order.deliveredAt}

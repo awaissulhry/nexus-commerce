@@ -704,6 +704,42 @@ export async function ordersRoutes(app: FastifyInstance) {
     }
   })
 
+  // ── POST /api/orders/:id/mark-delivered ──────────────────────────
+  // RV.2.4 — operator manual delivery override. Writes deliveredAt with
+  // source=MANUAL so the higher-authority guard in amazon-orders.service
+  // never overwrites it. Lets ops unblock the review pipeline for an
+  // order Amazon hasn't yet marked Delivered themselves.
+  //
+  // Body: { deliveredAt?: ISO date string } — defaults to now() if omitted.
+  app.post('/api/orders/:id/mark-delivered', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const body = (request.body ?? {}) as { deliveredAt?: string }
+      let deliveredAt: Date
+      if (body.deliveredAt) {
+        const d = new Date(body.deliveredAt)
+        if (Number.isNaN(d.getTime())) return reply.status(400).send({ error: 'invalid deliveredAt' })
+        if (d.getTime() > Date.now() + 60_000) return reply.status(400).send({ error: 'deliveredAt cannot be in the future' })
+        deliveredAt = d
+      } else {
+        deliveredAt = new Date()
+      }
+      const order = await prisma.order.update({
+        where: { id },
+        data: {
+          deliveredAt,
+          deliveredAtSource: 'MANUAL',
+          status: 'DELIVERED',
+        },
+        select: { id: true, channelOrderId: true, deliveredAt: true, deliveredAtSource: true, status: true },
+      })
+      return { ok: true, order }
+    } catch (error: any) {
+      if (error.code === 'P2025') return reply.status(404).send({ error: 'Order not found' })
+      return reply.status(500).send({ error: error.message })
+    }
+  })
+
   // ── PATCH /api/orders/:id/ship — legacy single-mark-shipped ─────
   app.patch('/api/orders/:id/ship', async (request, reply) => {
     try {

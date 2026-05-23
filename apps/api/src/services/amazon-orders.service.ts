@@ -79,6 +79,40 @@ function parseAmazonDate(value: string | undefined): Date | null {
   return Number.isNaN(d.getTime()) ? null : d
 }
 
+/**
+ * RV.2.2 — add N business days to a date, skipping weekends.
+ * Approximation: ignores public holidays. Italy averages ~12 bank
+ * holidays/year, so the worst-case error vs. real carrier delivery is
+ * ~2 days — well inside the Amazon Solicitations 4-30d send window.
+ */
+function addBusinessDays(date: Date, days: number): Date {
+  const out = new Date(date.getTime())
+  let added = 0
+  while (added < days) {
+    out.setDate(out.getDate() + 1)
+    const dow = out.getDay()
+    if (dow !== 0 && dow !== 6) added++
+  }
+  return out
+}
+
+/**
+ * Higher-authority sources never get overwritten by lower-authority ones.
+ * Returns true when we are allowed to set deliveredAt to a heuristic value
+ * over the existing one.
+ */
+const DELIVERED_AUTHORITATIVE_SOURCES = new Set([
+  'AMAZON_API',
+  'AMAZON_REPORT',
+  'CARRIER_WEBHOOK',
+  'MCF_API',
+  'MANUAL',
+])
+function canOverwriteWithHeuristic(existingSource: string | null | undefined): boolean {
+  if (!existingSource) return true
+  return !DELIVERED_AUTHORITATIVE_SOURCES.has(existingSource)
+}
+
 /** AFN = Amazon Fulfilled (FBA), MFN = Merchant Fulfilled (FBM). */
 function mapFulfillmentMethod(channel?: string): string | null {
   if (channel === 'AFN' || channel === 'AmazonFulfilled') return 'FBA'
@@ -610,7 +644,7 @@ export class AmazonOrdersService {
           channelOrderId: raw.AmazonOrderId,
         },
       },
-      select: { id: true, status: true },
+      select: { id: true, status: true, deliveredAt: true, deliveredAtSource: true, shippedAt: true },
     })
     const fulfillmentMethod = mapFulfillmentMethod(raw.FulfillmentChannel)
     const marketplace = mapMarketplaceCode(raw.MarketplaceId)
@@ -659,10 +693,37 @@ export class AmazonOrdersService {
         !preserveStatus && status === 'CANCELLED'
           ? new Date(raw.LastUpdateDate ?? raw.PurchaseDate)
           : undefined,
-      deliveredAt:
-        !preserveStatus && status === 'DELIVERED'
+      // RV.2.2 — deliveredAt resolution:
+      //   1. SP-API explicitly says Delivered → authoritative AMAZON_API source.
+      //   2. Existing higher-authority value present → leave it alone.
+      //   3. FBA + shippedAt + 3 business days in the past → heuristic guess.
+      //   4. Otherwise leave undefined (no write).
+      // The review pipeline keys entirely off deliveredAt; (3) is what
+      // unblocks it for FBA orders since SP-API rarely returns Delivered.
+      ...(() => {
+        if (!preserveStatus && status === 'DELIVERED') {
+          return {
+            deliveredAt: new Date(raw.LastUpdateDate ?? raw.PurchaseDate),
+            deliveredAtSource: 'AMAZON_API' as const,
+          }
+        }
+        if (!canOverwriteWithHeuristic(existing?.deliveredAtSource)) {
+          return {}
+        }
+        const shippedAt = !preserveStatus && isShippedLike
           ? new Date(raw.LastUpdateDate ?? raw.PurchaseDate)
-          : undefined,
+          : existing?.shippedAt ?? null
+        if (fulfillmentMethod === 'FBA' && shippedAt) {
+          const projected = addBusinessDays(shippedAt, 3)
+          if (projected.getTime() <= Date.now()) {
+            return {
+              deliveredAt: projected,
+              deliveredAtSource: 'HEURISTIC_FBA_3D' as const,
+            }
+          }
+        }
+        return {}
+      })(),
       // O.1: ship-by deadline + Prime SFP gating. SP-API delivers all of
       // these as ISO-8601 strings — parse defensively so a malformed
       // value doesn't fail the whole upsert.

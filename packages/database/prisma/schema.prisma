@@ -3629,6 +3629,20 @@ model Order {
   deliveredAt  DateTime?
   cancelledAt  DateTime?
 
+  // RV.2.1 — provenance of deliveredAt. The review-request pipeline keys
+  // entirely off deliveredAt; we need to know whether a given value is
+  // an authoritative signal (carrier confirm, MCF API, SP-API Delivered)
+  // or a heuristic guess (FBA shippedAt + 3 business days). Higher-
+  // authority sources never get overwritten by lower-authority ones.
+  // Source enum:
+  //   AMAZON_API       — SP-API GetOrder OrderStatus=Delivered
+  //   AMAZON_REPORT    — _GET_FLAT_FILE_ORDERS_DATA_ report (future)
+  //   CARRIER_WEBHOOK  — Sendcloud / DHL etc. delivery confirmation
+  //   MCF_API          — Amazon MCF firstShipment.deliveredDate
+  //   HEURISTIC_FBA_3D — FBA shippedAt + 3 business days (default)
+  //   MANUAL           — operator override
+  deliveredAtSource String?
+
   // D.1: FBA vs FBM (Amazon) or null for non-Amazon. Pulled from
   // SP-API FulfillmentChannel (AFN=FBA, MFN=FBM).
   fulfillmentMethod String?
