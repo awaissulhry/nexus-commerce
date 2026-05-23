@@ -21,6 +21,7 @@ import {
   Loader2,
   Search,
   Send,
+  Settings2,
   Tag,
   TrendingDown,
   Trophy,
@@ -35,6 +36,7 @@ import {
   GridToolbar,
   KeyboardShortcutsModal,
   KpiStrip as SharedKpiStrip,
+  PreferencesModal,
   ProductIdentityCell,
   VirtualizedGrid,
   type AutoRefreshInterval,
@@ -43,6 +45,7 @@ import {
   type GridLensColumn,
   type GridLensRow,
   type KpiTileSpec,
+  type PreferencesValue,
   type ShortcutGroup,
 } from '@/app/_shared/grid-lens'
 import { Card } from '@/components/ui/Card'
@@ -188,6 +191,37 @@ export default function PricingMatrixClient() {
     return (n === 5 || n === 15) ? n : 0
   })
   useEffect(() => { try { window.localStorage.setItem('pricing.autoRefreshMin', String(autoRefreshMin)) } catch {} }, [autoRefreshMin])
+
+  // XG.6 — shared PreferencesModal state. Sticky toggles + visible
+  // columns persist to localStorage. Per the audit, /pricing is the
+  // lightest-touch migration: no in-row ActionCluster (drawer-only
+  // paradigm stays), no page-size choice (fixed), no sort dropdown
+  // (sort happens via column-header click). Only sticky + visibility.
+  // XG.6 follow-up — preferencesOpen state will land when the modal
+  // is wired to a trigger button. Declaring it here right now would
+  // trip noUnusedLocals.
+  const [stickyFirstColumn, setStickyFirstColumn] = useState<boolean>(true)
+  const [stickyLastColumn, setStickyLastColumn] = useState<boolean>(true)
+  const PRICING_DEFAULT_VISIBLE = ['identity', 'price', 'source', 'channels', 'warnings']
+  const [visibleColumns, setVisibleColumns] = useState<string[]>(PRICING_DEFAULT_VISIBLE)
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    try {
+      const sl = window.localStorage.getItem('pricing.stickyFirstColumn')
+      if (sl !== null) setStickyFirstColumn(sl !== 'false')
+      const sr = window.localStorage.getItem('pricing.stickyLastColumn')
+      if (sr !== null) setStickyLastColumn(sr !== 'false')
+      const vc = window.localStorage.getItem('pricing.visibleColumns')
+      if (vc) {
+        const parsed = JSON.parse(vc) as string[]
+        if (Array.isArray(parsed) && parsed.length > 0) setVisibleColumns(parsed)
+      }
+    } catch { /* ignore */ }
+  }, [])
+  useEffect(() => { try { window.localStorage.setItem('pricing.stickyFirstColumn', String(stickyFirstColumn)) } catch {} }, [stickyFirstColumn])
+  useEffect(() => { try { window.localStorage.setItem('pricing.stickyLastColumn', String(stickyLastColumn)) } catch {} }, [stickyLastColumn])
+  useEffect(() => { try { window.localStorage.setItem('pricing.visibleColumns', JSON.stringify(visibleColumns)) } catch {} }, [visibleColumns])
+
   const [search, setSearch] = useState('')
   const [channel, setChannel] = useState('')
   const [marketplace, setMarketplace] = useState('')
@@ -668,7 +702,15 @@ export default function PricingMatrixClient() {
 
   // Memo'd to keep stable identity across renders (VirtualizedGrid uses
   // shallow compare). Re-builds only when locale flips.
-  const pricingColumns = useMemo(() => buildPricingColumns(t), [t])
+  // XG.6 — keep the full registry around for the Preferences modal,
+  // but filter to operator-visible columns for the grid. Locked
+  // columns (identity, actions) always show regardless of the picker.
+  const pricingColumnsAll = useMemo(() => buildPricingColumns(t), [t])
+  const pricingColumns = useMemo(() => {
+    return pricingColumnsAll.filter(
+      (c) => c.locked || visibleColumns.includes(c.key),
+    )
+  }, [pricingColumnsAll, visibleColumns])
 
   const applyBulkOverride = async () => {
     if (selected.size === 0) return
@@ -745,6 +787,17 @@ export default function PricingMatrixClient() {
             onResetOrder={filterOrder.length > 0 ? () => setFilterOrder([]) : undefined}
             openEventName="nexus:pricing-open-filter-menu"
           />
+        }
+        columns={
+          <button
+            type="button"
+            onClick={() => setPreferencesOpen(true)}
+            className="h-11 sm:h-8 px-2.5 text-base inline-flex items-center gap-1.5 border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800 text-slate-600"
+            title="Preferences"
+            aria-haspopup="dialog"
+          >
+            <Settings2 size={12} /> Preferences ({visibleColumns.length})
+          </button>
         }
         density={<SharedDensityToggle density={density} onChange={setDensity} />}
         autoRefresh={
@@ -1077,13 +1130,18 @@ const PRICING_SHORTCUTS: ShortcutGroup[] = [
 function buildPricingColumns(
   t: (key: string, vars?: Record<string, string | number>) => string,
 ): GridLensColumn[] {
+  // XG.6 — `identity` (leading) and `actions` (trailing) locked so the
+  // shared PreferencesModal renders them with disabled toggles and
+  // PG.6 sticky-left/right freezes pin them on horizontal scroll. The
+  // 'actions' cell itself still returns null (drawer-only paradigm
+  // preserved); the column exists purely as a sticky-right anchor.
   return [
-    { key: 'identity', label: t('pricing.grid.col.product'),  subLabel: t('pricing.grid.col.productSub'),  width: 360 },
+    { key: 'identity', label: t('pricing.grid.col.product'),  subLabel: t('pricing.grid.col.productSub'),  width: 360, locked: true },
     { key: 'price',    label: t('pricing.grid.col.price'),    subLabel: t('pricing.grid.col.priceSub'),    width: 130 },
     { key: 'source',   label: t('pricing.grid.col.source'),   subLabel: t('pricing.grid.col.sourceSub'),   width: 130 },
     { key: 'channels', label: t('pricing.grid.col.channels'), subLabel: t('pricing.grid.col.channelsSub'), width: 280 },
     { key: 'warnings', label: t('pricing.grid.col.warnings'), subLabel: t('pricing.grid.col.warningsSub'), width: 130 },
-    { key: 'actions',  label: '',                                                                          width: 40  },
+    { key: 'actions',  label: '',                                                                          width: 40, locked: true },
   ]
 }
 
