@@ -419,6 +419,7 @@ export default async function VariantsTab({
         />
       ) : (
         <FlatVariantTable
+          parentId={parentId}
           rows={children.map<FlatChildRow>((c) => {
             const hero =
               c.images.find((i) => i.type === 'MAIN') ?? c.images[0] ?? null
@@ -439,7 +440,6 @@ export default async function VariantsTab({
           })}
           sharedAxisKeys={axes.axes}
           locale={locale}
-          t={t}
         />
       )}
 
