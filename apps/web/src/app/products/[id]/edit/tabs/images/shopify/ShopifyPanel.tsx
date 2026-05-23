@@ -25,6 +25,7 @@ import ImagePickerModal from '../ImagePickerModal'
 import CrossChannelSyncBar from '../CrossChannelSyncBar'
 import ChannelPreview from '../ChannelPreview'
 import ChannelValidationBanner, { useChannelValidation } from '../ChannelValidationBanner'
+import ChannelPublishPreviewModal from '../ChannelPublishPreviewModal'
 import ImagePublishHistory from '../ImagePublishHistory'
 import type { ListingImage, PendingUpsert, ProductImage, VariantSummary, WorkspaceProduct } from '../types'
 
@@ -94,6 +95,7 @@ export default function ShopifyPanel({
   onPublish,
 }: Props) {
   const [previewOpen, setPreviewOpen] = useState(false)
+  const [publishPreviewOpen, setPublishPreviewOpen] = useState(false)
   const [historyOpen, setHistoryOpen] = useState(false)
   const [publishing, setPublishing] = useState(false)
   const [lastPublish, setLastPublish] = useState<{ success: boolean; message: string; ts: string } | null>(null)
@@ -623,6 +625,17 @@ export default function ShopifyPanel({
             size="sm"
             variant="ghost"
             className="gap-1.5 border border-slate-200 dark:border-slate-700"
+            onClick={() => setPublishPreviewOpen(true)}
+            disabled={publishing}
+            title="Open pre-publish preview"
+          >
+            <Eye className="w-3.5 h-3.5" />
+            Preview
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="gap-1.5 border border-slate-200 dark:border-slate-700"
             disabled={publishing || validation.blocking.length > 0}
             title={validation.blocking.length > 0
               ? `${validation.blocking.length} blocking issue${validation.blocking.length === 1 ? '' : 's'} — see banner above`
@@ -667,6 +680,30 @@ export default function ShopifyPanel({
           onClose={() => setPickerTarget(null)}
         />
       )}
+
+      {/* PB.3b — Pre-publish preview modal */}
+      <ChannelPublishPreviewModal
+        open={publishPreviewOpen}
+        channel="SHOPIFY"
+        masterImages={masterImages}
+        listingImages={listingImages}
+        pendingUpserts={pendingUpserts}
+        pendingDeletes={pendingDeletes}
+        variants={variants}
+        activeAxis={activeAxis}
+        publishing={publishing}
+        onClose={() => setPublishPreviewOpen(false)}
+        onConfirmPublish={async () => {
+          setPublishing(true)
+          try {
+            const result = await onPublish()
+            setLastPublish({ ...result, ts: new Date().toISOString() })
+            if (result.success) setPublishPreviewOpen(false)
+          } finally {
+            setPublishing(false)
+          }
+        }}
+      />
     </div>
   )
 }
