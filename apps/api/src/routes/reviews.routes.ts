@@ -492,6 +492,16 @@ const reviewsRoutes: FastifyPluginAsync = async (fastify) => {
     const due = await prisma.reviewRequest.count({
       where: { status: 'SCHEDULED', scheduledFor: { lte: new Date() } },
     })
+    // RV.3.3 — surface "retrying" count (FAILED rows scheduled for re-attempt)
+    const retrying = await prisma.reviewRequest.count({
+      where: { status: 'FAILED', nextRetryAt: { not: null }, attemptCount: { lt: 3 } },
+    })
+    // RV.4.2 — include the mailer pause state so the dashboard renders the toggle correctly
+    const mailerState = await prisma.reviewMailerState.upsert({
+      where: { id: 'default' },
+      update: {},
+      create: { id: 'default' },
+    })
     const upcoming = await prisma.reviewRequest.findMany({
       where: { status: 'SCHEDULED', scheduledFor: { gt: new Date() } },
       orderBy: { scheduledFor: 'asc' },
@@ -512,8 +522,115 @@ const reviewsRoutes: FastifyPluginAsync = async (fastify) => {
       },
     })
     reply.header('Cache-Control', 'private, max-age=30')
-    return { scheduled, sent, failed, skipped, due, upcoming }
+    return {
+      scheduled, sent, failed, skipped, due, retrying, upcoming,
+      mailer: {
+        isPaused: mailerState.isPaused,
+        pausedReason: mailerState.pausedReason,
+        pausedAt: mailerState.pausedAt,
+        pausedBy: mailerState.pausedBy,
+      },
+    }
   })
+
+  // RV.4.2 — pause + resume endpoints for the mailer kill switch.
+  fastify.post<{ Body: { reason?: string; pausedBy?: string } }>(
+    '/reviews/mailer/pause',
+    async (request) => {
+      const body = (request.body ?? {}) as { reason?: string; pausedBy?: string }
+      const state = await prisma.reviewMailerState.upsert({
+        where: { id: 'default' },
+        update: {
+          isPaused: true,
+          pausedReason: body.reason ?? null,
+          pausedAt: new Date(),
+          pausedBy: body.pausedBy ?? 'default-user',
+        },
+        create: {
+          id: 'default',
+          isPaused: true,
+          pausedReason: body.reason ?? null,
+          pausedAt: new Date(),
+          pausedBy: body.pausedBy ?? 'default-user',
+        },
+      })
+      return { ok: true, state }
+    },
+  )
+
+  fastify.post('/reviews/mailer/resume', async (_request) => {
+    const state = await prisma.reviewMailerState.upsert({
+      where: { id: 'default' },
+      update: {
+        isPaused: false,
+        pausedReason: null,
+        pausedAt: null,
+        pausedBy: null,
+      },
+      create: { id: 'default', isPaused: false },
+    })
+    return { ok: true, state }
+  })
+
+  // RV.4.3 — per-request unsuppress + snooze controls.
+  fastify.post<{ Params: { id: string } }>(
+    '/review-requests/:id/unsuppress',
+    async (request, reply) => {
+      try {
+        const { id } = request.params
+        const updated = await prisma.reviewRequest.update({
+          where: { id },
+          data: {
+            status: 'SCHEDULED',
+            scheduledFor: new Date(),
+            suppressedReason: null,
+            errorMessage: null,
+            providerResponseCode: null,
+            // Reset attempt counter so the row gets a fresh shot (operator
+            // explicitly chose to re-queue — don't penalize prior failures).
+            attemptCount: 0,
+            lastAttemptAt: null,
+            nextRetryAt: null,
+          },
+        })
+        return { ok: true, request: updated }
+      } catch (error: any) {
+        if (error.code === 'P2025') return reply.code(404).send({ error: 'Request not found' })
+        return reply.code(500).send({ error: error.message })
+      }
+    },
+  )
+
+  fastify.post<{ Params: { id: string }; Body: { hours?: number } }>(
+    '/review-requests/:id/snooze',
+    async (request, reply) => {
+      try {
+        const { id } = request.params
+        const body = (request.body ?? {}) as { hours?: number }
+        const hours = Math.min(Math.max(body.hours ?? 24, 1), 24 * 14) // 1h to 14d
+        const current = await prisma.reviewRequest.findUnique({ where: { id } })
+        if (!current) return reply.code(404).send({ error: 'Request not found' })
+        // Snooze pushes scheduledFor forward from now (not from existing
+        // scheduledFor, which may already be in the past). Caller intent
+        // is "don't try this for the next N hours", regardless of history.
+        const newScheduledFor = new Date(Date.now() + hours * 60 * 60 * 1000)
+        const updated = await prisma.reviewRequest.update({
+          where: { id },
+          data: {
+            // If currently FAILED → re-queue. If currently SCHEDULED → just defer.
+            status: 'SCHEDULED',
+            scheduledFor: newScheduledFor,
+            // Clear retry state — operator explicitly took control.
+            nextRetryAt: null,
+          },
+        })
+        return { ok: true, request: updated, snoozedUntil: newScheduledFor }
+      } catch (error: any) {
+        if (error.code === 'P2025') return reply.code(404).send({ error: 'Request not found' })
+        return reply.code(500).send({ error: error.message })
+      }
+    },
+  )
 }
 
 export default reviewsRoutes

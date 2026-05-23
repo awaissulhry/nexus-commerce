@@ -57,11 +57,32 @@ interface MailerTickResult {
   failed: number
   skipped: number
   retried: number
+  paused?: boolean
   durationMs: number
 }
 
 export async function runReviewMailerOnce(): Promise<MailerTickResult> {
   const startedAt = Date.now()
+
+  // RV.4.2 — operational kill switch. When paused, log + bail before
+  // doing any work. The cron tick still runs (no harm) but produces a
+  // no-op result so the dashboard reflects the paused state.
+  const state = await prisma.reviewMailerState.upsert({
+    where: { id: 'default' },
+    update: {},
+    create: { id: 'default' },
+  })
+  if (state.isPaused) {
+    const durationMs = Date.now() - startedAt
+    lastRunAt = new Date()
+    lastSummary = `PAUSED — reason="${state.pausedReason ?? 'unspecified'}" durationMs=${durationMs}`
+    logger.info('[review-mailer] paused — skipping tick', {
+      pausedReason: state.pausedReason,
+      pausedAt: state.pausedAt,
+      pausedBy: state.pausedBy,
+    })
+    return { scheduled: 0, due: 0, sent: 0, failed: 0, skipped: 0, retried: 0, paused: true, durationMs }
+  }
 
   // Step 1: schedule newly delivered orders
   const scheduleResult = await schedulePendingOrders()

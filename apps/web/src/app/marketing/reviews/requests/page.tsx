@@ -14,6 +14,7 @@ import { Mail, AlertCircle } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { ReviewsNav } from '../_shared/ReviewsNav'
 import { RequestsActionsClient } from './RequestsActionsClient'
+import { RequestRowActions } from './RequestRowActions'
 
 export const dynamic = 'force-dynamic'
 
@@ -23,6 +24,7 @@ interface Stats {
   failed: number
   skipped: number
   due: number
+  retrying?: number
   upcoming: Array<{
     id: string
     scheduledFor: string | null
@@ -37,6 +39,12 @@ interface Stats {
       }>
     } | null
   }>
+  mailer?: {
+    isPaused: boolean
+    pausedReason: string | null
+    pausedAt: string | null
+    pausedBy: string | null
+  }
 }
 
 async function fetchStats(): Promise<Stats> {
@@ -78,15 +86,16 @@ export default async function ReviewRequestsPage() {
       <ReviewsNav />
 
       {/* KPI strip */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
+      <div className="grid grid-cols-2 md:grid-cols-6 gap-3 mb-4">
         <Stat label="Scheduled" value={stats.scheduled} tone={stats.scheduled > 0 ? 'amber' : null} />
         <Stat label="Due now" value={stats.due} tone={stats.due > 0 ? 'rose' : null} />
+        <Stat label="Retrying" value={stats.retrying ?? 0} tone={(stats.retrying ?? 0) > 0 ? 'amber' : null} />
         <Stat label="Sent" value={stats.sent} tone="emerald" />
         <Stat label="Failed" value={stats.failed} tone={stats.failed > 0 ? 'rose' : null} />
         <Stat label="Skipped" value={stats.skipped} />
       </div>
 
-      <RequestsActionsClient />
+      <RequestsActionsClient mailer={stats.mailer} />
 
       {/* Upcoming queue */}
       <section className="mb-6">
@@ -107,6 +116,7 @@ export default async function ReviewRequestsPage() {
                   <th className="px-3 py-2">Channel</th>
                   <th className="px-3 py-2">Customer</th>
                   <th className="px-3 py-2">Product</th>
+                  <th className="px-3 py-2 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
@@ -142,6 +152,9 @@ export default async function ReviewRequestsPage() {
                             ({product.productType})
                           </span>
                         )}
+                      </td>
+                      <td className="px-3 py-2">
+                        <RequestRowActions requestId={r.id} status="SCHEDULED" />
                       </td>
                     </tr>
                   )

@@ -9383,6 +9383,20 @@ model ReviewRule {
   @@index([scope, isActive])
 }
 
+// RV.4.1 — Operational kill switch for the review request mailer.
+// Singleton row pattern: app always reads/writes id='default'. Lets ops
+// pause all automated sending at runtime — useful during an Amazon API
+// incident, a brand crisis, or a marketing freeze — without restarting
+// the API or flipping env flags.
+model ReviewMailerState {
+  id            String   @id @default("default")
+  isPaused      Boolean  @default(false)
+  pausedReason  String?
+  pausedAt      DateTime?
+  pausedBy      String?
+  updatedAt     DateTime @updatedAt
+}
+
 model OrderTag {
   orderId   String
   tagId     String
