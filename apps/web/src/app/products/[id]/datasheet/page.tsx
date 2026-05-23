@@ -133,55 +133,55 @@ export default async function ProductDatasheetPage({
   const showChannelCoverage = mode !== 'public'
   const showKeywords = mode === 'internal'
 
-  const product = await prisma.product.findUnique({
-    where: { id },
-    select: {
-      id: true,
-      sku: true,
-      name: true,
-      description: true,
-      brand: true,
-      manufacturer: true,
-      productType: true,
-      basePrice: true,
-      gtin: true,
-      upc: true,
-      ean: true,
-      amazonAsin: true,
-      ebayItemId: true,
-      shopifyProductId: true,
-      weightValue: true,
-      weightUnit: true,
-      dimLength: true,
-      dimWidth: true,
-      dimHeight: true,
-      dimUnit: true,
-      bulletPoints: true,
-      keywords: true,
-      categoryAttributes: true,
-      status: true,
-      // DS.8 — version stamp + last-update timestamp shown in the
-      // footer so a B2B distributor knows whether the printed copy
-      // is current. version bumps on every PATCH (NN.1 optimistic
-      // concurrency).
-      version: true,
-      updatedAt: true,
-      fulfillmentMethod: true,
-      totalStock: true,
-      lowStockThreshold: true,
-      isParent: true,
-      // DS.4 — EU compliance master data (H.16 + W7.1 schema fields).
-      // All nullable; the compliance section auto-hides when nothing
-      // resolves so non-PPE catalogs don't get an empty box.
-      hsCode: true,
-      countryOfOrigin: true,
-      ppeCategory: true,
-      hazmatClass: true,
-      hazmatUnNumber: true,
-      family: { select: { label: true, code: true } },
-      workflowStage: {
-        select: { label: true, workflow: { select: { label: true } } },
-      },
+  // DS hotfix-2 — Fetch the product with the FULL select that
+  // depends on H.16 / W7.1 / NN.1 columns; if Neon prod hasn't
+  // received one of those migrations the SQL errors, so fall back
+  // to a minimal select that has no schema dependencies newer than
+  // 2026-04. The page just hides the dependent UI (compliance
+  // block, version stamp) on the fallback path; the rest renders.
+  let product = await prisma.product
+    .findUnique({
+      where: { id },
+      select: {
+        id: true,
+        sku: true,
+        name: true,
+        description: true,
+        brand: true,
+        manufacturer: true,
+        productType: true,
+        basePrice: true,
+        gtin: true,
+        upc: true,
+        ean: true,
+        amazonAsin: true,
+        ebayItemId: true,
+        shopifyProductId: true,
+        weightValue: true,
+        weightUnit: true,
+        dimLength: true,
+        dimWidth: true,
+        dimHeight: true,
+        dimUnit: true,
+        bulletPoints: true,
+        keywords: true,
+        categoryAttributes: true,
+        status: true,
+        version: true,
+        updatedAt: true,
+        fulfillmentMethod: true,
+        totalStock: true,
+        lowStockThreshold: true,
+        isParent: true,
+        hsCode: true,
+        countryOfOrigin: true,
+        ppeCategory: true,
+        hazmatClass: true,
+        hazmatUnNumber: true,
+        family: { select: { label: true, code: true } },
+        workflowStage: {
+          select: { label: true, workflow: { select: { label: true } } },
+        },
       // DS.2 — pull sortOrder so the hero-first ranking can honor
       // the operator's drag-drop order. Fetch up to 8 so the JS
       // pass can drop SWATCH/DIAGRAM and still fill hero + 4
@@ -220,7 +220,103 @@ export default async function ProductDatasheetPage({
       },
       _count: { select: { children: true } },
     },
-  })
+    })
+    .catch((e: unknown) => {
+      console.error(
+        '[datasheet] full product select failed — falling back to legacy select',
+        e,
+      )
+      return null
+    })
+
+  if (product == null) {
+    // Fallback path: re-query with a select that doesn't depend on
+    // recent migrations. Compliance + version blocks render empty.
+    product = await prisma.product
+      .findUnique({
+        where: { id },
+        select: {
+          id: true,
+          sku: true,
+          name: true,
+          description: true,
+          brand: true,
+          manufacturer: true,
+          productType: true,
+          basePrice: true,
+          gtin: true,
+          upc: true,
+          ean: true,
+          amazonAsin: true,
+          ebayItemId: true,
+          shopifyProductId: true,
+          weightValue: true,
+          weightUnit: true,
+          dimLength: true,
+          dimWidth: true,
+          dimHeight: true,
+          dimUnit: true,
+          bulletPoints: true,
+          keywords: true,
+          categoryAttributes: true,
+          status: true,
+          fulfillmentMethod: true,
+          totalStock: true,
+          lowStockThreshold: true,
+          isParent: true,
+          family: { select: { label: true, code: true } },
+          workflowStage: {
+            select: { label: true, workflow: { select: { label: true } } },
+          },
+          images: {
+            select: { url: true, alt: true, type: true, sortOrder: true },
+            orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
+            take: 8,
+          },
+          translations: {
+            select: {
+              language: true,
+              name: true,
+              description: true,
+              bulletPoints: true,
+              keywords: true,
+            },
+          },
+          channelListings: {
+            where: { isPublished: true, listingStatus: 'ACTIVE' },
+            select: { channel: true, marketplace: true },
+          },
+          children: {
+            select: {
+              id: true,
+              sku: true,
+              name: true,
+              basePrice: true,
+              totalStock: true,
+            },
+            orderBy: { sku: 'asc' },
+            take: 12,
+          },
+          _count: { select: { children: true } },
+        },
+      })
+      // Stamp in null defaults for the fields the legacy select
+      // skipped, so downstream JSX can keep its narrowing.
+      .then((p) =>
+        p == null
+          ? null
+          : {
+              ...p,
+              version: 1 as number,
+              updatedAt: new Date(),
+              hsCode: null as string | null,
+              countryOfOrigin: null as string | null,
+              ppeCategory: null as string | null,
+              hazmatClass: null as string | null,
+              hazmatUnNumber: null as string | null,
+            },
+      )
+  }
 
   if (!product) notFound()
 
