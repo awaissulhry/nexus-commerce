@@ -94,6 +94,22 @@ export interface AmazonJobSummary {
   completedAt: string | null
 }
 
+export interface ChannelLiveImage {
+  id: string
+  productId: string
+  channel: string         // 'AMAZON' | 'EBAY' | 'SHOPIFY'
+  marketplace: string | null
+  externalSku: string | null
+  asin: string | null
+  slot: string | null     // 'MAIN' | 'PT01'..'PT08' | 'SWCH' (Amazon) or position-as-string
+  url: string
+  width: number | null
+  height: number | null
+  sortOrder: number
+  etag: string | null
+  fetchedAt: string
+}
+
 export interface WorkspaceData {
   product: WorkspaceProduct
   master: ProductImage[]
@@ -104,6 +120,10 @@ export interface WorkspaceData {
   // IR.7.2 — Map productImage.id → DigitalAsset.id for rows mirrored in
   // the DAM library. Empty when no master image has been pushed yet.
   damLinks: Record<string, string>
+  // IE.4 — read-replica of what each channel is currently serving.
+  // Empty until the operator triggers a refresh; populated again by
+  // IE.4b's cron once that lands.
+  channelLiveImages: ChannelLiveImage[]
 }
 
 export type ChannelTab = 'master' | 'amazon' | 'ebay' | 'shopify'

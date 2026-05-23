@@ -95,7 +95,7 @@ const imagesWorkspaceRoutes: FastifyPluginAsync = async (fastify) => {
       })
       if (!product) return reply.code(404).send({ error: 'Product not found' })
 
-      const [master, listing, childProducts, pvRecords, recentJobs] = await Promise.all([
+      const [master, listing, childProducts, pvRecords, recentJobs, liveImages] = await Promise.all([
         prisma.productImage.findMany({
           where: { productId },
           orderBy: { sortOrder: 'asc' },
@@ -155,6 +155,19 @@ const imagesWorkspaceRoutes: FastifyPluginAsync = async (fastify) => {
             submittedAt: true,
             completedAt: true,
           },
+        }),
+
+        // IE.4 — read-replica of what each channel is currently
+        // serving. Powers the IE.5 live strip + drift detector. Stays
+        // empty until the operator (or IE.4b cron) calls /refresh.
+        prisma.channelLiveImage.findMany({
+          where: { productId },
+          orderBy: [
+            { channel: 'asc' },
+            { marketplace: 'asc' },
+            { externalSku: 'asc' },
+            { sortOrder: 'asc' },
+          ],
         }),
       ])
 
@@ -227,6 +240,7 @@ const imagesWorkspaceRoutes: FastifyPluginAsync = async (fastify) => {
         availableAxes,
         amazonJobs: recentJobs,
         damLinks,
+        channelLiveImages: liveImages,
       }
     },
   )

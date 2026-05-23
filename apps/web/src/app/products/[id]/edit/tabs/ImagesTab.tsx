@@ -65,6 +65,29 @@ export default function ImagesTab({ product, discardSignal, onDirtyChange }: Pro
   const listing  = workspace.data?.listing  ?? []
   const master   = workspace.data?.master   ?? []
   const variants = workspace.data?.variants ?? []
+  const channelLiveImages = workspace.data?.channelLiveImages ?? []
+
+  // IE.5 — Adopt a live channel image into the master gallery. Fetches
+  // the live URL bytes, posts through the standard upload pipeline so
+  // the IE.1 dedup gate runs and the new row picks up dimensions /
+  // hashes / Cloudinary publicId like any other upload.
+  async function handleAdoptToMaster(url: string): Promise<void> {
+    try {
+      const res = await fetch(url)
+      const blob = await res.blob()
+      const fd = new FormData()
+      fd.append('file', new File([blob], `live-${Date.now()}.jpg`, { type: blob.type || 'image/jpeg' }))
+      const up = await beFetch(`/api/products/${product.id}/images?type=LIFESTYLE`, {
+        method: 'POST',
+        body: fd,
+      })
+      if (!up.ok) throw new Error(`Adopt failed: ${up.status}`)
+      showToast('Live image adopted into master gallery')
+      void workspace.reload()
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Adopt failed')
+    }
+  }
 
   const channelScores = useMemo(() => {
     const pending = Array.from(workspace.pendingUpserts.values())
@@ -319,6 +342,8 @@ export default function ImagesTab({ product, discardSignal, onDirtyChange }: Pro
               onCopyToEbayColorSets={() => workspace.copyChannelImages({ fromPlatform: 'AMAZON', toPlatform: 'EBAY', type: 'colorSets', activeAxis })}
               onCopyToShopifyPool={() => workspace.copyChannelImages({ fromPlatform: 'AMAZON', toPlatform: 'SHOPIFY', type: 'gallery', activeAxis })}
               onCopyToShopifyAssignments={() => workspace.copyChannelImages({ fromPlatform: 'AMAZON', toPlatform: 'SHOPIFY', type: 'colorSets', activeAxis })}
+              channelLiveImages={channelLiveImages}
+              onAdoptToMaster={(url) => handleAdoptToMaster(url)}
             />
           )}
           {activeChannel === 'ebay' && (

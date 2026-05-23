@@ -13,6 +13,8 @@ import ImagePickerModal from '../ImagePickerModal'
 import CrossChannelSyncBar from '../CrossChannelSyncBar'
 import ChannelPreview from '../ChannelPreview'
 import ImagePublishHistory from '../ImagePublishHistory'
+import LiveChannelStrip from '../LiveChannelStrip'
+import LiveImageDriftModal from '../LiveImageDriftModal'
 import { useTranslations } from '@/lib/i18n/use-translations'
 
 // IR.10.3 — Per-marketplace audience guidance keys.
@@ -28,7 +30,7 @@ import {
   type AmazonMarketplace,
   type AmazonSlot,
 } from './useAmazonImages'
-import type { ListingImage, PendingUpsert, ProductImage, VariantSummary, WorkspaceProduct, AmazonJobSummary } from '../types'
+import type { ChannelLiveImage, ListingImage, PendingUpsert, ProductImage, VariantSummary, WorkspaceProduct, AmazonJobSummary } from '../types'
 
 interface CopyResult { copied: number; skipped: number }
 
@@ -55,6 +57,9 @@ interface Props {
   onCopyToEbayColorSets: () => CopyResult
   onCopyToShopifyPool: () => CopyResult
   onCopyToShopifyAssignments: () => CopyResult
+  // IE.5 — live snapshot to render in the strip + adopt-to-master callback.
+  channelLiveImages?: ChannelLiveImage[]
+  onAdoptToMaster?: (url: string, channel: 'AMAZON' | 'EBAY' | 'SHOPIFY', marketplace: string | null, slot: string | null) => Promise<void> | void
 }
 
 const MKT_LABELS: Record<string, string> = {
@@ -83,6 +88,8 @@ export default function AmazonPanel({
   dirtyCount,
   onSavePending,
   onReload,
+  channelLiveImages = [],
+  onAdoptToMaster,
 }: Props) {
   const { t } = useTranslations()
   const noAxisData = variants.length > 0 && availableAxes.length === 0
@@ -90,6 +97,8 @@ export default function AmazonPanel({
   const [isExporting, setIsExporting] = useState(false)
   const [previewOpen, setPreviewOpen] = useState(false)
   const [historyOpen, setHistoryOpen] = useState(false)
+  // IE.5 — drift modal state
+  const [driftModal, setDriftModal] = useState<{ live: ChannelLiveImage; nexusUrl: string | null } | null>(null)
   const amazon = useAmazonImages({
     productId,
     variants,
@@ -256,6 +265,22 @@ export default function AmazonPanel({
         </div>
       )}
 
+      {/* IE.5 — Live channel strip above the matrix */}
+      <div className="px-4 pt-4">
+        <LiveChannelStrip
+          productId={productId}
+          channel="AMAZON"
+          marketplaces={AMAZON_MARKETPLACES}
+          liveImages={channelLiveImages}
+          listingImages={listingImages}
+          onRefreshed={onReload}
+          onAdoptToMaster={onAdoptToMaster
+            ? (url, marketplace, slot) => { void onAdoptToMaster(url, 'AMAZON', marketplace, slot) }
+            : undefined}
+          onOpenDiff={(live, nexusUrl) => setDriftModal({ live, nexusUrl })}
+        />
+      </div>
+
       {/* Matrix */}
       <div className="p-4">
         {amazon.variantGroups.length === 0 && variants.length === 0 ? (
@@ -370,6 +395,17 @@ export default function AmazonPanel({
           onClose={() => amazon.setImagePicker(null)}
         />
       )}
+
+      {/* IE.5 — Live ↔ Nexus drift modal */}
+      <LiveImageDriftModal
+        open={driftModal !== null}
+        live={driftModal?.live ?? null}
+        nexusUrl={driftModal?.nexusUrl ?? null}
+        onClose={() => setDriftModal(null)}
+        onAdoptToMaster={onAdoptToMaster
+          ? (url) => { void onAdoptToMaster(url, 'AMAZON', driftModal?.live.marketplace ?? null, driftModal?.live.slot ?? null) }
+          : undefined}
+      />
     </div>
   )
 }
