@@ -33,7 +33,8 @@ import { prisma } from '@nexus/database'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, FileText } from 'lucide-react'
-import { getServerT } from '@/lib/i18n/server'
+import { getServerLocale, getServerT } from '@/lib/i18n/server'
+import HeaderHealthPulse from './HeaderHealthPulse'
 
 export const dynamic = 'force-dynamic'
 
@@ -75,6 +76,7 @@ export default async function ProductDatasheetHubPage({
   const { id } = await params
   const sp = await searchParams
   const tab = parseTab(sp.tab)
+  const locale = await getServerLocale()
   const t = await getServerT()
 
   // Minimal product fetch — just what the header needs. Each tab's
@@ -88,6 +90,7 @@ export default async function ProductDatasheetHubPage({
       brand: true,
       status: true,
       isParent: true,
+      updatedAt: true,
     },
   })
 
@@ -133,6 +136,14 @@ export default async function ProductDatasheetHubPage({
           </Link>
         </div>
       </header>
+
+      {/* ── ATM.2 — Header health pulse ────────────────────────────── */}
+      <HeaderHealthPulse
+        productId={product.id}
+        productUpdatedAt={product.updatedAt}
+        locale={locale}
+        t={t}
+      />
 
       {/* ── Tab nav ────────────────────────────────────────────────── */}
       <nav
