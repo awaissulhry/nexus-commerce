@@ -42,6 +42,7 @@ import { useToast } from '@/components/ui/Toast'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import ListOnChannelDropdown from './ListOnChannelDropdown'
 import MasterDataTab from './tabs/MasterDataTab'
+import GlobalTab from './tabs/GlobalTab'
 import { AnalyticsTab } from './tabs/AnalyticsTab'
 import { AdsTab } from './tabs/AdsTab'
 import { TimelineTab } from './tabs/TimelineTab'
@@ -827,6 +828,14 @@ export default function ProductEditClient({
             onKeyDown={onTabListKeyDown}
           >
             <TopTabButton
+              tabKey="global"
+              active={topTab === 'global'}
+              onClick={() => goToTab('global')}
+              dirty={dirtyByTab.global}
+            >
+              Global
+            </TopTabButton>
+            <TopTabButton
               tabKey="master"
               active={topTab === 'master'}
               onClick={() => goToTab('master')}
@@ -988,6 +997,15 @@ export default function ProductEditClient({
             </IconButton>
           </div>
         )}
+        {topTab === 'global' && (
+          <div role="tabpanel" id="panel-global" aria-labelledby="tab-global">
+            <GlobalTab
+              productId={product.id}
+              onDirtyChange={(count) => setTabDirty('global', count)}
+            />
+          </div>
+        )}
+
         {topTab === 'master' && (
           <div role="tabpanel" id="panel-master" aria-labelledby="tab-master">
             <MasterDataTab
