@@ -47,6 +47,11 @@ interface Props {
   pendingUpserts: Map<string, PendingUpsert>
   addPendingUpsert: (u: Omit<PendingUpsert, '_tempId'>) => void
   removePendingUpsert: (tempId: string) => void
+  // IE.17 — Revert-to-master path. The matrix calls this when the
+  // operator hits the ↺ button on an override cell; we figure out
+  // whether to drop a pending upsert (unsaved override) or queue a
+  // delete (committed override) here in the panel.
+  addPendingDelete?: (listingImageId: string) => void
   amazonJobs: AmazonJobSummary[]
   dirtyCount: number
   onSavePending: () => Promise<boolean>
@@ -85,6 +90,7 @@ export default function AmazonPanel({
   onCopyToShopifyPool,
   onCopyToShopifyAssignments,
   removePendingUpsert,
+  addPendingDelete,
   amazonJobs,
   dirtyCount,
   onSavePending,
@@ -190,6 +196,41 @@ export default function AmazonPanel({
     for (const [key, u] of pendingUpserts.entries()) {
       if (u.platform === 'AMAZON' && u.variantGroupKey === activeAxis && u.variantGroupValue === groupValue) {
         removePendingUpsert(key)
+      }
+    }
+  }
+
+  // IE.17 — Revert a single override cell back to its inherited /
+  // master-fallback state. Drop the pending upsert if the override is
+  // unsaved; queue a pending delete for the server row if the override
+  // is committed. The resolver cascade re-fires on next render so the
+  // cell snaps to its parent scope or master gallery image.
+  function handleRevertCell(groupValue: string | null, slot: AmazonSlot) {
+    const isAll = amazon.activeMarketplace === 'ALL'
+    const scope = isAll ? 'PLATFORM' : 'MARKETPLACE'
+    const marketplace = isAll ? null : amazon.activeMarketplace
+
+    // 1. Drop any matching pending upsert.
+    for (const [key, u] of pendingUpserts.entries()) {
+      if (u.platform !== 'AMAZON' || u.amazonSlot !== slot) continue
+      if (u.scope !== scope) continue
+      if (u.marketplace !== marketplace) continue
+      const matchesGroup = groupValue === null
+        ? !u.variantGroupKey
+        : u.variantGroupKey === activeAxis && u.variantGroupValue === groupValue
+      if (matchesGroup) removePendingUpsert(key)
+    }
+
+    // 2. Queue delete on any matching server row.
+    if (addPendingDelete) {
+      for (const li of listingImages) {
+        if (li.platform !== 'AMAZON' || li.amazonSlot !== slot) continue
+        if (li.scope !== scope) continue
+        if (li.marketplace !== marketplace) continue
+        const matchesGroup = groupValue === null
+          ? !li.variantGroupKey
+          : li.variantGroupKey === activeAxis && li.variantGroupValue === groupValue
+        if (matchesGroup) addPendingDelete(li.id)
       }
     }
   }
@@ -332,6 +373,7 @@ export default function AmazonPanel({
             onCopyRow={handleCopyRow}
             onClearRow={handleClearRow}
             onCellFileDrop={handleCellFileDrop}
+            onCellRevert={handleRevertCell}
           />
         )}
       </div>

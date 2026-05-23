@@ -32,6 +32,10 @@ interface MatrixProps {
    *  to 'all' so existing call sites that don't pass it still type-
    *  check while the filter substrate is being wired up. */
   cellStatusFilter?: 'all' | 'empty' | 'inherited' | 'override' | 'flagged'
+  /** IE.17 — Revert a single override cell back to its inherited /
+   *  master-fallback state. Hover affordance on cells with
+   *  origin='own'; the cascade re-renders to the parent scope. */
+  onCellRevert?: (groupValue: string | null, slot: AmazonSlot) => void
 }
 
 // ── Slot cell ──────────────────────────────────────────────────────────
@@ -50,6 +54,8 @@ interface SlotCellProps {
   onKeyDown: (e: React.KeyboardEvent) => void
   onFocus: () => void
   onFileDrop?: (file: File) => void
+  /** IE.17 — Revert this cell to its inherited / master-fallback state. */
+  onRevert?: () => void
 }
 
 function SlotCell({
@@ -64,6 +70,7 @@ function SlotCell({
   onKeyDown,
   onFocus,
   onFileDrop,
+  onRevert,
 }: SlotCellProps) {
   const [isOver, setIsOver] = useState(false)
   const isMain = slot === 'MAIN'
@@ -205,6 +212,23 @@ function SlotCell({
           >
             Change
           </button>
+
+          {/* IE.17 — Revert affordance. Only for explicit overrides
+              at this exact scope (origin='own'). Inherited cells +
+              master fallbacks already show their parent — nothing
+              to revert from. */}
+          {cell.origin === 'own' && onRevert && (
+            <button
+              type="button"
+              tabIndex={-1}
+              onClick={(e) => { e.stopPropagation(); onRevert() }}
+              aria-label="Revert override"
+              title="Revert to inherited / master image"
+              className="absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-slate-800/80 text-white opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center hover:bg-slate-900 leading-none text-[10px]"
+            >
+              ↺
+            </button>
+          )}
         </div>
       ) : (
         <button
@@ -336,6 +360,7 @@ export default function AmazonMatrix({
   onCopyRow,
   onClearRow,
   onCellFileDrop,
+  onCellRevert,
   cellStatusFilter = 'all',
 }: MatrixProps) {
   // IE.11 — Match a cell against the active status filter. Empty
@@ -536,6 +561,7 @@ export default function AmazonMatrix({
                         onKeyDown={handleCellKeyDown(rowIdx, colIdx)}
                         onFocus={() => setFocusedCell({ row: rowIdx, col: colIdx })}
                         onFileDrop={(file) => onCellFileDrop(groupValue, slot, file)}
+                        onRevert={onCellRevert ? () => onCellRevert(groupValue, slot) : undefined}
                       />
                     </div>
                   )

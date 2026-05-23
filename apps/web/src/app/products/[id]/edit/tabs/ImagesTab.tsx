@@ -344,6 +344,7 @@ export default function ImagesTab({ product, discardSignal, onDirtyChange }: Pro
               onCopyToShopifyAssignments={() => workspace.copyChannelImages({ fromPlatform: 'AMAZON', toPlatform: 'SHOPIFY', type: 'colorSets', activeAxis })}
               channelLiveImages={channelLiveImages}
               onAdoptToMaster={(url) => handleAdoptToMaster(url)}
+              addPendingDelete={workspace.addPendingDelete}
             />
           )}
           {activeChannel === 'ebay' && (
