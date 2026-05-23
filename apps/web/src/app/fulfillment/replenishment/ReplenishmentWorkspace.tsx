@@ -17,9 +17,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import {
   Download,
+  Eye,
   Keyboard,
   Loader2,
   Package,
+  Settings2,
   ShoppingCart,
   Sparkles,
   X,
@@ -47,18 +49,21 @@ import {
   DensityToggle,
   AutoRefreshSelect,
   GridToolbar,
-  SharedColumnPicker,
   BulkActionShell,
   SortStack,
   KeyboardShortcutsModal,
   FilterPopover,
+  PreferencesModal,
+  ActionCluster,
   type Density,
   type AutoRefreshInterval,
-  type ColumnSpec,
   type BulkAction,
   type SortFieldOption,
   type ShortcutGroup,
   type FilterDimension,
+  type PreferencesValue,
+  type ActionDef,
+  type MenuItemDef,
 } from '@/app/_shared/grid-lens'
 import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
 import type { GridLensColumn, GridLensRow } from '@/app/_shared/grid-lens/types'
@@ -145,15 +150,15 @@ const REP_COLUMNS_CATALOG: ReadonlyArray<GridLensColumn & { alwaysOn?: boolean }
   { key: 'velocity',   label: 'Vel/day',     width: 80 },
   { key: 'demand',     label: 'Demand (LT)', width: 100 },
   { key: 'reorderQty', label: 'Suggest qty', width: 100 },
-  { key: 'actions',    label: '',            width: 120, alwaysOn: true },
+  // XG.4 — locked-trailing so the shared PreferencesModal renders it
+  // as a disabled toggle + PG.6 sticky-right freeze pins it on
+  // horizontal scroll. `alwaysOn` is kept for the legacy
+  // SharedColumnPicker codepath (removed in this phase).
+  { key: 'actions',    label: '',            width: 160, locked: true, alwaysOn: true },
 ]
 const REP_DEFAULT_VISIBLE: ReadonlyArray<RepColumnKey> = [
   'product', 'urgency', 'stock', 'daysLeft', 'velocity', 'demand', 'reorderQty', 'actions',
 ]
-const REP_COLUMN_PICKER_OPTIONS: ReadonlyArray<ColumnSpec<RepColumnKey>> = REP_COLUMNS_CATALOG
-  .filter((c) => c.label.length > 0)
-  .map((c) => ({ key: c.key as RepColumnKey, label: c.label, alwaysOn: c.alwaysOn }))
-
 const REP_SORT_FIELDS: ReadonlyArray<SortFieldOption> = [
   { value: 'sku',         label: 'SKU' },
   { value: 'name',        label: 'Name' },
@@ -295,6 +300,25 @@ export default function ReplenishmentWorkspace() {
   useEffect(() => {
     try { window.localStorage.setItem('nexus-replenishment-pageSize', String(pageSize)) } catch {}
   }, [pageSize])
+
+  // XG.4 — preferences modal (replaces SharedColumnPicker). Sticky
+  // toggles persist to localStorage replenishment.*; pageSize +
+  // visibleColumns + sortBy already have their own state above so the
+  // modal just reads + writes them via shared props.
+  const [preferencesOpen, setPreferencesOpen] = useState(false)
+  const [stickyFirstColumn, setStickyFirstColumn] = useState<boolean>(true)
+  const [stickyLastColumn, setStickyLastColumn] = useState<boolean>(true)
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    try {
+      const sl = window.localStorage.getItem('replenishment.stickyFirstColumn')
+      if (sl !== null) setStickyFirstColumn(sl !== 'false')
+      const sr = window.localStorage.getItem('replenishment.stickyLastColumn')
+      if (sr !== null) setStickyLastColumn(sr !== 'false')
+    } catch { /* ignore */ }
+  }, [])
+  useEffect(() => { try { window.localStorage.setItem('replenishment.stickyFirstColumn', String(stickyFirstColumn)) } catch {} }, [stickyFirstColumn])
+  useEffect(() => { try { window.localStorage.setItem('replenishment.stickyLastColumn', String(stickyLastColumn)) } catch {} }, [stickyLastColumn])
   // W2.2 — replaces window.prompt for dismiss-with-reason. Holds the
   // pending request; cleared on confirm/cancel. `onConfirm` receives
   // the trimmed reason or null when the operator left it blank.
@@ -941,35 +965,48 @@ export default function ReplenishmentWorkspace() {
       case 'actions': {
         if (row.isParent) return null
         const s = row.suggestion!
-        return (
-          <div className="flex items-center gap-1">
-            <button
-              type="button"
-              onClick={(e) => { e.stopPropagation(); void draftSinglePo(s) }}
-              disabled={!s.needsReorder}
-              className="h-6 px-2 text-xs bg-slate-900 dark:bg-slate-700 text-white rounded hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed inline-flex items-center gap-1"
-              title={s.isManufactured ? 'Create work order' : 'Draft PO'}
-            >
-              <ShoppingCart size={10} />
-              {s.isManufactured ? 'WO' : 'PO'}
-            </button>
-            {s.recommendationId && (
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation()
+        // XG.4 — shared ActionCluster. Eye → forecast drawer for
+        // every row; ShoppingCart → Draft PO/WO disabled when
+        // !needsReorder; long-tail dropdown carries Dismiss with its
+        // existing askDismissReason flow. Replaces the bespoke two-
+        // button JSX while preserving every action verb + the
+        // !needsReorder gating that pre-existed.
+        const inlineActions: ActionDef[] = [
+          {
+            id: 'open-forecast',
+            icon: Eye,
+            label: 'Open forecast',
+            onClick: () => setDrawerProductId(s.productId),
+          },
+          {
+            id: 'draft-po',
+            icon: ShoppingCart,
+            label: s.isManufactured ? 'Create work order' : 'Draft PO',
+            disabled: !s.needsReorder,
+            onClick: () => { void draftSinglePo(s) },
+          },
+        ]
+        const dropdownItems: MenuItemDef[] = s.recommendationId
+          ? [
+              {
+                id: 'dismiss',
+                label: 'Dismiss recommendation',
+                destructive: true,
+                onClick: () => {
                   askDismissReason(
                     t('replenishment.dismiss.titleSku', { sku: s.sku }),
                     (reason) => { void dismissRow(s, reason) },
                   )
-                }}
-                className="h-6 px-1.5 text-xs text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-900 rounded hover:bg-rose-50 dark:hover:bg-rose-950/40"
-                title="Dismiss recommendation"
-              >
-                <X size={10} />
-              </button>
-            )}
-          </div>
+                },
+              },
+            ]
+          : []
+        return (
+          <ActionCluster
+            rowId={s.productId}
+            inlineActions={inlineActions}
+            dropdownItems={dropdownItems}
+          />
         )
       }
       default:
@@ -1326,13 +1363,15 @@ export default function ReplenishmentWorkspace() {
           />
         }
         columns={
-          <SharedColumnPicker<RepColumnKey>
-            allColumns={REP_COLUMN_PICKER_OPTIONS}
-            visible={visibleColumns}
-            onChange={setVisibleColumns}
-            defaultVisible={REP_DEFAULT_VISIBLE}
-            buttonLabel={`Columns (${visibleColumns.length})`}
-          />
+          <button
+            type="button"
+            onClick={() => setPreferencesOpen(true)}
+            className="h-11 sm:h-8 px-2.5 text-base inline-flex items-center gap-1.5 border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800 text-slate-600"
+            title="Preferences"
+            aria-haspopup="dialog"
+          >
+            <Settings2 size={12} /> Preferences ({visibleColumns.length})
+          </button>
         }
         density={<DensityToggle density={density} onChange={setDensity} />}
         autoRefresh={
@@ -1487,6 +1526,8 @@ export default function ReplenishmentWorkspace() {
               riskFlaggedSkus={_REP_EMPTY_SET}
               renderCell={renderCell}
               storageKey="replenishment-grid"
+              stickyLeft={stickyFirstColumn}
+              stickyRight={stickyLastColumn}
             />
             <GridFooter
               count={gridRowsPage.length}
@@ -1523,6 +1564,46 @@ export default function ReplenishmentWorkspace() {
           onClose={() => setHelpOpen(false)}
         />
       )}
+
+      {/* XG.4 — shared Preferences modal. Replaces SharedColumnPicker.
+          Page-size + sticky toggles + visible columns + sort all wire
+          to the existing workspace state; URL params (sortBy/sortDir)
+          persist via updateUrl. */}
+      <PreferencesModal
+        open={preferencesOpen}
+        onClose={() => setPreferencesOpen(false)}
+        allColumns={REP_COLUMNS_CATALOG}
+        defaultVisible={[...REP_DEFAULT_VISIBLE]}
+        sortFieldOptions={[...REP_SORT_FIELDS]}
+        pageSizeChoices={[25, 50, 100, 200]}
+        value={{
+          pageSize,
+          visibleColumns,
+          stickyFirstColumn,
+          stickyLastColumn,
+          sortBy,
+          sortDir,
+        }}
+        onConfirm={(next: PreferencesValue) => {
+          if (next.pageSize !== pageSize) {
+            setPageSize(next.pageSize)
+            setPage(1)
+          }
+          // Drop 'actions' if the modal smuggled it through — locked
+          // detection should prevent it, but defense in depth.
+          setVisibleColumns(
+            next.visibleColumns.filter((k) => k !== 'actions') as RepColumnKey[],
+          )
+          setStickyFirstColumn(next.stickyFirstColumn)
+          setStickyLastColumn(next.stickyLastColumn)
+          if (next.sortBy !== sortBy || next.sortDir !== sortDir) {
+            updateUrl({
+              sortBy: next.sortBy === 'urgency' ? undefined : next.sortBy,
+              sortDir: next.sortDir === 'asc' ? 'asc' : undefined,
+            })
+          }
+        }}
+      />
 
       {/* Bulk-PO modal */}
       {bulkOpen && (

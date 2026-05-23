@@ -56,11 +56,11 @@ export interface PreferencesModalProps {
   value: PreferencesValue
   onConfirm: (next: PreferencesValue) => void
   /** Workspace's full column registry (visible + hidden + locked). */
-  allColumns: PreferencesColumnSpec[]
+  allColumns: readonly PreferencesColumnSpec[]
   /** Workspace's "Reset" target visible-columns list. */
-  defaultVisible: string[]
+  defaultVisible: readonly string[]
   /** Workspace's sort field options. */
-  sortFieldOptions: Array<{ value: string; label: string }>
+  sortFieldOptions: ReadonlyArray<{ value: string; label: string }>
   /** Optional override of the 20/50/100/250 page-size choices.
    *  Pass an empty array to hide the page-size section entirely
    *  (workspaces with a fixed page size, e.g. /fulfillment/stock at
@@ -190,7 +190,7 @@ export function PreferencesModal({
   const resetAll = () => {
     setDraft({
       ...SHARED_DEFAULTS,
-      visibleColumns: defaultVisible,
+      visibleColumns: [...defaultVisible],
     })
   }
 
