@@ -12,8 +12,8 @@
 // IE.4b's cron ships this strip is mostly read-only with refresh
 // only as a manual override.
 
-import { useMemo, useState } from 'react'
-import { AlertTriangle, Loader2, RefreshCcw } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { AlertTriangle, ChevronDown, ChevronRight, Loader2, RefreshCcw } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { cn } from '@/lib/utils'
 import { useTranslations } from '@/lib/i18n/use-translations'
@@ -53,6 +53,19 @@ export default function LiveChannelStrip({
   const { t } = useTranslations()
   const [refreshing, setRefreshing] = useState<Record<string, boolean>>({})
   const [refreshError, setRefreshError] = useState<string | null>(null)
+  // IA.8 — Persisted collapse state. Key namespaced by channel so a
+  // collapsed Amazon strip doesn't auto-collapse the eBay one when
+  // those land. Default open on first visit; on subsequent loads
+  // honour the operator's last choice.
+  const collapseKey = `ie.liveStrip.collapsed.${channel}`
+  const [collapsed, setCollapsed] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false
+    try { return window.localStorage.getItem(collapseKey) === '1' } catch { return false }
+  })
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    try { window.localStorage.setItem(collapseKey, collapsed ? '1' : '0') } catch { /* ignore */ }
+  }, [collapsed, collapseKey])
 
   // Group live images by marketplace (Amazon only has marketplace
   // today). Within each, group by externalSku so the strip surfaces
@@ -118,7 +131,17 @@ export default function LiveChannelStrip({
 
   return (
     <section className="mb-4 bg-slate-50 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden">
-      <header className="px-4 py-2 border-b border-slate-200 dark:border-slate-700 flex items-center gap-2">
+      {/* IA.8 — Header is a button that toggles the body. Chevron
+          rotates; whole row is clickable so the hit target is large. */}
+      <button
+        type="button"
+        onClick={() => setCollapsed((c) => !c)}
+        aria-expanded={!collapsed}
+        className="w-full px-4 py-2 border-b border-slate-200 dark:border-slate-700 flex items-center gap-2 hover:bg-slate-100/50 dark:hover:bg-slate-800/30 transition-colors"
+      >
+        {collapsed
+          ? <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+          : <ChevronDown className="w-3.5 h-3.5 text-slate-400" />}
         <span className="text-xs font-semibold text-slate-600 dark:text-slate-300">
           {t('products.edit.images.liveStrip.headerTitle', {
             channel: channel.charAt(0) + channel.slice(1).toLowerCase(),
@@ -132,8 +155,9 @@ export default function LiveChannelStrip({
         {refreshError && (
           <span className="text-[11px] text-red-500 ml-auto">{refreshError}</span>
         )}
-      </header>
+      </button>
 
+      {collapsed ? null : (
       <div className="px-4 py-3 space-y-3">
         {!supported && (
           <p className="text-xs text-slate-500 dark:text-slate-400 italic">
@@ -167,17 +191,33 @@ export default function LiveChannelStrip({
                       <button
                         key={li.id}
                         type="button"
+                        // IA.8 — Live thumbs are draggable. Same dataTransfer
+                        // keys the master gallery uses (application/nexus-
+                        // image-url + -image-id), so any Amazon matrix cell
+                        // accepts the drop and creates a pending upsert via
+                        // the existing addPendingUpsert flow. Save/Discard
+                        // in the action bar commits or rolls back like any
+                        // other channel change.
+                        draggable
+                        onDragStart={(e) => {
+                          e.dataTransfer.effectAllowed = 'copy'
+                          e.dataTransfer.setData('application/nexus-image-url', li.url)
+                          // No master ProductImage yet — leave the id slot
+                          // empty so the cell handler treats this as a
+                          // URL-only assignment (sourceProductImageId=null).
+                          e.dataTransfer.setData('application/nexus-image-id', '')
+                        }}
                         onClick={() => onOpenDiff?.(li, nexusUrl)}
                         className={cn(
-                          'relative w-14 h-14 rounded-md border bg-white dark:bg-slate-800 overflow-hidden hover:ring-2 hover:ring-blue-300 transition-all',
+                          'relative w-14 h-14 rounded-md border bg-white dark:bg-slate-800 overflow-hidden hover:ring-2 hover:ring-blue-300 transition-all cursor-grab active:cursor-grabbing',
                           drift
                             ? 'border-amber-400'
                             : 'border-slate-200 dark:border-slate-700',
                         )}
-                        title={`${li.slot ?? '?'}  ${li.width ?? '?'}×${li.height ?? '?'}${drift ? ' — differs from Nexus' : ''}`}
+                        title={`${li.slot ?? '?'}  ${li.width ?? '?'}×${li.height ?? '?'} — drag onto a cell to assign${drift ? ' (differs from Nexus)' : ''}`}
                       >
                         {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={li.url} alt="" className="w-full h-full object-contain" loading="lazy" decoding="async" />
+                        <img src={li.url} alt="" className="w-full h-full object-contain pointer-events-none" loading="lazy" decoding="async" />
                         <div className="absolute top-0 left-0 text-[8px] bg-black/50 text-white px-0.5 leading-none">
                           {li.slot ?? '·'}
                         </div>
@@ -221,6 +261,7 @@ export default function LiveChannelStrip({
           )
         })}
       </div>
+      )}
     </section>
   )
 }
