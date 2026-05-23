@@ -51,6 +51,7 @@ import {
 } from '../services/images/image-hash.service.js'
 import { refreshAmazonLiveImages } from '../services/images/amazon-live-images.service.js'
 import { refreshEbayLiveImages } from '../services/images/ebay-live-images.service.js'
+import { refreshShopifyLiveImages } from '../services/images/shopify-live-images.service.js'
 import { productEventService } from '../services/product-event.service.js'
 
 // PG.1b — fire IMAGES_UPDATED to refresh ProductReadCache.imageUrl
@@ -962,9 +963,21 @@ const productImagesCrudRoutes: FastifyPluginAsync = async (fastify) => {
         }
       }
 
+      // PB.8b — Shopify live-image refresh. Fetches /products/{id}.json,
+      // parses pool images + per-variant image_id assignments.
+      if (channel === 'SHOPIFY') {
+        try {
+          const result = await refreshShopifyLiveImages({ productId: id })
+          return reply.send(result)
+        } catch (err) {
+          const message = err instanceof Error ? err.message : 'Refresh failed'
+          return reply.status(500).send({ error: 'REFRESH_FAILED', message })
+        }
+      }
+
       return reply.status(501).send({
         error: 'CHANNEL_NOT_IMPLEMENTED',
-        message: `Live-image refresh for ${channel} not yet wired. PB.8b will add Shopify.`,
+        message: `Live-image refresh for ${channel} not yet wired.`,
       })
     },
   )

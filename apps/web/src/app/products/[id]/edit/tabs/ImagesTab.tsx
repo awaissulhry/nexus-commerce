@@ -605,6 +605,9 @@ export default function ImagesTab({ product, discardSignal, onDirtyChange }: Pro
                 showToast(message)
                 return { success: res.ok && body.success !== false, message }
               }}
+              channelLiveImages={channelLiveImages}
+              onReload={workspace.reload}
+              onAdoptToMaster={(url) => handleAdoptToMaster(url)}
             />
           )}
         </div>

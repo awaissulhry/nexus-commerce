@@ -29,7 +29,8 @@ import ChannelPublishPreviewModal from '../ChannelPublishPreviewModal'
 import ChannelStaleBanner from '../ChannelStaleBanner'
 import ImagePublishHistory from '../ImagePublishHistory'
 import RecentChannelJobsStrip from '../RecentChannelJobsStrip'
-import type { ListingImage, PendingUpsert, ProductImage, VariantSummary, WorkspaceProduct } from '../types'
+import LiveChannelStrip from '../LiveChannelStrip'
+import type { ChannelLiveImage, ListingImage, PendingUpsert, ProductImage, VariantSummary, WorkspaceProduct } from '../types'
 
 interface CopyResult { copied: number; skipped: number }
 
@@ -61,6 +62,10 @@ interface Props {
   onCopyFromAmazonAssignments: () => CopyResult
   publishedCount: number
   onPublish: () => Promise<{ success: boolean; message: string }>
+  // PB.8b — live channel strip props (mirrors AmazonPanel + EbayPanel).
+  channelLiveImages?: ChannelLiveImage[]
+  onReload?: () => void
+  onAdoptToMaster?: (url: string) => void | Promise<void>
 }
 
 interface PoolItem {
@@ -95,6 +100,9 @@ export default function ShopifyPanel({
   onCopyFromAmazonAssignments,
   publishedCount,
   onPublish,
+  channelLiveImages = [],
+  onReload,
+  onAdoptToMaster,
 }: Props) {
   const [previewOpen, setPreviewOpen] = useState(false)
   const [publishPreviewOpen, setPublishPreviewOpen] = useState(false)
@@ -344,6 +352,23 @@ export default function ShopifyPanel({
           <input ref={fileInputRef} type="file" accept="image/*" multiple className="sr-only" onChange={(e) => handleFiles(Array.from(e.target.files ?? []))} />
         </div>
       </div>
+
+      {/* PB.8b — Live channel strip (Shopify) */}
+      {onReload && (
+        <div className="px-5 pt-3">
+          <LiveChannelStrip
+            productId={productId}
+            channel="SHOPIFY"
+            marketplaces={['GLOBAL']}
+            liveImages={channelLiveImages}
+            listingImages={listingImages}
+            onRefreshed={onReload}
+            {...(onAdoptToMaster
+              ? { onAdoptToMaster: (url: string) => { void onAdoptToMaster(url) } }
+              : {})}
+          />
+        </div>
+      )}
 
       {/* PB.3a — Pre-publish validation gate */}
       <ChannelValidationBanner
