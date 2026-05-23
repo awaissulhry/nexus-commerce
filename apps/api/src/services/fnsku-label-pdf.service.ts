@@ -11,6 +11,7 @@
  */
 
 import PDFDocument from 'pdfkit'
+import { PassThrough } from 'node:stream'
 
 // ── Types (mirrors frontend types.ts) ────────────────────────────────────────
 
@@ -631,56 +632,78 @@ export function computeSheetLayout(widthMm: number, heightMm: number, template: 
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
+/**
+ * Stream variant — pipes a PDFDocument through a PassThrough as labels are
+ * drawn. The returned `stream` can be piped to an HTTP response so memory
+ * stays flat regardless of label count. `done` resolves when all pages have
+ * been written and the document end-signal has fired.
+ *
+ * Errors that occur mid-render are surfaced via `done.catch(...)`; callers
+ * MUST attach a handler or destroy(err) the stream to propagate to the client.
+ */
+export function streamFnskuLabelPdf(
+  items: LabelItem[],
+  template: TemplateConfig,
+  mode: 'label' | 'a4' = 'label',
+): { stream: PassThrough; done: Promise<void> } {
+  const { widthMm, heightMm } = template.labelSize
+  const wPt = mm(widthMm)
+  const hPt = mm(heightMm)
+
+  const stream = new PassThrough()
+  const doc = new PDFDocument({
+    size: mode === 'label' ? [wPt, hPt] : 'A4',
+    margin: 0,
+    autoFirstPage: false,
+  })
+  doc.pipe(stream)
+
+  const done = (async () => {
+    try {
+      if (mode === 'label') {
+        for (const item of items) {
+          doc.addPage({ size: [wPt, hPt], margin: 0 })
+          await drawLabel(doc, 0, 0, wPt, hPt, item, template)
+        }
+      } else {
+        const { cols, rows, marginMm, gapMm, effectiveLabelW } = computeSheetLayout(widthMm, heightMm, template)
+        const marginPt = mm(marginMm)
+        const gapPt    = mm(gapMm)
+        const effWPt   = mm(effectiveLabelW)
+        let col = 0, row = 0, pageOpen = false
+        for (const item of items) {
+          if (!pageOpen) { doc.addPage({ size: 'A4', margin: 0 }); pageOpen = true }
+          const xPt = marginPt + col * (effWPt + gapPt)
+          const yPt = marginPt + row * (hPt    + gapPt)
+          await drawLabel(doc, xPt, yPt, effWPt, hPt, item, template)
+          col++
+          if (col >= cols) { col = 0; row++ }
+          if (row >= rows) { col = 0; row = 0; pageOpen = false }
+        }
+      }
+      doc.end()
+    } catch (err) {
+      doc.end()
+      throw err
+    }
+  })()
+
+  return { stream, done }
+}
+
+/**
+ * Buffer variant — kept for callers that need the bytes in memory (tests,
+ * the rare CLI path). For the HTTP route, prefer streamFnskuLabelPdf so the
+ * full PDF never holds in RAM.
+ */
 export async function renderFnskuLabelPdf(
   items: LabelItem[],
   template: TemplateConfig,
   mode: 'label' | 'a4' = 'label',
 ): Promise<Buffer> {
-  const { widthMm, heightMm } = template.labelSize
-  const wPt = mm(widthMm)
-  const hPt = mm(heightMm)
+  const { stream, done } = streamFnskuLabelPdf(items, template, mode)
   const chunks: Buffer[] = []
-
-  if (mode === 'label') {
-    const doc = new PDFDocument({ size: [wPt, hPt], margin: 0, autoFirstPage: false })
-    doc.on('data', (c: Buffer) => chunks.push(c))
-    const done = new Promise<Buffer>((res, rej) => {
-      doc.on('end', () => res(Buffer.concat(chunks)))
-      doc.on('error', rej)
-    })
-    for (const item of items) {
-      doc.addPage({ size: [wPt, hPt], margin: 0 })
-      await drawLabel(doc, 0, 0, wPt, hPt, item, template)
-    }
-    doc.end()
-    return done
-
-  } else {
-    const { cols, rows, marginMm, gapMm, effectiveLabelW } = computeSheetLayout(widthMm, heightMm, template)
-    const marginPt = mm(marginMm)
-    const gapPt    = mm(gapMm)
-    const effWPt   = mm(effectiveLabelW)
-
-    const doc = new PDFDocument({ size: 'A4', margin: 0, autoFirstPage: false })
-    doc.on('data', (c: Buffer) => chunks.push(c))
-    const done = new Promise<Buffer>((res, rej) => {
-      doc.on('end', () => res(Buffer.concat(chunks)))
-      doc.on('error', rej)
-    })
-
-    let col = 0, row = 0, pageOpen = false
-
-    for (const item of items) {
-      if (!pageOpen) { doc.addPage({ size: 'A4', margin: 0 }); pageOpen = true }
-      const xPt = marginPt + col * (effWPt + gapPt)
-      const yPt = marginPt + row * (hPt    + gapPt)
-      await drawLabel(doc, xPt, yPt, effWPt, hPt, item, template)
-      col++
-      if (col >= cols) { col = 0; row++ }
-      if (row >= rows) { col = 0; row = 0; pageOpen = false }
-    }
-
-    doc.end()
-    return done
-  }
+  for await (const chunk of stream) chunks.push(chunk as Buffer)
+  await done
+  return Buffer.concat(chunks)
 }

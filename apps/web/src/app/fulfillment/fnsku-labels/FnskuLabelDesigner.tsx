@@ -27,6 +27,52 @@ const MARKETPLACES: Array<{ code: string; label: string }> = [
   { code: 'UK', label: 'United Kingdom (UK)' },
 ]
 
+// Hard cap on labels per generation. PDFs above this would consume excessive
+// RAM and produce ~50MB+ files that crash typical browsers when opening.
+// 5000 is the upper bound of any realistic Amazon FBA inbound shipment.
+const MAX_LABELS_PER_PDF = 5000
+
+// localStorage payload version. Bump when LabelItem shape changes so the
+// restore path can migrate or discard cleanly instead of silently corrupting.
+const LS_VERSION = 2
+const LS_KEY = 'fnsku-label-items'
+
+interface LsPayload { version: number; items: LabelItem[] }
+
+function loadItemsFromLs(): LabelItem[] {
+  try {
+    const raw = localStorage.getItem(LS_KEY)
+    if (!raw) return []
+    const parsed = JSON.parse(raw)
+    // v1: raw array (pre-FN.4) — migrate by wrapping.
+    // v2: { version: 2, items: [...] }
+    let items: LabelItem[]
+    if (Array.isArray(parsed)) {
+      items = parsed as LabelItem[]
+    } else if (parsed && typeof parsed === 'object' && parsed.version === LS_VERSION && Array.isArray(parsed.items)) {
+      items = parsed.items
+    } else {
+      // Unknown / future schema — discard rather than corrupt.
+      console.warn('[fnsku-labels] localStorage payload has unknown version, discarding')
+      return []
+    }
+    // Normalise: ensure quantity is always >= 1
+    return items.map(it => ({ ...it, quantity: Math.max(1, it.quantity || 1) }))
+  } catch (e) {
+    console.warn('[fnsku-labels] Failed to restore items from localStorage:', e)
+    return []
+  }
+}
+
+function saveItemsToLs(items: LabelItem[]): void {
+  try {
+    const payload: LsPayload = { version: LS_VERSION, items }
+    localStorage.setItem(LS_KEY, JSON.stringify(payload))
+  } catch (e) {
+    console.warn('[fnsku-labels] localStorage quota exceeded — label queue not persisted:', e)
+  }
+}
+
 const DEFAULT_TEMPLATE: TemplateConfig = {
   labelSize: { widthMm: 101.6, heightMm: 76.2, preset: '4x3in' },
   // Layout
@@ -73,24 +119,16 @@ const DEFAULT_TEMPLATE: TemplateConfig = {
 }
 
 export default function FnskuLabelDesigner() {
-  const [items, setItems] = useState<LabelItem[]>(() => {
-    try {
-      const saved = localStorage.getItem('fnsku-label-items')
-      if (!saved) return []
-      const parsed: LabelItem[] = JSON.parse(saved)
-      // Normalise in case of corruption: ensure quantity is always >= 1
-      return parsed.map(it => ({ ...it, quantity: Math.max(1, it.quantity || 1) }))
-    } catch (e) {
-      console.warn('[fnsku-labels] Failed to restore items from localStorage:', e)
-      return []
-    }
-  })
+  const [items, setItems] = useState<LabelItem[]>(() => loadItemsFromLs())
   const [selectedIdx, setSelectedIdx] = useState(0)
   const [template, setTemplate] = useState<TemplateConfig>(DEFAULT_TEMPLATE)
   const [savedTemplates, setSavedTemplates] = useState<SavedTemplate[]>([])
   const [activeTemplateId, setActiveTemplateId] = useState<string | null>(null)
   const [fetchingFnskus, setFetchingFnskus] = useState(false)
   const [pdfLoading, setPdfLoading] = useState<'label' | 'a4' | null>(null)
+  // Bytes received from the streaming PDF response — surfaces a "X.X MB" chip
+  // next to the spinner for large jobs. Reset to 0 between downloads.
+  const [pdfBytesReceived, setPdfBytesReceived] = useState(0)
   const [marketplace, setMarketplace] = useState<string>(() => {
     try { return localStorage.getItem('fnsku-label-marketplace') || 'IT' }
     catch { return 'IT' }
@@ -148,7 +186,7 @@ export default function FnskuLabelDesigner() {
           fnskuLoading: true,
         }))
         setItems(seeded)
-        try { localStorage.setItem('fnsku-label-items', JSON.stringify(seeded)) } catch {}
+        saveItemsToLs(seeded)
         setShipmentContext({
           id: shipment.id,
           reference: shipment.reference ?? shipment.name ?? null,
@@ -248,11 +286,7 @@ export default function FnskuLabelDesigner() {
   const handleItemsChange = useCallback((next: LabelItem[]) => {
     setItems(next)
     setSelectedIdx(i => Math.min(i, Math.max(0, next.length - 1)))
-    try {
-      localStorage.setItem('fnsku-label-items', JSON.stringify(next))
-    } catch (e) {
-      console.warn('[fnsku-labels] localStorage quota exceeded — label queue not persisted:', e)
-    }
+    saveItemsToLs(next)
     // Auto-fetch for items missing FNSKU or listing title
     const newOnes = next.filter(it => (!it.fnsku || !it.listingTitle) && !it.fnskuLoading && it.sku)
     if (newOnes.length > 0) fetchFnskus(newOnes)
@@ -287,6 +321,15 @@ export default function FnskuLabelDesigner() {
       }
     }
 
+    // Pre-flight: label count cap. PDFs above MAX_LABELS_PER_PDF crash browsers.
+    if (totalLabelCount > MAX_LABELS_PER_PDF) {
+      alert(
+        `Cannot generate ${totalLabelCount.toLocaleString()} labels in one PDF — limit is ${MAX_LABELS_PER_PDF.toLocaleString()}.\n\n` +
+        `Reduce per-SKU quantities or split into multiple shipments.`,
+      )
+      return
+    }
+
     // Pre-flight: malformed FNSKU (must be X + 9 alphanumeric)
     const malformed = items.filter(it => it.fnsku && !isValidFnskuFormat(it.fnsku))
     if (malformed.length > 0) {
@@ -304,6 +347,7 @@ export default function FnskuLabelDesigner() {
       for (let i = 0; i < Math.max(1, it.quantity); i++) allLabels.push(it)
     }
     setPdfLoading(mode)
+    setPdfBytesReceived(0)
     try {
       const res = await fetch(`${getBackendUrl()}/api/fulfillment/fnsku/pdf`, {
         method: 'POST',
@@ -311,17 +355,45 @@ export default function FnskuLabelDesigner() {
         body: JSON.stringify({ items: allLabels, template, mode }),
       })
       if (!res.ok) throw new Error(await res.text())
-      const blob = await res.blob()
+
+      // Read the streaming response chunk-by-chunk so we can surface a live
+      // bytes-received indicator. Fastify doesn't set Content-Length when
+      // streaming so absolute % isn't available, but received-bytes is enough
+      // to show the operator that progress is happening on large jobs.
+      const chunks: Uint8Array[] = []
+      if (res.body) {
+        const reader = res.body.getReader()
+        let received = 0
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+          if (value) {
+            chunks.push(value)
+            received += value.length
+            setPdfBytesReceived(received)
+          }
+        }
+      } else {
+        chunks.push(new Uint8Array(await res.arrayBuffer()))
+      }
+      const blob = new Blob(chunks as unknown as BlobPart[], { type: 'application/pdf' })
       const url  = URL.createObjectURL(blob)
       const a    = document.createElement('a')
       a.href     = url
-      a.download = mode === 'a4' ? 'fnsku-labels-a4.pdf' : 'fnsku-labels.pdf'
+      // Filename: include shipment ref (when pre-filled), date, and mode.
+      // Example: fnsku-shipment-INB123-2026-05-23-label.pdf
+      const datePart  = new Date().toISOString().slice(0, 10)
+      const shipPart  = shipmentContext
+        ? `shipment-${(shipmentContext.reference ?? shipmentContext.id).replace(/[^\w-]/g, '_')}-`
+        : ''
+      a.download = `fnsku-${shipPart}${datePart}-${mode}.pdf`
       a.click()
       URL.revokeObjectURL(url)
     } catch (err: any) {
       alert(`PDF generation failed: ${err?.message ?? String(err)}`)
     } finally {
       setPdfLoading(null)
+      setPdfBytesReceived(0)
     }
   }
 
@@ -453,7 +525,20 @@ export default function FnskuLabelDesigner() {
             <AlertTriangle size={12} /> Module {(moduleWidthMm * 1000).toFixed(0)}µm
           </span>
         )}
-        <span className="text-xs text-slate-400">{totalLabelCount} label{totalLabelCount !== 1 ? 's' : ''} total</span>
+        <span
+          className={`text-xs tabular-nums ${
+            totalLabelCount > MAX_LABELS_PER_PDF
+              ? 'text-red-600 dark:text-red-400 font-semibold'
+              : totalLabelCount > MAX_LABELS_PER_PDF * 0.8
+                ? 'text-amber-600 dark:text-amber-400'
+                : 'text-slate-400'
+          }`}
+          title={totalLabelCount > MAX_LABELS_PER_PDF
+            ? `Above ${MAX_LABELS_PER_PDF.toLocaleString()} cap — generation will be blocked`
+            : `${MAX_LABELS_PER_PDF.toLocaleString()} max per PDF`}
+        >
+          {totalLabelCount.toLocaleString()} label{totalLabelCount !== 1 ? 's' : ''} total
+        </span>
         <span className="text-xs text-slate-400 hidden sm:inline">·</span>
         <span className="text-xs text-slate-400 hidden sm:inline">{a4Cols}×{a4Rows} = {labelsPerSheet}/sheet</span>
         {items.length > 0 && (
@@ -491,6 +576,13 @@ export default function FnskuLabelDesigner() {
             {pdfLoading === 'a4' ? <Loader2 size={13} className="animate-spin" /> : <FileDown size={13} />}
             PDF (A4)
           </button>
+          {pdfLoading !== null && pdfBytesReceived > 0 && (
+            <span className="text-[11px] text-slate-500 dark:text-slate-400 tabular-nums" title="Bytes received from streaming PDF render">
+              {pdfBytesReceived > 1024 * 1024
+                ? `${(pdfBytesReceived / 1024 / 1024).toFixed(1)} MB`
+                : `${(pdfBytesReceived / 1024).toFixed(0)} KB`}
+            </span>
+          )}
         </div>
       </div>
 

@@ -298,7 +298,16 @@ export function SkuPanel({ items, onChange, onFetchFnskus, fetchingFnskus }: Pro
             {fetchingFnskus ? 'Fetching from Amazon…' : 'Re-fetch all FNSKUs from Amazon'}
           </button>
           <button
-            onClick={() => { onChange([]); try { localStorage.removeItem('fnsku-label-items') } catch {} }}
+            onClick={() => {
+              const totalQty = items.reduce((s, it) => s + Math.max(1, it.quantity), 0)
+              const ok = window.confirm(
+                `Clear ${items.length} SKU${items.length !== 1 ? 's' : ''} (${totalQty.toLocaleString()} label${totalQty !== 1 ? 's' : ''})?\n\n` +
+                `This cannot be undone.`,
+              )
+              if (!ok) return
+              onChange([])
+              try { localStorage.removeItem('fnsku-label-items') } catch {}
+            }}
             className="w-full inline-flex items-center justify-center gap-1.5 h-6 text-xs rounded border border-red-200 dark:border-red-900 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30"
           >
             Clear all SKUs

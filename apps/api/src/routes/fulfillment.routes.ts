@@ -194,7 +194,7 @@ import {
   updateTemplate as updateFnskuTemplate,
   deleteTemplate as deleteFnskuTemplate,
 } from '../services/fnsku-template.service.js'
-import { renderFnskuLabelPdf } from '../services/fnsku-label-pdf.service.js'
+import { streamFnskuLabelPdf } from '../services/fnsku-label-pdf.service.js'
 import {
   publishInboundEvent,
   subscribeInboundEvents,
@@ -11340,13 +11340,27 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
         mode?: 'label' | 'a4'
       }
       if (!items?.length) return reply.code(400).send({ error: 'items[] required' })
-      const buffer   = await renderFnskuLabelPdf(items, template, mode)
-      const filename = mode === 'a4' ? 'fnsku-labels-a4.pdf' : 'fnsku-labels.pdf'
+
+      // Timestamped filename keeps multiple downloads distinct in the user's
+      // Downloads folder. Client may override via Save-As; this is the default.
+      const datePart = new Date().toISOString().slice(0, 10)
+      const filename = `fnsku-${datePart}-${mode}.pdf`
+
+      // Stream the PDF directly to the response so memory stays flat for
+      // multi-thousand-label jobs (would otherwise buffer ~50MB+ in RAM).
+      const { stream, done } = streamFnskuLabelPdf(items, template, mode)
+      done.catch((err: any) => {
+        fastify.log.error({ err }, '[fnsku/pdf] mid-stream render failed')
+        // Destroy the stream so the client sees a truncated response and
+        // doesn't sit waiting indefinitely.
+        stream.destroy(err)
+      })
+
       reply
         .header('Content-Type', 'application/pdf')
         .header('Content-Disposition', `attachment; filename="${filename}"`)
         .header('Cache-Control', 'no-store')
-      return reply.send(buffer)
+      return reply.send(stream)
     } catch (err: any) {
       fastify.log.error({ err }, '[fnsku/pdf] failed')
       return reply.code(500).send({ error: err?.message ?? String(err) })
