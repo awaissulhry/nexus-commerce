@@ -3,7 +3,7 @@
 // IM.4 — Amazon publish controls and feed status strip.
 
 import { useState } from 'react'
-import { AlertTriangle, ChevronDown, CheckCircle2, Loader2, Clock } from 'lucide-react'
+import { AlertTriangle, ChevronDown, CheckCircle2, Loader2, Clock, RotateCcw } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { cn } from '@/lib/utils'
 import type { AmazonMarketplace } from './useAmazonImages'
@@ -32,6 +32,8 @@ interface Props {
   isExporting: boolean
   // IA.2 — Open the pre-publish preview modal for a given marketplace.
   onPreview?: (marketplace: AmazonMarketplace) => void
+  // PB.9 — Open the rollback modal for the active marketplace.
+  onOpenRollback?: (marketplace: AmazonMarketplace) => void
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -64,6 +66,7 @@ export default function AmazonPublishBar({
   onExportZip,
   isExporting,
   onPreview,
+  onOpenRollback,
 }: Props) {
   const [zipMenuOpen, setZipMenuOpen] = useState(false)
 
@@ -119,6 +122,22 @@ export default function AmazonPublishBar({
             title="Preview what will publish before submitting"
           >
             Preview
+          </Button>
+        )}
+
+        {/* PB.9 — Revert to last published. Only relevant for a specific
+            market — snapshots are captured per-marketplace. */}
+        {onOpenRollback && activeMarketplace !== 'ALL' && (
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => onOpenRollback(activeMarketplace)}
+            disabled={publishing || publishingAll}
+            className="text-xs gap-1 ml-1 border border-slate-200 dark:border-slate-700"
+            title={`Revert images on Amazon ${activeMarketplace} to the last successful publish (per-browser snapshot)`}
+          >
+            <RotateCcw className="w-3 h-3" />
+            Revert
           </Button>
         )}
 

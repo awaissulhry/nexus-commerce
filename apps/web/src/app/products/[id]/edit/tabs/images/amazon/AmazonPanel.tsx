@@ -76,6 +76,9 @@ interface Props {
   // IE.5 — live snapshot to render in the strip + adopt-to-master callback.
   channelLiveImages?: ChannelLiveImage[]
   onAdoptToMaster?: (url: string, channel: 'AMAZON' | 'EBAY' | 'SHOPIFY', marketplace: string | null, slot: string | null) => Promise<void> | void
+  // PB.9 — Per-marketplace publish-success notifier + Revert CTA.
+  onPublishSuccess?: (marketplace: string) => void
+  onOpenRollback?: (marketplace: string) => void
 }
 
 const MKT_LABELS: Record<string, string> = {
@@ -109,6 +112,8 @@ export default function AmazonPanel({
   onReload,
   channelLiveImages = [],
   onAdoptToMaster,
+  onPublishSuccess,
+  onOpenRollback,
 }: Props) {
   const { t } = useTranslations()
   const noAxisData = variants.length > 0 && availableAxes.length === 0
@@ -171,6 +176,7 @@ export default function AmazonPanel({
     amazonJobs,
     onSavePending,
     onReload,
+    onPublishSuccess,
   })
   const filteredVariantGroups = useMemo(() => {
     if (filterValues.size === 0) return amazon.variantGroups
@@ -623,6 +629,7 @@ export default function AmazonPanel({
         onExportZip={handleExportZip}
         isExporting={isExporting}
         onPreview={(mkt) => setPreviewMarketplace(mkt)}
+        onOpenRollback={onOpenRollback ? (mkt) => onOpenRollback(mkt) : undefined}
       />
 
       {/* IM.7 — Cross-channel sync */}

@@ -15,8 +15,8 @@
 
 import { useRef, useState, useMemo } from 'react'
 import {
-  AlertTriangle, CheckCircle2, ChevronDown, Clock, Eye, GripVertical, Link2, Loader2, Plus, ShoppingBag,
-  Trash2, Upload,
+  AlertTriangle, CheckCircle2, ChevronDown, Clock, Eye, GripVertical, Link2, Loader2, Plus, RotateCcw,
+  ShoppingBag, Trash2, Upload,
 } from 'lucide-react'
 import { PLATFORM_RULES } from '@nexus/shared/image-validation'
 import { Button } from '@/components/ui/Button'
@@ -69,6 +69,8 @@ interface Props {
   channelLiveImages?: ChannelLiveImage[]
   onReload?: () => void
   onAdoptToMaster?: (url: string) => void | Promise<void>
+  // PB.9 — open the rollback modal for this channel.
+  onOpenRollback?: () => void
 }
 
 interface DisplayItem {
@@ -106,6 +108,7 @@ export default function EbayPanel({
   channelLiveImages = [],
   onReload,
   onAdoptToMaster,
+  onOpenRollback,
 }: Props) {
   const [previewOpen, setPreviewOpen] = useState(false)
   const [publishPreviewOpen, setPublishPreviewOpen] = useState(false)
@@ -670,6 +673,19 @@ export default function EbayPanel({
             <Eye className="w-3.5 h-3.5" />
             Preview
           </Button>
+          {onOpenRollback && (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="gap-1.5 border border-slate-200 dark:border-slate-700"
+              onClick={onOpenRollback}
+              disabled={publishing}
+              title="Revert to the last successful eBay publish (per-browser snapshot)"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              Revert
+            </Button>
+          )}
           <Button
             size="sm"
             variant="ghost"

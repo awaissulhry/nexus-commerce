@@ -28,6 +28,8 @@ import ImageEditorModal from './images/ImageEditorModal'
 import DamPickerModal from './images/DamPickerModal'
 import LifestyleGenerationModal from './images/LifestyleGenerationModal'
 import CrossChannelPublishModal from './images/CrossChannelPublishModal'
+import RollbackModal from './images/RollbackModal'
+import { captureSnapshot, type SnapshotChannel } from './images/publishSnapshotStorage'
 import { fromListing, fromMaster, useLightbox } from './images/useLightbox'
 import type { LightboxImage } from './images/useLightbox'
 import type { ProductImage } from './images/types'
@@ -59,6 +61,8 @@ export default function ImagesTab({ product, discardSignal, onDirtyChange }: Pro
   const [publishing, setPublishing] = useState(false)
   // PB.5 — Cross-channel summary modal.
   const [crossChannelOpen, setCrossChannelOpen] = useState(false)
+  // PB.9 — Rollback modal state.
+  const [rollbackTarget, setRollbackTarget] = useState<{ channel: SnapshotChannel; marketplace: string | null } | null>(null)
   const lightbox = useLightbox()
   const { t } = useTranslations()
 
@@ -310,6 +314,8 @@ export default function ImagesTab({ product, discardSignal, onDirtyChange }: Pro
             }
             okCount++
             skuTotal += Array.isArray(body?.skus) ? body.skus.length : 0
+            // PB.9 — Capture snapshot per market on success.
+            captureSnapshot({ productId: product.id, channel: 'AMAZON', marketplace: m, listingImages: listing })
           } catch (err) {
             showToast(`Amazon ${m}: ${err instanceof Error ? err.message : 'publish failed'}`)
           }
@@ -325,6 +331,10 @@ export default function ImagesTab({ product, discardSignal, onDirtyChange }: Pro
           body: JSON.stringify({ activeAxis }),
         })
         const body = await res.json().catch(() => ({} as any))
+        if (res.ok && body?.success !== false) {
+          // PB.9 — Capture eBay snapshot on success.
+          captureSnapshot({ productId: product.id, channel: 'EBAY', marketplace: null, listingImages: listing })
+        }
         showToast(body?.message ?? (res.ok ? 'Published to eBay' : `eBay publish failed (${res.status})`))
         void workspace.reload()
       } else if (target.channel === 'SHOPIFY') {
@@ -334,6 +344,10 @@ export default function ImagesTab({ product, discardSignal, onDirtyChange }: Pro
           body: JSON.stringify({ activeAxis }),
         })
         const body = await res.json().catch(() => ({} as any))
+        if (res.ok && body?.success !== false) {
+          // PB.9 — Capture Shopify snapshot on success.
+          captureSnapshot({ productId: product.id, channel: 'SHOPIFY', marketplace: null, listingImages: listing })
+        }
         showToast(body?.message ?? (res.ok ? 'Published to Shopify' : `Shopify publish failed (${res.status})`))
         void workspace.reload()
       }
@@ -530,6 +544,10 @@ export default function ImagesTab({ product, discardSignal, onDirtyChange }: Pro
               addPendingDelete={workspace.addPendingDelete}
               pendingDeletes={workspace.pendingDeletes}
               restorePending={workspace.restorePending}
+              onPublishSuccess={(marketplace) => {
+                captureSnapshot({ productId: product.id, channel: 'AMAZON', marketplace, listingImages: listing })
+              }}
+              onOpenRollback={(marketplace) => setRollbackTarget({ channel: 'AMAZON', marketplace })}
             />
           )}
           {activeChannel === 'ebay' && (
@@ -563,12 +581,17 @@ export default function ImagesTab({ product, discardSignal, onDirtyChange }: Pro
                 })
                 const body = await res.json()
                 const message = body.message ?? (res.ok ? 'Published to eBay' : 'eBay publish failed')
+                if (res.ok && body.success !== false) {
+                  // PB.9 — capture snapshot on success (panel-side publish path).
+                  captureSnapshot({ productId: product.id, channel: 'EBAY', marketplace: null, listingImages: listing })
+                }
                 showToast(message)
                 return { success: res.ok && body.success !== false, message }
               }}
               channelLiveImages={channelLiveImages}
               onReload={workspace.reload}
               onAdoptToMaster={(url) => handleAdoptToMaster(url)}
+              onOpenRollback={() => setRollbackTarget({ channel: 'EBAY', marketplace: null })}
             />
           )}
           {activeChannel === 'shopify' && (
@@ -602,12 +625,16 @@ export default function ImagesTab({ product, discardSignal, onDirtyChange }: Pro
                 })
                 const body = await res.json()
                 const message = body.message ?? (res.ok ? 'Published to Shopify' : 'Shopify publish failed')
+                if (res.ok && body.success !== false) {
+                  captureSnapshot({ productId: product.id, channel: 'SHOPIFY', marketplace: null, listingImages: listing })
+                }
                 showToast(message)
                 return { success: res.ok && body.success !== false, message }
               }}
               channelLiveImages={channelLiveImages}
               onReload={workspace.reload}
               onAdoptToMaster={(url) => handleAdoptToMaster(url)}
+              onOpenRollback={() => setRollbackTarget({ channel: 'SHOPIFY', marketplace: null })}
             />
           )}
         </div>
@@ -640,6 +667,20 @@ export default function ImagesTab({ product, discardSignal, onDirtyChange }: Pro
         onPublish={handlePublish}
         onOpenCrossChannel={() => setCrossChannelOpen(true)}
       />
+
+      {/* PB.9 — Rollback to last published snapshot */}
+      {rollbackTarget && (
+        <RollbackModal
+          open
+          productId={product.id}
+          channel={rollbackTarget.channel}
+          marketplace={rollbackTarget.marketplace}
+          listingImages={listing}
+          addPendingUpsert={workspace.addPendingUpsert}
+          onToast={showToast}
+          onClose={() => setRollbackTarget(null)}
+        />
+      )}
 
       {/* PB.5 — Cross-channel publish summary modal */}
       <CrossChannelPublishModal

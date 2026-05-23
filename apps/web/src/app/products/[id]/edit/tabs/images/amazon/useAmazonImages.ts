@@ -94,6 +94,10 @@ interface UseAmazonImagesInput {
   amazonJobs: AmazonJobSummary[]
   onSavePending: () => Promise<boolean>
   onReload: () => void
+  // PB.9 — fired after a successful publish to a specific marketplace.
+  // Owner captures the per-marketplace snapshot. Optional so callers
+  // that don't care about rollback can skip wiring.
+  onPublishSuccess?: (marketplace: AmazonMarketplace) => void
 }
 
 export function useAmazonImages({
@@ -108,6 +112,7 @@ export function useAmazonImages({
   amazonJobs,
   onSavePending,
   onReload,
+  onPublishSuccess,
 }: UseAmazonImagesInput) {
   const [activeMarketplace, setActiveMarketplace] = useState<AmazonMarketplace>('ALL')
   const [imagePicker, setImagePicker] = useState<ImagePickerState | null>(null)
@@ -368,12 +373,14 @@ export function useAmazonImages({
         skuCount: data.skus.length,
       }, ...prev])
       startPolling(data.jobId)
+      // PB.9 — Notify owner so it can capture a rollback snapshot.
+      onPublishSuccess?.(marketplace)
     } catch (err) {
       setPublishError(err instanceof Error ? err.message : 'Publish failed')
     } finally {
       setPublishing(false)
     }
-  }, [productId, activeAxis, onSavePending])
+  }, [productId, activeAxis, onSavePending, onPublishSuccess])
 
   function startPolling(jobId: string) {
     if (pollTimerRef.current) clearInterval(pollTimerRef.current)
