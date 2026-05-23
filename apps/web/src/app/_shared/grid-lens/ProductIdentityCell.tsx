@@ -1,13 +1,7 @@
 'use client'
 
-import { useContext, useState } from 'react'
 import Link from 'next/link'
-import { Image as ImageIcon } from 'lucide-react'
-import {
-  DENSITY_THUMB_ICON_PX,
-  DENSITY_THUMB_PX,
-} from '@/lib/theme'
-import { DensityContext } from './VirtualizedGrid'
+import { Thumbnail } from './Thumbnail'
 
 export type ProductIdentityCellProps = {
   id: string
@@ -19,6 +13,8 @@ export type ProductIdentityCellProps = {
   parentId?: string | null
   childCount?: number
   imageUrl?: string | null
+  /** PG.7 — drives the multi-image dot on the thumbnail. */
+  photoCount?: number
   searchQuery?: string
   onThumbClick?: (productId: string) => void
   productHref?: string
@@ -62,7 +58,7 @@ export function ProductIdentityCell(props: ProductIdentityCellProps) {
   const {
     id, name, sku, amazonAsin, productType,
     isParent, parentId, childCount,
-    imageUrl, searchQuery,
+    imageUrl, photoCount, searchQuery,
     onThumbClick, productHref, variantDetailHref, variantDetailLabel,
     showThumb = false,
     fulfillmentMethod,
@@ -73,22 +69,6 @@ export function ProductIdentityCell(props: ProductIdentityCellProps) {
   const count = childCount ?? 0
   const editHref = productHref ?? `/products/${id}/edit`
   const childDetailHref = variantDetailHref ?? `/products/${id}/edit`
-
-  // PG.1c — track broken image URLs so we fall back to the placeholder
-  // instead of an empty <img>. Amazon CDN URLs occasionally 404 when an
-  // ASIN's image set is rotated; without this, the row showed a blank
-  // box and looked indistinguishable from "no image at all".
-  const [imgFailed, setImgFailed] = useState(false)
-  const showImage = imageUrl && !imgFailed
-
-  // PG.3 — thumb size follows the toolbar's DensityToggle so a
-  // compact row (44 px tall) renders a 32 px thumb, comfortable → 40 px,
-  // spacious → 56 px. Read via DensityContext set by VirtualizedGrid;
-  // cells rendered outside one fall back to comfortable.
-  const density = useContext(DensityContext)
-  const thumbPx = DENSITY_THUMB_PX[density]
-  const thumbIconPx = DENSITY_THUMB_ICON_PX[density]
-  const thumbStyle = { width: thumbPx, height: thumbPx }
 
   const handleThumbClick = () => {
     if (onThumbClick) {
@@ -103,36 +83,18 @@ export function ProductIdentityCell(props: ProductIdentityCellProps) {
   return (
     <div className="flex items-center gap-2.5 min-w-0 py-0.5">
       {showThumb && (
-        <button
-          type="button"
-          className="flex-shrink-0 cursor-pointer rounded focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none"
-          title="Open product drawer"
-          aria-label={`Open drawer for ${name}`}
+        // PG.7 — the inline thumb routes through the shared Thumbnail
+        // component (hover preview, multi-image dot, Cloudinary
+        // transform, blur-up, onError, density-aware sizing all live
+        // there). Was previously a bespoke <img> path; refactor keeps
+        // every catalog surface consistent.
+        <Thumbnail
+          src={imageUrl ?? null}
+          photoCount={photoCount}
+          alt={name}
+          title={`Open drawer for ${name}`}
           onClick={handleThumbClick}
-        >
-          {showImage ? (
-            // PG.3 — size driven by DensityContext (was hard-coded 48 px).
-            // loading=lazy + decoding=async keep the initial paint snappy
-            // when 100+ rows render at once.
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={imageUrl}
-              alt=""
-              loading="lazy"
-              decoding="async"
-              onError={() => setImgFailed(true)}
-              style={thumbStyle}
-              className="rounded object-cover bg-slate-100 dark:bg-slate-800"
-            />
-          ) : (
-            <div
-              style={thumbStyle}
-              className="rounded bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-300 dark:text-slate-600 flex-shrink-0"
-            >
-              <ImageIcon size={thumbIconPx} />
-            </div>
-          )}
-        </button>
+        />
       )}
       <div className="min-w-0 flex-1">
         <Link

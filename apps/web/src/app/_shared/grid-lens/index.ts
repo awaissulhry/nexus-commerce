@@ -9,6 +9,8 @@ export { VirtualizedGrid, SearchContext, RiskFlaggedContext, DensityContext, Col
 export { SavedViewsButton } from './SavedViewsButton'
 export { GridFooter } from './GridFooter'
 export { ProductIdentityCell } from './ProductIdentityCell'
+export { Thumbnail } from './Thumbnail'
+export type { ThumbnailProps } from './Thumbnail'
 export { StockSplit } from './StockSplit'
 export { DensityToggle } from './DensityToggle'
 export { AutoRefreshSelect } from './AutoRefreshSelect'

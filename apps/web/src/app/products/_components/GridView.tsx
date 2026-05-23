@@ -45,7 +45,6 @@ import {
   EyeOff,
   ExternalLink,
   GripVertical,
-  Image as ImageIcon,
   Layers,
   Pencil,
   Sparkles,
@@ -69,10 +68,8 @@ import {
   VirtualizedGrid as SharedVirtualizedGrid,
   SearchContext,
   RiskFlaggedContext,
-  DensityContext,
 } from '@/app/_shared/grid-lens/VirtualizedGrid'
-import { ProductIdentityCell, StockSplit } from '@/app/_shared/grid-lens'
-import { DENSITY_THUMB_ICON_PX, DENSITY_THUMB_PX } from '@/lib/theme'
+import { ProductIdentityCell, StockSplit, Thumbnail } from '@/app/_shared/grid-lens'
 
 // Italian terminology lookup — falls back to English when not in the
 // glossary. Mirrored from packages/database seed data for the brand
@@ -420,43 +417,6 @@ function RowContextMenuContent({
       <div className="my-1 border-t border-slate-100 dark:border-slate-800" />
       {item(<Copy size={14} />, 'Duplicate', duplicate)}
     </>
-  )
-}
-
-// PG.1c — Thumbnail with broken-URL fallback. Used by the standalone
-// 'thumb' column. Without an onError handler, a 404 from the Amazon
-// CDN left the cell as an empty box — visually indistinguishable
-// from "no image at all" but with different intent.
-// PG.3 — size now follows the toolbar's DensityToggle via DensityContext
-// (32 / 40 / 56 px for compact / comfortable / spacious). Accepts null
-// so a missing URL renders the same placeholder as a broken URL.
-function ThumbImage({ src }: { src: string | null }) {
-  const [failed, setFailed] = useState(false)
-  const density = useContext(DensityContext)
-  const thumbPx = DENSITY_THUMB_PX[density]
-  const iconPx = DENSITY_THUMB_ICON_PX[density]
-  const style = { width: thumbPx, height: thumbPx }
-  if (!src || failed) {
-    return (
-      <div
-        style={style}
-        className="rounded bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 dark:text-slate-500"
-      >
-        <ImageIcon size={iconPx} />
-      </div>
-    )
-  }
-  return (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img
-      src={src}
-      alt=""
-      loading="lazy"
-      decoding="async"
-      onError={() => setFailed(true)}
-      style={style}
-      className="rounded object-cover bg-slate-100 dark:bg-slate-800"
-    />
   )
 }
 
@@ -1184,6 +1144,7 @@ const ProductCell = memo(function ProductCell({
           parentId={p.parentId}
           childCount={p.childCount}
           imageUrl={p.imageUrl}
+          photoCount={p.photoCount}
           searchQuery={searchQuery}
           showThumb
           fulfillmentMethod={p.fulfillmentMethod}
@@ -1321,10 +1282,11 @@ const ProductCell = memo(function ProductCell({
       )
 
     case 'thumb':
-      // PG.1c + PG.3 — ThumbImage owns both the broken-URL fallback and
-      // the null-URL placeholder, sized by DensityContext so the cell
-      // breathes correctly at compact / comfortable / spacious.
-      return <ThumbImage src={p.imageUrl ?? null} />
+      // PG.7 — the standalone thumb column now uses the shared
+      // Thumbnail component so it shares hover preview + multi-image
+      // dot + Cloudinary transform + onError + density sizing with
+      // the Product column's inline thumb.
+      return <Thumbnail src={p.imageUrl ?? null} photoCount={p.photoCount} alt={p.name} />
 
     case 'sku':
       return (
