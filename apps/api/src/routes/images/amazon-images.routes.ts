@@ -29,6 +29,7 @@ import {
 import { generateAmazonZip } from '../../services/images/amazon-image-zip.service.js'
 import { buildAmazonImagePreview } from '../../services/images/amazon-image-preview.service.js'
 import { validateAmazonPublish } from '../../services/images/amazon-publish-validator.service.js'
+import { findStaleListingImages } from '../../services/images/amazon-stale.service.js'
 import prisma from '../../db.js'
 
 const VALID_MARKETPLACES = new Set(['IT', 'DE', 'FR', 'ES', 'UK'])
@@ -185,6 +186,32 @@ const amazonImagesRoutes: FastifyPluginAsync = async (fastify) => {
           activeAxis: request.query.activeAxis ?? null,
         })
         return preview
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        return reply.code(500).send({ error: msg })
+      }
+    },
+  )
+
+  // ── GET /api/products/:productId/amazon-images/stale ───────────────
+  // IA.5 — Detect ListingImage rows that were published but the
+  // master image has been updated since. The banner above the
+  // matrix surfaces this so the operator one-click re-publishes
+  // just the stale ASINs.
+  fastify.get<{
+    Params: { productId: string }
+    Querystring: { marketplace?: string }
+  }>(
+    '/products/:productId/amazon-images/stale',
+    async (request, reply) => {
+      const { productId } = request.params
+      const mkt = (request.query.marketplace ?? '').toUpperCase()
+      if (!VALID_MARKETPLACES.has(mkt)) {
+        return reply.code(400).send({ error: `Invalid marketplace: ${mkt}` })
+      }
+      try {
+        const result = await findStaleListingImages({ productId, marketplace: mkt })
+        return result
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
         return reply.code(500).send({ error: msg })

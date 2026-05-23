@@ -10,6 +10,7 @@ import { beFetch } from '../api'
 import AmazonMatrix from './AmazonMatrix'
 import AmazonPublishBar from './AmazonPublishBar'
 import PublishPreviewModal from './PublishPreviewModal'
+import StaleBanner from './StaleBanner'
 import MatrixFilterBar, { readFilterFromUrl, type CellStatus } from './MatrixFilterBar'
 import ImagePickerModal from '../ImagePickerModal'
 import CrossChannelSyncBar from '../CrossChannelSyncBar'
@@ -359,6 +360,18 @@ export default function AmazonPanel({
             : undefined}
           onOpenDiff={(live, nexusUrl) => setDriftModal({ live, nexusUrl })}
         />
+
+        {/* IA.5 — Stale banner. Hidden when active marketplace is 'ALL'
+            (banner is per-marketplace) or when no stale rows exist. */}
+        {amazon.activeMarketplace !== 'ALL' && (
+          <StaleBanner
+            productId={productId}
+            marketplace={amazon.activeMarketplace}
+            activeAxis={activeAxis}
+            onToast={onToast}
+            onSubmitted={onReload}
+          />
+        )}
       </div>
 
       {/* IE.11 — Filter + group-by bar above the matrix. Narrows
