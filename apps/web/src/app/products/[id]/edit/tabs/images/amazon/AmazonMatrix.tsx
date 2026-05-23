@@ -6,7 +6,7 @@
 // Column headers are also drop targets for column-fill operations.
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { AlertTriangle, MoreHorizontal, Plus } from 'lucide-react'
+import { AlertTriangle, Link2, MoreHorizontal, Plus } from 'lucide-react'
 import { PLATFORM_RULES } from '@nexus/shared/image-validation'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/Button'
@@ -86,7 +86,9 @@ function SlotCell({
 
   const ariaLabel = `${rowLabel}, ${SLOT_LABELS[slot]}: ${
     cell
-      ? cell.origin === 'inherited' ? 'inherited image' : 'image set'
+      ? cell.fromMaster
+        ? 'inherited from master gallery'
+        : cell.origin === 'inherited' ? 'inherited image' : 'image set'
       : 'empty, click or drop to assign'
   }`
 
@@ -119,8 +121,15 @@ function SlotCell({
     >
       {cell ? (
         <div className={cn(
-          'w-full h-full rounded-lg border overflow-hidden relative group cursor-pointer',
-          cell.origin === 'inherited' ? 'opacity-60 border-slate-200 dark:border-slate-700' : 'border-slate-300 dark:border-slate-600',
+          'w-full h-full rounded-lg overflow-hidden relative group cursor-pointer',
+          // IE.3 — master-fallback cells get a dashed border so the
+          // operator sees at a glance "this is just the master gallery
+          // showing through; drop a variant image to override."
+          cell.fromMaster
+            ? 'border-2 border-dashed border-slate-300 dark:border-slate-600 opacity-75'
+            : cell.origin === 'inherited'
+              ? 'border opacity-60 border-slate-200 dark:border-slate-700'
+              : 'border border-slate-300 dark:border-slate-600',
           cell.isPending && 'ring-2 ring-amber-400 ring-offset-1',
           // IR.2.6 / IR.5.2 — red outline when image is below the
           // shared per-channel min (PLATFORM_RULES.AMAZON.minDimensionPx).
@@ -139,11 +148,24 @@ function SlotCell({
             {slot}
           </div>
 
-          {/* Inherited badge */}
+          {/* Inherited badge — chain-link for master-fallback,
+              ∀ glyph for All-Markets / All-Colors inheritance. */}
           {cell.origin === 'inherited' && (
-            <div className="absolute bottom-0.5 right-0.5 text-[8px] bg-slate-700/60 text-white rounded px-0.5 leading-tight" title="Inherited from All Markets">
-              ∀
-            </div>
+            cell.fromMaster ? (
+              <div
+                className="absolute bottom-0.5 right-0.5 bg-slate-700/70 text-white rounded p-0.5 leading-none"
+                title="Inherited from master gallery — drop an image to override"
+              >
+                <Link2 className="w-2.5 h-2.5" />
+              </div>
+            ) : (
+              <div
+                className="absolute bottom-0.5 right-0.5 text-[8px] bg-slate-700/60 text-white rounded px-0.5 leading-tight"
+                title="Inherited from All Markets"
+              >
+                ∀
+              </div>
+            )
           )}
 
           {/* Pending dot */}

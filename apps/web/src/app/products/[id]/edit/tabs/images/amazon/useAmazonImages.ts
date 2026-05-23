@@ -48,6 +48,14 @@ export interface CellDisplay {
   height?: number | null
   publishStatus?: string
   publishError?: string | null
+  // IE.3 — set when the cell renders the master gallery image as
+  // the cascade's final fallback (no ListingImage row at any scope).
+  // Distinct from `origin: 'inherited'`, which is also set on
+  // Platform-scope and All-Colors fallbacks. When true, the matrix
+  // renders a chain-link badge + dashed border so the operator sees
+  // "this is the default; override by dropping a variant image".
+  fromMaster?: boolean
+  masterImageId?: string
 }
 
 export interface ImagePickerState {
@@ -139,6 +147,38 @@ export function useAmazonImages({
     return set
   }, [listingImages])
 
+  // ── Master-gallery slot mapping ────────────────────────────────────
+  // IE.3 — When no ListingImage row covers a (group, slot) cell at
+  // any scope, the matrix falls back to a master image so the
+  // common "all variants share MAIN + lifestyle shots" case
+  // requires zero manual drags. Mapping:
+  //   MAIN     → master image with type='MAIN' (first, by sortOrder)
+  //   SWCH     → master image with type='SWATCH'
+  //   PT01–08  → nth master image with type='LIFESTYLE' (then 'ALT' as overflow)
+  const resolveMasterForSlot = useCallback((slot: AmazonSlot): ProductImage | null => {
+    if (slot === 'MAIN') {
+      // PG.4 hero override beats type=MAIN: an operator who marked a
+      // LIFESTYLE shot as "primary" wants that one as the Amazon MAIN.
+      return (
+        masterImages.find((m) => m.isPrimary)
+        ?? masterImages.find((m) => m.type === 'MAIN')
+        ?? null
+      )
+    }
+    if (slot === 'SWCH') {
+      return masterImages.find((m) => m.type === 'SWATCH') ?? null
+    }
+    // PT01..PT08 → 0..7 into the [LIFESTYLE, then ALT] sequence.
+    // Sorted by sortOrder upstream in useImagesWorkspace.
+    const idx = parseInt(slot.slice(2), 10) - 1
+    const lifestyles = masterImages.filter((m) => m.type === 'LIFESTYLE')
+    if (idx < lifestyles.length) return lifestyles[idx]
+    const alts = masterImages.filter((m) => m.type === 'ALT')
+    const overflow = idx - lifestyles.length
+    if (overflow >= 0 && overflow < alts.length) return alts[overflow]
+    return null
+  }, [masterImages])
+
   // ── Cell resolution ────────────────────────────────────────────────
   const resolveCell = useCallback((
     groupValue: string | null,
@@ -208,11 +248,33 @@ export function useAmazonImages({
     // 4. If groupValue is set, fall back to All Colors (groupValue=null) as inherited
     if (groupValue !== null) {
       const fallback = resolveCell(null, slot, marketplace)
-      return fallback ? { ...fallback, origin: 'inherited' } : null
+      if (fallback) return { ...fallback, origin: 'inherited' }
+      // groupValue !== null but no All-Colors row either → check master
+      // directly so a variant row inherits straight from the gallery
+      // without an intermediate All-Colors record.
+    }
+
+    // 5. IE.3 — Master gallery fallback. No ListingImage row exists at
+    // any scope, so surface the master image whose type maps to this
+    // slot. Operator sees the gallery image with a chain-link badge;
+    // dropping a variant image on the cell creates the override that
+    // wins over this default in the cascade above.
+    const masterImg = resolveMasterForSlot(slot)
+    if (masterImg) {
+      return {
+        url: masterImg.url,
+        origin: 'inherited',
+        isPending: false,
+        width: masterImg.width,
+        height: masterImg.height,
+        hasWhiteBackground: null,
+        fromMaster: true,
+        masterImageId: masterImg.id,
+      }
     }
 
     return null
-  }, [activeMarketplace, activeAxis, listingImages, pendingUpserts])
+  }, [activeMarketplace, activeAxis, listingImages, pendingUpserts, resolveMasterForSlot])
 
   // ── Cell assignment ────────────────────────────────────────────────
   const assignCell = useCallback((

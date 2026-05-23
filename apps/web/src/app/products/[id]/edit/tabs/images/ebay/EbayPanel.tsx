@@ -15,7 +15,7 @@
 
 import { useRef, useState, useMemo } from 'react'
 import {
-  AlertTriangle, CheckCircle2, ChevronDown, Clock, Eye, GripVertical, Loader2, Plus, ShoppingBag,
+  AlertTriangle, CheckCircle2, ChevronDown, Clock, Eye, GripVertical, Link2, Loader2, Plus, ShoppingBag,
   Trash2, Upload,
 } from 'lucide-react'
 import { PLATFORM_RULES } from '@nexus/shared/image-validation'
@@ -68,6 +68,12 @@ interface DisplayItem {
   position: number
   isPending: boolean
   publishStatus?: string
+  // IE.3 — preview-only row sourced from MasterPanel when the gallery
+  // has nothing real to render. Rendered with a dashed border + chain
+  // link badge; converting these to real pending upserts is what the
+  // "Copy from master" button already does.
+  fromMaster?: boolean
+  masterImageId?: string
 }
 
 export default function EbayPanel({
@@ -131,8 +137,22 @@ export default function EbayPanel({
       isPending: true,
     }))
 
-    return [...base, ...news].sort((a, b) => a.position - b.position)
-  }, [listingImages, pendingUpserts, pendingDeletes])
+    const items = [...base, ...news].sort((a, b) => a.position - b.position)
+    // IE.3 — when the gallery has nothing real, surface master gallery
+    // images as preview-only suggestions so the operator sees what
+    // "Copy from master" would write. Up to EBAY_MAX.
+    if (items.length === 0 && masterImages.length > 0) {
+      return masterImages.slice(0, EBAY_MAX).map((m, idx) => ({
+        id: `master:${m.id}`,
+        url: m.url,
+        position: idx * 10,
+        isPending: false,
+        fromMaster: true,
+        masterImageId: m.id,
+      }))
+    }
+    return items
+  }, [listingImages, pendingUpserts, pendingDeletes, masterImages])
 
   // ── Effective color sets ───────────────────────────────────────────
   const variantGroups = useMemo(() => {
@@ -341,7 +361,9 @@ export default function EbayPanel({
                   'group relative w-20 h-20 rounded-xl border-2 overflow-hidden bg-slate-50 dark:bg-slate-800 transition-all flex-shrink-0',
                   dragOverIndex === index
                     ? 'border-blue-400 ring-2 ring-blue-300'
-                    : 'border-slate-200 dark:border-slate-700',
+                    : item.fromMaster
+                      ? 'border-dashed border-slate-300 dark:border-slate-600 opacity-75'
+                      : 'border-slate-200 dark:border-slate-700',
                   item.isPending && 'ring-1 ring-amber-400',
                   onOpenLightboxForCell && 'cursor-zoom-in',
                 )}
@@ -362,20 +384,35 @@ export default function EbayPanel({
                   <div className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-amber-400" />
                 )}
 
-                {/* Drag handle */}
-                <div className="absolute bottom-0.5 left-0.5 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab">
-                  <GripVertical className="w-3 h-3 text-white drop-shadow" />
-                </div>
+                {/* IE.3 — master-inherited preview badge */}
+                {item.fromMaster && (
+                  <div
+                    className="absolute bottom-0.5 right-0.5 bg-slate-700/70 text-white rounded p-0.5 leading-none"
+                    title="Inherited from master — click 'Copy from master' to commit"
+                  >
+                    <Link2 className="w-2.5 h-2.5" />
+                  </div>
+                )}
 
-                {/* Delete button — stopPropagation so it doesn't also open lightbox */}
-                <button
-                  type="button"
-                  aria-label="Remove from gallery"
-                  className="absolute top-0.5 right-0.5 opacity-0 group-hover:opacity-100 transition-opacity bg-red-500 rounded p-0.5"
-                  onClick={(e) => { e.stopPropagation(); addPendingDelete(item.id) }}
-                >
-                  <Trash2 className="w-2.5 h-2.5 text-white" />
-                </button>
+                {/* Drag handle — hidden for master previews (no real row to reorder yet) */}
+                {!item.fromMaster && (
+                  <div className="absolute bottom-0.5 left-0.5 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab">
+                    <GripVertical className="w-3 h-3 text-white drop-shadow" />
+                  </div>
+                )}
+
+                {/* Delete button — hidden for master previews; deleting one
+                    would have nothing to delete (no ListingImage row exists). */}
+                {!item.fromMaster && (
+                  <button
+                    type="button"
+                    aria-label="Remove from gallery"
+                    className="absolute top-0.5 right-0.5 opacity-0 group-hover:opacity-100 transition-opacity bg-red-500 rounded p-0.5"
+                    onClick={(e) => { e.stopPropagation(); addPendingDelete(item.id) }}
+                  >
+                    <Trash2 className="w-2.5 h-2.5 text-white" />
+                  </button>
+                )}
               </div>
             ))}
 
