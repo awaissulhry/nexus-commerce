@@ -36,12 +36,14 @@ import { ArrowLeft, FileText } from 'lucide-react'
 import { getServerLocale, getServerT } from '@/lib/i18n/server'
 import HeaderHealthPulse from './HeaderHealthPulse'
 import AttributesTab from './AttributesTab'
+import VariantsTab from './VariantsTab'
 
 export const dynamic = 'force-dynamic'
 
 type Tab =
   | 'overview'
   | 'attributes'
+  | 'variants'
   | 'channels'
   | 'pricing'
   | 'translations'
@@ -49,20 +51,30 @@ type Tab =
   | 'images'
   | 'history'
 
-const TABS: Tab[] = [
-  'overview',
-  'attributes',
-  'channels',
-  'pricing',
-  'translations',
-  'compliance',
-  'images',
-  'history',
-]
+// VR.1 — "variants" tab inserts between attributes and channels for
+// parent SKUs only. The TABS array drives both the nav and the
+// querystring validator; building it from product.isParent at render
+// time keeps the nav in sync with the actual SKU shape.
+function buildTabs(isParent: boolean): Tab[] {
+  return [
+    'overview',
+    'attributes',
+    ...(isParent ? (['variants'] as const) : []),
+    'channels',
+    'pricing',
+    'translations',
+    'compliance',
+    'images',
+    'history',
+  ]
+}
 
-function parseTab(v: string | string[] | undefined): Tab {
+function parseTab(
+  v: string | string[] | undefined,
+  validTabs: readonly Tab[],
+): Tab {
   if (typeof v !== 'string') return 'overview'
-  return (TABS as readonly string[]).includes(v) ? (v as Tab) : 'overview'
+  return (validTabs as readonly string[]).includes(v) ? (v as Tab) : 'overview'
 }
 
 interface PageProps {
@@ -76,7 +88,6 @@ export default async function ProductDatasheetHubPage({
 }: PageProps) {
   const { id } = await params
   const sp = await searchParams
-  const tab = parseTab(sp.tab)
   const locale = await getServerLocale()
   const t = await getServerT()
 
@@ -96,6 +107,12 @@ export default async function ProductDatasheetHubPage({
   })
 
   if (!product) notFound()
+
+  // VR.1 — Tabs depend on isParent (variants tab only for parents).
+  // Parse tab AFTER the fetch so the validator knows whether
+  // ?tab=variants is allowed for this SKU.
+  const tabs = buildTabs(product.isParent)
+  const tab = parseTab(sp.tab, tabs)
 
   return (
     <div className="space-y-4">
@@ -151,7 +168,7 @@ export default async function ProductDatasheetHubPage({
         className="flex items-center gap-1 border-b border-slate-200 dark:border-slate-800 overflow-x-auto"
         aria-label={t('products.datasheetHub.tabsAria')}
       >
-        {TABS.map((tabKey) => {
+        {tabs.map((tabKey) => {
           const active = tabKey === tab
           return (
             <Link
@@ -180,6 +197,8 @@ export default async function ProductDatasheetHubPage({
       >
         {tab === 'attributes' ? (
           <AttributesTab productId={product.id} locale={locale} t={t} />
+        ) : tab === 'variants' && product.isParent ? (
+          <VariantsTab parentId={product.id} locale={locale} t={t} />
         ) : (
           <TabStub tab={tab} t={t} />
         )}
@@ -201,6 +220,7 @@ function TabStub({
   const phase: Record<Tab, string> = {
     overview: 'ATM.2',
     attributes: 'ATM.3 / ATM.4',
+    variants: 'VR.1',
     channels: 'ATM.5 / ATM.6',
     pricing: 'ATM.8',
     translations: 'ATM.9',
