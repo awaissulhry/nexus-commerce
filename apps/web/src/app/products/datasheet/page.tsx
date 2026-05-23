@@ -27,9 +27,11 @@ import { prisma } from '@nexus/database'
 import { cookies } from 'next/headers'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
-import PrintButtonClient from '../[id]/datasheet/PrintButtonClient'
-import PrintBodyFlag from '../[id]/datasheet/PrintBodyFlag'
-import DatasheetModePicker from '../[id]/datasheet/DatasheetModePicker'
+// ATM.1 — DS-series printable moved into /datasheet/print/ subfolder
+// so /datasheet itself can host the new cross-channel attribute hub.
+import PrintButtonClient from '../[id]/datasheet/print/PrintButtonClient'
+import PrintBodyFlag from '../[id]/datasheet/print/PrintBodyFlag'
+import DatasheetModePicker from '../[id]/datasheet/print/DatasheetModePicker'
 import { Barcode128 } from '@/components/ui/Barcode128'
 import { getServerLocale, getServerT } from '@/lib/i18n/server'
 

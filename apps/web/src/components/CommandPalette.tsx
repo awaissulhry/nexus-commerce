@@ -530,12 +530,29 @@ export const PAGE_COMMANDS: Command[] = [
   // router.push with its own productId so this stays generic.
   {
     id: 'page-products-edit-open-datasheet',
-    label: 'Open printable datasheet',
+    label: 'Open product datasheet',
     icon: FileText,
     run: () =>
       window.dispatchEvent(
         new CustomEvent('nexus:products-edit:goto-route', {
           detail: { route: 'datasheet' },
+        }),
+      ),
+    group: 'On this page',
+    contextPath: /^\/products\/[^/]+\/edit(\?|$)/,
+    keywords: 'datasheet attributes mapping channels markets',
+  },
+  {
+    // ATM.1 — separate entry for the printable. The label-as-action
+    // still ends in "printable", so the operator's muscle-memory ⌘K
+    // → "print" search still lands here.
+    id: 'page-products-edit-open-datasheet-print',
+    label: 'Open printable datasheet',
+    icon: FileText,
+    run: () =>
+      window.dispatchEvent(
+        new CustomEvent('nexus:products-edit:goto-route', {
+          detail: { route: 'datasheet-print' },
         }),
       ),
     group: 'On this page',

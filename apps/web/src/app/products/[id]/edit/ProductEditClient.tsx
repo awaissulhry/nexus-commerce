@@ -229,7 +229,10 @@ export default function ProductEditClient({
       const ce = e as CustomEvent<{ route?: string }>
       const route = ce.detail?.route
       if (route === 'datasheet') {
+        // ATM.1 — Hub is the default. /datasheet/print is the print-only.
         router.push(`/products/${product.id}/datasheet`)
+      } else if (route === 'datasheet-print') {
+        router.push(`/products/${product.id}/datasheet/print`)
       } else if (route === 'matrix' && product.isParent) {
         router.push(`/products/${product.id}/matrix`)
       } else if (route === 'list-wizard') {
