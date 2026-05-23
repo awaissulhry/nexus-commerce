@@ -429,11 +429,22 @@ export default function PurchaseOrdersClient() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
-  // PO.13 — scorecard drawer state. Opened from the spend tile's Top
-  // Suppliers list and from supplier-name cells in PO rows (when
-  // PO.14 adds the supplier picker, this becomes the primary deep-
-  // link for supplier intel).
-  const [scorecardSupplierId, setScorecardSupplierId] = useState<string | null>(null)
+  // PO.13 / PO-Plus.4 — scorecard drawer state. Opened from the spend
+  // tile's Top Suppliers list, from supplier-name cells in PO rows,
+  // and from `?scorecardSupplierId=` deep links (palette / Slack /
+  // any shared link). URL is authoritative so back/forward closes
+  // the drawer.
+  const scorecardSupplierId = searchParams.get('scorecardSupplierId') || null
+  const setScorecardSupplierId = useCallback(
+    (next: string | null) => {
+      const params = new URLSearchParams(searchParams.toString())
+      if (next) params.set('scorecardSupplierId', next)
+      else params.delete('scorecardSupplierId')
+      const qs = params.toString()
+      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
+    },
+    [pathname, router, searchParams],
+  )
   const [lastFetchedAt, setLastFetchedAt] = useState<number | null>(null)
 
   // ── View / density / preferences state (LS-persisted) ────────────
@@ -1079,6 +1090,7 @@ export default function PurchaseOrdersClient() {
             selected={selected}
             onToggleSelect={toggleSelected}
             onTransition={handleTransition}
+            onPickSupplier={setScorecardSupplierId}
             router={router}
           />
         ) : (
@@ -1090,6 +1102,7 @@ export default function PurchaseOrdersClient() {
                 onTransition={handleTransition}
                 isSelected={selected.has(po.id)}
                 onToggleSelect={toggleSelected}
+                onPickSupplier={setScorecardSupplierId}
               />
             ))}
           </div>
@@ -1325,6 +1338,7 @@ function PoTable({
   selected,
   onToggleSelect,
   onTransition,
+  onPickSupplier,
   router,
 }: {
   rows: PORow[]
@@ -1337,6 +1351,7 @@ function PoTable({
   selected: Set<string>
   onToggleSelect: (id: string) => void
   onTransition: (poId: string, transition: WorkflowTransition, reason?: string) => Promise<void>
+  onPickSupplier: (id: string) => void
   router: ReturnType<typeof useRouter>
 }) {
   const cols = useMemo(
@@ -1423,6 +1438,7 @@ function PoTable({
               onToggleSelect={() => onToggleSelect(po.id)}
               onRowClick={() => router.push(`/fulfillment/purchase-orders/${po.id}`)}
               onTransition={onTransition}
+              onPickSupplier={onPickSupplier}
             />
           ))}
         </tbody>
@@ -1441,6 +1457,7 @@ function PoTableRow({
   onToggleSelect,
   onRowClick,
   onTransition,
+  onPickSupplier,
 }: {
   po: PORow
   cols: ReadonlyArray<PoColumnSpec>
@@ -1451,6 +1468,7 @@ function PoTableRow({
   onToggleSelect: () => void
   onRowClick: () => void
   onTransition: (poId: string, transition: WorkflowTransition, reason?: string) => Promise<void>
+  onPickSupplier: (id: string) => void
 }) {
   const overdue = isPoOverdue(po.expectedDeliveryDate, po.status)
   const totalUnits = po.items.reduce((s, i) => s + i.quantityOrdered, 0)
@@ -1531,6 +1549,7 @@ function PoTableRow({
               totalReceived={totalReceived}
               inlineActions={inlineActions}
               dropdownItems={dropdownItems}
+              onPickSupplier={onPickSupplier}
             />
           </td>
         )
@@ -1549,6 +1568,7 @@ function PoTableCell({
   totalReceived,
   inlineActions,
   dropdownItems,
+  onPickSupplier,
 }: {
   col: string
   po: PORow
@@ -1561,6 +1581,7 @@ function PoTableCell({
   inlineActions: any[]
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   dropdownItems: any[]
+  onPickSupplier: (id: string) => void
 }) {
   switch (col) {
     case 'select':
@@ -1606,7 +1627,17 @@ function PoTableCell({
       )
     case 'supplier':
       return po.supplier ? (
-        <span className="text-slate-700 dark:text-slate-300">{po.supplier.name}</span>
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation()
+            onPickSupplier(po.supplier!.id)
+          }}
+          className="text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-slate-100 hover:underline text-left"
+          title={`View ${po.supplier.name} scorecard`}
+        >
+          {po.supplier.name}
+        </button>
       ) : (
         <span className="text-amber-700 dark:text-amber-300">No supplier</span>
       )
@@ -1699,11 +1730,13 @@ function PoCard({
   onTransition,
   isSelected,
   onToggleSelect,
+  onPickSupplier,
 }: {
   po: PORow
   onTransition: (poId: string, transition: WorkflowTransition, reason?: string) => Promise<void>
   isSelected?: boolean
   onToggleSelect?: (id: string) => void
+  onPickSupplier?: (id: string) => void
 }) {
   const { t } = useTranslations()
   const [expanded, setExpanded] = useState(false)
@@ -1790,9 +1823,23 @@ function PoCard({
               {po.status.replace(/_/g, ' ')}
             </Badge>
             {po.supplier ? (
-              <span className="text-base text-slate-700 dark:text-slate-300">
-                {po.supplier.name}
-              </span>
+              onPickSupplier ? (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onPickSupplier(po.supplier!.id)
+                  }}
+                  className="text-base text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-slate-100 hover:underline text-left"
+                  title={`View ${po.supplier.name} scorecard`}
+                >
+                  {po.supplier.name}
+                </button>
+              ) : (
+                <span className="text-base text-slate-700 dark:text-slate-300">
+                  {po.supplier.name}
+                </span>
+              )
             ) : (
               <span className="text-base text-amber-700 dark:text-amber-300">
                 {t('po.noSupplier')}

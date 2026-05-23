@@ -56,6 +56,7 @@ import { PoLiveSyncChip } from '../_shared/PoLiveSyncChip'
 import { EditableSummaryPane, isEditableStatus } from '../_shared/EditableSummaryPane'
 import { ThreeWayMatchPanel } from '../_shared/ThreeWayMatchPanel'
 import { QuickReceiveModal } from '../_shared/QuickReceiveModal'
+import { SupplierScorecardDrawer } from '../_shared/SupplierScorecardDrawer'
 
 // ── Types ──────────────────────────────────────────────────────────
 
@@ -321,6 +322,21 @@ export default function PurchaseOrderDetailClient({ id }: { id: string }) {
 
   // PO-Plus.3 — quick-receive modal state.
   const [quickReceiveOpen, setQuickReceiveOpen] = useState(false)
+
+  // PO-Plus.4 — supplier-scorecard drawer state. URL-bound so a deep
+  // link like `?scorecardSupplierId=…` opens it on page load (e.g.
+  // from a Slack share or the Cmd+K palette).
+  const scorecardSupplierId = searchParams.get('scorecardSupplierId') || null
+  const setScorecardSupplierId = useCallback(
+    (next: string | null) => {
+      const params = new URLSearchParams(searchParams.toString())
+      if (next) params.set('scorecardSupplierId', next)
+      else params.delete('scorecardSupplierId')
+      const qs = params.toString()
+      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
+    },
+    [pathname, router, searchParams],
+  )
 
   const handleTransition = useCallback(
     async (transition: string, reason?: string) => {
@@ -616,12 +632,26 @@ export default function PurchaseOrderDetailClient({ id }: { id: string }) {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-2 border-t border-slate-100 dark:border-slate-800">
           <DetailField label="Supplier">
             {po.supplier ? (
-              <Link
-                href={`/products?supplierId=${po.supplierId}`}
-                className="text-slate-900 dark:text-slate-100 hover:underline inline-flex items-center gap-1"
-              >
-                <ShoppingCart className="w-3 h-3" /> {po.supplier.name}
-              </Link>
+              <div className="inline-flex items-center gap-2 flex-wrap">
+                {/* PO-Plus.4 — supplier name opens the scorecard
+                    drawer; the small "products" icon keeps the
+                    catalog deep-link from PO.2 as a secondary action. */}
+                <button
+                  type="button"
+                  onClick={() => setScorecardSupplierId(po.supplierId)}
+                  className="text-slate-900 dark:text-slate-100 hover:underline text-left"
+                  title={`View ${po.supplier.name} scorecard`}
+                >
+                  {po.supplier.name}
+                </button>
+                <Link
+                  href={`/products?supplierId=${po.supplierId}`}
+                  className="text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+                  title="Supplier catalog products"
+                >
+                  <ShoppingCart className="w-3 h-3" />
+                </Link>
+              </div>
             ) : (
               <span className="text-amber-700 dark:text-amber-300">No supplier</span>
             )}
@@ -848,6 +878,15 @@ export default function PurchaseOrderDetailClient({ id }: { id: string }) {
             setQuickReceiveOpen(false)
             await refresh()
           }}
+        />
+      )}
+
+      {/* PO-Plus.4 — supplier scorecard drawer. URL-bound so back/
+          forward closes the drawer + a deep link opens it. */}
+      {scorecardSupplierId && (
+        <SupplierScorecardDrawer
+          supplierId={scorecardSupplierId}
+          onClose={() => setScorecardSupplierId(null)}
         />
       )}
     </div>
