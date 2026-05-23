@@ -202,10 +202,11 @@ describe('buildDriftPairs — kind classification (DA-RT.20)', () => {
     }
   })
 
-  it('older window (>=14d) + F < O → true-drift (settlement should have happened)', () => {
+  it('older window (>= settlement cutoff) + F < O → true-drift (settlement should have happened)', () => {
+    // Default cutoff is 21d; 25d is well past.
     const pairs = buildDriftPairs(
       { orderCents: 100_000, aggregateCents: 100_000, financialCents: 30_000 },
-      20,
+      25,
     )
     for (const p of pairs.filter((p) => p.b === 'financial' || p.a === 'financial')) {
       expect(p.kind).toBe('true-drift')
@@ -221,19 +222,19 @@ describe('buildDriftPairs — kind classification (DA-RT.20)', () => {
     expect(oA.kind).toBe('true-drift')
   })
 
-  it('14d boundary is exclusive on the settlement-pending side', () => {
-    // Exactly 14 days = NOT settlement-pending (settlement should be done by now)
-    const pairs14 = buildDriftPairs(
+  it('settlement-cutoff boundary is exclusive (default 21d)', () => {
+    // Exactly 21 days = NOT settlement-pending (settlement should be done by now)
+    const pairs21 = buildDriftPairs(
       { orderCents: 100_000, aggregateCents: 100_000, financialCents: 50_000 },
-      14,
+      21,
     )
-    expect(pairs14.find((p) => p.b === 'financial')!.kind).toBe('true-drift')
+    expect(pairs21.find((p) => p.b === 'financial')!.kind).toBe('true-drift')
 
-    // 13 days = settlement-pending
-    const pairs13 = buildDriftPairs(
+    // 20 days = settlement-pending
+    const pairs20 = buildDriftPairs(
       { orderCents: 100_000, aggregateCents: 100_000, financialCents: 50_000 },
-      13,
+      20,
     )
-    expect(pairs13.find((p) => p.b === 'financial')!.kind).toBe('settlement-pending')
+    expect(pairs20.find((p) => p.b === 'financial')!.kind).toBe('settlement-pending')
   })
 })

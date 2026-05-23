@@ -63,10 +63,17 @@ export function checkPair(
 
 /** Builds the drifting-pair list for a single (day, marketplace)
  *  window. Returns an empty array when nothing drifts.
- *  windowAgeDays — when provided AND < 14, F-side pairs where F < O
- *  are classified as `settlement-pending` (Amazon's normal settlement
- *  lag). Pairs where F > O always classify as `true-drift` regardless
- *  of age — Amazon settling more than we sold is a real bug. */
+ *  windowAgeDays — when provided AND < settlement window, F-side
+ *  pairs where F < O are classified as `settlement-pending` (Amazon's
+ *  normal settlement lag). Pairs where F > O always classify as
+ *  `true-drift` regardless of age — Amazon settling more than we sold
+ *  is a real bug.
+ *
+ *  Settlement window defaults to 21 days (overridable via env
+ *  NEXUS_SALES_DRIFT_SETTLEMENT_DAYS). Amazon DE in particular often
+ *  settles 14-21 days post-ship; IT/ES/FR are typically 7-14. 21
+ *  days as the default catches the long tail across all EU markets;
+ *  operator can tighten if running a smaller-volume account. */
 export function buildDriftPairs(
   sums: ThreeWaySums,
   windowAgeDays?: number,
@@ -76,7 +83,10 @@ export function buildDriftPairs(
     { a: 'order',     b: 'financial', aVal: sums.orderCents,     bVal: sums.financialCents },
     { a: 'aggregate', b: 'financial', aVal: sums.aggregateCents, bVal: sums.financialCents },
   ]
-  const SETTLEMENT_DAYS = 14
+  const settlementDaysRaw = Number(process.env.NEXUS_SALES_DRIFT_SETTLEMENT_DAYS ?? 21)
+  const SETTLEMENT_DAYS = Number.isFinite(settlementDaysRaw) && settlementDaysRaw > 0
+    ? Math.trunc(settlementDaysRaw)
+    : 21
   const inSettlementWindow =
     typeof windowAgeDays === 'number' && windowAgeDays < SETTLEMENT_DAYS
 
