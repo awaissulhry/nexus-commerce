@@ -76,6 +76,13 @@ interface FinancialSyncSummary {
     purchaseDate: string | null
     status: string | null
     totalPrice: number | null
+    existingFts: Array<{
+      id: string
+      transactionType: string
+      grossRevenue: number
+      amazonTransactionId: string | null
+      transactionDate: string
+    }>
   }>
 }
 
@@ -274,22 +281,43 @@ export async function syncFinancialEvents(
   })
 
   // DA-RT.17 — for each unmatched ID, check whether the order exists
-  // in our Order table at ANY purchaseDate. If it does, the issue is
-  // the window mismatch (event posted in audit window but order was
-  // placed earlier). If it doesn't, the order was never ingested
-  // (different account, deleted, or sync-cron-missed).
+  // in our Order table at ANY purchaseDate, AND what FinancialTransaction
+  // rows already exist for it. If existingFtCount > 0, the idempotency
+  // check is the skip reason → reveals the existing rows' grossRevenue
+  // for diagnosis (€0 = broken-write history; real = audit query bug).
   const unmatchedLookup = await Promise.all(
     unmatchedIds.map(async (channelOrderId) => {
       const o = await prisma.order.findFirst({
         where: { channel: 'AMAZON', channelOrderId },
         select: { id: true, purchaseDate: true, status: true, totalPrice: true },
       })
+      let existingFts: Array<{
+        id: string
+        transactionType: string
+        grossRevenue: number
+        amazonTransactionId: string | null
+        transactionDate: string
+      }> = []
+      if (o) {
+        const rows = await prisma.financialTransaction.findMany({
+          where: { orderId: o.id },
+          select: { id: true, transactionType: true, grossRevenue: true, amazonTransactionId: true, transactionDate: true },
+        })
+        existingFts = rows.map((r) => ({
+          id: r.id,
+          transactionType: r.transactionType,
+          grossRevenue: Number(r.grossRevenue),
+          amazonTransactionId: r.amazonTransactionId,
+          transactionDate: r.transactionDate.toISOString(),
+        }))
+      }
       return {
         channelOrderId,
         existsInOurDb: !!o,
         purchaseDate: o?.purchaseDate?.toISOString() ?? null,
         status: o?.status ?? null,
         totalPrice: o ? Number(o.totalPrice) : null,
+        existingFts,
       }
     }),
   )
