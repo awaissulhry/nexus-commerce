@@ -27,6 +27,7 @@ import CrossChannelSyncBar from '../CrossChannelSyncBar'
 import ChannelPreview from '../ChannelPreview'
 import ChannelValidationBanner, { useChannelValidation } from '../ChannelValidationBanner'
 import ChannelPublishPreviewModal from '../ChannelPublishPreviewModal'
+import ChannelStaleBanner from '../ChannelStaleBanner'
 import ImagePublishHistory from '../ImagePublishHistory'
 import RecentChannelJobsStrip from '../RecentChannelJobsStrip'
 import type { ListingImage, PendingUpsert, ProductImage, VariantSummary, WorkspaceProduct } from '../types'
@@ -342,6 +343,16 @@ export default function EbayPanel({
         channelImages={ebayListing}
         pendingForChannel={ebayPending}
         pendingDeletes={pendingDeletes}
+      />
+
+      {/* PB.3d — Stale-detection banner */}
+      <ChannelStaleBanner
+        channel="EBAY"
+        masterImages={masterImages}
+        channelImages={ebayListing}
+        onPublish={onPublish}
+        onToast={onToast}
+        publishingExternally={publishing}
       />
 
       {/* ── Gallery section ─────────────────────────────────────────── */}

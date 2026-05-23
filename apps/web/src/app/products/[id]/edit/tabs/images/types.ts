@@ -32,6 +32,9 @@ export interface ProductImage {
   // At most one row per product is allowed (DB partial unique index).
   isPrimary: boolean
   createdAt: string
+  // PB.3d — surfaced for the eBay/Shopify stale-detection banner.
+  // The workspace endpoint already returns it; previously not typed.
+  updatedAt: string
 }
 
 export interface ListingImage {
