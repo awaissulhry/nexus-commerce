@@ -290,6 +290,135 @@ export async function adminRoutes(app: FastifyInstance) {
   )
 
   /**
+   * DA-RT.13 — GET /admin/sales-drift/window?day=YYYY-MM-DD&marketplace=ES
+   *
+   * Per-order drill-down into a single (day, marketplace) drift window.
+   * Surfaces both bucketing strategies so the operator can pinpoint
+   * which orders are TZ-misbucketed or NULL-purchaseDate-fallback-shifted:
+   *
+   *   - ordersByPurchaseDate: rows whose Order.purchaseDate, bucketed
+   *     in Europe/Rome, lands on the queried day. Matches the
+   *     drift-audit endpoint's Order-side sum exactly.
+   *   - ordersByCreatedAt: rows whose Order.createdAt, bucketed
+   *     in Europe/Rome, lands on the queried day. Matches the
+   *     aggregate cron's COALESCE(purchaseDate, createdAt) bucket
+   *     for the subset where purchaseDate is NULL.
+   *   - aggregateRow: the DailySalesAggregate row(s) for that
+   *     (day, marketplace) so operator can see if it's stale vs
+   *     what the Order table now reports.
+   *
+   * Diff the two order lists to find the offending rows:
+   *   - Order in `byPurchaseDate` not in `byCreatedAt` → bucketed by
+   *     purchaseDate on this day, but createdAt is on a different
+   *     day. Standard non-issue.
+   *   - Order in `byCreatedAt` not in `byPurchaseDate` AND
+   *     purchaseDate IS NULL → COALESCE fallback. Aggregate sees it
+   *     on this day, Order-side query excludes it. DA-RT bug.
+   *   - aggregateRow.grossRevenue doesn't match SUM of either list
+   *     → aggregate is stale; needs refresh.
+   */
+  app.get<{
+    Querystring: { day?: string; marketplace?: string }
+  }>('/admin/sales-drift/window', async (request, reply) => {
+    try {
+      const day = request.query.day
+      const marketplace = request.query.marketplace
+      if (!day || !/^\d{4}-\d{2}-\d{2}$/.test(day)) {
+        return reply.status(400).send({ error: 'day must be YYYY-MM-DD' })
+      }
+      if (!marketplace) {
+        return reply.status(400).send({ error: 'marketplace required' })
+      }
+
+      const ordersByPurchaseDate = await prisma.$queryRaw<Array<{
+        id: string
+        channelOrderId: string | null
+        purchaseDate: Date | null
+        createdAt: Date
+        totalPrice: number | null
+        status: string
+        romeDayPurchase: Date | null
+        romeDayCreated: Date
+      }>>`
+        SELECT
+          id, "channelOrderId", "purchaseDate", "createdAt",
+          "totalPrice"::float, "status",
+          date_trunc('day', "purchaseDate" AT TIME ZONE 'Europe/Rome')::date AS "romeDayPurchase",
+          date_trunc('day', "createdAt"    AT TIME ZONE 'Europe/Rome')::date AS "romeDayCreated"
+        FROM "Order"
+        WHERE "deletedAt" IS NULL
+          AND "channel" = 'AMAZON'
+          AND "marketplace" = ${marketplace}
+          AND "status" != 'CANCELLED'
+          AND date_trunc('day', "purchaseDate" AT TIME ZONE 'Europe/Rome')::date = ${day}::date
+        ORDER BY "purchaseDate"
+      `
+
+      const ordersByCreatedAt = await prisma.$queryRaw<Array<{
+        id: string
+        channelOrderId: string | null
+        purchaseDate: Date | null
+        createdAt: Date
+        totalPrice: number | null
+        status: string
+      }>>`
+        SELECT
+          id, "channelOrderId", "purchaseDate", "createdAt",
+          "totalPrice"::float, "status"
+        FROM "Order"
+        WHERE "deletedAt" IS NULL
+          AND "channel" = 'AMAZON'
+          AND "marketplace" = ${marketplace}
+          AND "status" != 'CANCELLED'
+          AND date_trunc('day',
+                COALESCE("purchaseDate", "createdAt") AT TIME ZONE 'Europe/Rome'
+              )::date = ${day}::date
+        ORDER BY "createdAt"
+      `
+
+      const aggregateRows = await prisma.$queryRaw<Array<{
+        day: Date
+        marketplace: string | null
+        sku: string
+        grossRevenue: number
+        unitsSold: number
+      }>>`
+        SELECT "day", "marketplace", "sku",
+               "grossRevenue"::float, "unitsSold"::int
+        FROM "DailySalesAggregate"
+        WHERE "channel" = 'AMAZON'
+          AND "marketplace" = ${marketplace}
+          AND "day" = ${day}::date
+      `
+
+      const aggregateTotal = aggregateRows.reduce(
+        (s, r) => s + Number(r.grossRevenue),
+        0,
+      )
+
+      return reply.send({
+        day,
+        marketplace,
+        ordersByPurchaseDate,
+        ordersByCreatedAt,
+        aggregateRows,
+        aggregateTotal,
+        purchaseDateTotal: ordersByPurchaseDate.reduce(
+          (s, r) => s + Number(r.totalPrice ?? 0),
+          0,
+        ),
+        createdAtTotal: ordersByCreatedAt.reduce(
+          (s, r) => s + Number(r.totalPrice ?? 0),
+          0,
+        ),
+      })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error'
+      return reply.status(500).send({ error: message })
+    }
+  })
+
+  /**
    * DA-RT.13 — POST /admin/sales-drift/backfill-financial-events?days=7
    *
    * One-shot backfill of Amazon FinancialTransaction (Store C) over a
