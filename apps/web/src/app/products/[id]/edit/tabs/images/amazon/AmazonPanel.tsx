@@ -236,6 +236,35 @@ export default function AmazonPanel({
     }
   }
 
+  // IA.17 — Multi-image drop from a master-gallery multi-drag. The
+  // operator dragged N selected master images onto a starting cell;
+  // we fan them into the target slot + next slots in canonical
+  // Amazon order (MAIN, PT01..PT08, SWCH). Stops at SWCH; any
+  // images beyond capacity are dropped with a toast notice.
+  function handleCellMultiDrop(
+    groupValue: string | null,
+    startSlot: AmazonSlot,
+    items: Array<{ url: string; id?: string }>,
+  ) {
+    if (items.length === 0) return
+    const allSlots: AmazonSlot[] = ['MAIN', 'PT01', 'PT02', 'PT03', 'PT04', 'PT05', 'PT06', 'PT07', 'PT08', 'SWCH']
+    const startIdx = allSlots.indexOf(startSlot)
+    if (startIdx < 0) return
+    let assigned = 0
+    for (let i = 0; i < items.length; i++) {
+      const slotIdx = startIdx + i
+      if (slotIdx >= allSlots.length) break  // ran out of slots
+      const slot = allSlots[slotIdx]
+      amazon.assignCell(groupValue, slot, items[i].url, items[i].id || undefined)
+      assigned++
+    }
+    if (assigned < items.length) {
+      onToast(`Filled ${assigned}/${items.length} slots — ran out of room past SWCH`)
+    } else {
+      onToast(`${assigned} image${assigned === 1 ? '' : 's'} queued — save to commit`)
+    }
+  }
+
   // IA.9 + IA.11 + IA.14 — Drag an image between matrix cells. The
   // action depends on whether the target is filled:
   //
@@ -507,6 +536,7 @@ export default function AmazonPanel({
             onCellFileDrop={handleCellFileDrop}
             onCellRevert={handleRevertCell}
             onCellMove={handleCellMove}
+            onCellMultiDrop={handleCellMultiDrop}
           />
         )}
       </div>

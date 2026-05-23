@@ -617,9 +617,25 @@ export default function MasterPanel({
     if (e.dataTransfer.types.includes('Files')) return
     dragIndexRef.current = index
     e.dataTransfer.effectAllowed = 'copyMove'
+
+    // IA.17 — When the dragged card is part of the active selection
+    // (Cmd-click or "Select all"), carry the whole set in a separate
+    // dataTransfer key. Drop targets that understand multi-payload
+    // (AmazonMatrix cells fan into slots) read this first; legacy
+    // single-image drops still work because we also set the legacy
+    // url + id keys for the primary card.
+    const primary = images[index]
+    const draggingSet = selectedIds.has(primary.id) && selectedIds.size > 1
+    if (draggingSet) {
+      const items = images
+        .filter((img) => selectedIds.has(img.id))
+        .map((img) => ({ url: img.url, id: img.id }))
+      e.dataTransfer.setData('application/nexus-image-set', JSON.stringify(items))
+    }
     // Expose URL + id so channel panels can accept drags from master gallery
-    e.dataTransfer.setData('application/nexus-image-url', images[index].url)
-    e.dataTransfer.setData('application/nexus-image-id', images[index].id)
+    e.dataTransfer.setData('application/nexus-image-url', primary.url)
+    e.dataTransfer.setData('application/nexus-image-id', primary.id)
+
     // IA.16 — Custom drag preview. The browser default is a tiny
     // thumbnail snapshot of the whole card (with corner buttons +
     // metadata) which doesn't match the operator's intent. Use the

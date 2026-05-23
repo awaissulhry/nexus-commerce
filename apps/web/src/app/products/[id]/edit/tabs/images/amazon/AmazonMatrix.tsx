@@ -43,6 +43,15 @@ interface MatrixProps {
     from: { groupValue: string | null; slot: AmazonSlot; url: string; origin: 'own' | 'inherited'; listingImageId?: string },
     to: { groupValue: string | null; slot: AmazonSlot },
   ) => void
+  /** IA.17 — Multi-image drop from a master-gallery multi-drag. Fans
+   *  the items across the target slot + next free slots in slot
+   *  order (MAIN, PT01..PT08, SWCH). AmazonPanel implements the
+   *  fan-out. */
+  onCellMultiDrop?: (
+    groupValue: string | null,
+    startSlot: AmazonSlot,
+    items: Array<{ url: string; id?: string }>,
+  ) => void
 }
 
 // ── Slot cell ──────────────────────────────────────────────────────────
@@ -74,6 +83,9 @@ interface SlotCellProps {
   /** IA.9 — Identifier the cell stamps onto its dataTransfer payload
    *  so the drop target knows which cell it's coming from. */
   selfGroupValue: string | null
+  /** IA.17 — Multi-payload drop. The cell forwards the parsed list
+   *  up to AmazonMatrix which fans across slots. */
+  onMultiDrop?: (items: Array<{ url: string; id?: string }>) => void
 }
 
 function SlotCell({
@@ -91,12 +103,14 @@ function SlotCell({
   onRevert,
   onCellMoveDrop,
   selfGroupValue,
+  onMultiDrop,
 }: SlotCellProps) {
   const [isOver, setIsOver] = useState(false)
   const isMain = slot === 'MAIN'
 
   function handleDragOver(e: React.DragEvent) {
     if (
+      e.dataTransfer.types.includes('application/nexus-image-set') ||
       e.dataTransfer.types.includes('application/nexus-matrix-cell') ||
       e.dataTransfer.types.includes('application/nexus-image-url') ||
       e.dataTransfer.types.includes('Files')
@@ -112,6 +126,19 @@ function SlotCell({
     e.preventDefault()
     e.stopPropagation()
     setIsOver(false)
+    // IA.17 — Multi-image set from a master-gallery multi-drag.
+    // Check before the single-image keys; if the set is present and
+    // has 2+ items, fan into slots starting at this cell.
+    const setPayload = e.dataTransfer.getData('application/nexus-image-set')
+    if (setPayload && onMultiDrop) {
+      try {
+        const items = JSON.parse(setPayload) as Array<{ url: string; id?: string }>
+        if (Array.isArray(items) && items.length > 1) {
+          onMultiDrop(items)
+          return
+        }
+      } catch { /* fall through */ }
+    }
     // IA.9 — Internal cell-to-cell drop. Check this first so the
     // outer onDrop (which assumes an external source) doesn't fire
     // when the drag came from another matrix cell.
@@ -437,6 +464,7 @@ export default function AmazonMatrix({
   onCellFileDrop,
   onCellRevert,
   onCellMove,
+  onCellMultiDrop,
   cellStatusFilter = 'all',
 }: MatrixProps) {
   // IE.11 — Match a cell against the active status filter. Empty
@@ -641,6 +669,9 @@ export default function AmazonMatrix({
                         onRevert={onCellRevert ? () => onCellRevert(groupValue, slot) : undefined}
                         onCellMoveDrop={onCellMove
                           ? (from) => onCellMove(from, { groupValue, slot })
+                          : undefined}
+                        onMultiDrop={onCellMultiDrop
+                          ? (items) => onCellMultiDrop(groupValue, slot, items)
                           : undefined}
                       />
                     </div>
