@@ -587,7 +587,7 @@ export default function ShopifyPanel({
       </div>
 
       {/* Publish */}
-      <div className="px-5 py-3 border-t border-slate-100 dark:border-slate-800 flex flex-col gap-1.5">
+      <div data-publish-anchor className="px-5 py-3 border-t border-slate-100 dark:border-slate-800 flex flex-col gap-1.5">
         <div className="flex items-center justify-between">
           <span className="text-xs text-slate-400">
             PUT /products/{'{id}'} · variant image_id assignment via REST

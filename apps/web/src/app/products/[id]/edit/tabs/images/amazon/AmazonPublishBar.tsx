@@ -69,7 +69,7 @@ export default function AmazonPublishBar({
 
   const recentJobs = feedJobs.slice(0, 3)
   return (
-    <div className="border-t border-slate-200 dark:border-slate-700 px-4 pt-3 pb-2 space-y-3">
+    <div data-publish-anchor className="border-t border-slate-200 dark:border-slate-700 px-4 pt-3 pb-2 space-y-3">
       {/* Publish buttons row */}
       <div className="flex items-center gap-2 flex-wrap">
         <span className="text-xs font-medium text-slate-500 dark:text-slate-400 mr-1">Publish:</span>

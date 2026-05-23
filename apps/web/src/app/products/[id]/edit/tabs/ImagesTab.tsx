@@ -136,6 +136,16 @@ export default function ImagesTab({ product, discardSignal, onDirtyChange }: Pro
     shopify: listing.filter((i) => i.platform === 'SHOPIFY' && i.publishStatus === 'PUBLISHED').length,
   }), [listing])
 
+  // PB.2 — "needs publish" rows per channel: anything other than
+  // PUBLISHED (DRAFT, OUTDATED, ERROR). Surfaced as a pill on each
+  // channel tab next to the completeness score. Click pill →
+  // jumps to the channel's publish anchor (PB.2).
+  const unpublishedCount = useMemo(() => ({
+    amazon:  listing.filter((i) => i.platform === 'AMAZON'  && i.publishStatus !== 'PUBLISHED').length,
+    ebay:    listing.filter((i) => i.platform === 'EBAY'    && i.publishStatus !== 'PUBLISHED').length,
+    shopify: listing.filter((i) => i.platform === 'SHOPIFY' && i.publishStatus !== 'PUBLISHED').length,
+  }), [listing])
+
   // PB.1 — Per-channel status for the global Publish dropdown in the
   // action bar. hasContent is true once any image exists at master OR
   // listing level (the publish resolver cascades from master, so a
@@ -239,6 +249,26 @@ export default function ImagesTab({ product, discardSignal, onDirtyChange }: Pro
     return Array.from(workspace.pendingUpserts.values()).filter(
       (u) => u.platform === platform,
     ).length
+  }
+
+  // PB.2 — Click-to-jump from a channel tab's "N to publish" pill.
+  // Switches tab AND scrolls the channel's publish anchor into view
+  // after the panel renders.
+  function jumpToChannelPublish(channel: ChannelTab) {
+    setActiveChannel(channel)
+    // Wait one frame for the panel to mount, then a tick for layout.
+    requestAnimationFrame(() => {
+      window.setTimeout(() => {
+        const el = document.querySelector<HTMLElement>('[data-publish-anchor]')
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'end' })
+          el.classList.add('ring-2', 'ring-blue-400', 'rounded-xl')
+          window.setTimeout(() => {
+            el.classList.remove('ring-2', 'ring-blue-400', 'rounded-xl')
+          }, 1600)
+        }
+      }, 80)
+    })
   }
 
   // PB.1 — Top-level publish handler used by ImageActionBar's dropdown.
@@ -353,39 +383,71 @@ export default function ImagesTab({ product, discardSignal, onDirtyChange }: Pro
               const dotCount = key === 'master' ? 0 : pendingForChannel(key as any)
               const score = key === 'master' ? null : channelScores[key as keyof typeof channelScores]
               const pubCount = key === 'master' ? null : publishedCount[key as keyof typeof publishedCount]
+              // PB.2 — count of ListingImage rows not yet PUBLISHED.
+              const unpubCount = key === 'master' ? 0 : unpublishedCount[key as keyof typeof unpublishedCount]
               return (
-                <button
+                <div
                   key={key}
-                  type="button"
-                  onClick={() => setActiveChannel(key)}
                   className={cn(
-                    'relative flex items-center gap-1.5 px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap',
+                    'relative flex items-center gap-1.5 border-b-2 transition-colors whitespace-nowrap',
                     isActive
-                      ? 'border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400'
-                      : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:border-slate-300 dark:hover:border-slate-600',
+                      ? 'border-blue-600 dark:border-blue-400'
+                      : 'border-transparent hover:border-slate-300 dark:hover:border-slate-600',
                   )}
                 >
-                  {label}
-                  {/* IM.10 — Completeness score pill */}
-                  {score !== null && (
-                    <span
-                      className={cn(
-                        'text-[10px] font-mono px-1.5 py-px rounded tabular-nums',
-                        score >= 80
-                          ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300'
-                          : score >= 50
-                            ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300'
-                            : 'bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300',
-                      )}
-                      title={`${score}% complete${pubCount ? ` · ${pubCount} published` : ''}`}
+                  {/* Tab label (selects tab) */}
+                  <button
+                    type="button"
+                    onClick={() => setActiveChannel(key)}
+                    className={cn(
+                      'flex items-center gap-1.5 pl-4 py-3 text-sm font-medium',
+                      isActive
+                        ? 'text-blue-600 dark:text-blue-400'
+                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100',
+                    )}
+                  >
+                    {label}
+                    {/* IM.10 — Completeness score pill */}
+                    {score !== null && (
+                      <span
+                        className={cn(
+                          'text-[10px] font-mono px-1.5 py-px rounded tabular-nums',
+                          score >= 80
+                            ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300'
+                            : score >= 50
+                              ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300'
+                              : 'bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300',
+                        )}
+                        title={`${score}% complete${pubCount ? ` · ${pubCount} published` : ''}`}
+                      >
+                        {score}%
+                      </span>
+                    )}
+                  </button>
+
+                  {/* PB.2 — Needs-publish pill. Click jumps to publish bar. */}
+                  {unpubCount > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => jumpToChannelPublish(key)}
+                      className="text-[10px] font-medium px-1.5 py-px rounded tabular-nums bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-900/50 inline-flex items-center gap-0.5"
+                      title={`${unpubCount} not yet published — click to jump to publish`}
                     >
-                      {score}%
-                    </span>
+                      <svg viewBox="0 0 12 12" className="w-2.5 h-2.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <path d="M3 9 L9 3 M5 3 L9 3 L9 7" />
+                      </svg>
+                      {unpubCount}
+                    </button>
                   )}
+
+                  {/* Unsaved-changes dot */}
                   {dotCount > 0 && (
                     <span className="w-1.5 h-1.5 rounded-full bg-amber-500 dark:bg-amber-400" title={`${dotCount} unsaved`} />
                   )}
-                </button>
+
+                  {/* Right-edge padding (stays inside the tab background) */}
+                  <span className="pr-4 py-3" aria-hidden="true" />
+                </div>
               )
             })}
           </div>
