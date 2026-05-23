@@ -30,6 +30,7 @@ import { IconButton } from '@/components/ui/IconButton'
 import { cn } from '@/lib/utils'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import ScopeUploadModal, { type ScopeChoice } from './ScopeUploadModal'
+import BulkApplyModal from './BulkApplyModal'
 import type { ListingImage, PendingUpsert, ProductImage, VariantSummary, WorkspaceProduct } from './types'
 
 const IMAGE_TYPES = ['MAIN', 'ALT', 'LIFESTYLE', 'SWATCH', 'DIAGRAM'] as const
@@ -116,6 +117,8 @@ export default function MasterPanel({
   // operator hits "Upload to variant…"; the modal reads from here and
   // calls handleScopedUpload(scope) on confirm.
   const [scopedFiles, setScopedFiles] = useState<File[]>([])
+  // IE.12 — master image awaiting bulk-apply target selection.
+  const [bulkApplyImage, setBulkApplyImage] = useState<ProductImage | null>(null)
   // IR.8.3 — apply-to-children flow state.
   const [applyConfirm, setApplyConfirm] = useState(false)
   const [applying, setApplying] = useState(false)
@@ -1036,6 +1039,17 @@ export default function MasterPanel({
                           <button className="w-full text-left px-3 py-1.5 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 font-medium" onClick={() => handleAddToChannel(img, 'all')}>
                             Use in all channels
                           </button>
+                          {addPendingUpsert && variants.length > 0 && (
+                            <>
+                              <div className="h-px bg-slate-100 dark:bg-slate-700 my-1" />
+                              <button
+                                className="w-full text-left px-3 py-1.5 text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-950/30 font-medium"
+                                onClick={() => { setMenuOpenId(null); setBulkApplyImage(img) }}
+                              >
+                                Apply to…
+                              </button>
+                            </>
+                          )}
                           <div className="h-px bg-slate-100 dark:bg-slate-700 my-1" />
                           <button
                             className="w-full text-left px-3 py-1.5 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/20"
@@ -1142,6 +1156,20 @@ export default function MasterPanel({
         onCancel={() => setScopedFiles([])}
         onConfirm={(scope) => { void handleScopedUpload(scope) }}
       />
+
+      {/* IE.12 — Bulk-apply target picker */}
+      {addPendingUpsert && (
+        <BulkApplyModal
+          open={bulkApplyImage !== null}
+          image={bulkApplyImage}
+          variants={variants}
+          listingImages={listingImages}
+          activeAxis={activeAxis}
+          addPendingUpsert={addPendingUpsert}
+          onClose={() => setBulkApplyImage(null)}
+          onToast={onToast}
+        />
+      )}
 
       {/* IE.1.3 — Near-duplicate confirmation modal. Triggers when the
           upload endpoint returns 409 NEAR_DUPLICATE. Shows the
