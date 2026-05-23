@@ -541,17 +541,31 @@ export function VirtualizedGrid<T extends GridLensRow>({
                       <span className="flex flex-col items-start gap-0">
                         <span className="inline-flex items-center gap-1">
                           {col.labelKey ? t(col.labelKey) : col.label}
+                          {/* PG.10 — sort arrow visibility.
+                              Active sort: full-opacity ↑/↓.
+                              Sortable but inactive: ↕ persistent at
+                              30% so every sortable column advertises
+                              itself at rest (Salesforce/Airtable
+                              density). Bumps to full on hover.
+                              Pre-PG.10 the ↕ was opacity-0 → 100 on
+                              hover; operators had to know-or-guess
+                              which columns sorted. */}
                           {isActive ? (
                             <span className="text-slate-400" aria-hidden="true">
                               {sortDir === 'ascending' ? '↑' : '↓'}
                             </span>
                           ) : sortable ? (
-                            <span className="text-slate-300 opacity-0 group-hover/sort:opacity-100 transition-opacity" aria-hidden="true">
+                            <span className="text-slate-300 dark:text-slate-600 opacity-30 group-hover/sort:opacity-100 transition-opacity" aria-hidden="true">
                               ↕
                             </span>
                           ) : null}
                         </span>
-                        {col.subLabel && (
+                        {col.subLabel && density !== 'compact' && (
+                          // PG.10 — at compact density the row is 44 px;
+                          // the two-line header collides with the cell
+                          // baseline. Hide the subLabel hint in compact
+                          // mode; keep it in comfortable + spacious where
+                          // there's vertical room.
                           <span className="text-[10px] font-normal normal-case tracking-normal text-slate-400 dark:text-slate-500 leading-none mt-0.5">
                             {col.subLabel}
                           </span>
