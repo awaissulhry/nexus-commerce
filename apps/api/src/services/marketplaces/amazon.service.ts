@@ -130,7 +130,11 @@ export interface FBAInventoryRow {
 }
 
 /** Charge/fee component from financial events. */
-export interface AmazonMoneyType { Amount: string; CurrencyCode: string }
+// DA-RT.18 — Amazon's SP-API listFinancialEvents response uses
+// `CurrencyAmount: number` in the newer schema versions; older
+// surfaces returned `Amount: string`. Support both — the parser
+// helpers prefer CurrencyAmount when present, fall back to Amount.
+export interface AmazonMoneyType { Amount?: string; CurrencyAmount?: number; CurrencyCode: string }
 export interface AmazonChargeComponent { ChargeType: string; ChargeAmount: AmazonMoneyType }
 export interface AmazonFeeComponent { FeeType: string; FeeAmount: AmazonMoneyType }
 export interface AmazonShipmentItem {

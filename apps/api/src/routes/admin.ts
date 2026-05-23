@@ -420,6 +420,53 @@ export async function adminRoutes(app: FastifyInstance) {
   })
 
   /**
+   * DA-RT.18 — POST /admin/sales-drift/delete-empty-order-fts
+   *
+   * Scoped delete for FinancialTransaction rows created by the
+   * pre-DA-RT.18 parser that read `ChargeAmount.Amount` (undefined
+   * in our seller's API version) instead of `CurrencyAmount`.
+   * Result: rows with transactionType='Order' AND grossRevenue=0
+   * are the bug's fingerprint. Real Amazon-confirmed Order
+   * transactions never settle at €0 (a refund would be transactionType
+   * 'Refund', a fee-only event would be 'ServiceFee').
+   *
+   * Deleting these rows lets the idempotency check in
+   * processOrderEvent pass on the next backfill, so the re-created
+   * rows carry the real grossRevenue from Amazon's response.
+   *
+   * Query param: dryRun=true (default) returns count + sample without
+   * deleting. dryRun=false applies.
+   */
+  app.post<{ Querystring: { dryRun?: string } }>(
+    '/admin/sales-drift/delete-empty-order-fts',
+    async (request, reply) => {
+      try {
+        const dryRun = request.query.dryRun !== 'false'
+        const where = { transactionType: 'Order', grossRevenue: 0 }
+        if (dryRun) {
+          const count = await prisma.financialTransaction.count({ where })
+          const sample = await prisma.financialTransaction.findMany({
+            where,
+            select: {
+              id: true,
+              amazonTransactionId: true,
+              transactionDate: true,
+              order: { select: { channelOrderId: true, totalPrice: true } },
+            },
+            take: 10,
+          })
+          return reply.send({ dryRun: true, count, sample })
+        }
+        const result = await prisma.financialTransaction.deleteMany({ where })
+        return reply.send({ dryRun: false, deleted: result.count })
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unknown error'
+        return reply.status(500).send({ error: message })
+      }
+    },
+  )
+
+  /**
    * DA-RT.15 — POST /admin/sales-drift/fix-line-total-orderitems
    *
    * One-shot migration for OrderItem rows where the ingest stored

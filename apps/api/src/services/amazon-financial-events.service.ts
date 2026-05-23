@@ -34,21 +34,35 @@ function parseAmount(str: string | undefined): number {
   return isNaN(n) ? 0 : n
 }
 
+/** DA-RT.18 — Amazon SP-API's listFinancialEvents response uses
+ *  `CurrencyAmount: number` in the v0/v1 shapes our seller account
+ *  receives; older API surfaces returned `Amount: string`. Read
+ *  CurrencyAmount when present, fall back to Amount otherwise. The
+ *  previous `?.Amount` only access silently returned 0 for every
+ *  charge/fee, producing the 231 €0 FinancialTransaction rows
+ *  surfaced by DA-RT.17's diagnostic. */
+function moneyOf(m: { Amount?: string | number; CurrencyAmount?: number } | undefined): number {
+  if (!m) return 0
+  if (typeof m.CurrencyAmount === 'number') return m.CurrencyAmount
+  if (typeof m.Amount === 'number') return m.Amount
+  return parseAmount(typeof m.Amount === 'string' ? m.Amount : undefined)
+}
+
 function sumCharges(list: AmazonChargeComponent[] | undefined, type: string): number {
   return (list ?? [])
     .filter(c => c.ChargeType === type)
-    .reduce((s, c) => s + parseAmount(c.ChargeAmount?.Amount), 0)
+    .reduce((s, c) => s + moneyOf(c.ChargeAmount), 0)
 }
 
 function sumFees(list: AmazonFeeComponent[] | undefined, ...types: string[]): number {
   const set = new Set(types)
   return (list ?? [])
     .filter(f => set.has(f.FeeType))
-    .reduce((s, f) => s + Math.abs(parseAmount(f.FeeAmount?.Amount)), 0)
+    .reduce((s, f) => s + Math.abs(moneyOf(f.FeeAmount)), 0)
 }
 
 function sumAllFees(list: AmazonFeeComponent[] | undefined): number {
-  return (list ?? []).reduce((s, f) => s + Math.abs(parseAmount(f.FeeAmount?.Amount)), 0)
+  return (list ?? []).reduce((s, f) => s + Math.abs(moneyOf(f.FeeAmount)), 0)
 }
 
 interface FinancialSyncSummary {
