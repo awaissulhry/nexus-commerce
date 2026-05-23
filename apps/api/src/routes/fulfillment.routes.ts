@@ -5782,6 +5782,193 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // PO.6 — edit-in-place: header-field patch with optimistic lock.
+  //
+  // Editable only when status ∈ {DRAFT, REVIEW}. Once APPROVED+, the
+  // PO is locked and changes must go through a revision (PO.8).
+  //
+  // Optimistic lock contract: the client sends its current `version`;
+  // the UPDATE only commits when version matches in the DB. Mismatch
+  // returns 409 + the fresh PO so the client can re-render with the
+  // server's truth and re-apply the operator's pending edits on top.
+  fastify.patch('/fulfillment/purchase-orders/:id', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const body = request.body as {
+        version?: number
+        supplierId?: string | null
+        warehouseId?: string | null
+        expectedDeliveryDate?: string | null
+        notes?: string | null
+      }
+      if (typeof body.version !== 'number') {
+        return reply.code(400).send({ error: 'version required for optimistic lock' })
+      }
+
+      const existing = await prisma.purchaseOrder.findUnique({
+        where: { id },
+        select: { id: true, status: true, version: true },
+      })
+      if (!existing) return reply.code(404).send({ error: 'PO not found' })
+      if (existing.status !== 'DRAFT' && existing.status !== 'REVIEW') {
+        return reply.code(409).send({
+          error: `PO is ${existing.status}; open a revision (PO.8) to change a non-draft PO`,
+        })
+      }
+
+      const data: any = { version: { increment: 1 } }
+      if (body.supplierId !== undefined) data.supplierId = body.supplierId
+      if (body.warehouseId !== undefined) data.warehouseId = body.warehouseId
+      if (body.expectedDeliveryDate !== undefined) {
+        data.expectedDeliveryDate = body.expectedDeliveryDate
+          ? new Date(body.expectedDeliveryDate)
+          : null
+      }
+      if (body.notes !== undefined) data.notes = body.notes
+
+      const result = await prisma.purchaseOrder.updateMany({
+        where: { id, version: body.version },
+        data,
+      })
+      if (result.count === 0) {
+        const fresh = await prisma.purchaseOrder.findUnique({
+          where: { id },
+          select: { id: true, version: true, status: true },
+        })
+        return reply.code(409).send({
+          error: 'Version mismatch — PO was changed by someone else',
+          current: fresh,
+        })
+      }
+
+      publishPoEvent({ type: 'po.updated', poId: id, reason: 'header', ts: Date.now() })
+
+      const updated = await prisma.purchaseOrder.findUnique({
+        where: { id },
+        include: {
+          supplier: true,
+          warehouse: true,
+          items: { orderBy: [{ lineOrder: 'asc' }, { id: 'asc' }] },
+        },
+      })
+      return updated
+    } catch (err: any) {
+      fastify.log.error({ err }, '[purchase-orders/:id PATCH] failed')
+      return reply.code(500).send({ error: err?.message ?? String(err) })
+    }
+  })
+
+  // PO.6 — edit-in-place: bulk-replace line items.
+  //
+  // Frontend autosave sends the full items[] array every time. We use
+  // a transaction to (1) version-check, (2) delete the existing items,
+  // (3) insert the new ones with explicit lineOrder (defaults to the
+  // array index), (4) recompute totalCents, (5) bump version.
+  //
+  // Why bulk-replace instead of per-line PATCH/POST/DELETE: the autosave
+  // pattern needs idempotency + simple conflict semantics. One PATCH
+  // per edit risks partial-state races where another tab sees a half-
+  // applied PO. Bulk-replace keeps each save atomic.
+  fastify.patch('/fulfillment/purchase-orders/:id/lines', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const body = request.body as {
+        version?: number
+        items?: Array<{
+          productId?: string | null
+          sku: string
+          supplierSku?: string | null
+          quantityOrdered: number
+          unitCostCents: number
+          note?: string | null
+          lineOrder?: number
+        }>
+      }
+      if (typeof body.version !== 'number') {
+        return reply.code(400).send({ error: 'version required for optimistic lock' })
+      }
+      const items = Array.isArray(body.items) ? body.items : []
+      if (items.length === 0) {
+        return reply.code(400).send({ error: 'items[] required (cannot empty a PO)' })
+      }
+
+      const existing = await prisma.purchaseOrder.findUnique({
+        where: { id },
+        select: { id: true, status: true, version: true },
+      })
+      if (!existing) return reply.code(404).send({ error: 'PO not found' })
+      if (existing.status !== 'DRAFT' && existing.status !== 'REVIEW') {
+        return reply.code(409).send({
+          error: `PO is ${existing.status}; open a revision (PO.8) to change a non-draft PO`,
+        })
+      }
+      if (existing.version !== body.version) {
+        const fresh = await prisma.purchaseOrder.findUnique({
+          where: { id },
+          select: { id: true, version: true, status: true },
+        })
+        return reply.code(409).send({
+          error: 'Version mismatch — PO was changed by someone else',
+          current: fresh,
+        })
+      }
+
+      const totalCents = items.reduce(
+        (s, it) => s + Math.max(0, it.unitCostCents) * Math.max(0, it.quantityOrdered),
+        0,
+      )
+
+      const updated = await prisma.$transaction(async (tx) => {
+        // Optimistic-lock re-check inside the transaction to close the
+        // race window between the read above and the writes below.
+        const locked = await tx.purchaseOrder.updateMany({
+          where: { id, version: body.version },
+          data: { totalCents, version: { increment: 1 } },
+        })
+        if (locked.count === 0) {
+          throw new Error('VERSION_MISMATCH')
+        }
+        await tx.purchaseOrderItem.deleteMany({ where: { purchaseOrderId: id } })
+        await tx.purchaseOrderItem.createMany({
+          data: items.map((it, idx) => ({
+            purchaseOrderId: id,
+            productId: it.productId ?? null,
+            sku: it.sku,
+            supplierSku: it.supplierSku ?? null,
+            quantityOrdered: it.quantityOrdered,
+            unitCostCents: it.unitCostCents,
+            note: it.note ?? null,
+            lineOrder: it.lineOrder ?? idx,
+          })),
+        })
+        return await tx.purchaseOrder.findUnique({
+          where: { id },
+          include: {
+            supplier: true,
+            warehouse: true,
+            items: { orderBy: [{ lineOrder: 'asc' }, { id: 'asc' }] },
+          },
+        })
+      })
+
+      publishPoEvent({ type: 'po.updated', poId: id, reason: 'lines', ts: Date.now() })
+      return updated
+    } catch (err: any) {
+      if (err?.message === 'VERSION_MISMATCH') {
+        const fresh = await prisma.purchaseOrder.findUnique({
+          where: { id: (request.params as any).id },
+          select: { id: true, version: true, status: true },
+        })
+        return reply.code(409).send({
+          error: 'Version mismatch — PO was changed by someone else',
+          current: fresh,
+        })
+      }
+      fastify.log.error({ err }, '[purchase-orders/:id/lines PATCH] failed')
+      return reply.code(500).send({ error: err?.message ?? String(err) })
+    }
+  })
+
   // R.7 — chronological audit trail for a PO. Lists every state
   // transition with its timestamp + user (when known).
   fastify.get('/fulfillment/purchase-orders/:id/audit', async (request, reply) => {

@@ -50,6 +50,7 @@ import {
   statusVariant,
 } from '../_shared/po-lens'
 import { PoLiveSyncChip } from '../_shared/PoLiveSyncChip'
+import { EditableSummaryPane, isEditableStatus } from '../_shared/EditableSummaryPane'
 
 // ── Types ──────────────────────────────────────────────────────────
 
@@ -634,7 +635,11 @@ export default function PurchaseOrderDetailClient({ id }: { id: string }) {
           is a single document. */}
       <div className="po-detail-print-all space-y-4">
         <section data-tab-pane className={cn(tab !== 'summary' && 'po-detail-no-print')}>
-          <SummaryPane po={po} />
+          {isEditableStatus(po.status) ? (
+            <EditableSummaryPane po={po} onRefresh={refresh} />
+          ) : (
+            <SummaryPane po={po} />
+          )}
         </section>
         <section data-tab-pane className={cn(tab !== 'activity' && 'po-detail-no-print')}>
           <ActivityPane audit={audit} />
