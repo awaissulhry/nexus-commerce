@@ -41,7 +41,6 @@ import {
   type LensTab,
   type FilterDimension,
   type PreferencesValue,
-  type ActionDef,
 } from '@/app/_shared/grid-lens'
 import PageHeader from '@/components/layout/PageHeader'
 import {
@@ -1270,6 +1269,45 @@ export default function ListingsWorkspace({ lockChannel, lockMarketplace, titleO
           onClose={() => setShortcutsOpen(false)}
         />
       )}
+
+      {/* XG.5 — shared Preferences modal. Owns sticky toggles + page
+          size + sort + column visibility/order; replaces the bespoke
+          ColumnPickerMenu popover. Per-channel subpages (/listings/
+          amazon etc.) inherit via the same storageKey since they share
+          this component. */}
+      <PreferencesModal
+        open={columnPickerOpen}
+        onClose={() => setColumnPickerOpen(false)}
+        allColumns={ALL_COLUMNS}
+        defaultVisible={defaultVisible}
+        sortFieldOptions={LISTINGS_SORT_FIELD_OPTIONS}
+        pageSizeChoices={[25, 50, 100, 250]}
+        value={{
+          pageSize,
+          visibleColumns,
+          stickyFirstColumn,
+          stickyLastColumn,
+          sortBy,
+          sortDir,
+        }}
+        onConfirm={(next: PreferencesValue) => {
+          if (next.pageSize !== pageSize) {
+            updateUrl({ pageSize: next.pageSize === 50 ? undefined : String(next.pageSize), page: undefined })
+          }
+          // Strip 'actions' if it sneaks through (locked detection
+          // should prevent it; defense in depth).
+          setVisibleColumns(next.visibleColumns.filter((k) => k !== 'actions'))
+          setStickyFirstColumn(next.stickyFirstColumn)
+          setStickyLastColumn(next.stickyLastColumn)
+          if (next.sortBy !== sortBy || next.sortDir !== sortDir) {
+            updateUrl({
+              sortBy: next.sortBy === 'updatedAt' ? undefined : next.sortBy,
+              sortDir: next.sortDir,
+              page: undefined,
+            })
+          }
+        }}
+      />
     </div>
   )
 }
@@ -1862,7 +1900,10 @@ function GridLens(props: {
   stickyFirstColumn: boolean
   stickyLastColumn: boolean
 }) {
-  const { grid, visible, visibleColumns, setVisibleColumns, columnPickerOpen, setColumnPickerOpen, sortBy, sortDir, onSort, page, onPage, pageSize, onPageSize, selected, setSelected, onOpenDrawer, onResync, onListingChanged, activeRowIndex, density, setDensity, storageKey, defaultVisible, parentRows, childrenByParent, expandedParents, onToggleExpand, stickyFirstColumn, stickyLastColumn } = props
+  // XG.5 — setVisibleColumns / columnPickerOpen / defaultVisible are
+  // now owned by the workspace root (where the PreferencesModal is
+  // mounted); GridLens only reads visibleColumns + the sticky toggles.
+  const { grid, visible, visibleColumns, setColumnPickerOpen, sortBy, sortDir, onSort, page, onPage, pageSize, onPageSize, selected, setSelected, onOpenDrawer, onResync, onListingChanged, activeRowIndex, density, setDensity, storageKey, parentRows, childrenByParent, expandedParents, onToggleExpand, stickyFirstColumn, stickyLastColumn } = props
 
   // grouping state (expandedParents, parentRows, childrenByParent, onToggleExpand)
   // is now owned by ListingsWorkspace so the keyboard handler has access.
@@ -2349,43 +2390,6 @@ function CellRenderer({ col, listing, isParentRow = false, onOpenDrawer, onResyn
     default:
       return null
   }
-}
-
-// ────────────────────────────────────────────────────────────────────
-// ColumnPickerMenu
-// ────────────────────────────────────────────────────────────────────
-function ColumnPickerMenu({ visible, setVisible, onClose, defaultVisible }: { visible: string[]; setVisible: (v: string[]) => void; onClose: () => void; defaultVisible?: string[] }) {
-  const ref = useRef<HTMLDivElement>(null)
-  useEffect(() => {
-    const onClick = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) onClose()
-    }
-    document.addEventListener('mousedown', onClick)
-    return () => document.removeEventListener('mousedown', onClick)
-  }, [onClose])
-  const togglable = ALL_COLUMNS
-  return (
-    <div ref={ref} className="absolute right-0 top-full mt-1 w-56 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md shadow-lg z-10 p-1.5">
-      <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 px-2 py-1.5">Visible columns</div>
-      {togglable.map((c) => (
-        <label key={c.key} className="flex items-center gap-2 px-2 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-800 rounded text-base cursor-pointer">
-          <input
-            type="checkbox"
-            checked={visible.includes(c.key)}
-            onChange={() => {
-              if (visible.includes(c.key)) setVisible(visible.filter((k) => k !== c.key))
-              else setVisible([...visible, c.key])
-            }}
-          />
-          <span className="text-slate-700 dark:text-slate-300">{c.label || c.key}</span>
-        </label>
-      ))}
-      <div className="border-t border-slate-100 dark:border-slate-800 mt-1.5 pt-1.5 px-2 py-1 flex items-center justify-between">
-        <button onClick={() => setVisible(defaultVisible ?? DEFAULT_VISIBLE)} className="text-sm text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100">Reset</button>
-        <button onClick={onClose} className="text-sm text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100">Close</button>
-      </div>
-    </div>
-  )
 }
 
 // ────────────────────────────────────────────────────────────────────
