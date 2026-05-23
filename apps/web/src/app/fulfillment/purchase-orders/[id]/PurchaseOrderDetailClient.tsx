@@ -20,18 +20,12 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import {
   AlertCircle,
   ArrowLeft,
-  Ban,
   CheckCircle2,
-  ChevronRight,
-  Clock,
-  FileCheck2,
   FileText,
   Loader2,
   Mail,
   MessageSquare,
-  PackageCheck,
   Printer,
-  Send,
   ShoppingCart,
   Truck,
   Paperclip,
@@ -47,6 +41,13 @@ import { useInboundEvents } from '@/lib/sync/use-inbound-events'
 import { useInvalidationChannel } from '@/lib/sync/invalidation-channel'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { cn } from '@/lib/utils'
+import {
+  StatusIcon,
+  availableTransitions,
+  formatCurrency,
+  relativeTime,
+  statusVariant,
+} from '../_shared/po-lens'
 
 // ── Types ──────────────────────────────────────────────────────────
 
@@ -144,111 +145,7 @@ interface AuditEntry {
 
 type Tab = 'summary' | 'activity' | 'shipments' | 'attachments' | 'revisions' | 'comments'
 
-// ── Helpers (duplicated from list; hoisted in PO.3) ─────────────────
-
-function relativeTime(iso: string | null): string {
-  if (!iso) return '—'
-  const ms = Date.now() - new Date(iso).getTime()
-  if (ms < 0) return 'just now'
-  const sec = Math.floor(ms / 1000)
-  if (sec < 60) return `${sec}s ago`
-  const min = Math.floor(sec / 60)
-  if (min < 60) return `${min}m ago`
-  const hr = Math.floor(min / 60)
-  if (hr < 24) return `${hr}h ago`
-  const day = Math.floor(hr / 24)
-  if (day < 30) return `${day}d ago`
-  return new Date(iso).toISOString().slice(0, 10)
-}
-
-function formatCurrency(cents: number, code: string): string {
-  const amount = cents / 100
-  try {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: code,
-      maximumFractionDigits: 2,
-    }).format(amount)
-  } catch {
-    return `${amount.toFixed(2)} ${code}`
-  }
-}
-
-function statusVariant(
-  status: string,
-): 'success' | 'warning' | 'danger' | 'info' | 'default' {
-  switch (status) {
-    case 'ACKNOWLEDGED':
-    case 'RECEIVED':
-    case 'CONFIRMED':
-      return 'success'
-    case 'SUBMITTED':
-    case 'APPROVED':
-      return 'info'
-    case 'REVIEW':
-    case 'PARTIAL':
-      return 'warning'
-    case 'CANCELLED':
-      return 'danger'
-    case 'DRAFT':
-    default:
-      return 'default'
-  }
-}
-
-function StatusIcon({ status, className }: { status: string; className?: string }) {
-  const cls = cn('w-3.5 h-3.5', className)
-  switch (status) {
-    case 'DRAFT':
-      return <FileText className={cn(cls, 'text-slate-500 dark:text-slate-400')} />
-    case 'REVIEW':
-      return <Clock className={cn(cls, 'text-amber-600 dark:text-amber-400')} />
-    case 'APPROVED':
-      return <FileCheck2 className={cn(cls, 'text-blue-600 dark:text-blue-400')} />
-    case 'SUBMITTED':
-      return <Send className={cn(cls, 'text-blue-600 dark:text-blue-400')} />
-    case 'ACKNOWLEDGED':
-    case 'CONFIRMED':
-      return <CheckCircle2 className={cn(cls, 'text-green-600 dark:text-green-400')} />
-    case 'PARTIAL':
-      return <PackageCheck className={cn(cls, 'text-amber-600 dark:text-amber-400')} />
-    case 'RECEIVED':
-      return <PackageCheck className={cn(cls, 'text-green-600 dark:text-green-400')} />
-    case 'CANCELLED':
-      return <Ban className={cn(cls, 'text-red-600 dark:text-red-400')} />
-    default:
-      return <Clock className={cls} />
-  }
-}
-
-function availableTransitions(status: string): Array<{
-  key: 'submit-for-review' | 'approve' | 'send' | 'acknowledge' | 'cancel'
-  label: string
-  variant: 'primary' | 'secondary' | 'danger'
-  icon: typeof Send
-}> {
-  switch (status) {
-    case 'DRAFT':
-      return [
-        { key: 'submit-for-review', label: 'Submit for review', variant: 'primary', icon: ChevronRight },
-        { key: 'cancel', label: 'Cancel', variant: 'danger', icon: Ban },
-      ]
-    case 'REVIEW':
-      return [
-        { key: 'approve', label: 'Approve', variant: 'primary', icon: FileCheck2 },
-        { key: 'cancel', label: 'Cancel', variant: 'danger', icon: Ban },
-      ]
-    case 'APPROVED':
-      return [
-        { key: 'send', label: 'Send to supplier', variant: 'primary', icon: Send },
-        { key: 'cancel', label: 'Cancel', variant: 'danger', icon: Ban },
-      ]
-    case 'SUBMITTED':
-      return [{ key: 'acknowledge', label: 'Mark acknowledged', variant: 'primary', icon: CheckCircle2 }]
-    default:
-      return []
-  }
-}
+// ── Helpers (small, detail-page-local) ──────────────────────────────
 
 function formatBytes(n: number | null): string {
   if (n == null) return '—'
@@ -520,7 +417,7 @@ export default function PurchaseOrderDetailClient({ id }: { id: string }) {
                   ) : (
                     <Icon className="w-3.5 h-3.5" />
                   )}
-                  {tr.label}
+                  {t(tr.labelKey as any)}
                 </button>
               )
             })}

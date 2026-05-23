@@ -1,84 +1,77 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+// PO.3 — /fulfillment/purchase-orders list.
+//
+// Layout choice (operator-confirmed): density table is the default, an
+// expandable card view is preserved behind a toggle. Both lenses share
+// the same data, selection, and transition logic.
+//
+// Grid-lens parity:
+//   - DensityToggle (compact / comfortable / spacious)
+//   - PreferencesModal — sticky-left + visible-columns + sort
+//   - ActionCluster per row (sticky-right column in table view)
+//   - Cmd+. opens the focused row's action menu
+//
+// Helpers + types live in ./_shared/po-lens.tsx — duplicated nowhere.
+
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type CSSProperties,
+} from 'react'
+import Link from 'next/link'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import {
   AlertCircle,
-  Ban,
+  ArrowLeft,
   Check,
   CheckCircle2,
   ChevronDown,
   ChevronRight,
-  Clock,
-  FileCheck2,
   FileText,
   Loader2,
-  PackageCheck,
   Plus,
   Search,
-  Send,
+  Settings2,
   ShoppingCart,
   Trash2,
-  ArrowLeft,
   X,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { EmptyState } from '@/components/ui/EmptyState'
 import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
-import { AutoRefreshSelect, GridToolbar } from '@/app/_shared/grid-lens'
+import {
+  ActionCluster,
+  AutoRefreshSelect,
+  DensityToggle as SharedDensityToggle,
+  GridToolbar,
+  PreferencesModal,
+  type Density,
+  type PreferencesValue,
+} from '@/app/_shared/grid-lens'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useInvalidationChannel } from '@/lib/sync/invalidation-channel'
 import { useInboundEvents } from '@/lib/sync/use-inbound-events'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { cn } from '@/lib/utils'
+import {
+  ACTIVE_STATUSES,
+  STATUS_FILTERS,
+  StatusIcon,
+  availableTransitions,
+  formatCurrency,
+  isPoOverdue,
+  relativeTime,
+  statusVariant,
+  type PORow,
+  type StatusFilter,
+  type WorkflowTransition,
+} from './_shared/po-lens'
 
-// ── Types (mirror PO API response) ─────────────────────────────────
-
-interface POItem {
-  id: string
-  productId: string | null
-  sku: string
-  quantityOrdered: number
-  quantityReceived: number
-  unitCostCents: number
-}
-
-interface PORow {
-  id: string
-  poNumber: string
-  supplierId: string | null
-  supplier: { id: string; name: string } | null
-  warehouseId: string | null
-  warehouse: { code: string } | null
-  status:
-    | 'DRAFT'
-    | 'REVIEW'
-    | 'APPROVED'
-    | 'SUBMITTED'
-    | 'ACKNOWLEDGED'
-    | 'CONFIRMED'
-    | 'PARTIAL'
-    | 'RECEIVED'
-    | 'CANCELLED'
-  totalCents: number
-  currencyCode: string
-  notes: string | null
-  expectedDeliveryDate: string | null
-  reviewedAt: string | null
-  reviewedByUserId: string | null
-  approvedAt: string | null
-  approvedByUserId: string | null
-  submittedAt: string | null
-  submittedByUserId: string | null
-  acknowledgedAt: string | null
-  cancelledAt: string | null
-  cancelledReason: string | null
-  createdAt: string
-  updatedAt: string
-  createdBy: string | null
-  items: POItem[]
-}
+// ── Audit-trail panel (still used by the card lens) ────────────────
 
 interface AuditEntry {
   status: string
@@ -86,160 +79,6 @@ interface AuditEntry {
   byUserId: string | null
   reason?: string | null
 }
-
-// ── Filter chips ───────────────────────────────────────────────────
-
-type StatusFilter =
-  | 'all'
-  | 'active'
-  | 'DRAFT'
-  | 'REVIEW'
-  | 'APPROVED'
-  | 'SUBMITTED'
-  | 'ACKNOWLEDGED'
-  | 'RECEIVED'
-  | 'CANCELLED'
-
-// labelKey → t() lookup at render. Keeps the mapping table flat
-// while still locale-aware.
-const STATUS_FILTERS: Array<{ key: StatusFilter; labelKey: string }> = [
-  { key: 'all', labelKey: 'po.filter.all' },
-  { key: 'active', labelKey: 'po.filter.active' },
-  { key: 'DRAFT', labelKey: 'po.status.DRAFT' },
-  { key: 'REVIEW', labelKey: 'po.status.REVIEW' },
-  { key: 'APPROVED', labelKey: 'po.status.APPROVED' },
-  { key: 'SUBMITTED', labelKey: 'po.status.SUBMITTED' },
-  { key: 'ACKNOWLEDGED', labelKey: 'po.status.ACKNOWLEDGED' },
-  { key: 'RECEIVED', labelKey: 'po.status.RECEIVED' },
-  { key: 'CANCELLED', labelKey: 'po.status.CANCELLED' },
-]
-
-// "active" means anything pre-terminal that needs operator attention.
-const ACTIVE_STATUSES = new Set([
-  'DRAFT',
-  'REVIEW',
-  'APPROVED',
-  'SUBMITTED',
-])
-
-// ── Status presentation ────────────────────────────────────────────
-
-function statusVariant(
-  status: string,
-): 'success' | 'warning' | 'danger' | 'info' | 'default' {
-  switch (status) {
-    case 'ACKNOWLEDGED':
-    case 'RECEIVED':
-    case 'CONFIRMED':
-      return 'success'
-    case 'SUBMITTED':
-    case 'APPROVED':
-      return 'info'
-    case 'REVIEW':
-    case 'PARTIAL':
-      return 'warning'
-    case 'CANCELLED':
-      return 'danger'
-    case 'DRAFT':
-    default:
-      return 'default'
-  }
-}
-
-function StatusIcon({ status, className }: { status: string; className?: string }) {
-  const cls = cn('w-3.5 h-3.5', className)
-  switch (status) {
-    case 'DRAFT':
-      return <FileText className={cn(cls, 'text-slate-500 dark:text-slate-400')} />
-    case 'REVIEW':
-      return <Clock className={cn(cls, 'text-amber-600 dark:text-amber-400')} />
-    case 'APPROVED':
-      return <FileCheck2 className={cn(cls, 'text-blue-600 dark:text-blue-400')} />
-    case 'SUBMITTED':
-      return <Send className={cn(cls, 'text-blue-600 dark:text-blue-400')} />
-    case 'ACKNOWLEDGED':
-    case 'CONFIRMED':
-      return <CheckCircle2 className={cn(cls, 'text-green-600 dark:text-green-400')} />
-    case 'PARTIAL':
-      return <PackageCheck className={cn(cls, 'text-amber-600 dark:text-amber-400')} />
-    case 'RECEIVED':
-      return <PackageCheck className={cn(cls, 'text-green-600 dark:text-green-400')} />
-    case 'CANCELLED':
-      return <Ban className={cn(cls, 'text-red-600 dark:text-red-400')} />
-    default:
-      return <Clock className={cls} />
-  }
-}
-
-// ── Helpers ────────────────────────────────────────────────────────
-
-function relativeTime(iso: string | null): string {
-  if (!iso) return '—'
-  const ms = Date.now() - new Date(iso).getTime()
-  if (ms < 0) return 'just now'
-  const sec = Math.floor(ms / 1000)
-  if (sec < 60) return `${sec}s ago`
-  const min = Math.floor(sec / 60)
-  if (min < 60) return `${min}m ago`
-  const hr = Math.floor(min / 60)
-  if (hr < 24) return `${hr}h ago`
-  const day = Math.floor(hr / 24)
-  if (day < 30) return `${day}d ago`
-  return new Date(iso).toISOString().slice(0, 10)
-}
-
-function formatCurrency(cents: number, code: string): string {
-  const amount = cents / 100
-  // Best-effort Intl formatting; falls back if currencyCode is invalid.
-  try {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: code,
-      maximumFractionDigits: 2,
-    }).format(amount)
-  } catch {
-    return `${amount.toFixed(2)} ${code}`
-  }
-}
-
-// What transitions are available from a given status — mirrors
-// po-workflow.service.ts:nextStatus(). Keep in sync if the backend
-// state machine changes.
-function availableTransitions(
-  status: string,
-): Array<{
-  key: 'submit-for-review' | 'approve' | 'send' | 'acknowledge' | 'cancel'
-  labelKey: string
-  variant: 'primary' | 'secondary' | 'danger'
-  icon: typeof Send
-  destructive?: boolean
-}> {
-  switch (status) {
-    case 'DRAFT':
-      return [
-        { key: 'submit-for-review', labelKey: 'po.transition.submitForReview', variant: 'primary', icon: ChevronRight },
-        { key: 'cancel', labelKey: 'po.transition.cancel', variant: 'danger', icon: Ban, destructive: true },
-      ]
-    case 'REVIEW':
-      return [
-        { key: 'approve', labelKey: 'po.transition.approve', variant: 'primary', icon: FileCheck2 },
-        { key: 'cancel', labelKey: 'po.transition.cancel', variant: 'danger', icon: Ban, destructive: true },
-      ]
-    case 'APPROVED':
-      return [
-        { key: 'send', labelKey: 'po.transition.send', variant: 'primary', icon: Send },
-        { key: 'cancel', labelKey: 'po.transition.cancel', variant: 'danger', icon: Ban, destructive: true },
-      ]
-    case 'SUBMITTED':
-      return [
-        { key: 'acknowledge', labelKey: 'po.transition.acknowledge', variant: 'primary', icon: CheckCircle2 },
-      ]
-    default:
-      return []
-  }
-}
-
-// ── Audit trail panel ──────────────────────────────────────────────
 
 function AuditTrailPanel({ poId }: { poId: string }) {
   const { t } = useTranslations()
@@ -282,7 +121,9 @@ function AuditTrailPanel({ poId }: { poId: string }) {
   }
   if (error) {
     return (
-      <div className="text-base text-red-700 dark:text-red-300">{t('po.audit.unavailable', { error })}</div>
+      <div className="text-base text-red-700 dark:text-red-300">
+        {t('po.audit.unavailable', { error })}
+      </div>
     )
   }
   if (!trail || trail.length === 0) {
@@ -302,7 +143,10 @@ function AuditTrailPanel({ poId }: { poId: string }) {
           <Badge variant={statusVariant(entry.status)} size="sm">
             {entry.status.replace(/_/g, ' ')}
           </Badge>
-          <span className="text-slate-500 dark:text-slate-400" title={new Date(entry.at).toLocaleString()}>
+          <span
+            className="text-slate-500 dark:text-slate-400"
+            title={new Date(entry.at).toLocaleString()}
+          >
             {relativeTime(entry.at)}
           </span>
           {entry.byUserId && (
@@ -317,7 +161,1105 @@ function AuditTrailPanel({ poId }: { poId: string }) {
   )
 }
 
-// ── Per-PO card (expandable) ───────────────────────────────────────
+// ── Density classes ────────────────────────────────────────────────
+
+const DENSITY_ROW_CLS: Record<Density, string> = {
+  compact: 'py-1 text-sm',
+  comfortable: 'py-2 text-base',
+  spacious: 'py-3 text-base',
+}
+
+// ── Column registry ────────────────────────────────────────────────
+
+interface PoColumnSpec {
+  key: string
+  labelKey: string
+  label: string
+  width?: number
+  locked?: boolean
+}
+
+const PO_COLUMNS: ReadonlyArray<PoColumnSpec> = [
+  { key: 'select',          labelKey: 'po.col.select',        label: '',                    width: 36,  locked: true },
+  { key: 'poNumber',        labelKey: 'po.col.poNumber',      label: 'PO #',                width: 160, locked: true },
+  { key: 'status',          labelKey: 'po.col.status',        label: 'Status',              width: 130 },
+  { key: 'supplier',        labelKey: 'po.col.supplier',      label: 'Supplier',            width: 200 },
+  { key: 'warehouse',       labelKey: 'po.col.warehouse',     label: 'Warehouse',           width: 110 },
+  { key: 'total',           labelKey: 'po.col.total',         label: 'Total',               width: 130 },
+  { key: 'lines',           labelKey: 'po.col.lines',         label: 'Lines',               width: 130 },
+  { key: 'expectedDate',    labelKey: 'po.col.expectedDate',  label: 'Expected',            width: 130 },
+  { key: 'confirmedDate',   labelKey: 'po.col.confirmedDate', label: 'Supplier ETA',        width: 150 },
+  { key: 'createdAt',       labelKey: 'po.col.createdAt',     label: 'Created',             width: 110 },
+  { key: 'updatedAt',       labelKey: 'po.col.updatedAt',     label: 'Updated',             width: 110 },
+  { key: 'actions',         labelKey: 'po.col.actions',       label: '',                    width: 120, locked: true },
+]
+
+const DEFAULT_VISIBLE = [
+  'select',
+  'poNumber',
+  'status',
+  'supplier',
+  'warehouse',
+  'total',
+  'lines',
+  'expectedDate',
+  'confirmedDate',
+  'createdAt',
+  'actions',
+]
+
+const SORT_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
+  { value: 'createdAt:desc',   label: 'Created (newest)' },
+  { value: 'createdAt:asc',    label: 'Created (oldest)' },
+  { value: 'expectedDate:asc', label: 'Expected delivery (soonest)' },
+  { value: 'expectedDate:desc',label: 'Expected delivery (latest)' },
+  { value: 'total:desc',       label: 'Total (highest)' },
+  { value: 'total:asc',        label: 'Total (lowest)' },
+  { value: 'poNumber:asc',     label: 'PO number (A→Z)' },
+  { value: 'poNumber:desc',    label: 'PO number (Z→A)' },
+]
+
+function compareRows(a: PORow, b: PORow, sortBy: string, dir: 'asc' | 'desc'): number {
+  const sign = dir === 'desc' ? -1 : 1
+  switch (sortBy) {
+    case 'createdAt':
+      return sign * (new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
+    case 'updatedAt':
+      return sign * (new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime())
+    case 'expectedDate': {
+      const av = a.expectedDeliveryDate ? new Date(a.expectedDeliveryDate).getTime() : Number.POSITIVE_INFINITY
+      const bv = b.expectedDeliveryDate ? new Date(b.expectedDeliveryDate).getTime() : Number.POSITIVE_INFINITY
+      return sign * (av - bv)
+    }
+    case 'total':
+      return sign * (a.totalCents - b.totalCents)
+    case 'poNumber':
+      return sign * a.poNumber.localeCompare(b.poNumber)
+    default:
+      return 0
+  }
+}
+
+// ── localStorage keys ──────────────────────────────────────────────
+
+const LS = {
+  view: 'po.list.view',
+  density: 'po.list.density',
+  visibleColumns: 'po.list.visibleColumns',
+  stickyLeft: 'po.list.stickyLeft',
+  stickyRight: 'po.list.stickyRight',
+  sort: 'po.list.sort',
+  autoRefreshMin: 'po.list.autoRefreshMin',
+} as const
+
+type ViewMode = 'table' | 'card'
+
+function readLS<T>(key: string, fallback: T, parse: (v: string) => T): T {
+  if (typeof window === 'undefined') return fallback
+  try {
+    const raw = window.localStorage.getItem(key)
+    return raw == null ? fallback : parse(raw)
+  } catch {
+    return fallback
+  }
+}
+
+function writeLS(key: string, value: string) {
+  try {
+    window.localStorage.setItem(key, value)
+  } catch {
+    /* ignore */
+  }
+}
+
+// ── Top-level client ───────────────────────────────────────────────
+
+export default function PurchaseOrdersClient() {
+  const { t } = useTranslations()
+  const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
+
+  const urlStatus = (searchParams.get('status') ?? 'all') as StatusFilter
+  const validStatuses = useMemo(
+    () => new Set(STATUS_FILTERS.map((f) => f.key as StatusFilter)),
+    [],
+  )
+  const statusFilter: StatusFilter = validStatuses.has(urlStatus) ? urlStatus : 'all'
+  const setStatusFilter = useCallback(
+    (next: StatusFilter) => {
+      const params = new URLSearchParams(searchParams.toString())
+      if (next === 'all') params.delete('status')
+      else params.set('status', next)
+      const qs = params.toString()
+      router.replace(qs ? `${pathname}?${qs}` : pathname)
+    },
+    [pathname, router, searchParams],
+  )
+
+  // RB.1 — recycle-bin scope via ?deleted=true.
+  const showDeleted = searchParams.get('deleted') === 'true'
+  const toggleShowDeleted = useCallback(() => {
+    const params = new URLSearchParams(searchParams.toString())
+    if (showDeleted) params.delete('deleted')
+    else params.set('deleted', 'true')
+    const qs = params.toString()
+    router.replace(qs ? `${pathname}?${qs}` : pathname)
+  }, [pathname, router, searchParams, showDeleted])
+
+  const [pos, setPos] = useState<PORow[] | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
+  const [search, setSearch] = useState('')
+  const [createOpen, setCreateOpen] = useState(false)
+  const [lastFetchedAt, setLastFetchedAt] = useState<number | null>(null)
+
+  // ── View / density / preferences state (LS-persisted) ────────────
+
+  const [view, setView] = useState<ViewMode>(() =>
+    readLS<ViewMode>(LS.view, 'table', (v) => (v === 'card' ? 'card' : 'table')),
+  )
+  useEffect(() => writeLS(LS.view, view), [view])
+
+  const [density, setDensity] = useState<Density>(() =>
+    readLS<Density>(LS.density, 'comfortable', (v) =>
+      v === 'compact' || v === 'spacious' ? v : 'comfortable',
+    ),
+  )
+  useEffect(() => writeLS(LS.density, density), [density])
+
+  const [autoRefreshMin, setAutoRefreshMin] = useState<0 | 5 | 15>(() =>
+    readLS<0 | 5 | 15>(LS.autoRefreshMin, 0, (v) => {
+      const n = Number(v)
+      return n === 5 || n === 15 ? (n as 5 | 15) : 0
+    }),
+  )
+  useEffect(() => writeLS(LS.autoRefreshMin, String(autoRefreshMin)), [autoRefreshMin])
+
+  const [stickyLeft, setStickyLeft] = useState<boolean>(() =>
+    readLS<boolean>(LS.stickyLeft, true, (v) => v !== 'false'),
+  )
+  const [stickyRight, setStickyRight] = useState<boolean>(() =>
+    readLS<boolean>(LS.stickyRight, true, (v) => v !== 'false'),
+  )
+  useEffect(() => writeLS(LS.stickyLeft, String(stickyLeft)), [stickyLeft])
+  useEffect(() => writeLS(LS.stickyRight, String(stickyRight)), [stickyRight])
+
+  const [visibleColumns, setVisibleColumns] = useState<string[]>(() =>
+    readLS<string[]>(LS.visibleColumns, DEFAULT_VISIBLE, (v) => {
+      try {
+        const parsed = JSON.parse(v) as string[]
+        return Array.isArray(parsed) && parsed.length > 0 ? parsed : DEFAULT_VISIBLE
+      } catch {
+        return DEFAULT_VISIBLE
+      }
+    }),
+  )
+  useEffect(
+    () => writeLS(LS.visibleColumns, JSON.stringify(visibleColumns)),
+    [visibleColumns],
+  )
+
+  const [sortKey, setSortKey] = useState<{ by: string; dir: 'asc' | 'desc' }>(() =>
+    readLS<{ by: string; dir: 'asc' | 'desc' }>(
+      LS.sort,
+      { by: 'createdAt', dir: 'desc' },
+      (v) => {
+        try {
+          const parsed = JSON.parse(v)
+          if (parsed && typeof parsed.by === 'string' && (parsed.dir === 'asc' || parsed.dir === 'desc')) {
+            return parsed
+          }
+          return { by: 'createdAt', dir: 'desc' }
+        } catch {
+          return { by: 'createdAt', dir: 'desc' }
+        }
+      },
+    ),
+  )
+  useEffect(() => writeLS(LS.sort, JSON.stringify(sortKey)), [sortKey])
+
+  const [preferencesOpen, setPreferencesOpen] = useState(false)
+
+  // ── Selection + bulk delete ──────────────────────────────────────
+
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [bulkDeleting, setBulkDeleting] = useState(false)
+  const [confirmBulkDelete, setConfirmBulkDelete] = useState(false)
+  const toggleSelected = useCallback((id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }, [])
+  const clearSelection = useCallback(() => setSelected(new Set()), [])
+
+  // ── Fetch ────────────────────────────────────────────────────────
+
+  const fetchPos = useCallback(async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const url = new URL(`${getBackendUrl()}/api/fulfillment/purchase-orders`)
+      if (statusFilter !== 'all' && statusFilter !== 'active') {
+        url.searchParams.set('status', statusFilter)
+      } else if (statusFilter === 'active') {
+        url.searchParams.set('status', Array.from(ACTIVE_STATUSES).join(','))
+      }
+      if (showDeleted) url.searchParams.set('deleted', 'true')
+      const res = await fetch(url.toString(), { cache: 'no-store' })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body.error ?? `HTTP ${res.status}`)
+      }
+      const data = await res.json()
+      setPos(data.items ?? [])
+      setLastFetchedAt(Date.now())
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setLoading(false)
+    }
+  }, [statusFilter, showDeleted])
+
+  useEffect(() => {
+    fetchPos()
+  }, [fetchPos])
+
+  // F-RT.1 — inbound SSE pipe + invalidation listener.
+  useInboundEvents()
+  useInvalidationChannel(
+    ['inbound.received', 'inbound.discrepancy', 'inbound.updated', 'inbound.created'],
+    useCallback(() => {
+      fetchPos()
+    }, [fetchPos]),
+  )
+
+  const handleBulkDelete = useCallback(async () => {
+    const ids = Array.from(selected)
+    if (ids.length === 0) return
+    setBulkDeleting(true)
+    setActionError(null)
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/fulfillment/purchase-orders/bulk-soft-delete`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ids }),
+        },
+      )
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body?.error ?? `HTTP ${res.status}`)
+      }
+      setSelected(new Set())
+      setConfirmBulkDelete(false)
+      await fetchPos()
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setBulkDeleting(false)
+    }
+  }, [selected, fetchPos])
+
+  const handleTransition = useCallback(
+    async (poId: string, transition: WorkflowTransition, reason?: string) => {
+      setActionError(null)
+      try {
+        const res = await fetch(
+          `${getBackendUrl()}/api/fulfillment/purchase-orders/${poId}/transition`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ transition, reason }),
+          },
+        )
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}))
+          throw new Error(body.error ?? `HTTP ${res.status}`)
+        }
+        await fetchPos()
+      } catch (err) {
+        setActionError(err instanceof Error ? err.message : String(err))
+      }
+    },
+    [fetchPos],
+  )
+
+  // ── Filtered + sorted list ───────────────────────────────────────
+
+  const counts = useMemo(() => {
+    const c: Record<string, number> = { active: 0 }
+    if (pos) {
+      for (const p of pos) {
+        c[p.status] = (c[p.status] ?? 0) + 1
+        if (ACTIVE_STATUSES.has(p.status)) c.active++
+      }
+    }
+    return c
+  }, [pos])
+
+  const filteredPos = useMemo(() => {
+    if (!pos) return null
+    const q = search.trim().toLowerCase()
+    const filtered = !q
+      ? pos
+      : pos.filter((p) => {
+          if (p.poNumber.toLowerCase().includes(q)) return true
+          if (p.supplier?.name?.toLowerCase().includes(q)) return true
+          if (p.items.some((it) => it.sku.toLowerCase().includes(q))) return true
+          return false
+        })
+    return [...filtered].sort((a, b) => compareRows(a, b, sortKey.by, sortKey.dir))
+  }, [pos, search, sortKey])
+
+  // Preferences modal commit handler — atomic update of every field.
+  const preferencesValue: PreferencesValue = useMemo(
+    () => ({
+      pageSize: 200, // fixed; server-capped at 200
+      visibleColumns,
+      stickyFirstColumn: stickyLeft,
+      stickyLastColumn: stickyRight,
+      sortBy: sortKey.by,
+      sortDir: sortKey.dir,
+    }),
+    [visibleColumns, stickyLeft, stickyRight, sortKey],
+  )
+
+  const onPreferencesConfirm = useCallback(
+    (next: PreferencesValue) => {
+      setVisibleColumns(next.visibleColumns)
+      setStickyLeft(next.stickyFirstColumn)
+      setStickyRight(next.stickyLastColumn)
+      setSortKey({ by: next.sortBy, dir: next.sortDir })
+      setPreferencesOpen(false)
+    },
+    [],
+  )
+
+  return (
+    <div className="space-y-3">
+      {/* Toolbar — search, filters, density, view, prefs, auto-refresh */}
+      <GridToolbar
+        searchSlot={
+          <div className="relative">
+            <Search
+              size={12}
+              className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500"
+            />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder={t('po.search.placeholder')}
+              className="h-8 pl-7 pr-2 text-base border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 w-56"
+            />
+          </div>
+        }
+        quickFilterSlot={
+          <div className="flex items-center gap-1 flex-wrap">
+            {STATUS_FILTERS.map((f) => {
+              const count = f.key === 'all' ? pos?.length ?? 0 : counts[f.key] ?? 0
+              return (
+                <button
+                  key={f.key}
+                  type="button"
+                  onClick={() => setStatusFilter(f.key)}
+                  className={cn(
+                    'px-3 py-1 text-sm font-medium rounded border transition-colors',
+                    statusFilter === f.key
+                      ? 'bg-slate-900 dark:bg-slate-100 text-white border-slate-900'
+                      : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600',
+                  )}
+                >
+                  {t(f.labelKey as any)}
+                  {pos && count > 0 && <span className="ml-1 opacity-70">{count}</span>}
+                </button>
+              )
+            })}
+          </div>
+        }
+        density={
+          /* PO.3 — view-mode toggle + density toggle live in the
+             toolbar's density slot. View toggle first (table default),
+             then density (only when in table view). */
+          <div className="inline-flex items-center gap-2">
+            <ViewToggle value={view} onChange={setView} />
+            {view === 'table' && (
+              <SharedDensityToggle density={density} onChange={setDensity} />
+            )}
+            <button
+              type="button"
+              onClick={() => setPreferencesOpen(true)}
+              className="h-8 px-2 inline-flex items-center gap-1 text-sm border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800"
+              title="Preferences"
+              aria-label="Preferences"
+            >
+              <Settings2 className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        }
+        autoRefresh={
+          <AutoRefreshSelect
+            value={autoRefreshMin}
+            onChange={setAutoRefreshMin}
+            onTick={fetchPos}
+          />
+        }
+        freshness={
+          <FreshnessIndicator
+            lastFetchedAt={lastFetchedAt}
+            onRefresh={fetchPos}
+            loading={loading}
+          />
+        }
+        trailingSlot={
+          <div className="inline-flex items-center gap-2">
+            <Button variant="primary" size="sm" onClick={() => setCreateOpen(true)}>
+              <Plus className="w-3.5 h-3.5" />
+              {t('po.newPo')}
+            </Button>
+            <button
+              type="button"
+              onClick={toggleShowDeleted}
+              title={
+                showDeleted
+                  ? t('purchaseOrders.recycleBin.exit')
+                  : t('purchaseOrders.recycleBin.enter')
+              }
+              aria-pressed={showDeleted}
+              aria-label={
+                showDeleted
+                  ? t('purchaseOrders.recycleBin.exit')
+                  : t('purchaseOrders.recycleBin.label')
+              }
+              className={cn(
+                'h-8 px-3 text-base border rounded-md inline-flex items-center gap-1.5 transition-colors',
+                showDeleted
+                  ? 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800 dark:hover:bg-rose-900/40'
+                  : 'border-slate-200 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800',
+              )}
+            >
+              {showDeleted ? <ArrowLeft className="w-3 h-3" /> : <Trash2 className="w-3 h-3" />}
+              {showDeleted
+                ? t('purchaseOrders.recycleBin.exit')
+                : t('purchaseOrders.recycleBin.label')}
+            </button>
+          </div>
+        }
+      />
+
+      {/* Error toasts */}
+      {error && (
+        <div className="text-md text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 rounded px-3 py-2 inline-flex items-center gap-2">
+          <AlertCircle className="w-4 h-4" />
+          {t('po.failedToLoad', { error })}
+        </div>
+      )}
+      {actionError && (
+        <div className="text-md text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 rounded px-3 py-2 inline-flex items-center gap-2">
+          <AlertCircle className="w-4 h-4" />
+          {actionError}
+        </div>
+      )}
+
+      {/* Loading skeleton */}
+      {loading && !pos && (
+        <div className="space-y-2">
+          {[1, 2, 3, 4].map((i) => (
+            <div
+              key={i}
+              className="h-16 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg animate-pulse"
+            />
+          ))}
+        </div>
+      )}
+
+      {/* Empty state */}
+      {pos && pos.length === 0 && !loading && (
+        <EmptyState
+          icon={ShoppingCart}
+          title={
+            statusFilter === 'all' ? t('po.empty.title') : t('po.empty.titleFiltered')
+          }
+          description={
+            statusFilter === 'all'
+              ? t('po.empty.description')
+              : t('po.empty.descriptionFiltered')
+          }
+          action={
+            statusFilter === 'all'
+              ? {
+                  label: t('po.empty.openReplenishment'),
+                  href: '/fulfillment/replenishment',
+                }
+              : undefined
+          }
+        />
+      )}
+
+      {pos && pos.length > 0 && filteredPos && filteredPos.length === 0 && (
+        <div className="text-md text-slate-500 dark:text-slate-400 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded p-6 text-center">
+          {t('po.search.noMatches', { q: search })}
+        </div>
+      )}
+
+      {/* Bulk action bar */}
+      {selected.size > 0 && (
+        <div className="sticky top-0 z-20 -mx-2 px-3 py-2 bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900 rounded-lg flex items-center gap-3 shadow-sm">
+          <span className="text-sm font-medium text-slate-800 dark:text-slate-200">
+            {selected.size} selected
+          </span>
+          <div className="flex-1" />
+          {confirmBulkDelete ? (
+            <>
+              <span className="text-xs text-slate-600 dark:text-slate-400">
+                Delete {selected.size} purchase order{selected.size === 1 ? '' : 's'}?
+              </span>
+              <button
+                type="button"
+                onClick={handleBulkDelete}
+                disabled={bulkDeleting}
+                className="h-7 px-3 text-xs rounded bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 inline-flex items-center gap-1.5"
+              >
+                {bulkDeleting && <Loader2 size={12} className="animate-spin" />}
+                Yes, delete
+              </button>
+              <button
+                type="button"
+                onClick={() => setConfirmBulkDelete(false)}
+                disabled={bulkDeleting}
+                className="h-7 px-3 text-xs rounded border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
+              >
+                Cancel
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={() => setConfirmBulkDelete(true)}
+                className="h-7 px-3 text-xs rounded border border-red-200 dark:border-red-900 text-red-700 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 inline-flex items-center gap-1.5"
+              >
+                <Trash2 size={12} /> Delete
+              </button>
+              <button
+                type="button"
+                onClick={clearSelection}
+                className="h-7 px-3 text-xs rounded border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
+              >
+                Clear
+              </button>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* List body — table or cards */}
+      {filteredPos && filteredPos.length > 0 && (
+        view === 'table' ? (
+          <PoTable
+            rows={filteredPos}
+            density={density}
+            visibleColumns={visibleColumns}
+            stickyLeft={stickyLeft}
+            stickyRight={stickyRight}
+            sortKey={sortKey}
+            onSort={(by) =>
+              setSortKey((prev) =>
+                prev.by === by
+                  ? { by, dir: prev.dir === 'asc' ? 'desc' : 'asc' }
+                  : { by, dir: 'desc' },
+              )
+            }
+            selected={selected}
+            onToggleSelect={toggleSelected}
+            onTransition={handleTransition}
+            router={router}
+          />
+        ) : (
+          <div className="space-y-2">
+            {filteredPos.map((po) => (
+              <PoCard
+                key={po.id}
+                po={po}
+                onTransition={handleTransition}
+                isSelected={selected.has(po.id)}
+                onToggleSelect={toggleSelected}
+              />
+            ))}
+          </div>
+        )
+      )}
+
+      {/* Preferences modal */}
+      <PreferencesModal
+        open={preferencesOpen}
+        onClose={() => setPreferencesOpen(false)}
+        value={preferencesValue}
+        onConfirm={onPreferencesConfirm}
+        allColumns={PO_COLUMNS}
+        defaultVisible={DEFAULT_VISIBLE}
+        sortFieldOptions={SORT_OPTIONS.map((o) => {
+          const [by, dir] = o.value.split(':')
+          return { value: by, label: o.label, dir }
+        }).reduce<Array<{ value: string; label: string }>>((acc, x) => {
+          // Modal expects { value, label } pairs — collapse asc/desc to a
+          // single "field" entry; direction is implied by the label.
+          if (!acc.find((y) => y.value === x.value)) {
+            acc.push({ value: x.value, label: x.label.replace(/\s*\(.*\)$/, '') })
+          }
+          return acc
+        }, [])}
+        pageSizeChoices={[]}
+        title={t('po.preferences.title')}
+      />
+
+      {createOpen && (
+        <CreatePoModal
+          onClose={() => setCreateOpen(false)}
+          onCreated={async () => {
+            setCreateOpen(false)
+            await fetchPos()
+          }}
+        />
+      )}
+    </div>
+  )
+}
+
+// ── View toggle ────────────────────────────────────────────────────
+
+function ViewToggle({
+  value,
+  onChange,
+}: {
+  value: ViewMode
+  onChange: (v: ViewMode) => void
+}) {
+  return (
+    <div
+      className="inline-flex items-center border border-slate-200 dark:border-slate-700 rounded-md overflow-hidden h-8 text-sm"
+      role="group"
+      aria-label="View mode"
+    >
+      <button
+        type="button"
+        onClick={() => onChange('table')}
+        title="Table view"
+        aria-pressed={value === 'table'}
+        className={cn(
+          'px-3 h-full inline-flex items-center',
+          value === 'table'
+            ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900'
+            : 'bg-white text-slate-600 hover:bg-slate-50 dark:bg-slate-900 dark:text-slate-400 dark:hover:bg-slate-800',
+        )}
+      >
+        Table
+      </button>
+      <button
+        type="button"
+        onClick={() => onChange('card')}
+        title="Card view"
+        aria-pressed={value === 'card'}
+        className={cn(
+          'px-3 h-full inline-flex items-center border-l border-slate-200 dark:border-slate-700',
+          value === 'card'
+            ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900'
+            : 'bg-white text-slate-600 hover:bg-slate-50 dark:bg-slate-900 dark:text-slate-400 dark:hover:bg-slate-800',
+        )}
+      >
+        Cards
+      </button>
+    </div>
+  )
+}
+
+// ── Table lens ─────────────────────────────────────────────────────
+
+function PoTable({
+  rows,
+  density,
+  visibleColumns,
+  stickyLeft,
+  stickyRight,
+  sortKey,
+  onSort,
+  selected,
+  onToggleSelect,
+  onTransition,
+  router,
+}: {
+  rows: PORow[]
+  density: Density
+  visibleColumns: string[]
+  stickyLeft: boolean
+  stickyRight: boolean
+  sortKey: { by: string; dir: 'asc' | 'desc' }
+  onSort: (by: string) => void
+  selected: Set<string>
+  onToggleSelect: (id: string) => void
+  onTransition: (poId: string, transition: WorkflowTransition, reason?: string) => Promise<void>
+  router: ReturnType<typeof useRouter>
+}) {
+  const cols = useMemo(
+    () => PO_COLUMNS.filter((c) => visibleColumns.includes(c.key) || c.locked),
+    [visibleColumns],
+  )
+
+  // Sticky left = poNumber column. Sticky right = actions column.
+  // We compute offsets dynamically — the select column is always sticky
+  // left:0 when stickyLeft is on (otherwise it scrolls with the rest).
+  const sortableKeys: ReadonlySet<string> = new Set([
+    'poNumber',
+    'total',
+    'expectedDate',
+    'createdAt',
+    'updatedAt',
+  ])
+
+  return (
+    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg overflow-x-auto">
+      <table className="w-full border-collapse">
+        <thead className="bg-slate-50 dark:bg-slate-800 text-sm text-slate-600 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700">
+          <tr>
+            {cols.map((c) => {
+              const sortable = sortableKeys.has(c.key)
+              const stickyStyle: CSSProperties = {}
+              const stickyCls: string[] = []
+              if (stickyLeft && c.key === 'select') {
+                stickyCls.push('sticky left-0 z-10 bg-slate-50 dark:bg-slate-800')
+                stickyStyle.left = 0
+              } else if (stickyLeft && c.key === 'poNumber') {
+                stickyCls.push('sticky z-10 bg-slate-50 dark:bg-slate-800')
+                stickyStyle.left = 36 // width of the select column
+              } else if (stickyRight && c.key === 'actions') {
+                stickyCls.push('sticky right-0 z-10 bg-slate-50 dark:bg-slate-800')
+                stickyStyle.right = 0
+              }
+              return (
+                <th
+                  key={c.key}
+                  scope="col"
+                  className={cn(
+                    'text-left font-medium px-3 py-2 whitespace-nowrap',
+                    c.key === 'total' || c.key === 'lines' || c.key === 'select'
+                      ? 'text-right'
+                      : '',
+                    ...stickyCls,
+                  )}
+                  style={{ ...stickyStyle, width: c.width, minWidth: c.width }}
+                >
+                  {c.key === 'select' ? (
+                    <span className="sr-only">Select</span>
+                  ) : sortable ? (
+                    <button
+                      type="button"
+                      onClick={() => onSort(c.key)}
+                      className="inline-flex items-center gap-1 hover:text-slate-900 dark:hover:text-slate-100"
+                    >
+                      {c.label}
+                      {sortKey.by === c.key && (
+                        <span className="text-slate-400 dark:text-slate-500">
+                          {sortKey.dir === 'asc' ? '↑' : '↓'}
+                        </span>
+                      )}
+                    </button>
+                  ) : (
+                    c.label
+                  )}
+                </th>
+              )
+            })}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((po) => (
+            <PoTableRow
+              key={po.id}
+              po={po}
+              cols={cols}
+              density={density}
+              stickyLeft={stickyLeft}
+              stickyRight={stickyRight}
+              isSelected={selected.has(po.id)}
+              onToggleSelect={() => onToggleSelect(po.id)}
+              onRowClick={() => router.push(`/fulfillment/purchase-orders/${po.id}`)}
+              onTransition={onTransition}
+            />
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+function PoTableRow({
+  po,
+  cols,
+  density,
+  stickyLeft,
+  stickyRight,
+  isSelected,
+  onToggleSelect,
+  onRowClick,
+  onTransition,
+}: {
+  po: PORow
+  cols: ReadonlyArray<PoColumnSpec>
+  density: Density
+  stickyLeft: boolean
+  stickyRight: boolean
+  isSelected: boolean
+  onToggleSelect: () => void
+  onRowClick: () => void
+  onTransition: (poId: string, transition: WorkflowTransition, reason?: string) => Promise<void>
+}) {
+  const overdue = isPoOverdue(po.expectedDeliveryDate, po.status)
+  const totalUnits = po.items.reduce((s, i) => s + i.quantityOrdered, 0)
+  const totalReceived = po.items.reduce((s, i) => s + i.quantityReceived, 0)
+  const transitions = availableTransitions(po.status)
+
+  const inlineActions = transitions
+    .filter((tr) => !tr.destructive)
+    .slice(0, 1)
+    .map((tr) => ({
+      id: tr.key,
+      icon: tr.icon,
+      label: tr.labelKey, // already a translation key consumers can resolve later
+      onClick: () => onTransition(po.id, tr.key),
+    }))
+
+  const dropdownItems = [
+    {
+      id: 'open',
+      label: 'Open detail',
+      icon: ChevronRight,
+      href: `/fulfillment/purchase-orders/${po.id}`,
+    },
+    ...transitions
+      .filter((tr) => tr.destructive)
+      .map((tr) => ({
+        id: tr.key,
+        label: tr.labelKey === 'po.transition.cancel' ? 'Cancel PO' : tr.labelKey,
+        icon: tr.icon,
+        destructive: true,
+        confirm: {
+          question: 'Cancel this PO?',
+          confirmLabel: 'Cancel PO',
+        },
+        onClick: () => onTransition(po.id, tr.key, 'cancelled from row action'),
+      })),
+  ]
+
+  const rowCls = cn(
+    'border-b border-slate-100 dark:border-slate-800 transition-colors group cursor-pointer',
+    isSelected
+      ? 'bg-blue-50/40 dark:bg-blue-950/20'
+      : 'hover:bg-slate-50 dark:hover:bg-slate-800/50',
+  )
+
+  return (
+    <tr className={rowCls} onClick={onRowClick}>
+      {cols.map((c) => {
+        const stickyStyle: CSSProperties = {}
+        const stickyCls: string[] = []
+        const cellBg = isSelected
+          ? 'bg-blue-50/40 dark:bg-blue-950/20'
+          : 'bg-white dark:bg-slate-900 group-hover:bg-slate-50 dark:group-hover:bg-slate-800/50'
+        if (stickyLeft && c.key === 'select') {
+          stickyCls.push('sticky left-0 z-[5]', cellBg)
+          stickyStyle.left = 0
+        } else if (stickyLeft && c.key === 'poNumber') {
+          stickyCls.push('sticky z-[5]', cellBg)
+          stickyStyle.left = 36
+        } else if (stickyRight && c.key === 'actions') {
+          stickyCls.push('sticky right-0 z-[5]', cellBg)
+          stickyStyle.right = 0
+        }
+        const baseCls = cn(
+          'px-3 align-middle whitespace-nowrap',
+          DENSITY_ROW_CLS[density],
+          ...stickyCls,
+        )
+        return (
+          <td key={c.key} className={baseCls} style={stickyStyle}>
+            <PoTableCell
+              col={c.key}
+              po={po}
+              isSelected={isSelected}
+              onToggleSelect={onToggleSelect}
+              overdue={overdue}
+              totalUnits={totalUnits}
+              totalReceived={totalReceived}
+              inlineActions={inlineActions}
+              dropdownItems={dropdownItems}
+            />
+          </td>
+        )
+      })}
+    </tr>
+  )
+}
+
+function PoTableCell({
+  col,
+  po,
+  isSelected,
+  onToggleSelect,
+  overdue,
+  totalUnits,
+  totalReceived,
+  inlineActions,
+  dropdownItems,
+}: {
+  col: string
+  po: PORow
+  isSelected: boolean
+  onToggleSelect: () => void
+  overdue: boolean
+  totalUnits: number
+  totalReceived: number
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  inlineActions: any[]
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  dropdownItems: any[]
+}) {
+  switch (col) {
+    case 'select':
+      return (
+        <span
+          role="checkbox"
+          aria-checked={isSelected}
+          tabIndex={0}
+          onClick={(e) => {
+            e.stopPropagation()
+            onToggleSelect()
+          }}
+          onKeyDown={(e) => {
+            if (e.key === ' ' || e.key === 'Enter') {
+              e.preventDefault()
+              e.stopPropagation()
+              onToggleSelect()
+            }
+          }}
+          className={cn(
+            'w-4 h-4 rounded border-2 inline-flex items-center justify-center cursor-pointer transition-colors',
+            isSelected
+              ? 'bg-blue-600 border-blue-600 text-white'
+              : 'border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 hover:border-slate-400',
+          )}
+          aria-label={isSelected ? 'Deselect' : 'Select'}
+        >
+          {isSelected && <Check className="w-3 h-3" strokeWidth={3} />}
+        </span>
+      )
+    case 'poNumber':
+      return (
+        <span className="inline-flex items-center gap-2 font-mono font-medium text-slate-900 dark:text-slate-100">
+          <StatusIcon status={po.status} />
+          {po.poNumber}
+        </span>
+      )
+    case 'status':
+      return (
+        <Badge variant={statusVariant(po.status)} size="sm">
+          {po.status.replace(/_/g, ' ')}
+        </Badge>
+      )
+    case 'supplier':
+      return po.supplier ? (
+        <span className="text-slate-700 dark:text-slate-300">{po.supplier.name}</span>
+      ) : (
+        <span className="text-amber-700 dark:text-amber-300">No supplier</span>
+      )
+    case 'warehouse':
+      return po.warehouse?.code ? (
+        <span className="text-slate-700 dark:text-slate-300 font-mono text-sm">
+          {po.warehouse.code}
+        </span>
+      ) : (
+        <span className="text-slate-400 dark:text-slate-500">—</span>
+      )
+    case 'total':
+      return (
+        <span className="tabular-nums font-medium text-slate-900 dark:text-slate-100 block text-right">
+          {formatCurrency(po.totalCents, po.currencyCode)}
+        </span>
+      )
+    case 'lines':
+      return (
+        <span className="tabular-nums text-slate-700 dark:text-slate-300 block text-right">
+          {po.items.length}
+          <span className="text-slate-400 dark:text-slate-500 ml-1">
+            / {totalReceived}/{totalUnits} u
+          </span>
+        </span>
+      )
+    case 'expectedDate':
+      return po.expectedDeliveryDate ? (
+        <span
+          className={cn(
+            'tabular-nums',
+            overdue ? 'text-red-700 dark:text-red-300 font-medium' : 'text-slate-700 dark:text-slate-300',
+          )}
+          title={overdue ? 'Overdue' : undefined}
+        >
+          {new Date(po.expectedDeliveryDate).toISOString().slice(0, 10)}
+        </span>
+      ) : (
+        <span className="text-slate-400 dark:text-slate-500">—</span>
+      )
+    case 'confirmedDate':
+      return po.supplierConfirmedDeliveryDate ? (
+        <span className="tabular-nums text-green-700 dark:text-green-300 inline-flex items-center gap-1">
+          <CheckCircle2 className="w-3 h-3" />
+          {new Date(po.supplierConfirmedDeliveryDate).toISOString().slice(0, 10)}
+        </span>
+      ) : po.status === 'SUBMITTED' || po.status === 'APPROVED' ? (
+        <span className="text-amber-700 dark:text-amber-300 text-sm">Awaiting</span>
+      ) : (
+        <span className="text-slate-400 dark:text-slate-500">—</span>
+      )
+    case 'createdAt':
+      return (
+        <span
+          className="text-slate-500 dark:text-slate-400"
+          title={new Date(po.createdAt).toLocaleString()}
+        >
+          {relativeTime(po.createdAt)}
+        </span>
+      )
+    case 'updatedAt':
+      return (
+        <span
+          className="text-slate-500 dark:text-slate-400"
+          title={new Date(po.updatedAt).toLocaleString()}
+        >
+          {relativeTime(po.updatedAt)}
+        </span>
+      )
+    case 'actions':
+      return (
+        <span onClick={(e) => e.stopPropagation()}>
+          <ActionCluster
+            rowId={po.id}
+            inlineActions={inlineActions}
+            dropdownItems={dropdownItems}
+            variant="cluster"
+          />
+        </span>
+      )
+    default:
+      return null
+  }
+}
+
+// ── Card lens (preserved verbatim from pre-PO.3 behavior) ──────────
 
 function PoCard({
   po,
@@ -326,9 +1268,7 @@ function PoCard({
   onToggleSelect,
 }: {
   po: PORow
-  onTransition: (poId: string, transition: string, reason?: string) => Promise<void>
-  // PO-FIX — checkbox for multi-select. Optional so existing callers
-  // that don't wire it (none today, but future) still render fine.
+  onTransition: (poId: string, transition: WorkflowTransition, reason?: string) => Promise<void>
   isSelected?: boolean
   onToggleSelect?: (id: string) => void
 }) {
@@ -342,10 +1282,7 @@ function PoCard({
   const itemCount = po.items.length
   const totalUnits = po.items.reduce((s, i) => s + i.quantityOrdered, 0)
 
-  const handleTransition = async (
-    transitionKey: string,
-    requireReason = false,
-  ) => {
+  const handleTransition = async (transitionKey: WorkflowTransition, requireReason = false) => {
     if (requireReason && !cancelReason.trim()) {
       setShowCancelConfirm(true)
       return
@@ -362,21 +1299,18 @@ function PoCard({
 
   return (
     <div
-      className={`bg-white dark:bg-slate-900 border rounded-lg overflow-hidden transition-colors ${
+      className={cn(
+        'bg-white dark:bg-slate-900 border rounded-lg overflow-hidden transition-colors',
         isSelected
           ? 'border-blue-400 dark:border-blue-500 bg-blue-50/30 dark:bg-blue-950/20'
-          : 'border-slate-200 dark:border-slate-700'
-      }`}
+          : 'border-slate-200 dark:border-slate-700',
+      )}
     >
       <button
         type="button"
         onClick={() => setExpanded((v) => !v)}
         className="w-full px-5 py-3 flex items-center gap-4 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors text-left"
       >
-        {/* PO-FIX — multi-select checkbox. Click stops propagation so
-            it doesn't also toggle the card's expand state. Rendered
-            even when onToggleSelect is undefined (defensive empty
-            div keeps the layout stable). */}
         {onToggleSelect ? (
           <span
             role="checkbox"
@@ -393,11 +1327,12 @@ function PoCard({
                 onToggleSelect(po.id)
               }
             }}
-            className={`w-4 h-4 rounded border-2 flex-shrink-0 inline-flex items-center justify-center cursor-pointer transition-colors ${
+            className={cn(
+              'w-4 h-4 rounded border-2 flex-shrink-0 inline-flex items-center justify-center cursor-pointer transition-colors',
               isSelected
                 ? 'bg-blue-600 border-blue-600 text-white'
-                : 'border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 hover:border-slate-400'
-            }`}
+                : 'border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 hover:border-slate-400',
+            )}
             aria-label={isSelected ? 'Deselect purchase order' : 'Select purchase order'}
           >
             {isSelected && <Check className="w-3 h-3" strokeWidth={3} />}
@@ -426,7 +1361,9 @@ function PoCard({
                 {po.supplier.name}
               </span>
             ) : (
-              <span className="text-base text-amber-700 dark:text-amber-300">{t('po.noSupplier')}</span>
+              <span className="text-base text-amber-700 dark:text-amber-300">
+                {t('po.noSupplier')}
+              </span>
             )}
           </div>
           <div className="flex items-center gap-3 mt-1 text-sm text-slate-500 dark:text-slate-400 flex-wrap">
@@ -434,7 +1371,10 @@ function PoCard({
               {formatCurrency(po.totalCents, po.currencyCode)}
             </span>
             <span>
-              {t(itemCount === 1 ? 'po.summary.line' : 'po.summary.lines', { count: itemCount, units: totalUnits })}
+              {t(itemCount === 1 ? 'po.summary.line' : 'po.summary.lines', {
+                count: itemCount,
+                units: totalUnits,
+              })}
             </span>
             <span title={new Date(po.createdAt).toLocaleString()}>
               · {relativeTime(po.createdAt)}
@@ -446,7 +1386,6 @@ function PoCard({
 
       {expanded && (
         <div className="bg-slate-50 dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 px-5 py-4 space-y-4">
-          {/* Action buttons */}
           {transitions.length > 0 && (
             <div className="flex items-center gap-2 flex-wrap">
               {transitions.map((tr) => {
@@ -519,7 +1458,6 @@ function PoCard({
             </div>
           )}
 
-          {/* Line items */}
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded overflow-hidden">
             <div className="px-3 py-2 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide">
               {t('po.lineItems')}
@@ -536,11 +1474,12 @@ function PoCard({
               </thead>
               <tbody>
                 {po.items.map((it) => (
-                  <tr key={it.id} className="border-b border-slate-100 dark:border-slate-800 last:border-0">
+                  <tr
+                    key={it.id}
+                    className="border-b border-slate-100 dark:border-slate-800 last:border-0"
+                  >
                     <td className="px-3 py-1.5 font-mono text-sm">{it.sku}</td>
-                    <td className="px-3 py-1.5 text-right tabular-nums">
-                      {it.quantityOrdered}
-                    </td>
+                    <td className="px-3 py-1.5 text-right tabular-nums">{it.quantityOrdered}</td>
                     <td className="px-3 py-1.5 text-right tabular-nums">
                       <span
                         className={cn(
@@ -558,10 +1497,7 @@ function PoCard({
                       {formatCurrency(it.unitCostCents, po.currencyCode)}
                     </td>
                     <td className="px-3 py-1.5 text-right tabular-nums font-medium">
-                      {formatCurrency(
-                        it.unitCostCents * it.quantityOrdered,
-                        po.currencyCode,
-                      )}
+                      {formatCurrency(it.unitCostCents * it.quantityOrdered, po.currencyCode)}
                     </td>
                   </tr>
                 ))}
@@ -569,7 +1505,6 @@ function PoCard({
             </table>
           </div>
 
-          {/* Audit trail */}
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded p-3">
             <div className="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide mb-2">
               {t('po.auditTrail')}
@@ -577,18 +1512,14 @@ function PoCard({
             <AuditTrailPanel poId={po.id} />
           </div>
 
-          {/* Footer actions: detail page + PDF + email link */}
           <div className="flex items-center gap-2 text-sm">
-            {/* PO.2 — deep-link to the full detail page. Surfaces all
-                tabs (Activity / Shipments / Attachments / Revisions /
-                Comments) + print-friendly view. */}
-            <a
+            <Link
               href={`/fulfillment/purchase-orders/${po.id}`}
               className="inline-flex items-center gap-1 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"
             >
               <ChevronRight className="w-3 h-3" />
               {t('po.openDetail')}
-            </a>
+            </Link>
             <a
               href={`${getBackendUrl()}/api/fulfillment/purchase-orders/${po.id}/factory.pdf`}
               target="_blank"
@@ -619,429 +1550,7 @@ function PoCard({
   )
 }
 
-// ── Top-level client ───────────────────────────────────────────────
-
-export default function PurchaseOrdersClient() {
-  const { t } = useTranslations()
-  const router = useRouter()
-  const pathname = usePathname()
-  const searchParams = useSearchParams()
-  const urlStatus = (searchParams.get('status') ?? 'all') as StatusFilter
-  const validStatuses = useMemo(
-    () => new Set(STATUS_FILTERS.map((f) => f.key as StatusFilter)),
-    [],
-  )
-  const statusFilter: StatusFilter = validStatuses.has(urlStatus)
-    ? urlStatus
-    : 'all'
-  const setStatusFilter = useCallback(
-    (next: StatusFilter) => {
-      const params = new URLSearchParams(searchParams.toString())
-      if (next === 'all') params.delete('status')
-      else params.set('status', next)
-      const qs = params.toString()
-      router.replace(qs ? `${pathname}?${qs}` : pathname)
-    },
-    [pathname, router, searchParams],
-  )
-
-  // RB.1 — recycle-bin scope via ?deleted=true. Backend defaults to
-  // live-only; toggling this flag flips the list into bin mode.
-  const showDeleted = searchParams.get('deleted') === 'true'
-  const toggleShowDeleted = useCallback(() => {
-    const params = new URLSearchParams(searchParams.toString())
-    if (showDeleted) params.delete('deleted')
-    else params.set('deleted', 'true')
-    const qs = params.toString()
-    router.replace(qs ? `${pathname}?${qs}` : pathname)
-  }, [pathname, router, searchParams, showDeleted])
-
-  const [pos, setPos] = useState<PORow[] | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [actionError, setActionError] = useState<string | null>(null)
-  // PO-FIX (2026-05-23) — multi-select state + bulk delete. The
-  // backend already exposes /fulfillment/purchase-orders/bulk-soft-
-  // delete (ids[]); the UI just didn't surface a way to select POs.
-  // Operators reported "no checkboxes to select and delete on
-  // /fulfillment/purchase-orders" — this patch adds the missing
-  // affordance on the existing card layout.
-  const [selected, setSelected] = useState<Set<string>>(new Set())
-  const [bulkDeleting, setBulkDeleting] = useState(false)
-  const [confirmBulkDelete, setConfirmBulkDelete] = useState(false)
-  const toggleSelected = useCallback((id: string) => {
-    setSelected((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
-  }, [])
-  const clearSelection = useCallback(() => setSelected(new Set()), [])
-  const handleBulkDelete = useCallback(async () => {
-    const ids = Array.from(selected)
-    if (ids.length === 0) return
-    setBulkDeleting(true)
-    setActionError(null)
-    try {
-      const res = await fetch(
-        `${getBackendUrl()}/api/fulfillment/purchase-orders/bulk-soft-delete`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ids }),
-        },
-      )
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}))
-        throw new Error(body?.error ?? `HTTP ${res.status}`)
-      }
-      setSelected(new Set())
-      setConfirmBulkDelete(false)
-      await fetchPos()
-    } catch (err) {
-      setActionError(err instanceof Error ? err.message : String(err))
-    } finally {
-      setBulkDeleting(false)
-    }
-  }, [selected])
-  // F2.8 — search across poNumber + supplier name + line SKU. Local
-  // filter (no server round-trip) since lists are small (<200 active).
-  const [search, setSearch] = useState('')
-  // F2.8 — Create PO modal toggle.
-  const [createOpen, setCreateOpen] = useState(false)
-  const [lastFetchedAt, setLastFetchedAt] = useState<number | null>(null)
-  const [autoRefreshMin, setAutoRefreshMin] = useState<0 | 5 | 15>(0)
-
-  const fetchPos = useCallback(async () => {
-    setLoading(true)
-    setError(null)
-    try {
-      const url = new URL(
-        `${getBackendUrl()}/api/fulfillment/purchase-orders`,
-      )
-      if (statusFilter !== 'all' && statusFilter !== 'active') {
-        url.searchParams.set('status', statusFilter)
-      } else if (statusFilter === 'active') {
-        url.searchParams.set('status', Array.from(ACTIVE_STATUSES).join(','))
-      }
-      if (showDeleted) url.searchParams.set('deleted', 'true')
-      const res = await fetch(url.toString(), { cache: 'no-store' })
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}))
-        throw new Error(body.error ?? `HTTP ${res.status}`)
-      }
-      const data = await res.json()
-      setPos(data.items ?? [])
-      setLastFetchedAt(Date.now())
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
-    } finally {
-      setLoading(false)
-    }
-  }, [statusFilter, showDeleted])
-
-  useEffect(() => {
-    fetchPos()
-  }, [fetchPos])
-
-  // F-RT.1 — open the inbound SSE pipe + invalidation listener so a
-  // PO that converts into an inbound shipment (or a discrepancy
-  // landed during receiving) flips this view sub-200ms. POs are
-  // upstream-only — they don't generate stock movements directly —
-  // but inbound.received against a PO closes its receiving window
-  // and shifts its status, so the list must refresh.
-  useInboundEvents()
-  useInvalidationChannel(
-    ['inbound.received', 'inbound.discrepancy', 'inbound.updated', 'inbound.created'],
-    useCallback(() => { fetchPos() }, [fetchPos]),
-  )
-
-  const counts = useMemo(() => {
-    const c: Record<string, number> = { active: 0 }
-    if (pos) {
-      for (const p of pos) {
-        c[p.status] = (c[p.status] ?? 0) + 1
-        if (ACTIVE_STATUSES.has(p.status)) c.active++
-      }
-    }
-    return c
-  }, [pos])
-
-  // F2.8 — local search filter. Match poNumber, supplier name, or
-  // any line-item SKU (case-insensitive substring).
-  const filteredPos = useMemo(() => {
-    if (!pos) return null
-    const q = search.trim().toLowerCase()
-    if (!q) return pos
-    return pos.filter((p) => {
-      if (p.poNumber.toLowerCase().includes(q)) return true
-      if (p.supplier?.name?.toLowerCase().includes(q)) return true
-      if (p.items.some((it) => it.sku.toLowerCase().includes(q))) return true
-      return false
-    })
-  }, [pos, search])
-
-  const handleTransition = useCallback(
-    async (poId: string, transition: string, reason?: string) => {
-      setActionError(null)
-      try {
-        const res = await fetch(
-          `${getBackendUrl()}/api/fulfillment/purchase-orders/${poId}/transition`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ transition, reason }),
-          },
-        )
-        if (!res.ok) {
-          const body = await res.json().catch(() => ({}))
-          throw new Error(body.error ?? `HTTP ${res.status}`)
-        }
-        await fetchPos()
-      } catch (err) {
-        setActionError(err instanceof Error ? err.message : String(err))
-      }
-    },
-    [fetchPos],
-  )
-
-  return (
-    <div className="space-y-3">
-      {/* Filter bar */}
-      <GridToolbar
-        searchSlot={
-          /* F2.8 — local search across poNumber + supplier + SKU. */
-          <div className="relative">
-            <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
-            <input
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder={t('po.search.placeholder')}
-              className="h-8 pl-7 pr-2 text-base border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 w-56"
-            />
-          </div>
-        }
-        quickFilterSlot={
-          <div className="flex items-center gap-1 flex-wrap">
-            {STATUS_FILTERS.map((f) => {
-              const count = f.key === 'all' ? pos?.length ?? 0 : counts[f.key] ?? 0
-              return (
-                <button
-                  key={f.key}
-                  type="button"
-                  onClick={() => setStatusFilter(f.key)}
-                  className={cn(
-                    'px-3 py-1 text-sm font-medium rounded border transition-colors',
-                    statusFilter === f.key
-                      ? 'bg-slate-900 dark:bg-slate-100 text-white border-slate-900'
-                      : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600',
-                  )}
-                >
-                  {t(f.labelKey as any)}
-                  {pos && count > 0 && (
-                    <span className="ml-1 opacity-70">{count}</span>
-                  )}
-                </button>
-              )
-            })}
-          </div>
-        }
-        autoRefresh={
-          <AutoRefreshSelect
-            value={autoRefreshMin}
-            onChange={setAutoRefreshMin}
-            onTick={fetchPos}
-          />
-        }
-        freshness={
-          <FreshnessIndicator
-            lastFetchedAt={lastFetchedAt}
-            onRefresh={fetchPos}
-            loading={loading}
-          />
-        }
-        trailingSlot={
-          <div className="inline-flex items-center gap-2">
-            <Button variant="primary" size="sm" onClick={() => setCreateOpen(true)}>
-              <Plus className="w-3.5 h-3.5" />
-              {t('po.newPo')}
-            </Button>
-            {/* RB.1 — recycle-bin toggle. Icon + label both swap on state
-                so the button always names the destination, not the
-                current scope (enter Trash2 → exit ArrowLeft). */}
-            <button
-              type="button"
-              onClick={toggleShowDeleted}
-              title={showDeleted ? t('purchaseOrders.recycleBin.exit') : t('purchaseOrders.recycleBin.enter')}
-              aria-pressed={showDeleted}
-              aria-label={showDeleted ? t('purchaseOrders.recycleBin.exit') : t('purchaseOrders.recycleBin.label')}
-              className={cn(
-                'h-8 px-3 text-base border rounded-md inline-flex items-center gap-1.5 transition-colors',
-                showDeleted
-                  ? 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800 dark:hover:bg-rose-900/40'
-                  : 'border-slate-200 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800',
-              )}
-            >
-              {showDeleted ? <ArrowLeft className="w-3 h-3" /> : <Trash2 className="w-3 h-3" />}
-              {showDeleted ? t('purchaseOrders.recycleBin.exit') : t('purchaseOrders.recycleBin.label')}
-            </button>
-          </div>
-        }
-      />
-
-      {/* Error toasts */}
-      {error && (
-        <div className="text-md text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 rounded px-3 py-2 inline-flex items-center gap-2">
-          <AlertCircle className="w-4 h-4" />
-          {t('po.failedToLoad', { error })}
-        </div>
-      )}
-      {actionError && (
-        <div className="text-md text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 rounded px-3 py-2 inline-flex items-center gap-2">
-          <AlertCircle className="w-4 h-4" />
-          {actionError}
-        </div>
-      )}
-
-      {/* Loading skeleton */}
-      {loading && !pos && (
-        <div className="space-y-2">
-          {[1, 2, 3, 4].map((i) => (
-            <div
-              key={i}
-              className="h-16 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg animate-pulse"
-            />
-          ))}
-        </div>
-      )}
-
-      {/* Empty state */}
-      {pos && pos.length === 0 && !loading && (
-        <EmptyState
-          icon={ShoppingCart}
-          title={
-            statusFilter === 'all'
-              ? t('po.empty.title')
-              : t('po.empty.titleFiltered')
-          }
-          description={
-            statusFilter === 'all'
-              ? t('po.empty.description')
-              : t('po.empty.descriptionFiltered')
-          }
-          action={
-            statusFilter === 'all'
-              ? { label: t('po.empty.openReplenishment'), href: '/fulfillment/replenishment' }
-              : undefined
-          }
-        />
-      )}
-
-      {/* F2.8 — search-empty state when filter eliminates all rows
-          but the underlying list isn't empty. */}
-      {pos && pos.length > 0 && filteredPos && filteredPos.length === 0 && (
-        <div className="text-md text-slate-500 dark:text-slate-400 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded p-6 text-center">
-          {t('po.search.noMatches', { q: search })}
-        </div>
-      )}
-
-      {/* PO-FIX — bulk action bar. Visible only when one or more POs
-          are selected. Shows a count, a destructive Delete button
-          (soft-delete; rows land in the recycle bin and can be
-          restored from /admin?deleted=true), and a Clear button. */}
-      {selected.size > 0 && (
-        <div className="sticky top-0 z-20 -mx-2 px-3 py-2 bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900 rounded-lg flex items-center gap-3 shadow-sm">
-          <span className="text-sm font-medium text-slate-800 dark:text-slate-200">
-            {selected.size} selected
-          </span>
-          <div className="flex-1" />
-          {confirmBulkDelete ? (
-            <>
-              <span className="text-xs text-slate-600 dark:text-slate-400">
-                Delete {selected.size} purchase order{selected.size === 1 ? '' : 's'}?
-              </span>
-              <button
-                type="button"
-                onClick={handleBulkDelete}
-                disabled={bulkDeleting}
-                className="h-7 px-3 text-xs rounded bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 inline-flex items-center gap-1.5"
-              >
-                {bulkDeleting && <Loader2 size={12} className="animate-spin" />}
-                Yes, delete
-              </button>
-              <button
-                type="button"
-                onClick={() => setConfirmBulkDelete(false)}
-                disabled={bulkDeleting}
-                className="h-7 px-3 text-xs rounded border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
-              >
-                Cancel
-              </button>
-            </>
-          ) : (
-            <>
-              <button
-                type="button"
-                onClick={() => setConfirmBulkDelete(true)}
-                className="h-7 px-3 text-xs rounded border border-red-200 dark:border-red-900 text-red-700 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 inline-flex items-center gap-1.5"
-              >
-                <Trash2 size={12} /> Delete
-              </button>
-              <button
-                type="button"
-                onClick={clearSelection}
-                className="h-7 px-3 text-xs rounded border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
-              >
-                Clear
-              </button>
-            </>
-          )}
-        </div>
-      )}
-
-      {/* PO list */}
-      {filteredPos && filteredPos.length > 0 && (
-        <div className="space-y-2">
-          {filteredPos.map((po) => (
-            <PoCard
-              key={po.id}
-              po={po}
-              onTransition={handleTransition}
-              isSelected={selected.has(po.id)}
-              onToggleSelect={toggleSelected}
-            />
-          ))}
-        </div>
-      )}
-
-      {/* F2.8 — Create PO modal. Renders only when open; mounts the
-          form inline so each open is a fresh state. */}
-      {createOpen && (
-        <CreatePoModal
-          onClose={() => setCreateOpen(false)}
-          onCreated={async () => {
-            setCreateOpen(false)
-            await fetchPos()
-          }}
-        />
-      )}
-    </div>
-  )
-}
-
-// ── Create PO modal ────────────────────────────────────────────────
-//
-// Minimal manual-create flow. Most POs land here via replenishment
-// auto-create; this is the escape hatch for the operator who wants
-// to draft a PO themselves (one-off supplier order, partial top-up,
-// emergency restock).
-//
-// Required fields per the API: items[] (≥1 row with SKU + qty).
-// supplier + warehouse are optional at the schema layer (warehouse
-// defaults server-side); we still surface them so the operator
-// makes the explicit choice when it matters.
+// ── Create PO modal (unchanged from pre-PO.3; PO.5 rebuilds it) ────
 
 interface SupplierOption {
   id: string
@@ -1050,7 +1559,6 @@ interface SupplierOption {
 }
 
 interface DraftLine {
-  // local-only id for keying
   uid: string
   sku: string
   quantityOrdered: string
@@ -1083,16 +1591,21 @@ function CreatePoModal({
 
   useEffect(() => {
     let cancelled = false
-    fetch(`${getBackendUrl()}/api/fulfillment/suppliers?activeOnly=true`, { cache: 'no-store' })
+    fetch(`${getBackendUrl()}/api/fulfillment/suppliers?activeOnly=true`, {
+      cache: 'no-store',
+    })
       .then((r) => (r.ok ? r.json() : { items: [] }))
       .then((data) => {
         if (!cancelled) setSuppliers(data.items ?? [])
       })
-      .catch(() => { if (!cancelled) setSuppliers([]) })
-    return () => { cancelled = true }
+      .catch(() => {
+        if (!cancelled) setSuppliers([])
+      })
+    return () => {
+      cancelled = true
+    }
   }, [])
 
-  // Esc closes the modal — mirrors routing-rules + qc-queue patterns.
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && !submitting) onClose()
@@ -1116,7 +1629,9 @@ function CreatePoModal({
 
   const submit = async () => {
     setError(null)
-    const validLines = lines.filter((l) => l.sku.trim() && parseInt(l.quantityOrdered, 10) > 0)
+    const validLines = lines.filter(
+      (l) => l.sku.trim() && parseInt(l.quantityOrdered, 10) > 0,
+    )
     if (validLines.length === 0) {
       setError(t('po.create.error.noLines'))
       return
@@ -1152,14 +1667,21 @@ function CreatePoModal({
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
-      onClick={(e) => { if (e.target === e.currentTarget && !submitting) onClose() }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget && !submitting) onClose()
+      }}
       role="dialog"
       aria-modal="true"
       aria-labelledby="create-po-title"
     >
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between gap-2 px-5 py-3 border-b border-slate-200 dark:border-slate-700 sticky top-0 bg-white dark:bg-slate-900">
-          <h2 id="create-po-title" className="text-lg font-semibold text-slate-900 dark:text-slate-100">{t('po.create.title')}</h2>
+          <h2
+            id="create-po-title"
+            className="text-lg font-semibold text-slate-900 dark:text-slate-100"
+          >
+            {t('po.create.title')}
+          </h2>
           <button
             type="button"
             onClick={onClose}
@@ -1185,7 +1707,9 @@ function CreatePoModal({
               >
                 <option value="">{t('po.create.supplierNone')}</option>
                 {suppliers?.map((s) => (
-                  <option key={s.id} value={s.id}>{s.name}</option>
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
                 ))}
               </select>
             </div>
@@ -1222,14 +1746,21 @@ function CreatePoModal({
                 <thead className="bg-slate-50 dark:bg-slate-800 text-sm text-slate-600 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700">
                   <tr>
                     <th className="text-left font-medium px-3 py-1.5">{t('po.col.sku')}</th>
-                    <th className="text-right font-medium px-3 py-1.5 w-24">{t('po.col.ordered')}</th>
-                    <th className="text-right font-medium px-3 py-1.5 w-28">{t('po.col.unitCost')}</th>
+                    <th className="text-right font-medium px-3 py-1.5 w-24">
+                      {t('po.col.ordered')}
+                    </th>
+                    <th className="text-right font-medium px-3 py-1.5 w-28">
+                      {t('po.col.unitCost')}
+                    </th>
                     <th className="w-8"></th>
                   </tr>
                 </thead>
                 <tbody>
                   {lines.map((l) => (
-                    <tr key={l.uid} className="border-b border-slate-100 dark:border-slate-800 last:border-0">
+                    <tr
+                      key={l.uid}
+                      className="border-b border-slate-100 dark:border-slate-800 last:border-0"
+                    >
                       <td className="px-2 py-1">
                         <input
                           type="text"
@@ -1245,7 +1776,9 @@ function CreatePoModal({
                           type="number"
                           min="1"
                           value={l.quantityOrdered}
-                          onChange={(e) => updateLine(l.uid, { quantityOrdered: e.target.value })}
+                          onChange={(e) =>
+                            updateLine(l.uid, { quantityOrdered: e.target.value })
+                          }
                           disabled={submitting}
                           className="w-full h-8 px-2 text-base text-right tabular-nums border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
                         />
@@ -1256,7 +1789,9 @@ function CreatePoModal({
                           min="0"
                           step="0.01"
                           value={l.unitCostCents}
-                          onChange={(e) => updateLine(l.uid, { unitCostCents: e.target.value })}
+                          onChange={(e) =>
+                            updateLine(l.uid, { unitCostCents: e.target.value })
+                          }
                           disabled={submitting}
                           placeholder="0.00"
                           className="w-full h-8 px-2 text-base text-right tabular-nums border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
@@ -1279,7 +1814,10 @@ function CreatePoModal({
               </table>
             </div>
             <div className="text-sm text-slate-500 dark:text-slate-400 mt-1 text-right tabular-nums">
-              {t('po.create.total')}: <span className="font-semibold text-slate-900 dark:text-slate-100">€{(totalCents / 100).toFixed(2)}</span>
+              {t('po.create.total')}:{' '}
+              <span className="font-semibold text-slate-900 dark:text-slate-100">
+                €{(totalCents / 100).toFixed(2)}
+              </span>
             </div>
           </div>
 
