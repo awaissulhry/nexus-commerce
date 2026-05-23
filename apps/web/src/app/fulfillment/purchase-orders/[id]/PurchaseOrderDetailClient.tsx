@@ -202,10 +202,16 @@ const TAB_ORDER: Array<{ key: Tab; label: string; icon: typeof FileText }> = [
 
 // ── Print-mode CSS ─────────────────────────────────────────────────
 //
-// Hides chrome (back link, tabs, action cluster, page-level toolbar)
-// and forces every tab body to render inline so an operator can
-// File → Print → save as PDF and get a single readable document.
+// Two layers:
+//   1. Browser default: inactive tab panes are hidden via
+//      `.po-detail-tab-inactive`. Only the active pane renders.
+//   2. Print mode: every tab pane is forced visible via the
+//      `.po-detail-print-all > section[data-tab-pane]` rule (higher
+//      specificity beats the inactive-class display:none), and chrome
+//      tagged `.po-detail-no-print` is hidden. The result is a single
+//      printable document containing every tab body.
 const PRINT_CSS = `
+  .po-detail-tab-inactive { display: none; }
   @media print {
     .po-detail-no-print { display: none !important; }
     .po-detail-print-all > section { break-inside: avoid; margin-bottom: 1.5rem; }
@@ -768,7 +774,7 @@ export default function PurchaseOrderDetailClient({ id }: { id: string }) {
           mode forces every section to display so the printable view
           is a single document. */}
       <div className="po-detail-print-all space-y-4">
-        <section data-tab-pane className={cn(tab !== 'summary' && 'po-detail-no-print')}>
+        <section data-tab-pane className={cn(tab !== 'summary' && 'po-detail-tab-inactive')}>
           {isEditableStatus(po.status) ? (
             <EditableSummaryPane po={po} onRefresh={refresh} />
           ) : (
@@ -783,16 +789,16 @@ export default function PurchaseOrderDetailClient({ id }: { id: string }) {
             </div>
           )}
         </section>
-        <section data-tab-pane className={cn(tab !== 'activity' && 'po-detail-no-print')}>
+        <section data-tab-pane className={cn(tab !== 'activity' && 'po-detail-tab-inactive')}>
           <ActivityPane audit={audit} />
         </section>
-        <section data-tab-pane className={cn(tab !== 'shipments' && 'po-detail-no-print')}>
+        <section data-tab-pane className={cn(tab !== 'shipments' && 'po-detail-tab-inactive')}>
           <ShipmentsPane shipments={po.inboundShipments} />
         </section>
-        <section data-tab-pane className={cn(tab !== 'attachments' && 'po-detail-no-print')}>
+        <section data-tab-pane className={cn(tab !== 'attachments' && 'po-detail-tab-inactive')}>
           <AttachmentsPane attachments={po.attachments} />
         </section>
-        <section data-tab-pane className={cn(tab !== 'revisions' && 'po-detail-no-print')}>
+        <section data-tab-pane className={cn(tab !== 'revisions' && 'po-detail-tab-inactive')}>
           <RevisionsPane
             poId={po.id}
             poStatus={po.status}
@@ -801,7 +807,7 @@ export default function PurchaseOrderDetailClient({ id }: { id: string }) {
             onRefresh={refresh}
           />
         </section>
-        <section data-tab-pane className={cn(tab !== 'comments' && 'po-detail-no-print')}>
+        <section data-tab-pane className={cn(tab !== 'comments' && 'po-detail-tab-inactive')}>
           <CommentsPane poId={po.id} comments={po.comments} onRefresh={refresh} />
         </section>
       </div>
