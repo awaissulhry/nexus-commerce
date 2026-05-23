@@ -1107,6 +1107,13 @@ function InboundDrawer({ id, onClose, onChanged }: { id: string; onClose: () => 
                     >
                       <Smartphone size={10} /> Mobile receive
                     </Link>
+                    <button
+                      onClick={() => window.open(`/fulfillment/fnsku-labels?shipmentId=${encodeURIComponent(id)}`, '_blank', 'noopener,noreferrer')}
+                      className="text-xs text-violet-700 dark:text-violet-300 hover:underline inline-flex items-center gap-1"
+                      title="Open the FNSKU label designer pre-filled with this shipment's items and quantities"
+                    >
+                      <Tag size={10} /> FNSKU labels
+                    </button>
                     <button onClick={fillExpected} className="text-xs text-blue-700 dark:text-blue-300 hover:underline inline-flex items-center gap-1">
                       <Check size={10} /> Fill all expected
                     </button>

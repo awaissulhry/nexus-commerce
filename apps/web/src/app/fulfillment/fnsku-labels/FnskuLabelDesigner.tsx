@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ArrowLeft, Printer, FileDown, Loader2, Globe, AlertTriangle } from 'lucide-react'
+import { ArrowLeft, Printer, FileDown, Loader2, Globe, AlertTriangle, Package, X as XIcon } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { SkuPanel } from './SkuPanel'
 import { LabelPreview } from './LabelPreview'
@@ -95,12 +95,69 @@ export default function FnskuLabelDesigner() {
     try { return localStorage.getItem('fnsku-label-marketplace') || 'IT' }
     catch { return 'IT' }
   })
+  // Shipment pre-fill context (set when ?shipmentId= present in URL).
+  const [shipmentContext, setShipmentContext] = useState<{ id: string; reference: string | null } | null>(null)
+  const [shipmentLoading, setShipmentLoading] = useState(false)
+  const [shipmentError, setShipmentError] = useState<string | null>(null)
   const printRef = useRef<HTMLDivElement>(null)
 
   // On mount: fetch metadata for localStorage-restored items missing FNSKU or listing title
   useEffect(() => {
     const needsMeta = items.filter(it => it.sku && (!it.fnsku || !it.listingTitle))
     if (needsMeta.length > 0) fetchFnskus(needsMeta)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // On mount: if ?shipmentId= is present, pre-fill the queue from that
+  // inbound shipment's items (SKU + quantityExpected). Replaces any
+  // localStorage-restored queue — opening from /inbound is an explicit
+  // "use this shipment's items" action.
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const params = new URLSearchParams(window.location.search)
+    const shipmentId = params.get('shipmentId')
+    if (!shipmentId) return
+
+    setShipmentLoading(true)
+    setShipmentError(null)
+    fetch(`${getBackendUrl()}/api/fulfillment/inbound/${encodeURIComponent(shipmentId)}`)
+      .then(async r => {
+        if (!r.ok) throw new Error(`Shipment ${shipmentId} not found (${r.status})`)
+        return r.json()
+      })
+      .then((shipment: any) => {
+        const rows: Array<{ sku: string; quantityExpected: number }> = shipment?.items ?? []
+        if (rows.length === 0) {
+          setShipmentError('Shipment has no items')
+          return
+        }
+        // Coalesce duplicate SKUs (defensive) — sum quantities.
+        const merged = new Map<string, number>()
+        for (const r of rows) {
+          if (!r.sku) continue
+          merged.set(r.sku, (merged.get(r.sku) ?? 0) + Math.max(1, r.quantityExpected || 1))
+        }
+        const seeded: LabelItem[] = Array.from(merged.entries()).map(([sku, qty]) => ({
+          sku,
+          fnsku: '',
+          quantity: qty,
+          productName: null,
+          listingTitle: null,
+          variationAttributes: {},
+          imageUrl: null,
+          fnskuLoading: true,
+        }))
+        setItems(seeded)
+        try { localStorage.setItem('fnsku-label-items', JSON.stringify(seeded)) } catch {}
+        setShipmentContext({
+          id: shipment.id,
+          reference: shipment.reference ?? shipment.name ?? null,
+        })
+        // Kick off FNSKU + listing-title enrichment via the existing path.
+        fetchFnskus(seeded, true)
+      })
+      .catch((e: any) => setShipmentError(e?.message ?? 'Failed to load shipment'))
+      .finally(() => setShipmentLoading(false))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -342,6 +399,37 @@ export default function FnskuLabelDesigner() {
         </button>
         <div className="h-4 w-px bg-slate-200 dark:bg-slate-700" />
         <span className="font-semibold text-slate-900 dark:text-slate-100">FNSKU Label Designer</span>
+        {shipmentContext && (
+          <span
+            className="inline-flex items-center gap-1 h-6 px-2 rounded text-[11px] font-medium bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800"
+            title={`Pre-filled from inbound shipment ${shipmentContext.reference ?? shipmentContext.id}. Click × to detach.`}
+          >
+            <Package size={11} /> Shipment {shipmentContext.reference ?? shipmentContext.id.slice(-8)}
+            <button
+              onClick={() => {
+                setShipmentContext(null)
+                // Remove from URL without reload so refresh doesn't re-import.
+                const url = new URL(window.location.href)
+                url.searchParams.delete('shipmentId')
+                window.history.replaceState({}, '', url.toString())
+              }}
+              className="ml-0.5 hover:text-emerald-900 dark:hover:text-emerald-200"
+              aria-label="Detach shipment"
+            >
+              <XIcon size={11} />
+            </button>
+          </span>
+        )}
+        {shipmentLoading && (
+          <span className="inline-flex items-center gap-1 text-[11px] text-slate-500">
+            <Loader2 size={11} className="animate-spin" /> Loading shipment…
+          </span>
+        )}
+        {shipmentError && (
+          <span className="inline-flex items-center gap-1 text-[11px] text-amber-600 dark:text-amber-400" title={shipmentError}>
+            <AlertTriangle size={11} /> {shipmentError}
+          </span>
+        )}
         <div className="h-4 w-px bg-slate-200 dark:bg-slate-700 ml-3" />
         <label className="inline-flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400" title="Destination Amazon marketplace — controls which listing title appears on the label">
           <Globe size={12} />
