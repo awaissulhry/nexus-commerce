@@ -12,6 +12,7 @@ import { DataValidationService } from '../services/sync/data-validation.service.
 import { BatchRepairService } from '../services/sync/batch-repair.service.js'
 import { auditSalesDrift } from '../services/revenue/drift-audit.service.js'
 import { syncFinancialEvents } from '../services/amazon-financial-events.service.js'
+import { refreshSalesAggregates } from '../services/sales-aggregate.service.js'
 import prisma from '../db.js'
 
 // RB.1 — entities tracked by /admin/recycle-bin. Each maps to a Prisma
@@ -417,6 +418,44 @@ export async function adminRoutes(app: FastifyInstance) {
       return reply.status(500).send({ error: message })
     }
   })
+
+  /**
+   * DA-RT.14 — POST /admin/sales-drift/refresh-aggregate?days=30
+   *
+   * Re-runs the sales-aggregate UPSERT over a window so historical
+   * DailySalesAggregate rows align with the current SQL bucket
+   * expression. Necessary after DA-RT.14 (TZ-direction fix) — old
+   * aggregate rows were built with the buggy expression and need
+   * to be rewritten to match what the audit endpoint now expects.
+   *
+   * Synchronous; refreshSalesAggregates with a 30-day window is
+   * usually seconds for ~hundreds of rows, longer for larger
+   * catalogs. Window is end-inclusive on today.
+   *
+   * Query param: days (default 30, min 1, max 90).
+   */
+  app.post<{ Querystring: { days?: string } }>(
+    '/admin/sales-drift/refresh-aggregate',
+    async (request, reply) => {
+      try {
+        const raw = Number(request.query.days ?? 30)
+        const days =
+          Number.isFinite(raw) ? Math.min(90, Math.max(1, Math.trunc(raw))) : 30
+        const to = new Date()
+        const from = new Date(to.getTime() - (days - 1) * 86_400_000)
+        const result = await refreshSalesAggregates({ from, to })
+        return reply.send({
+          days,
+          from: from.toISOString().slice(0, 10),
+          to: to.toISOString().slice(0, 10),
+          ...result,
+        })
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unknown error'
+        return reply.status(500).send({ error: message })
+      }
+    },
+  )
 
   /**
    * DA-RT.13 — POST /admin/sales-drift/backfill-financial-events?days=7
