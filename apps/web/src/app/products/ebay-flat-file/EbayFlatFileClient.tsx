@@ -456,6 +456,20 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
     if (!toPush.length) { toast({ title: 'Nothing to push', tone: 'info' }); return }
     setPushing(true)
     try {
+      // DSP.7 — pre-save dirty rows BEFORE pushing to eBay. Pre-DSP.7
+      // the push went out but the parent grid's localStorage / server
+      // state didn't reflect the rows that just shipped — operator
+      // refreshing then saw older data while eBay already had the new
+      // version. Match Amazon's submit pre-save guarantee.
+      const dirty = rows.filter((r) => r._dirty)
+      if (dirty.length > 0) {
+        try {
+          await onSave(dirty)
+        } catch (err) {
+          toast.error('Save failed before push: ' + (err instanceof Error ? err.message : String(err)))
+          return
+        }
+      }
       const res = await fetch(`${BACKEND}/api/ebay/flat-file/push`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

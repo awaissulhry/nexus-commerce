@@ -1620,6 +1620,21 @@ export default function AmazonFlatFileClient({
     setSubmitPanelOpen(false)
     setFeedEntries([])
 
+    // DSP.7 — Submit now pre-saves the in-memory rows BEFORE firing the
+    // feed request. Pre-DSP.7 the active marketplace's edits went to
+    // Amazon but were never persisted to localStorage; the operator
+    // refreshing or navigating away then "lost" their edits even
+    // though they were already at Amazon. createVersion + saveRows
+    // are the same calls handleSave makes, so this is a no-op when
+    // the operator just clicked Save first — idempotent.
+    try {
+      createVersion('Auto-save before submit')
+      saveRows(marketplace, productType, rows)
+    } catch {
+      // Persisting locally is best-effort; never block the submit
+      // because the operator already committed to firing it.
+    }
+
     if (markets.has(marketplace)) {
       setRows((prev) => prev.map((r) => r._dirty || r._isNew ? { ...r, _status: 'pending' } : r))
     }
