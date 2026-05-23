@@ -496,7 +496,7 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
     },
   )
 
-  fastify.get<{ Querystring: { period?: string; marketplace?: string } }>(
+  fastify.get<{ Querystring: { period?: string; marketplace?: string; baseCurrency?: string } }>(
     '/dashboard/global-snapshot',
     async (request, reply) => {
       try {
@@ -508,6 +508,14 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
         // marketplace. The byMarketplace array still returns to keep
         // the response shape stable for the UI.
         const marketplaceFilter = (request.query.marketplace ?? '').trim().toUpperCase() || null
+        // DA-RT.8b — operator's currency basis choice. 'EUR' (default
+        // legacy behaviour: EUR-only headline + non-EUR as native chips)
+        // OR 'EUR_EQUIV' (DA-RT.8 conversion: non-EUR orders converted
+        // to EUR via the FxRate daily snapshot and folded into the
+        // single headline number). 'EUR' kept as default so legacy
+        // clients see no behaviour change until they opt in.
+        const baseCurrency = (request.query.baseCurrency ?? 'EUR').toUpperCase()
+        const convertNonEur = baseCurrency === 'EUR_EQUIV'
         const now = new Date()
         const todayStart = zonedStartOfDay(now, OPERATOR_TIMEZONE)
         let from: Date
@@ -830,20 +838,65 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
           // Optional in the response so old clients still render.
           pendingEstimateCents?: number
           pendingCount?: number
+          // DA-RT.8b — populated only when baseCurrency=EUR_EQUIV AND
+          // the row's currency has a rate in the daily FX snapshot.
+          // The tile total now includes this; the row UI can show
+          // "€X.XX (£Y.YY)" without re-computing on the client.
+          eurEquivCents?: number
         }
         const salesRows: SalesRow[] = []
         let salesTotalCents = 0
         let salesUnitsTotal = 0
         // MS.3 — non-EUR currency rollup. Snapshot headline stays
-        // EUR-only (mixing currencies in one figure is misleading), but
-        // we surface a sibling chip per additional currency so UK GBP
-        // / SE SEK / PL PLN / TR TRY orders don't silently disappear.
+        // EUR-only by default (mixing currencies in one figure is
+        // misleading), but we surface a sibling chip per additional
+        // currency so UK GBP / SE SEK / PL PLN / TR TRY orders don't
+        // silently disappear.
+        // DA-RT.8b — when baseCurrency=EUR_EQUIV, pre-fetch FX rates
+        // for the distinct non-EUR currencies + fold each currency's
+        // sum into salesTotalCents via the rate. Surfaces fxMissing
+        // count so the UI can warn when a currency has no rate yet.
+        const distinctNonEurCurrencies = Array.from(
+          new Set(
+            salesByMarketplace
+              .map((g) => g.currencyCode ?? 'EUR')
+              .filter((c) => c !== 'EUR'),
+          ),
+        )
+        let fxLookup: { rates: Map<string, number>; asOf: Date } | null = null
+        if (convertNonEur && distinctNonEurCurrencies.length > 0) {
+          try {
+            const { buildFxLookup } = await import(
+              '../services/revenue/compute.js'
+            )
+            fxLookup = await buildFxLookup(distinctNonEurCurrencies)
+          } catch (fxErr) {
+            fastify.log.warn(
+              { err: fxErr },
+              '[dashboard/global-snapshot] DA-RT.8b FX lookup failed; falling back to EUR-only headline',
+            )
+          }
+        }
+        let fxMissingCount = 0
+        const fxMissingCurrencies = new Set<string>()
+        let fxConvertedCents = 0
+
         const additionalByCurrency = new Map<string, { valueCents: number; units: number; orderCount: number }>()
         for (const g of salesByMarketplace) {
           const mkt = g.marketplace ?? 'UNKNOWN'
           const cents = Math.round(Number(g._sum?.totalPrice ?? 0) * 100)
           const cur = g.currencyCode ?? 'EUR'
           const units = unitsByMarketplace.get(mkt) ?? 0
+          // DA-RT.8b — surface per-row EUR-equivalent so the table can
+          // render a single number even for non-EUR markets. Optional;
+          // legacy clients ignore.
+          let rowEurEquivCents: number | undefined
+          if (convertNonEur && cur !== 'EUR') {
+            const rate = fxLookup?.rates.get(cur)
+            if (rate != null && rate > 0) {
+              rowEurEquivCents = Math.round(cents * rate)
+            }
+          }
           salesRows.push({
             marketplace: mkt,
             region: REGION[mkt] ?? 'Other',
@@ -851,11 +904,30 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
             valueCents: cents,
             units,
             orderCount: g._count?._all ?? 0,
+            ...(rowEurEquivCents != null ? { eurEquivCents: rowEurEquivCents } : {}),
           })
           salesUnitsTotal += units
           if (cur === 'EUR') {
             salesTotalCents += cents
+          } else if (convertNonEur && rowEurEquivCents != null) {
+            // DA-RT.8b — fold into headline as EUR-equivalent. Chip
+            // still rendered for transparency (native value visible).
+            salesTotalCents += rowEurEquivCents
+            fxConvertedCents += rowEurEquivCents
+            // Also keep in additionalByCurrency for the chip render
+            // — operator sees native + EUR-equivalent side by side.
+            const existing = additionalByCurrency.get(cur) ?? { valueCents: 0, units: 0, orderCount: 0 }
+            existing.valueCents += cents
+            existing.units += units
+            existing.orderCount += g._count?._all ?? 0
+            additionalByCurrency.set(cur, existing)
           } else {
+            // Either convertNonEur was off OR the FX rate was missing.
+            // Surface as chip + flag missing-rate cases so UI can warn.
+            if (convertNonEur) {
+              fxMissingCount += g._count?._all ?? 0
+              fxMissingCurrencies.add(cur)
+            }
             const existing = additionalByCurrency.get(cur) ?? { valueCents: 0, units: 0, orderCount: 0 }
             existing.valueCents += cents
             existing.units += units
@@ -1103,9 +1175,25 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
                 estimateCents: pendingEstimateCents,
               },
               // MS.3 — orders ingested in currencies other than EUR.
-              // Headline stays EUR-only (mixing currencies misleads);
-              // these surface as small chips beside the tile total.
+              // Native amounts surface as chips beside the tile total
+              // for transparency. When DA-RT.8b convertNonEur is on,
+              // they're ALSO folded into the headline as EUR-equivalent
+              // (via fx.convertedCents) so the operator sees a single
+              // unified revenue number.
               additionalCurrencies,
+              // DA-RT.8b — currency-conversion telemetry. When
+              // baseCurrency=EUR_EQUIV, this carries the metadata UI
+              // needs to render "Total: €X.XX (incl. €Y.YY converted
+              // from N non-EUR markets · M orders awaiting FX rate)".
+              fx: {
+                basis: baseCurrency,
+                convertedCents: convertNonEur ? fxConvertedCents : 0,
+                fxMissingCount: convertNonEur ? fxMissingCount : 0,
+                fxMissingCurrencies: convertNonEur
+                  ? [...fxMissingCurrencies].sort()
+                  : [],
+                rateAsOf: fxLookup?.asOf?.toISOString() ?? null,
+              },
             },
             sparkline,
             byMarketplace: salesRows.sort((a, b) => b.valueCents - a.valueCents),

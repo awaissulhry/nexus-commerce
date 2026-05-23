@@ -37,6 +37,10 @@ type SalesRow = {
   // split-brain that GS-RT.1 was built to close.
   pendingEstimateCents?: number
   pendingCount?: number
+  // DA-RT.8b — EUR-equivalent for non-EUR rows when baseCurrency=
+  // EUR_EQUIV was requested AND the FX rate was available. UI can
+  // render native + EUR-equiv side by side without re-computing.
+  eurEquivCents?: number
 }
 
 type OpenOrdersRow = {
@@ -75,6 +79,15 @@ type Snapshot = {
         units: number
         orderCount: number
       }>
+      // DA-RT.8b — FX conversion telemetry. Populated only when
+      // baseCurrency=EUR_EQUIV is requested.
+      fx?: {
+        basis: string                         // 'EUR' | 'EUR_EQUIV'
+        convertedCents: number                // amount folded into headline via FX
+        fxMissingCount: number                // orders whose currency had no rate
+        fxMissingCurrencies: string[]         // distinct missing-rate currencies
+        rateAsOf: string | null               // ISO of the FX snapshot used
+      }
     }
     sparkline: Array<{ date: string; valueCents: number }>
     byMarketplace: SalesRow[]
@@ -456,8 +469,12 @@ export function GlobalSnapshot() {
                 {data.sales.total.pending.count} awaiting price
               </div>
             )}
-            {/* MS.3 — non-EUR currency chips. Stays close to the
-                headline so the EUR total isn't read as "everything". */}
+            {/* MS.3 + DA-RT.8b — non-EUR currency chips. Always
+                shown when non-EUR sales exist (operator transparency:
+                see the native number). When baseCurrency=EUR_EQUIV
+                the headline ALSO includes these via FX conversion;
+                the chip's tooltip surfaces both numbers + the rate
+                date so operator can audit. */}
             {data.sales.total.additionalCurrencies && data.sales.total.additionalCurrencies.length > 0 && (
               <div className="flex items-center gap-1 flex-wrap pt-1">
                 <span className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">
@@ -467,11 +484,24 @@ export function GlobalSnapshot() {
                   <span
                     key={c.currency}
                     className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 tabular-nums"
-                    title={`${c.units} unit${c.units === 1 ? '' : 's'} in ${c.orderCount} order${c.orderCount === 1 ? '' : 's'} (native currency, not converted to EUR)`}
+                    title={`${c.units} unit${c.units === 1 ? '' : 's'} in ${c.orderCount} order${c.orderCount === 1 ? '' : 's'} — native currency. ${data.sales.total.fx?.basis === 'EUR_EQUIV' ? `Converted into the EUR headline via daily FX rate (as of ${data.sales.total.fx.rateAsOf ?? 'today'}).` : 'NOT included in the EUR headline — operator can switch to EUR equivalent via the Currency dropdown.'}`}
                   >
                     {formatCurrencyCents(c.valueCents, c.currency)}
                   </span>
                 ))}
+              </div>
+            )}
+            {/* DA-RT.8b — FX-missing warning. Surfaces when the
+                operator picked EUR_EQUIV but some currencies had no
+                rate available (typical: a market we just started
+                selling in before the daily FX cron has populated). */}
+            {data.sales.total.fx && data.sales.total.fx.fxMissingCount > 0 && (
+              <div
+                className="text-xs text-amber-700 dark:text-amber-300 font-medium pt-1"
+                title={`No FX rate yet for: ${data.sales.total.fx.fxMissingCurrencies.join(', ')}. These orders are excluded from the EUR headline until the next pricing-fx-refresh cron tick (~daily).`}
+              >
+                ⚠ {data.sales.total.fx.fxMissingCount} order
+                {data.sales.total.fx.fxMissingCount === 1 ? '' : 's'} awaiting FX rate
               </div>
             )}
             <Sparkline data={data.sales.sparkline} />
@@ -914,6 +944,21 @@ const PERIOD_LABELS: Record<PeriodKey, string> = {
 function SalesPanelPlaceholder({ data, onSelectMarketplace }: { data: Snapshot; onSelectMarketplace: (m: string | null) => void }) {
   const [period, setPeriod] = useState<PeriodKey>('today')
   const [view, setView] = useState<'table' | 'graph'>('table')
+  // DA-RT.8b — operator's currency basis. 'EUR' (legacy: EUR-only
+  // headline + non-EUR chips) | 'EUR_EQUIV' (DA-RT.8 conversion:
+  // non-EUR sales folded into the EUR headline via daily FX rate).
+  // Persisted to localStorage so the operator's preference survives
+  // page reloads — most operators have one consistent answer for
+  // their workflow.
+  const [baseCurrency, setBaseCurrencyState] = useState<'EUR' | 'EUR_EQUIV'>(() => {
+    if (typeof window === 'undefined') return 'EUR'
+    const saved = window.localStorage.getItem('nexus.snapshot.baseCurrency.v1')
+    return saved === 'EUR_EQUIV' ? 'EUR_EQUIV' : 'EUR'
+  })
+  const setBaseCurrency = (next: 'EUR' | 'EUR_EQUIV') => {
+    setBaseCurrencyState(next)
+    try { window.localStorage.setItem('nexus.snapshot.baseCurrency.v1', next) } catch {}
+  }
   const [panelData, setPanelData] = useState<Snapshot>(data)
   const [loading, setLoading] = useState(false)
   // SA.5 — yesterday's sales reconciliation vs Amazon's T+1 report.
@@ -938,13 +983,20 @@ function SalesPanelPlaceholder({ data, onSelectMarketplace }: { data: Snapshot; 
   }, [data.marketplace])
 
   useEffect(() => {
-    if (period === 'today') {
+    // DA-RT.8b — refetch when baseCurrency changes too (in addition
+    // to period/data). The 'today' shortcut only stays valid if the
+    // operator hasn't switched to EUR_EQUIV mode, otherwise we need
+    // a fresh fetch to apply FX conversion server-side.
+    if (period === 'today' && baseCurrency === 'EUR') {
       setPanelData(data)
       return
     }
     let cancelled = false
     setLoading(true)
-    fetch(`${getBackendUrl()}/api/dashboard/global-snapshot?period=${period}`, { cache: 'no-store' })
+    const qs = new URLSearchParams()
+    qs.set('period', period)
+    if (baseCurrency === 'EUR_EQUIV') qs.set('baseCurrency', 'EUR_EQUIV')
+    fetch(`${getBackendUrl()}/api/dashboard/global-snapshot?${qs.toString()}`, { cache: 'no-store' })
       .then(async (r) => {
         if (!r.ok) throw new Error(`${r.status}`)
         return r.json()
@@ -953,7 +1005,7 @@ function SalesPanelPlaceholder({ data, onSelectMarketplace }: { data: Snapshot; 
       .catch(() => { if (!cancelled) setPanelData(data) })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [period, data])
+  }, [period, data, baseCurrency])
 
   // Group rows by region for the table layout, with a synthetic
   // region row containing the regional rollup that's collapsible.
@@ -1007,18 +1059,24 @@ function SalesPanelPlaceholder({ data, onSelectMarketplace }: { data: Snapshot; 
             <option key={p} value={p}>{PERIOD_LABELS[p]}</option>
           ))}
         </select>
-        {/* PV-RT.2 — Currency dropdown placeholder. EUR-only today;
-            FX conversion (GA-RT.4) will add native + EUR-equivalent
-            options. Disabled state communicates the stub honestly
-            instead of pretending the dropdown does something. */}
+        {/* DA-RT.8b — functional Currency dropdown.
+            EUR (default): headline + table show EUR only; non-EUR
+              sales surface as native chips.
+            EUR equivalent: server converts non-EUR via daily FX
+              rate (FxRate table, refreshed by pricing-fx-refresh
+              cron) and folds into the EUR headline. Operator gets
+              one unified revenue number across all currencies.
+              When a rate is missing, surfaced via fxMissingCurrencies
+              for the warning chip below. */}
         <select
-          value="EUR"
-          disabled
-          aria-label="Currency"
-          title="FX conversion coming soon — multi-currency rollup deferred to GA-RT.4. Headline + table currently EUR only; non-EUR sales surface as chips beside the tile total."
-          className="h-7 px-2 text-sm border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-500 cursor-not-allowed opacity-70"
+          value={baseCurrency}
+          onChange={(e) => setBaseCurrency(e.target.value as 'EUR' | 'EUR_EQUIV')}
+          aria-label="Currency basis"
+          title="Choose how non-EUR sales display: EUR-only (native chips) or EUR-equivalent (converted via daily FX rate)"
+          className="h-7 px-2 text-sm border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900"
         >
           <option value="EUR">EUR</option>
+          <option value="EUR_EQUIV">EUR equivalent</option>
         </select>
         <div className="inline-flex items-center bg-slate-100 dark:bg-slate-800 rounded p-0.5">
           {(['table', 'graph'] as const).map((v) => (
