@@ -577,8 +577,18 @@ function PoCard({
             <AuditTrailPanel poId={po.id} />
           </div>
 
-          {/* Footer actions: PDF + email link */}
+          {/* Footer actions: detail page + PDF + email link */}
           <div className="flex items-center gap-2 text-sm">
+            {/* PO.2 — deep-link to the full detail page. Surfaces all
+                tabs (Activity / Shipments / Attachments / Revisions /
+                Comments) + print-friendly view. */}
+            <a
+              href={`/fulfillment/purchase-orders/${po.id}`}
+              className="inline-flex items-center gap-1 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"
+            >
+              <ChevronRight className="w-3 h-3" />
+              {t('po.openDetail')}
+            </a>
             <a
               href={`${getBackendUrl()}/api/fulfillment/purchase-orders/${po.id}/factory.pdf`}
               target="_blank"

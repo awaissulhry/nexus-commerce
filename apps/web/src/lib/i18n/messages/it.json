@@ -4104,6 +4104,7 @@
   "inbound.bulk.confirmHardDelete.fbaWarningTitle": "{n} di queste sono spedizioni FBA",
   "inbound.bulk.confirmHardDelete.fbaWarningBody": "Il piano di spedizione FBA su Amazon non è interessato. L'eliminazione locale rimuove solo il record di tracciamento di Nexus — Amazon continuerà a ricevere unità sul piano FBA originale.",
 
+  "po.detail.notFound": "Ordine d'acquisto non trovato",
   "po.filter.all": "Tutti",
   "po.filter.active": "Attivi",
   "po.status.DRAFT": "Bozza",
@@ -4134,6 +4135,7 @@
   "po.col.subtotal": "Subtotale",
   "po.auditTrail": "Storico transizioni",
   "po.factoryPdf": "PDF fabbrica",
+  "po.openDetail": "Apri dettaglio",
   "po.supplierProducts": "Prodotti fornitore",
   "po.audit.loading": "Caricamento storico…",
   "po.audit.unavailable": "Storico non disponibile: {error}",

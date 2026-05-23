@@ -4084,6 +4084,7 @@
   "inbound.bulk.confirmHardDelete.fbaWarningTitle": "{n} of these are FBA shipments",
   "inbound.bulk.confirmHardDelete.fbaWarningBody": "The FBA shipment plan on Amazon is unaffected. Deleting locally only removes the Nexus tracking record — Amazon will continue to receive units against the original FBA plan.",
 
+  "po.detail.notFound": "Purchase order not found",
   "po.filter.all": "All",
   "po.filter.active": "Active",
   "po.status.DRAFT": "Draft",
@@ -4114,6 +4115,7 @@
   "po.col.subtotal": "Subtotal",
   "po.auditTrail": "Audit trail",
   "po.factoryPdf": "Factory PDF",
+  "po.openDetail": "Open detail",
   "po.supplierProducts": "Supplier products",
   "po.audit.loading": "Loading audit trail…",
   "po.audit.unavailable": "Audit unavailable: {error}",

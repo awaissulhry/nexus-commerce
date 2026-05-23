@@ -5599,7 +5599,21 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
     const { id } = request.params as { id: string }
     const po = await prisma.purchaseOrder.findUnique({
       where: { id },
-      include: { supplier: true, warehouse: true, items: true, inboundShipments: true },
+      include: {
+        supplier: true,
+        warehouse: true,
+        // PO.1 — line ordering is now durable; sort by lineOrder ASC
+        // with id tiebreak so the detail page matches the edit grid.
+        items: { orderBy: [{ lineOrder: 'asc' }, { id: 'asc' }] },
+        inboundShipments: { orderBy: { createdAt: 'desc' } },
+        // PO.1 — surface attachments, revisions, comments. Empty
+        // collections until PO.5+ populate them, but already wired so
+        // the detail page (PO.2) can render skeleton sections without
+        // a second backend trip.
+        attachments: { orderBy: { uploadedAt: 'desc' } },
+        revisions: { orderBy: { version: 'asc' } },
+        comments: { orderBy: { createdAt: 'asc' } },
+      },
     })
     if (!po) return reply.code(404).send({ error: 'PO not found' })
     return po
