@@ -1,7 +1,7 @@
 'use client'
 
-import { useRef, useState } from 'react'
-import { Sparkles, ArrowDownToLine, AlertTriangle, Copy, DollarSign, Save, Send, CheckCircle2, XCircle, Loader2 } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { Sparkles, ArrowDownToLine, AlertTriangle, Copy, DollarSign, Send, CheckCircle2, XCircle, Loader2 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
@@ -58,6 +58,14 @@ interface Props {
   listing: Listing | undefined
   onDirtyChange: (count: number) => void
   onSave: (updated: Listing) => void
+  /** DSP.5 — registers this listing tab's flush() so header Save All
+   *  picks it up via the dirty registry. Same pattern as MasterDataTab
+   *  in DSP.2. Each (channel, marketplace) instance registers under
+   *  its own key. */
+  onRegister?: (handlers: {
+    flush: () => Promise<void>
+    discard: () => void
+  }) => void
   childrenList?: ChildProduct[]
 }
 
@@ -70,6 +78,7 @@ export default function ChannelListingTab({
   listing,
   onDirtyChange,
   onSave,
+  onRegister,
   childrenList = [],
 }: Props) {
   const { t } = useTranslations()
@@ -81,8 +90,7 @@ export default function ChannelListingTab({
   const activeProductId = selectedChildId ?? product.id
   const [pulling, setPulling] = useState(false)
   const [translating, setTranslating] = useState(false)
-  const [saving, setSaving] = useState(false)
-  const [savedFlash, setSavedFlash] = useState(false)
+  // DSP.5 — saving/savedFlash removed; header Save All owns the state.
   const [showPublishModal, setShowPublishModal] = useState(false)
   const translateAllRef = useRef<
     | (() => Promise<{ translated: number; skipped: number }>)
@@ -104,6 +112,15 @@ export default function ChannelListingTab({
   const [autoPublishing, setAutoPublishing] = useState(false)
   const [autoPublishErr, setAutoPublishErr] = useState<string | null>(null)
 
+  // DSP.5 — inline "Saved" flash after the auto-publish toggle's
+  // immediate PATCH succeeds. The toggle is the spec-permitted
+  // single-control exception to explicit-save: it persists
+  // instantly, but the operator needs visible confirmation that the
+  // persist happened (per the DSP.0 anti-pattern rule on hidden
+  // auto-save). State is local to the toggle; the global registry
+  // doesn't track it because the value is never "dirty" between
+  // change and persist.
+  const [autoPublishSaved, setAutoPublishSaved] = useState(false)
   async function handleToggleAutoPublish() {
     if (!listing || autoPublishing) return
     setAutoPublishing(true)
@@ -125,6 +142,8 @@ export default function ChannelListingTab({
         const body = await res.json().catch(() => ({}))
         throw new Error(body?.error ?? `HTTP ${res.status}`)
       }
+      setAutoPublishSaved(true)
+      window.setTimeout(() => setAutoPublishSaved(false), 1500)
     } catch (e) {
       setAutoPublish(!next) // revert on failure
       setAutoPublishErr(e instanceof Error ? e.message : String(e))
@@ -253,18 +272,29 @@ export default function ChannelListingTab({
     }
   }
 
-  async function handleSave() {
-    setSaving(true)
-    try {
-      await flushRef.current?.()
-      setSavedFlash(true)
-      window.setTimeout(() => setSavedFlash(false), 1500)
-    } catch (e) {
-      setStatusMsg({ kind: 'error', text: `Save failed: ${(e as Error).message}` })
-    } finally {
-      setSaving(false)
-    }
-  }
+  // DSP.5 — handleSave + savedFlash + saving state removed along with
+  // the tab-level Save button. The header "Save All" now invokes the
+  // tab's flush via the registry (onRegister prop below); failures
+  // propagate as toasts at the header level (DSP.1's saveFailed).
+
+  // Register with the parent registry once (refs ensure the latest
+  // flush is always invoked even though registration runs on mount).
+  // discardSignal already triggers a key-based remount of this whole
+  // tab in ProductEditClient, so the discard handler here is a no-op
+  // unless registry.discardAll() is called outside the remount path.
+  useEffect(() => {
+    if (!onRegister) return
+    onRegister({
+      flush: async () => {
+        await flushRef.current?.()
+      },
+      discard: () => {
+        // No-op: parent's key={`${channel}_${marketplace}_${discardSignal}`}
+        // already drops + remounts this tab on discard, so local state
+        // is reseeded from listing prop automatically.
+      },
+    })
+  }, [onRegister])
 
   return (
     <div className="space-y-4">
@@ -327,17 +357,21 @@ export default function ChannelListingTab({
             >
               {t('products.edit.translate.button')}
             </Button>
-            <Button
-              variant="secondary"
-              size="sm"
-              loading={saving}
-              icon={savedFlash ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> : <Save className="w-3.5 h-3.5" />}
-              onClick={handleSave}
-              title="Save all pending changes immediately"
-            >
-              {savedFlash ? 'Saved' : 'Save'}
-            </Button>
-            {/* IS.2b — auto-publish content toggle */}
+            {/* DSP.5 — tab-level Save removed. Header "Save All"
+                now handles persistence atomically across every dirty
+                tab via the DSP.1 registry; a per-tab Save here would
+                race with that flow + violate the spec's "either the
+                header owns Save (preferred) or the tab does — not
+                both" rule (docs/edit-ux.md anti-pattern #4).
+                The Pull / Translate buttons stay because they're
+                channel-data operations, not save operations. */}
+            {/* IS.2b / DSP.5 — auto-publish content toggle.
+                Single-control immediate-save (spec-permitted exception
+                to explicit-save). After every successful PATCH a brief
+                "Saved" pill replaces the icon to give the operator
+                visible confirmation that the toggle persisted.
+                Tooltip explicitly mentions the immediate-save behavior
+                so operator isn't surprised. */}
             {listing && (
               <div className="flex items-center gap-1.5">
                 <button
@@ -345,8 +379,8 @@ export default function ChannelListingTab({
                   disabled={autoPublishing}
                   onClick={handleToggleAutoPublish}
                   title={autoPublish
-                    ? 'Auto-publish ON — content changes (title, description) push to this channel automatically. Click to turn off.'
-                    : 'Auto-publish OFF — content changes require manual Publish. Click to enable.'}
+                    ? 'Auto-publish ON — content changes (title, description) push to this channel automatically. Saves immediately on click. Click to turn off.'
+                    : 'Auto-publish OFF — content changes require manual Publish. Saves immediately on click. Click to enable.'}
                   className={cn(
                     'inline-flex items-center gap-1 h-7 px-2.5 text-xs font-medium rounded border transition-colors disabled:opacity-50',
                     autoPublish
@@ -356,10 +390,14 @@ export default function ChannelListingTab({
                 >
                   {autoPublishing ? (
                     <Loader2 className="w-3 h-3 animate-spin" />
+                  ) : autoPublishSaved ? (
+                    <CheckCircle2 className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
                   ) : (
                     <span className="text-[10px]">↑</span>
                   )}
-                  {autoPublish ? 'Auto-publish ON' : 'Auto-publish OFF'}
+                  {autoPublishSaved
+                    ? 'Saved'
+                    : autoPublish ? 'Auto-publish ON' : 'Auto-publish OFF'}
                 </button>
                 {autoPublishErr && (
                   <span className="text-xs text-rose-600" title={autoPublishErr}>⚠</span>

@@ -1149,6 +1149,15 @@ export default function ProductEditClient({
                 listing={listing}
                 onDirtyChange={(count) => setTabDirty(tabKey, count)}
                 onSave={() => router.refresh()}
+                onRegister={(handlers) =>
+                  registry.register(tabKey, {
+                    label: t('products.edit.discardScopeChannel', {
+                      channel,
+                      marketplace: selectedMarket,
+                    }),
+                    ...handlers,
+                  })
+                }
                 childrenList={childrenList}
               />
             </div>
