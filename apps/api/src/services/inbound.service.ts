@@ -332,7 +332,19 @@ async function syncPoState(shipmentId: string) {
       totalReceived += it.quantityReceived ?? 0
     }
     if (totalReceived === 0) continue
-    const next: 'PARTIAL' | 'RECEIVED' = totalReceived >= totalOrdered ? 'RECEIVED' : 'PARTIAL'
+    // PO.10 — auto-close tolerance. When the cumulative shortfall is
+    // within the operator-configured band, treat the PO as fully
+    // received. Default 0 = exact match required, matching the
+    // pre-PO.10 behavior. Negative values (over-receipts) are always
+    // treated as RECEIVED (the operator can review the variance in
+    // the PO.10 match panel before closing books).
+    const tolerance = Math.max(
+      0,
+      Number(process.env.NEXUS_PO_AUTO_CLOSE_TOLERANCE_UNITS) || 0,
+    )
+    const shortfall = totalOrdered - totalReceived
+    const next: 'PARTIAL' | 'RECEIVED' =
+      shortfall <= tolerance ? 'RECEIVED' : 'PARTIAL'
     if (ORDER[next] <= ORDER[po.status]) continue
     await prisma.purchaseOrder.update({
       where: { id: poId },

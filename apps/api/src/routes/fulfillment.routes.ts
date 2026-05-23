@@ -5983,6 +5983,164 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // PO.10 — Three-way match read-side endpoint.
+  //
+  // Joins each PO line with the rolled-up InboundShipmentItem actuals
+  // (received qty + received unit costs) so the detail-page panel can
+  // surface ordered/received variance + purchase-price variance per
+  // line. Invoice match remains deferred — no invoice ingestion lives
+  // in the schema yet; the UI surfaces a placeholder column.
+  //
+  // Tolerance / PPV thresholds come from env vars to keep this phase
+  // schema-migration-free:
+  //   NEXUS_PO_AUTO_CLOSE_TOLERANCE_UNITS  (default 0)
+  //   NEXUS_PO_PPV_WARNING_BP              (default 200, i.e. 2%)
+  fastify.get('/fulfillment/purchase-orders/:id/match', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const po = await prisma.purchaseOrder.findUnique({
+        where: { id },
+        include: {
+          items: { orderBy: [{ lineOrder: 'asc' }, { id: 'asc' }] },
+          inboundShipments: { select: { id: true, status: true, arrivedAt: true } },
+        },
+      })
+      if (!po) return reply.code(404).send({ error: 'PO not found' })
+
+      const poiIds = po.items.map((it) => it.id)
+      const shipmentItems = poiIds.length
+        ? await prisma.inboundShipmentItem.findMany({
+            where: { purchaseOrderItemId: { in: poiIds } },
+            select: {
+              purchaseOrderItemId: true,
+              quantityReceived: true,
+              unitCostCents: true,
+            },
+          })
+        : []
+
+      // Roll up per-line actuals from the receive side.
+      const byPoi = new Map<string, { qty: number; weightedCostNum: number; sampleCount: number }>()
+      for (const si of shipmentItems) {
+        if (!si.purchaseOrderItemId) continue
+        const prev = byPoi.get(si.purchaseOrderItemId) ?? { qty: 0, weightedCostNum: 0, sampleCount: 0 }
+        prev.qty += si.quantityReceived ?? 0
+        if (si.unitCostCents != null && si.quantityReceived > 0) {
+          prev.weightedCostNum += si.unitCostCents * si.quantityReceived
+          prev.sampleCount += si.quantityReceived
+        }
+        byPoi.set(si.purchaseOrderItemId, prev)
+      }
+
+      const ppvWarningBp = Math.max(0, Number(process.env.NEXUS_PO_PPV_WARNING_BP) || 200)
+      const tolerance = Math.max(0, Number(process.env.NEXUS_PO_AUTO_CLOSE_TOLERANCE_UNITS) || 0)
+
+      let totalOrdered = 0
+      let totalReceived = 0
+      let totalOrderedCents = 0
+      let totalReceivedCents = 0
+      let ppvFlags = 0
+      let overReceipts = 0
+      let underReceipts = 0
+
+      const lines = po.items.map((it) => {
+        const actuals = byPoi.get(it.id)
+        const receivedQty = actuals?.qty ?? 0
+        const receivedAvgUnitCostCents =
+          actuals && actuals.sampleCount > 0
+            ? Math.round(actuals.weightedCostNum / actuals.sampleCount)
+            : null
+
+        const orderedSubtotal = it.unitCostCents * it.quantityOrdered
+        const receivedSubtotal =
+          receivedAvgUnitCostCents != null
+            ? receivedAvgUnitCostCents * receivedQty
+            : it.unitCostCents * receivedQty // fall back to ordered cost when actuals unknown
+
+        const qtyDelta = receivedQty - it.quantityOrdered // negative = under, positive = over
+        const ppvBp =
+          receivedAvgUnitCostCents != null && it.unitCostCents > 0
+            ? Math.round(((receivedAvgUnitCostCents - it.unitCostCents) / it.unitCostCents) * 10000)
+            : 0
+
+        let lineStatus: 'matched' | 'partial' | 'over' | 'price-variance' | 'pending'
+        if (receivedQty === 0) lineStatus = 'pending'
+        else if (qtyDelta > 0) lineStatus = 'over'
+        else if (qtyDelta < -tolerance) lineStatus = 'partial'
+        else if (Math.abs(ppvBp) > ppvWarningBp) lineStatus = 'price-variance'
+        else lineStatus = 'matched'
+
+        if (qtyDelta > 0) overReceipts++
+        if (lineStatus === 'partial') underReceipts++
+        if (Math.abs(ppvBp) > ppvWarningBp) ppvFlags++
+
+        totalOrdered += it.quantityOrdered
+        totalReceived += receivedQty
+        totalOrderedCents += orderedSubtotal
+        totalReceivedCents += receivedSubtotal
+
+        return {
+          purchaseOrderItemId: it.id,
+          productId: it.productId,
+          sku: it.sku,
+          supplierSku: it.supplierSku,
+          note: it.note,
+          orderedQty: it.quantityOrdered,
+          receivedQty,
+          openQty: Math.max(0, it.quantityOrdered - receivedQty),
+          orderedUnitCostCents: it.unitCostCents,
+          receivedAvgUnitCostCents,
+          orderedSubtotalCents: orderedSubtotal,
+          receivedSubtotalCents: receivedSubtotal,
+          qtyDelta,
+          ppvBp,
+          ppvCents:
+            receivedAvgUnitCostCents != null && receivedQty > 0
+              ? (receivedAvgUnitCostCents - it.unitCostCents) * receivedQty
+              : 0,
+          status: lineStatus,
+        }
+      })
+
+      const totalCostVarianceCents = totalReceivedCents - totalOrderedCents
+      const shortfallUnits = totalOrdered - totalReceived
+      const withinTolerance = shortfallUnits >= 0 && shortfallUnits <= tolerance
+      const linkedShipmentCount = po.inboundShipments.length
+
+      return {
+        poNumber: po.poNumber,
+        status: po.status,
+        currencyCode: po.currencyCode,
+        toleranceUnits: tolerance,
+        ppvWarningBp,
+        totals: {
+          orderedQty: totalOrdered,
+          receivedQty: totalReceived,
+          shortfallUnits,
+          orderedCents: totalOrderedCents,
+          receivedCents: totalReceivedCents,
+          varianceCents: totalCostVarianceCents,
+          withinTolerance,
+        },
+        flags: {
+          ppvLines: ppvFlags,
+          overReceiptLines: overReceipts,
+          underReceiptLines: underReceipts,
+        },
+        invoice: {
+          // No invoice ingestion yet; placeholder so the UI can keep
+          // the third column reserved.
+          status: 'not-tracked' as const,
+        },
+        linkedShipmentCount,
+        lines,
+      }
+    } catch (err: any) {
+      fastify.log.error({ err }, '[purchase-orders/:id/match] failed')
+      return reply.code(500).send({ error: err?.message ?? String(err) })
+    }
+  })
+
   // PO.7 — Add a comment to a PO. body[] is required (≥1 char after
   // trim); mentions[] is optional (resolved emails or user ids that
   // future notification fan-out will read). Emits po.updated so the

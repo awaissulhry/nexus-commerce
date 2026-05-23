@@ -53,6 +53,7 @@ import {
 } from '../_shared/po-lens'
 import { PoLiveSyncChip } from '../_shared/PoLiveSyncChip'
 import { EditableSummaryPane, isEditableStatus } from '../_shared/EditableSummaryPane'
+import { ThreeWayMatchPanel } from '../_shared/ThreeWayMatchPanel'
 
 // ── Types ──────────────────────────────────────────────────────────
 
@@ -716,7 +717,15 @@ export default function PurchaseOrderDetailClient({ id }: { id: string }) {
           {isEditableStatus(po.status) ? (
             <EditableSummaryPane po={po} onRefresh={refresh} />
           ) : (
-            <SummaryPane po={po} />
+            <div className="space-y-4">
+              {/* PO.10 — three-way match surfaces above the read-only
+                  line table whenever any quantity has been received,
+                  so the operator's eye lands on the variance summary
+                  before the raw lines. Panel auto-hides at zero
+                  receives. */}
+              <ThreeWayMatchPanel poId={po.id} />
+              <SummaryPane po={po} />
+            </div>
           )}
         </section>
         <section data-tab-pane className={cn(tab !== 'activity' && 'po-detail-no-print')}>
