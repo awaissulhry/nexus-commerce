@@ -72,6 +72,8 @@ import {
 } from './_shared/po-lens'
 import { PoLiveSyncChip } from './_shared/PoLiveSyncChip'
 import { CreatePoModal } from './_shared/CreatePoModal'
+import { SpendSummaryTile } from './_shared/SpendSummaryTile'
+import { SupplierScorecardDrawer } from './_shared/SupplierScorecardDrawer'
 
 // ── Audit-trail panel (still used by the card lens) ────────────────
 
@@ -315,6 +317,11 @@ export default function PurchaseOrdersClient() {
   const [actionError, setActionError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [createOpen, setCreateOpen] = useState(false)
+  // PO.13 — scorecard drawer state. Opened from the spend tile's Top
+  // Suppliers list and from supplier-name cells in PO rows (when
+  // PO.14 adds the supplier picker, this becomes the primary deep-
+  // link for supplier intel).
+  const [scorecardSupplierId, setScorecardSupplierId] = useState<string | null>(null)
   const [lastFetchedAt, setLastFetchedAt] = useState<number | null>(null)
 
   // ── View / density / preferences state (LS-persisted) ────────────
@@ -558,6 +565,12 @@ export default function PurchaseOrdersClient() {
 
   return (
     <div className="space-y-3">
+      {/* PO.13 — Spend summary tile above the toolbar. Click-to-drill
+          tiles + aging strip + top suppliers (opens scorecard drawer). */}
+      <SpendSummaryTile
+        onPickSupplier={(id) => setScorecardSupplierId(id)}
+      />
+
       {/* Toolbar — search, filters, density, view, prefs, auto-refresh */}
       <GridToolbar
         searchSlot={
@@ -847,6 +860,15 @@ export default function PurchaseOrdersClient() {
             setCreateOpen(false)
             await fetchPos()
           }}
+        />
+      )}
+
+      {/* PO.13 — supplier scorecard drawer. Opened from the spend
+          tile's top-suppliers list. */}
+      {scorecardSupplierId && (
+        <SupplierScorecardDrawer
+          supplierId={scorecardSupplierId}
+          onClose={() => setScorecardSupplierId(null)}
         />
       )}
     </div>

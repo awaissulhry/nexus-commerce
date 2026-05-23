@@ -7202,6 +7202,130 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
     return { listenerCount: getPoListenerCount() }
   })
 
+  // PO.13 — Spend summary aggregation for the dashboard tile on
+  // /fulfillment/purchase-orders. Single query, single response. All
+  // amounts in PO currency cents; the UI groups by currency or
+  // converts via fx-rate.service if the operator runs mixed-ccy
+  // procurement (Xavia is EUR-dominant; PO.18 polish revisits the
+  // mixed-ccy formatter).
+  fastify.get('/fulfillment/purchase-orders/spend-summary', async (_request, reply) => {
+    try {
+      // Pre-terminal statuses: count toward "open" value.
+      const OPEN_STATUSES: Prisma.PurchaseOrderWhereInput['status'] = {
+        in: ['DRAFT', 'REVIEW', 'APPROVED', 'SUBMITTED', 'ACKNOWLEDGED', 'CONFIRMED', 'PARTIAL'],
+      }
+      // Supplier has the PO + we haven't fully received it yet.
+      const IN_TRANSIT_STATUSES = new Set([
+        'SUBMITTED',
+        'ACKNOWLEDGED',
+        'CONFIRMED',
+        'PARTIAL',
+      ])
+
+      const now = new Date()
+      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
+      const day7 = new Date(now.getTime() - 7 * 86400_000)
+      const day14 = new Date(now.getTime() - 14 * 86400_000)
+      const day30 = new Date(now.getTime() - 30 * 86400_000)
+
+      // Load all relevant POs in one pass; aggregation is in JS so we
+      // can do bucket counting + top-suppliers without N SQL queries.
+      const pos = await prisma.purchaseOrder.findMany({
+        where: {
+          deletedAt: null,
+          status: OPEN_STATUSES,
+        },
+        include: {
+          supplier: { select: { id: true, name: true } },
+        },
+      })
+
+      let openValueCents = 0
+      let inTransitValueCents = 0
+      let thisMonthCommitCents = 0
+      const aging = {
+        upTo7: { count: 0, valueCents: 0 },
+        upTo14: { count: 0, valueCents: 0 },
+        upTo30: { count: 0, valueCents: 0 },
+        over30: { count: 0, valueCents: 0 },
+      }
+      const supplierAcc = new Map<
+        string,
+        { supplierId: string; name: string; poCount: number; openValueCents: number }
+      >()
+
+      for (const po of pos) {
+        openValueCents += po.totalCents
+        if (IN_TRANSIT_STATUSES.has(po.status)) {
+          inTransitValueCents += po.totalCents
+        }
+        if (po.createdAt >= monthStart) {
+          thisMonthCommitCents += po.totalCents
+        }
+        // Late = expectedDeliveryDate in the past and status is not yet
+        // fully received. We're inside OPEN_STATUSES so already non-
+        // terminal — just check the date.
+        if (po.expectedDeliveryDate && po.expectedDeliveryDate < now) {
+          if (po.expectedDeliveryDate >= day7) {
+            aging.upTo7.count++
+            aging.upTo7.valueCents += po.totalCents
+          } else if (po.expectedDeliveryDate >= day14) {
+            aging.upTo14.count++
+            aging.upTo14.valueCents += po.totalCents
+          } else if (po.expectedDeliveryDate >= day30) {
+            aging.upTo30.count++
+            aging.upTo30.valueCents += po.totalCents
+          } else {
+            aging.over30.count++
+            aging.over30.valueCents += po.totalCents
+          }
+        }
+        // Top suppliers by open value.
+        if (po.supplier) {
+          const prev = supplierAcc.get(po.supplier.id) ?? {
+            supplierId: po.supplier.id,
+            name: po.supplier.name,
+            poCount: 0,
+            openValueCents: 0,
+          }
+          prev.poCount += 1
+          prev.openValueCents += po.totalCents
+          supplierAcc.set(po.supplier.id, prev)
+        }
+      }
+
+      const topSuppliers = Array.from(supplierAcc.values())
+        .sort((a, b) => b.openValueCents - a.openValueCents)
+        .slice(0, 5)
+
+      const lateCount =
+        aging.upTo7.count + aging.upTo14.count + aging.upTo30.count + aging.over30.count
+      const lateValueCents =
+        aging.upTo7.valueCents +
+        aging.upTo14.valueCents +
+        aging.upTo30.valueCents +
+        aging.over30.valueCents
+
+      return {
+        openCount: pos.length,
+        openValueCents,
+        inTransitValueCents,
+        thisMonthCommitCents,
+        aging,
+        late: { count: lateCount, valueCents: lateValueCents },
+        topSuppliers,
+        // PO.13 — currency reported alongside the cents totals. Mixed
+        // currencies aren't yet split per-ccy; UI treats this as the
+        // dominant currency for display. PO.18 polish adds per-ccy
+        // sub-rollups when needed.
+        currencyCode: pos[0]?.currencyCode ?? 'EUR',
+      }
+    } catch (err: any) {
+      fastify.log.error({ err }, '[purchase-orders/spend-summary] failed')
+      return reply.code(500).send({ error: err?.message ?? String(err) })
+    }
+  })
+
   // ═══════════════════════════════════════════════════════════════════
   // PO.9 — Public supplier ack endpoints. Token-gated, no auth.
   //
