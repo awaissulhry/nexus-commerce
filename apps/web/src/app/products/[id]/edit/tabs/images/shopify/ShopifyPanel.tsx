@@ -27,6 +27,7 @@ import ChannelPreview from '../ChannelPreview'
 import ChannelValidationBanner, { useChannelValidation } from '../ChannelValidationBanner'
 import ChannelPublishPreviewModal from '../ChannelPublishPreviewModal'
 import ImagePublishHistory from '../ImagePublishHistory'
+import RecentChannelJobsStrip from '../RecentChannelJobsStrip'
 import type { ListingImage, PendingUpsert, ProductImage, VariantSummary, WorkspaceProduct } from '../types'
 
 interface CopyResult { copied: number; skipped: number }
@@ -98,6 +99,8 @@ export default function ShopifyPanel({
   const [publishPreviewOpen, setPublishPreviewOpen] = useState(false)
   const [historyOpen, setHistoryOpen] = useState(false)
   const [publishing, setPublishing] = useState(false)
+  // PB.3c — Increment after a publish so the recent-jobs strip refetches.
+  const [jobsRefreshKey, setJobsRefreshKey] = useState(0)
   const [lastPublish, setLastPublish] = useState<{ success: boolean; message: string; ts: string } | null>(null)
   const [pickerTarget, setPickerTarget] = useState<'pool' | { colorValue: string } | null>(null)
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null)
@@ -612,6 +615,9 @@ export default function ShopifyPanel({
         )}
       </div>
 
+      {/* PB.3c — Recent jobs strip (compact, last 3) */}
+      <RecentChannelJobsStrip productId={productId} channel="SHOPIFY" refreshKey={jobsRefreshKey} />
+
       {/* Publish */}
       <div data-publish-anchor className="px-5 py-3 border-t border-slate-100 dark:border-slate-800 flex flex-col gap-1.5">
         <div className="flex items-center justify-between">
@@ -645,6 +651,7 @@ export default function ShopifyPanel({
               try {
                 const result = await onPublish()
                 setLastPublish({ ...result, ts: new Date().toISOString() })
+                setJobsRefreshKey((k) => k + 1)
               } finally {
                 setPublishing(false)
               }
@@ -698,6 +705,7 @@ export default function ShopifyPanel({
           try {
             const result = await onPublish()
             setLastPublish({ ...result, ts: new Date().toISOString() })
+            setJobsRefreshKey((k) => k + 1)
             if (result.success) setPublishPreviewOpen(false)
           } finally {
             setPublishing(false)
