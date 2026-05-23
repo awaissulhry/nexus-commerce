@@ -14,9 +14,9 @@
  *   3. Hover preview at 320 px after a 400 ms dwell. Portal-rendered
  *      so virtualized rows can't clip it; auto-positions above the
  *      thumb but flips below when within ~360 px of the viewport top.
- *   4. Multi-image dot — small badge in the corner when photoCount > 1
- *      so the operator sees at a glance which SKUs have a full gallery
- *      vs. a single hero.
+ *   4. (Removed) — the multi-image dot used to show a Layers icon +
+ *      count in the corner when photoCount > 1; the hover preview
+ *      already surfaces "1 of N" so the badge was redundant clutter.
  *
  * Cloudinary URLs (`res.cloudinary.com/<cloud>/image/upload/...`) are
  * rewritten with a per-density transform so a 32 px compact thumb
@@ -35,7 +35,7 @@ import {
   useState,
 } from 'react'
 import { createPortal } from 'react-dom'
-import { Image as ImageIcon, Layers as ImagesIcon, Loader2, Upload } from 'lucide-react'
+import { Image as ImageIcon, Loader2, Upload } from 'lucide-react'
 import {
   DENSITY_THUMB_ICON_PX,
   DENSITY_THUMB_PX,
@@ -129,7 +129,6 @@ function ThumbnailImpl({
   const previewSrc = src ? withCloudinaryTransform(src, previewTransform()) : null
 
   const showImage = thumbSrc && !imgFailed
-  const showDot = photoCount > 1
 
   const clearDwell = useCallback(() => {
     if (dwellTimerRef.current) {
@@ -212,16 +211,6 @@ function ThumbnailImpl({
           style={style}
           className="absolute inset-0 rounded bg-slate-100 dark:bg-slate-800 animate-pulse"
         />
-      )}
-      {showDot && (
-        <span
-          aria-label={t('products.thumb.photoCount', { count: photoCount })}
-          title={t('products.thumb.photoCount', { count: photoCount })}
-          className="absolute bottom-0.5 right-0.5 inline-flex items-center justify-center gap-0.5 px-1 py-px rounded text-[9px] font-semibold bg-slate-900/75 text-white leading-none"
-        >
-          <ImagesIcon size={8} strokeWidth={2.5} />
-          {photoCount}
-        </span>
       )}
     </>
   ) : (
