@@ -130,6 +130,16 @@ model Product {
   // Structure: { "voltage": "110V", "apparel_size": "M", "material": "Cotton" }
   categoryAttributes Json?
 
+  // ── PIM A.1 — Localized content layer ────────────────────────────
+  // Per-locale overrides for content fields (title, description,
+  // bulletPoints, keywords, etc.). Structure:
+  //   { "en": { "title": "...", "description": "..." },
+  //     "it": { "title": "...", "description": "..." } }
+  // Empty locale objects fall back through attribute-resolver merge
+  // (locale → en → master columns). Variant child Products override
+  // their parent via the existing parent/child hierarchy.
+  localizedContent Json @default("{\"en\":{},\"it\":{}}")
+
   // ── W2.1 — ProductFamily (Akeneo cornerstone) ────────────────────
   // Optional FK to a Family template that declares which attribute
   // groups + per-channel rules apply to this product. Wave 2 builds
@@ -1392,6 +1402,16 @@ model ChannelListing {
   // eBay: { itemSpecifics, categoryId, conditionId, returnPolicy }
   // Shopify: { tags, vendor, collections }
   platformAttributes Json?
+
+  // ── PIM A.1 — Channel-level master attribute overrides ─────────
+  // JSONB bag of overrides for master Product attributes (categoryAttributes,
+  // localizedContent keys). Distinct from platformAttributes:
+  //  - platformAttributes = channel-native fields (browseNode, itemSpecifics)
+  //  - overrideData       = overrides of master attributes per channel
+  // Example: { "material": "Premium Cowhide", "color": "Jet Black" }
+  // Resolver merges this above master values, below explicit *Override columns
+  // (titleOverride, priceOverride, etc.) which take final precedence.
+  overrideData Json @default("{}")
 
   // ── PHASE 12b: Variation Matrix ────────────────────────────────
   // Platform-specific variation theme (e.g., "Size", "Color", "SizeColor")
