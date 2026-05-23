@@ -3444,6 +3444,7 @@
   "products.edit.discardScopeChannel": "{channel} — {marketplace}",
   "products.edit.discardScopeFields": "{count} campo",
   "products.edit.discardScopeFieldsPlural": "{count} campi",
+  "products.edit.navGuardMessage": "Ci sono modifiche non salvate su questo prodotto. Uscire comunque?",
   "products.edit.saveFailed": "Salvataggio non riuscito",
   "products.edit.unsaved": "Non salvato",
   "products.edit.unsavedCount": "{count} non salvati",

@@ -3440,6 +3440,7 @@
   "products.edit.discardScopeChannel": "{channel} — {marketplace}",
   "products.edit.discardScopeFields": "{count} field",
   "products.edit.discardScopeFieldsPlural": "{count} fields",
+  "products.edit.navGuardMessage": "You have unsaved changes on this product. Leave anyway?",
   "products.edit.saveFailed": "Save failed",
   "products.edit.unsaved": "Unsaved",
   "products.edit.unsavedCount": "{count} unsaved",

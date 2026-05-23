@@ -32,6 +32,7 @@ import {
   X,
 } from 'lucide-react'
 import { useDirtyRegistry } from './_shared/useDirtyRegistry'
+import { useNavigationGuard } from './_shared/useNavigationGuard'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { IconButton } from '@/components/ui/IconButton'
@@ -451,17 +452,15 @@ export default function ProductEditClient({
     }
   }, [headerSaving, registry, router, toast, t])
 
-  // NN.3 — beforeunload guard so closing the tab / hitting back
-  // doesn't silently drop unsaved edits.
-  useEffect(() => {
-    if (!isDirty) return
-    function onBeforeUnload(e: BeforeUnloadEvent) {
-      e.preventDefault()
-      e.returnValue = ''
-    }
-    window.addEventListener('beforeunload', onBeforeUnload)
-    return () => window.removeEventListener('beforeunload', onBeforeUnload)
-  }, [isDirty])
+  // NN.3 / DSP.8 — unified navigation guard. Covers both browser-level
+  // tab close / refresh (beforeunload) AND in-app <a> click navigation
+  // (sidebar, breadcrumb, dashboard links). Pre-DSP.8 the latter
+  // silently navigated even with unsaved state because Next.js App
+  // Router doesn't fire beforeunload on client-side route changes.
+  useNavigationGuard({
+    enabled: isDirty,
+    message: t('products.edit.navGuardMessage'),
+  })
 
   useTrackRecentlyViewed({
     id: product.id,
