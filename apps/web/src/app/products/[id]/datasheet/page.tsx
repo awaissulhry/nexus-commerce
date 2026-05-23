@@ -35,6 +35,7 @@ import Link from 'next/link'
 import { ArrowLeft, FileText } from 'lucide-react'
 import { getServerLocale, getServerT } from '@/lib/i18n/server'
 import HeaderHealthPulse from './HeaderHealthPulse'
+import AttributesTab from './AttributesTab'
 
 export const dynamic = 'force-dynamic'
 
@@ -171,13 +172,17 @@ export default async function ProductDatasheetHubPage({
         })}
       </nav>
 
-      {/* ── Tab content (stubs — filled in by ATM.2+) ─────────────── */}
+      {/* ── Tab content (stubs gradually replaced by ATM.3+) ──────── */}
       <section
         role="tabpanel"
         aria-labelledby={`tab-${tab}`}
         className="min-h-[40vh]"
       >
-        <TabStub tab={tab} t={t} />
+        {tab === 'attributes' ? (
+          <AttributesTab productId={product.id} locale={locale} t={t} />
+        ) : (
+          <TabStub tab={tab} t={t} />
+        )}
       </section>
     </div>
   )
