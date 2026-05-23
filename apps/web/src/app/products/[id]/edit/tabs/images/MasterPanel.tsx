@@ -921,6 +921,13 @@ export default function MasterPanel({
                     <img
                       src={img.url}
                       alt={img.alt ?? img.type}
+                      // IA.15 — disable the browser's native "drag image
+                      // by URL" behaviour so the parent card's
+                      // draggable=true wins. Without this, mousedown on
+                      // the image starts a URL-drag (creating a
+                      // browser bookmark when dropped on the address
+                      // bar) instead of the card-level reorder gesture.
+                      draggable={false}
                       className={cn(
                         'relative w-full h-full object-contain transition-opacity duration-200',
                         loadedIds.has(img.id) ? 'opacity-100' : 'opacity-0',

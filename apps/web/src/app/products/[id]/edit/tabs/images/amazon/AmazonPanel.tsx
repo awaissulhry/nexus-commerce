@@ -236,20 +236,21 @@ export default function AmazonPanel({
     }
   }
 
-  // IA.9 + IA.11 — Move an image between matrix cells. Always
-  // semantic MOVE: the source clears, regardless of whether it had
-  // an explicit row or was inheriting from master.
+  // IA.9 + IA.11 + IA.14 — Drag an image between matrix cells. The
+  // action depends on whether the target is filled:
   //
-  // For own source rows: delete the row (or removePendingUpsert if
-  // unsaved). The cascade re-resolves the source from parent scope
-  // or master fallback.
+  //   • Target empty: MOVE (IA.11). Source clears via blocker (if
+  //     inherited) or row delete (if own). Target gets source's url.
   //
-  // For inherited source: write a "blocker" pending upsert at the
-  // current scope with an empty url. resolveCell sees this row at
-  // levels 1-2 and returns null — short-circuits the cascade so the
-  // cell renders empty instead of falling back to master.
-  // Backend publisher + ZIP filter blocker rows so they never reach
-  // Amazon. Save / Discard commits or rolls back the whole batch.
+  //   • Target filled: SWAP (IA.14). Source gets target's url and
+  //     target gets source's url. Both become explicit overrides at
+  //     the current scope. No blocker — both cells stay filled, just
+  //     exchanged.
+  //
+  // Both branches route through pending state, so Save / Discard
+  // commits or rolls back the whole drag batch atomically. The
+  // resolver re-renders the new cell contents synchronously
+  // (IA.10's pendingDeletes reactivity).
   function handleCellMove(
     from: { groupValue: string | null; slot: AmazonSlot; url: string; origin: 'own' | 'inherited'; listingImageId?: string },
     to: { groupValue: string | null; slot: AmazonSlot },
@@ -258,10 +259,17 @@ export default function AmazonPanel({
     const scope = isAll ? 'PLATFORM' : 'MARKETPLACE'
     const marketplace = isAll ? null : amazon.activeMarketplace
 
-    // 1. Drop a pending row onto the target with the source's URL.
+    // Inspect the target BEFORE we mutate pending state so we know
+    // whether to swap or move.
+    const targetCell = amazon.resolveCell(to.groupValue, to.slot)
+    const isSwap = !!targetCell && !!targetCell.url
+
+    // 1. Source's url lands on target via the existing assignCell
+    //    helper (auto-detects whether to update or insert).
     amazon.assignCell(to.groupValue, to.slot, from.url, undefined)
 
-    // 2. Drop any matching pending upsert at the source.
+    // 2. Drop any matching pending upsert at the source — they'd
+    //    collide with the new source-side upsert we're about to add.
     for (const [key, u] of pendingUpserts.entries()) {
       if (u.platform !== 'AMAZON' || u.amazonSlot !== from.slot) continue
       if (u.scope !== scope || u.marketplace !== marketplace) continue
@@ -271,27 +279,44 @@ export default function AmazonPanel({
       if (matchesGroup) removePendingUpsert(key)
     }
 
-    // 3. Queue a delete for the existing server row at the source
-    //    if there was one.
-    if (from.listingImageId && addPendingDelete) {
-      addPendingDelete(from.listingImageId)
-    }
-
-    // 4. IA.11 — For inherited sources (no own row to delete), write
-    //    a blocker pending upsert at the source scope so the cascade
-    //    doesn't fall back to the inherited / master image.
-    if (from.origin === 'inherited') {
+    if (isSwap && targetCell) {
+      // 3a. SWAP — write target's url at source coords. Reuse the
+      //     source's existing listingImageId when it had an own row
+      //     so bulk-save UPDATES rather than insert+delete-old. When
+      //     source was inherited, no id → create fresh row.
       addPendingUpsert({
+        id: from.listingImageId,
         scope: scope as 'PLATFORM' | 'MARKETPLACE',
         platform: 'AMAZON',
         marketplace,
         amazonSlot: from.slot,
         variantGroupKey: from.groupValue !== null ? activeAxis : null,
         variantGroupValue: from.groupValue,
-        url: '',  // sentinel — resolveCell returns null on empty url
+        url: targetCell.url,
+        sourceProductImageId: targetCell.masterImageId,
         role: from.slot === 'MAIN' ? 'MAIN' : from.slot === 'SWCH' ? 'SWATCH' : 'GALLERY',
         position: from.slot === 'MAIN' ? 0 : from.slot === 'SWCH' ? 9 : parseInt(from.slot.slice(2), 10),
       })
+    } else {
+      // 3b. MOVE — clear the source. Own row: queue delete. Inherited
+      //     source: write a blocker (empty url) so the cascade stops
+      //     showing the master fallback.
+      if (from.listingImageId && addPendingDelete) {
+        addPendingDelete(from.listingImageId)
+      }
+      if (from.origin === 'inherited') {
+        addPendingUpsert({
+          scope: scope as 'PLATFORM' | 'MARKETPLACE',
+          platform: 'AMAZON',
+          marketplace,
+          amazonSlot: from.slot,
+          variantGroupKey: from.groupValue !== null ? activeAxis : null,
+          variantGroupValue: from.groupValue,
+          url: '',  // blocker — resolveCell returns null on empty url
+          role: from.slot === 'MAIN' ? 'MAIN' : from.slot === 'SWCH' ? 'SWATCH' : 'GALLERY',
+          position: from.slot === 'MAIN' ? 0 : from.slot === 'SWCH' ? 9 : parseInt(from.slot.slice(2), 10),
+        })
+      }
     }
   }
 
