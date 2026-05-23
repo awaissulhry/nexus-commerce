@@ -26,6 +26,12 @@
 import type { FastifyPluginAsync } from 'fastify'
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
+import {
+  sendAmazonSolicitation as sharedSendAmazonSolicitation,
+  amazonMarketplaceIdFor as sharedAmazonMarketplaceIdFor,
+  isBenignFailure,
+  benignSuppressedReason,
+} from '../services/reviews/amazon-solicitations.service.js'
 
 type RuleScope =
   | 'AMAZON_PER_MARKETPLACE'
@@ -38,121 +44,17 @@ type RuleScope =
 
 const ACTIVE_RETURN_STATUSES = ['REQUESTED', 'AUTHORIZED', 'IN_TRANSIT', 'RECEIVED', 'INSPECTING'] as const
 
-// O.16c — Amazon Solicitations API wrapper.
-//
-// SP-API endpoint:
-//   POST /solicitations/v1/orders/{orderId}/solicitations/
-//        productReviewAndSellerFeedback?marketplaceIds={mp}
-// Sends Amazon's standard "Request a review" email to the buyer.
-// Window: 4–30 days post-delivery, max 1 per order.
-//
-// Gated behind NEXUS_ENABLE_AMAZON_SOLICITATIONS=true. dryRun
-// (default) returns the same structured "SKIPPED" outcome the
-// engine + UI have always handled, so flipping the env flag is
-// a no-op for review-rule logic — only the actual upstream call
-// activates.
-//
-// Real path uses amazonSpApiClient.getAccessToken() + fetch. The
-// SP-API client's internal SigV4 + retry loop is bypassed here
-// because the Solicitations endpoint is small + idempotent (one
-// solicitation per order, the API returns 400 on a re-send) and
-// the engine already records the outcome in ReviewRequest. A
-// follow-up commit can fold this into the client class once a
-// shared `request()` helper exists.
-async function sendAmazonSolicitation({
-  amazonOrderId,
-  marketplaceId,
-}: {
-  amazonOrderId: string
-  marketplaceId: string
-}): Promise<{ ok: boolean; providerRequestId?: string; errorCode?: string; errorMessage?: string }> {
-  if (process.env.NEXUS_ENABLE_AMAZON_SOLICITATIONS !== 'true') {
-    logger.info('[REVIEW ENGINE] sendAmazonSolicitation dryRun — set NEXUS_ENABLE_AMAZON_SOLICITATIONS=true to flip', {
-      amazonOrderId,
-      marketplaceId,
-    })
-    return {
-      ok: false,
-      errorCode: 'NOT_IMPLEMENTED',
-      errorMessage:
-        'SP-API Solicitations gated by env (NEXUS_ENABLE_AMAZON_SOLICITATIONS=true)',
-    }
-  }
-
-  // FU.6 — routed through amazonSpApiClient.request() which folds
-  // auth + rate-limit + retry into one call. Replaces the inline
-  // fetch O.16c shipped.
-  try {
-    const { amazonSpApiClient } = await import('../clients/amazon-sp-api.client.js')
-    await amazonSpApiClient.request(
-      'POST',
-      `/solicitations/v1/orders/${encodeURIComponent(amazonOrderId)}/solicitations/productReviewAndSellerFeedback`,
-      {
-        query: { marketplaceIds: marketplaceId },
-        label: 'sendAmazonSolicitation',
-      },
-    )
-    logger.info('[REVIEW ENGINE] sendAmazonSolicitation OK', {
-      amazonOrderId,
-      marketplaceId,
-    })
-    return { ok: true }
-  } catch (err: any) {
-    const msg: string = err?.message ?? String(err)
-    // Amazon's "already solicited" duplicate protection — benign no-op
-    // from the engine's POV → record as ALREADY_SOLICITED (the caller
-    // marks SKIPPED, not FAILED). Amazon returns this as:
-    //   HTTP 400 with message "...has already been..." (some markets)
-    //   HTTP 403 with code "Unauthorized" + message "...already requested..."
-    //     (most markets including IT/DE/FR/ES; verified empirically RV.2.5)
-    // Both shapes are duplicate-protection, not auth failures, so we
-    // collapse them.
-    if (/HTTP 40[03]/.test(msg) && /already/i.test(msg)) {
-      return {
-        ok: false,
-        errorCode: 'ALREADY_SOLICITED',
-        errorMessage: msg.slice(0, 500),
-      }
-    }
-    const httpMatch = msg.match(/HTTP (\d+)/)
-    if (httpMatch) {
-      return {
-        ok: false,
-        errorCode: `HTTP_${httpMatch[1]}`,
-        errorMessage: msg.slice(0, 500),
-      }
-    }
-    logger.warn('[REVIEW ENGINE] sendAmazonSolicitation threw', {
-      amazonOrderId,
-      marketplaceId,
-      error: msg,
-    })
-    return {
-      ok: false,
-      errorCode: 'EXCEPTION',
-      errorMessage: msg,
-    }
-  }
-}
+// RV.3.2 — Solicitations API + marketplace map moved to
+// services/reviews/amazon-solicitations.service.ts. Both this file and
+// the cron mailer import from there. The shared module also exports
+// isBenignFailure / benignSuppressedReason for status classification.
+const sendAmazonSolicitation = sharedSendAmazonSolicitation
+const amazonMarketplaceIdFor = sharedAmazonMarketplaceIdFor
 
 // Extract the channel order id Amazon expects (Amazon Order ID).
 function extractAmazonOrderId(order: any): string | null {
   // The Order.channelOrderId IS the Amazon-Order-Id when channel === 'AMAZON'.
   return order.channel === 'AMAZON' ? order.channelOrderId : null
-}
-
-// Resolve the marketplace ID Amazon expects from our short code (IT/DE/FR…).
-function amazonMarketplaceIdFor(code: string | null | undefined): string | null {
-  if (!code) return null
-  const map: Record<string, string> = {
-    IT: 'APJ6JRA9NG5V4', DE: 'A1PA6795UKMFR9', FR: 'A13V1IB3VIYZZH', ES: 'A1RKKUPIHCS9HS',
-    UK: 'A1F83G8C2ARO7P', GB: 'A1F83G8C2ARO7P', US: 'ATVPDKIKX0DER',
-    NL: 'A1805IZSGTT6HS', PL: 'A1C3SOZRARQ6R3', SE: 'A2NODRKZP88ZB9',
-    BE: 'AMEN7PMS3EDWL', TR: 'A33AVAJ2PDY3EV',
-    AE: 'A2VIGQ35RCS4UG', SA: 'A17E79C6D8DWNP', EG: 'ARBP9OOSHTCHU',
-    JP: 'A1VC38T7YXB528', AU: 'A39IBJ37TRP1C6', SG: 'A19VAU5U5O7RUS', IN: 'A21TJRUUN4KGV',
-  }
-  return map[code.toUpperCase()] ?? null
 }
 
 const ordersReviewsRoutes: FastifyPluginAsync = async (fastify) => {
@@ -369,20 +271,22 @@ const ordersReviewsRoutes: FastifyPluginAsync = async (fastify) => {
       // For Amazon: try the SP-API call now. For others: enqueue/skip.
       if (order.channel === 'AMAZON') {
         const amazonOrderId = extractAmazonOrderId(order)
-        const marketplaceId = amazonMarketplaceIdFor(order.marketplace)
-        if (!amazonOrderId || !marketplaceId) {
+        if (!amazonOrderId || !amazonMarketplaceIdFor(order.marketplace)) {
           return reply.status(400).send({ error: 'Missing amazonOrderId or unknown marketplace' })
         }
-        const result = await sendAmazonSolicitation({ amazonOrderId, marketplaceId })
+        const result = await sendAmazonSolicitation({ amazonOrderId, marketplaceCode: order.marketplace ?? '' })
+        const benign = isBenignFailure(result.errorCode)
+        const newStatus = result.ok ? 'SENT' as const : benign ? 'SKIPPED' as const : 'FAILED' as const
         const data = {
           orderId: order.id,
           channel: order.channel,
           marketplace: order.marketplace,
-          status: result.ok ? 'SENT' as const : 'FAILED' as const,
+          status: newStatus,
           sentAt: result.ok ? new Date() : null,
           providerRequestId: result.providerRequestId ?? null,
           providerResponseCode: result.errorCode ?? null,
-          errorMessage: result.errorMessage ?? null,
+          errorMessage: benign ? null : result.errorMessage ?? null,
+          suppressedReason: benignSuppressedReason(result.errorCode),
         }
         const upserted = existing
           ? await prisma.reviewRequest.update({ where: { id: existing.id }, data })
@@ -438,19 +342,23 @@ const ordersReviewsRoutes: FastifyPluginAsync = async (fastify) => {
           if (order.channel === 'AMAZON') {
             const result = await sendAmazonSolicitation({
               amazonOrderId: extractAmazonOrderId(order)!,
-              marketplaceId: amazonMarketplaceIdFor(order.marketplace) ?? '',
+              marketplaceCode: order.marketplace ?? '',
             })
+            const benign = isBenignFailure(result.errorCode)
+            const newStatus = result.ok ? 'SENT' : benign ? 'SKIPPED' : 'FAILED'
             await prisma.reviewRequest.create({
               data: {
                 orderId: order.id, channel: order.channel, marketplace: order.marketplace,
-                status: result.ok ? 'SENT' : 'FAILED',
+                status: newStatus,
                 sentAt: result.ok ? new Date() : null,
                 providerRequestId: result.providerRequestId ?? null,
                 providerResponseCode: result.errorCode ?? null,
-                errorMessage: result.errorMessage ?? null,
+                errorMessage: benign ? null : result.errorMessage ?? null,
+                suppressedReason: benignSuppressedReason(result.errorCode),
               },
             })
             if (result.ok) sent++
+            else if (benign) skipped++
             else failed++
           } else {
             await prisma.reviewRequest.create({
@@ -506,15 +414,12 @@ const ordersReviewsRoutes: FastifyPluginAsync = async (fastify) => {
         }
         if (order.channel === 'AMAZON') {
           const amazonOrderId = extractAmazonOrderId(order)
-          const marketplaceId = amazonMarketplaceIdFor(order.marketplace)
-          if (!amazonOrderId || !marketplaceId) {
+          if (!amazonOrderId || !amazonMarketplaceIdFor(order.marketplace)) {
             await prisma.reviewRequest.update({ where: { id: req.id }, data: { status: 'FAILED', errorMessage: 'missing amazonOrderId or marketplaceId' } })
             failed++; continue
           }
-          const result = await sendAmazonSolicitation({ amazonOrderId, marketplaceId })
-          // ALREADY_SOLICITED + NOT_IMPLEMENTED (dry-run) collapse to
-          // SKIPPED — both are benign, neither is a real failure.
-          const benign = result.errorCode === 'ALREADY_SOLICITED' || result.errorCode === 'NOT_IMPLEMENTED'
+          const result = await sendAmazonSolicitation({ amazonOrderId, marketplaceCode: order.marketplace ?? '' })
+          const benign = isBenignFailure(result.errorCode)
           const newStatus = result.ok ? 'SENT' : benign ? 'SKIPPED' : 'FAILED'
           await prisma.reviewRequest.update({
             where: { id: req.id },
@@ -524,11 +429,7 @@ const ordersReviewsRoutes: FastifyPluginAsync = async (fastify) => {
               providerRequestId: result.providerRequestId ?? null,
               providerResponseCode: result.errorCode ?? null,
               errorMessage: benign ? null : result.errorMessage ?? null,
-              suppressedReason: result.errorCode === 'ALREADY_SOLICITED'
-                ? 'Amazon already solicited a review for this order'
-                : result.errorCode === 'NOT_IMPLEMENTED'
-                  ? 'Amazon Solicitations gated by env (NEXUS_ENABLE_AMAZON_SOLICITATIONS)'
-                  : null,
+              suppressedReason: benignSuppressedReason(result.errorCode),
             },
           })
           if (result.ok) sent++

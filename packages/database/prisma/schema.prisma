@@ -9329,6 +9329,15 @@ model ReviewRequest {
   // Which rule matched (null for manual one-off sends from the detail page)
   ruleId               String?
 
+  // RV.3.3 — app-level retry on top of SP-API client's per-request retries
+  // (which already handle 429/5xx with 1s/2s/4s backoff). If all client
+  // retries fail, this layer reschedules the row for a longer-timescale
+  // re-attempt (hours later). After 3 attempts at this layer the row stays
+  // FAILED until manual operator action.
+  attemptCount  Int       @default(0)
+  lastAttemptAt DateTime?
+  nextRetryAt   DateTime?
+
   order Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
   rule  ReviewRule? @relation(fields: [ruleId], references: [id], onDelete: SetNull)
 
