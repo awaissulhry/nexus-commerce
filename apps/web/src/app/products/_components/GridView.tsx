@@ -898,7 +898,12 @@ function EditSplitButton({
 
   const needsFix = !product.isParent && product.status === 'ACTIVE' && (product.channelCount ?? 0) === 0
   const label = needsFix ? 'Fix' : 'Edit'
-  const splitBtnCls = 'h-7 px-3 text-sm font-medium bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-l-md text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 inline-flex items-center transition-colors'
+  // PG.8 — promoted inline icon buttons sit BEFORE the Edit label so
+  // the operator's most-common follow-ups (peek in drawer, duplicate)
+  // are one click, not a chevron+scan. Borders join the cluster into
+  // a single segmented control.
+  const inlineIconCls = 'h-7 w-7 inline-flex items-center justify-center bg-white dark:bg-slate-800 border-l-0 first:border-l first:rounded-l-md border-y border-slate-300 dark:border-slate-600 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 hover:text-slate-700 transition-colors'
+  const splitBtnCls = 'h-7 px-3 text-sm font-medium bg-white dark:bg-slate-800 border-l-0 border-y border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 inline-flex items-center transition-colors'
   const itemCls = 'w-full text-left px-3 py-1.5 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed'
   const linkCls = 'block px-3 py-1.5 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800'
   const deleteCls = 'w-full text-left px-3 py-1.5 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 disabled:opacity-50 disabled:cursor-not-allowed'
@@ -1084,8 +1089,54 @@ function EditSplitButton({
     document.body,
   ) : null
 
+  const handlePeek = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    e.preventDefault()
+    window.dispatchEvent(
+      new CustomEvent('nexus:open-product-drawer', {
+        detail: { productId: product.id },
+      }),
+    )
+  }
+
+  // PG.8 — listen for the workspace's Cmd+. shortcut. When fired with
+  // a matching productId, open this row's chevron menu programmatically
+  // (positioned next to the row's chevron). Lets keyboard-driven
+  // operators reach the long-tail action menu without leaving J/K.
+  useEffect(() => {
+    const onOpen = (e: Event) => {
+      const detail = (e as CustomEvent).detail as { productId?: string } | undefined
+      if (!detail?.productId || detail.productId !== product.id) return
+      const rect = chevronRef.current?.getBoundingClientRect()
+      if (!rect) return
+      setMenuPos({ top: rect.bottom + 4, right: window.innerWidth - rect.right })
+      setOpen(true)
+      setConfirmDelete(false)
+    }
+    window.addEventListener('nexus:open-product-actions', onOpen as EventListener)
+    return () => window.removeEventListener('nexus:open-product-actions', onOpen as EventListener)
+  }, [product.id])
+
   return (
     <div className="inline-flex rounded-md shadow-sm">
+      <button
+        type="button"
+        onClick={handlePeek}
+        className={inlineIconCls}
+        title="Open in drawer"
+        aria-label="Open in drawer"
+      >
+        <Eye size={13} />
+      </button>
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); void handleCopy() }}
+        className={inlineIconCls}
+        title="Duplicate"
+        aria-label="Duplicate product"
+      >
+        <Copy size={13} />
+      </button>
       <Link href={`/products/${product.id}/edit`} className={splitBtnCls}>
         {label}
       </Link>
@@ -1095,6 +1146,7 @@ function EditSplitButton({
         onClick={handleChevron}
         className="h-7 px-1.5 bg-white dark:bg-slate-800 border border-l-0 border-slate-300 dark:border-slate-600 rounded-r-md text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 inline-flex items-center transition-colors"
         aria-label="More actions"
+        title="More actions (⌘ .)"
       >
         <ChevronDown size={12} />
       </button>
