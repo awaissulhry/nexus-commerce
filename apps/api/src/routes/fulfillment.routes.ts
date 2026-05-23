@@ -6002,22 +6002,45 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
         where: { id },
         include: {
           items: { orderBy: [{ lineOrder: 'asc' }, { id: 'asc' }] },
-          inboundShipments: { select: { id: true, status: true, arrivedAt: true } },
+          // PO.11 — fetch the full cost detail for each linked shipment
+          // so the landed-cost roll-up can prorate shipping / customs /
+          // duties / insurance across the receive batches.
+          inboundShipments: {
+            select: {
+              id: true,
+              status: true,
+              arrivedAt: true,
+              currencyCode: true,
+              exchangeRate: true,
+              shippingCostCents: true,
+              customsCostCents: true,
+              dutiesCostCents: true,
+              insuranceCostCents: true,
+              items: {
+                select: {
+                  purchaseOrderItemId: true,
+                  quantityReceived: true,
+                  unitCostCents: true,
+                },
+              },
+            },
+          },
         },
       })
       if (!po) return reply.code(404).send({ error: 'PO not found' })
 
       const poiIds = po.items.map((it) => it.id)
-      const shipmentItems = poiIds.length
-        ? await prisma.inboundShipmentItem.findMany({
-            where: { purchaseOrderItemId: { in: poiIds } },
-            select: {
-              purchaseOrderItemId: true,
-              quantityReceived: true,
-              unitCostCents: true,
-            },
-          })
-        : []
+      // PO.10 still wants the flat list of shipment items; flatten from
+      // the nested include rather than running a second query.
+      const shipmentItems = po.inboundShipments.flatMap((s) =>
+        s.items
+          .filter((it) => it.purchaseOrderItemId && poiIds.includes(it.purchaseOrderItemId))
+          .map((it) => ({
+            purchaseOrderItemId: it.purchaseOrderItemId,
+            quantityReceived: it.quantityReceived,
+            unitCostCents: it.unitCostCents,
+          })),
+      )
 
       // Roll up per-line actuals from the receive side.
       const byPoi = new Map<string, { qty: number; weightedCostNum: number; sampleCount: number }>()
@@ -6030,6 +6053,81 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
           prev.sampleCount += si.quantityReceived
         }
         byPoi.set(si.purchaseOrderItemId, prev)
+      }
+
+      // ── PO.11 — landed-cost rollup ─────────────────────────────
+      //
+      // For each linked InboundShipment:
+      //   1. overhead = shipping + customs + duties + insurance,
+      //      in the shipment's currency
+      //   2. receivedUnits = sum(quantityReceived across items)
+      //   3. per-unit overhead = overhead / receivedUnits
+      //   4. for each item: landed_unit_cost (shipment-ccy) =
+      //                       unitCostCents + per_unit_overhead
+      //   5. EUR conversion via shipment.exchangeRate (Decimal → number)
+      //
+      // Aggregate per POI:
+      //   - sum landed cost in shipment ccy AND in EUR
+      //   - units count
+      //
+      // Totals block reports overhead breakdown in EUR (the canonical
+      // base) so the UI doesn't have to mix currencies.
+      const landedByPoi = new Map<
+        string,
+        { units: number; landedCentsPoCcy: number; landedCentsEur: number }
+      >()
+      let overheadShippingEurCents = 0
+      let overheadCustomsEurCents = 0
+      let overheadDutiesEurCents = 0
+      let overheadInsuranceEurCents = 0
+      let goodsEurCents = 0
+
+      // PO currency may differ from each shipment's. We report landed
+      // unit cost in the PO currency when the shipment matches, and
+      // fall back to EUR-converted figures otherwise. The UI surfaces
+      // EUR-converted totals to keep the page readable when mixed.
+      for (const ship of po.inboundShipments) {
+        const overheadShipCents =
+          (ship.shippingCostCents ?? 0) +
+          (ship.customsCostCents ?? 0) +
+          (ship.dutiesCostCents ?? 0) +
+          (ship.insuranceCostCents ?? 0)
+        const receivedUnits = ship.items.reduce(
+          (s, it) => s + (it.quantityReceived ?? 0),
+          0,
+        )
+        const perUnitOverhead =
+          receivedUnits > 0 ? overheadShipCents / receivedUnits : 0
+
+        // Shipment-currency → EUR conversion. exchangeRate is a Decimal;
+        // null/missing falls back to 1.0 (treat as EUR when unknown).
+        const fxToEur = ship.exchangeRate ? Number(ship.exchangeRate) : 1
+
+        overheadShippingEurCents += Math.round((ship.shippingCostCents ?? 0) * fxToEur)
+        overheadCustomsEurCents += Math.round((ship.customsCostCents ?? 0) * fxToEur)
+        overheadDutiesEurCents += Math.round((ship.dutiesCostCents ?? 0) * fxToEur)
+        overheadInsuranceEurCents += Math.round((ship.insuranceCostCents ?? 0) * fxToEur)
+
+        for (const item of ship.items) {
+          if (!item.purchaseOrderItemId) continue
+          const q = item.quantityReceived ?? 0
+          if (q <= 0) continue
+          const unitCost = item.unitCostCents ?? 0
+          const landedShipUnitCents = unitCost + perUnitOverhead
+          const landedShipTotalCents = landedShipUnitCents * q
+          const landedEurTotalCents = Math.round(landedShipTotalCents * fxToEur)
+          goodsEurCents += Math.round(unitCost * q * fxToEur)
+
+          const prev = landedByPoi.get(item.purchaseOrderItemId) ?? {
+            units: 0,
+            landedCentsPoCcy: 0,
+            landedCentsEur: 0,
+          }
+          prev.units += q
+          prev.landedCentsPoCcy += landedShipTotalCents
+          prev.landedCentsEur += landedEurTotalCents
+          landedByPoi.set(item.purchaseOrderItemId, prev)
+        }
       }
 
       const ppvWarningBp = Math.max(0, Number(process.env.NEXUS_PO_PPV_WARNING_BP) || 200)
@@ -6079,6 +6177,17 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
         totalOrderedCents += orderedSubtotal
         totalReceivedCents += receivedSubtotal
 
+        // PO.11 — landed cost lookup for this PO line.
+        const landed = landedByPoi.get(it.id)
+        const landedUnitCentsPoCcy =
+          landed && landed.units > 0
+            ? Math.round(landed.landedCentsPoCcy / landed.units)
+            : null
+        const landedUnitCentsEur =
+          landed && landed.units > 0
+            ? Math.round(landed.landedCentsEur / landed.units)
+            : null
+
         return {
           purchaseOrderItemId: it.id,
           productId: it.productId,
@@ -6099,6 +6208,12 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
               ? (receivedAvgUnitCostCents - it.unitCostCents) * receivedQty
               : 0,
           status: lineStatus,
+          // PO.11 — per-line landed cost. PoCcy = PO currency, Eur =
+          // canonical base. UI surfaces Eur when shipments mix
+          // currencies; PoCcy when they match.
+          landedUnitCentsPoCcy,
+          landedUnitCentsEur,
+          landedSubtotalCentsEur: landed?.landedCentsEur ?? 0,
         }
       })
 
@@ -6106,6 +6221,14 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
       const shortfallUnits = totalOrdered - totalReceived
       const withinTolerance = shortfallUnits >= 0 && shortfallUnits <= tolerance
       const linkedShipmentCount = po.inboundShipments.length
+
+      // PO.11 — total landed cost in EUR = goods + overhead.
+      const overheadTotalEurCents =
+        overheadShippingEurCents +
+        overheadCustomsEurCents +
+        overheadDutiesEurCents +
+        overheadInsuranceEurCents
+      const landedTotalEurCents = goodsEurCents + overheadTotalEurCents
 
       return {
         poNumber: po.poNumber,
@@ -6121,6 +6244,22 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
           receivedCents: totalReceivedCents,
           varianceCents: totalCostVarianceCents,
           withinTolerance,
+        },
+        // PO.11 — Landed cost roll-up. All amounts in EUR cents so the
+        // UI doesn't have to mix currencies; line-level landedUnitCents
+        // also exposes the PO-currency figure for unmixed cases.
+        landed: {
+          goodsEurCents,
+          overheadShippingEurCents,
+          overheadCustomsEurCents,
+          overheadDutiesEurCents,
+          overheadInsuranceEurCents,
+          overheadTotalEurCents,
+          totalEurCents: landedTotalEurCents,
+          overheadShareBp:
+            landedTotalEurCents > 0
+              ? Math.round((overheadTotalEurCents / landedTotalEurCents) * 10000)
+              : 0,
         },
         flags: {
           ppvLines: ppvFlags,

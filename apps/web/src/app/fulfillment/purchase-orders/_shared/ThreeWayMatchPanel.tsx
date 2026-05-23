@@ -44,6 +44,22 @@ interface MatchLine {
   ppvBp: number
   ppvCents: number
   status: 'matched' | 'partial' | 'over' | 'price-variance' | 'pending'
+  // PO.11 — landed cost (after prorated shipping/customs/duties/insurance).
+  landedUnitCentsPoCcy: number | null
+  landedUnitCentsEur: number | null
+  landedSubtotalCentsEur: number
+}
+
+interface LandedRollup {
+  goodsEurCents: number
+  overheadShippingEurCents: number
+  overheadCustomsEurCents: number
+  overheadDutiesEurCents: number
+  overheadInsuranceEurCents: number
+  overheadTotalEurCents: number
+  totalEurCents: number
+  /** Overhead's share of total landed cost, in basis points. */
+  overheadShareBp: number
 }
 
 interface MatchResponse {
@@ -61,6 +77,7 @@ interface MatchResponse {
     varianceCents: number
     withinTolerance: boolean
   }
+  landed: LandedRollup
   flags: {
     ppvLines: number
     overReceiptLines: number
@@ -214,6 +231,12 @@ export function ThreeWayMatchPanel({ poId }: { poId: string }) {
         />
       </div>
 
+      {/* PO.11 — Landed-cost breakdown. Only renders when there's
+          actual overhead captured on a linked shipment. */}
+      {data.landed.overheadTotalEurCents > 0 && (
+        <LandedCostBreakdown landed={data.landed} />
+      )}
+
       {/* Per-line table */}
       <div className="overflow-x-auto">
         <table className="w-full text-base">
@@ -226,6 +249,7 @@ export function ThreeWayMatchPanel({ poId }: { poId: string }) {
               <th className="text-right font-medium px-3 py-1.5" colSpan={3}>
                 Receipt (actual)
               </th>
+              <th className="text-right font-medium px-3 py-1.5">Landed</th>
               <th className="text-left font-medium px-3 py-1.5">Invoice</th>
               <th className="text-left font-medium px-3 py-1.5">Status</th>
             </tr>
@@ -236,6 +260,7 @@ export function ThreeWayMatchPanel({ poId }: { poId: string }) {
               <th className="text-right font-medium px-3 pb-1.5">Qty</th>
               <th className="text-right font-medium px-3 pb-1.5">Avg cost</th>
               <th className="text-right font-medium px-3 pb-1.5">PPV</th>
+              <th className="text-right font-medium px-3 pb-1.5">Unit (EUR)</th>
               <th></th>
               <th></th>
             </tr>
@@ -246,6 +271,56 @@ export function ThreeWayMatchPanel({ poId }: { poId: string }) {
             ))}
           </tbody>
         </table>
+      </div>
+    </div>
+  )
+}
+
+function LandedCostBreakdown({ landed }: { landed: LandedRollup }) {
+  const sharePct = landed.overheadShareBp / 100
+  return (
+    <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
+      <div className="flex items-baseline justify-between mb-2 flex-wrap gap-2">
+        <span className="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide">
+          Landed cost (EUR)
+        </span>
+        <span className="text-sm text-slate-500 dark:text-slate-400">
+          Overhead is {sharePct.toFixed(1)}% of total landed
+        </span>
+      </div>
+      <div className="grid grid-cols-2 md:grid-cols-6 gap-3 text-base">
+        <CostCell label="Goods" cents={landed.goodsEurCents} />
+        <CostCell label="Shipping" cents={landed.overheadShippingEurCents} />
+        <CostCell label="Customs" cents={landed.overheadCustomsEurCents} />
+        <CostCell label="Duties" cents={landed.overheadDutiesEurCents} />
+        <CostCell label="Insurance" cents={landed.overheadInsuranceEurCents} />
+        <CostCell label="Total" cents={landed.totalEurCents} bold />
+      </div>
+    </div>
+  )
+}
+
+function CostCell({
+  label,
+  cents,
+  bold,
+}: {
+  label: string
+  cents: number
+  bold?: boolean
+}) {
+  return (
+    <div>
+      <div className="text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wide">
+        {label}
+      </div>
+      <div
+        className={cn(
+          'tabular-nums',
+          bold ? 'font-semibold text-slate-900 dark:text-slate-100' : 'text-slate-700 dark:text-slate-300',
+        )}
+      >
+        {cents === 0 ? '—' : formatCurrency(cents, 'EUR')}
       </div>
     </div>
   )
@@ -313,6 +388,18 @@ function MatchRow({ line, currency }: { line: MatchLine; currency: string }) {
         }
       >
         {ppvLabel}
+      </td>
+      <td className="px-3 py-2 text-right tabular-nums">
+        {line.landedUnitCentsEur != null ? (
+          <span
+            className="text-slate-900 dark:text-slate-100"
+            title={`Landed subtotal: ${formatCurrency(line.landedSubtotalCentsEur, 'EUR')} EUR`}
+          >
+            {formatCurrency(line.landedUnitCentsEur, 'EUR')}
+          </span>
+        ) : (
+          <span className="text-slate-400 dark:text-slate-500">—</span>
+        )}
       </td>
       <td className="px-3 py-2 text-sm text-slate-400 dark:text-slate-500">
         <span className="inline-flex items-center gap-1">
