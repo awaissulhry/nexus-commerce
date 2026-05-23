@@ -32,6 +32,7 @@ import RollbackModal from './images/RollbackModal'
 import SchedulePublishModal from './images/SchedulePublishModal'
 import AutoPublishSettings from './images/AutoPublishSettings'
 import ApprovalModal from './images/ApprovalModal'
+import PublishHealthCards from './images/PublishHealthCards'
 import { captureSnapshot, type SnapshotChannel } from './images/publishSnapshotStorage'
 import { readAllPrefs, type AutoPublishChannel } from './images/autoPublishPrefs'
 import {
@@ -78,6 +79,8 @@ export default function ImagesTab({ product, discardSignal, onDirtyChange }: Pro
   // PB.12 — Approval modal state + pending count badge.
   const [approvalOpen, setApprovalOpen] = useState(false)
   const [pendingApprovalCount, setPendingApprovalCount] = useState(0)
+  // PB.13 — bump to force the health cards to refetch after a publish.
+  const [healthRefreshKey, setHealthRefreshKey] = useState(0)
   function refreshApprovalCount() {
     setPendingApprovalCount(readPendingApprovals(product.id).length)
   }
@@ -406,6 +409,8 @@ export default function ImagesTab({ product, discardSignal, onDirtyChange }: Pro
         showToast(body?.message ?? (res.ok ? 'Published to Shopify' : `Shopify publish failed (${res.status})`))
         void workspace.reload()
       }
+      // PB.13 — Refetch the health-card stats after any publish path.
+      setHealthRefreshKey((k) => k + 1)
     } finally {
       setPublishing(false)
     }
@@ -444,6 +449,9 @@ export default function ImagesTab({ product, discardSignal, onDirtyChange }: Pro
           {toast}
         </div>
       )}
+
+      {/* PB.13 — Per-channel publish health cards */}
+      <PublishHealthCards productId={product.id} refreshKey={healthRefreshKey} />
 
       {/* ── Channel tab strip + axis selector ───────────────────────── */}
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden">
