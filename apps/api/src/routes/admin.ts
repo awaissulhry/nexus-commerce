@@ -14,6 +14,11 @@ import { auditSalesDrift } from '../services/revenue/drift-audit.service.js'
 import { syncFinancialEvents } from '../services/amazon-financial-events.service.js'
 import { refreshSalesAggregates } from '../services/sales-aggregate.service.js'
 import prisma from '../db.js'
+import {
+  getShadowStats,
+  resetShadowBuffer,
+  isShadowEnabled,
+} from '../services/pim/resolver-shadow.js'
 
 // RB.1 — entities tracked by /admin/recycle-bin. Each maps to a Prisma
 // model that carries a `deletedAt` column. The same list drives the
@@ -816,5 +821,27 @@ export async function adminRoutes(app: FastifyInstance) {
       const message = error instanceof Error ? error.message : 'Unknown error'
       return reply.status(500).send({ error: message })
     }
+  })
+
+  // ── PIM A.2 — resolver shadow telemetry ─────────────────────────
+  // GET  /admin/pim/resolver-shadow-stats   — buffered mismatch summary
+  // POST /admin/pim/resolver-shadow-reset   — clear the buffer
+  //
+  // The shadow itself runs in /api/products/:id when env
+  // PIM_RESOLVER_SHADOW=true. These endpoints surface what it has
+  // logged so we can spot patterns before flipping read paths in
+  // Phase B.
+  app.get('/admin/pim/resolver-shadow-stats', async (_request, reply) => {
+    const recentRaw = (_request.query as { recent?: string } | undefined)?.recent
+    const recentN = Math.min(Math.max(Number(recentRaw ?? 20), 1), 100)
+    return reply.send({
+      enabled: isShadowEnabled(),
+      ...getShadowStats(recentN),
+    })
+  })
+
+  app.post('/admin/pim/resolver-shadow-reset', async (_request, reply) => {
+    resetShadowBuffer()
+    return reply.send({ ok: true })
   })
 }

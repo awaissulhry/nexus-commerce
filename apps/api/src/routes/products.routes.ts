@@ -26,6 +26,10 @@ import {
   FACE_IMAGE_SELECT,
 } from '../services/product-read-cache.service.js'
 import { deriveFulfillmentMethod } from '../services/fulfillment-derivation.service.js'
+import {
+  shadowCompareProductRead,
+  isShadowEnabled,
+} from '../services/pim/resolver-shadow.js'
 
 // ES.3 — module-level cache-ready flag (re-checked every 60s).
 // Avoids a DB round-trip on every single request; a stale "false"
@@ -1204,6 +1208,34 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
         if (!product) {
           return reply.status(404).send({ error: 'Product not found' })
         }
+
+        // PIM A.2 — shadow-compare resolver against the legacy read.
+        // Off by default (PIM_RESOLVER_SHADOW=true to enable). When on,
+        // loads parent + channel listings, runs the resolver, logs any
+        // mismatch as warn. Response shape is unchanged.
+        if (isShadowEnabled()) {
+          try {
+            const [parent, channelListings] = await Promise.all([
+              product.parentId
+                ? prisma.product.findUnique({ where: { id: product.parentId } })
+                : Promise.resolve(null),
+              prisma.channelListing.findMany({ where: { productId: id } }),
+            ])
+            shadowCompareProductRead({
+              product: product as any,
+              parent: parent as any,
+              channelListings: channelListings as any[],
+              logger: request.log,
+            })
+          } catch (shadowErr: any) {
+            // Shadow must never break the real request.
+            request.log.warn(
+              { err: shadowErr?.message, productId: id },
+              'pim-resolver-shadow-failed',
+            )
+          }
+        }
+
         return reply.send({
           ...product,
           basePrice: Number(product.basePrice),
