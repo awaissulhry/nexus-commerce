@@ -50,6 +50,22 @@ interface PreviewResponse {
   rows: PreviewVariantRow[]
 }
 
+interface ValidationIssue {
+  sku: string
+  asin: string | null
+  slot: string | null
+  code: string
+  message: string
+  level: 'error' | 'warning'
+}
+
+interface ValidationResponse {
+  hardFails: ValidationIssue[]
+  softWarnings: ValidationIssue[]
+  blockedAsins: string[]
+  summary: { totalAsins: number; asinsWithIssues: number; asinsBlocked: number }
+}
+
 interface Props {
   open: boolean
   productId: string
@@ -79,24 +95,40 @@ export default function PublishPreviewModal({
 }: Props) {
   const [loading, setLoading] = useState(false)
   const [data, setData] = useState<PreviewResponse | null>(null)
+  const [validation, setValidation] = useState<ValidationResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [drillCell, setDrillCell] = useState<{ row: PreviewVariantRow; slot: AmazonSlot } | null>(null)
+  const [showAllWarnings, setShowAllWarnings] = useState(false)
 
   useEffect(() => {
     if (!open) return
     setData(null)
+    setValidation(null)
     setError(null)
     setLoading(true)
+    setShowAllWarnings(false)
     const qs = new URLSearchParams({ marketplace, activeAxis })
-    beFetch(`/api/products/${productId}/amazon-images/preview?${qs.toString()}`)
-      .then(async (res) => {
-        if (!res.ok) {
-          const body = await res.json().catch(() => ({}))
-          throw new Error(body?.error ?? `Preview failed: ${res.status}`)
+    // IA.4 — Fetch preview + validation in parallel so the modal
+    // can render the blocking banner alongside the per-ASIN table
+    // on first paint. Either failure surfaces to the operator.
+    Promise.all([
+      beFetch(`/api/products/${productId}/amazon-images/preview?${qs.toString()}`),
+      beFetch(`/api/products/${productId}/amazon-images/validate?${qs.toString()}`),
+    ])
+      .then(async ([previewRes, validateRes]) => {
+        if (!previewRes.ok) {
+          const body = await previewRes.json().catch(() => ({}))
+          throw new Error(body?.error ?? `Preview failed: ${previewRes.status}`)
         }
-        return res.json() as Promise<PreviewResponse>
+        const preview = await previewRes.json() as PreviewResponse
+        let validation: ValidationResponse | null = null
+        if (validateRes.ok) validation = await validateRes.json() as ValidationResponse
+        return { preview, validation }
       })
-      .then((r) => setData(r))
+      .then(({ preview, validation }) => {
+        setData(preview)
+        setValidation(validation)
+      })
       .catch((err) => setError(err instanceof Error ? err.message : 'Preview failed'))
       .finally(() => setLoading(false))
   }, [open, productId, marketplace, activeAxis])
@@ -142,6 +174,64 @@ export default function PublishPreviewModal({
             {data.activeAxis && (
               <span className="text-slate-400 ml-auto">axis: {data.activeAxis}</span>
             )}
+          </div>
+        )}
+
+        {/* IA.4 — Validation banner. Hard fails block publish; soft
+            warnings are informational. Operator can expand to see all
+            issues with Amazon error codes. */}
+        {validation && (validation.hardFails.length > 0 || validation.softWarnings.length > 0) && (
+          <div className={cn(
+            'px-5 py-3 border-b text-xs',
+            validation.hardFails.length > 0
+              ? 'bg-rose-50 dark:bg-rose-950/30 border-rose-200 dark:border-rose-800'
+              : 'bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800',
+          )}>
+            <div className="flex items-start gap-2">
+              <AlertTriangle className={cn(
+                'w-4 h-4 mt-0.5 flex-shrink-0',
+                validation.hardFails.length > 0 ? 'text-rose-500' : 'text-amber-500',
+              )} />
+              <div className="flex-1 min-w-0">
+                <div className="font-medium">
+                  {validation.hardFails.length > 0 ? (
+                    <span className="text-rose-700 dark:text-rose-300">
+                      {validation.hardFails.length} blocking issue{validation.hardFails.length === 1 ? '' : 's'} across {validation.summary.asinsBlocked} ASIN{validation.summary.asinsBlocked === 1 ? '' : 's'}
+                    </span>
+                  ) : (
+                    <span className="text-amber-700 dark:text-amber-300">
+                      {validation.softWarnings.length} warning{validation.softWarnings.length === 1 ? '' : 's'} — publish allowed
+                    </span>
+                  )}
+                </div>
+                <ul className="mt-1 space-y-0.5 text-slate-600 dark:text-slate-300">
+                  {(showAllWarnings
+                    ? [...validation.hardFails, ...validation.softWarnings]
+                    : [...validation.hardFails, ...validation.softWarnings].slice(0, 5)
+                  ).map((issue, i) => (
+                    <li key={i} className="flex items-start gap-1.5">
+                      <span className={cn(
+                        'font-mono text-[10px] mt-0.5 px-1 rounded',
+                        issue.level === 'error'
+                          ? 'bg-rose-200 dark:bg-rose-900/50 text-rose-800 dark:text-rose-200'
+                          : 'bg-amber-200 dark:bg-amber-900/50 text-amber-800 dark:text-amber-200',
+                      )}>{issue.code}</span>
+                      <span className="font-mono text-slate-500">{issue.sku}</span>
+                      <span className="text-slate-600 dark:text-slate-300">{issue.message}</span>
+                    </li>
+                  ))}
+                </ul>
+                {(validation.hardFails.length + validation.softWarnings.length) > 5 && !showAllWarnings && (
+                  <button
+                    type="button"
+                    onClick={() => setShowAllWarnings(true)}
+                    className="text-[11px] mt-1 text-blue-600 dark:text-blue-400 hover:underline"
+                  >
+                    Show all {validation.hardFails.length + validation.softWarnings.length}
+                  </button>
+                )}
+              </div>
+            </div>
           </div>
         )}
 
@@ -298,8 +388,15 @@ export default function PublishPreviewModal({
               <Button
                 size="sm"
                 onClick={() => { onConfirmPublish(); onClose() }}
-                disabled={!data || data.variantsWithMain === 0}
+                disabled={!data || data.variantsWithMain === 0 || (validation?.hardFails.length ?? 0) > 0}
                 className="text-xs"
+                title={
+                  (validation?.hardFails.length ?? 0) > 0
+                    ? 'Fix blocking issues before publishing'
+                    : data && data.variantsWithMain === 0
+                      ? 'No ASIN has a MAIN image'
+                      : undefined
+                }
               >
                 Publish to {marketplace}
               </Button>

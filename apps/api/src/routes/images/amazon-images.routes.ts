@@ -28,12 +28,22 @@ import {
 } from '../../services/images/amazon-image-feed.service.js'
 import { generateAmazonZip } from '../../services/images/amazon-image-zip.service.js'
 import { buildAmazonImagePreview } from '../../services/images/amazon-image-preview.service.js'
+import { validateAmazonPublish } from '../../services/images/amazon-publish-validator.service.js'
 import prisma from '../../db.js'
 
 const VALID_MARKETPLACES = new Set(['IT', 'DE', 'FR', 'ES', 'UK'])
 
 const amazonImagesRoutes: FastifyPluginAsync = async (fastify) => {
   // ── POST /api/products/:productId/amazon-images/publish ────────────
+  // IA.4 — Runs the validator before submitting. Hard fails (missing
+  // MAIN, sub-1000px image, malformed URL) return 422 with the issue
+  // list so the operator fixes them before the feed wastes a quota
+  // round-trip. Soft warnings (too-few-images, missing-SWCH, non-
+  // white-bg MAIN) don't block; they're reported in the response
+  // for surfacing in the preview modal.
+  //
+  // `?force=true` skips the gate — for the "I know better than the
+  // validator" case (e.g. Amazon spec changed and our rule is stale).
   fastify.post<{
     Params: { productId: string }
     Body: {
@@ -41,12 +51,13 @@ const amazonImagesRoutes: FastifyPluginAsync = async (fastify) => {
       variantIds?: string[]
       activeAxis?: string
       dryRun?: boolean
+      force?: boolean
     }
   }>(
     '/products/:productId/amazon-images/publish',
     async (request, reply) => {
       const { productId } = request.params
-      const { marketplace, variantIds, activeAxis, dryRun = false } = request.body ?? ({} as any)
+      const { marketplace, variantIds, activeAxis, dryRun = false, force = false } = request.body ?? ({} as any)
 
       const mkt = (marketplace ?? '').toUpperCase()
       if (!VALID_MARKETPLACES.has(mkt)) {
@@ -61,6 +72,25 @@ const amazonImagesRoutes: FastifyPluginAsync = async (fastify) => {
       })
       if (!product) return reply.code(404).send({ error: 'Product not found' })
 
+      // IA.4 — Validation gate. Refuse on hard fails unless force=true.
+      if (!force) {
+        const validation = await validateAmazonPublish({
+          productId,
+          marketplace: mkt,
+          activeAxis,
+          variantIds,
+        })
+        if (validation.hardFails.length > 0) {
+          return reply.code(422).send({
+            error: 'VALIDATION_FAILED',
+            message: `${validation.hardFails.length} blocking issue${validation.hardFails.length === 1 ? '' : 's'} across ${validation.summary.asinsBlocked} ASIN${validation.summary.asinsBlocked === 1 ? '' : 's'}. Resubmit with force=true to publish anyway.`,
+            hardFails: validation.hardFails,
+            softWarnings: validation.softWarnings,
+            summary: validation.summary,
+          })
+        }
+      }
+
       try {
         const result = await submitAmazonImageFeed({
           productId,
@@ -70,6 +100,39 @@ const amazonImagesRoutes: FastifyPluginAsync = async (fastify) => {
           dryRun,
         })
         return result
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        return reply.code(500).send({ error: msg })
+      }
+    },
+  )
+
+  // ── GET /api/products/:productId/amazon-images/validate ────────────
+  // IA.4 — Standalone validation surface for the preview modal so the
+  // operator sees blocking issues + warnings WITHOUT triggering a
+  // publish attempt. Same checks as the gate above.
+  fastify.get<{
+    Params: { productId: string }
+    Querystring: { marketplace?: string; activeAxis?: string }
+  }>(
+    '/products/:productId/amazon-images/validate',
+    async (request, reply) => {
+      const { productId } = request.params
+      const mkt = (request.query.marketplace ?? '').toUpperCase()
+      if (!VALID_MARKETPLACES.has(mkt)) {
+        return reply.code(400).send({ error: `Invalid marketplace: ${mkt}` })
+      }
+      try {
+        const validation = await validateAmazonPublish({
+          productId,
+          marketplace: mkt,
+          activeAxis: request.query.activeAxis ?? null,
+        })
+        // blockedAsins is a Set — convert to array for JSON.
+        return {
+          ...validation,
+          blockedAsins: Array.from(validation.blockedAsins),
+        }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
         return reply.code(500).send({ error: msg })

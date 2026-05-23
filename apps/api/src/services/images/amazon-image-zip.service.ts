@@ -24,6 +24,7 @@ import JSZip from 'jszip'
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import { resolveAmazonImages } from './amazon-image-feed.service.js'
+import { validateAmazonPublish } from './amazon-publish-validator.service.js'
 
 export const ALL_AMAZON_MARKETPLACES = ['IT', 'DE', 'FR', 'ES', 'UK'] as const
 type Marketplace = typeof ALL_AMAZON_MARKETPLACES[number]
@@ -77,7 +78,10 @@ interface MarketplaceRunResult {
 }
 
 /** Run one marketplace's worth of resolution + fetches, adding files
- *  to the shared zip under an optional folder prefix. */
+ *  to the shared zip under an optional folder prefix. IA.4 added the
+ *  validation gate — blocked ASINs (missing MAIN, sub-1000px, broken
+ *  URL) get skipped with a clear reason in errors[] so the ZIP
+ *  matches what Amazon would actually accept. */
 async function runMarketplace(
   zip: JSZip,
   productId: string,
@@ -86,12 +90,20 @@ async function runMarketplace(
   variantIds: string[] | undefined,
   folderPrefix: string,
 ): Promise<MarketplaceRunResult> {
-  const resolved = await resolveAmazonImages(
-    productId,
-    marketplace,
-    variantIds,
-    activeAxis ?? undefined,
-  )
+  const [resolved, validation] = await Promise.all([
+    resolveAmazonImages(
+      productId,
+      marketplace,
+      variantIds,
+      activeAxis ?? undefined,
+    ),
+    validateAmazonPublish({
+      productId,
+      marketplace,
+      activeAxis,
+      variantIds,
+    }),
+  ])
   const skippedNoAsin: string[] = []
   const errors: AmazonZipError[] = []
   let fileCount = 0
@@ -99,6 +111,20 @@ async function runMarketplace(
   for (const variant of resolved) {
     if (!variant.amazonAsin) {
       skippedNoAsin.push(variant.sku)
+      continue
+    }
+    // IA.4 — Skip ASINs the validator blocked. Their hard fails
+    // surface as ZIP errors so the operator sees "B0XXX skipped:
+    // MAIN_MISSING" in the response, not just a missing file.
+    if (validation.blockedAsins.has(variant.amazonAsin)) {
+      for (const issue of validation.hardFails.filter((i) => i.asin === variant.amazonAsin)) {
+        errors.push({
+          asin: variant.amazonAsin,
+          slot: issue.slot ?? '*',
+          marketplace,
+          reason: `${issue.code}: ${issue.message}`,
+        })
+      }
       continue
     }
     for (const { slot, url } of variant.slots) {
