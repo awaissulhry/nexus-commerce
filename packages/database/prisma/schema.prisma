@@ -1576,6 +1576,14 @@ model Marketplace {
   participationStatus    String?
   participationCheckedAt DateTime?
 
+  // ── PIM A.3 — Schema mapping ───────────────────────────────────
+  // JSONB definition of how internal PIM data flows into this
+  // marketplace's external API payload. Distinct from ChannelSchema
+  // (which is per-field metadata: maxLength, required, enum values).
+  // Shape locked in apps/api/src/services/pim/schema-mapping.service.ts;
+  // operators edit via the Phase D drag-drop mapping canvas.
+  schemaMapping Json @default("{}")
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
