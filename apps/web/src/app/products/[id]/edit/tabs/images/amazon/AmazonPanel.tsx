@@ -3,8 +3,9 @@
 // IM.4 — Amazon images panel (replaces AmazonPanelStub).
 // Marketplace tabs + Color × Slot matrix + publish bar.
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { cn } from '@/lib/utils'
+import { Button } from '@/components/ui/Button'
 import { AlertTriangle, ChevronDown, Clock, Eye, Info, Loader2 } from 'lucide-react'
 import { beFetch } from '../api'
 import AmazonMatrix from './AmazonMatrix'
@@ -58,6 +59,9 @@ interface Props {
   // resolver so cell-move source-delete + revert reflect in the UI
   // immediately, not after Save+reload.
   pendingDeletes?: Set<string>
+  // IA.19 — Atomic restore of pending state to a captured snapshot.
+  // Powers the "Undo" banner after a drag.
+  restorePending?: (upserts: Map<string, PendingUpsert>, deletes: Set<string>) => void
   amazonJobs: AmazonJobSummary[]
   dirtyCount: number
   onSavePending: () => Promise<boolean>
@@ -98,6 +102,7 @@ export default function AmazonPanel({
   removePendingUpsert,
   addPendingDelete,
   pendingDeletes,
+  restorePending,
   amazonJobs,
   dirtyCount,
   onSavePending,
@@ -117,6 +122,38 @@ export default function AmazonPanel({
   // operator wants to preview (must not be 'ALL'); modal fetches the
   // resolver plan and renders the per-ASIN × per-slot table.
   const [previewMarketplace, setPreviewMarketplace] = useState<AmazonMarketplace | null>(null)
+  // IA.19 — Snapshot of pending state from before the most recent
+  // drag, so the operator can click Undo within ~6 seconds to revert
+  // the gesture atomically. Cleared by Save (drag committed), by
+  // Discard (drag rolled back with all other changes), or by the
+  // setTimeout below.
+  const [undoableDrag, setUndoableDrag] = useState<{
+    label: string
+    snapshotPending: Map<string, PendingUpsert>
+    snapshotDeletes: Set<string>
+  } | null>(null)
+  function captureSnapshotBeforeDrag(label: string) {
+    if (!restorePending) return  // undo unsupported in this mount
+    setUndoableDrag({
+      label,
+      snapshotPending: new Map(pendingUpserts),
+      snapshotDeletes: new Set(pendingDeletes ?? []),
+    })
+  }
+  // Auto-dismiss the undo affordance after ~6s. Operator's window
+  // to react matches the "Moved — Undo" pattern in macOS Finder,
+  // GitHub PR labels, etc.
+  useEffect(() => {
+    if (!undoableDrag) return
+    const timer = setTimeout(() => setUndoableDrag(null), 6000)
+    return () => clearTimeout(timer)
+  }, [undoableDrag])
+  function performUndo() {
+    if (!undoableDrag || !restorePending) return
+    restorePending(undoableDrag.snapshotPending, undoableDrag.snapshotDeletes)
+    setUndoableDrag(null)
+    onToast('Drag undone')
+  }
   // IE.11 — filter state. Seeded from URL params so deep-links land
   // on the filtered view; MatrixFilterBar writes back via
   // history.replaceState on every toggle.
@@ -247,6 +284,7 @@ export default function AmazonPanel({
     items: Array<{ url: string; id?: string }>,
   ) {
     if (items.length === 0) return
+    captureSnapshotBeforeDrag(`Filled ${items.length} slot${items.length === 1 ? '' : 's'}`)
     const allSlots: AmazonSlot[] = ['MAIN', 'PT01', 'PT02', 'PT03', 'PT04', 'PT05', 'PT06', 'PT07', 'PT08', 'SWCH']
     const startIdx = allSlots.indexOf(startSlot)
     if (startIdx < 0) return
@@ -292,6 +330,11 @@ export default function AmazonPanel({
     // whether to swap or move.
     const targetCell = amazon.resolveCell(to.groupValue, to.slot)
     const isSwap = !!targetCell && !!targetCell.url
+
+    // IA.19 — Snapshot pending state for the Undo banner. Captured
+    // BEFORE any mutation so the undo restores the exact pre-drag
+    // pending Maps.
+    captureSnapshotBeforeDrag(isSwap ? 'Swapped cells' : 'Moved image')
 
     // 1. Source's url lands on target via the existing assignCell
     //    helper (auto-detects whether to update or insert).
@@ -490,6 +533,28 @@ export default function AmazonPanel({
             onToast={onToast}
             onSubmitted={onReload}
           />
+        )}
+
+        {/* IA.19 — Undo last drag. Shows for ~6s after every drag
+            (cell move, swap, multi-drop). Click to revert just that
+            drag back to the pre-drag pending state — useful when an
+            operator drops on the wrong row/slot and wants a quick
+            single-action revert instead of Discard's all-or-nothing. */}
+        {undoableDrag && restorePending && (
+          <div className="mb-3 px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 flex items-center gap-3 animate-in fade-in slide-in-from-top-1 duration-150">
+            <span className="text-xs text-slate-700 dark:text-slate-200 flex-1">
+              <span className="font-medium">{undoableDrag.label}</span>
+              <span className="text-slate-400 ml-2">— save to commit, discard or undo to revert</span>
+            </span>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={performUndo}
+              className="text-[11px] h-6 px-2 border border-slate-300 dark:border-slate-600"
+            >
+              Undo
+            </Button>
+          </div>
         )}
       </div>
 

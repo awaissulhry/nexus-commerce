@@ -301,6 +301,19 @@ export function useImagesWorkspace(
     )
   }, [])
 
+  // IA.19 — Restore pending state to a captured snapshot. Used by
+  // the undo-last-drag affordance: operator drags → we snapshot
+  // before-state → toast shows "Undo" → click reverts to snapshot.
+  // Atomic: both pendingUpserts and pendingDeletes flip in one
+  // render so the matrix doesn't flash a half-undone state.
+  const restorePending = useCallback((
+    upserts: Map<string, PendingUpsert>,
+    deletes: Set<string>,
+  ) => {
+    setPendingUpserts(new Map(upserts))
+    setPendingDeletes(new Set(deletes))
+  }, [])
+
   return {
     data,
     loading,
@@ -321,5 +334,7 @@ export function useImagesWorkspace(
     // IA.12 — optimistic local patches
     setMasterImages,
     patchMasterImage,
+    // IA.19 — undo-last-drag snapshot restore
+    restorePending,
   }
 }
