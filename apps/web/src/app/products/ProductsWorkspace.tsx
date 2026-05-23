@@ -126,6 +126,7 @@ const PRODUCTS_SHORTCUTS: ShortcutGroup[] = [
       { keys: ['j', '↓'], label: 'Move to next row' },
       { keys: ['k', '↑'], label: 'Move to previous row' },
       { keys: ['Enter'], label: 'Open product drawer' },
+      { keys: ['⌘', '.'], label: 'Open row actions menu' },
     ],
   },
   {
@@ -942,6 +943,20 @@ export default function ProductsWorkspace() {
       if (e.key === ' ' && focusedRowId) {
         e.preventDefault()
         handleRowToggle(focusedRowId, e.shiftKey)
+        return
+      }
+      // PG.8 — Cmd+. (Mac) / Ctrl+. (others) opens the focused row's
+      // chevron menu via CustomEvent. Same mnemonic that Excel /
+      // Numbers / Figma use for "open contextual menu"; lets a
+      // keyboard-driven operator reach the long-tail actions without
+      // leaving J/K navigation.
+      if ((e.metaKey || e.ctrlKey) && e.key === '.' && focusedRowId) {
+        e.preventDefault()
+        window.dispatchEvent(
+          new CustomEvent('nexus:open-product-actions', {
+            detail: { productId: focusedRowId },
+          }),
+        )
         return
       }
     }
