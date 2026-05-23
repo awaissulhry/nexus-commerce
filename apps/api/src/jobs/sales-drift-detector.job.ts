@@ -47,6 +47,7 @@ import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
 import { recordCronRun } from '../utils/cron-observability.js'
 import { publishOrderEvent } from '../services/order-events.service.js'
+import { buildDriftPairs, type ThreeWaySums } from './_helpers/sales-drift-compare.js'
 
 const OPERATOR_TIMEZONE = 'Europe/Rome'
 
@@ -61,12 +62,6 @@ function isoLocalDay(d: Date): string {
     month: '2-digit',
     day: '2-digit',
   }).format(d)
-}
-
-function toleranceFor(maxCents: number): number {
-  // max(€1, 0.5% of max). €1 floor catches near-empty days where
-  // 0.5% would be unhelpfully small.
-  return Math.max(100, Math.round(maxCents * 0.005))
 }
 
 export async function runSalesDriftDetector(): Promise<void> {
@@ -153,16 +148,11 @@ export async function runSalesDriftDetector(): Promise<void> {
       // a €0 order for this day"). We use null to suppress false
       // drift on recent days where ListFinancialEvents hasn't caught
       // up yet (T+1 to T+7 settlement window).
-      type Sums = {
-        orderCents: number
-        aggregateCents: number
-        financialCents: number | null
-      }
-      const merged = new Map<string, Sums>()
+      const merged = new Map<string, ThreeWaySums>()
       const keyFor = (day: Date, mkt: string | null): string =>
         `${day.toISOString().slice(0, 10)}|${mkt ?? 'NULL'}`
 
-      const getOrCreate = (key: string): Sums => {
+      const getOrCreate = (key: string): ThreeWaySums => {
         let existing = merged.get(key)
         if (!existing) {
           existing = { orderCents: 0, aggregateCents: 0, financialCents: null }
@@ -180,45 +170,10 @@ export async function runSalesDriftDetector(): Promise<void> {
         getOrCreate(keyFor(r.day, r.marketplace)).financialCents = Number(r.cents)
       }
 
-      // Pair check helper. Returns `null` when either side is missing
-      // data (Store C may legitimately be `null` for recent windows).
-      // Returns the deltaCents + deltaPct when both sides are present
-      // AND the absolute delta exceeds tolerance.
-      const checkPair = (
-        a: number | null,
-        b: number | null,
-      ): { deltaCents: number; deltaPct: number } | null => {
-        if (a === null || b === null) return null
-        const max = Math.max(a, b)
-        if (max === 0) return null
-        const delta = a - b
-        const absDelta = Math.abs(delta)
-        if (absDelta <= toleranceFor(max)) return null
-        return { deltaCents: delta, deltaPct: (delta / max) * 100 }
-      }
-
       const driftedKeys: Array<{ day: string; marketplace: string | null }> = []
       const nowTs = Date.now()
       for (const [key, sums] of merged.entries()) {
-        // 3 candidate pairs; financial may be null and is excluded
-        // automatically by checkPair when missing.
-        const pairs: Array<{
-          a: 'order' | 'aggregate' | 'financial'
-          b: 'order' | 'aggregate' | 'financial'
-          delta: { deltaCents: number; deltaPct: number } | null
-        }> = [
-          { a: 'order',     b: 'aggregate', delta: checkPair(sums.orderCents,     sums.aggregateCents) },
-          { a: 'order',     b: 'financial', delta: checkPair(sums.orderCents,     sums.financialCents) },
-          { a: 'aggregate', b: 'financial', delta: checkPair(sums.aggregateCents, sums.financialCents) },
-        ]
-        const driftPairs = pairs
-          .filter((p) => p.delta !== null)
-          .map((p) => ({
-            a: p.a,
-            b: p.b,
-            deltaCents: p.delta!.deltaCents,
-            deltaPct: p.delta!.deltaPct,
-          }))
+        const driftPairs = buildDriftPairs(sums)
         if (driftPairs.length === 0) continue
 
         const [day, mktRaw] = key.split('|')

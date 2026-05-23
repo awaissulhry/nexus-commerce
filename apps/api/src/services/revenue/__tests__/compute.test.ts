@@ -297,3 +297,96 @@ describe('rollupRevenue — FX missing exclusion (DA-RT.8)', () => {
     expect(r.totalCents).toBe(5000)
   })
 })
+
+// DA-RT.11 — Shape contracts. Downstream consumers (insights-fiscal,
+// dashboard.routes EUR_EQUIV folding, GlobalSnapshot UI) destructure
+// specific fields off RevenueComputation / RevenueRollup. If any of
+// these key names move or change semantics, those callers silently
+// produce wrong numbers — failing here forces an explicit migration.
+describe('Shape contracts — RevenueComputation', () => {
+  it('always returns the canonical key set even on the "none" path', () => {
+    const r = computeOrderRevenue({ totalPrice: null })
+    expect(Object.keys(r).sort()).toEqual([
+      'awaitingPrice',
+      'cents',
+      'currency',
+      'estimated',
+      'fxMissing',
+      'nativeCents',
+      'source',
+    ])
+  })
+
+  it('cents and nativeCents are always integers (no fractional cents)', () => {
+    const cases = [
+      computeOrderRevenue({ totalPrice: 42.50 }),
+      computeOrderRevenue({ totalPrice: '99.99' }),
+      computeOrderRevenue({ totalPrice: null }),
+      computeOrderRevenue({ totalPrice: 0.001 }), // sub-cent rounding
+    ]
+    for (const r of cases) {
+      expect(Number.isInteger(r.cents)).toBe(true)
+      expect(Number.isInteger(r.nativeCents)).toBe(true)
+    }
+  })
+
+  it('currency defaults to EUR when caller omits currencyCode', () => {
+    const r = computeOrderRevenue({ totalPrice: 10 })
+    expect(r.currency).toBe('EUR')
+  })
+
+  it('currency passes through caller value as-is (no normalisation)', () => {
+    // Contract: the helper trusts the caller. Insights-fiscal +
+    // dashboard.routes upstream-normalise currencyCode to upper
+    // ISO before handing the order in — duplicating that here
+    // would mask if an upstream stops normalising.
+    const r = computeOrderRevenue({ totalPrice: 10, currencyCode: 'GBP' })
+    expect(r.currency).toBe('GBP')
+  })
+})
+
+describe('Shape contracts — RevenueRollup', () => {
+  it('returns the canonical key set even when input is empty', () => {
+    const r = rollupRevenue([])
+    expect(Object.keys(r).sort()).toEqual([
+      'awaitingPriceCount',
+      'confirmedCents',
+      'estimatedCents',
+      'fxMissingCount',
+      'totalCents',
+      'zeroCount',
+    ])
+    expect(r.confirmedCents).toBe(0)
+    expect(r.totalCents).toBe(0)
+  })
+
+  it('totalCents = confirmedCents + estimatedCents invariant', () => {
+    // Critical invariant that insights-fiscal + GlobalSnapshot
+    // tile both assume: a rollup never silently drops cents.
+    const results = [
+      { revenue: { cents: 5000, nativeCents: 5000, currency: 'EUR', source: 'order_total' as const,    estimated: false, awaitingPrice: false, fxMissing: false } },
+      { revenue: { cents: 3000, nativeCents: 3000, currency: 'EUR', source: 'item_sum' as const,       estimated: false, awaitingPrice: false, fxMissing: false } },
+      { revenue: { cents: 2500, nativeCents: 2500, currency: 'EUR', source: 'channel_listing' as const, estimated: true,  awaitingPrice: true,  fxMissing: false } },
+      { revenue: { cents: 1500, nativeCents: 1500, currency: 'EUR', source: 'base_price' as const,     estimated: true,  awaitingPrice: true,  fxMissing: false } },
+      { revenue: { cents: 800,  nativeCents: 800,  currency: 'EUR', source: 'mixed_estimate' as const, estimated: true,  awaitingPrice: true,  fxMissing: false } },
+    ]
+    const r = rollupRevenue(results)
+    expect(r.confirmedCents).toBe(8000)
+    expect(r.estimatedCents).toBe(4800)
+    expect(r.totalCents).toBe(r.confirmedCents + r.estimatedCents)
+  })
+
+  it('awaitingPriceCount only counts estimate-tier orders that produced cents > 0', () => {
+    // Tier 4 ("none", cents=0) goes to zeroCount, not
+    // awaitingPriceCount — insights-fiscal renders these in two
+    // separate columns and conflating them double-counts the
+    // "needs operator review" badge.
+    const results = [
+      { revenue: { cents: 1000, nativeCents: 1000, currency: 'EUR', source: 'channel_listing' as const, estimated: true, awaitingPrice: true,  fxMissing: false } },
+      { revenue: { cents: 0,    nativeCents: 0,    currency: 'EUR', source: 'none' as const,             estimated: false, awaitingPrice: true,  fxMissing: false } },
+    ]
+    const r = rollupRevenue(results)
+    expect(r.awaitingPriceCount).toBe(1)
+    expect(r.zeroCount).toBe(1)
+  })
+})
