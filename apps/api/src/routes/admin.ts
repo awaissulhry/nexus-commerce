@@ -420,6 +420,121 @@ export async function adminRoutes(app: FastifyInstance) {
   })
 
   /**
+   * PV-RT.4 — POST /admin/orders/:id/manual-total
+   *
+   * Operator escape hatch for orders where Amazon never releases
+   * OrderTotal via SP-API (the long-tail SHIPPED+€0 case after
+   * GS-RT.2/4/5 backfills + DA-RT.9 OrderItem.price retry have
+   * exhausted automated paths). Operator looks up the real total
+   * from Seller Central → fills it in here.
+   *
+   * Writes:
+   *   - Order.totalPrice = body.totalPrice
+   *   - AuditLog row recording who/when/why with before/after
+   *   - Refresh sales-aggregate for the order's day so downstream
+   *     surfaces pick it up immediately (DA-RT.6 pattern)
+   *
+   * Body: { totalPrice: number, reason?: string, userId?: string }
+   *
+   * Safety:
+   *   - Refuses if totalPrice <= 0 (use the standard delete flow if
+   *     the order genuinely had zero revenue)
+   *   - Refuses if Order.totalPrice is already > 0 unless
+   *     ?force=true (avoid clobbering a real Amazon-confirmed value)
+   */
+  app.post<{
+    Params: { id: string }
+    Querystring: { force?: string }
+    Body: { totalPrice?: number; reason?: string; userId?: string }
+  }>('/admin/orders/:id/manual-total', async (request, reply) => {
+    try {
+      const { id } = request.params
+      const force = request.query.force === 'true'
+      const newTotal = Number(request.body?.totalPrice)
+      const reason = request.body?.reason?.toString() ?? null
+      const userId = request.body?.userId?.toString() ?? null
+
+      if (!Number.isFinite(newTotal) || newTotal <= 0) {
+        return reply.status(400).send({
+          error: 'totalPrice must be a positive number',
+        })
+      }
+
+      const order = await prisma.order.findUnique({
+        where: { id },
+        select: {
+          id: true,
+          channelOrderId: true,
+          channel: true,
+          totalPrice: true,
+          purchaseDate: true,
+          marketplace: true,
+        },
+      })
+      if (!order) return reply.status(404).send({ error: 'Order not found' })
+
+      const currentTotal = Number(order.totalPrice)
+      if (currentTotal > 0 && !force) {
+        return reply.status(409).send({
+          error: `Order already has totalPrice=${currentTotal.toFixed(2)}; pass ?force=true to overwrite`,
+          currentTotalPrice: currentTotal,
+        })
+      }
+
+      await prisma.order.update({
+        where: { id },
+        data: { totalPrice: newTotal },
+      })
+      await prisma.auditLog.create({
+        data: {
+          userId,
+          entityType: 'Order',
+          entityId: id,
+          action: 'manual-total',
+          before: { totalPrice: currentTotal },
+          after: { totalPrice: newTotal },
+          metadata: {
+            channelOrderId: order.channelOrderId,
+            channel: order.channel,
+            marketplace: order.marketplace,
+            reason,
+            source: 'PV-RT.4',
+            forceOverwrite: force && currentTotal > 0,
+          },
+        },
+      })
+
+      // DA-RT.6 — refresh aggregate so /insights, /dashboard, etc.
+      // pick up the new total without waiting for the nightly cron.
+      // Best-effort: a refresh failure must never block the update.
+      try {
+        if (order.purchaseDate) {
+          const day = new Date(order.purchaseDate)
+          day.setUTCHours(0, 0, 0, 0)
+          await refreshSalesAggregates({ from: day, to: day })
+        }
+      } catch (err) {
+        // Non-fatal — the next scheduled refresh will catch up.
+        request.log.warn(
+          { err, orderId: id },
+          '[manual-total] sales-aggregate refresh failed (non-fatal)',
+        )
+      }
+
+      return reply.send({
+        ok: true,
+        orderId: id,
+        channelOrderId: order.channelOrderId,
+        previousTotalPrice: currentTotal,
+        newTotalPrice: newTotal,
+      })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error'
+      return reply.status(500).send({ error: message })
+    }
+  })
+
+  /**
    * DA-RT.18 — POST /admin/sales-drift/delete-empty-order-fts
    *
    * Scoped delete for FinancialTransaction rows created by the
