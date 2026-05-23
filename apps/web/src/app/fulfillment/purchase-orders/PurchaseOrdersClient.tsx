@@ -74,6 +74,17 @@ import { PoLiveSyncChip } from './_shared/PoLiveSyncChip'
 import { CreatePoModal } from './_shared/CreatePoModal'
 import { SpendSummaryTile } from './_shared/SpendSummaryTile'
 import { SupplierScorecardDrawer } from './_shared/SupplierScorecardDrawer'
+import {
+  AdvancedFiltersButton,
+  ActiveFilterPills,
+  SavedViewChips,
+  advancedFromParams,
+  advancedToParams,
+  countActiveFilters,
+  materializeView,
+  type AdvancedFilterState,
+  type SavedView,
+} from './_shared/AdvancedFilters'
 
 // ── Audit-trail panel (still used by the card lens) ────────────────
 
@@ -311,6 +322,91 @@ export default function PurchaseOrdersClient() {
     router.replace(qs ? `${pathname}?${qs}` : pathname)
   }, [pathname, router, searchParams, showDeleted])
 
+  // PO.14 — advanced filters state lives in the URL so links are
+  // shareable. The reducer pattern of "write to URL, derive from URL"
+  // keeps the source of truth single.
+  const advanced: AdvancedFilterState = useMemo(
+    () => advancedFromParams(searchParams),
+    [searchParams],
+  )
+  const setAdvanced = useCallback(
+    (next: AdvancedFilterState) => {
+      const params = new URLSearchParams(searchParams.toString())
+      const wire = advancedToParams(next)
+      // Clear keys that aren't in wire, write the rest.
+      const ALL_KEYS = [
+        'supplierIds',
+        'warehouseId',
+        'currencyCode',
+        'expectedFrom',
+        'expectedTo',
+        'minValueCents',
+        'maxValueCents',
+        'lateOnly',
+      ] as const
+      for (const k of ALL_KEYS) {
+        const v = wire[k]
+        if (v == null) params.delete(k)
+        else params.set(k, v)
+      }
+      const qs = params.toString()
+      router.replace(qs ? `${pathname}?${qs}` : pathname)
+    },
+    [pathname, router, searchParams],
+  )
+
+  // Click a built-in saved view → applies status + advanced atomically.
+  const applyView = useCallback(
+    (view: SavedView) => {
+      const { status, advanced: nextAdv } = materializeView(view)
+      const params = new URLSearchParams(searchParams.toString())
+      // Status
+      if (status) params.set('status', status)
+      else params.delete('status')
+      // Advanced wire
+      const wire = advancedToParams(nextAdv)
+      const ALL_KEYS = [
+        'supplierIds',
+        'warehouseId',
+        'currencyCode',
+        'expectedFrom',
+        'expectedTo',
+        'minValueCents',
+        'maxValueCents',
+        'lateOnly',
+      ] as const
+      for (const k of ALL_KEYS) {
+        const v = wire[k]
+        if (v == null) params.delete(k)
+        else params.set(k, v)
+      }
+      const qs = params.toString()
+      router.replace(qs ? `${pathname}?${qs}` : pathname)
+    },
+    [pathname, router, searchParams],
+  )
+
+  // PO.14 — supplier + warehouse caches for the active-pills labels.
+  // Loaded lazily; the AdvancedFiltersButton lazy-loads them too but
+  // the pills want them earlier (visible before the popover opens).
+  const [suppliersCache, setSuppliersCache] = useState<Array<{ id: string; name: string }> | null>(null)
+  const [warehousesCache, setWarehousesCache] = useState<Array<{ id: string; code: string; name: string | null }> | null>(null)
+  useEffect(() => {
+    if (countActiveFilters(advanced) === 0) return
+    if (!suppliersCache) {
+      fetch(`${getBackendUrl()}/api/fulfillment/suppliers?activeOnly=true`, { cache: 'no-store' })
+        .then((r) => (r.ok ? r.json() : { items: [] }))
+        .then((d) => setSuppliersCache(d.items ?? []))
+        .catch(() => setSuppliersCache([]))
+    }
+    if (!warehousesCache) {
+      fetch(`${getBackendUrl()}/api/fulfillment/warehouses`, { cache: 'no-store' })
+        .then((r) => (r.ok ? r.json() : { items: [] }))
+        .then((d) => setWarehousesCache(d.items ?? []))
+        .catch(() => setWarehousesCache([]))
+    }
+  }, [advanced, suppliersCache, warehousesCache])
+
   const [pos, setPos] = useState<PORow[] | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -419,6 +515,11 @@ export default function PurchaseOrdersClient() {
         url.searchParams.set('status', Array.from(ACTIVE_STATUSES).join(','))
       }
       if (showDeleted) url.searchParams.set('deleted', 'true')
+      // PO.14 — thread advanced filters into the wire.
+      const wire = advancedToParams(advanced)
+      for (const [k, v] of Object.entries(wire)) {
+        if (v != null) url.searchParams.set(k, v)
+      }
       const res = await fetch(url.toString(), { cache: 'no-store' })
       if (!res.ok) {
         const body = await res.json().catch(() => ({}))
@@ -432,7 +533,7 @@ export default function PurchaseOrdersClient() {
     } finally {
       setLoading(false)
     }
-  }, [statusFilter, showDeleted])
+  }, [statusFilter, showDeleted, advanced])
 
   useEffect(() => {
     fetchPos()
@@ -589,26 +690,35 @@ export default function PurchaseOrdersClient() {
           </div>
         }
         quickFilterSlot={
-          <div className="flex items-center gap-1 flex-wrap">
-            {STATUS_FILTERS.map((f) => {
-              const count = f.key === 'all' ? pos?.length ?? 0 : counts[f.key] ?? 0
-              return (
-                <button
-                  key={f.key}
-                  type="button"
-                  onClick={() => setStatusFilter(f.key)}
-                  className={cn(
-                    'px-3 py-1 text-sm font-medium rounded border transition-colors',
-                    statusFilter === f.key
-                      ? 'bg-slate-900 dark:bg-slate-100 text-white border-slate-900'
-                      : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600',
-                  )}
-                >
-                  {t(f.labelKey as any)}
-                  {pos && count > 0 && <span className="ml-1 opacity-70">{count}</span>}
-                </button>
-              )
-            })}
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-1 flex-wrap">
+              {STATUS_FILTERS.map((f) => {
+                const count = f.key === 'all' ? pos?.length ?? 0 : counts[f.key] ?? 0
+                return (
+                  <button
+                    key={f.key}
+                    type="button"
+                    onClick={() => setStatusFilter(f.key)}
+                    className={cn(
+                      'px-3 py-1 text-sm font-medium rounded border transition-colors',
+                      statusFilter === f.key
+                        ? 'bg-slate-900 dark:bg-slate-100 text-white border-slate-900'
+                        : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600',
+                    )}
+                  >
+                    {t(f.labelKey as any)}
+                    {pos && count > 0 && <span className="ml-1 opacity-70">{count}</span>}
+                  </button>
+                )
+              })}
+            </div>
+            {/* PO.14 — saved view chips as a separator-divided group
+                next to the status chips. Click to apply a preset
+                (Late / Awaiting approval / This week / Drafts /
+                Received) — atomic write to URL state. */}
+            <div className="h-5 w-px bg-slate-200 dark:bg-slate-700" />
+            <SavedViewChips onApply={applyView} />
+            <AdvancedFiltersButton value={advanced} onChange={setAdvanced} />
           </div>
         }
         density={
@@ -699,6 +809,43 @@ export default function PurchaseOrdersClient() {
           <AlertCircle className="w-4 h-4" />
           {actionError}
         </div>
+      )}
+
+      {/* PO.14 — Active-filter pills strip. Click X on any pill to
+          clear that specific filter. Auto-hides when no advanced
+          filters are active. */}
+      {countActiveFilters(advanced) > 0 && (
+        <ActiveFilterPills
+          state={advanced}
+          suppliers={suppliersCache}
+          warehouses={warehousesCache}
+          onClear={(key) => {
+            const next: AdvancedFilterState = { ...advanced }
+            switch (key) {
+              case 'supplierIds':
+                next.supplierIds = []
+                break
+              case 'warehouseId':
+                next.warehouseId = null
+                break
+              case 'currencyCode':
+                next.currencyCode = null
+                break
+              case 'expectedFrom':
+                next.expectedFrom = null
+                next.expectedTo = null
+                break
+              case 'minValueCents':
+                next.minValueCents = null
+                next.maxValueCents = null
+                break
+              case 'lateOnly':
+                next.lateOnly = false
+                break
+            }
+            setAdvanced(next)
+          }}
+        />
       )}
 
       {/* Loading skeleton */}

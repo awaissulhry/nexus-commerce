@@ -5698,7 +5698,64 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
         if (statuses.length === 1) where.status = statuses[0]
         else if (statuses.length > 1) where.status = { in: statuses }
       }
-      if (q.supplierId) where.supplierId = q.supplierId
+      // PO.14 — supplier filter accepts comma-separated multi-select.
+      // Legacy `supplierId` (single) still honored for backward-compat
+      // with /products?supplierId= deep-links.
+      if (q.supplierIds) {
+        const ids = String(q.supplierIds).split(',').map((s) => s.trim()).filter(Boolean)
+        if (ids.length === 1) where.supplierId = ids[0]
+        else if (ids.length > 1) where.supplierId = { in: ids }
+      } else if (q.supplierId) {
+        where.supplierId = q.supplierId
+      }
+      // PO.14 — warehouse filter (single).
+      if (q.warehouseId) where.warehouseId = q.warehouseId
+      // PO.14 — currency filter (single 3-char code, uppercased).
+      if (q.currencyCode) {
+        where.currencyCode = String(q.currencyCode).trim().toUpperCase()
+      }
+      // PO.14 — value range. Cents are integers so no FX conversion
+      // here; mixed-ccy bands are operator's responsibility.
+      const minValue = q.minValueCents != null ? Number(q.minValueCents) : null
+      const maxValue = q.maxValueCents != null ? Number(q.maxValueCents) : null
+      if (Number.isFinite(minValue) || Number.isFinite(maxValue)) {
+        where.totalCents = {}
+        if (Number.isFinite(minValue) && minValue! >= 0) {
+          where.totalCents.gte = Math.floor(minValue!)
+        }
+        if (Number.isFinite(maxValue) && maxValue! >= 0) {
+          where.totalCents.lte = Math.floor(maxValue!)
+        }
+      }
+      // PO.14 — expectedDeliveryDate range.
+      const fromDate = q.expectedFrom ? new Date(String(q.expectedFrom)) : null
+      const toDate = q.expectedTo ? new Date(String(q.expectedTo)) : null
+      if (fromDate || toDate) {
+        where.expectedDeliveryDate = {}
+        if (fromDate && !isNaN(fromDate.getTime())) {
+          where.expectedDeliveryDate.gte = fromDate
+        }
+        if (toDate && !isNaN(toDate.getTime())) {
+          // Make `to` inclusive of the whole day.
+          const inclusive = new Date(toDate.getTime())
+          inclusive.setHours(23, 59, 59, 999)
+          where.expectedDeliveryDate.lte = inclusive
+        }
+      }
+      // PO.14 — lateOnly preset. Past expectedDeliveryDate AND status
+      // not yet fully received/cancelled. Combines with any explicit
+      // status filter via AND.
+      if (q.lateOnly === 'true') {
+        where.expectedDeliveryDate = {
+          ...(where.expectedDeliveryDate ?? {}),
+          lt: new Date(),
+        }
+        const lateStatuses = ['DRAFT', 'REVIEW', 'APPROVED', 'SUBMITTED', 'ACKNOWLEDGED', 'CONFIRMED', 'PARTIAL']
+        if (!where.status) {
+          where.status = { in: lateStatuses }
+        }
+      }
+
       const items = await prisma.purchaseOrder.findMany({
         where,
         include: {
