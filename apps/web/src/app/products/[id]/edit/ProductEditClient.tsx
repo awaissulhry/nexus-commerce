@@ -31,6 +31,7 @@ import {
   Save,
   X,
 } from 'lucide-react'
+import { useDirtyRegistry } from './_shared/useDirtyRegistry'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { IconButton } from '@/components/ui/IconButton'
@@ -361,20 +362,32 @@ export default function ProductEditClient({
     // this op yet, no need to bother the operator.
   }, [lastSseEvent, knownListingIds, clientListings, toast, t])
 
-  // W1.1 — accurate dirty tracking. Each tab reports its own count of
-  // unsaved fields via onDirtyChange; the header badge shows the
-  // aggregate. Replaces the old single boolean which never cleared
-  // after the first edit (B1) and made "Discard" a lie because there
-  // was no signal to actually revert tab state (B2).
-  const [dirtyByTab, setDirtyByTab] = useState<Record<string, number>>({})
-  const totalDirty = useMemo(
-    () => Object.values(dirtyByTab).reduce((a, b) => a + b, 0),
-    [dirtyByTab],
+  // W1.1 / DSP.1 — central dirty-state registry. Each tab calls
+  // onDirtyChange(count) which routes into registry.register(); the
+  // header reads `registry.byTab` for per-tab dots and `registry.total`
+  // for the aggregate badge. DSP.2+ will add `flush()` callbacks per
+  // tab so header Save can await every pending write in parallel
+  // (currently we still rely on the 800ms debounce drain in
+  // handleHeaderSave for tabs that haven't been migrated). See
+  // `docs/edit-ux.md` for the full model.
+  const registry = useDirtyRegistry()
+  const totalDirty = registry.total
+  const isDirty = registry.isDirty
+  // Back-compat shim: existing tabs pass count-only via onDirtyChange.
+  // DSP.2+ will switch them to register({ count, flush, discard })
+  // directly. Until then, keep this so no tab needs to change yet.
+  const setTabDirty = useCallback(
+    (tabKey: string, count: number) => registry.register(tabKey, { count }),
+    [registry],
   )
-  const isDirty = totalDirty > 0
-  const setTabDirty = useCallback((tabKey: string, count: number) => {
-    setDirtyByTab((prev) => (prev[tabKey] === count ? prev : { ...prev, [tabKey]: count }))
-  }, [])
+  // Derived shape that matches the old `dirtyByTab: Record<string, number>`
+  // so existing UI lookups (e.g. tab dirty dots) keep working without
+  // every call site needing to change.
+  const dirtyByTab = useMemo(() => {
+    const out: Record<string, number> = {}
+    for (const [k, e] of Object.entries(registry.byTab)) out[k] = e.count
+    return out
+  }, [registry.byTab])
   // Bumped by Discard. Tabs watch this prop; on change they cancel
   // pending debounce timers, drop their dirty set, and reseed values
   // from the freshly-fetched product. Channel tabs additionally hard-
@@ -389,14 +402,29 @@ export default function ProductEditClient({
   const handleHeaderSave = useCallback(async () => {
     if (headerSaving) return
     setHeaderSaving(true)
-    // 800ms covers the debounce timers in child editors; then refresh
-    // so the page reflects the latest saved state.
-    await new Promise((r) => window.setTimeout(r, 800))
-    setHeaderSaving(false)
-    setHeaderSaved(true)
-    router.refresh()
-    window.setTimeout(() => setHeaderSaved(false), 1500)
-  }, [headerSaving, router])
+    try {
+      // DSP.1 — real Save All: await every tab's registered flush()
+      // in parallel. Tabs that haven't migrated to register a flush
+      // (still on debounce auto-save) get the 800ms drain below as
+      // a back-compat fallback. After DSP.2+ migrates them, the
+      // 800ms wait collapses to ~0.
+      await registry.saveAll()
+      await new Promise((r) => window.setTimeout(r, 800))
+      setHeaderSaved(true)
+      router.refresh()
+      window.setTimeout(() => setHeaderSaved(false), 1500)
+    } catch (err) {
+      // Surface failure so the operator knows the save didn't land.
+      // Don't refresh — keep the dirty state so they can retry.
+      toast({
+        title: t('products.edit.saveFailed'),
+        description: err instanceof Error ? err.message : String(err),
+        tone: 'error',
+      })
+    } finally {
+      setHeaderSaving(false)
+    }
+  }, [headerSaving, registry, router, toast, t])
 
   // NN.3 — beforeunload guard so closing the tab / hitting back
   // doesn't silently drop unsaved edits.
@@ -432,8 +460,15 @@ export default function ProductEditClient({
       tone: 'warning',
     })
     if (!ok) return
+    // DSP.1 — call every registered discard handler first, then bump
+    // the legacy discardSignal for tabs that haven't migrated.
+    // Setting an empty count via the shim isn't enough — the registry
+    // keeps callbacks; we just reset counts to 0 so the dots clear.
+    registry.discardAll()
+    for (const k of Object.keys(registry.byTab)) {
+      registry.register(k, { count: 0 })
+    }
     setDiscardSignal((s) => s + 1)
-    setDirtyByTab({})
     router.refresh()
   }
 
@@ -733,6 +768,7 @@ export default function ProductEditClient({
               tabKey="images"
               active={topTab === 'images'}
               onClick={() => goToTab('images')}
+              dirty={dirtyByTab.images}
             >
               {t('products.edit.tab.images')}
             </TopTabButton>
@@ -749,6 +785,7 @@ export default function ProductEditClient({
                 tabKey="seo"
                 active={topTab === 'seo'}
                 onClick={() => goToTab('seo')}
+                dirty={dirtyByTab.seo}
               >
                 {t('products.edit.tab.seo')}
               </TopTabButton>
@@ -756,6 +793,7 @@ export default function ProductEditClient({
                 tabKey="compliance"
                 active={topTab === 'compliance'}
                 onClick={() => goToTab('compliance')}
+                dirty={dirtyByTab.compliance}
               >
                 {t('products.edit.tab.compliance')}
               </TopTabButton>
@@ -763,6 +801,7 @@ export default function ProductEditClient({
                 tabKey="workflow"
                 active={topTab === 'workflow'}
                 onClick={() => goToTab('workflow')}
+                dirty={dirtyByTab.workflow}
               >
                 {t('products.edit.tab.workflow')}
               </TopTabButton>
@@ -770,6 +809,7 @@ export default function ProductEditClient({
                 tabKey="relations"
                 active={topTab === 'relations'}
                 onClick={() => goToTab('relations')}
+                dirty={dirtyByTab.relations}
               >
                 {t('products.edit.tab.relations')}
               </TopTabButton>
@@ -777,6 +817,7 @@ export default function ProductEditClient({
                 tabKey="activity"
                 active={topTab === 'activity'}
                 onClick={() => goToTab('activity')}
+                dirty={dirtyByTab.activity}
               >
                 Timeline
               </TopTabButton>

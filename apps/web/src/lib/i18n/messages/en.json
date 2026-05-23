@@ -3436,6 +3436,7 @@
   "products.edit.discardConfirmMany": "Discard {count} unsaved fields?",
   "products.edit.discardBody": "Pending edits across the open tabs will be lost. Anything already saved is unaffected.",
   "products.edit.discardCta": "Discard changes",
+  "products.edit.saveFailed": "Save failed",
   "products.edit.unsaved": "Unsaved",
   "products.edit.unsavedCount": "{count} unsaved",
   "products.edit.savedFlag": "Saved",
