@@ -50,6 +50,13 @@ const EXCLUSIONS: Array<{ value: string; label: string }> = [
 
 const PRESETS = [
   {
+    name: 'Amazon — all markets default',
+    scope: 'AMAZON_GLOBAL',
+    minDays: 7, maxDays: 25,
+    exclusions: ['has_active_return', 'has_refund'],
+    notes: 'Covers IT + DE + FR + ES + UK + every other Amazon marketplace at once. One rule to rule them all. Easiest setup.',
+  },
+  {
     name: 'Amazon — safe default',
     scope: 'AMAZON_PER_MARKETPLACE',
     minDays: 7, maxDays: 25,
@@ -101,21 +108,33 @@ export default function RulesClient() {
   }
 
   // RV.9.1 — detect the state where automation is *configured* but won't
-  // *fire*. Two cases:
-  //   1. No active IT (Xavia primary) rule exists → seed one.
+  // fire for some/all Amazon markets. Three cases:
+  //   1. No rule at all OR no rule covering Amazon orders → show full banner.
   //   2. A rule with scope=AMAZON_PER_MARKETPLACE has marketplace=null
   //      (broken — matches no orders).
+  //   3. Only an IT rule exists → suggest expanding to all markets.
+  const activeGlobalRule = rules.find(
+    (r) => r.isActive && r.scope === 'AMAZON_GLOBAL',
+  )
   const activeItRule = rules.find(
     (r) => r.isActive && r.scope === 'AMAZON_PER_MARKETPLACE' && r.marketplace === 'IT',
   )
   const brokenRule = rules.find(
     (r) => r.scope === 'AMAZON_PER_MARKETPLACE' && !r.marketplace,
   )
-  const showSetupBanner = rules.length > 0 && !activeItRule
+  // Amazon orders covered iff a global rule is active OR an IT rule is
+  // active. Show the banner unless one of those holds.
+  const someAmazonCoverage = !!activeGlobalRule || !!activeItRule
+  const showSetupBanner = !someAmazonCoverage || !!brokenRule
+  // RV.9.1 follow-up — even when an IT rule is in place, suggest
+  // expanding to global since DE/FR/ES/etc. delivered orders never
+  // create ReviewRequest rows.
+  const suggestExpand = !!activeItRule && !activeGlobalRule
 
-  const seedDefault = async () => {
+  const seedDefault = async (scope?: 'AMAZON_GLOBAL') => {
     try {
-      const res = await fetch(`${getBackendUrl()}/api/review-rules/seed-default`, { method: 'POST' })
+      const qs = scope ? `?scope=${scope}` : ''
+      const res = await fetch(`${getBackendUrl()}/api/review-rules/seed-default${qs}`, { method: 'POST' })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'Failed')
       refresh()
@@ -151,40 +170,60 @@ export default function RulesClient() {
       />
 
       {/* RV.9.1 — setup nudge banner */}
-      {!loading && (rules.length === 0 || showSetupBanner || brokenRule) && (
+      {!loading && showSetupBanner && (
         <div className="rounded-md border border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 px-4 py-3 flex items-start gap-3">
           <Sparkles className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
           <div className="flex-1">
-            {rules.length === 0 ? (
-              <>
-                <div className="text-sm font-semibold text-amber-900 dark:text-amber-100">No automation set up yet</div>
-                <div className="text-xs text-amber-800 dark:text-amber-200 mt-0.5">
-                  Without an active rule, the system never schedules review requests. Click to create a recommended Xavia IT rule (7–25d window, returns/refunds excluded, sentiment diversion on).
-                </div>
-              </>
-            ) : brokenRule ? (
+            {brokenRule ? (
               <>
                 <div className="text-sm font-semibold text-amber-900 dark:text-amber-100">
                   Rule &quot;{brokenRule.name}&quot; is misconfigured
                 </div>
                 <div className="text-xs text-amber-800 dark:text-amber-200 mt-0.5">
-                  Scope is <strong>AMAZON_PER_MARKETPLACE</strong> but no marketplace is set — this rule matches zero orders. Click to repair it to <strong>IT</strong> (Xavia primary) or edit manually.
+                  Scope is <strong>AMAZON_PER_MARKETPLACE</strong> but no marketplace is set — this rule matches zero orders. Repair it to <strong>IT</strong> or switch to a global rule covering every market.
                 </div>
               </>
             ) : (
               <>
-                <div className="text-sm font-semibold text-amber-900 dark:text-amber-100">No active IT rule</div>
+                <div className="text-sm font-semibold text-amber-900 dark:text-amber-100">No active Amazon rule</div>
                 <div className="text-xs text-amber-800 dark:text-amber-200 mt-0.5">
-                  Xavia&apos;s primary market is Amazon IT, but no active rule scoped to it. The automation won&apos;t fire for IT orders. Click to seed a recommended default.
+                  Without an active rule the automation never schedules review requests. Pick the recommended <strong>all-markets default</strong> (covers IT + DE + FR + ES + UK + every other Amazon marketplace at once) or an IT-only rule.
                 </div>
               </>
             )}
           </div>
+          <div className="flex flex-col gap-1.5 shrink-0">
+            <button
+              onClick={() => seedDefault('AMAZON_GLOBAL')}
+              className="h-8 px-3 text-sm font-semibold bg-amber-600 text-white rounded hover:bg-amber-700 whitespace-nowrap"
+            >
+              Set up all-markets default
+            </button>
+            <button
+              onClick={() => seedDefault()}
+              className="h-7 px-3 text-xs font-medium bg-white text-amber-800 border border-amber-300 rounded hover:bg-amber-50 dark:bg-slate-900 dark:text-amber-200 dark:border-amber-800 whitespace-nowrap"
+            >
+              {brokenRule ? 'Repair to IT only' : 'Set up IT only'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* RV.9.1 follow-up — even with an IT rule, suggest expanding to global.
+          Quiet sky-blue banner; not an error state, just a hint. */}
+      {!loading && suggestExpand && (
+        <div className="rounded-md border border-sky-200 dark:border-sky-900 bg-sky-50 dark:bg-sky-950/30 px-4 py-2.5 flex items-start gap-3">
+          <Sparkles className="h-4 w-4 text-sky-600 dark:text-sky-400 shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <div className="text-xs text-sky-900 dark:text-sky-200">
+              Only the <strong>IT</strong> rule is active — delivered orders from DE / FR / ES / UK / other Amazon markets are never scheduled. Add an <strong>all-markets default</strong> to cover them too. (Per-market still wins for IT — they coexist.)
+            </div>
+          </div>
           <button
-            onClick={seedDefault}
-            className="h-8 px-3 text-sm font-medium bg-amber-600 text-white rounded hover:bg-amber-700 shrink-0"
+            onClick={() => seedDefault('AMAZON_GLOBAL')}
+            className="h-7 px-2.5 text-xs font-medium bg-sky-600 text-white rounded hover:bg-sky-700 shrink-0 whitespace-nowrap"
           >
-            {brokenRule ? 'Repair to IT' : 'Set up Xavia IT default'}
+            Expand to all markets
           </button>
         </div>
       )}

@@ -161,8 +161,40 @@ const ordersReviewsRoutes: FastifyPluginAsync = async (fastify) => {
   //   with scope=AMAZON_PER_MARKETPLACE has marketplace=null (broken
   //   from earlier RV.3 testing), patches it to mp='IT' instead of
   //   creating a duplicate. Returns the rule that's now active.
-  fastify.post('/review-rules/seed-default', async (_request, reply) => {
+  fastify.post<{ Querystring: { scope?: string } }>('/review-rules/seed-default', async (request, reply) => {
     try {
+      const variant = (request.query?.scope ?? '').toUpperCase()
+
+      // RV.9.1 (+follow-up) — "Amazon — all markets" variant. Covers every
+      // Amazon marketplace with a single AMAZON_GLOBAL rule.
+      if (variant === 'AMAZON_GLOBAL') {
+        const existingGlobal = await prisma.reviewRule.findFirst({
+          where: { scope: 'AMAZON_GLOBAL' },
+        })
+        if (existingGlobal) {
+          const updated = await prisma.reviewRule.update({
+            where: { id: existingGlobal.id },
+            data: { isActive: true, useSentimentDiversion: true },
+          })
+          return { ok: true, rule: updated, action: 'existing-activated' }
+        }
+        const created = await prisma.reviewRule.create({
+          data: {
+            name: 'Xavia all-markets default',
+            scope: 'AMAZON_GLOBAL',
+            marketplace: null,
+            isActive: true,
+            minDaysSinceDelivery: 7,
+            maxDaysSinceDelivery: 25,
+            exclusions: ['has_active_return', 'has_refund'],
+            useSentimentDiversion: true,
+            notes: 'Covers IT + DE + FR + ES + UK + every other Amazon marketplace. One rule fits all.',
+            createdBy: 'system-seed',
+          },
+        })
+        return { ok: true, rule: created, action: 'created' }
+      }
+
       const existingIt = await prisma.reviewRule.findFirst({
         where: { scope: 'AMAZON_PER_MARKETPLACE', marketplace: 'IT' },
       })
