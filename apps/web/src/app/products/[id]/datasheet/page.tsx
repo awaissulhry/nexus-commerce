@@ -37,6 +37,7 @@ import { getServerLocale, getServerT } from '@/lib/i18n/server'
 import HeaderHealthPulse from './HeaderHealthPulse'
 import AttributesTab from './AttributesTab'
 import VariantsTab from './VariantsTab'
+import ChannelsTab from './ChannelsTab'
 
 export const dynamic = 'force-dynamic'
 
@@ -210,6 +211,8 @@ export default async function ProductDatasheetHubPage({
             locale={locale}
             t={t}
           />
+        ) : tab === 'channels' ? (
+          <ChannelsTab productId={product.id} locale={locale} t={t} />
         ) : (
           <TabStub tab={tab} t={t} />
         )}
