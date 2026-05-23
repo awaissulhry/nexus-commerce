@@ -59,7 +59,10 @@ export interface PreferencesModalProps {
   allColumns: readonly PreferencesColumnSpec[]
   /** Workspace's "Reset" target visible-columns list. */
   defaultVisible: readonly string[]
-  /** Workspace's sort field options. */
+  /** Workspace's sort field options. Pass an empty array to hide
+   *  the sort section entirely (matches the pageSizeChoices=[] opt-out
+   *  pattern; used by /pricing where sort happens via column-header
+   *  click, not a global setting). */
   sortFieldOptions: ReadonlyArray<{ value: string; label: string }>
   /** Optional override of the 20/50/100/250 page-size choices.
    *  Pass an empty array to hide the page-size section entirely
@@ -276,35 +279,39 @@ export function PreferencesModal({
 
           {/* Sort order — single-field select. Per-workspace SortStack
               still drives multi-sort for power users; this is the
-              simple Amazon-style entry point. */}
-          <fieldset className="space-y-2">
-            <legend className="text-sm font-semibold text-slate-800 dark:text-slate-200">
-              {t('products.preferences.sortOrder')}
-            </legend>
-            <div className="flex gap-2">
-              <select
-                value={draft.sortBy}
-                onChange={(e) => setDraft((d) => ({ ...d, sortBy: e.target.value }))}
-                className="flex-1 h-9 px-2 text-sm border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900"
-              >
-                {sortFieldOptions.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
-              <select
-                value={draft.sortDir}
-                onChange={(e) =>
-                  setDraft((d) => ({ ...d, sortDir: e.target.value as 'asc' | 'desc' }))
-                }
-                className="h-9 px-2 text-sm border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900"
-              >
-                <option value="desc">↓ Descending</option>
-                <option value="asc">↑ Ascending</option>
-              </select>
-            </div>
-          </fieldset>
+              simple Amazon-style entry point. Hidden when the workspace
+              passes sortFieldOptions=[] (e.g. /pricing where sort is
+              column-header-driven, not a global preference). */}
+          {sortFieldOptions.length > 0 && (
+            <fieldset className="space-y-2">
+              <legend className="text-sm font-semibold text-slate-800 dark:text-slate-200">
+                {t('products.preferences.sortOrder')}
+              </legend>
+              <div className="flex gap-2">
+                <select
+                  value={draft.sortBy}
+                  onChange={(e) => setDraft((d) => ({ ...d, sortBy: e.target.value }))}
+                  className="flex-1 h-9 px-2 text-sm border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900"
+                >
+                  {sortFieldOptions.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  value={draft.sortDir}
+                  onChange={(e) =>
+                    setDraft((d) => ({ ...d, sortDir: e.target.value as 'asc' | 'desc' }))
+                  }
+                  className="h-9 px-2 text-sm border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900"
+                >
+                  <option value="desc">↓ Descending</option>
+                  <option value="asc">↑ Ascending</option>
+                </select>
+              </div>
+            </fieldset>
+          )}
         </div>
 
         {/* ── Right panel: column visibility + drag reorder ─────── */}

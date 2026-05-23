@@ -197,9 +197,7 @@ export default function PricingMatrixClient() {
   // lightest-touch migration: no in-row ActionCluster (drawer-only
   // paradigm stays), no page-size choice (fixed), no sort dropdown
   // (sort happens via column-header click). Only sticky + visibility.
-  // XG.6 follow-up — preferencesOpen state will land when the modal
-  // is wired to a trigger button. Declaring it here right now would
-  // trip noUnusedLocals.
+  const [preferencesOpen, setPreferencesOpen] = useState(false)
   const [stickyFirstColumn, setStickyFirstColumn] = useState<boolean>(true)
   const [stickyLastColumn, setStickyLastColumn] = useState<boolean>(true)
   const PRICING_DEFAULT_VISIBLE = ['identity', 'price', 'source', 'channels', 'warnings']
@@ -966,6 +964,8 @@ export default function PricingMatrixClient() {
             riskFlaggedSkus={new Set()}
             storageKey="pricing-matrix"
             showExpandColumn={true}
+            stickyLeft={stickyFirstColumn}
+            stickyRight={stickyLastColumn}
             renderCell={(row, key) => renderPricingCell(row as ParentRow | VariantRow, key, { selected, toggleRow, openDrawer, t })}
           />
 
@@ -1017,6 +1017,39 @@ export default function PricingMatrixClient() {
           onClose={() => setShortcutsOpen(false)}
         />
       )}
+
+      {/* XG.6 — shared Preferences modal. Lightest-touch parity:
+          - pageSizeChoices=[] hides the page-size section (/pricing has
+            fixed pagination via the backend)
+          - sortFieldOptions=[] hides the sort section (/pricing sorts
+            via column-header click, not a global setting)
+          - No ActionCluster on rows; drawer-only paradigm stays
+          So the modal effectively just shows sticky toggles + column
+          visibility (operator can hide Warnings or Source if they want
+          a cleaner matrix). */}
+      <PreferencesModal
+        open={preferencesOpen}
+        onClose={() => setPreferencesOpen(false)}
+        allColumns={pricingColumnsAll}
+        defaultVisible={PRICING_DEFAULT_VISIBLE}
+        sortFieldOptions={[]}
+        pageSizeChoices={[]}
+        value={{
+          pageSize: 0,
+          visibleColumns,
+          stickyFirstColumn,
+          stickyLastColumn,
+          sortBy: '',
+          sortDir: 'desc',
+        }}
+        onConfirm={(next: PreferencesValue) => {
+          setVisibleColumns(
+            next.visibleColumns.filter((k) => k !== 'identity' && k !== 'actions'),
+          )
+          setStickyFirstColumn(next.stickyFirstColumn)
+          setStickyLastColumn(next.stickyLastColumn)
+        }}
+      />
 
       {/* P.D — Bulk override confirmation modal. Shows the cascade
           scope explicitly so the operator knows the blast radius
