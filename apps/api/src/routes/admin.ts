@@ -420,6 +420,88 @@ export async function adminRoutes(app: FastifyInstance) {
   })
 
   /**
+   * DA-RT.15 — POST /admin/sales-drift/fix-line-total-orderitems
+   *
+   * One-shot migration for OrderItem rows where the ingest stored
+   * Amazon's ItemPrice.Amount (line total across all units) as
+   * `price` while keeping `quantity = QuantityOrdered`. Downstream
+   * `SUM(price * quantity)` then double-counts. The ingest itself
+   * is fixed in DA-RT.15; this endpoint repairs the historical
+   * rows so they line up with the new ingest's per-unit semantics.
+   *
+   * Scope (defensive): only touches rows where
+   *   - quantity > 1
+   *   - the parent Order has totalPrice > 0
+   *   - the row's `price * quantity` overshoots the proportional
+   *     share of the Order's totalPrice by more than 1% — i.e. the
+   *     row was demonstrably double-counted, not already correct.
+   *
+   * Idempotent: running twice on the same rows is a no-op because
+   * after the first run `price * quantity` equals the share.
+   *
+   * Query param: dryRun=true (default) returns the count + sample
+   *   without writing. dryRun=false applies the fix.
+   */
+  app.post<{ Querystring: { dryRun?: string } }>(
+    '/admin/sales-drift/fix-line-total-orderitems',
+    async (request, reply) => {
+      try {
+        const dryRun = request.query.dryRun !== 'false'
+        // Find rows where qty > 1 AND (price * qty) overshoots the
+        // order's totalPrice by >1%. These are the smoking-gun rows.
+        const candidates = await prisma.$queryRaw<Array<{
+          id: string
+          orderId: string
+          channelOrderId: string | null
+          sku: string
+          quantity: number
+          price: number
+          orderTotal: number
+          newPrice: number
+        }>>`
+          SELECT
+            oi.id, oi."orderId", o."channelOrderId", oi.sku, oi.quantity,
+            oi.price::float AS price,
+            o."totalPrice"::float AS "orderTotal",
+            (oi.price / oi.quantity)::float AS "newPrice"
+          FROM "OrderItem" oi
+          JOIN "Order" o ON o.id = oi."orderId"
+          WHERE oi.quantity > 1
+            AND oi.price IS NOT NULL
+            AND oi.price > 0
+            AND o."totalPrice" > 0
+            AND ABS((oi.price * oi.quantity) - o."totalPrice") > GREATEST(1, o."totalPrice" * 0.01)
+          ORDER BY o."purchaseDate" DESC NULLS LAST
+        `
+
+        if (dryRun) {
+          return reply.send({
+            dryRun: true,
+            candidateCount: candidates.length,
+            sample: candidates.slice(0, 20),
+          })
+        }
+
+        // Apply the fix in a single transaction. Per-row update so
+        // each row's `newPrice = price / quantity` is computed
+        // correctly even with mixed quantities.
+        let updated = 0
+        for (const c of candidates) {
+          await prisma.orderItem.update({
+            where: { id: c.id },
+            data: { price: c.newPrice },
+          })
+          updated += 1
+        }
+        return reply.send({ dryRun: false, updated })
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unknown error'
+        return reply.status(500).send({ error: message })
+      }
+    },
+  )
+
+  /**
    * DA-RT.14 — POST /admin/sales-drift/refresh-aggregate?days=30
    *
    * Re-runs the sales-aggregate UPSERT over a window so historical

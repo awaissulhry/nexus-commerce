@@ -1032,7 +1032,17 @@ export class AmazonOrdersService {
     orderId: string,
     item: AmazonOrderItemRaw,
   ): Promise<{ productId: string | null; quantity: number; sku: string }> {
-    const totalPrice = item.ItemPrice?.Amount ? Number(item.ItemPrice.Amount) : 0
+    // DA-RT.15 — SP-API's ItemPrice.Amount is the LINE TOTAL across
+    // QuantityOrdered units, NOT per-unit. Downstream (sales-aggregate,
+    // compute.ts Tier 2) does `SUM(OrderItem.price * quantity)` and
+    // assumes per-unit pricing. Storing the line total directly causes
+    // double-counting for orders with quantity > 1.
+    //
+    // Divide by quantity to get the per-unit price before storing.
+    // For quantity = 1 (the common case) the value is unchanged.
+    const lineTotal = item.ItemPrice?.Amount ? Number(item.ItemPrice.Amount) : 0
+    const qty = item.QuantityOrdered || 1
+    const unitPrice = qty > 0 ? lineTotal / qty : 0
     const sku = item.SellerSKU ?? item.ASIN ?? ''
     const externalLineItemId = item.OrderItemId
 
@@ -1062,14 +1072,14 @@ export class AmazonOrdersService {
         externalLineItemId,
         sku,
         quantity: item.QuantityOrdered,
-        price: totalPrice,
+        price: unitPrice,
         amazonMetadata: item as object,
         ...(productId ? { productId } : {}),
       },
       update: {
         sku,
         quantity: item.QuantityOrdered,
-        price: totalPrice,
+        price: unitPrice,
         amazonMetadata: item as object,
         ...(productId ? { productId } : {}),
       },

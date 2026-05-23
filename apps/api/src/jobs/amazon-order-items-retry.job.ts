@@ -116,7 +116,12 @@ export async function runAmazonOrderItemsRetry(): Promise<void> {
           let updatedAny = false
           for (const it of items) {
             if (!it.ItemPrice?.Amount) continue
-            const newPrice = Number(it.ItemPrice.Amount)
+            // DA-RT.15 — SP-API's ItemPrice.Amount is the line total
+            // across QuantityOrdered units, not per-unit. Divide so
+            // downstream `SUM(price * quantity)` stays correct.
+            const lineTotal = Number(it.ItemPrice.Amount)
+            const qty = it.QuantityOrdered || 1
+            const newPrice = qty > 0 ? lineTotal / qty : 0
             if (!Number.isFinite(newPrice) || newPrice <= 0) continue
             // Update our row only if the existing price is 0/null —
             // never overwrite a confirmed price.
