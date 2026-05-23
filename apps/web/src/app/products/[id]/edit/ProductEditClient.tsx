@@ -1,5 +1,23 @@
 'use client'
 
+/**
+ * Product Editor — multi-tab shell.
+ *
+ * Save / Discard / Publish UX is governed by the DSP-series spec at
+ * `docs/edit-ux.md`. Read it before changing any button label,
+ * scope, or wiring on this surface. Key invariants enforced there:
+ *
+ *   - Header "Save" writes the FULL dirty registry (all tabs)
+ *     atomically; no per-tab fake saves
+ *   - Header "Discard" prompts scope when >1 tab is dirty
+ *   - Every "Publish" pre-saves the entire dirty set
+ *   - Tab labels show a dirty dot when their tab has unsaved state
+ *   - Auto-save is forbidden except on single-toggle controls
+ *
+ * If a child tab needs to diverge from these rules, update the spec
+ * first and link the discussion in the comment.
+ */
+
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import {
