@@ -119,6 +119,13 @@ interface VirtualizedGridProps {
   stagedProductIds?: Set<string>
   /** ID of the product currently being dragged (opacity-40 row tint). */
   activeProductId?: string | null
+  /** PG.6 — freeze the leading column group on horizontal scroll.
+   *  Driven by the operator's Preferences-modal toggle (PG.5); default
+   *  true so other workspaces inheriting this wrapper get Amazon-parity
+   *  freeze for free. */
+  stickyLeft?: boolean
+  /** PG.6 — same shape for the trailing locked column (actions). */
+  stickyRight?: boolean
 }
 
 // Sort key map — matches the original hard-coded sortKeys in VirtualizedGrid.
@@ -167,6 +174,8 @@ export function VirtualizedGrid({
   draggable = false,
   stagedProductIds,
   activeProductId = null,
+  stickyLeft = true,
+  stickyRight = true,
 }: VirtualizedGridProps) {
   // Stable renderCell so GridRow memo skips re-renders when unrelated
   // selections change. Depends on onTagEdit + onChanged so they're
@@ -222,6 +231,8 @@ export function VirtualizedGrid({
       renderDropOverlay={(row) =>
         draggable ? <DroppableRowOverlay product={row} /> : null
       }
+      stickyLeft={stickyLeft}
+      stickyRight={stickyRight}
     />
   )
 }

@@ -115,7 +115,69 @@ export interface VirtualizedGridProps<T extends GridLensRow> {
    * Defaults to true so /products keeps its expand/collapse behaviour unchanged.
    */
   showExpandColumn?: boolean
+  /**
+   * PG.6 — Freeze the leading column group (drag + checkbox + expand +
+   * star + first locked content column) on horizontal scroll. Matches
+   * Amazon Manage Products. Default true; /products operator can flip
+   * off via the Preferences modal (PG.5). Other workspaces inherit the
+   * default for free.
+   */
+  stickyLeft?: boolean
+  /**
+   * PG.6 — Freeze the trailing locked column ("actions") on the right
+   * during horizontal scroll. Same Amazon parity + Preferences-driven
+   * shape as stickyLeft.
+   */
+  stickyRight?: boolean
 }
+
+// PG.6 — Cell widths for the conditional leading utility columns.
+// Mirror the literals already used in the header + GridRow render
+// (kept inline before for inline-style brevity; lifted here so the
+// sticky-left offset math reads as one source of truth).
+const LEAD_DRAG_W = 28
+const LEAD_CHECKBOX_W = 32
+const LEAD_EXPAND_W = 24
+const LEAD_STAR_W = 22
+
+/** Cumulative `left` px offset for every sticky-left cell, given which
+ *  conditional leading columns are mounted. The product column lands
+ *  after the utility group at the sum of every mounted width. */
+function leadingLeftOffsets(args: {
+  draggable: boolean
+  showExpandColumn: boolean
+  hasStar: boolean
+}) {
+  const dragW = args.draggable ? LEAD_DRAG_W : 0
+  const expandW = args.showExpandColumn ? LEAD_EXPAND_W : 0
+  const starW = args.hasStar ? LEAD_STAR_W : 0
+  return {
+    drag: 0,
+    checkbox: dragW,
+    expand: dragW + LEAD_CHECKBOX_W,
+    star: dragW + LEAD_CHECKBOX_W + expandW,
+    /** Offset for the first locked content column (`product`). */
+    firstContent: dragW + LEAD_CHECKBOX_W + expandW + starW,
+  }
+}
+
+// PG.6 — z-index layers for sticky cells. The header row already uses
+// z-10; sticky body cells stack at z-1 to sit above non-sticky body
+// peers but below the header. Header cells that are ALSO sticky-left
+// /right inherit the header's z-10 and bump to z-20 so they remain
+// above body sticky cells when scrolling diagonally.
+const STICKY_BODY_Z = 'z-[1]'
+const STICKY_HEADER_CORNER_Z = 'z-20'
+
+// PG.6 — Edge shadow on the right of the sticky-left group and left of
+// the sticky-right cell. Always rendered (subtle 1 px tint that acts as
+// a divider even when not scrolled); a `box-shadow` larger than 1 px
+// would distract on the resting state. inset:0 / right:-1 / left:-1
+// places the strip just outside the cell so it never overlaps content.
+const STICKY_LEFT_EDGE_SHADOW =
+  "after:content-[''] after:absolute after:top-0 after:right-[-1px] after:bottom-0 after:w-px after:bg-slate-200 dark:after:bg-slate-700 after:pointer-events-none"
+const STICKY_RIGHT_EDGE_SHADOW =
+  "before:content-[''] before:absolute before:top-0 before:left-[-1px] before:bottom-0 before:w-px before:bg-slate-200 dark:before:bg-slate-700 before:pointer-events-none"
 
 const EMPTY_SET = new Set<never>()
 
@@ -149,10 +211,39 @@ export function VirtualizedGrid<T extends GridLensRow>({
   renderDragHandle,
   renderDropOverlay,
   showExpandColumn = true,
+  stickyLeft = true,
+  stickyRight = true,
 }: VirtualizedGridProps<T>): React.ReactElement {
   const _stagedIds = stagedIds ?? (EMPTY_SET as Set<string>)
   const { t } = useTranslations()
   const sortKeys = sortKeysProp ?? {}
+
+  // PG.6 — Precompute the cumulative `left` offset for each sticky-left
+  // cell once per render. Drag/checkbox/expand/star are conditional on
+  // their callbacks; the offsets shift when those columns aren't
+  // mounted, which is exactly the contract leadingLeftOffsets covers.
+  const stickyLeftOffsets = useMemo(
+    () =>
+      leadingLeftOffsets({
+        draggable: !!draggable,
+        showExpandColumn,
+        hasStar: !!onTagEdit,
+      }),
+    [draggable, showExpandColumn, onTagEdit],
+  )
+
+  // PG.6 — Which content column counts as "first" / "last" for the
+  // sticky toggles. Today these are the locked leading + trailing keys
+  // ('product' + 'actions' on /products); fall back to the visible
+  // array bookends if the workspace didn't lock anything.
+  const firstStickyKey = useMemo(() => {
+    const leadingLocked = visible.find((c) => c.locked && c.key === 'product')
+    return leadingLocked?.key ?? visible[0]?.key ?? null
+  }, [visible])
+  const lastStickyKey = useMemo(() => {
+    const trailingLocked = visible.find((c) => c.locked && c.key === 'actions')
+    return trailingLocked?.key ?? visible[visible.length - 1]?.key ?? null
+  }, [visible])
 
   // ── Flat row list ──────────────────────────────────────────────────────────
   const flatRows: FlatRow<T>[] = useMemo(() => {
@@ -332,15 +423,23 @@ export function VirtualizedGrid<T extends GridLensRow>({
               >
                 {draggable && (
                   <div
-                    className="px-1 py-2"
-                    style={{ width: 28, minWidth: 28 }}
+                    className={`px-1 py-2${stickyLeft ? ` sticky ${STICKY_HEADER_CORNER_Z} bg-slate-50 dark:bg-slate-800` : ''}`}
+                    style={{
+                      width: 28,
+                      minWidth: 28,
+                      ...(stickyLeft ? { left: stickyLeftOffsets.drag } : null),
+                    }}
                     role="columnheader"
                     aria-label="Drag"
                   />
                 )}
                 <div
-                  className="px-3 py-2 flex items-center"
-                  style={{ width: 32, minWidth: 32 }}
+                  className={`px-3 py-2 flex items-center${stickyLeft ? ` sticky ${STICKY_HEADER_CORNER_Z} bg-slate-50 dark:bg-slate-800` : ''}`}
+                  style={{
+                    width: 32,
+                    minWidth: 32,
+                    ...(stickyLeft ? { left: stickyLeftOffsets.checkbox } : null),
+                  }}
                   role="columnheader"
                 >
                   {/* U.34 — custom checkbox button */}
@@ -363,16 +462,24 @@ export function VirtualizedGrid<T extends GridLensRow>({
                 </div>
                 {showExpandColumn && (
                   <div
-                    className="px-1 py-2"
-                    style={{ width: 24, minWidth: 24 }}
+                    className={`px-1 py-2${stickyLeft ? ` sticky ${STICKY_HEADER_CORNER_Z} bg-slate-50 dark:bg-slate-800` : ''}`}
+                    style={{
+                      width: 24,
+                      minWidth: 24,
+                      ...(stickyLeft ? { left: stickyLeftOffsets.expand } : null),
+                    }}
                     role="columnheader"
                     aria-label={t('products.grid.expandVariants')}
                   />
                 )}
                 {onTagEdit && (
                   <div
-                    className="px-0.5 py-2"
-                    style={{ width: 22, minWidth: 22 }}
+                    className={`px-0.5 py-2${stickyLeft ? ` sticky ${STICKY_HEADER_CORNER_Z} bg-slate-50 dark:bg-slate-800` : ''}`}
+                    style={{
+                      width: 22,
+                      minWidth: 22,
+                      ...(stickyLeft ? { left: stickyLeftOffsets.star } : null),
+                    }}
                     role="columnheader"
                     aria-label="Star"
                   />
@@ -393,6 +500,21 @@ export function VirtualizedGrid<T extends GridLensRow>({
                         : sortBy.endsWith('-asc')
                           ? 'ascending'
                           : 'descending'
+                  // PG.6 — fold sticky-left/right onto the locked
+                  // bookend headers. firstStickyKey takes the leading
+                  // group's last offset; lastStickyKey pins right:0.
+                  const isStickyLeftCol = stickyLeft && col.key === firstStickyKey
+                  const isStickyRightCol = stickyRight && col.key === lastStickyKey
+                  const stickyHeaderCls = isStickyLeftCol
+                    ? ` sticky ${STICKY_HEADER_CORNER_Z} bg-slate-50 dark:bg-slate-800 ${STICKY_LEFT_EDGE_SHADOW}`
+                    : isStickyRightCol
+                      ? ` sticky ${STICKY_HEADER_CORNER_Z} bg-slate-50 dark:bg-slate-800 ${STICKY_RIGHT_EDGE_SHADOW}`
+                      : ''
+                  const stickyHeaderStyle: React.CSSProperties = isStickyLeftCol
+                    ? { left: stickyLeftOffsets.firstContent }
+                    : isStickyRightCol
+                      ? { right: 0 }
+                      : {}
                   return (
                     <div
                       key={col.key}
@@ -406,10 +528,11 @@ export function VirtualizedGrid<T extends GridLensRow>({
                           onSort(sortKeys[col.key])
                         }
                       }}
-                      className={`relative px-3 py-2 text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300 text-left flex items-start group/sort ${sortable ? 'cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:bg-slate-100' : ''}`}
+                      className={`relative px-3 py-2 text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300 text-left flex items-start group/sort ${sortable ? 'cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:bg-slate-100' : ''}${stickyHeaderCls}`}
                       style={{
                         width: `var(--col-${col.key}-width)`,
                         minWidth: `var(--col-${col.key}-width)`,
+                        ...stickyHeaderStyle,
                       }}
                       onClick={() => {
                         if (sortable) onSort(sortKeys[col.key])
@@ -516,6 +639,11 @@ export function VirtualizedGrid<T extends GridLensRow>({
                             renderCell={renderCell}
                             renderDragHandle={renderDragHandle}
                             showExpandColumn={showExpandColumn}
+                            stickyLeft={stickyLeft}
+                            stickyRight={stickyRight}
+                            stickyLeftOffsets={stickyLeftOffsets}
+                            firstStickyKey={firstStickyKey}
+                            lastStickyKey={lastStickyKey}
                           />
                           {draggable && renderDropOverlay?.(row.product)}
                         </>
@@ -614,6 +742,15 @@ interface GridRowProps<T extends GridLensRow> {
   renderCell: (row: T, colKey: string, isChild: boolean) => React.ReactNode
   renderDragHandle?: (row: T, rowBg: string) => React.ReactNode
   showExpandColumn?: boolean
+  /** PG.6 — sticky toggles + precomputed cumulative offsets. The parent
+   *  memoises both so React.memo on GridRowInner stays effective; if we
+   *  computed inside the row, every render would create a new offsets
+   *  object and bust the shallow compare. */
+  stickyLeft?: boolean
+  stickyRight?: boolean
+  stickyLeftOffsets?: ReturnType<typeof leadingLeftOffsets>
+  firstStickyKey?: string | null
+  lastStickyKey?: string | null
 }
 
 // Inner component is memo'd but uses `any` for T to satisfy React.memo
@@ -636,11 +773,21 @@ const GridRowInner = memo(function GridRowInner({
   renderCell,
   renderDragHandle,
   showExpandColumn = true,
+  stickyLeft = true,
+  stickyRight = true,
+  stickyLeftOffsets,
+  firstStickyKey = null,
+  lastStickyKey = null,
 }: GridRowProps<any>) {
   const { t } = useTranslations()
   const childCount = product.childCount ?? 0
   const canExpand = !isChild && product.isParent && childCount > 0
   const focusRing = isFocused ? 'ring-2 ring-inset ring-blue-500' : ''
+  const offsets = stickyLeftOffsets ?? leadingLeftOffsets({
+    draggable: !!isDraggable,
+    showExpandColumn,
+    hasStar: !!onTagEdit,
+  })
 
   // W5.3 — Conditional row formatting.
   const stateTint = (() => {
@@ -667,12 +814,20 @@ const GridRowInner = memo(function GridRowInner({
         ? `bg-blue-50/30 ${focusRing}`
         : `${stagedTint || stateTint} hover:bg-slate-50 dark:hover:bg-slate-900 ${focusRing}`
 
+  // PG.6 — sticky body-cell modifier helpers. Each leading utility
+  // cell gets the same sticky/left/z-index treatment when stickyLeft
+  // is on; otherwise renders unchanged. Background is supplied by the
+  // existing rowBg template so sticky cells visually match the rest
+  // of the row.
+  const stickyLeftCls = stickyLeft ? `sticky ${STICKY_BODY_Z}` : ''
+  const stickyStyle = (offset: number): React.CSSProperties =>
+    stickyLeft ? { left: offset } : {}
   return (
     <>
       {isDraggable && renderDragHandle?.(product, rowBg)}
       <div
-        className={`px-3 py-2 flex items-center ${rowBg}`}
-        style={{ width: 32, minWidth: 32 }}
+        className={`px-3 py-2 flex items-center ${rowBg} ${stickyLeftCls}`}
+        style={{ width: 32, minWidth: 32, ...stickyStyle(offsets.checkbox) }}
         role="cell"
       >
         {/* U.34 — custom checkbox */}
@@ -701,8 +856,8 @@ const GridRowInner = memo(function GridRowInner({
         </button>
       </div>
       {showExpandColumn && <div
-        className={`px-1 py-2 flex items-center ${rowBg}`}
-        style={{ width: 24, minWidth: 24 }}
+        className={`px-1 py-2 flex items-center ${rowBg} ${stickyLeftCls}`}
+        style={{ width: 24, minWidth: 24, ...stickyStyle(offsets.expand) }}
         role="cell"
       >
         {canExpand ? (
@@ -738,8 +893,8 @@ const GridRowInner = memo(function GridRowInner({
       {/* AM.1 — ★ star slot (only when onTagEdit is provided) */}
       {onTagEdit && (
         <div
-          className={`px-0.5 py-2 flex items-center justify-center ${rowBg}`}
-          style={{ width: 22, minWidth: 22 }}
+          className={`px-0.5 py-2 flex items-center justify-center ${rowBg} ${stickyLeftCls}`}
+          style={{ width: 22, minWidth: 22, ...stickyStyle(offsets.star) }}
           role="cell"
         >
           <button
@@ -753,19 +908,37 @@ const GridRowInner = memo(function GridRowInner({
           </button>
         </div>
       )}
-      {visible.map((col) => (
-        <div
-          key={col.key}
-          role="cell"
-          className={`${cellPad} flex items-center ${rowBg} overflow-hidden`}
-          style={{
-            width: `var(--col-${col.key}-width)`,
-            minWidth: `var(--col-${col.key}-width)`,
-          }}
-        >
-          {renderCell(product, col.key, isChild)}
-        </div>
-      ))}
+      {visible.map((col) => {
+        // PG.6 — fold sticky-left/right onto the locked bookend cells.
+        // firstStickyKey pins after the leading utility group at the
+        // computed offset; lastStickyKey pins right:0.
+        const isStickyLeftCol = stickyLeft && col.key === firstStickyKey
+        const isStickyRightCol = stickyRight && col.key === lastStickyKey
+        const stickyCellCls = isStickyLeftCol
+          ? `sticky ${STICKY_BODY_Z} ${STICKY_LEFT_EDGE_SHADOW}`
+          : isStickyRightCol
+            ? `sticky ${STICKY_BODY_Z} ${STICKY_RIGHT_EDGE_SHADOW}`
+            : ''
+        const stickyCellStyle: React.CSSProperties = isStickyLeftCol
+          ? { left: offsets.firstContent }
+          : isStickyRightCol
+            ? { right: 0 }
+            : {}
+        return (
+          <div
+            key={col.key}
+            role="cell"
+            className={`${cellPad} flex items-center ${rowBg} overflow-hidden ${stickyCellCls}`}
+            style={{
+              width: `var(--col-${col.key}-width)`,
+              minWidth: `var(--col-${col.key}-width)`,
+              ...stickyCellStyle,
+            }}
+          >
+            {renderCell(product, col.key, isChild)}
+          </div>
+        )
+      })}
     </>
   )
 })

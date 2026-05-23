@@ -1829,6 +1829,8 @@ export default function ProductsWorkspace() {
           onDensityChange={setDensity}
           searchTerm={search}
           riskFlaggedSkus={riskFlaggedSkus}
+          stickyLeft={stickyFirstColumn}
+          stickyRight={stickyLastColumn}
         />
       )}
 
@@ -2045,6 +2047,9 @@ function GridLens(props: any) {
     // SearchContext + RiskFlaggedContext providers internally.
     searchTerm,
     riskFlaggedSkus,
+    // PG.6 — Preferences-modal-driven sticky toggles.
+    stickyLeft,
+    stickyRight,
   } = props as {
     products: ProductRow[]
     loading: boolean
@@ -2079,6 +2084,8 @@ function GridLens(props: any) {
     onDensityChange: (d: Density) => void
     searchTerm: string
     riskFlaggedSkus: Set<string>
+    stickyLeft: boolean
+    stickyRight: boolean
   }
   const cellPad = DENSITY_CELL_CLASS[density] ?? DENSITY_CELL_CLASS.comfortable
 
@@ -2306,6 +2313,8 @@ function GridLens(props: any) {
           focusedRowId={focusedRowId}
           searchTerm={searchTerm}
           riskFlaggedSkus={riskFlaggedSkus}
+          stickyLeft={stickyLeft}
+          stickyRight={stickyRight}
         />
       </div>
       {/* Mobile + tablet card list — lg:hidden. Shows the same product
