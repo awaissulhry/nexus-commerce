@@ -895,6 +895,7 @@ function EditSplitButton({
   const chevronRef = useRef<HTMLButtonElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
   const { toast } = useToast()
+  const { t } = useTranslations()
 
   const needsFix = !product.isParent && product.status === 'ACTIVE' && (product.channelCount ?? 0) === 0
   const label = needsFix ? 'Fix' : 'Edit'
@@ -1123,8 +1124,8 @@ function EditSplitButton({
         type="button"
         onClick={handlePeek}
         className={inlineIconCls}
-        title="Open in drawer"
-        aria-label="Open in drawer"
+        title={t('products.actions.openInDrawer')}
+        aria-label={t('products.actions.openInDrawer')}
       >
         <Eye size={13} />
       </button>
@@ -1132,8 +1133,8 @@ function EditSplitButton({
         type="button"
         onClick={(e) => { e.stopPropagation(); void handleCopy() }}
         className={inlineIconCls}
-        title="Duplicate"
-        aria-label="Duplicate product"
+        title={t('products.actions.duplicate')}
+        aria-label={t('products.actions.duplicateProduct')}
       >
         <Copy size={13} />
       </button>
@@ -1145,8 +1146,8 @@ function EditSplitButton({
         type="button"
         onClick={handleChevron}
         className="h-7 px-1.5 bg-white dark:bg-slate-800 border border-l-0 border-slate-300 dark:border-slate-600 rounded-r-md text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 inline-flex items-center transition-colors"
-        aria-label="More actions"
-        title="More actions (⌘ .)"
+        aria-label={t('products.actions.moreActions')}
+        title={t('products.actions.moreActionsShortcut')}
       >
         <ChevronDown size={12} />
       </button>
@@ -1293,10 +1294,10 @@ const ProductCell = memo(function ProductCell({
             <Link
               href={`/products/${p.id}/edit?tab=images`}
               className="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400 hover:underline"
-              title="No images yet — channel listings need photos before they ship"
+              title={t('products.grid.addPhotosHint')}
             >
               <AlertCircle size={10} className="flex-shrink-0" />
-              Add photos
+              {t('products.grid.addPhotos')}
             </Link>
           )}
         </div>

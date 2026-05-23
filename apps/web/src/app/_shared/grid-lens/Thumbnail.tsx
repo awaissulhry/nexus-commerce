@@ -27,6 +27,7 @@
  */
 
 import {
+  memo,
   useCallback,
   useContext,
   useEffect,
@@ -39,6 +40,7 @@ import {
   DENSITY_THUMB_ICON_PX,
   DENSITY_THUMB_PX,
 } from '@/lib/theme'
+import { useTranslations } from '@/lib/i18n/use-translations'
 import { DensityContext } from './VirtualizedGrid'
 
 export interface ThumbnailProps {
@@ -90,7 +92,7 @@ function previewTransform(): string {
   return `w_${PREVIEW_SIZE_PX},c_fit,f_auto,q_auto`
 }
 
-export function Thumbnail({
+function ThumbnailImpl({
   src,
   photoCount = 0,
   alt = '',
@@ -99,6 +101,7 @@ export function Thumbnail({
   title,
   onUpload,
 }: ThumbnailProps) {
+  const { t } = useTranslations()
   const density = useContext(DensityContext)
   const thumbPx = DENSITY_THUMB_PX[density]
   const iconPx = DENSITY_THUMB_ICON_PX[density]
@@ -212,8 +215,8 @@ export function Thumbnail({
       )}
       {showDot && (
         <span
-          aria-label={`${photoCount} photos`}
-          title={`${photoCount} photos`}
+          aria-label={t('products.thumb.photoCount', { count: photoCount })}
+          title={t('products.thumb.photoCount', { count: photoCount })}
           className="absolute bottom-0.5 right-0.5 inline-flex items-center justify-center gap-0.5 px-1 py-px rounded text-[9px] font-semibold bg-slate-900/75 text-white leading-none"
         >
           <ImagesIcon size={8} strokeWidth={2.5} />
@@ -223,10 +226,12 @@ export function Thumbnail({
     </>
   ) : (
     <div
+      role="img"
+      aria-label={alt || 'No image'}
       style={style}
       className="rounded bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 dark:text-slate-500"
     >
-      <ImageIcon size={iconPx} />
+      <ImageIcon size={iconPx} aria-hidden="true" />
     </div>
   )
 
@@ -302,7 +307,10 @@ export function Thumbnail({
             file drag is hovering AND onUpload is wired. */}
         {dragOver && onUpload && (
           <div
-            aria-hidden="true"
+            role="status"
+            aria-live="polite"
+            aria-label={t('products.thumb.dropToUpload')}
+            title={t('products.thumb.dropToUpload')}
             style={{ width: thumbPx, height: thumbPx }}
             className="absolute inset-0 rounded bg-blue-500/20 border-2 border-dashed border-blue-500 flex items-center justify-center text-blue-700 dark:text-blue-300 pointer-events-none"
           >
@@ -314,8 +322,11 @@ export function Thumbnail({
             their drop landed and the network request is in motion. */}
         {uploading && (
           <div
+            role="status"
             aria-live="polite"
             aria-busy="true"
+            aria-label={t('products.thumb.uploading')}
+            title={t('products.thumb.uploading')}
             style={{ width: thumbPx, height: thumbPx }}
             className="absolute inset-0 rounded bg-slate-900/70 flex items-center justify-center text-white"
           >
@@ -349,3 +360,13 @@ export function Thumbnail({
     </>
   )
 }
+
+// PG.11 — memoise to skip re-renders when only sibling rows change.
+// At page size 250 with virtualization, J/K navigation re-renders ~12
+// rows × 2 thumbs = 24 Thumbnail evaluations per keystroke; the
+// component does Cloudinary URL parsing + hover-timer plumbing on
+// every mount. Default shallow compare is enough because every
+// caller passes string / number primitives (src, photoCount, alt,
+// title) and stable callback refs (handleThumbClick + handleThumbUpload
+// are both useCallback-wrapped in GridView).
+export const Thumbnail = memo(ThumbnailImpl)
