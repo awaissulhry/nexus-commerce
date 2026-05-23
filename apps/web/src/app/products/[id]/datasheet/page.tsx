@@ -43,6 +43,7 @@ import PricingTab from './PricingTab'
 import TranslationsTab from './TranslationsTab'
 import CompliancePerMarketTab from './CompliancePerMarketTab'
 import ImagesTab from './ImagesTab'
+import HistoryTab from './HistoryTab'
 
 export const dynamic = 'force-dynamic'
 
@@ -232,6 +233,8 @@ export default async function ProductDatasheetHubPage({
           />
         ) : tab === 'images' ? (
           <ImagesTab productId={product.id} locale={locale} t={t} />
+        ) : tab === 'history' ? (
+          <HistoryTab productId={product.id} locale={locale} t={t} />
         ) : (
           <TabStub tab={tab} t={t} />
         )}
