@@ -75,7 +75,11 @@ import { BulkActionBar } from './_components/BulkActionBar'
 import { SavedViewsButton } from './_components/SavedViewsButton'
 import { Pagination } from './_components/Pagination'
 import { MobileProductList } from './_components/MobileProductList'
-import { ColumnPickerMenu } from './_components/ColumnPickerMenu'
+import {
+  PreferencesModal,
+  type ProductNameDisplay,
+  type PreferencesValue,
+} from './_components/PreferencesModal'
 import { LensPickerMenu } from './_components/LensPickerMenu'
 import { TagEditor } from './_components/TagEditor'
 import { VirtualizedGrid } from './_components/GridView'
@@ -373,6 +377,39 @@ export default function ProductsWorkspace() {
       return 'comfortable'
     }
   })
+  // PG.5 — new persisted preferences from the Preferences modal:
+  //   stickyFirstColumn / stickyLastColumn — settings only in PG.5;
+  //     PG.6 wires the actual position:sticky behavior.
+  //   productNameDisplay — 'full' (default) shows the entire name on
+  //     one block; 'shortened' clamps to 2 lines + hover-to-expand.
+  //     The Product cell reads this via a context/prop in PG.6 polish.
+  // All three persist to localStorage on every change for parity with
+  // visibleColumns + density.
+  const [stickyFirstColumn, setStickyFirstColumn] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return true
+    try { return window.localStorage.getItem('products.stickyFirstColumn') !== 'false' } catch { return true }
+  })
+  const [stickyLastColumn, setStickyLastColumn] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return true
+    try { return window.localStorage.getItem('products.stickyLastColumn') !== 'false' } catch { return true }
+  })
+  const [productNameDisplay, setProductNameDisplay] = useState<ProductNameDisplay>(() => {
+    if (typeof window === 'undefined') return 'full'
+    try {
+      const saved = window.localStorage.getItem('products.nameDisplay')
+      return saved === 'shortened' ? 'shortened' : 'full'
+    } catch { return 'full' }
+  })
+  useEffect(() => {
+    try { window.localStorage.setItem('products.stickyFirstColumn', String(stickyFirstColumn)) } catch {}
+  }, [stickyFirstColumn])
+  useEffect(() => {
+    try { window.localStorage.setItem('products.stickyLastColumn', String(stickyLastColumn)) } catch {}
+  }, [stickyLastColumn])
+  useEffect(() => {
+    try { window.localStorage.setItem('products.nameDisplay', productNameDisplay) } catch {}
+  }, [productNameDisplay])
+
   useEffect(() => {
     try {
       window.localStorage.setItem('products.density', density)
@@ -1771,8 +1808,6 @@ export default function ProductsWorkspace() {
           totalPages={totalPages}
           total={total}
           visibleColumns={visibleColumns}
-          setVisibleColumns={setVisibleColumns}
-          columnPickerOpen={columnPickerOpen}
           setColumnPickerOpen={setColumnPickerOpen}
           sortBy={sortBy}
           onSort={onSort}
@@ -1853,6 +1888,42 @@ export default function ProductsWorkspace() {
           onClose={() => setShortcutsOpen(false)}
         />
       )}
+
+      {/* PG.5 — Preferences modal. Owns page size + sticky toggles +
+          name display + sort order + column visibility/order. The
+          old ColumnPickerMenu popover was replaced; this consolidates
+          every per-table preference in one Amazon-style two-panel
+          dialog. Sticky toggles persist now; PG.6 wires the actual
+          position:sticky behavior on VirtualizedGrid. */}
+      <PreferencesModal
+        open={columnPickerOpen}
+        onClose={() => setColumnPickerOpen(false)}
+        sortFieldOptions={SORT_FIELD_OPTIONS}
+        value={{
+          pageSize,
+          visibleColumns,
+          stickyFirstColumn,
+          stickyLastColumn,
+          productNameDisplay,
+          sortBy: sortBy.replace(/-(asc|desc)$/, ''),
+          sortDir: sortBy.endsWith('-asc') ? 'asc' : 'desc',
+        }}
+        onConfirm={(next: PreferencesValue) => {
+          // Atomic commit: every preference flips at once so the user
+          // sees a single re-render rather than a cascade of partial
+          // updates. URL params (pageSize, sortBy) get pushed via the
+          // existing onPage/onPageSize/onSort callbacks; local state
+          // updates fire directly.
+          if (next.pageSize !== pageSize) onPageSize(next.pageSize)
+          setVisibleColumns(next.visibleColumns)
+          setStickyFirstColumn(next.stickyFirstColumn)
+          setStickyLastColumn(next.stickyLastColumn)
+          setProductNameDisplay(next.productNameDisplay)
+          const nextSortBy =
+            next.sortDir === 'asc' ? `${next.sortBy}-asc` : next.sortBy
+          if (nextSortBy !== sortBy) onSort(nextSortBy)
+        }}
+      />
     </div>
   )
 }
@@ -1960,7 +2031,7 @@ function LensTabs({
 function GridLens(props: any) {
   const {
     products, loading, error, page, pageSize, totalPages, total,
-    visibleColumns, setVisibleColumns, columnPickerOpen, setColumnPickerOpen,
+    visibleColumns, setColumnPickerOpen,
     sortBy, onSort, selected, setSelected, onRowToggle, focusedRowId, onPage, onPageSize, onTagEdit, onChanged,
     // Expand-on-chevron — see ProductsWorkspace for state ownership.
     expandedParents,
@@ -1983,8 +2054,6 @@ function GridLens(props: any) {
     totalPages: number
     total: number
     visibleColumns: string[]
-    setVisibleColumns: (cols: string[]) => void
-    columnPickerOpen: boolean
     setColumnPickerOpen: (open: boolean) => void
     sortBy: string
     onSort: (key: string) => void
@@ -2204,12 +2273,9 @@ function GridLens(props: any) {
             )
           })}
         </div>
-        <ColumnPickerTrigger
-          open={columnPickerOpen}
-          setOpen={setColumnPickerOpen}
+        <PreferencesTrigger
           count={visibleColumns.length}
-          visible={visibleColumns}
-          setVisible={setVisibleColumns}
+          onOpen={() => setColumnPickerOpen(true)}
         />
       </div>
 
@@ -2521,40 +2587,28 @@ function AddSortButton({
   )
 }
 
-function ColumnPickerTrigger({
-  open,
-  setOpen,
+// PG.5 — Lightweight trigger for the new Preferences modal. The modal
+// itself lives at the workspace root (mounted near the other dialogs)
+// so the trigger only needs to fire onOpen; modal owns close + state.
+// Replaces the old ColumnPickerTrigger + ColumnPickerMenu popover.
+function PreferencesTrigger({
   count,
-  visible,
-  setVisible,
+  onOpen,
 }: {
-  open: boolean
-  setOpen: (v: boolean) => void
   count: number
-  visible: string[]
-  setVisible: (v: string[]) => void
+  onOpen: () => void
 }) {
-  const btnRef = useRef<HTMLButtonElement>(null)
+  const { t } = useTranslations()
   return (
-    <div className="relative">
-      <Button
-        ref={btnRef}
-        size="sm"
-        variant="secondary"
-        onClick={() => setOpen(!open)}
-        icon={<Settings2 size={12} />}
-      >
-        Columns ({count})
-      </Button>
-      {open && (
-        <ColumnPickerMenu
-          visible={visible}
-          setVisible={setVisible}
-          onClose={() => setOpen(false)}
-          anchorRef={btnRef}
-        />
-      )}
-    </div>
+    <Button
+      size="sm"
+      variant="secondary"
+      onClick={onOpen}
+      icon={<Settings2 size={12} />}
+      aria-haspopup="dialog"
+    >
+      {t('products.preferences.trigger')} ({count})
+    </Button>
   )
 }
 
