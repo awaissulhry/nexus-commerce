@@ -195,6 +195,7 @@ import {
   deleteTemplate as deleteFnskuTemplate,
 } from '../services/fnsku-template.service.js'
 import { streamFnskuLabelPdf } from '../services/fnsku-label-pdf.service.js'
+import { renderFnskuLabelsZpl } from '../services/fnsku-label-zpl.service.js'
 import {
   publishInboundEvent,
   subscribeInboundEvents,
@@ -11328,6 +11329,28 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
       await deleteFnskuTemplate(id)
       return reply.code(204).send()
     } catch (err: any) {
+      return reply.code(500).send({ error: err?.message ?? String(err) })
+    }
+  })
+
+  fastify.post('/fulfillment/fnsku/zpl', async (request, reply) => {
+    try {
+      const { items, template, dpi } = request.body as {
+        items: any[]
+        template: any
+        dpi?: 203 | 300
+      }
+      if (!items?.length) return reply.code(400).send({ error: 'items[] required' })
+      const zpl  = renderFnskuLabelsZpl(items, template, dpi ?? 203)
+      const datePart = new Date().toISOString().slice(0, 10)
+      const filename = `fnsku-${datePart}.zpl`
+      reply
+        .header('Content-Type', 'text/plain; charset=utf-8')
+        .header('Content-Disposition', `attachment; filename="${filename}"`)
+        .header('Cache-Control', 'no-store')
+      return reply.send(zpl)
+    } catch (err: any) {
+      fastify.log.error({ err }, '[fnsku/zpl] failed')
       return reply.code(500).send({ error: err?.message ?? String(err) })
     }
   })

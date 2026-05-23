@@ -446,6 +446,8 @@ export function TemplateSidebar({ template, onChange, savedTemplates, activeTemp
             onChange={v => patch({ sheetMarginMm: v })} />
           <SliderRow label="Label gap" value={template.sheetGapMm ?? 2} min={0} max={10} step={0.5} unit="mm"
             onChange={v => patch({ sheetGapMm: v })} />
+          <Checkbox label="Crop marks" checked={template.showCropMarks ?? false} onChange={v => patch({ showCropMarks: v })} />
+          <p className="text-[10px] text-slate-400 ml-5 -mt-1">Tiny corner ticks for guillotine-cut alignment (A4 only).</p>
         </Section>
 
         {/* ── Logo URL ────────────────────────────── */}

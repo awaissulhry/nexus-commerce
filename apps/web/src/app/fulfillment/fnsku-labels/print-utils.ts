@@ -210,3 +210,30 @@ ${labelsHtml}
 </body>
 </html>`
 }
+
+/**
+ * Build a multi-label SVG. Reuses the same renderLabelHtml output wrapped in
+ * an SVG `<foreignObject>` so the layout matches the print HTML byte-for-byte.
+ *
+ * Labels stack vertically with a small gap. Modern browsers render this
+ * directly; most SVG editors (Inkscape, Affinity Designer) handle the
+ * foreignObject layer for vector export. Illustrator's foreignObject support
+ * is limited — if a designer needs pure-vector output, use the PDF export
+ * and convert via Acrobat.
+ */
+export function buildLabelsSvg(items: LabelItem[], template: TemplateConfig): string {
+  const { widthMm, heightMm } = template.labelSize
+  const gapMm  = 5
+  const totalH = items.length > 0 ? items.length * heightMm + (items.length - 1) * gapMm : heightMm
+  const inner  = items.map(item =>
+    `<div style="margin-bottom:${gapMm}mm;">${renderLabelHtml(item, template)}</div>`
+  ).join('')
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="${widthMm}mm" height="${totalH}mm" viewBox="0 0 ${widthMm} ${totalH}">
+  <foreignObject x="0" y="0" width="${widthMm}" height="${totalH}">
+    <div xmlns="http://www.w3.org/1999/xhtml" style="font-family:Helvetica,Arial,sans-serif;background:white;">
+      ${inner}
+    </div>
+  </foreignObject>
+</svg>`
+}

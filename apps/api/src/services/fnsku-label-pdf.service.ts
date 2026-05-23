@@ -57,6 +57,7 @@ interface TemplateConfig {
   sheetCols?: number
   sheetMarginMm?: number
   sheetGapMm?: number
+  showCropMarks?: boolean
   rows: TemplateRow[]
 }
 
@@ -600,6 +601,32 @@ async function drawLabel(
   doc.restore()
 }
 
+/**
+ * Draw 4 corner registration ticks just outside the label boundary so an
+ * operator can align a guillotine cut. Ticks are 4mm long, 0.2pt line weight,
+ * neutral grey — visible enough to align but won't bleed onto the label.
+ */
+function drawCropMarks(doc: InstanceType<typeof PDFDocument>, xPt: number, yPt: number, wPt: number, hPt: number): void {
+  const len  = mm(4)
+  const gap  = mm(0.5)  // small offset from label edge so ticks don't print on the label
+  const grey = '#999999'
+  doc.save()
+  doc.lineWidth(0.2).strokeColor(grey)
+  // Top-left
+  doc.moveTo(xPt - gap, yPt - gap).lineTo(xPt - gap - len, yPt - gap).stroke()
+  doc.moveTo(xPt - gap, yPt - gap).lineTo(xPt - gap, yPt - gap - len).stroke()
+  // Top-right
+  doc.moveTo(xPt + wPt + gap, yPt - gap).lineTo(xPt + wPt + gap + len, yPt - gap).stroke()
+  doc.moveTo(xPt + wPt + gap, yPt - gap).lineTo(xPt + wPt + gap, yPt - gap - len).stroke()
+  // Bottom-left
+  doc.moveTo(xPt - gap, yPt + hPt + gap).lineTo(xPt - gap - len, yPt + hPt + gap).stroke()
+  doc.moveTo(xPt - gap, yPt + hPt + gap).lineTo(xPt - gap, yPt + hPt + gap + len).stroke()
+  // Bottom-right
+  doc.moveTo(xPt + wPt + gap, yPt + hPt + gap).lineTo(xPt + wPt + gap + len, yPt + hPt + gap).stroke()
+  doc.moveTo(xPt + wPt + gap, yPt + hPt + gap).lineTo(xPt + wPt + gap, yPt + hPt + gap + len).stroke()
+  doc.restore()
+}
+
 // ── Sheet layout helpers ──────────────────────────────────────────────────────
 
 export interface SheetLayout {
@@ -671,11 +698,13 @@ export function streamFnskuLabelPdf(
         const gapPt    = mm(gapMm)
         const effWPt   = mm(effectiveLabelW)
         let col = 0, row = 0, pageOpen = false
+        const cropMarks = template.showCropMarks === true
         for (const item of items) {
           if (!pageOpen) { doc.addPage({ size: 'A4', margin: 0 }); pageOpen = true }
           const xPt = marginPt + col * (effWPt + gapPt)
           const yPt = marginPt + row * (hPt    + gapPt)
           await drawLabel(doc, xPt, yPt, effWPt, hPt, item, template)
+          if (cropMarks) drawCropMarks(doc, xPt, yPt, effWPt, hPt)
           col++
           if (col >= cols) { col = 0; row++ }
           if (row >= rows) { col = 0; row = 0; pageOpen = false }

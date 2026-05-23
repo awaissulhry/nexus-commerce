@@ -6,7 +6,7 @@ import { getBackendUrl } from '@/lib/backend-url'
 import { SkuPanel } from './SkuPanel'
 import { LabelPreview } from './LabelPreview'
 import { TemplateSidebar } from './TemplateSidebar'
-import { buildPrintHtml } from './print-utils'
+import { buildPrintHtml, buildLabelsSvg } from './print-utils'
 import { isValidFnskuFormat } from './fnsku-validation'
 import type { LabelItem, TemplateConfig, SavedTemplate } from './types'
 
@@ -311,6 +311,65 @@ export default function FnskuLabelDesigner() {
     const url  = URL.createObjectURL(blob)
     const w    = window.open(url, '_blank', 'noopener')
     if (w) w.addEventListener('load', () => { w.print(); URL.revokeObjectURL(url) }, { once: true })
+  }
+
+  const handleDownloadZpl = async () => {
+    if (items.length === 0) return
+    if (totalLabelCount > MAX_LABELS_PER_PDF) {
+      alert(`Cannot export ${totalLabelCount.toLocaleString()} labels as ZPL — limit is ${MAX_LABELS_PER_PDF.toLocaleString()}.`)
+      return
+    }
+    const allLabels: LabelItem[] = []
+    for (const it of items) {
+      for (let i = 0; i < Math.max(1, it.quantity); i++) allLabels.push(it)
+    }
+    try {
+      const res = await fetch(`${getBackendUrl()}/api/fulfillment/fnsku/zpl`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items: allLabels, template, dpi: 203 }),
+      })
+      if (!res.ok) throw new Error(await res.text())
+      const text = await res.text()
+      const blob = new Blob([text], { type: 'text/plain;charset=utf-8' })
+      const url  = URL.createObjectURL(blob)
+      const a    = document.createElement('a')
+      a.href     = url
+      const datePart = new Date().toISOString().slice(0, 10)
+      const shipPart = shipmentContext
+        ? `shipment-${(shipmentContext.reference ?? shipmentContext.id).replace(/[^\w-]/g, '_')}-`
+        : ''
+      a.download = `fnsku-${shipPart}${datePart}-203dpi.zpl`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch (err: any) {
+      alert(`ZPL export failed: ${err?.message ?? String(err)}`)
+    }
+  }
+
+  const handleDownloadSvg = () => {
+    if (items.length === 0) return
+    if (totalLabelCount > MAX_LABELS_PER_PDF) {
+      alert(`Cannot export ${totalLabelCount.toLocaleString()} labels as SVG — limit is ${MAX_LABELS_PER_PDF.toLocaleString()}.`)
+      return
+    }
+    // Expand quantities (one row per physical label, matching PDF behavior).
+    const allLabels: LabelItem[] = []
+    for (const it of items) {
+      for (let i = 0; i < Math.max(1, it.quantity); i++) allLabels.push(it)
+    }
+    const svg  = buildLabelsSvg(allLabels, template)
+    const blob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' })
+    const url  = URL.createObjectURL(blob)
+    const a    = document.createElement('a')
+    a.href     = url
+    const datePart = new Date().toISOString().slice(0, 10)
+    const shipPart = shipmentContext
+      ? `shipment-${(shipmentContext.reference ?? shipmentContext.id).replace(/[^\w-]/g, '_')}-`
+      : ''
+    a.download = `fnsku-${shipPart}${datePart}.svg`
+    a.click()
+    URL.revokeObjectURL(url)
   }
 
   const handleDownloadPdf = async (mode: 'label' | 'a4') => {
@@ -632,6 +691,22 @@ export default function FnskuLabelDesigner() {
           >
             {pdfLoading === 'a4' ? <Loader2 size={13} className="animate-spin" /> : <FileDown size={13} />}
             PDF (A4)
+          </button>
+          <button
+            onClick={handleDownloadSvg}
+            disabled={items.length === 0 || pdfLoading !== null}
+            title="Vector SVG — useful for designers / outsourced print. Modern editors handle the embedded HTML layer."
+            className="inline-flex items-center gap-1.5 h-8 px-3 rounded border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 text-sm hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <FileDown size={13} /> SVG
+          </button>
+          <button
+            onClick={handleDownloadZpl}
+            disabled={items.length === 0 || pdfLoading !== null}
+            title="Zebra ZPL II for direct thermal printer drop — no rasterization, printer handles bars + glyphs. 203 dpi."
+            className="inline-flex items-center gap-1.5 h-8 px-3 rounded border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 text-sm hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <FileDown size={13} /> ZPL
           </button>
           {pdfLoading !== null && pdfBytesReceived > 0 && (
             <span className="text-[11px] text-slate-500 dark:text-slate-400 tabular-nums" title="Bytes received from streaming PDF render">

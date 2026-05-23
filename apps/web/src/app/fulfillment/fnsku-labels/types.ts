@@ -63,6 +63,7 @@ export interface TemplateConfig {
   sheetCols?: number        // override auto-calculated columns (blank = auto)
   sheetMarginMm?: number    // sheet edge margin mm (default 5)
   sheetGapMm?: number       // gap between labels mm (default 2)
+  showCropMarks?: boolean   // draw registration ticks at each label corner for cutting (A4 only)
 
   // Field rows
   rows: TemplateRow[]
