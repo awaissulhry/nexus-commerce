@@ -38,6 +38,7 @@ import { generateLifestyleImage, type ImagenAspectRatio } from '../services/ai/i
 import { applyImagesToProducts } from '../services/images/bulk-apply.service.js'
 import {
   NEAR_DUP_HAMMING_THRESHOLD,
+  aHashBuffer,
   hammingHex,
   sha256Buffer,
 } from '../services/images/image-hash.service.js'
@@ -136,20 +137,25 @@ const productImagesCrudRoutes: FastifyPluginAsync = async (fastify) => {
       // original sortOrder; a no-op upload shouldn't reshuffle.
       const existing = await prisma.productImage.count({ where: { productId: id } })
 
-      const cloudResult = await uploadBufferToCloudinary(buf, {
-        folder: `product-images/${id}`,
-        phash: true,
-      })
+      // IE.2 — Compute the perceptual hash locally (sharp aHash) BEFORE
+      // Cloudinary so a near-dup miss short-circuits the upload. Local
+      // hashing also keeps the algorithm uniform with the IE.2 backfill,
+      // which runs the same function on Amazon-synced rows that never
+      // touched Cloudinary. Fail-open: a sharp decode error logs and
+      // proceeds with perceptualHash=null rather than blocking upload.
+      let perceptualHash: string | null = null
+      try {
+        perceptualHash = await aHashBuffer(buf)
+      } catch (e) {
+        req.log.warn({ err: e, productId: id }, 'aHash failed; proceeding without pHash')
+      }
 
-      const perceptualHash = cloudResult.perceptualHash ?? null
-
-      // IE.1.3 — Near-duplicate gate. Cloudinary returned a pHash;
-      // scan existing rows on this product and surface the closest
-      // match within the Hamming threshold. The FE shows a "looks
-      // similar to this one — use existing or upload anyway?" modal,
-      // and the operator can re-submit with ?force=true to bypass.
-      // Bypass also undoes the just-uploaded asset to keep Cloudinary
-      // tidy on a "use existing" decision.
+      // IE.1.3 — Near-duplicate gate. We now have a pHash; scan existing
+      // rows on this product and surface the closest match within the
+      // Hamming threshold. The FE shows a "looks similar to this one —
+      // use existing or upload anyway?" modal, and the operator can
+      // re-submit with ?force=true to bypass. Done BEFORE the Cloudinary
+      // upload so a "use existing" decision doesn't waste an upload.
       if (perceptualHash && !force) {
         const candidates = await prisma.productImage.findMany({
           where: { productId: id, perceptualHash: { not: null } },
@@ -181,12 +187,8 @@ const productImagesCrudRoutes: FastifyPluginAsync = async (fastify) => {
           }
         }
         if (best && bestDistance <= NEAR_DUP_HAMMING_THRESHOLD) {
-          // Roll back the Cloudinary asset — operator hasn't committed
-          // to keeping it yet. Fire-and-forget so the 409 response
-          // doesn't wait on Cloudinary's delete RTT.
-          if (cloudResult.publicId) {
-            deleteFromCloudinary(cloudResult.publicId).catch(() => {/* orphan; manual gc later */})
-          }
+          // No Cloudinary asset to roll back — we now hash BEFORE
+          // upload, so the 409 path never spent any Cloudinary cost.
           return reply.status(409).send({
             error: 'NEAR_DUPLICATE',
             hammingDistance: bestDistance,
@@ -195,6 +197,11 @@ const productImagesCrudRoutes: FastifyPluginAsync = async (fastify) => {
           })
         }
       }
+
+      // Past both dedup checks — commit the bytes to Cloudinary.
+      const cloudResult = await uploadBufferToCloudinary(buf, {
+        folder: `product-images/${id}`,
+      })
 
       const image = await prisma.productImage.create({
         data: {

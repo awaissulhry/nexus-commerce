@@ -13,14 +13,16 @@
  *   • NEAR_DUP threshold matches the value the route relies on
  */
 
+import sharp from 'sharp'
 import {
   NEAR_DUP_HAMMING_THRESHOLD,
+  aHashBuffer,
   hammingHex,
   sha256Buffer,
 } from './image-hash.service.js'
 
-const tests: Array<{ name: string; fn: () => void }> = []
-function test(name: string, fn: () => void) { tests.push({ name, fn }) }
+const tests: Array<{ name: string; fn: () => void | Promise<void> }> = []
+function test(name: string, fn: () => void | Promise<void>) { tests.push({ name, fn }) }
 function assert(cond: unknown, msg = 'assertion failed'): asserts cond {
   if (!cond) throw new Error(msg)
 }
@@ -88,11 +90,88 @@ test('NEAR_DUP_HAMMING_THRESHOLD matches the route expectation', () => {
   assertEq(NEAR_DUP_HAMMING_THRESHOLD, 6)
 })
 
+test('aHashBuffer is deterministic on the same buffer', async () => {
+  // Build a tiny synthetic image: 16×16 PNG with a gradient.
+  const buf = await sharp({
+    create: {
+      width: 16,
+      height: 16,
+      channels: 3,
+      background: { r: 128, g: 128, b: 128 },
+    },
+  }).png().toBuffer()
+  const a = await aHashBuffer(buf)
+  const b = await aHashBuffer(buf)
+  assertEq(a, b)
+  assertEq(a.length, 16, 'aHash must be 16 hex chars (64 bits)')
+})
+
+test('aHashBuffer detects same image at different resolutions', async () => {
+  // The Amazon-sync duplication shape: identical content rendered at
+  // 256, 128, and 32 px. aHash must give near-identical fingerprints
+  // (Hamming ≤ threshold) so the IE.2 collapse can group them.
+  const source = await sharp({
+    create: { width: 256, height: 256, channels: 3, background: { r: 80, g: 80, b: 80 } },
+  })
+    // Add a darker top-left quadrant so the gradient survives downscale.
+    .composite([{
+      input: await sharp({
+        create: { width: 128, height: 128, channels: 3, background: { r: 0, g: 0, b: 0 } },
+      }).png().toBuffer(),
+      top: 0,
+      left: 0,
+    }])
+    .png()
+    .toBuffer()
+  const small = await sharp(source).resize(128, 128).png().toBuffer()
+  const tiny = await sharp(source).resize(32, 32).png().toBuffer()
+  const h256 = await aHashBuffer(source)
+  const h128 = await aHashBuffer(small)
+  const h32 = await aHashBuffer(tiny)
+  // 256→128 should be near-zero distance (downscale preserves the
+  // mean-threshold pattern almost exactly).
+  const d128 = hammingHex(h256, h128)
+  const d32 = hammingHex(h256, h32)
+  assert(d128 <= NEAR_DUP_HAMMING_THRESHOLD, `256→128 distance ${d128} must be ≤ ${NEAR_DUP_HAMMING_THRESHOLD}`)
+  assert(d32 <= NEAR_DUP_HAMMING_THRESHOLD, `256→32 distance ${d32} must be ≤ ${NEAR_DUP_HAMMING_THRESHOLD}`)
+})
+
+test('aHashBuffer differs for visually different images', async () => {
+  // Inverse contrast pattern. The mean-threshold flip means every
+  // bit should toggle → distance ≈ 64.
+  const dark = await sharp({
+    create: { width: 64, height: 64, channels: 3, background: { r: 240, g: 240, b: 240 } },
+  })
+    .composite([{
+      input: await sharp({
+        create: { width: 32, height: 32, channels: 3, background: { r: 0, g: 0, b: 0 } },
+      }).png().toBuffer(),
+      top: 0,
+      left: 0,
+    }])
+    .png()
+    .toBuffer()
+  const light = await sharp({
+    create: { width: 64, height: 64, channels: 3, background: { r: 0, g: 0, b: 0 } },
+  })
+    .composite([{
+      input: await sharp({
+        create: { width: 32, height: 32, channels: 3, background: { r: 240, g: 240, b: 240 } },
+      }).png().toBuffer(),
+      top: 0,
+      left: 0,
+    }])
+    .png()
+    .toBuffer()
+  const d = hammingHex(await aHashBuffer(dark), await aHashBuffer(light))
+  assert(d > NEAR_DUP_HAMMING_THRESHOLD, `distinct images should differ by > ${NEAR_DUP_HAMMING_THRESHOLD}, got ${d}`)
+})
+
 let passed = 0
 let failed = 0
 for (const t of tests) {
   try {
-    t.fn()
+    await t.fn()
     console.log(`  ✓ ${t.name}`)
     passed++
   } catch (e: any) {

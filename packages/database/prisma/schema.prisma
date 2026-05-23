@@ -1876,13 +1876,32 @@ model ProductImage {
   aiOffCenterScore     Float?
   aiNotes              Json?
 
+  /// PG.4 — Operator-curated "hero image" flag. When true, this row
+  /// wins the /products catalog thumbnail picker over MAIN type +
+  /// sortOrder. Exactly zero or one row per product should be true at
+  /// any time; the PATCH /api/products/:id/images/:imageId/primary
+  /// endpoint enforces single-selection inside a transaction. The
+  /// partial unique index below makes the contract a DB-level
+  /// invariant — concurrent operator sessions can't both win.
+  isPrimary Boolean @default(false)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([productId, sortOrder])
   @@index([derivedFromImageId])
-  @@index([productId, contentHash])
+  /// IE.2 — Enforces the IE.1 dedup contract at the DB level once
+  /// the backfill + collapse pass has removed pre-existing duplicates.
+  /// Postgres treats NULL contentHash values as distinct, so legacy
+  /// rows that never got backfilled don't trip the constraint.
+  @@unique([productId, contentHash])
   @@index([productId, perceptualHash])
+  /// PG.4 — Partial unique index implemented as raw SQL in the
+  /// 20260523_pg4_product_image_is_primary migration (Prisma's
+  /// @@unique doesn't take a WHERE clause). Indexed via @@index for
+  /// the FE's "find current primary" lookup. The DB-level partial
+  /// unique is what actually enforces at-most-one per product.
+  @@index([productId, isPrimary])
 }
 
 // (Phase 31 Image model removed 2026-05-02 — see RESTORATION_NOTES.
