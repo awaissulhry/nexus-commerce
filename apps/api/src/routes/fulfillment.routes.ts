@@ -5901,6 +5901,8 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
         warehouseId?: string | null
         expectedDeliveryDate?: string | null
         notes?: string | null
+        // PO-Plus.8 — drop-ship override. Pass null to clear.
+        shipToAddress?: Record<string, unknown> | null
       }
       if (typeof body.version !== 'number') {
         return reply.code(400).send({ error: 'version required for optimistic lock' })
@@ -5926,6 +5928,12 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
           : null
       }
       if (body.notes !== undefined) data.notes = body.notes
+      if (body.shipToAddress !== undefined) {
+        data.shipToAddress =
+          body.shipToAddress && typeof body.shipToAddress === 'object'
+            ? (body.shipToAddress as Prisma.InputJsonValue)
+            : Prisma.JsonNull
+      }
 
       const result = await prisma.purchaseOrder.updateMany({
         where: { id, version: body.version },
@@ -6080,6 +6088,29 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
       return { id, trail }
     } catch (err: any) {
       fastify.log.error({ err }, '[purchase-orders/:id/audit] failed')
+      return reply.code(500).send({ error: err?.message ?? String(err) })
+    }
+  })
+
+  // PO-Plus.8 — Persisted event log. Reads PoEventLog rows for one
+  // PO ordered by createdAt asc. Useful for forensics + compliance
+  // ("who acked the revision and when") long after the in-process
+  // SSE bus has forgotten.
+  fastify.get('/fulfillment/purchase-orders/:id/event-log', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const q = request.query as { limit?: string; type?: string }
+      const take = Math.min(500, Math.max(1, Number(q.limit) || 100))
+      const where: any = { poId: id }
+      if (q.type) where.type = q.type
+      const rows = await prisma.poEventLog.findMany({
+        where,
+        orderBy: { createdAt: 'asc' },
+        take,
+      })
+      return { id, events: rows }
+    } catch (err: any) {
+      fastify.log.error({ err }, '[purchase-orders/:id/event-log] failed')
       return reply.code(500).send({ error: err?.message ?? String(err) })
     }
   })
@@ -7350,6 +7381,10 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
         // are unambiguous. Default EUR matches the Supplier model's
         // defaultCurrency default.
         currencyCode?: string
+        // PO-Plus.8 — optional drop-ship address. JSON blob passed
+        // through verbatim; the factory PDF renders it as the
+        // "Ship to" block when present (instead of the warehouse).
+        shipToAddress?: Record<string, unknown> | null
         items?: Array<{
           productId?: string
           sku: string
@@ -7376,6 +7411,10 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
           notes: body.notes ?? null,
           totalCents,
           currencyCode: body.currencyCode?.toUpperCase() || 'EUR',
+          shipToAddress:
+            body.shipToAddress && typeof body.shipToAddress === 'object'
+              ? (body.shipToAddress as Prisma.InputJsonValue)
+              : Prisma.JsonNull,
           items: {
             create: items.map((it, idx) => ({
               productId: it.productId ?? null,

@@ -131,6 +131,17 @@ interface POInboundShipment {
   trackingNumber: string | null
 }
 
+interface POShipToAddress {
+  contactName?: string | null
+  company?: string | null
+  addressLines?: string[]
+  city?: string | null
+  postalCode?: string | null
+  country?: string | null
+  phone?: string | null
+  instructions?: string | null
+}
+
 interface POFiscal {
   piva: string
   vatScheme: string | null
@@ -168,6 +179,8 @@ interface PODetail {
   deletedAt: string | null
   // PO.12 — fiscal block, null when brand.piva is unset.
   fiscal: POFiscal | null
+  // PO-Plus.8 — drop-ship override. Null = ship to the linked warehouse.
+  shipToAddress: POShipToAddress | null
   items: POItem[]
   inboundShipments: POInboundShipment[]
   attachments: POAttachment[]
@@ -292,6 +305,10 @@ export default function PurchaseOrderDetailClient({ id }: { id: string }) {
   // refresh.
   useInboundEvents()
   const { connected: poStreamConnected, lastEventAt: poStreamLastEventAt } = usePoEvents()
+
+  // PO-Plus.8 — shortcut sheet visibility (the keydown effect lives
+  // below after handleTransition is in scope).
+  const [showShortcuts, setShowShortcuts] = useState(false)
   useInvalidationChannel(
     [
       'inbound.received',
@@ -381,6 +398,50 @@ export default function PurchaseOrderDetailClient({ id }: { id: string }) {
     },
     [id, refresh],
   )
+
+  // PO-Plus.8 — keyboard shortcuts. R/A/S/K trigger the state-machine
+  // transition that matches the current PO status; ? toggles the
+  // shortcut sheet; / jumps to the comments tab. Disabled while focus
+  // is in an input/textarea/contenteditable so operators editing line
+  // items don't accidentally approve a PO.
+  useEffect(() => {
+    if (!po) return
+    const isTypingTarget = (target: EventTarget | null) => {
+      if (!(target instanceof HTMLElement)) return false
+      const tag = target.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true
+      if (target.isContentEditable) return true
+      return false
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey || e.altKey) return
+      if (isTypingTarget(e.target)) return
+      if (e.key === '?') {
+        e.preventDefault()
+        setShowShortcuts((v) => !v)
+        return
+      }
+      const k = e.key.toLowerCase()
+      if (k === 'a' && po.status === 'REVIEW') {
+        e.preventDefault()
+        handleTransition('approve')
+      } else if (k === 's' && po.status === 'APPROVED') {
+        e.preventDefault()
+        handleTransition('send')
+      } else if (k === 'r' && po.status === 'DRAFT') {
+        e.preventDefault()
+        handleTransition('submit-for-review')
+      } else if (k === 'k' && po.status === 'SUBMITTED') {
+        e.preventDefault()
+        handleTransition('acknowledge')
+      } else if (e.key === '/') {
+        e.preventDefault()
+        setTab('comments')
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [po, handleTransition, setTab])
 
   const submitSaveAsTemplate = useCallback(async () => {
     const name = templateName.trim()
@@ -776,8 +837,40 @@ export default function PurchaseOrderDetailClient({ id }: { id: string }) {
               </a>
             )}
           </DetailField>
-          <DetailField label="Warehouse">
-            {po.warehouse?.code ? (
+          <DetailField label={po.shipToAddress ? 'Ship to (drop-ship)' : 'Warehouse'}>
+            {po.shipToAddress ? (
+              <div className="text-slate-900 dark:text-slate-100">
+                {po.shipToAddress.contactName && (
+                  <div>{po.shipToAddress.contactName}</div>
+                )}
+                {po.shipToAddress.company && (
+                  <div className="text-sm text-slate-700 dark:text-slate-300">
+                    {po.shipToAddress.company}
+                  </div>
+                )}
+                {(po.shipToAddress.addressLines ?? []).map((line, i) => (
+                  <div key={i} className="text-sm text-slate-600 dark:text-slate-400">
+                    {line}
+                  </div>
+                ))}
+                {(po.shipToAddress.city || po.shipToAddress.postalCode || po.shipToAddress.country) && (
+                  <div className="text-sm text-slate-600 dark:text-slate-400">
+                    {[
+                      po.shipToAddress.postalCode,
+                      po.shipToAddress.city,
+                      po.shipToAddress.country,
+                    ]
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </div>
+                )}
+                {po.shipToAddress.instructions && (
+                  <div className="text-xs text-slate-500 dark:text-slate-400 italic mt-1">
+                    {po.shipToAddress.instructions}
+                  </div>
+                )}
+              </div>
+            ) : po.warehouse?.code ? (
               <span className="text-slate-900 dark:text-slate-100">
                 {po.warehouse.code}
                 {po.warehouse.name ? ` · ${po.warehouse.name}` : ''}
@@ -1001,11 +1094,66 @@ export default function PurchaseOrderDetailClient({ id }: { id: string }) {
           onClose={() => setScorecardSupplierId(null)}
         />
       )}
+
+      {/* PO-Plus.8 — keyboard shortcut sheet. Toggled with `?`. */}
+      {showShortcuts && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 po-detail-no-print"
+          role="dialog"
+          aria-modal="true"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowShortcuts(false)
+          }}
+        >
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl w-full max-w-md p-5">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+                Keyboard shortcuts
+              </h2>
+              <button
+                type="button"
+                onClick={() => setShowShortcuts(false)}
+                className="h-8 w-8 inline-flex items-center justify-center rounded text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
+                aria-label="Close"
+              >
+                ✕
+              </button>
+            </div>
+            <table className="w-full text-base">
+              <tbody>
+                <ShortcutRow keys="R" label="Submit for review (DRAFT)" />
+                <ShortcutRow keys="A" label="Approve (REVIEW)" />
+                <ShortcutRow keys="S" label="Send to supplier (APPROVED)" />
+                <ShortcutRow keys="K" label="Mark acknowledged (SUBMITTED)" />
+                <ShortcutRow keys="/" label="Jump to comments" />
+                <ShortcutRow keys="?" label="Toggle this sheet" />
+                <ShortcutRow keys="Esc" label="Close any open modal" />
+              </tbody>
+            </table>
+            <div className="text-xs text-slate-500 dark:text-slate-400 mt-3">
+              Shortcuts are disabled while typing in an input.
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
 
 // ── Subcomponents ──────────────────────────────────────────────────
+
+function ShortcutRow({ keys, label }: { keys: string; label: string }) {
+  return (
+    <tr className="border-b border-slate-100 dark:border-slate-800 last:border-0">
+      <td className="py-1.5 w-20">
+        <kbd className="px-2 py-0.5 text-sm font-mono bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded">
+          {keys}
+        </kbd>
+      </td>
+      <td className="py-1.5 text-slate-700 dark:text-slate-300">{label}</td>
+    </tr>
+  )
+}
 
 function DetailField({ label, children }: { label: string; children: React.ReactNode }) {
   return (

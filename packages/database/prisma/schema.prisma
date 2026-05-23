@@ -7679,6 +7679,14 @@ model PurchaseOrder {
   approverAckToken     String?   @unique
   approverAckExpiresAt DateTime?
 
+  // PO-Plus.8 — drop-ship override. When set, this PO ships goods
+  // directly from supplier to the address in this JSON blob rather
+  // than to the configured warehouseId. Shape:
+  //   { contactName?, company?, addressLines[], city, postalCode,
+  //     country, phone?, instructions? }
+  // Surfaces on the factory PDF in PO.12 as the "Ship to" block.
+  shipToAddress Json?
+
   supplier         Supplier?           @relation(fields: [supplierId], references: [id])
   warehouse        Warehouse?          @relation(fields: [warehouseId], references: [id])
   items            PurchaseOrderItem[]
@@ -7806,6 +7814,32 @@ model PoComment {
   purchaseOrder PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
 
   @@index([purchaseOrderId, createdAt])
+}
+
+// PO-Plus.8 — Persisted audit log for PO lifecycle events. The in-
+// process po-events.service bus fans out to SSE subscribers but
+// doesn't survive process restarts; PoEventLog mirrors every emit
+// so an operator can grep the full history for forensics, compliance,
+// or "who acked this revision" questions long after the fact.
+//
+// type values match the runtime PoEvent union from po-events.service:
+//   po.created | po.updated | po.transitioned | po.deleted |
+//   po.restored | po.received
+//
+// payload snapshots the full event object as JSON so future fields
+// land without a migration.
+model PoEventLog {
+  id        String   @id @default(cuid())
+  poId      String?
+  poNumber  String?
+  type      String
+  reason    String?
+  payload   Json
+  createdAt DateTime @default(now())
+
+  @@index([poId, createdAt])
+  @@index([type, createdAt])
+  @@index([createdAt])
 }
 
 // PO-Plus.6 — Reusable PO template. "Save as template" on an existing

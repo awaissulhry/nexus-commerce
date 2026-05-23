@@ -161,6 +161,19 @@ export function CreatePoModal({
   const [expectedDate, setExpectedDate] = useState('')
   const [currency, setCurrency] = useState<string>('EUR')
   const [notes, setNotes] = useState('')
+  // PO-Plus.8 — drop-ship override. When toggled on, the rendered
+  // factory PDF lists this address as the destination instead of the
+  // configured warehouse. Stored as JSON on PurchaseOrder.shipToAddress.
+  const [shipToOpen, setShipToOpen] = useState(false)
+  const [shipToContact, setShipToContact] = useState('')
+  const [shipToCompany, setShipToCompany] = useState('')
+  const [shipToLine1, setShipToLine1] = useState('')
+  const [shipToLine2, setShipToLine2] = useState('')
+  const [shipToCity, setShipToCity] = useState('')
+  const [shipToPostalCode, setShipToPostalCode] = useState('')
+  const [shipToCountry, setShipToCountry] = useState('IT')
+  const [shipToPhone, setShipToPhone] = useState('')
+  const [shipToInstructions, setShipToInstructions] = useState('')
 
   // ── Lines ───────────────────────────────────────────────────────
   const [lines, setLines] = useState<DraftLine[]>([newLine()])
@@ -379,6 +392,25 @@ export function CreatePoModal({
     }
     setSubmitting(true)
     try {
+      // PO-Plus.8 — assemble drop-ship payload only when the toggle is
+      // on AND at least one meaningful field is set. The backend
+      // refuses fully-empty objects; nulling out keeps null-vs-{}
+      // semantics clean.
+      const shipToAddress = shipToOpen
+        ? {
+            contactName: shipToContact.trim() || undefined,
+            company: shipToCompany.trim() || undefined,
+            addressLines: [shipToLine1, shipToLine2]
+              .map((s) => s.trim())
+              .filter(Boolean),
+            city: shipToCity.trim() || undefined,
+            postalCode: shipToPostalCode.trim() || undefined,
+            country: shipToCountry.trim().toUpperCase() || undefined,
+            phone: shipToPhone.trim() || undefined,
+            instructions: shipToInstructions.trim() || undefined,
+          }
+        : null
+
       const res = await fetch(`${getBackendUrl()}/api/fulfillment/purchase-orders`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -388,6 +420,7 @@ export function CreatePoModal({
           expectedDeliveryDate: expectedDate || undefined,
           currencyCode: currency || 'EUR',
           notes: notes.trim() || undefined,
+          shipToAddress,
           items: validLines.map((l) => ({
             productId: l.productId ?? undefined,
             sku: l.sku.trim(),
@@ -670,6 +703,112 @@ export function CreatePoModal({
             </div>
           </div>
 
+          {/* PO-Plus.8 — Drop-ship override. Defaults closed; the
+              toggle reveals an inline address form. When committed,
+              the factory PDF lists this address as the destination. */}
+          <div className="border border-slate-200 dark:border-slate-700 rounded">
+            <button
+              type="button"
+              onClick={() => setShipToOpen((v) => !v)}
+              className="w-full px-3 py-2 text-left text-base text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center justify-between"
+            >
+              <span className="inline-flex items-center gap-1.5">
+                <Package className="w-3.5 h-3.5" />
+                {shipToOpen ? 'Drop-ship address' : 'Drop-ship to a different address (optional)'}
+              </span>
+              <span className="text-sm text-slate-500 dark:text-slate-400">
+                {shipToOpen ? 'Hide' : 'Show'}
+              </span>
+            </button>
+            {shipToOpen && (
+              <div className="p-3 border-t border-slate-200 dark:border-slate-700 grid grid-cols-2 gap-2">
+                <ShipToField label="Contact name">
+                  <input
+                    type="text"
+                    value={shipToContact}
+                    onChange={(e) => setShipToContact(e.target.value)}
+                    disabled={submitting}
+                    className="w-full h-9 px-2 text-base border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900"
+                  />
+                </ShipToField>
+                <ShipToField label="Company">
+                  <input
+                    type="text"
+                    value={shipToCompany}
+                    onChange={(e) => setShipToCompany(e.target.value)}
+                    disabled={submitting}
+                    className="w-full h-9 px-2 text-base border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900"
+                  />
+                </ShipToField>
+                <ShipToField label="Address line 1" full>
+                  <input
+                    type="text"
+                    value={shipToLine1}
+                    onChange={(e) => setShipToLine1(e.target.value)}
+                    disabled={submitting}
+                    className="w-full h-9 px-2 text-base border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900"
+                  />
+                </ShipToField>
+                <ShipToField label="Address line 2" full>
+                  <input
+                    type="text"
+                    value={shipToLine2}
+                    onChange={(e) => setShipToLine2(e.target.value)}
+                    disabled={submitting}
+                    className="w-full h-9 px-2 text-base border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900"
+                  />
+                </ShipToField>
+                <ShipToField label="City">
+                  <input
+                    type="text"
+                    value={shipToCity}
+                    onChange={(e) => setShipToCity(e.target.value)}
+                    disabled={submitting}
+                    className="w-full h-9 px-2 text-base border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900"
+                  />
+                </ShipToField>
+                <ShipToField label="Postal code">
+                  <input
+                    type="text"
+                    value={shipToPostalCode}
+                    onChange={(e) => setShipToPostalCode(e.target.value)}
+                    disabled={submitting}
+                    className="w-full h-9 px-2 text-base border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900"
+                  />
+                </ShipToField>
+                <ShipToField label="Country (ISO)">
+                  <input
+                    type="text"
+                    value={shipToCountry}
+                    onChange={(e) => setShipToCountry(e.target.value.toUpperCase())}
+                    maxLength={2}
+                    disabled={submitting}
+                    className="w-full h-9 px-2 text-base font-mono uppercase border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900"
+                  />
+                </ShipToField>
+                <ShipToField label="Phone">
+                  <input
+                    type="text"
+                    value={shipToPhone}
+                    onChange={(e) => setShipToPhone(e.target.value)}
+                    disabled={submitting}
+                    className="w-full h-9 px-2 text-base border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900"
+                  />
+                </ShipToField>
+                <ShipToField label="Delivery instructions" full>
+                  <input
+                    type="text"
+                    value={shipToInstructions}
+                    onChange={(e) => setShipToInstructions(e.target.value)}
+                    disabled={submitting}
+                    placeholder="e.g. Leave with reception"
+                    className="w-full h-9 px-2 text-base border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900"
+                  />
+                </ShipToField>
+              </div>
+            )}
+          </div>
+
           {/* Notes */}
           <div>
             <label className="text-sm font-medium text-slate-700 dark:text-slate-300 block mb-1">
@@ -702,6 +841,25 @@ export function CreatePoModal({
           </Button>
         </div>
       </div>
+    </div>
+  )
+}
+
+// ── Drop-ship address sub-field ────────────────────────────────────
+
+function ShipToField({
+  label,
+  full,
+  children,
+}: {
+  label: string
+  full?: boolean
+  children: React.ReactNode
+}) {
+  return (
+    <div className={full ? 'col-span-2' : ''}>
+      <div className="text-xs text-slate-500 dark:text-slate-400 mb-0.5">{label}</div>
+      {children}
     </div>
   )
 }

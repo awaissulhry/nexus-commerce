@@ -42,6 +42,35 @@ export function publishPoEvent(event: PoEvent): void {
       // A misbehaving listener mustn't break the bus for others.
     }
   }
+  // PO-Plus.8 — persist every non-ping event to PoEventLog so the
+  // audit trail survives process restarts. Fire-and-forget; failures
+  // are logged but never block the in-process listeners (the SSE
+  // pipe is the operator-facing path, the DB row is just forensics).
+  if (event.type !== 'ping') {
+    void persistPoEvent(event).catch((err) => {
+      // eslint-disable-next-line no-console
+      console.warn(
+        `[po-events] PoEventLog persist failed for ${event.type}:`,
+        err instanceof Error ? err.message : String(err),
+      )
+    })
+  }
+}
+
+async function persistPoEvent(event: PoEvent): Promise<void> {
+  // Dynamic import keeps this service runnable without the DB layer
+  // wired (e.g. in unit tests that exercise the bus behavior).
+  const { default: prisma } = await import('../db.js')
+  const anyEvent = event as any
+  await prisma.poEventLog.create({
+    data: {
+      poId: anyEvent.poId ?? null,
+      poNumber: anyEvent.poNumber ?? null,
+      type: event.type,
+      reason: anyEvent.reason ?? null,
+      payload: event as unknown as import('@prisma/client').Prisma.InputJsonValue,
+    },
+  })
 }
 
 export function subscribePoEvents(listener: Listener): () => void {

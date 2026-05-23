@@ -287,6 +287,62 @@ These remain backlog. Each is a meaningful engagement on its own.
 | Per-action authorization                      | PO.18                | Waiting on user-role model                         |
 | Mobile-responsive scanner receive flow        | PO.18                | Desktop-first ops; revisit when receive volume grows |
 
+## PO-Plus engagement (post-series follow-up)
+
+After the original 18-phase PO-series shipped, an 8-phase PO-Plus
+engagement closed out the documented deferred items + the operator-
+spotted attachments gap:
+
+| Phase | Topic                                                  | Commit       |
+| ----- | ------------------------------------------------------ | ------------ |
+| 1     | Attachments upload + viewer (Cloudinary)                | `f7767257`   |
+| 2     | Approver email + `/po/approve/[token]` page             | `71639600`   |
+| 3     | Quick-receive against PO from detail page               | `b1051345`   |
+| 4     | Supplier scorecard drill from rows + identity strip     | `c200ef23`   |
+| 5     | Bulk re-assign supplier + bulk merge POs                | `927dbf3a`   |
+| 6     | Templates + recurring schedules + cron                  | `ce8d5cfd`   |
+| 7     | User-saved named views + push landed cost to catalog    | `705d9591`   |
+| 8     | Shortcuts + ship-to override + persisted event log      | `<this>`     |
+
+### New endpoints (PO-Plus)
+
+| Method | Path                                                              | Purpose                                  |
+| ------ | ----------------------------------------------------------------- | ---------------------------------------- |
+| POST   | `/fulfillment/purchase-orders/:id/attachments`                    | multipart upload to Cloudinary           |
+| PATCH  | `/fulfillment/purchase-orders/:id/attachments/:attachmentId`      | rename / relabel                         |
+| DELETE | `/fulfillment/purchase-orders/:id/attachments/:attachmentId`      | hard-delete                              |
+| GET    | `/po/approve/:token`                                              | approver-side public view                |
+| POST   | `/po/approve/:token/approve` `/decline`                           | one-click approve / decline              |
+| POST   | `/fulfillment/purchase-orders/:id/quick-receive`                  | create + receive shipment in one shot    |
+| POST   | `/fulfillment/purchase-orders/bulk-reassign-supplier`             | DRAFT/REVIEW supplier swap               |
+| POST   | `/fulfillment/purchase-orders/bulk-merge`                         | combine multiple DRAFTs into one         |
+| GET / POST / PATCH / DELETE | `/fulfillment/po-templates(/:id/instantiate?)` | Template CRUD + instantiate          |
+| POST / PATCH / DELETE | `/fulfillment/po-templates/:id/schedules` / `/po-schedules/:id`  | recurring schedule CRUD |
+| POST   | `/fulfillment/purchase-orders/:id/push-landed-cost`               | push landed cost → SupplierProduct       |
+| GET    | `/fulfillment/purchase-orders/:id/event-log`                      | persisted PoEventLog rows for forensics  |
+
+### Shortcuts (PO-Plus.8)
+
+When the detail page has focus and the operator isn't typing in an input:
+
+- `R` — submit DRAFT for review
+- `A` — approve a REVIEW PO
+- `S` — send an APPROVED PO to its supplier
+- `K` — mark a SUBMITTED PO as acknowledged
+- `/` — jump to the Comments tab
+- `?` — toggle the shortcut sheet
+
+### Still deferred after PO-Plus
+
+| Item                                          | Why                                                    |
+| --------------------------------------------- | ------------------------------------------------------ |
+| RFQ pre-PO flow                               | 5–8 phases on its own; low leverage for single-source Xavia |
+| Per-line warehouseId (multi-warehouse split)  | touches edit grid + receive flow + factory PDF; own engagement |
+| DDT / nota di credito                         | needs the supplier-return flow (its own engagement)    |
+| EN↔IT auto-translation                        | operators write in target language today               |
+| Mobile scanner-friendly receive flow          | desktop-first; revisit when warehouse headcount grows  |
+| Per-action authorization                      | waiting on user-roles model across the app             |
+
 ## Environment variables
 
 | Var                                       | Default                             | Used by             |
@@ -301,3 +357,6 @@ These remain backlog. Each is a meaningful engagement on its own.
 | `AI_PROVIDER`                             | `gemini` (or whichever configured)  | PO.17               |
 | `RESEND_API_KEY`                          | unset                               | PO.9 email send     |
 | `NEXUS_EMAIL_FROM`                        | `Xavia <ship@xavia.it>`             | PO.9 default from   |
+| `NEXUS_PO_APPROVER_ACK_TTL_DAYS`          | `14`                                | PO-Plus.2           |
+| `NEXUS_ENABLE_SCHEDULED_PO`               | unset (off)                         | PO-Plus.6 cron      |
+| `CLOUDINARY_CLOUD_NAME` / `_API_KEY` / `_API_SECRET` | unset                    | PO-Plus.1 uploads   |
