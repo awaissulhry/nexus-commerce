@@ -437,12 +437,22 @@ export async function adminRoutes(app: FastifyInstance) {
    * Query param: dryRun=true (default) returns count + sample without
    * deleting. dryRun=false applies.
    */
-  app.post<{ Querystring: { dryRun?: string } }>(
+  app.post<{ Querystring: { dryRun?: string; scope?: string } }>(
     '/admin/sales-drift/delete-empty-order-fts',
     async (request, reply) => {
       try {
         const dryRun = request.query.dryRun !== 'false'
-        const where = { transactionType: 'Order', grossRevenue: 0 }
+        // DA-RT.19 — scope=all deletes every Order-type FinancialTransaction
+        // (default 'empty' = the original €0-only fingerprint). Use 'all'
+        // after a parser fix (DA-RT.19 promotion subtraction) so the
+        // re-backfill recreates rows with the new math. The Order-type
+        // FT rows are fully recoverable from Amazon's SP-API, so the
+        // destructive op is reversible.
+        const scope = request.query.scope === 'all' ? 'all' : 'empty'
+        const where =
+          scope === 'all'
+            ? { transactionType: 'Order' }
+            : { transactionType: 'Order', grossRevenue: 0 }
         if (dryRun) {
           const count = await prisma.financialTransaction.count({ where })
           const sample = await prisma.financialTransaction.findMany({
@@ -450,15 +460,17 @@ export async function adminRoutes(app: FastifyInstance) {
             select: {
               id: true,
               amazonTransactionId: true,
+              grossRevenue: true,
+              amount: true,
               transactionDate: true,
               order: { select: { channelOrderId: true, totalPrice: true } },
             },
-            take: 10,
+            take: 5,
           })
-          return reply.send({ dryRun: true, count, sample })
+          return reply.send({ dryRun: true, scope, count, sample })
         }
         const result = await prisma.financialTransaction.deleteMany({ where })
-        return reply.send({ dryRun: false, deleted: result.count })
+        return reply.send({ dryRun: false, scope, deleted: result.count })
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Unknown error'
         return reply.status(500).send({ error: message })
