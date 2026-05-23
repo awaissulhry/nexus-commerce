@@ -212,6 +212,13 @@ export async function ordersRoutes(app: FastifyInstance) {
       // Order.totalPrice = 0 AND at least one OrderItem has quantity > 0
       // (matches the count query in dashboard.routes /sales-reconciliation).
       const awaitingPrice = q.awaitingPrice === 'true'
+      // PV-RT.5 — abandoned-awaiting mode. After N days (default 60,
+      // NEXUS_AWAITING_PRICE_ABANDONMENT_DAYS overrides) Amazon
+      // realistically won't release OrderTotal. The default awaitingPrice
+      // mode hides these so the chip count stays operationally useful;
+      // operator can explicitly list them via this param to triage with
+      // POST /admin/orders/:id/manual-total.
+      const abandonedAwaitingPrice = q.abandonedAwaitingPrice === 'true'
       // OX.3 — order-type filter. Values map to:
       //   PRIME      → Order.isPrime = true
       //   BUSINESS   → amazonMetadata.IsBusinessOrder = true
@@ -294,16 +301,35 @@ export async function ordersRoutes(app: FastifyInstance) {
           { items: { some: { sku: { contains: search, mode: 'insensitive' } } } },
         ]
       }
-      // PV-RT.3 — awaiting-price drill-through from the reconciliation
-      // banner's "+N awaiting price" chip. Mirrors the count query in
-      // dashboard.routes /sales-reconciliation so the list matches the
-      // banner's reported N. AMAZON-only + EUR because the reconciliation
-      // tile compares EUR sums.
-      if (awaitingPrice) {
+      // PV-RT.3 / PV-RT.5 — awaiting-price drill-through.
+      //
+      // awaitingPrice=true (default): orders where Amazon hasn't released
+      //   OrderTotal AND the order is recent enough to still be
+      //   automated-recoverable (purchaseDate >= now - abandonmentDays).
+      //   These are the orders the banner counts + the operator should
+      //   wait on or back-fill.
+      //
+      // abandonedAwaitingPrice=true: orders that fell off the automated
+      //   recovery curve. Operator triages via POST /admin/orders/:id/
+      //   manual-total or accepts the €0.
+      if (awaitingPrice || abandonedAwaitingPrice) {
         where.channel = 'AMAZON'
         where.currencyCode = 'EUR'
         where.totalPrice = 0
         where.items = { some: { quantity: { gt: 0 } } }
+        const abandonmentDaysRaw = Number(process.env.NEXUS_AWAITING_PRICE_ABANDONMENT_DAYS ?? 60)
+        const abandonmentDays =
+          Number.isFinite(abandonmentDaysRaw) && abandonmentDaysRaw > 0
+            ? Math.trunc(abandonmentDaysRaw)
+            : 60
+        const cutoff = new Date(Date.now() - abandonmentDays * 86_400_000)
+        if (awaitingPrice) {
+          // Recent enough to still be automated-recoverable.
+          where.purchaseDate = { ...(where.purchaseDate ?? {}), gte: cutoff }
+        } else {
+          // abandonedAwaitingPrice — older than the cutoff.
+          where.purchaseDate = { ...(where.purchaseDate ?? {}), lt: cutoff }
+        }
       }
       if (tagIds && tagIds.length) {
         where.tags = { some: { tagId: { in: tagIds } } }
