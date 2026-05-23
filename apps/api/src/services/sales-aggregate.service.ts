@@ -59,8 +59,9 @@ export async function refreshSalesAggregates(
   args: RefreshArgs,
 ): Promise<RefreshResult> {
   const startTime = Date.now()
-  const fromDay = startOfDay(args.from)
-  const toDay = startOfDay(args.to)
+  // DA-RT.2 — TZ-aware day boundaries. See startOfRomeDay note below.
+  const fromDay = startOfRomeDay(args.from)
+  const toDay = startOfRomeDay(args.to)
 
   if (toDay < fromDay) {
     throw new Error(
@@ -81,8 +82,59 @@ export async function refreshSalesAggregates(
     ? '' // unconditional update
     : `WHERE "DailySalesAggregate"."source" IN ('ORDER_ITEM')`
 
+  // DA-RT.2 — two corrections vs the original AR.1 SQL:
+  //
+  // 1. TZ-aware day bucketing. `DATE(timestamptz)` uses UTC, which
+  //    shifts the calendar day by 1–2 hours every day for Europe/Rome
+  //    (CET = UTC+1, CEST = UTC+2). Orders placed late-evening local
+  //    bucket into the NEXT day in UTC. Switch to
+  //    `date_trunc('day', ... AT TIME ZONE 'Europe/Rome')::date` so
+  //    the aggregate's calendar matches operator + Amazon Seller
+  //    Central + the dashboard global-snapshot.
+  //
+  // 2. Order.totalPrice apportionment. The original SQL summed
+  //    `oi.price * oi.quantity` — which returns 0 for the long-tail
+  //    SHIPPED+€0 orders (Amazon-withheld OrderTotal, no OrderItem
+  //    price either). New CTE first establishes per-order quantity
+  //    total, then per item:
+  //      - oi.price > 0          → use oi.price * oi.quantity
+  //      - else o.totalPrice > 0 → apportion totalPrice by qty share
+  //      - else                  → 0 (no estimate at this layer;
+  //                                runtime callers can layer the
+  //                                ChannelListing estimate on top via
+  //                                the central computeOrderRevenue
+  //                                helper from DA-RT.1)
+  //
+  // The CTE keeps the single-roundtrip INSERT...SELECT shape so the
+  // wallclock cost stays minimal even at scale.
   const result = await prisma.$executeRawUnsafe(
     `
+    WITH "items_with_share" AS (
+      SELECT
+        oi.sku,
+        oi.quantity,
+        oi.price,
+        o.id AS order_id,
+        o.channel::text AS channel,
+        COALESCE(o.marketplace, 'GLOBAL') AS marketplace,
+        o."totalPrice" AS order_total,
+        SUM(oi.quantity) OVER (PARTITION BY o.id) AS order_qty_total,
+        date_trunc(
+          'day',
+          COALESCE(o."purchaseDate", o."createdAt") AT TIME ZONE 'Europe/Rome'
+        )::date AS day
+      FROM "OrderItem" oi
+      JOIN "Order" o ON o.id = oi."orderId"
+      WHERE date_trunc(
+              'day',
+              COALESCE(o."purchaseDate", o."createdAt") AT TIME ZONE 'Europe/Rome'
+            )::date >= $1::date
+        AND date_trunc(
+              'day',
+              COALESCE(o."purchaseDate", o."createdAt") AT TIME ZONE 'Europe/Rome'
+            )::date <= $2::date
+        AND o.status != 'CANCELLED'
+    )
     INSERT INTO "DailySalesAggregate" (
       id, sku, channel, marketplace, day,
       "unitsSold", "grossRevenue", "ordersCount", source,
@@ -90,23 +142,26 @@ export async function refreshSalesAggregates(
     )
     SELECT
       gen_random_uuid()::text AS id,
-      oi.sku,
-      o.channel::text AS channel,
-      COALESCE(o.marketplace, 'GLOBAL') AS marketplace,
-      DATE(COALESCE(o."purchaseDate", o."createdAt")) AS day,
-      SUM(oi.quantity)::int AS "unitsSold",
-      SUM(oi.price * oi.quantity)::numeric(14,2) AS "grossRevenue",
-      COUNT(DISTINCT oi."orderId")::int AS "ordersCount",
+      sku,
+      channel,
+      marketplace,
+      day,
+      SUM(quantity)::int AS "unitsSold",
+      SUM(
+        CASE
+          WHEN price IS NOT NULL AND price > 0
+            THEN price * quantity
+          WHEN order_total IS NOT NULL AND order_total > 0 AND order_qty_total > 0
+            THEN order_total * (quantity::numeric / order_qty_total)
+          ELSE 0
+        END
+      )::numeric(14,2) AS "grossRevenue",
+      COUNT(DISTINCT order_id)::int AS "ordersCount",
       'ORDER_ITEM' AS source,
       NOW() AS "createdAt",
       NOW() AS "updatedAt"
-    FROM "OrderItem" oi
-    JOIN "Order" o ON o.id = oi."orderId"
-    WHERE DATE(COALESCE(o."purchaseDate", o."createdAt")) >= $1::date
-      AND DATE(COALESCE(o."purchaseDate", o."createdAt")) <= $2::date
-      AND o.status != 'CANCELLED'
-    GROUP BY oi.sku, o.channel, COALESCE(o.marketplace, 'GLOBAL'),
-             DATE(COALESCE(o."purchaseDate", o."createdAt"))
+    FROM "items_with_share"
+    GROUP BY sku, channel, marketplace, day
     ON CONFLICT (sku, channel, marketplace, day) DO UPDATE SET
       "unitsSold"    = EXCLUDED."unitsSold",
       "grossRevenue" = EXCLUDED."grossRevenue",
@@ -123,6 +178,11 @@ export async function refreshSalesAggregates(
   // ORDER_ITEM aggregate so cancellations / order deletions zero out
   // correctly. We only touch rows our window owns and never report-
   // sourced rows. Bounded by date range so it's fast even at scale.
+  //
+  // DA-RT.2 — `DATE(...)` → `date_trunc('day', ... AT TZ 'Europe/Rome')
+  // ::date` here too, otherwise the NOT EXISTS check uses UTC day
+  // and stale aggregates from yesterday-UTC-but-today-Rome don't get
+  // deleted when their underlying orders were cancelled.
   const deleted = await prisma.$executeRaw`
     DELETE FROM "DailySalesAggregate"
     WHERE source = 'ORDER_ITEM'
@@ -135,7 +195,10 @@ export async function refreshSalesAggregates(
         WHERE oi.sku = "DailySalesAggregate".sku
           AND o.channel::text = "DailySalesAggregate".channel
           AND COALESCE(o.marketplace, 'GLOBAL') = "DailySalesAggregate".marketplace
-          AND DATE(COALESCE(o."purchaseDate", o."createdAt")) = "DailySalesAggregate".day
+          AND date_trunc(
+                'day',
+                COALESCE(o."purchaseDate", o."createdAt") AT TIME ZONE 'Europe/Rome'
+              )::date = "DailySalesAggregate".day
           AND o.status != 'CANCELLED'
       )
   `
@@ -187,15 +250,36 @@ export async function recordOrderItem(orderItemId: string): Promise<void> {
   if (!item) return
   if (item.order.status === 'CANCELLED') return
 
-  const day = startOfDay(item.order.purchaseDate ?? item.order.createdAt)
+  // DA-RT.2 — match the SQL's TZ-aware day bucketing. startOfDay
+  // was setting UTCHours to 0 — the UTC calendar day. But the refresh
+  // SQL groups by Europe/Rome calendar day. A late-evening Rome order
+  // (e.g. 23:00 local = 21:00 UTC during CEST) sat at UTC-day N while
+  // SQL bucketed it under Rome-day N+1; the scan window [N..N] missed
+  // it. Now both sides use the local calendar day so the bounded
+  // single-row update lands on the right partition.
+  const day = startOfRomeDay(item.order.purchaseDate ?? item.order.createdAt)
   // Recompute just this row's aggregate from OrderItem so we never drift
   // from the source-of-truth. Bounded query — single (sku, channel,
   // marketplace, day) tuple — ~milliseconds.
   await refreshSalesAggregates({ from: day, to: day })
 }
 
-function startOfDay(d: Date): Date {
-  const out = new Date(d)
-  out.setUTCHours(0, 0, 0, 0)
-  return out
+/**
+ * UTC midnight of the calendar day in Europe/Rome that contains `d`.
+ * Used to align JS-side day boundaries with the SQL's
+ * `date_trunc('day', ... AT TIME ZONE 'Europe/Rome')::date` bucket.
+ *
+ * Example: 2026-05-23T23:00:00Z (= 2026-05-24 01:00 in Rome under
+ * CEST) → returns 2026-05-24T00:00:00Z.
+ */
+function startOfRomeDay(d: Date): Date {
+  const ymd = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Rome',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(d)
+  // Parse "YYYY-MM-DD" as UTC midnight so Postgres ::date coerces it
+  // back to the same calendar date without further TZ math.
+  return new Date(`${ymd}T00:00:00Z`)
 }
