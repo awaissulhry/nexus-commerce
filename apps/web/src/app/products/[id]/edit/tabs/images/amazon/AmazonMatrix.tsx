@@ -28,6 +28,10 @@ interface MatrixProps {
   onCopyRow: (groupValue: string, toMarketplace: string) => void
   onClearRow: (groupValue: string) => void
   onCellFileDrop: (groupValue: string | null, slot: AmazonSlot, file: File) => void
+  /** IE.11 — Active status filter from the MatrixFilterBar. Defaults
+   *  to 'all' so existing call sites that don't pass it still type-
+   *  check while the filter substrate is being wired up. */
+  cellStatusFilter?: 'all' | 'empty' | 'inherited' | 'override' | 'flagged'
 }
 
 // ── Slot cell ──────────────────────────────────────────────────────────
