@@ -137,12 +137,22 @@ export interface FBAInventoryRow {
 export interface AmazonMoneyType { Amount?: string; CurrencyAmount?: number; CurrencyCode: string }
 export interface AmazonChargeComponent { ChargeType: string; ChargeAmount: AmazonMoneyType }
 export interface AmazonFeeComponent { FeeType: string; FeeAmount: AmazonMoneyType }
+export interface AmazonPromotionComponent {
+  PromotionType: string
+  PromotionAmount: AmazonMoneyType
+}
 export interface AmazonShipmentItem {
   SellerSKU?: string
   ASIN?: string
   QuantityShipped?: number
   ItemChargeList?: AmazonChargeComponent[]
   ItemFeeList?: AmazonFeeComponent[]
+  // DA-RT.19 — promotions (buyer discounts, Amazon-funded coupons)
+  // come back with negative PromotionAmount values and reduce the
+  // gross-with-tax total Amazon charged the buyer. Skipping them
+  // makes FinancialTransaction.amount overshoot Order.totalPrice
+  // by the promotion amount per affected order.
+  PromotionList?: AmazonPromotionComponent[]
   ShipmentItemId?: string
 }
 export interface AmazonOrderFinancialEvent {

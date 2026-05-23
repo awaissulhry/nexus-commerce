@@ -135,6 +135,17 @@ async function processOrderEvent(event: AmazonOrderFinancialEvent): Promise<{ cr
   const shippingCharge = sumCharges(allCharges, 'ShippingCharge') + sumCharges(allCharges, 'ShippingTax')
   const grossRevenue = principal + shippingCharge // pre-tax gross
 
+  // DA-RT.19 — sum buyer-facing promotions/discounts (always negative).
+  // These reduce the gross-with-tax total Amazon charged the buyer
+  // (= Order.totalPrice). Without subtracting them, FinancialTransaction
+  // .amount overshoots Order.totalPrice and the drift detector fires
+  // a false-positive ~€4 per affected order.
+  const allPromotions = (event.ShipmentItemList ?? []).flatMap(i => i.PromotionList ?? [])
+  const promotionAdjustment = allPromotions.reduce(
+    (s, p) => s + moneyOf(p.PromotionAmount as { Amount?: string; CurrencyAmount?: number }),
+    0,
+  )
+
   // Amazon fee types: Commission, FBAPerUnitFulfillmentFee, FBAPerOrderFulfillmentFee,
   //   FBAWeightBasedFee, ShippingChargeback, VariableClosingFee, etc.
   const fbaFee = sumFees(allFees,
@@ -158,7 +169,10 @@ async function processOrderEvent(event: AmazonOrderFinancialEvent): Promise<{ cr
       orderId: order.id,
       transactionType: 'Order',
       transactionDate: postedDate,
-      amount: grossRevenue + tax,
+      // DA-RT.19 — amount = full gross-with-tax total Amazon charged
+      // the buyer (matches Order.totalPrice). promotionAdjustment is
+      // already negative so adding it subtracts the discount.
+      amount: grossRevenue + tax + promotionAdjustment,
       currencyCode,
       amazonFee: commission,
       fbaFee,

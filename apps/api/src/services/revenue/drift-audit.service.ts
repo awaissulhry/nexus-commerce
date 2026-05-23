@@ -120,7 +120,7 @@ export async function auditSalesDrift(
       SELECT
         date_trunc('day', o."purchaseDate" AT TIME ZONE 'UTC' AT TIME ZONE 'Europe/Rome')::date AS day,
         o."marketplace",
-        COALESCE(SUM(ROUND(ft."grossRevenue" * 100)), 0)::bigint AS cents
+        COALESCE(SUM(ROUND(ft."amount" * 100)), 0)::bigint AS cents
       FROM "FinancialTransaction" ft
       JOIN "Order" o ON o.id = ft."orderId"
       WHERE o."deletedAt" IS NULL
@@ -132,6 +132,12 @@ export async function auditSalesDrift(
         AND ft."transactionType" = 'Order'
       GROUP BY day, o."marketplace"
     `,
+    // DA-RT.19 — query FinancialTransaction.amount (gross with tax),
+    // not .grossRevenue (pre-tax). Order.totalPrice is gross with tax,
+    // so the apples-to-apples comparison needs .amount. The .grossRevenue
+    // field is still useful for revenue/profit reports where IVA is
+    // a pass-through to the tax authority, but for the drift detector
+    // we compare operator-facing totals.
   ])
 
   const merged = new Map<string, ThreeWaySums>()
