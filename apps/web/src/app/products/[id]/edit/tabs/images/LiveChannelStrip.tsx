@@ -206,6 +206,10 @@ export default function LiveChannelStrip({
                           // empty so the cell handler treats this as a
                           // URL-only assignment (sourceProductImageId=null).
                           e.dataTransfer.setData('application/nexus-image-id', '')
+                          // IA.16 — show the live thumbnail as the drag
+                          // preview, not the surrounding button chrome.
+                          const imgEl = e.currentTarget.querySelector('img') as HTMLImageElement | null
+                          if (imgEl) e.dataTransfer.setDragImage(imgEl, imgEl.width / 2, imgEl.height / 2)
                         }}
                         onClick={() => onOpenDiff?.(li, nexusUrl)}
                         className={cn(

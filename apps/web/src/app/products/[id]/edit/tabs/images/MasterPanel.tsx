@@ -620,6 +620,15 @@ export default function MasterPanel({
     // Expose URL + id so channel panels can accept drags from master gallery
     e.dataTransfer.setData('application/nexus-image-url', images[index].url)
     e.dataTransfer.setData('application/nexus-image-id', images[index].id)
+    // IA.16 — Custom drag preview. The browser default is a tiny
+    // thumbnail snapshot of the whole card (with corner buttons +
+    // metadata) which doesn't match the operator's intent. Use the
+    // <img> directly as the preview so what follows the cursor is
+    // the actual image at sensible size, anchored under the cursor.
+    const imgEl = e.currentTarget.querySelector('img') as HTMLImageElement | null
+    if (imgEl) {
+      e.dataTransfer.setDragImage(imgEl, imgEl.width / 2, imgEl.height / 2)
+    }
   }
 
   function onDragOver(e: React.DragEvent, index: number) {
@@ -887,12 +896,16 @@ export default function MasterPanel({
                   // Inner buttons (checkbox, menu, edit form) override with
                   // their own cursor; clicks on them still fire normally
                   // because they capture pointer-up before any drag movement.
+                  // IA.16 — an inserted left-bar (::before via Tailwind
+                  // arbitrary properties) lights up when this card is the
+                  // drop target, showing the operator where the dropped
+                  // image will land. Like macOS Finder reorder.
                   className={cn(
                     'group relative rounded-xl border bg-slate-50 dark:bg-slate-800 overflow-hidden transition-all cursor-grab active:cursor-grabbing',
                     selectedIds.has(img.id)
                       ? 'border-blue-500 ring-2 ring-blue-300 dark:ring-blue-600'
                       : dragOverIndex === index
-                        ? 'border-blue-400 dark:border-blue-500 ring-2 ring-blue-300 dark:ring-blue-600'
+                        ? 'border-blue-400 dark:border-blue-500 ring-2 ring-blue-300 dark:ring-blue-600 before:content-[""] before:absolute before:left-0 before:top-0 before:bottom-0 before:w-1 before:bg-blue-500 before:rounded-l-xl before:animate-pulse'
                         : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600',
                   )}
                   title="Drag to reorder, or drop on a channel cell to assign"

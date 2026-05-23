@@ -193,6 +193,9 @@ export default function ShopifyPanel({
     if (e.dataTransfer.types.includes('Files')) return
     dragIndexRef.current = index
     e.dataTransfer.effectAllowed = 'move'
+    // IA.16 — proper-sized drag preview from the inner img.
+    const imgEl = e.currentTarget.querySelector('img') as HTMLImageElement | null
+    if (imgEl) e.dataTransfer.setDragImage(imgEl, imgEl.width / 2, imgEl.height / 2)
   }
 
   function onDragOver(e: React.DragEvent, index: number) {

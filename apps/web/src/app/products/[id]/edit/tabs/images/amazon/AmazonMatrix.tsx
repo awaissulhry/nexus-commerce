@@ -152,6 +152,13 @@ function SlotCell({
     })
     e.dataTransfer.effectAllowed = 'move'
     e.dataTransfer.setData('application/nexus-matrix-cell', payload)
+    // IA.16 — Custom drag preview using the cell's own <img> at its
+    // current rendered size. Browser default snapshots the entire
+    // cell wrapper (badges, drag handles) which is noisy.
+    const imgEl = e.currentTarget.querySelector('img') as HTMLImageElement | null
+    if (imgEl) {
+      e.dataTransfer.setDragImage(imgEl, imgEl.width / 2, imgEl.height / 2)
+    }
   }
 
   const ariaLabel = `${rowLabel}, ${SLOT_LABELS[slot]}: ${
@@ -183,7 +190,13 @@ function SlotCell({
       onFocus={onFocus}
       className={cn(
         'relative w-[72px] h-[72px] rounded-lg border-2 transition-all flex-shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500',
-        isOver ? 'border-blue-400 bg-blue-50 dark:bg-blue-950/30' : 'border-transparent',
+        // IA.16 — animated pulse ring on drop hover so the operator sees
+        // exactly which cell will catch the drop. transition-all already
+        // smooths the colour change; the ring + scale make the target
+        // unambiguous in a dense matrix.
+        isOver
+          ? 'border-blue-400 bg-blue-50 dark:bg-blue-950/30 ring-2 ring-blue-300 dark:ring-blue-600 ring-offset-1 scale-[1.04] animate-pulse'
+          : 'border-transparent',
       )}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
