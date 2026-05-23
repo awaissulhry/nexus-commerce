@@ -129,25 +129,49 @@ export default function AmazonPanel({
   }, [amazon.variantGroups, filterValues])
 
   async function handleExportZip(marketplace: AmazonMarketplace) {
-    if (marketplace === 'ALL') return
+    // IA.1 — marketplace='ALL' is now valid; the backend walks every
+    // EU market and emits per-market folders inside one ZIP.
     setIsExporting(true)
     try {
       const res = await beFetch(`/api/products/${productId}/amazon-images/export-zip`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ marketplace }),
+        // IA.1 — activeAxis is the critical fix. Without it, the
+        // resolver skips the entire group cascade (Color=Black,
+        // Size=M, …) and only emits product-level images.
+        body: JSON.stringify({ marketplace, activeAxis }),
       })
-      if (!res.ok) return
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        const skipped = Array.isArray(body?.skippedNoAsin) ? body.skippedNoAsin.length : 0
+        onToast(
+          body?.error
+            ? `Export failed: ${body.error}${skipped > 0 ? ` (${skipped} SKUs with no ASIN on this market)` : ''}`
+            : `Export failed: ${res.status}`,
+        )
+        return
+      }
       const blob = await res.blob()
       const disposition = res.headers.get('Content-Disposition') ?? ''
-      const filename = disposition.match(/filename="([^"]+)"/)?.[1] ?? `amazon-${marketplace}.zip`
+      const filename = disposition.match(/filename="([^"]+)"/)?.[1] ?? `amazon-${marketplace.toLowerCase()}.zip`
       const a = document.createElement('a')
       a.href = URL.createObjectURL(blob)
       a.download = filename
       a.click()
       URL.revokeObjectURL(a.href)
-    } catch {
-      // Non-fatal — user can retry
+      // IA.1 — surface counts to the operator so a smaller-than-expected
+      // ZIP doesn't go unnoticed. Headers always present.
+      const fileCount = res.headers.get('X-File-Count') ?? '?'
+      const errors = res.headers.get('X-Errors') ?? '0'
+      const skippedRaw = res.headers.get('X-Skipped-No-Asin') ?? ''
+      const skippedCount = skippedRaw.split(',').filter(Boolean).length
+      onToast(
+        `Downloaded ${fileCount} image${fileCount === '1' ? '' : 's'}` +
+        (Number(errors) > 0 ? ` · ${errors} fetch error${errors === '1' ? '' : 's'}` : '') +
+        (skippedCount > 0 ? ` · ${skippedCount} SKU${skippedCount === 1 ? '' : 's'} skipped (no ASIN)` : ''),
+      )
+    } catch (err) {
+      onToast(err instanceof Error ? err.message : 'Export failed')
     } finally {
       setIsExporting(false)
     }

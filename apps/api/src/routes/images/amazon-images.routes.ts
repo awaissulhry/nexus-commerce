@@ -94,17 +94,27 @@ const amazonImagesRoutes: FastifyPluginAsync = async (fastify) => {
   )
 
   // ── POST /api/products/:productId/amazon-images/export-zip ─────────
+  // IA.1 — accepts marketplace='ALL' (per-market folders) and
+  // activeAxis (operator's grouping axis, e.g. 'Color') so the
+  // resolver honours per-group overrides instead of silently dropping
+  // them. Response headers carry the counts so the FE can surface
+  // "X files, Y errors" without parsing the body.
   fastify.post<{
     Params: { productId: string }
-    Body: { marketplace: string; variantIds?: string[] }
+    Body: {
+      marketplace: string
+      activeAxis?: string | null
+      variantIds?: string[]
+    }
   }>(
     '/products/:productId/amazon-images/export-zip',
     async (request, reply) => {
       const { productId } = request.params
-      const { marketplace, variantIds } = request.body ?? ({} as any)
+      const { marketplace, activeAxis, variantIds } = request.body ?? ({} as any)
 
       const mkt = (marketplace ?? '').toUpperCase()
-      if (!VALID_MARKETPLACES.has(mkt)) {
+      const isAll = mkt === 'ALL'
+      if (!isAll && !VALID_MARKETPLACES.has(mkt)) {
         return reply.code(400).send({ error: `Invalid marketplace: ${marketplace}` })
       }
 
@@ -115,21 +125,25 @@ const amazonImagesRoutes: FastifyPluginAsync = async (fastify) => {
       if (!product) return reply.code(404).send({ error: 'Product not found' })
 
       try {
-        const { buffer, filename, fileCount, skippedNoAsin } =
-          await generateAmazonZip({ productId, marketplace: mkt, variantIds })
+        const { buffer, filename, fileCount, skippedNoAsin, errors } =
+          await generateAmazonZip({ productId, marketplace: mkt, activeAxis, variantIds })
 
         if (fileCount === 0) {
           return reply.code(422).send({
             error: 'No images resolved for export',
             skippedNoAsin,
+            errors,
           })
         }
 
+        // X-Errors header surfaces the per-image failure count without
+        // requiring the FE to read the body (which is the ZIP bytes).
         reply
           .header('Content-Type', 'application/zip')
           .header('Content-Disposition', `attachment; filename="${filename}"`)
           .header('X-File-Count', String(fileCount))
           .header('X-Skipped-No-Asin', skippedNoAsin.join(','))
+          .header('X-Errors', String(errors.length))
         return reply.send(buffer)
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
