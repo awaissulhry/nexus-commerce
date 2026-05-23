@@ -218,6 +218,11 @@ function resolveSlot(
       return img.variationId === null && !img.variantGroupKey
     })
     if (match) {
+      // IA.11 — empty url = blocker row. Cell is explicitly empty
+      // at this scope; short-circuit the cascade so we don't fall
+      // back to inherited / product-level. Publisher + ZIP skip
+      // the entire slot for this ASIN — Amazon receives nothing.
+      if (!match.url) return null
       return { slot, url: match.url, listingImageId: match.id, origin: c.origin, scope: c.scopeLabel }
     }
   }

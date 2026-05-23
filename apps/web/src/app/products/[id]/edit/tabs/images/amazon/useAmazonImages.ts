@@ -203,10 +203,14 @@ export function useAmazonImages({
       return u.scope === targetScope && (targetMkt === null ? !u.marketplace : u.marketplace === targetMkt)
     }
 
-    // 1. Pending (exact marketplace)
+    // 1. Pending (exact marketplace). IA.11 — empty url = blocker row;
+    // the cell is explicitly empty and the cascade short-circuits here
+    // (no fallback to inherited / master). Used by drag-move to clear
+    // the source cell even when its image came from a parent scope.
     for (const u of pendingUpserts.values()) {
       if (u.platform !== 'AMAZON' || u.amazonSlot !== slot) continue
       if (!matchesGroup(u as any) || !matchesMkt(u)) continue
+      if (!u.url) return null
       return { url: u.url, origin: 'own', isPending: true }
     }
 
@@ -220,6 +224,7 @@ export function useAmazonImages({
       !pendingDeletes?.has(img.id),
     )
     if (serverOwn) {
+      if (!serverOwn.url) return null  // IA.11 blocker on server row
       return {
         url: serverOwn.url, origin: 'own', isPending: false,
         listingImageId: serverOwn.id, hasWhiteBackground: serverOwn.hasWhiteBackground,
@@ -234,6 +239,7 @@ export function useAmazonImages({
       for (const u of pendingUpserts.values()) {
         if (u.platform !== 'AMAZON' || u.amazonSlot !== slot || u.scope !== 'PLATFORM' || u.marketplace) continue
         if (!matchesGroup(u as any)) continue
+        if (!u.url) return null  // IA.11 — blocker at Platform suppresses master fallback for this group
         return { url: u.url, origin: 'inherited', isPending: true }
       }
       // Server All Markets — skip pending deletes
@@ -243,6 +249,7 @@ export function useAmazonImages({
         !pendingDeletes?.has(img.id),
       )
       if (serverPlatform) {
+        if (!serverPlatform.url) return null
         return {
           url: serverPlatform.url, origin: 'inherited', isPending: false,
           listingImageId: serverPlatform.id, hasWhiteBackground: serverPlatform.hasWhiteBackground,
