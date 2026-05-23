@@ -357,6 +357,13 @@ export class AmazonOrdersService {
       return { amount: total, currency: '' }
     }
 
+    // DA-RT.6 — track repaired order IDs so we can refresh the
+    // DailySalesAggregate window once at the end. Without this trigger,
+    // the aggregate stays stale for hours (until the next nightly
+    // sales-aggregate cron) — insights/replenishment/forecast pages
+    // would keep showing the under-reported pre-repair numbers.
+    const repairedOrderIds: string[] = []
+
     for (const row of stale) {
       try {
         const raw = await amazonService.fetchOrderById(row.channelOrderId)
@@ -371,6 +378,7 @@ export class AmazonOrdersService {
               data: { totalPrice: fb.amount },
             })
             result.repairedFromItems += 1
+            repairedOrderIds.push(row.id)
             continue
           }
           result.skipped += 1
@@ -388,6 +396,7 @@ export class AmazonOrdersService {
               data: { totalPrice: fb.amount },
             })
             result.repairedFromItems += 1
+            repairedOrderIds.push(row.id)
             continue
           }
           result.skipped += 1
@@ -405,6 +414,7 @@ export class AmazonOrdersService {
               data: { totalPrice: fb.amount },
             })
             result.repairedFromItems += 1
+            repairedOrderIds.push(row.id)
             continue
           }
           result.skipped += 1
@@ -419,11 +429,57 @@ export class AmazonOrdersService {
           },
         })
         result.repaired += 1
+        repairedOrderIds.push(row.id)
       } catch (e: any) {
         result.failed += 1
         result.errors.push({ orderId: row.channelOrderId, error: e?.message ?? String(e) })
       }
     }
+
+    // DA-RT.6 — refresh DailySalesAggregate over the span of repaired
+    // orders' days so insights/replenishment/forecast pages reflect
+    // the new numbers within seconds instead of waiting for the
+    // nightly sales-aggregate cron. Single refreshSalesAggregates call
+    // for [minDay..maxDay] across all repaired orders — Postgres's
+    // INSERT...SELECT walks the window once regardless of how many
+    // rows landed in it.
+    if (repairedOrderIds.length > 0) {
+      try {
+        const repairedOrders = await prisma.order.findMany({
+          where: { id: { in: repairedOrderIds } },
+          select: { purchaseDate: true, createdAt: true },
+        })
+        const days = repairedOrders
+          .map((o) => o.purchaseDate ?? o.createdAt)
+          .filter((d): d is Date => d != null)
+        if (days.length > 0) {
+          const minMs = Math.min(...days.map((d) => d.getTime()))
+          const maxMs = Math.max(...days.map((d) => d.getTime()))
+          const { refreshSalesAggregates } = await import('./sales-aggregate.service.js')
+          // refreshSalesAggregates internally aligns to Europe/Rome
+          // day boundaries via DA-RT.2's startOfRomeDay, so passing
+          // raw instants is safe.
+          await refreshSalesAggregates({
+            from: new Date(minMs),
+            to: new Date(maxMs),
+          })
+          logger.info('amazon-orders: DA-RT.6 sales-aggregate refresh after backfill', {
+            repaired: result.repaired,
+            repairedFromItems: result.repairedFromItems,
+            windowFromDay: new Date(minMs).toISOString().slice(0, 10),
+            windowToDay: new Date(maxMs).toISOString().slice(0, 10),
+          })
+        }
+      } catch (aggregateErr) {
+        // Non-fatal — the backfill itself succeeded; aggregate refresh
+        // failure just delays the propagation by one nightly tick.
+        logger.warn('amazon-orders: DA-RT.6 sales-aggregate refresh failed', {
+          error: aggregateErr instanceof Error ? aggregateErr.message : String(aggregateErr),
+          repairedOrderCount: repairedOrderIds.length,
+        })
+      }
+    }
+
     logger.info('amazon-orders: backfillZeroTotals complete', result)
     return result
   }
