@@ -415,3 +415,123 @@ describe('resolveAttributes — full stack', () => {
     })
   })
 })
+
+// ────────────────────────────────────────────────────────────────────
+// Case 9 (A.4): legacy-column synthesis layer
+// ────────────────────────────────────────────────────────────────────
+describe('resolveAttributes — synthesis from legacy columns', () => {
+  it('synthesizes title from Product.name when localizedContent is empty', () => {
+    const product = mkProduct({
+      id: 'p1',
+      name: 'Racing Suit',
+      description: 'A premium racing suit.',
+      bulletPoints: ['Cowhide', '1.3mm thick'],
+      brand: 'Xavia',
+    })
+
+    const result = resolveAttributes({ product, parent: null })
+
+    expect(result.title).toEqual({
+      value: 'Racing Suit',
+      source: 'masterColumn',
+      inheritedFrom: 'p1:name',
+    })
+    expect(result.description.value).toBe('A premium racing suit.')
+    expect(result.description.source).toBe('masterColumn')
+    expect(result.bulletPoints.value).toEqual(['Cowhide', '1.3mm thick'])
+    expect(result.brand.value).toBe('Xavia')
+  })
+
+  it('JSONB localizedContent.en wins over synthesized Product.name', () => {
+    const product = mkProduct({
+      id: 'p1',
+      name: 'Old name',
+      localizedContent: { en: { title: 'New JSONB Title' }, it: {} },
+    })
+
+    const result = resolveAttributes({ product, parent: null })
+
+    expect(result.title.value).toBe('New JSONB Title')
+    expect(result.title.source).toBe('masterLocale')
+  })
+
+  it('does NOT synthesize when synthesize=false (strict JSONB-only mode)', () => {
+    const product = mkProduct({ id: 'p1', name: 'Racing Suit' })
+
+    const result = resolveAttributes({ product, parent: null, synthesize: false })
+
+    expect(result.title).toBeUndefined()
+  })
+
+  it('does NOT synthesize for non-en locales (avoids mislabeling English as Italian)', () => {
+    const product = mkProduct({ id: 'p1', name: 'Racing Suit' })
+
+    const result = resolveAttributes({ product, parent: null, locale: 'it' })
+
+    expect(result.title).toBeUndefined()
+  })
+
+  it('variant column synthesis overrides parent column synthesis', () => {
+    const parent = mkProduct({ id: 'parent1', name: 'Racing Apparel' })
+    const variant = mkProduct({ id: 'v1', parentId: 'parent1', name: 'Racing Apparel — Size 52' })
+
+    const result = resolveAttributes({ product: variant, parent })
+
+    expect(result.title.value).toBe('Racing Apparel — Size 52')
+    expect(result.title.inheritedFrom).toBe('v1:name')
+  })
+
+  it('variant column synthesis beats parent JSONB localizedContent', () => {
+    // The variant's own column data represents an explicit per-variant
+    // value, matching "variant overrides master" semantics elsewhere.
+    const parent = mkProduct({
+      id: 'parent1',
+      localizedContent: { en: { title: 'Parent JSONB Title' }, it: {} },
+    })
+    const variant = mkProduct({ id: 'v1', parentId: 'parent1', name: 'Variant Specific Name' })
+
+    const result = resolveAttributes({ product: variant, parent })
+
+    expect(result.title.value).toBe('Variant Specific Name')
+    expect(result.title.source).toBe('masterColumn')
+    expect(result.title.inheritedFrom).toBe('v1:name')
+  })
+
+  it('empty array on bulletPoints does NOT synthesize (treated as no data)', () => {
+    const product = mkProduct({ id: 'p1', name: 'Title', bulletPoints: [] })
+
+    const result = resolveAttributes({ product, parent: null })
+
+    expect(result.title.value).toBe('Title')
+    expect(result.bulletPoints).toBeUndefined()
+  })
+
+  it('null/undefined columns do not synthesize', () => {
+    const product = mkProduct({
+      id: 'p1',
+      name: null,
+      description: undefined,
+      brand: null,
+    })
+
+    const result = resolveAttributes({ product, parent: null })
+
+    expect(result.title).toBeUndefined()
+    expect(result.description).toBeUndefined()
+    expect(result.brand).toBeUndefined()
+  })
+
+  it('channel override beats variant-column synthesis', () => {
+    const variant = mkProduct({ id: 'v1', name: 'Variant Name' })
+    const cl = mkChannelListing({
+      id: 'cl1',
+      followMasterTitle: false,
+      titleOverride: 'Channel Title',
+    })
+
+    const result = resolveAttributes({ product: variant, parent: null, channelListing: cl })
+
+    expect(result.title.value).toBe('Channel Title')
+    expect(result.title.source).toBe('channelExplicit')
+  })
+})

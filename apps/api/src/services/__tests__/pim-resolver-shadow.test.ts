@@ -273,3 +273,115 @@ describe('shadowCompareProductRead — logger invocation', () => {
     expect(calls).toHaveLength(0)
   })
 })
+
+// ────────────────────────────────────────────────────────────────────
+// A.4 — synthesized-key compare
+// ────────────────────────────────────────────────────────────────────
+describe('shadowCompareProductRead — synthesized keys (A.4)', () => {
+  it('zero mismatch when resolver synthesizes title from Product.name', () => {
+    const product = mkProduct({
+      id: 'p1',
+      name: 'Racing Suit',
+      description: 'A premium racing suit.',
+      brand: 'Xavia',
+    })
+
+    const recorded = shadowCompareProductRead({
+      product,
+      parent: null,
+      channelListings: [],
+      logger: silentLogger,
+    })
+
+    expect(recorded).toBe(0)
+  })
+
+  it('zero mismatch when variant inherits name from parent (parent col synthesis)', () => {
+    const parent = mkProduct({ id: 'parent1', name: 'Racing Apparel' })
+    const variant = mkProduct({ id: 'v1', parentId: 'parent1' /* no own name */ })
+
+    const recorded = shadowCompareProductRead({
+      product: variant,
+      parent,
+      channelListings: [],
+      logger: silentLogger,
+    })
+
+    expect(recorded).toBe(0)
+  })
+
+  it('zero mismatch when variant overrides parent name with its own', () => {
+    const parent = mkProduct({ id: 'parent1', name: 'Racing Apparel' })
+    const variant = mkProduct({ id: 'v1', parentId: 'parent1', name: 'Variant Specific' })
+
+    const recorded = shadowCompareProductRead({
+      product: variant,
+      parent,
+      channelListings: [],
+      logger: silentLogger,
+    })
+
+    expect(recorded).toBe(0)
+  })
+
+  it('skips synthesis compare entirely for non-en locale', () => {
+    // Legacy columns exist but resolver doesn't synthesize at it locale.
+    // The shadow should also skip the synthesis check so the absence
+    // doesn't get reported as a mismatch.
+    const product = mkProduct({ id: 'p1', name: 'Racing Suit' })
+
+    const recorded = shadowCompareProductRead({
+      product,
+      parent: null,
+      channelListings: [],
+      locale: 'it',
+      logger: silentLogger,
+    })
+
+    expect(recorded).toBe(0)
+  })
+
+  it('zero mismatch when JSONB localizedContent.en wins over synthesized column', () => {
+    const product = mkProduct({
+      id: 'p1',
+      name: 'Old Name',
+      localizedContent: { en: { title: 'New JSONB Title' }, it: {} },
+    })
+
+    const recorded = shadowCompareProductRead({
+      product,
+      parent: null,
+      channelListings: [],
+      logger: silentLogger,
+    })
+
+    // Shadow's "legacy expectation" is pickInheritedColumn(product, parent, 'name') = 'Old Name',
+    // but resolver returns 'New JSONB Title' from localizedContent.en. This SHOULD register
+    // as both_present_differ — it's a real signal that JSONB has diverged from the legacy
+    // column. Operator can decide whether to backfill or not. Recording is the right behavior.
+    expect(recorded).toBeGreaterThanOrEqual(1)
+
+    const stats = getShadowStats()
+    const titleMismatch = stats.recent.find((m) => m.key === 'title')
+    expect(titleMismatch).toBeDefined()
+    expect(titleMismatch!.category).toBe('both_present_differ')
+    expect(titleMismatch!.resolverSource).toBe('masterLocale')
+  })
+
+  it('bulletPoints array compared element-wise (no spurious mismatch)', () => {
+    const product = mkProduct({
+      id: 'p1',
+      name: 'X',
+      bulletPoints: ['a', 'b', 'c'],
+    })
+
+    const recorded = shadowCompareProductRead({
+      product,
+      parent: null,
+      channelListings: [],
+      logger: silentLogger,
+    })
+
+    expect(recorded).toBe(0)
+  })
+})

@@ -221,6 +221,47 @@ export interface ShadowCompareInput {
  * recorded for this call (useful for callers that want to surface
  * "shadow-detected N issues" telemetry).
  */
+/** A.4 — Keys the resolver synthesizes from legacy Product columns, and
+ *  the legacy-column name that drives the expectation. Used by the
+ *  shadow to validate synthesis against direct column reads. The
+ *  expectation respects variant→parent precedence: if a variant has
+ *  the column set, that wins; otherwise the parent's column does. */
+const SYNTHESIZED_KEYS: Array<{
+  resolverKey: string
+  legacyCol:
+    | 'name'
+    | 'description'
+    | 'bulletPoints'
+    | 'keywords'
+    | 'brand'
+    | 'manufacturer'
+    | 'basePrice'
+}> = [
+  { resolverKey: 'title',        legacyCol: 'name' },
+  { resolverKey: 'description',  legacyCol: 'description' },
+  { resolverKey: 'bulletPoints', legacyCol: 'bulletPoints' },
+  { resolverKey: 'keywords',     legacyCol: 'keywords' },
+  { resolverKey: 'brand',        legacyCol: 'brand' },
+  { resolverKey: 'manufacturer', legacyCol: 'manufacturer' },
+  { resolverKey: 'basePrice',    legacyCol: 'basePrice' },
+]
+
+/** Pick the legacy-column value that "wins" between variant and parent:
+ *  variant value if non-empty, else parent value. Empty arrays count as
+ *  absent so a variant with `bulletPoints: []` falls back to parent. */
+function pickInheritedColumn(
+  product: ProductLike,
+  parent: ProductLike | null,
+  col: string,
+): unknown {
+  const own = (product as unknown as Record<string, unknown>)[col]
+  const ownPresent = own !== undefined && own !== null
+    && !(Array.isArray(own) && own.length === 0)
+  if (ownPresent) return own
+  if (!parent) return null
+  return (parent as unknown as Record<string, unknown>)[col]
+}
+
 export function shadowCompareProductRead(input: ShadowCompareInput): number {
   const { product, parent, channelListings, locale = 'en', logger } = input
   let recorded = 0
@@ -268,6 +309,46 @@ export function shadowCompareProductRead(input: ShadowCompareInput): number {
       'pim-resolver-shadow-mismatch',
     )
     recorded++
+  }
+
+  // 1b. A.4 — Compare synthesized keys (title/description/bullet-
+  //     Points/etc.) against the corresponding legacy columns.
+  //     Synthesis fires only at the default locale ('en'); for other
+  //     locales the resolver returns nothing for these keys and the
+  //     legacy column is the "if you fell back to en, this is what
+  //     you'd see" reference. We skip the compare for non-en locales
+  //     since the resolver intentionally doesn't synthesize there.
+  if (locale === 'en') {
+    for (const { resolverKey, legacyCol } of SYNTHESIZED_KEYS) {
+      const expected = pickInheritedColumn(product, parent, legacyCol)
+      const resolved = productLevel[resolverKey]?.value
+      const cat = classify(resolved, expected)
+      if (!cat) continue
+
+      const m: Mismatch = {
+        productId: product.id,
+        channelListingId: null,
+        key: resolverKey,
+        resolverValue: resolved,
+        legacyValue: expected,
+        resolverSource: productLevel[resolverKey]?.source ?? null,
+        category: cat,
+        at: new Date().toISOString(),
+      }
+      recordMismatch(m)
+      logger?.warn(
+        {
+          productId: m.productId,
+          key: m.key,
+          resolver: m.resolverValue,
+          legacy: m.legacyValue,
+          source: m.resolverSource,
+          category: m.category,
+        },
+        'pim-resolver-shadow-mismatch',
+      )
+      recorded++
+    }
   }
 
   // 2. Compare SSOT fields per channel listing.

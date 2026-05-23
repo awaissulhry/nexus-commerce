@@ -36,6 +36,7 @@
 export type ValueSource =
   | 'master'           // came from parent Product.categoryAttributes
   | 'masterLocale'     // came from parent Product.localizedContent
+  | 'masterColumn'     // synthesized from a legacy Product column (A.4 compat layer)
   | 'variant'          // came from variant child Product
   | 'variantLocale'    // came from variant child localizedContent
   | 'channelOverride'  // came from ChannelListing.overrideData
@@ -60,6 +61,18 @@ export interface ProductLike {
   categoryAttributes: Record<string, unknown> | null
   localizedContent: Record<string, Record<string, unknown>> | null
   variantAttributes: Record<string, unknown> | null
+  // ── A.4 legacy-column synthesis sources ─────────────────────────
+  // Optional because not every loader hydrates them. When `synthesize:
+  // true` (default) AND the corresponding JSONB key is missing, the
+  // resolver returns these with source='masterColumn'. Removable once
+  // all writes populate localizedContent + categoryAttributes.
+  name?: string | null
+  description?: string | null
+  bulletPoints?: string[]
+  keywords?: string[]
+  brand?: string | null
+  manufacturer?: string | null
+  basePrice?: number | string | null
 }
 
 /** Minimal ChannelListing shape. All explicit-override fields are
@@ -97,6 +110,13 @@ export interface ResolveInput {
   channelListing?: ChannelListingLike | null
   /** Locale code for localizedContent lookup. Defaults to 'en'. */
   locale?: string
+  /** A.4 — Fill in missing keys from legacy Product columns
+   *  (name → title, description → description, etc.). Default true.
+   *  Only fires for the default locale ('en') so non-en queries don't
+   *  receive English text mislabeled as the requested locale. Pass
+   *  false to get strict JSONB-only behaviour (useful for "what's
+   *  ACTUALLY been authored in JSONB" diagnostics). */
+  synthesize?: boolean
 }
 
 export type ResolvedAttributes = Record<string, ResolvedValue>
@@ -117,6 +137,25 @@ const SSOT_FIELDS = [
   { key: 'bulletPoints', followFlag: 'followMasterBulletPoints', overrideCol: 'bulletPointsOverride', directCol: null },
 ] as const
 
+/** A.4 — legacy Product columns the resolver can synthesize into
+ *  attribute keys when the JSONB layers don't supply them. Each entry
+ *  is (resolver-key → ProductLike column). Only consulted when
+ *  synthesize=true AND the query is for the default locale, so non-en
+ *  queries don't receive English text mislabeled. Remove an entry
+ *  once 100% of writes for that key go through localizedContent. */
+const SYNTHESIS_MAP: Array<{
+  resolverKey: string
+  column: keyof ProductLike
+}> = [
+  { resolverKey: 'title',        column: 'name' },
+  { resolverKey: 'description',  column: 'description' },
+  { resolverKey: 'bulletPoints', column: 'bulletPoints' },
+  { resolverKey: 'keywords',     column: 'keywords' },
+  { resolverKey: 'brand',        column: 'brand' },
+  { resolverKey: 'manufacturer', column: 'manufacturer' },
+  { resolverKey: 'basePrice',    column: 'basePrice' },
+]
+
 /** Apply a layer of key/values onto the accumulator. A `null` value in
  *  the layer means "explicit null" (still overrides); `undefined`
  *  means "key absent" (no-op). Caller-controlled source/inheritedFrom. */
@@ -133,6 +172,30 @@ function applyLayer(
   }
 }
 
+/** A.4 — Apply the legacy-column synthesis layer for one Product.
+ *  Lowest-precedence layer for that entity; later JSONB layers from
+ *  the same entity overwrite it, and a higher-precedence entity
+ *  (variant > parent, channel > variant) overwrites it. inheritedFrom
+ *  carries "<productId>:<columnName>" so the UI can link back to the
+ *  exact field, not just the entity. */
+function applySynthesisLayer(
+  acc: ResolvedAttributes,
+  source: ProductLike,
+): void {
+  for (const { resolverKey, column } of SYNTHESIS_MAP) {
+    const value = (source as unknown as Record<string, unknown>)[column as string]
+    if (value === undefined || value === null) continue
+    // Empty arrays count as "no data" for synthesis — they'd otherwise
+    // mask a real bulletPoints write further up the merge stack.
+    if (Array.isArray(value) && value.length === 0) continue
+    acc[resolverKey] = {
+      value,
+      source: 'masterColumn',
+      inheritedFrom: `${source.id}:${column as string}`,
+    }
+  }
+}
+
 // ────────────────────────────────────────────────────────────────────
 // Public API
 // ────────────────────────────────────────────────────────────────────
@@ -146,12 +209,26 @@ function applyLayer(
  * decides whether absence means "not applicable" or "use schema default".
  */
 export function resolveAttributes(input: ResolveInput): ResolvedAttributes {
-  const { product, parent, channelListing, locale = DEFAULT_LOCALE } = input
+  const {
+    product,
+    parent,
+    channelListing,
+    locale = DEFAULT_LOCALE,
+    synthesize = true,
+  } = input
   const acc: ResolvedAttributes = {}
+
+  // A.4 — Synthesis fires only for the default locale ('en'). Non-en
+  // queries that lack their per-locale slot should surface as "missing
+  // translation" in the UI, not as English text mislabeled.
+  const doSynthesize = synthesize && locale === DEFAULT_LOCALE
 
   // Layers 1-3 only apply when there's a parent (i.e. resolving a
   // variant child). Top-level products skip straight to layer 4.
   if (parent) {
+    // 0. Parent legacy-column synthesis (lowest precedence; any JSONB
+    //    layer for the same key in parent or variant overrides it).
+    if (doSynthesize) applySynthesisLayer(acc, parent)
     // 1. Parent categoryAttributes
     applyLayer(acc, parent.categoryAttributes, 'master', parent.id)
     // 2. Parent localizedContent[locale]
@@ -164,9 +241,11 @@ export function resolveAttributes(input: ResolveInput): ResolvedAttributes {
     }
   }
 
-  // 4. Variant (or top-level product) own values. variantAttributes
-  //    first (axis values: Color, Size), then categoryAttributes
-  //    (technical specs), then localizedContent[locale], then en fallback.
+  // 4. Variant (or top-level product) own values. Variant-column
+  //    synthesis goes first as the lowest-precedence layer FOR THIS
+  //    entity — but it still beats every parent layer above, matching
+  //    "variant overrides master" semantics.
+  if (doSynthesize) applySynthesisLayer(acc, product)
   applyLayer(acc, product.variantAttributes, 'variant', product.id)
   applyLayer(acc, product.categoryAttributes, parent ? 'variant' : 'master', product.id)
   applyLayer(acc, product.localizedContent?.[locale], parent ? 'variantLocale' : 'masterLocale', product.id)

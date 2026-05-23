@@ -24,15 +24,17 @@ Lowest → highest. Later layers override earlier ones for any given key.
 
 | # | Layer | Source on `ResolvedValue` | When it applies |
 |---|---|---|---|
+| 0a | Parent legacy columns (`name`→`title`, `description`→`description`, `bulletPoints`, `keywords`, `brand`, `manufacturer`, `basePrice`) | `masterColumn` | `synthesize=true` (default) AND `locale='en'` AND parent exists |
 | 1 | Parent `Product.categoryAttributes` | `master` | Resolving a variant child (`product.parentId != null`) |
 | 2 | Parent `Product.localizedContent[locale]` | `masterLocale` | Same, with locale set |
 | 3 | Parent `Product.localizedContent['en']` | `masterLocale` | Per-key fallback when locale layer didn't supply the key |
+| 0b | Variant legacy columns (same set as 0a) | `masterColumn` | `synthesize=true` AND `locale='en'`; for top-level products this is the master layer too |
 | 4 | Variant `Product` own values: `variantAttributes`, `categoryAttributes`, `localizedContent[locale]`, then `en` | `variant` / `variantLocale` | Always (for top-level products, this is layer 1) |
 | 5 | `ChannelListing.overrideData` | `channelOverride` | When `channelListing` is supplied |
 | 6 | `ChannelListing.titleOverride` / `priceOverride` / etc. | `channelExplicit` | When `followMasterX === false` for that field |
 
-For top-level products (no parent), layers 1-3 are skipped and step 4
-becomes the master baseline (`source = 'master'` instead of `'variant'`).
+For top-level products (no parent), layers 0a–3 are skipped and 0b/4
+become the master baseline (`source = 'master'` instead of `'variant'`).
 
 ## SSOT-tracked fields
 
@@ -87,11 +89,56 @@ Schema default is `{en, it}` — Xavia primary markets. Additional
 locales (`de`, `fr`, `es`) are added by writes, not schema migrations.
 The resolver treats any locale key as valid; absence falls back to `en`.
 
-## Out of scope for A.1
+## A.4 — Legacy-column synthesis (compat layer)
+
+Many Product attributes still live in legacy columns (`Product.name`,
+`Product.description`, `bulletPoints`, etc.) rather than `localizedContent`
+or `categoryAttributes`. Migrating those writes is a Phase B+ effort.
+
+To unblock Phase B without waiting, the resolver synthesizes from
+legacy columns when JSONB doesn't supply a key. Controlled by the
+`synthesize` option on `ResolveInput`:
+
+```ts
+resolveAttributes({ product, parent, synthesize: true })  // default
+resolveAttributes({ product, parent, synthesize: false }) // strict JSONB only
+```
+
+**Rules:**
+- Fires only when `locale === 'en'` (the default). Non-en queries that
+  lack their per-locale slot surface as "missing translation" in the
+  UI — they don't get English text mislabeled.
+- Lowest-precedence layer for each entity. Any JSONB layer (parent or
+  variant, master or locale, channel override) overrides it.
+- Variant column synthesis still beats parent JSONB — matches "variant
+  overrides parent" semantics elsewhere.
+- Empty arrays count as "no data" so a variant with `bulletPoints: []`
+  falls back to parent (or doesn't synthesize at all).
+- Source label: `'masterColumn'`. `inheritedFrom` is `<productId>:<columnName>`
+  so the UI can deep-link to the exact field.
+
+**Synthesis map** (locked in A.4):
+
+| Resolver key | Legacy column |
+|---|---|
+| `title` | `Product.name` |
+| `description` | `Product.description` |
+| `bulletPoints` | `Product.bulletPoints` |
+| `keywords` | `Product.keywords` |
+| `brand` | `Product.brand` |
+| `manufacturer` | `Product.manufacturer` |
+| `basePrice` | `Product.basePrice` |
+
+**Removal path:** when shadow telemetry (A.2) shows zero `masterColumn`
+hits for a given key over a period, that column's writes have fully
+migrated to JSONB. Remove the entry from `SYNTHESIS_MAP` in a Phase B
+or C sub-phase; drop the legacy column in a follow-up migration.
+
+## Out of scope for A.1–A.4
 
 - **Caller migration** — existing read paths (edit page, grid, publish
-  pipeline) still read direct columns. A.4 wires the first caller in
-  behind a feature flag.
+  pipeline) still read direct columns. Phase B starts flipping them
+  onto the resolver.
 - **Write paths** — nothing writes to `localizedContent` or
   `overrideData` until Phase B (Global tab + inheritance UI).
 - **Deep merge for nested objects** — current resolver replaces wholesale.
