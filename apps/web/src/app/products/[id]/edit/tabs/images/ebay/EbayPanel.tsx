@@ -310,7 +310,7 @@ export default function EbayPanel({
   })
 
   return (
-    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden space-y-0">
+    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl space-y-0">
       {/* Header */}
       <div className="flex items-center gap-2 px-5 py-3 border-b border-slate-200 dark:border-slate-700">
         <ShoppingBag className="w-4 h-4 text-slate-500" />
@@ -621,8 +621,12 @@ export default function EbayPanel({
       {/* PB.3c — Recent jobs strip (compact, last 3) */}
       <RecentChannelJobsStrip productId={productId} channel="EBAY" refreshKey={jobsRefreshKey} />
 
-      {/* Publish */}
-      <div data-publish-anchor className="px-5 py-3 border-t border-slate-100 dark:border-slate-800 flex flex-col gap-1.5">
+      {/* PB.4 — sticky publish bar so the Publish button stays in
+          reach when the gallery + color sets push it below the fold. */}
+      <div
+        data-publish-anchor
+        className="sticky bottom-0 z-10 bg-white dark:bg-slate-900 rounded-b-xl px-5 py-3 border-t border-slate-100 dark:border-slate-800 shadow-[0_-2px_8px_-2px_rgba(0,0,0,0.08)] dark:shadow-[0_-2px_8px_-2px_rgba(0,0,0,0.5)] flex flex-col gap-1.5"
+      >
         <div className="flex items-center justify-between">
           <span className="text-xs text-slate-400">
             ReviseItem · PictureDetails + VariationSpecificPictureSet via Trading API

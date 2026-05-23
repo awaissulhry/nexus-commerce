@@ -428,7 +428,11 @@ export default function AmazonPanel({
   }
 
   return (
-    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden">
+    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl">
+      {/* PB.4 — removed overflow-hidden so the publish bar can use
+          position: sticky bottom-0 against the viewport (not clipped
+          to the panel boundary). Rounded-b-xl on AmazonPublishBar
+          matches the panel's bottom corners. */}
       {/* Marketplace tabs + axis selector */}
       <div className="flex items-center border-b border-slate-200 dark:border-slate-700 px-4 overflow-x-auto gap-2">
         <div className="flex items-center flex-1 overflow-x-auto">
