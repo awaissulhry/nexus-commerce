@@ -6559,6 +6559,7 @@ model Warehouse {
   shipments         Shipment[]
   inboundShipments  InboundShipment[]
   purchaseOrders    PurchaseOrder[]
+  poTemplates       PoTemplate[]
   // H.1: optional 1-1 link to inventory-side StockLocation
   stockLocation     StockLocation?
   // Order routing rules that target this warehouse
@@ -7555,6 +7556,7 @@ model Supplier {
 
   products        SupplierProduct[]
   purchaseOrders  PurchaseOrder[]
+  poTemplates     PoTemplate[]
   // R.19 — optional shipping profile (mode + freight rates +
   // container capacity). When present, enables landed-cost EOQ and
   // container-fill suggestions.
@@ -7793,6 +7795,86 @@ model PoComment {
   purchaseOrder PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
 
   @@index([purchaseOrderId, createdAt])
+}
+
+// PO-Plus.6 — Reusable PO template. "Save as template" on an existing
+// PO captures the supplier + warehouse + currency + line basket; the
+// operator can later instantiate it as a fresh DRAFT in one click,
+// or attach a PoSchedule for cron-driven auto-creation.
+model PoTemplate {
+  id           String  @id @default(cuid())
+  name         String
+  description  String?
+  supplierId   String?
+  warehouseId  String?
+  currencyCode String  @default("EUR")
+  notes        String?
+
+  createdBy String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  deletedAt DateTime?
+
+  items     PoTemplateItem[]
+  schedules PoSchedule[]
+  supplier  Supplier?  @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  warehouse Warehouse? @relation(fields: [warehouseId], references: [id], onDelete: SetNull)
+
+  @@index([supplierId])
+  @@index([deletedAt])
+  @@index([createdAt])
+}
+
+model PoTemplateItem {
+  id              String  @id @default(cuid())
+  templateId      String
+  productId       String?
+  supplierSku     String?
+  sku             String
+  quantityOrdered Int
+  unitCostCents   Int     @default(0)
+  note            String?
+  lineOrder       Int     @default(0)
+
+  template PoTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@index([templateId, lineOrder])
+}
+
+// PO-Plus.6 — Recurring schedule attached to a template. Cron job
+// `scheduled-po.job` wakes hourly, finds schedules where
+// nextRunAt <= now AND isActive, instantiates a DRAFT PO from the
+// linked template, and advances nextRunAt by the cadence.
+//
+// Cadence values:
+//   DAILY      — every `cadenceInterval` days
+//   WEEKLY     — every `cadenceInterval` weeks (same day-of-week)
+//   MONTHLY    — every `cadenceInterval` months
+//   QUARTERLY  — every `cadenceInterval` × 3 months
+//
+// expectedLeadDays: when set, generated POs get
+// expectedDeliveryDate = today + expectedLeadDays. Null = no
+// expected date (operator fills in after).
+model PoSchedule {
+  id                 String   @id @default(cuid())
+  templateId         String
+  cadence            String // DAILY | WEEKLY | MONTHLY | QUARTERLY
+  cadenceInterval    Int      @default(1)
+  startsAt           DateTime
+  nextRunAt          DateTime
+  lastRunAt          DateTime?
+  lastGeneratedPoId  String?
+  isActive           Boolean  @default(true)
+  expectedLeadDays   Int?
+
+  createdBy String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  template PoTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@index([nextRunAt, isActive])
+  @@index([templateId])
 }
 
 model InboundShipment {

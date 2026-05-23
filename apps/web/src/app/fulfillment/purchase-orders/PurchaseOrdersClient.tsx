@@ -33,6 +33,7 @@ import {
   FileText,
   Loader2,
   Plus,
+  Repeat,
   Search,
   Settings2,
   ShoppingCart,
@@ -858,6 +859,16 @@ export default function PurchaseOrdersClient() {
               <Upload className="w-3 h-3" />
               Import CSV
             </button>
+            {/* PO-Plus.6 — templates surface link. The /templates page
+                lists reusable templates + recurring schedules. */}
+            <Link
+              href="/fulfillment/purchase-orders/templates"
+              className="h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded-md inline-flex items-center gap-1.5 hover:bg-slate-50 dark:hover:bg-slate-800"
+              title="Reusable templates + recurring schedules"
+            >
+              <Repeat className="w-3 h-3" />
+              Templates
+            </Link>
             <button
               type="button"
               onClick={toggleShowDeleted}

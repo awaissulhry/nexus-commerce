@@ -28,6 +28,7 @@ import {
   PackageCheck,
   Plus,
   Printer,
+  Repeat,
   ShoppingCart,
   Trash2,
   Truck,
@@ -322,6 +323,11 @@ export default function PurchaseOrderDetailClient({ id }: { id: string }) {
 
   // PO-Plus.3 — quick-receive modal state.
   const [quickReceiveOpen, setQuickReceiveOpen] = useState(false)
+  // PO-Plus.6 — save-as-template state.
+  const [savingAsTemplate, setSavingAsTemplate] = useState(false)
+  const [templateName, setTemplateName] = useState('')
+  const [saveTemplateError, setSaveTemplateError] = useState<string | null>(null)
+  const [savedTemplate, setSavedTemplate] = useState<{ id: string; name: string } | null>(null)
 
   // PO-Plus.4 — supplier-scorecard drawer state. URL-bound so a deep
   // link like `?scorecardSupplierId=…` opens it on page load (e.g.
@@ -375,6 +381,35 @@ export default function PurchaseOrderDetailClient({ id }: { id: string }) {
     },
     [id, refresh],
   )
+
+  const submitSaveAsTemplate = useCallback(async () => {
+    const name = templateName.trim()
+    if (!name) {
+      setSaveTemplateError('Name required')
+      return
+    }
+    setSaveTemplateError(null)
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/fulfillment/po-templates?fromPoId=${id}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name }),
+        },
+      )
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body?.error ?? `HTTP ${res.status}`)
+      }
+      const data = await res.json()
+      setSavedTemplate({ id: data.id, name: data.name })
+      setSavingAsTemplate(false)
+      setTemplateName('')
+    } catch (err) {
+      setSaveTemplateError(err instanceof Error ? err.message : String(err))
+    }
+  }, [id, templateName])
 
   const totalUnits = useMemo(
     () => po?.items.reduce((s, i) => s + i.quantityOrdered, 0) ?? 0,
@@ -508,6 +543,16 @@ export default function PurchaseOrderDetailClient({ id }: { id: string }) {
                 Create receipt
               </button>
             )}
+            {/* PO-Plus.6 — save the current PO as a reusable template. */}
+            <button
+              type="button"
+              onClick={() => setSavingAsTemplate(true)}
+              className="h-8 px-3 inline-flex items-center gap-1.5 text-base font-medium rounded border bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"
+              title="Save as a reusable template"
+            >
+              <Repeat className="w-3.5 h-3.5" />
+              Save as template
+            </button>
             {transitions.map((tr) => {
               const Icon = tr.icon
               if (tr.key === 'cancel' && showCancelConfirm) return null
@@ -582,6 +627,73 @@ export default function PurchaseOrderDetailClient({ id }: { id: string }) {
           <div className="text-md text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 rounded px-3 py-2 inline-flex items-center gap-2 po-detail-no-print">
             <AlertCircle className="w-4 h-4" />
             {actionError}
+          </div>
+        )}
+
+        {/* PO-Plus.6 — save-as-template inline prompt + confirmation. */}
+        {savingAsTemplate && (
+          <div className="bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900 rounded p-3 space-y-2 po-detail-no-print">
+            <div className="text-base text-blue-900 dark:text-blue-100 font-medium inline-flex items-center gap-2">
+              <Repeat className="w-3.5 h-3.5" />
+              Save this PO as a reusable template
+            </div>
+            <input
+              type="text"
+              value={templateName}
+              onChange={(e) => setTemplateName(e.target.value)}
+              placeholder='e.g. "Weekly Acme restock"'
+              autoFocus
+              className="w-full h-9 px-2 text-base border border-blue-200 dark:border-blue-900 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+            />
+            {saveTemplateError && (
+              <div className="text-sm text-red-700 dark:text-red-300 inline-flex items-center gap-1">
+                <AlertCircle className="w-3 h-3" /> {saveTemplateError}
+              </div>
+            )}
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={submitSaveAsTemplate}
+                disabled={!templateName.trim()}
+                className="h-8 px-3 inline-flex items-center gap-1.5 text-base font-medium rounded bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 border border-slate-900 hover:bg-slate-800 disabled:opacity-50"
+              >
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                Save template
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setSavingAsTemplate(false)
+                  setTemplateName('')
+                  setSaveTemplateError(null)
+                }}
+                className="h-8 px-3 text-base font-medium rounded border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+        {savedTemplate && (
+          <div className="bg-green-50 dark:bg-green-950/40 border border-green-200 dark:border-green-900 rounded p-3 inline-flex items-center justify-between gap-3 w-full po-detail-no-print">
+            <div className="text-base text-green-900 dark:text-green-100 inline-flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4" />
+              Saved as template <span className="font-semibold">{savedTemplate.name}</span>.{' '}
+              <Link
+                href="/fulfillment/purchase-orders/templates"
+                className="underline hover:text-green-700 dark:hover:text-green-300"
+              >
+                Manage templates →
+              </Link>
+            </div>
+            <button
+              type="button"
+              onClick={() => setSavedTemplate(null)}
+              className="text-green-700 dark:text-green-300 hover:bg-green-100 dark:hover:bg-green-900/40 h-7 w-7 rounded inline-flex items-center justify-center"
+              aria-label="Dismiss"
+            >
+              ✕
+            </button>
           </div>
         )}
 

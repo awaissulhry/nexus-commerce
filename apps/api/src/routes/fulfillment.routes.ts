@@ -7822,6 +7822,418 @@ Return ONLY valid JSON, no prose:
   // converts via fx-rate.service if the operator runs mixed-ccy
   // procurement (Xavia is EUR-dominant; PO.18 polish revisits the
   // mixed-ccy formatter).
+  // ═══════════════════════════════════════════════════════════════════
+  // PO-Plus.6 — Templates + recurring schedules.
+  //
+  // Templates store a reusable {supplier, warehouse, currency, items[]}
+  // snapshot the operator instantiates as a fresh DRAFT in one click.
+  // Schedules attach a cadence to a template and the
+  // scheduled-po.job cron auto-instantiates on the due date.
+  // ═══════════════════════════════════════════════════════════════════
+
+  // List templates (live only; soft-deleted hidden by default).
+  fastify.get('/fulfillment/po-templates', async (request, reply) => {
+    try {
+      const q = request.query as { deleted?: string }
+      const where: any = { deletedAt: q.deleted === 'true' ? { not: null } : null }
+      const items = await prisma.poTemplate.findMany({
+        where,
+        include: {
+          supplier: { select: { id: true, name: true } },
+          warehouse: { select: { code: true } },
+          items: { orderBy: [{ lineOrder: 'asc' }, { id: 'asc' }] },
+          schedules: { orderBy: { nextRunAt: 'asc' } },
+        },
+        orderBy: { createdAt: 'desc' },
+      })
+      return { items, total: items.length }
+    } catch (err: any) {
+      fastify.log.error({ err }, '[po-templates GET] failed')
+      return reply.code(500).send({ error: err?.message ?? String(err) })
+    }
+  })
+
+  fastify.get('/fulfillment/po-templates/:id', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const tpl = await prisma.poTemplate.findUnique({
+        where: { id },
+        include: {
+          supplier: { select: { id: true, name: true } },
+          warehouse: { select: { code: true } },
+          items: { orderBy: [{ lineOrder: 'asc' }, { id: 'asc' }] },
+          schedules: { orderBy: { nextRunAt: 'asc' } },
+        },
+      })
+      if (!tpl) return reply.code(404).send({ error: 'Template not found' })
+      return tpl
+    } catch (err: any) {
+      fastify.log.error({ err }, '[po-templates/:id GET] failed')
+      return reply.code(500).send({ error: err?.message ?? String(err) })
+    }
+  })
+
+  // Create a template. Two modes:
+  //   - From scratch: full body
+  //   - Clone from PO: ?fromPoId=<id> body just supplies the name
+  fastify.post('/fulfillment/po-templates', async (request, reply) => {
+    try {
+      const q = request.query as { fromPoId?: string }
+      const body = (request.body ?? {}) as {
+        name?: string
+        description?: string
+        supplierId?: string | null
+        warehouseId?: string | null
+        currencyCode?: string
+        notes?: string | null
+        items?: Array<{
+          productId?: string | null
+          sku: string
+          supplierSku?: string | null
+          quantityOrdered: number
+          unitCostCents?: number
+          note?: string | null
+        }>
+      }
+      const name = body.name?.trim()
+      if (!name) return reply.code(400).send({ error: 'name required' })
+
+      let supplierId = body.supplierId ?? null
+      let warehouseId = body.warehouseId ?? null
+      let currencyCode = body.currencyCode?.toUpperCase() || 'EUR'
+      let notes = body.notes ?? null
+      let items = Array.isArray(body.items) ? body.items : []
+
+      if (q.fromPoId) {
+        const src = await prisma.purchaseOrder.findUnique({
+          where: { id: q.fromPoId },
+          include: { items: { orderBy: [{ lineOrder: 'asc' }, { id: 'asc' }] } },
+        })
+        if (!src) return reply.code(404).send({ error: 'Source PO not found' })
+        supplierId = supplierId ?? src.supplierId
+        warehouseId = warehouseId ?? src.warehouseId
+        currencyCode = body.currencyCode?.toUpperCase() || src.currencyCode
+        notes = notes ?? src.notes
+        items =
+          items.length > 0
+            ? items
+            : src.items.map((it) => ({
+                productId: it.productId,
+                sku: it.sku,
+                supplierSku: it.supplierSku,
+                quantityOrdered: it.quantityOrdered,
+                unitCostCents: it.unitCostCents,
+                note: it.note,
+              }))
+      }
+
+      if (items.length === 0) {
+        return reply.code(400).send({ error: 'items[] required (or use ?fromPoId=<id>)' })
+      }
+
+      const tpl = await prisma.poTemplate.create({
+        data: {
+          name,
+          description: body.description?.trim() || null,
+          supplierId,
+          warehouseId,
+          currencyCode,
+          notes,
+          items: {
+            create: items.map((it, idx) => ({
+              productId: it.productId ?? null,
+              sku: it.sku,
+              supplierSku: it.supplierSku ?? null,
+              quantityOrdered: Math.max(1, Math.floor(it.quantityOrdered)),
+              unitCostCents: Math.max(0, Math.floor(it.unitCostCents ?? 0)),
+              note: it.note ?? null,
+              lineOrder: idx,
+            })),
+          },
+        },
+        include: { items: true, schedules: true },
+      })
+      return tpl
+    } catch (err: any) {
+      fastify.log.error({ err }, '[po-templates POST] failed')
+      return reply.code(500).send({ error: err?.message ?? String(err) })
+    }
+  })
+
+  fastify.patch('/fulfillment/po-templates/:id', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const body = (request.body ?? {}) as {
+        name?: string
+        description?: string | null
+        supplierId?: string | null
+        warehouseId?: string | null
+        currencyCode?: string
+        notes?: string | null
+        items?: Array<{
+          productId?: string | null
+          sku: string
+          supplierSku?: string | null
+          quantityOrdered: number
+          unitCostCents?: number
+          note?: string | null
+        }>
+      }
+      const tpl = await prisma.poTemplate.findUnique({ where: { id } })
+      if (!tpl || tpl.deletedAt)
+        return reply.code(404).send({ error: 'Template not found' })
+
+      const data: any = {}
+      if (body.name !== undefined) data.name = String(body.name).trim()
+      if (body.description !== undefined) data.description = body.description ?? null
+      if (body.supplierId !== undefined) data.supplierId = body.supplierId
+      if (body.warehouseId !== undefined) data.warehouseId = body.warehouseId
+      if (body.currencyCode !== undefined)
+        data.currencyCode = body.currencyCode.toUpperCase()
+      if (body.notes !== undefined) data.notes = body.notes
+
+      const updated = await prisma.$transaction(async (tx) => {
+        if (Array.isArray(body.items)) {
+          await tx.poTemplateItem.deleteMany({ where: { templateId: id } })
+          await tx.poTemplateItem.createMany({
+            data: body.items.map((it, idx) => ({
+              templateId: id,
+              productId: it.productId ?? null,
+              sku: it.sku,
+              supplierSku: it.supplierSku ?? null,
+              quantityOrdered: Math.max(1, Math.floor(it.quantityOrdered)),
+              unitCostCents: Math.max(0, Math.floor(it.unitCostCents ?? 0)),
+              note: it.note ?? null,
+              lineOrder: idx,
+            })),
+          })
+        }
+        if (Object.keys(data).length > 0) {
+          await tx.poTemplate.update({ where: { id }, data })
+        }
+        return await tx.poTemplate.findUnique({
+          where: { id },
+          include: { items: true, schedules: true },
+        })
+      })
+      return updated
+    } catch (err: any) {
+      fastify.log.error({ err }, '[po-templates/:id PATCH] failed')
+      return reply.code(500).send({ error: err?.message ?? String(err) })
+    }
+  })
+
+  fastify.delete('/fulfillment/po-templates/:id', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const result = await prisma.poTemplate.updateMany({
+        where: { id, deletedAt: null },
+        data: { deletedAt: new Date() },
+      })
+      if (result.count === 0)
+        return reply.code(404).send({ error: 'Template not found' })
+      return { ok: true }
+    } catch (err: any) {
+      fastify.log.error({ err }, '[po-templates/:id DELETE] failed')
+      return reply.code(500).send({ error: err?.message ?? String(err) })
+    }
+  })
+
+  // Instantiate a template → fresh DRAFT PO. Body lets the operator
+  // override the expected delivery date on the way in (defaults to
+  // null; PO.5-style smart-default not applied since the template's
+  // supplier may not be the same as the call-site context).
+  fastify.post('/fulfillment/po-templates/:id/instantiate', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const body = (request.body ?? {}) as { expectedDeliveryDate?: string }
+      const tpl = await prisma.poTemplate.findUnique({
+        where: { id },
+        include: { items: { orderBy: [{ lineOrder: 'asc' }, { id: 'asc' }] } },
+      })
+      if (!tpl || tpl.deletedAt)
+        return reply.code(404).send({ error: 'Template not found' })
+      if (tpl.items.length === 0)
+        return reply.code(400).send({ error: 'Template has no items' })
+
+      const totalCents = tpl.items.reduce(
+        (s, it) => s + it.unitCostCents * it.quantityOrdered,
+        0,
+      )
+      const warehouseId =
+        tpl.warehouseId ??
+        (await prisma.warehouse.findFirst({ where: { isDefault: true } }))?.id ??
+        null
+      const expectedDeliveryDate = body.expectedDeliveryDate
+        ? new Date(body.expectedDeliveryDate)
+        : null
+
+      const po = await prisma.purchaseOrder.create({
+        data: {
+          poNumber: generatePoNumber(),
+          supplierId: tpl.supplierId,
+          warehouseId,
+          status: 'DRAFT',
+          expectedDeliveryDate,
+          notes: tpl.notes ?? null,
+          totalCents,
+          currencyCode: tpl.currencyCode,
+          items: {
+            create: tpl.items.map((it, idx) => ({
+              productId: it.productId,
+              sku: it.sku,
+              supplierSku: it.supplierSku,
+              quantityOrdered: it.quantityOrdered,
+              unitCostCents: it.unitCostCents,
+              note: it.note,
+              lineOrder: idx,
+            })),
+          },
+        },
+      })
+      publishPoEvent({
+        type: 'po.created',
+        poId: po.id,
+        poNumber: po.poNumber,
+        ts: Date.now(),
+      })
+      return { ok: true, poId: po.id, poNumber: po.poNumber }
+    } catch (err: any) {
+      fastify.log.error({ err }, '[po-templates/:id/instantiate] failed')
+      return reply.code(500).send({ error: err?.message ?? String(err) })
+    }
+  })
+
+  // Schedules — attached to a template.
+  function advanceNextRun(
+    from: Date,
+    cadence: string,
+    interval: number,
+  ): Date {
+    const next = new Date(from)
+    const n = Math.max(1, interval)
+    switch (cadence) {
+      case 'DAILY':
+        next.setDate(next.getDate() + n)
+        break
+      case 'WEEKLY':
+        next.setDate(next.getDate() + n * 7)
+        break
+      case 'MONTHLY':
+        next.setMonth(next.getMonth() + n)
+        break
+      case 'QUARTERLY':
+        next.setMonth(next.getMonth() + n * 3)
+        break
+      default:
+        // Fallback to weekly to avoid runaway loops on bad data.
+        next.setDate(next.getDate() + 7)
+    }
+    return next
+  }
+
+  fastify.post('/fulfillment/po-templates/:id/schedules', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const body = (request.body ?? {}) as {
+        cadence?: 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'QUARTERLY'
+        cadenceInterval?: number
+        startsAt?: string
+        expectedLeadDays?: number | null
+      }
+      const tpl = await prisma.poTemplate.findUnique({ where: { id } })
+      if (!tpl || tpl.deletedAt)
+        return reply.code(404).send({ error: 'Template not found' })
+      if (!body.cadence || !['DAILY', 'WEEKLY', 'MONTHLY', 'QUARTERLY'].includes(body.cadence)) {
+        return reply.code(400).send({
+          error: 'cadence required (DAILY | WEEKLY | MONTHLY | QUARTERLY)',
+        })
+      }
+      const startsAt = body.startsAt ? new Date(body.startsAt) : new Date()
+      if (isNaN(startsAt.getTime())) {
+        return reply.code(400).send({ error: 'invalid startsAt' })
+      }
+      const interval = Math.max(1, Math.floor(body.cadenceInterval ?? 1))
+      const schedule = await prisma.poSchedule.create({
+        data: {
+          templateId: id,
+          cadence: body.cadence,
+          cadenceInterval: interval,
+          startsAt,
+          nextRunAt: startsAt,
+          expectedLeadDays:
+            body.expectedLeadDays != null && body.expectedLeadDays > 0
+              ? Math.floor(body.expectedLeadDays)
+              : null,
+        },
+      })
+      return schedule
+    } catch (err: any) {
+      fastify.log.error({ err }, '[po-templates/:id/schedules POST] failed')
+      return reply.code(500).send({ error: err?.message ?? String(err) })
+    }
+  })
+
+  fastify.patch('/fulfillment/po-schedules/:id', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const body = (request.body ?? {}) as {
+        cadence?: 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'QUARTERLY'
+        cadenceInterval?: number
+        nextRunAt?: string
+        isActive?: boolean
+        expectedLeadDays?: number | null
+      }
+      const data: any = {}
+      if (body.cadence !== undefined) {
+        if (!['DAILY', 'WEEKLY', 'MONTHLY', 'QUARTERLY'].includes(body.cadence)) {
+          return reply.code(400).send({ error: 'invalid cadence' })
+        }
+        data.cadence = body.cadence
+      }
+      if (body.cadenceInterval !== undefined) {
+        data.cadenceInterval = Math.max(1, Math.floor(body.cadenceInterval))
+      }
+      if (body.nextRunAt !== undefined) {
+        const d = new Date(body.nextRunAt)
+        if (isNaN(d.getTime())) return reply.code(400).send({ error: 'invalid nextRunAt' })
+        data.nextRunAt = d
+      }
+      if (body.isActive !== undefined) data.isActive = !!body.isActive
+      if (body.expectedLeadDays !== undefined) {
+        data.expectedLeadDays =
+          body.expectedLeadDays == null || body.expectedLeadDays <= 0
+            ? null
+            : Math.floor(body.expectedLeadDays)
+      }
+      if (Object.keys(data).length === 0) {
+        return reply.code(400).send({ error: 'no editable fields supplied' })
+      }
+      const result = await prisma.poSchedule.update({ where: { id }, data })
+      return result
+    } catch (err: any) {
+      fastify.log.error({ err }, '[po-schedules/:id PATCH] failed')
+      return reply.code(500).send({ error: err?.message ?? String(err) })
+    }
+  })
+
+  fastify.delete('/fulfillment/po-schedules/:id', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const result = await prisma.poSchedule.deleteMany({ where: { id } })
+      if (result.count === 0)
+        return reply.code(404).send({ error: 'Schedule not found' })
+      return { ok: true }
+    } catch (err: any) {
+      fastify.log.error({ err }, '[po-schedules/:id DELETE] failed')
+      return reply.code(500).send({ error: err?.message ?? String(err) })
+    }
+  })
+
+  // Internal helper exposed so the cron job + UI can both call the
+  // same instantiation logic.
+  ;(fastify as any)._poPlusAdvanceNextRun = advanceNextRun
+
   fastify.get('/fulfillment/purchase-orders/spend-summary', async (_request, reply) => {
     try {
       // Pre-terminal statuses: count toward "open" value.

@@ -204,6 +204,7 @@ import { seedPromptTemplateDefaults } from "./services/ai/prompt-template.servic
 // opt in via NEXUS_ENABLE_SCHEDULED_WIZARD_PUBLISH=1.
 import { startScheduledWizardPublishCron } from "./jobs/scheduled-wizard-publish.job.js";
 import { startScheduledImagePublishCron } from "./jobs/scheduled-image-publish.job.js";
+import { startScheduledPoCron } from "./jobs/scheduled-po.job.js";
 import { startObservabilityRetentionCron } from "./jobs/observability-retention.job.js";
 import { startAlertEvaluatorCron } from "./jobs/alert-evaluator.job.js";
 import { startRepricingEvaluatorCron } from "./jobs/repricing-evaluator.job.js";
@@ -1143,6 +1144,11 @@ async function start() {
     // PB.10 — scheduled image publish cron. Default-OFF unless
     // NEXUS_ENABLE_SCHEDULED_IMAGE_PUBLISH=1. Tick 60s; cap 25 rows.
     startScheduledImagePublishCron();
+
+    // PO-Plus.6 — recurring PO cron. Default-OFF unless
+    // NEXUS_ENABLE_SCHEDULED_PO=1. Tick 5min; cap 25 schedules per
+    // tick.
+    startScheduledPoCron();
 
     // S.17 — daily ABC-driven cycle-count scheduler. 02:30 UTC.
     // Picks up products whose cadence has elapsed (A=7d, B=30d,
