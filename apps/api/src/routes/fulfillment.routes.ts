@@ -6814,6 +6814,184 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
   })
 
   // ═══════════════════════════════════════════════════════════════════
+  // PO.9 — Public supplier ack endpoints. Token-gated, no auth.
+  //
+  // Reached from the URL embedded in the supplier email. The token is
+  // an opaque 256-bit value minted in po-supplier-email.service. We
+  // look it up directly (no parsing), so a leaked URL can be revoked
+  // by rotating the token (operator clicks "Re-send" which mints a
+  // new one).
+  //
+  // Endpoints:
+  //   GET    /po/ack/:token            — supplier-side view
+  //   POST   /po/ack/:token/confirm    — supplier confirms
+  //   POST   /po/ack/:token/decline    — supplier declines
+  //
+  // Routes mount under `/api` like the rest of the fulfillment surface
+  // (the Next.js public ack page at /po/ack/[token] proxies to these).
+  // ═══════════════════════════════════════════════════════════════════
+
+  async function findPoByToken(token: string) {
+    if (!token) return null
+    const po = await prisma.purchaseOrder.findFirst({
+      where: { supplierAckToken: token },
+      include: {
+        supplier: true,
+        items: { orderBy: [{ lineOrder: 'asc' }, { id: 'asc' }] },
+      },
+    })
+    if (!po) return null
+    if (po.supplierAckExpiresAt && po.supplierAckExpiresAt < new Date()) {
+      return { ...po, expired: true as const }
+    }
+    return { ...po, expired: false as const }
+  }
+
+  // Minimal payload — strip sensitive fields (cost, supplierSku, notes
+  // the operator may not want disclosed). Item-level shows quantity +
+  // SKU only.
+  function publicPoView(po: Awaited<ReturnType<typeof findPoByToken>>) {
+    if (!po) return null
+    return {
+      poNumber: po.poNumber,
+      status: po.status,
+      currencyCode: po.currencyCode,
+      expectedDeliveryDate: po.expectedDeliveryDate,
+      supplierConfirmedDeliveryDate: po.supplierConfirmedDeliveryDate,
+      supplierConfirmedAt: po.supplierConfirmedAt,
+      supplierAckExpiresAt: po.supplierAckExpiresAt,
+      expired: po.expired,
+      supplier: po.supplier
+        ? { name: po.supplier.name, email: po.supplier.email }
+        : null,
+      totalCents: po.totalCents,
+      notes: po.notes,
+      items: po.items.map((it) => ({
+        sku: it.sku,
+        supplierSku: it.supplierSku,
+        quantityOrdered: it.quantityOrdered,
+        unitCostCents: it.unitCostCents,
+        note: it.note,
+      })),
+    }
+  }
+
+  fastify.get('/po/ack/:token', async (request, reply) => {
+    try {
+      const { token } = request.params as { token: string }
+      const po = await findPoByToken(token)
+      if (!po) return reply.code(404).send({ error: 'Invalid or revoked link' })
+      return publicPoView(po)
+    } catch (err: any) {
+      fastify.log.error({ err }, '[po/ack/:token GET] failed')
+      return reply.code(500).send({ error: err?.message ?? String(err) })
+    }
+  })
+
+  fastify.post('/po/ack/:token/confirm', async (request, reply) => {
+    try {
+      const { token } = request.params as { token: string }
+      const body = (request.body ?? {}) as {
+        confirmedDeliveryDate?: string | null
+      }
+      const po = await findPoByToken(token)
+      if (!po) return reply.code(404).send({ error: 'Invalid or revoked link' })
+      if (po.expired) {
+        return reply.code(410).send({ error: 'Link has expired. Please request a new one from the buyer.' })
+      }
+
+      const confirmedAt = new Date()
+      const confirmedEta = body.confirmedDeliveryDate
+        ? new Date(body.confirmedDeliveryDate)
+        : po.expectedDeliveryDate
+
+      await prisma.$transaction(async (tx) => {
+        await tx.purchaseOrder.update({
+          where: { id: po.id },
+          data: {
+            supplierConfirmedAt: confirmedAt,
+            supplierConfirmedDeliveryDate: confirmedEta,
+            // Auto-advance to ACKNOWLEDGED when the supplier confirms
+            // (covers the operator-flips-it manual path that used to
+            // be the only way to reach ACKNOWLEDGED).
+            status: po.status === 'SUBMITTED' ? 'ACKNOWLEDGED' : po.status,
+            acknowledgedAt: po.status === 'SUBMITTED' ? confirmedAt : undefined,
+          },
+        })
+        // PO.8 — if there's an outstanding revision in
+        // SUPPLIER_NOTIFIED, the supplier confirming the PO body
+        // implicitly acks that revision too. Mark it as such.
+        await tx.purchaseOrderRevision.updateMany({
+          where: {
+            purchaseOrderId: po.id,
+            status: 'SUPPLIER_NOTIFIED',
+          },
+          data: {
+            status: 'SUPPLIER_ACKED',
+            supplierAckedAt: confirmedAt,
+          },
+        })
+      })
+
+      publishPoEvent({
+        type: 'po.transitioned',
+        poId: po.id,
+        poNumber: po.poNumber,
+        fromStatus: po.status,
+        toStatus: po.status === 'SUBMITTED' ? 'ACKNOWLEDGED' : po.status,
+        ts: Date.now(),
+      })
+
+      return { ok: true, confirmedAt, confirmedDeliveryDate: confirmedEta }
+    } catch (err: any) {
+      fastify.log.error({ err }, '[po/ack/:token/confirm] failed')
+      return reply.code(500).send({ error: err?.message ?? String(err) })
+    }
+  })
+
+  fastify.post('/po/ack/:token/decline', async (request, reply) => {
+    try {
+      const { token } = request.params as { token: string }
+      const body = (request.body ?? {}) as { reason?: string }
+      const po = await findPoByToken(token)
+      if (!po) return reply.code(404).send({ error: 'Invalid or revoked link' })
+      if (po.expired) {
+        return reply.code(410).send({ error: 'Link has expired. Please contact the buyer.' })
+      }
+
+      // Decline writes the reason into PO.cancelledReason for now (a
+      // dedicated supplierDeclineReason column lands in PO.18 polish if
+      // operator demand surfaces). Status flips to CANCELLED so the
+      // operator sees it immediately in the list.
+      await prisma.purchaseOrder.update({
+        where: { id: po.id },
+        data: {
+          status: 'CANCELLED',
+          cancelledAt: new Date(),
+          cancelledReason: body.reason?.trim()
+            ? `Supplier declined: ${body.reason.trim()}`
+            : 'Supplier declined via ack link',
+          // Invalidate the token so re-clicks are no-ops.
+          supplierAckToken: null,
+          supplierAckExpiresAt: null,
+        },
+      })
+      publishPoEvent({
+        type: 'po.transitioned',
+        poId: po.id,
+        poNumber: po.poNumber,
+        fromStatus: po.status,
+        toStatus: 'CANCELLED',
+        ts: Date.now(),
+      })
+      return { ok: true }
+    } catch (err: any) {
+      fastify.log.error({ err }, '[po/ack/:token/decline] failed')
+      return reply.code(500).send({ error: err?.message ?? String(err) })
+    }
+  })
+
+  // ═══════════════════════════════════════════════════════════════════
   // WORK ORDERS (in-house manufacturing)
   // ═══════════════════════════════════════════════════════════════════
 

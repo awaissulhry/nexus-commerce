@@ -109,6 +109,8 @@ export async function transitionPo(args: {
   fromStatus: PurchaseOrderStatus
   toStatus: PurchaseOrderStatus
   autoAdvanced: PurchaseOrderStatus[]
+  // PO.9 — populated only on the APPROVED → SUBMITTED edge.
+  supplierEmail?: import('./po-supplier-email.service.js').PoSupplierEmailResult
 }> {
   const po = await prisma.purchaseOrder.findUnique({
     where: { id: args.poId },
@@ -193,12 +195,43 @@ export async function transitionPo(args: {
     select: { id: true, poNumber: true, status: true },
   })
 
+  // PO.9 — when the operator hits 'send' (APPROVED → SUBMITTED), mint
+  // a fresh supplier ack token + email the supplier. The result is
+  // attached to the response so the route can surface delivery state
+  // to the operator (dryRun / sent / failed). PDF render + delivery
+  // failures don't roll back the status transition — the operator
+  // can re-send from the detail page if needed.
+  let supplierEmail: import('./po-supplier-email.service.js').PoSupplierEmailResult | undefined
+  if (args.transition === 'send' && updated.status === 'SUBMITTED') {
+    try {
+      const { sendPoToSupplier } = await import('./po-supplier-email.service.js')
+      supplierEmail = await sendPoToSupplier(po.id)
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.warn(
+        `[po-workflow] supplier email failed for ${updated.poNumber}:`,
+        err,
+      )
+      supplierEmail = {
+        ok: false,
+        token: '',
+        ackUrl: '',
+        emailDelivery: {
+          sent: false,
+          dryRun: false,
+          error: err instanceof Error ? err.message : String(err),
+        },
+      }
+    }
+  }
+
   return {
     poId: updated.id,
     poNumber: updated.poNumber,
     fromStatus: po.status,
     toStatus: updated.status,
     autoAdvanced: result.autoAdvanced,
+    supplierEmail,
   }
 }
 

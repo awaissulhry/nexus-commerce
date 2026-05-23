@@ -291,6 +291,13 @@ export default function PurchaseOrderDetailClient({ id }: { id: string }) {
     ),
   )
 
+  // PO.9 — populated when the operator just hit Send so the page can
+  // render the freshly-minted ack URL + email-delivery status.
+  const [sendResult, setSendResult] = useState<{
+    ackUrl: string
+    emailDelivery: { sent: boolean; dryRun: boolean; error?: string; skipped?: boolean }
+  } | null>(null)
+
   const handleTransition = useCallback(
     async (transition: string, reason?: string) => {
       setActionError(null)
@@ -307,6 +314,15 @@ export default function PurchaseOrderDetailClient({ id }: { id: string }) {
         if (!res.ok) {
           const body = await res.json().catch(() => ({}))
           throw new Error(body.error ?? `HTTP ${res.status}`)
+        }
+        const body = await res.json().catch(() => ({}))
+        // PO.9 — surface the supplier-email outcome when the send
+        // transition runs.
+        if (transition === 'send' && body?.supplierEmail) {
+          setSendResult({
+            ackUrl: body.supplierEmail.ackUrl,
+            emailDelivery: body.supplierEmail.emailDelivery,
+          })
         }
         await refresh()
         setShowCancelConfirm(false)
@@ -509,6 +525,49 @@ export default function PurchaseOrderDetailClient({ id }: { id: string }) {
           <div className="text-md text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 rounded px-3 py-2 inline-flex items-center gap-2 po-detail-no-print">
             <AlertCircle className="w-4 h-4" />
             {actionError}
+          </div>
+        )}
+
+        {/* PO.9 — supplier-email send result banner. Operator clicks
+            Send, sees the freshly-minted ack URL + delivery state. */}
+        {sendResult && (
+          <div className="bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900 rounded p-3 space-y-2 po-detail-no-print">
+            <div className="flex items-center gap-2 text-base text-blue-900 dark:text-blue-100 font-medium">
+              <CheckCircle2 className="w-4 h-4" />
+              {sendResult.emailDelivery.sent
+                ? 'Sent to supplier'
+                : sendResult.emailDelivery.dryRun
+                  ? 'Email skipped (dry-run mode); ack link minted'
+                  : sendResult.emailDelivery.error
+                    ? `Email did not send: ${sendResult.emailDelivery.error}`
+                    : 'Ack link minted (email skipped)'}
+            </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <input
+                type="text"
+                readOnly
+                value={sendResult.ackUrl}
+                onFocus={(e) => e.currentTarget.select()}
+                className="flex-1 min-w-0 h-8 px-2 text-sm font-mono border border-blue-200 dark:border-blue-900 rounded bg-white dark:bg-slate-900"
+              />
+              <button
+                type="button"
+                onClick={() => navigator.clipboard?.writeText(sendResult.ackUrl)}
+                className="h-8 px-3 text-sm rounded border border-blue-200 dark:border-blue-900 bg-white dark:bg-slate-900 hover:bg-blue-50 dark:hover:bg-blue-950/40"
+              >
+                Copy
+              </button>
+              <button
+                type="button"
+                onClick={() => setSendResult(null)}
+                className="h-8 px-3 text-sm rounded border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"
+              >
+                Dismiss
+              </button>
+            </div>
+            <div className="text-sm text-blue-800 dark:text-blue-200">
+              Share this URL with the supplier if the email doesn't reach them. They can confirm or decline from the link.
+            </div>
           </div>
         )}
 
