@@ -56,6 +56,13 @@ import VariantCompliancePanel, {
 } from './VariantCompliancePanel'
 import { Package } from 'lucide-react'
 
+// VR.8 — priority rank for picking the worst-of-best Amazon MAIN
+// status across a variant's marketplaces. Higher = "more
+// attention-grabbing" so it wins the per-cell pip.
+function tonePriority(tone: 'live' | 'staged' | 'drift' | 'error'): number {
+  return tone === 'error' ? 3 : tone === 'drift' ? 2 : tone === 'staged' ? 1 : 0
+}
+
 interface VariantsTabProps {
   parentId: string
   layout: VariantsLayout
@@ -165,16 +172,22 @@ export default async function VariantsTab({
     }),
   ])
 
-  // VR.7 — Per-child certificate counts + nearest expiry. Fetched
-  // AFTER children resolve (we need the child IDs); kept as a
-  // separate query and wrapped in .catch so a missing
-  // ProductCertificate table on a stale DB never crashes the tab
-  // (lesson from the DS hotfix-1 / ATM.4 saga).
+  // VR.7 + VR.8 — Per-child secondary fetches that depend on the
+  // children list: certificates (VR.7) and Amazon MAIN image
+  // publish status (VR.8). Both run AFTER children resolve since
+  // we need child IDs, both wrapped in .catch so missing tables
+  // on a stale DB never crash the tab.
   const childIds = children?.map((c) => c.id) ?? []
-  const childCerts =
+  const [childCerts, amazonMainImages] = await Promise.all([
     childIds.length === 0
-      ? []
-      : await prisma.productCertificate
+      ? Promise.resolve(
+          [] as Array<{
+            productId: string
+            certType: string
+            expiresAt: Date | null
+          }>,
+        )
+      : prisma.productCertificate
           .findMany({
             where: { productId: { in: childIds } },
             select: {
@@ -190,7 +203,52 @@ export default async function VariantsTab({
               certType: string
               expiresAt: Date | null
             }>
+          }),
+    // VR.8 — Amazon MAIN ListingImage per variant. One row per
+    // (productId, marketplace) at most when the variant has been
+    // published. Captures publishStatus + the most-recently-pushed
+    // marketplace's URL so the matrix cell can show drift / live
+    // signal next to its master ProductImage hero.
+    childIds.length === 0
+      ? Promise.resolve(
+          [] as Array<{
+            productId: string
+            url: string
+            publishStatus: string
+            publishedAt: Date | null
+            marketplace: string | null
+          }>,
+        )
+      : prisma.listingImage
+          .findMany({
+            where: {
+              productId: { in: childIds },
+              platform: 'AMAZON',
+              amazonSlot: 'MAIN',
+            },
+            select: {
+              productId: true,
+              url: true,
+              publishStatus: true,
+              publishedAt: true,
+              marketplace: true,
+            },
+            orderBy: { publishedAt: 'desc' },
           })
+          .catch((e: unknown) => {
+            console.error(
+              '[vr.8] amazon main listing images fetch failed',
+              e,
+            )
+            return [] as Array<{
+              productId: string
+              url: string
+              publishStatus: string
+              publishedAt: Date | null
+              marketplace: string | null
+            }>
+          }),
+  ])
 
   // Aggregate certs per child for the panel.
   const certsByChild = new Map<
@@ -220,6 +278,38 @@ export default async function VariantsTab({
         if (entry.expiringSoonAt == null || dt < entry.expiringSoonAt.getTime())
           entry.expiringSoonAt = cert.expiresAt
       }
+    }
+  }
+
+  // VR.8 — Aggregate Amazon MAIN status per child. Multiple
+  // marketplaces share the same MAIN image for one variant; the
+  // worst-of-best status drives the cell pip:
+  //   PUBLISHED          green  — at least one market live
+  //   DRAFT              grey   — staged only
+  //   OUTDATED / ERROR   amber/red — drift or publish failure
+  //   no row             null   — no Amazon MAIN registered yet
+  type AmazonMainTone = 'live' | 'staged' | 'drift' | 'error'
+  const amazonMainByChild = new Map<
+    string,
+    { tone: AmazonMainTone; publishedAt: Date | null; marketplace: string | null }
+  >()
+  for (const img of amazonMainImages) {
+    const status = img.publishStatus
+    const tone: AmazonMainTone =
+      status === 'PUBLISHED'
+        ? 'live'
+        : status === 'OUTDATED'
+          ? 'drift'
+          : status === 'ERROR'
+            ? 'error'
+            : 'staged'
+    const existing = amazonMainByChild.get(img.productId)
+    if (!existing || tonePriority(tone) > tonePriority(existing.tone)) {
+      amazonMainByChild.set(img.productId, {
+        tone,
+        publishedAt: img.publishedAt,
+        marketplace: img.marketplace,
+      })
     }
   }
 
@@ -312,6 +402,7 @@ export default async function VariantsTab({
           children={children.map<VariantCellData>((c) => {
             const hero =
               c.images.find((i) => i.type === 'MAIN') ?? c.images[0] ?? null
+            const amzMain = amazonMainByChild.get(c.id) ?? null
             return {
               id: c.id,
               sku: c.sku,
@@ -322,6 +413,7 @@ export default async function VariantsTab({
               marketsActive: c._count.channelListings,
               heroUrl: hero?.url ?? null,
               heroAlt: hero?.alt ?? null,
+              amazonMain: amzMain,
             }
           })}
         />

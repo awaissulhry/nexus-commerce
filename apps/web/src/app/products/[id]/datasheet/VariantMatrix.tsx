@@ -40,6 +40,14 @@ export interface VariantCellData {
   marketsActive: number
   heroUrl: string | null
   heroAlt: string | null
+  /** VR.8 — Amazon MAIN image publish status, worst-of-best across
+   *  the variant's marketplaces. Null when no ListingImage row
+   *  exists for AMAZON/MAIN on this variant. */
+  amazonMain: {
+    tone: 'live' | 'staged' | 'drift' | 'error'
+    publishedAt: Date | null
+    marketplace: string | null
+  } | null
 }
 
 export default function VariantMatrix({
@@ -169,6 +177,23 @@ function FilledCell({
 }) {
   const draft = data.status === 'DRAFT'
   const inactive = data.status === 'INACTIVE'
+  // VR.8 — Per-cell Amazon MAIN publish-status pip. Small dot on
+  // the hero thumb's bottom-right corner. Tone follows VariantsTab's
+  // worst-of-best aggregation; tooltip surfaces the published
+  // marketplace + last-publish time.
+  const amzPipTone =
+    data.amazonMain?.tone === 'live'
+      ? 'bg-emerald-500'
+      : data.amazonMain?.tone === 'staged'
+        ? 'bg-slate-400'
+        : data.amazonMain?.tone === 'drift'
+          ? 'bg-amber-500'
+          : data.amazonMain?.tone === 'error'
+            ? 'bg-red-500'
+            : null
+  const amzPipTitle = data.amazonMain
+    ? amzPipTooltip(data.amazonMain, t)
+    : t('products.datasheetHub.variants.amzMain.none')
   return (
     <Link
       href={`/products/${data.id}/datasheet`}
@@ -176,7 +201,7 @@ function FilledCell({
       title={data.name}
     >
       <div className="flex items-center gap-1.5 mb-1">
-        <div className="w-8 h-8 flex-shrink-0 rounded border border-slate-200 dark:border-slate-700 overflow-hidden bg-slate-50 dark:bg-slate-800">
+        <div className="relative w-8 h-8 flex-shrink-0 rounded border border-slate-200 dark:border-slate-700 overflow-hidden bg-slate-50 dark:bg-slate-800">
           {data.heroUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
@@ -189,6 +214,16 @@ function FilledCell({
             <div className="w-full h-full flex items-center justify-center text-slate-300">
               <ImageOff className="w-3 h-3" />
             </div>
+          )}
+          {amzPipTone && (
+            <span
+              className={
+                'absolute bottom-0 right-0 w-2 h-2 rounded-full ring-1 ring-white dark:ring-slate-900 ' +
+                amzPipTone
+              }
+              aria-label={amzPipTitle}
+              title={amzPipTitle}
+            />
           )}
         </div>
         <div className="min-w-0 flex-1">
@@ -239,6 +274,18 @@ function FilledCell({
       </div>
     </Link>
   )
+}
+
+function amzPipTooltip(
+  amzMain: NonNullable<VariantCellData['amazonMain']>,
+  t: Awaited<ReturnType<typeof getServerT>>,
+): string {
+  const toneKey = `products.datasheetHub.variants.amzMain.${amzMain.tone}`
+  const statusLabel = t(toneKey)
+  const parts = [statusLabel]
+  if (amzMain.marketplace) parts.push(amzMain.marketplace)
+  if (amzMain.publishedAt) parts.push(amzMain.publishedAt.toISOString().slice(0, 10))
+  return parts.join(' · ')
 }
 
 function EmptyCell({
