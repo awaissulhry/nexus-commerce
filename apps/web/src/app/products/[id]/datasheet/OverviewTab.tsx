@@ -29,6 +29,7 @@ import Link from 'next/link'
 import { AlertTriangle, CheckCircle2, ExternalLink } from 'lucide-react'
 import { prettyChannelMarketplace } from '@/lib/marketplace-code'
 import type { getServerT } from '@/lib/i18n/server'
+import LaunchReadiness from './LaunchReadiness'
 
 interface OverviewTabProps {
   productId: string
@@ -133,6 +134,10 @@ export default async function OverviewTab({
 
   return (
     <div className="space-y-4">
+      {/* ATM.13 — Launch readiness checklist, cross-tab signal
+          rollup. Mounted above drift because launch readiness is
+          the prime "what should I be doing first?" question. */}
+      <LaunchReadiness productId={productId} t={t} />
       <DriftSection drifts={drifts} locale={locale} t={t} />
     </div>
   )
