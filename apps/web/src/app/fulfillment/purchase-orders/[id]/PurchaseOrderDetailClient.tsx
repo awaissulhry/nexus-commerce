@@ -796,7 +796,7 @@ export default function PurchaseOrderDetailClient({ id }: { id: string }) {
           <ShipmentsPane shipments={po.inboundShipments} />
         </section>
         <section data-tab-pane className={cn(tab !== 'attachments' && 'po-detail-tab-inactive')}>
-          <AttachmentsPane attachments={po.attachments} />
+          <AttachmentsPane poId={po.id} attachments={po.attachments} onRefresh={refresh} />
         </section>
         <section data-tab-pane className={cn(tab !== 'revisions' && 'po-detail-tab-inactive')}>
           <RevisionsPane
@@ -1086,58 +1086,327 @@ function ShipmentsPane({ shipments }: { shipments: POInboundShipment[] }) {
   )
 }
 
-function AttachmentsPane({ attachments }: { attachments: POAttachment[] }) {
-  if (attachments.length === 0) {
-    return (
-      <EmptyState
-        icon={Paperclip}
-        title="No attachments"
-        description="Supplier quotes, contracts, art files, and label sheets will appear here. Upload UI ships in PO.5."
-      />
-    )
-  }
+// ── Attachments pane (PO-Plus.1) ──────────────────────────────────
+//
+// Upload via drag-drop or "Choose file" button. Per-row kind dropdown
+// (PATCH), filename inline edit, delete-with-confirm. Inline preview
+// for images + PDFs; download icon for everything else.
+
+const ATTACHMENT_KIND_CHOICES = [
+  { key: 'QUOTE', label: 'Quote' },
+  { key: 'CONTRACT', label: 'Contract' },
+  { key: 'ART', label: 'Art' },
+  { key: 'LABEL', label: 'Label' },
+  { key: 'EMAIL', label: 'Email' },
+  { key: 'OTHER', label: 'Other' },
+] as const
+
+const MAX_ATTACHMENT_BYTES_CLIENT = 25 * 1024 * 1024 // mirror the API cap
+
+function AttachmentsPane({
+  poId,
+  attachments,
+  onRefresh,
+}: {
+  poId: string
+  attachments: POAttachment[]
+  onRefresh: () => void | Promise<void>
+}) {
+  const [uploading, setUploading] = useState<{ filename: string; bytes: number; progress: number } | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [dragOver, setDragOver] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const uploadFiles = useCallback(
+    async (files: FileList | File[]) => {
+      const list = Array.from(files)
+      if (list.length === 0) return
+      setError(null)
+      for (const f of list) {
+        if (f.size > MAX_ATTACHMENT_BYTES_CLIENT) {
+          setError(
+            `"${f.name}" is ${(f.size / 1024 / 1024).toFixed(1)} MB; max ${MAX_ATTACHMENT_BYTES_CLIENT / 1024 / 1024} MB per file.`,
+          )
+          continue
+        }
+        setUploading({ filename: f.name, bytes: f.size, progress: 0 })
+        try {
+          await new Promise<void>((resolve, reject) => {
+            const xhr = new XMLHttpRequest()
+            xhr.open(
+              'POST',
+              `${getBackendUrl()}/api/fulfillment/purchase-orders/${poId}/attachments`,
+              true,
+            )
+            xhr.upload.onprogress = (e) => {
+              if (e.lengthComputable) {
+                setUploading({
+                  filename: f.name,
+                  bytes: f.size,
+                  progress: e.loaded / e.total,
+                })
+              }
+            }
+            xhr.onload = () => {
+              if (xhr.status >= 200 && xhr.status < 300) resolve()
+              else {
+                try {
+                  const body = JSON.parse(xhr.responseText)
+                  reject(new Error(body?.error ?? `HTTP ${xhr.status}`))
+                } catch {
+                  reject(new Error(`HTTP ${xhr.status}`))
+                }
+              }
+            }
+            xhr.onerror = () => reject(new Error('network error'))
+            const form = new FormData()
+            form.append('file', f, f.name)
+            xhr.send(form)
+          })
+        } catch (err) {
+          setError(`"${f.name}" — ${err instanceof Error ? err.message : String(err)}`)
+        }
+      }
+      setUploading(null)
+      await onRefresh()
+    },
+    [poId, onRefresh],
+  )
+
+  const handleDrop = useCallback(
+    (e: React.DragEvent<HTMLDivElement>) => {
+      e.preventDefault()
+      setDragOver(false)
+      if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+        uploadFiles(e.dataTransfer.files)
+      }
+    },
+    [uploadFiles],
+  )
+
   return (
-    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
-      <table className="w-full text-base">
-        <thead className="bg-slate-50 dark:bg-slate-800 text-sm text-slate-600 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700">
-          <tr>
-            <th className="text-left font-medium px-4 py-1.5">File</th>
-            <th className="text-left font-medium px-4 py-1.5">Kind</th>
-            <th className="text-left font-medium px-4 py-1.5">Size</th>
-            <th className="text-left font-medium px-4 py-1.5">Uploaded</th>
-          </tr>
-        </thead>
-        <tbody>
-          {attachments.map((a) => (
-            <tr key={a.id} className="border-b border-slate-100 dark:border-slate-800 last:border-0">
-              <td className="px-4 py-2">
-                <a
-                  href={a.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-slate-900 dark:text-slate-100 hover:underline inline-flex items-center gap-1.5"
-                >
-                  <Paperclip className="w-3 h-3" />
-                  {a.filename ?? a.url}
-                </a>
-              </td>
-              <td className="px-4 py-2">
-                <Badge variant="default" size="sm">
-                  {a.kind}
-                </Badge>
-              </td>
-              <td className="px-4 py-2 tabular-nums text-sm text-slate-500 dark:text-slate-400">
-                {formatBytes(a.sizeBytes)}
-              </td>
-              <td className="px-4 py-2 text-sm text-slate-500 dark:text-slate-400">
-                {relativeTime(a.uploadedAt)}
-                {a.uploadedBy ? ` · ${a.uploadedBy}` : ''}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+    <div className="space-y-3">
+      {/* Drop zone + browse */}
+      <div
+        onDragEnter={(e) => {
+          e.preventDefault()
+          setDragOver(true)
+        }}
+        onDragOver={(e) => {
+          e.preventDefault()
+          e.dataTransfer.dropEffect = 'copy'
+        }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={handleDrop}
+        className={cn(
+          'border-2 border-dashed rounded-lg p-6 text-center transition-colors',
+          dragOver
+            ? 'border-blue-400 dark:border-blue-500 bg-blue-50/40 dark:bg-blue-950/30'
+            : 'border-slate-300 dark:border-slate-700 bg-slate-50/40 dark:bg-slate-800/40',
+        )}
+      >
+        <Paperclip className="w-5 h-5 text-slate-400 dark:text-slate-500 mx-auto mb-2" />
+        <div className="text-base text-slate-700 dark:text-slate-300 mb-1">
+          Drag files here, or{' '}
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            className="text-blue-600 dark:text-blue-400 hover:underline"
+          >
+            choose a file
+          </button>
+        </div>
+        <div className="text-xs text-slate-500 dark:text-slate-400">
+          Quotes, contracts, art, labels, anything up to 25 MB. PDFs and images preview inline.
+        </div>
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          onChange={(e) => {
+            if (e.target.files) uploadFiles(e.target.files)
+            e.target.value = ''
+          }}
+          className="hidden"
+        />
+      </div>
+
+      {uploading && (
+        <div className="bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900 rounded p-2 text-base text-blue-900 dark:text-blue-100 inline-flex items-center gap-2 w-full">
+          <Loader2 className="w-3 h-3 animate-spin" />
+          Uploading {uploading.filename} — {Math.round(uploading.progress * 100)}%
+        </div>
+      )}
+      {error && (
+        <div className="text-md text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 rounded px-3 py-2 inline-flex items-center gap-2">
+          <AlertCircle className="w-4 h-4" />
+          {error}
+        </div>
+      )}
+
+      {/* Attachments table */}
+      {attachments.length === 0 ? (
+        <div className="text-base text-slate-500 dark:text-slate-400 italic">
+          No attachments yet.
+        </div>
+      ) : (
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
+          <table className="w-full text-base">
+            <thead className="bg-slate-50 dark:bg-slate-800 text-sm text-slate-600 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700">
+              <tr>
+                <th className="text-left font-medium px-4 py-1.5 w-12">Preview</th>
+                <th className="text-left font-medium px-4 py-1.5">File</th>
+                <th className="text-left font-medium px-4 py-1.5 w-32">Kind</th>
+                <th className="text-left font-medium px-4 py-1.5 w-24">Size</th>
+                <th className="text-left font-medium px-4 py-1.5">Uploaded</th>
+                <th className="w-12"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {attachments.map((a) => (
+                <AttachmentRow key={a.id} poId={poId} attachment={a} onRefresh={onRefresh} />
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
+  )
+}
+
+function AttachmentRow({
+  poId,
+  attachment,
+  onRefresh,
+}: {
+  poId: string
+  attachment: POAttachment
+  onRefresh: () => void | Promise<void>
+}) {
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [saving, setSaving] = useState(false)
+
+  const isImage = attachment.contentType?.startsWith('image/')
+  const isPdf = attachment.contentType === 'application/pdf'
+
+  const updateKind = async (newKind: string) => {
+    setSaving(true)
+    try {
+      await fetch(
+        `${getBackendUrl()}/api/fulfillment/purchase-orders/${poId}/attachments/${attachment.id}`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ kind: newKind }),
+        },
+      )
+      await onRefresh()
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const remove = async () => {
+    setSaving(true)
+    try {
+      await fetch(
+        `${getBackendUrl()}/api/fulfillment/purchase-orders/${poId}/attachments/${attachment.id}`,
+        { method: 'DELETE' },
+      )
+      await onRefresh()
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <tr className="border-b border-slate-100 dark:border-slate-800 last:border-0 align-middle">
+      <td className="px-4 py-2">
+        {isImage ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={attachment.url}
+            alt={attachment.filename ?? 'attachment'}
+            className="w-10 h-10 object-cover rounded border border-slate-200 dark:border-slate-700"
+          />
+        ) : isPdf ? (
+          <div className="w-10 h-10 rounded border border-slate-200 dark:border-slate-700 bg-red-50 dark:bg-red-950/40 inline-flex items-center justify-center text-xs font-mono text-red-700 dark:text-red-300">
+            PDF
+          </div>
+        ) : (
+          <div className="w-10 h-10 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 inline-flex items-center justify-center">
+            <Paperclip className="w-4 h-4 text-slate-400 dark:text-slate-500" />
+          </div>
+        )}
+      </td>
+      <td className="px-4 py-2">
+        <a
+          href={attachment.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-slate-900 dark:text-slate-100 hover:underline inline-flex items-center gap-1.5"
+        >
+          {attachment.filename ?? attachment.url.split('/').pop() ?? attachment.url}
+        </a>
+        {attachment.contentType && (
+          <div className="text-xs text-slate-500 dark:text-slate-400 font-mono">
+            {attachment.contentType}
+          </div>
+        )}
+      </td>
+      <td className="px-4 py-2">
+        <select
+          value={attachment.kind}
+          onChange={(e) => updateKind(e.target.value)}
+          disabled={saving}
+          className="h-7 px-1 text-sm border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+        >
+          {ATTACHMENT_KIND_CHOICES.map((c) => (
+            <option key={c.key} value={c.key}>
+              {c.label}
+            </option>
+          ))}
+        </select>
+      </td>
+      <td className="px-4 py-2 tabular-nums text-sm text-slate-500 dark:text-slate-400">
+        {formatBytes(attachment.sizeBytes)}
+      </td>
+      <td className="px-4 py-2 text-sm text-slate-500 dark:text-slate-400">
+        {relativeTime(attachment.uploadedAt)}
+        {attachment.uploadedBy ? ` · ${attachment.uploadedBy}` : ''}
+      </td>
+      <td className="px-2 py-2">
+        {confirmDelete ? (
+          <div className="inline-flex items-center gap-1">
+            <button
+              type="button"
+              onClick={remove}
+              disabled={saving}
+              className="text-xs text-red-700 dark:text-red-300 hover:underline disabled:opacity-50"
+            >
+              Delete?
+            </button>
+            <button
+              type="button"
+              onClick={() => setConfirmDelete(false)}
+              disabled={saving}
+              className="text-xs text-slate-500 dark:text-slate-400 hover:underline"
+            >
+              Cancel
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setConfirmDelete(true)}
+            className="h-7 w-7 inline-flex items-center justify-center rounded text-slate-400 dark:text-slate-500 hover:text-rose-700 dark:hover:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/40"
+            aria-label="Delete attachment"
+          >
+            <Trash2 size={12} />
+          </button>
+        )}
+      </td>
+    </tr>
   )
 }
 

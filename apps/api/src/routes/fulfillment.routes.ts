@@ -6385,6 +6385,200 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
   // trim); mentions[] is optional (resolved emails or user ids that
   // future notification fan-out will read). Emits po.updated so the
   // SSE pipe refreshes the count in the tab badge.
+  // ═══════════════════════════════════════════════════════════════════
+  // PO-Plus.1 — Purchase-order attachments.
+  //
+  // Stores supplier quotes / contracts / art files / label sheets etc.
+  // alongside a PO. Persists URL + metadata in PurchaseOrderAttachment
+  // (schema landed in PO.1); binaries upload to Cloudinary so we don't
+  // bloat Postgres.
+  //
+  // Kind dictionary (also reflected in the frontend dropdown):
+  //   QUOTE     — supplier price quote (PDF / image / Excel)
+  //   CONTRACT  — signed contract or framework agreement
+  //   ART       — color reference, brand assets, logos
+  //   LABEL     — EAN sheet, FNSKU sheet, custom label artwork
+  //   EMAIL     — supplier-facing correspondence (printable copy)
+  //   OTHER     — anything else
+  // ═══════════════════════════════════════════════════════════════════
+
+  const ALLOWED_ATTACHMENT_KINDS = new Set([
+    'QUOTE', 'CONTRACT', 'ART', 'LABEL', 'EMAIL', 'OTHER',
+  ])
+
+  // Per-file cap. 25 MB matches Resend's attachment ceiling so a
+  // QUOTE that's been attached to a PO can later ride along on the
+  // supplier email without truncation.
+  const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024
+
+  // Map MIME → default kind so the operator gets a sensible pre-pick
+  // they can override in the kind dropdown.
+  function guessAttachmentKind(mime: string | null, filename: string | null): string {
+    const m = (mime ?? '').toLowerCase()
+    const f = (filename ?? '').toLowerCase()
+    if (m.startsWith('image/')) return 'ART'
+    if (m === 'application/pdf') return 'QUOTE'
+    if (m.includes('zip') || m.includes('compressed') || f.endsWith('.zip')) return 'LABEL'
+    if (m.includes('spreadsheet') || m.includes('excel') || f.endsWith('.xlsx') || f.endsWith('.csv')) return 'QUOTE'
+    if (m.startsWith('text/') || m.includes('eml') || f.endsWith('.eml')) return 'EMAIL'
+    return 'OTHER'
+  }
+
+  // Cloudinary's resource_type picker. PDFs + ZIPs + Excel go in as
+  // 'raw' so Cloudinary doesn't try to image-process them.
+  function cloudinaryResourceFor(mime: string | null): 'image' | 'video' | 'raw' {
+    const m = (mime ?? '').toLowerCase()
+    if (m.startsWith('image/')) return 'image'
+    if (m.startsWith('video/')) return 'video'
+    return 'raw'
+  }
+
+  // POST /:id/attachments — multipart upload. Accepts any file kind
+  // up to MAX_ATTACHMENT_BYTES. Operator can override kind via the
+  // ?kind= query param; default is MIME-inferred.
+  fastify.post('/fulfillment/purchase-orders/:id/attachments', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const exists = await prisma.purchaseOrder.findUnique({
+        where: { id },
+        select: { id: true },
+      })
+      if (!exists) return reply.code(404).send({ error: 'PO not found' })
+
+      const { isCloudinaryConfigured, uploadBufferToCloudinary } = await import(
+        '../services/cloudinary.service.js'
+      )
+      if (!isCloudinaryConfigured()) {
+        return reply.code(503).send({
+          error:
+            'Cloudinary not configured. Set CLOUDINARY_CLOUD_NAME / _API_KEY / _API_SECRET to enable attachments.',
+        })
+      }
+
+      let data: any
+      try {
+        data = await (request as any).file?.()
+      } catch (err) {
+        return reply.code(400).send({
+          error:
+            'multipart upload required (Content-Type: multipart/form-data, field name: "file")',
+        })
+      }
+      if (!data) {
+        return reply.code(400).send({ error: 'multipart upload required (field "file")' })
+      }
+      const buffer: Buffer = await data.toBuffer()
+      if (buffer.byteLength > MAX_ATTACHMENT_BYTES) {
+        return reply.code(413).send({
+          error: `File too large (${(buffer.byteLength / 1024 / 1024).toFixed(1)} MB). Max ${MAX_ATTACHMENT_BYTES / 1024 / 1024} MB.`,
+        })
+      }
+
+      const q = request.query as { kind?: string; uploadedBy?: string }
+      const filename: string | null = data.filename ?? null
+      const mime: string | null = data.mimetype ?? null
+
+      // Pick kind: explicit ?kind= wins (when valid), else MIME guess.
+      const requestedKind = (q.kind ?? '').toUpperCase().trim()
+      const kind = ALLOWED_ATTACHMENT_KINDS.has(requestedKind)
+        ? requestedKind
+        : guessAttachmentKind(mime, filename)
+
+      const resourceType = cloudinaryResourceFor(mime)
+      const uploaded = await uploadBufferToCloudinary(buffer, {
+        folder: `po-attachments/${id}`,
+        resourceType,
+      })
+
+      const row = await prisma.purchaseOrderAttachment.create({
+        data: {
+          purchaseOrderId: id,
+          kind,
+          url: uploaded.url,
+          filename,
+          contentType: mime,
+          sizeBytes: buffer.byteLength,
+          uploadedBy: q.uploadedBy ?? null,
+        },
+      })
+      publishPoEvent({ type: 'po.updated', poId: id, reason: 'attachment-added', ts: Date.now() })
+      return row
+    } catch (err: any) {
+      fastify.log.error({ err }, '[purchase-orders/:id/attachments POST] failed')
+      return reply.code(500).send({ error: err?.message ?? String(err) })
+    }
+  })
+
+  // PATCH /:id/attachments/:attachmentId — change the kind or filename
+  // post-upload (operator catches a misclassification).
+  fastify.patch(
+    '/fulfillment/purchase-orders/:id/attachments/:attachmentId',
+    async (request, reply) => {
+      try {
+        const { id, attachmentId } = request.params as {
+          id: string
+          attachmentId: string
+        }
+        const body = (request.body ?? {}) as { kind?: string; filename?: string }
+        const data: any = {}
+        if (body.kind !== undefined) {
+          const k = String(body.kind).toUpperCase().trim()
+          if (!ALLOWED_ATTACHMENT_KINDS.has(k)) {
+            return reply.code(400).send({
+              error: `kind must be one of: ${Array.from(ALLOWED_ATTACHMENT_KINDS).join(', ')}`,
+            })
+          }
+          data.kind = k
+        }
+        if (body.filename !== undefined) {
+          data.filename = String(body.filename).trim() || null
+        }
+        if (Object.keys(data).length === 0) {
+          return reply.code(400).send({ error: 'no editable fields supplied' })
+        }
+        const result = await prisma.purchaseOrderAttachment.updateMany({
+          where: { id: attachmentId, purchaseOrderId: id },
+          data,
+        })
+        if (result.count === 0) {
+          return reply.code(404).send({ error: 'Attachment not found' })
+        }
+        publishPoEvent({ type: 'po.updated', poId: id, reason: 'attachment-edited', ts: Date.now() })
+        return { ok: true }
+      } catch (err: any) {
+        fastify.log.error({ err }, '[purchase-orders/:id/attachments PATCH] failed')
+        return reply.code(500).send({ error: err?.message ?? String(err) })
+      }
+    },
+  )
+
+  // DELETE /:id/attachments/:attachmentId — hard-delete. We don't try
+  // to also delete the Cloudinary asset; the bytes age out per the
+  // Cloudinary retention policy. PO.18 polish can wire a `destroy`
+  // call if storage costs become a concern.
+  fastify.delete(
+    '/fulfillment/purchase-orders/:id/attachments/:attachmentId',
+    async (request, reply) => {
+      try {
+        const { id, attachmentId } = request.params as {
+          id: string
+          attachmentId: string
+        }
+        const result = await prisma.purchaseOrderAttachment.deleteMany({
+          where: { id: attachmentId, purchaseOrderId: id },
+        })
+        if (result.count === 0) {
+          return reply.code(404).send({ error: 'Attachment not found' })
+        }
+        publishPoEvent({ type: 'po.updated', poId: id, reason: 'attachment-deleted', ts: Date.now() })
+        return { ok: true }
+      } catch (err: any) {
+        fastify.log.error({ err }, '[purchase-orders/:id/attachments DELETE] failed')
+        return reply.code(500).send({ error: err?.message ?? String(err) })
+      }
+    },
+  )
+
   fastify.post('/fulfillment/purchase-orders/:id/comments', async (request, reply) => {
     try {
       const { id } = request.params as { id: string }
