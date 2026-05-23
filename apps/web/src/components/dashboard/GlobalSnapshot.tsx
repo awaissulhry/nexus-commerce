@@ -16,9 +16,9 @@
 
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
-import { ArrowUpRight, ShoppingCart, Package, Mail, RefreshCw } from 'lucide-react'
+import { ArrowUpRight, ShoppingCart, Package, Mail, RefreshCw, X } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
-import { Modal } from '@/components/ui/Modal'
+import { AnchoredPopover } from '@/app/_shared/grid-lens/AnchoredPopover'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { getBackendUrl } from '@/lib/backend-url'
 
@@ -312,6 +312,15 @@ export function GlobalSnapshot() {
       return next
     })
 
+  // PV-RT.1 — per-tile refs for AnchoredPopover. Each ref attaches to
+  // the tile's <button> so the popover positions itself directly under
+  // the clicked tile (matches Amazon Seller Central's pattern). The
+  // popover renders via portal to document.body so it layers above
+  // sticky headers / sidebars / any ancestor stacking context.
+  const salesTileRef = useRef<HTMLButtonElement>(null)
+  const openOrdersTileRef = useRef<HTMLButtonElement>(null)
+  const messagesTileRef = useRef<HTMLButtonElement>(null)
+
   if (loading && !data) {
     return (
       <Card title="Global snapshot">
@@ -383,6 +392,7 @@ export function GlobalSnapshot() {
           label="Sales"
           expanded={expanded === 'sales'}
           onToggle={() => onToggle('sales')}
+          buttonRef={salesTileRef}
         >
           <div className="space-y-1">
             {/* SR.1 — combined headline matches Amazon Seller Central
@@ -473,6 +483,7 @@ export function GlobalSnapshot() {
           label="Open Orders"
           expanded={expanded === 'openOrders'}
           onToggle={() => onToggle('openOrders')}
+          buttonRef={openOrdersTileRef}
         >
           <div className="space-y-1.5">
             <PulseOnChange value={data.openOrders.total}>
@@ -494,6 +505,7 @@ export function GlobalSnapshot() {
           label="Buyer Messages"
           expanded={expanded === 'messages'}
           onToggle={() => onToggle('messages')}
+          buttonRef={messagesTileRef}
         >
           <div className="space-y-1">
             <div className="text-2xl font-bold tabular-nums text-slate-400 dark:text-slate-500">—</div>
@@ -502,62 +514,101 @@ export function GlobalSnapshot() {
         </SnapshotTile>
       </div>
 
-      {/* GP-RT.1 — Modal-based detail panels. Replaces the inline
-          expansion that pushed all subsequent dashboard content down.
-          Each tile's detail opens in a centered modal:
-          - Sales + Open Orders → 3xl (1024px) for the wide table +
-            chart
-          - Buyer Messages → md (448px), placeholder is lightweight
-          Canonical <Modal> handles ESC, backdrop click, focus trap,
-          body scroll lock, and ARIA wiring. */}
-      <Modal
-        open={expanded === 'sales'}
-        onClose={() => onToggle('sales')}
-        title={
-          <span className="inline-flex items-center gap-2">
-            <ShoppingCart size={14} className="text-slate-500" aria-hidden />
-            Sales
-          </span>
-        }
-        size="3xl"
-      >
-        <div className="px-1 pb-1">
-          <SalesPanelPlaceholder data={data} onSelectMarketplace={setMarketplace} />
-        </div>
-      </Modal>
+      {/* PV-RT.1 — AnchoredPopover-based detail panels (Amazon Seller
+          Central pattern). Each popover positions directly beneath
+          the clicked tile (anchored), with no darkened backdrop. ESC
+          + click-outside dismiss via AnchoredPopover; left-aligned to
+          the trigger so the popover edge lines up with the tile edge.
+          Width 960px (~3 tile columns) so the per-marketplace table +
+          chart get the room Amazon gives them. */}
+      {expanded === 'sales' && (
+        <AnchoredPopover
+          anchorRef={salesTileRef}
+          onClose={() => onToggle('sales')}
+          align="left"
+          ariaLabel="Sales detail"
+          className="w-[960px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl overflow-hidden"
+        >
+          <PopoverHeader
+            icon={ShoppingCart}
+            label="Sales"
+            onClose={() => onToggle('sales')}
+          />
+          <div className="p-4 max-h-[70vh] overflow-y-auto">
+            <SalesPanelPlaceholder data={data} onSelectMarketplace={setMarketplace} />
+          </div>
+        </AnchoredPopover>
+      )}
 
-      <Modal
-        open={expanded === 'openOrders'}
-        onClose={() => onToggle('openOrders')}
-        title={
-          <span className="inline-flex items-center gap-2">
-            <Package size={14} className="text-slate-500" aria-hidden />
-            Open Orders
-          </span>
-        }
-        size="3xl"
-      >
-        <div className="px-1 pb-1">
-          <OpenOrdersPanelPlaceholder data={data} onSelectMarketplace={setMarketplace} />
-        </div>
-      </Modal>
+      {expanded === 'openOrders' && (
+        <AnchoredPopover
+          anchorRef={openOrdersTileRef}
+          onClose={() => onToggle('openOrders')}
+          align="left"
+          ariaLabel="Open orders detail"
+          className="w-[960px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl overflow-hidden"
+        >
+          <PopoverHeader
+            icon={Package}
+            label="Open Orders"
+            onClose={() => onToggle('openOrders')}
+          />
+          <div className="p-4 max-h-[70vh] overflow-y-auto">
+            <OpenOrdersPanelPlaceholder data={data} onSelectMarketplace={setMarketplace} />
+          </div>
+        </AnchoredPopover>
+      )}
 
-      <Modal
-        open={expanded === 'messages'}
-        onClose={() => onToggle('messages')}
-        title={
-          <span className="inline-flex items-center gap-2">
-            <Mail size={14} className="text-slate-500" aria-hidden />
-            Buyer Messages
-          </span>
-        }
-        size="md"
-      >
-        <div className="px-1 pb-1">
-          <MessagesPanelPlaceholder />
-        </div>
-      </Modal>
+      {expanded === 'messages' && (
+        <AnchoredPopover
+          anchorRef={messagesTileRef}
+          onClose={() => onToggle('messages')}
+          align="left"
+          ariaLabel="Buyer messages detail"
+          className="w-[400px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl overflow-hidden"
+        >
+          <PopoverHeader
+            icon={Mail}
+            label="Buyer Messages"
+            onClose={() => onToggle('messages')}
+          />
+          <div className="p-4">
+            <MessagesPanelPlaceholder />
+          </div>
+        </AnchoredPopover>
+      )}
     </Card>
+  )
+}
+
+// PV-RT.1 — popover header strip. Tile icon + label on the left so
+// the operator visually links the popover back to the tile they
+// clicked; close X on the right (AnchoredPopover handles ESC + click-
+// outside but explicit X is the expected affordance).
+function PopoverHeader({
+  icon: Icon,
+  label,
+  onClose,
+}: {
+  icon: any
+  label: string
+  onClose: () => void
+}) {
+  return (
+    <div className="flex items-center justify-between gap-2 px-4 py-2.5 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900">
+      <div className="inline-flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
+        <Icon size={14} className="text-slate-500 dark:text-slate-400" aria-hidden="true" />
+        {label}
+      </div>
+      <button
+        type="button"
+        onClick={onClose}
+        aria-label={`Close ${label} detail`}
+        className="h-7 w-7 inline-flex items-center justify-center rounded hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400"
+      >
+        <X size={14} aria-hidden="true" />
+      </button>
+    </div>
   )
 }
 
@@ -623,21 +674,28 @@ function SnapshotTile({
   expanded,
   onToggle,
   children,
+  buttonRef,
 }: {
   icon: any
   label: string
   expanded: boolean
   onToggle: () => void
   children: React.ReactNode
+  // PV-RT.1 — forward ref to the underlying button. Used by the
+  // parent AnchoredPopover to position itself directly beneath the
+  // clicked tile (Amazon Seller Central pattern). React.Ref instead
+  // of RefObject so the prop accepts both object refs and callback
+  // refs without compile-time mismatch.
+  buttonRef?: React.Ref<HTMLButtonElement>
 }) {
-  // GP-RT.1 — tile is now a button that OPENS A MODAL (vs the old
-  // inline-expand behaviour). aria-haspopup="dialog" communicates the
-  // pattern to AT users; aria-expanded reflects whether the modal is
-  // currently open. The arrow-up-right icon replaces chevron-down so
-  // operators visually expect a popup, not an inline expansion.
+  // GP-RT.1 — tile is a button that OPENS A POPOVER. aria-haspopup
+  // "dialog" communicates the pattern to AT users; aria-expanded
+  // reflects open/closed. The arrow-up-right icon signals "opens
+  // detail" without implying inline expansion.
   return (
     <div className="p-4">
       <button
+        ref={buttonRef}
         type="button"
         onClick={onToggle}
         aria-haspopup="dialog"
