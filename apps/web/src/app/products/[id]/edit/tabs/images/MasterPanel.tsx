@@ -21,6 +21,7 @@ import {
   Sparkles,
   Square,
   Star,
+  Tag,
   Trash2,
   Upload,
 } from 'lucide-react'
@@ -28,7 +29,8 @@ import { Button } from '@/components/ui/Button'
 import { IconButton } from '@/components/ui/IconButton'
 import { cn } from '@/lib/utils'
 import { useTranslations } from '@/lib/i18n/use-translations'
-import type { ProductImage, WorkspaceProduct } from './types'
+import ScopeUploadModal, { type ScopeChoice } from './ScopeUploadModal'
+import type { ListingImage, PendingUpsert, ProductImage, VariantSummary, WorkspaceProduct } from './types'
 
 const IMAGE_TYPES = ['MAIN', 'ALT', 'LIFESTYLE', 'SWATCH', 'DIAGRAM'] as const
 type ImageType = typeof IMAGE_TYPES[number]
@@ -69,6 +71,15 @@ interface Props {
   onOpenDamPicker?: () => void
   // IR.14 — open the Imagen lifestyle generation modal.
   onOpenLifestyle?: () => void
+  // IE.10 — variant-targeted upload. The "Upload to variant…" CTA opens
+  // ScopeUploadModal which uses these to populate the axis + value
+  // dropdowns and to auto-pick the next free Amazon slot when fanning
+  // the new image out into pending ListingImage upserts.
+  listingImages?: ListingImage[]
+  variants?: VariantSummary[]
+  activeAxis?: string
+  availableAxes?: string[]
+  addPendingUpsert?: (u: Omit<PendingUpsert, '_tempId'>) => void
 }
 
 export default function MasterPanel({
@@ -80,6 +91,11 @@ export default function MasterPanel({
   onOpenLightbox,
   onOpenDamPicker,
   onOpenLifestyle,
+  listingImages = [],
+  variants = [],
+  activeAxis = 'Color',
+  availableAxes = [],
+  addPendingUpsert,
 }: Props) {
   const { t } = useTranslations()
   const [uploading, setUploading] = useState(false)
@@ -96,6 +112,10 @@ export default function MasterPanel({
     candidate: { id: string; url: string; type: string; alt: string | null; width: number | null; height: number | null }
   } | null>(null)
   const [forcingUpload, setForcingUpload] = useState(false)
+  // IE.10 — staged files awaiting scope selection. Set when the
+  // operator hits "Upload to variant…"; the modal reads from here and
+  // calls handleScopedUpload(scope) on confirm.
+  const [scopedFiles, setScopedFiles] = useState<File[]>([])
   // IR.8.3 — apply-to-children flow state.
   const [applyConfirm, setApplyConfirm] = useState(false)
   const [applying, setApplying] = useState(false)
@@ -275,6 +295,158 @@ export default function MasterPanel({
       type: nearDup.candidate.type,
     }))
     setNearDup(null)
+  }
+
+  // IE.10 — Variant-targeted upload entrypoint. The hidden input fires
+  // this with the picked files, we stage them, and ScopeUploadModal
+  // opens so the operator picks Master vs Variant + axis + channels
+  // before any POST. The dedup gate from IE.1 still runs on each
+  // upload regardless of scope.
+  const scopedInputRef = useRef<HTMLInputElement>(null)
+  function openScopedPicker() {
+    scopedInputRef.current?.click()
+  }
+  function handleScopedInput(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? [])
+    if (files.length === 0) return
+    setScopedFiles(files)
+    if (scopedInputRef.current) scopedInputRef.current.value = ''
+  }
+
+  // Amazon slot from ProductImage.type, picking the next free PT01..PT08
+  // when the type maps to a gallery slot. Reads from listingImages +
+  // any pending upserts at the matching scope so we don't collide.
+  function nextAmazonSlotForType(t: ImageType, axis: string, val: string): string {
+    if (t === 'MAIN') return 'MAIN'
+    if (t === 'SWATCH') return 'SWCH'
+    const occupied = new Set<string>()
+    for (const li of listingImages) {
+      if (li.platform === 'AMAZON' && li.variantGroupKey === axis && li.variantGroupValue === val && li.amazonSlot) {
+        occupied.add(li.amazonSlot)
+      }
+    }
+    for (let i = 1; i <= 8; i++) {
+      const slot = `PT0${i}`
+      if (!occupied.has(slot)) return slot
+    }
+    return 'PT08'
+  }
+
+  function nextEbayPosition(): number {
+    let max = -1
+    for (const li of listingImages) {
+      if (li.platform === 'EBAY' && !li.variantGroupKey) max = Math.max(max, li.position)
+    }
+    return (max + 1) * 10 + 10
+  }
+
+  function nextShopifyPosition(): number {
+    let max = -1
+    for (const li of listingImages) {
+      if (li.platform === 'SHOPIFY' && !li.variantGroupKey) max = Math.max(max, li.position)
+    }
+    return (max + 1) * 10 + 10
+  }
+
+  async function handleScopedUpload(scope: ScopeChoice) {
+    const files = scopedFiles
+    setScopedFiles([])
+    if (files.length === 0) return
+    setUploading(true)
+    setUploadError(null)
+    let next = images
+    let amazonSlotCursor = 0
+    try {
+      for (const file of files) {
+        if (file.size > 20 * 1024 * 1024) {
+          setUploadError(`${file.name} exceeds 20 MB — too large for any channel`)
+          continue
+        }
+        const result = await uploadOne(file, scope.type, false)
+        let masterImage: ProductImage | null = null
+        if (result.outcome === 'created') {
+          masterImage = result.image
+          next = [...next, result.image]
+        } else if (result.outcome === 'reused') {
+          masterImage = result.image
+          onToast?.(t('products.edit.images.masterPanel.duplicateReused', { type: result.image.type }))
+        } else if (result.outcome === 'near-duplicate') {
+          // For variant uploads we don't gate on near-dup; treat the
+          // existing candidate as the master and continue. This matches
+          // the "I know this is similar — use it for the variant" intent.
+          masterImage = {
+            id: result.candidate.id,
+            url: result.candidate.url,
+            type: result.candidate.type,
+          } as ProductImage
+          onToast?.(t('products.edit.images.masterPanel.duplicateReused', { type: result.candidate.type }))
+        }
+
+        if (!masterImage || scope.kind === 'master' || !addPendingUpsert) continue
+
+        // IE.10 — Fan the master image into pending ListingImage rows
+        // for each selected channel + the chosen variant axis value.
+        // Amazon slot advances per file so a 3-file PT-batch lands in
+        // PT01, PT02, PT03 without colliding on the same row.
+        for (const channel of scope.channels) {
+          if (channel === 'amazon') {
+            const baseSlot = nextAmazonSlotForType(scope.type, scope.axis, scope.value)
+            const slot = baseSlot.startsWith('PT')
+              ? `PT0${Math.min(8, parseInt(baseSlot.slice(2), 10) + amazonSlotCursor)}`
+              : baseSlot
+            if (baseSlot.startsWith('PT')) amazonSlotCursor++
+            addPendingUpsert({
+              scope: 'PLATFORM',
+              platform: 'AMAZON',
+              marketplace: null,
+              amazonSlot: slot,
+              variantGroupKey: scope.axis,
+              variantGroupValue: scope.value,
+              url: masterImage.url,
+              sourceProductImageId: masterImage.id,
+              role: slot === 'MAIN' ? 'MAIN' : slot === 'SWCH' ? 'SWATCH' : 'GALLERY',
+              position: slot === 'MAIN' ? 0 : slot === 'SWCH' ? 9 : parseInt(slot.slice(2), 10),
+            })
+          } else if (channel === 'ebay') {
+            addPendingUpsert({
+              scope: 'PLATFORM',
+              platform: 'EBAY',
+              marketplace: null,
+              variantGroupKey: scope.axis,
+              variantGroupValue: scope.value,
+              url: masterImage.url,
+              sourceProductImageId: masterImage.id,
+              role: 'GALLERY',
+              position: nextEbayPosition(),
+            })
+          } else if (channel === 'shopify') {
+            addPendingUpsert({
+              scope: 'PLATFORM',
+              platform: 'SHOPIFY',
+              marketplace: null,
+              variantGroupKey: scope.axis,
+              variantGroupValue: scope.value,
+              url: masterImage.url,
+              sourceProductImageId: masterImage.id,
+              role: 'GALLERY',
+              position: nextShopifyPosition(),
+            })
+          }
+        }
+      }
+      if (next !== images) onImagesChange(next)
+      if (scope.kind === 'variant') {
+        onToast?.(t('products.edit.images.scopeUpload.applied', {
+          count: files.length,
+          axis: scope.axis,
+          value: scope.value,
+        }))
+      }
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : 'Upload failed')
+    } finally {
+      setUploading(false)
+    }
   }
 
   async function handleNearDupForce() {
@@ -569,6 +741,19 @@ export default function MasterPanel({
               {uploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
               Upload
             </Button>
+            {addPendingUpsert && (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="gap-1.5"
+                onClick={openScopedPicker}
+                disabled={uploading}
+                title={t('products.edit.images.scopeUpload.buttonTooltip')}
+              >
+                <Tag className="w-3.5 h-3.5 text-blue-500" />
+                {t('products.edit.images.scopeUpload.buttonLabel')}
+              </Button>
+            )}
             {onOpenDamPicker && (
               <Button
                 size="sm"
@@ -609,6 +794,14 @@ export default function MasterPanel({
               </Button>
             )}
             <input ref={fileInputRef} type="file" accept="image/*" multiple className="sr-only" onChange={handleFileInput} />
+            <input
+              ref={scopedInputRef}
+              type="file"
+              accept="image/*"
+              multiple
+              className="sr-only"
+              onChange={handleScopedInput}
+            />
           </div>
         </div>
 
@@ -937,6 +1130,18 @@ export default function MasterPanel({
         <p>• Use the ··· menu to copy any image into a channel panel for slot assignment.</p>
         <p>• Drop image files anywhere on the grid to upload.</p>
       </div>
+
+      {/* IE.10 — Variant-targeted upload modal */}
+      <ScopeUploadModal
+        open={scopedFiles.length > 0}
+        files={scopedFiles}
+        variants={variants}
+        availableAxes={availableAxes}
+        defaultAxis={activeAxis}
+        defaultType={newTypeRef.current}
+        onCancel={() => setScopedFiles([])}
+        onConfirm={(scope) => { void handleScopedUpload(scope) }}
+      />
 
       {/* IE.1.3 — Near-duplicate confirmation modal. Triggers when the
           upload endpoint returns 409 NEAR_DUPLICATE. Shows the

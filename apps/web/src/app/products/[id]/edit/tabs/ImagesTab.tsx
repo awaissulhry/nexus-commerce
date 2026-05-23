@@ -283,6 +283,11 @@ export default function ImagesTab({ product, discardSignal, onDirtyChange }: Pro
             <MasterPanel
               product={wp}
               images={master}
+              listingImages={listing}
+              variants={variants}
+              activeAxis={activeAxis}
+              availableAxes={availableAxes}
+              addPendingUpsert={workspace.addPendingUpsert}
               onImagesChange={() => { void workspace.reload() }}
               onAddToChannel={workspace.addToChannel}
               onToast={showToast}
