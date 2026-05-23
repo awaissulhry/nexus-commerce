@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ArrowLeft, Printer, FileDown, Loader2, Globe, AlertTriangle, Package, X as XIcon } from 'lucide-react'
+import { ArrowLeft, Printer, FileDown, Loader2, Globe, AlertTriangle, Package, X as XIcon, Keyboard } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { SkuPanel } from './SkuPanel'
 import { LabelPreview } from './LabelPreview'
@@ -129,6 +129,7 @@ export default function FnskuLabelDesigner() {
   // Bytes received from the streaming PDF response — surfaces a "X.X MB" chip
   // next to the spinner for large jobs. Reset to 0 between downloads.
   const [pdfBytesReceived, setPdfBytesReceived] = useState(0)
+  const [shortcutsOpen, setShortcutsOpen] = useState(false)
   const [marketplace, setMarketplace] = useState<string>(() => {
     try { return localStorage.getItem('fnsku-label-marketplace') || 'IT' }
     catch { return 'IT' }
@@ -284,13 +285,19 @@ export default function FnskuLabelDesigner() {
   }
 
   const handleItemsChange = useCallback((next: LabelItem[]) => {
+    const prevLen = items.length
     setItems(next)
-    setSelectedIdx(i => Math.min(i, Math.max(0, next.length - 1)))
+    // Auto-jump selection to the freshly added row when items count grows.
+    // On removal/no-change, clamp to valid bounds.
+    setSelectedIdx(prev => next.length > prevLen
+      ? next.length - 1
+      : Math.min(prev, Math.max(0, next.length - 1))
+    )
     saveItemsToLs(next)
     // Auto-fetch for items missing FNSKU or listing title
     const newOnes = next.filter(it => (!it.fnsku || !it.listingTitle) && !it.fnskuLoading && it.sku)
     if (newOnes.length > 0) fetchFnskus(newOnes)
-  }, [fetchFnskus])
+  }, [items.length, fetchFnskus])
 
   const handlePrint = () => {
     const allLabels: LabelItem[] = []
@@ -396,6 +403,48 @@ export default function FnskuLabelDesigner() {
       setPdfBytesReceived(0)
     }
   }
+
+  // Keyboard shortcuts — skip when user is typing into an input/textarea/select
+  useEffect(() => {
+    const isEditable = (target: EventTarget | null) => {
+      if (!(target instanceof HTMLElement)) return false
+      const tag = target.tagName
+      return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target.isContentEditable
+    }
+    const onKey = (e: KeyboardEvent) => {
+      // ? opens shortcuts overlay (works even from inputs)
+      if (e.key === '?' && (e.shiftKey || e.key === '?')) {
+        if (!isEditable(e.target)) { e.preventDefault(); setShortcutsOpen(s => !s); return }
+      }
+      if (e.key === 'Escape' && shortcutsOpen) { e.preventDefault(); setShortcutsOpen(false); return }
+      if (isEditable(e.target)) return
+
+      // Cmd/Ctrl shortcuts
+      const meta = e.metaKey || e.ctrlKey
+      if (meta && e.key.toLowerCase() === 'p') { e.preventDefault(); handlePrint(); return }
+      if (meta && e.shiftKey && e.key.toLowerCase() === 'd') { e.preventDefault(); handleDownloadPdf('a4'); return }
+      if (meta && e.key.toLowerCase() === 'd') { e.preventDefault(); handleDownloadPdf('label'); return }
+
+      // No-modifier nav
+      if (e.key === 'j' || e.key === 'ArrowDown') {
+        if (items.length > 0) { e.preventDefault(); setSelectedIdx(i => Math.min(items.length - 1, i + 1)) }
+      } else if (e.key === 'k' || e.key === 'ArrowUp') {
+        if (items.length > 0) { e.preventDefault(); setSelectedIdx(i => Math.max(0, i - 1)) }
+      } else if (e.key === '/') {
+        // Focus search input — find the first input.search descendant
+        const searchEl = document.querySelector<HTMLInputElement>('input[placeholder*="Search variant SKU"]')
+        if (searchEl) { e.preventDefault(); searchEl.focus() }
+      } else if (e.key === 'Delete' || e.key === 'Backspace') {
+        if (items.length > 0) {
+          e.preventDefault()
+          handleItemsChange(items.filter((_, i) => i !== selectedIdx))
+        }
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items, selectedIdx, shortcutsOpen])
 
   const saveTemplate = async (name: string) => {
     const body = JSON.stringify({ name, config: template })
@@ -552,6 +601,14 @@ export default function FnskuLabelDesigner() {
         )}
         <div className="flex items-center gap-1.5">
           <button
+            onClick={() => setShortcutsOpen(true)}
+            title="Keyboard shortcuts (?)"
+            aria-label="Keyboard shortcuts"
+            className="h-8 w-8 flex items-center justify-center rounded border border-slate-300 dark:border-slate-600 text-slate-500 hover:text-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"
+          >
+            <Keyboard size={13} />
+          </button>
+          <button
             onClick={handlePrint}
             disabled={items.length === 0}
             className="inline-flex items-center gap-1.5 h-8 px-3 rounded border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 text-sm hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed"
@@ -642,6 +699,63 @@ export default function FnskuLabelDesigner() {
         />
       </div>
       <div ref={printRef} />
+
+      {/* Keyboard shortcuts overlay — toggle with ? */}
+      {shortcutsOpen && (
+        <div
+          className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4"
+          onClick={() => setShortcutsOpen(false)}
+        >
+          <div
+            className="w-full max-w-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg shadow-2xl"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="px-5 py-3 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Keyboard shortcuts</h3>
+              <button onClick={() => setShortcutsOpen(false)} aria-label="Close" className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+                <XIcon size={16} />
+              </button>
+            </div>
+            <div className="px-5 py-3 space-y-3 text-sm">
+              {[
+                { group: 'Selection', items: [
+                  { keys: ['j', '↓'], label: 'Move to next SKU' },
+                  { keys: ['k', '↑'], label: 'Move to previous SKU' },
+                  { keys: ['Del'],    label: 'Remove selected SKU' },
+                ]},
+                { group: 'Input', items: [
+                  { keys: ['/'],      label: 'Focus search input' },
+                ]},
+                { group: 'Output', items: [
+                  { keys: ['⌘P', 'Ctrl+P'],         label: 'Print (HTML preview)' },
+                  { keys: ['⌘D', 'Ctrl+D'],         label: 'Download PDF (label)' },
+                  { keys: ['⌘⇧D', 'Ctrl+Shift+D'], label: 'Download PDF (A4)' },
+                ]},
+                { group: 'Help', items: [
+                  { keys: ['?'],   label: 'Toggle this overlay' },
+                  { keys: ['Esc'], label: 'Close overlay' },
+                ]},
+              ].map(section => (
+                <div key={section.group}>
+                  <div className="text-[10px] uppercase tracking-wider text-slate-400 mb-1">{section.group}</div>
+                  <ul className="space-y-1">
+                    {section.items.map(item => (
+                      <li key={item.label} className="flex items-center justify-between gap-3 text-xs">
+                        <span className="text-slate-700 dark:text-slate-300">{item.label}</span>
+                        <span className="flex gap-1">
+                          {item.keys.map(k => (
+                            <kbd key={k} className="px-1.5 py-0.5 text-[10px] font-mono rounded bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400">{k}</kbd>
+                          ))}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
