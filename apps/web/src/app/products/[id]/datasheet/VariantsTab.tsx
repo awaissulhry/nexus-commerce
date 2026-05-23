@@ -39,6 +39,10 @@ import FlatVariantTable, {
 import VariantsLayoutToggle, {
   type VariantsLayout,
 } from './VariantsLayoutToggle'
+import VariantChannelCoverage, {
+  type CoverageListing,
+  type CoverageVariant,
+} from './VariantChannelCoverage'
 import { Package } from 'lucide-react'
 
 interface VariantsTabProps {
@@ -71,10 +75,20 @@ export default async function VariantsTab({
         shopifyProductId: true,
         categoryAttributes: true,
         // VR.2 — axis detection inputs.
+        // VR.3 — coverage matrix needs channel + marketplace +
+        // externalListingId + listingStatus + isPublished + lastSyncedAt
+        // per listing. Single query keeps the page fast; the join is
+        // already happening on the parent fetch.
         channelListings: {
           select: {
             variationTheme: true,
             variationMapping: true,
+            channel: true,
+            marketplace: true,
+            externalListingId: true,
+            listingStatus: true,
+            isPublished: true,
+            lastSyncedAt: true,
           },
         },
         images: {
@@ -176,7 +190,7 @@ export default async function VariantsTab({
         )}
       </div>
 
-      {/* Body */}
+      {/* Body — main variant view (matrix or flat) */}
       {effectiveLayout === 'matrix' ? (
         <VariantMatrix
           axes={axes}
@@ -223,6 +237,27 @@ export default async function VariantsTab({
           t={t}
         />
       )}
+
+      {/* VR.3 — Per-variant channel coverage matrix. Renders below
+          the main view so the operator sees the variant grid AND
+          the publish-coverage cross-tab without switching views. */}
+      <VariantChannelCoverage
+        variants={children.map<CoverageVariant>((c) => ({
+          id: c.id,
+          sku: c.sku,
+          name: c.name,
+          listings: c.channelListings.map<CoverageListing>((l) => ({
+            channel: l.channel,
+            marketplace: l.marketplace,
+            externalListingId: l.externalListingId,
+            listingStatus: l.listingStatus,
+            isPublished: l.isPublished,
+            lastSyncedAt: l.lastSyncedAt,
+          })),
+        }))}
+        locale={locale}
+        t={t}
+      />
     </div>
   )
 }
