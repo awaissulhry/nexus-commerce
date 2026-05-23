@@ -4252,6 +4252,8 @@
   "products.datasheetHub.backToProduct": "Torna al prodotto",
   "products.datasheetHub.print": "Scheda stampabile",
   "products.datasheetHub.exportJson": "Esporta JSON",
+  "products.datasheetHub.edit": "Modifica",
+  "products.datasheetHub.editTooltip": "Apri l'editor multi-scheda per modificare dati master, immagini, canali e altro",
   "products.datasheetHub.exportJsonTooltip": "Scarica un singolo file JSON con master + traduzioni + canali + certificati + recensioni + varianti. Qualità audit.",
   "products.datasheetHub.tabsAria": "Sezioni della scheda",
   "products.datasheetHub.tab.overview": "Panoramica",
@@ -4708,7 +4710,7 @@
   "listWizard.stepper.title.plain": "Passaggio {id}: {title}",
   "listWizard.stepper.mobileProgress": "Passaggio {current} di {total}",
 
-  "listWizard.nav.saveExit": "Salva ed esci",
+  "listWizard.nav.saveExit": "Salva bozza e chiudi",
   "listWizard.nav.discard": "Scarta",
   "listWizard.nav.discardTooltip": "Scarta questa bozza (la guida verrà rimossa)",
   "listWizard.nav.saving": "Salvataggio…",

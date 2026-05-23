@@ -32,6 +32,7 @@ import {
   X,
 } from 'lucide-react'
 import { useDirtyRegistry } from './_shared/useDirtyRegistry'
+import { useEditorShortcuts } from './_shared/useEditorShortcuts'
 import { useNavigationGuard } from './_shared/useNavigationGuard'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
@@ -460,6 +461,18 @@ export default function ProductEditClient({
   useNavigationGuard({
     enabled: isDirty,
     message: t('products.edit.navGuardMessage'),
+  })
+
+  // DSP.9 — keyboard shortcuts: Cmd+S (Save All) and Esc (Discard).
+  // Cmd+Shift+S (Save & Publish) is intentionally not wired here —
+  // ProductEditClient doesn't own a default Publish target (that
+  // lives in ImagesTab's per-product remembered channel from DSP.6).
+  // Future: thread an onSaveAndPublish from ImagesTab up to register
+  // with the header so the shortcut works on any tab.
+  useEditorShortcuts({
+    enabled: true,
+    onSave: () => void handleHeaderSave(),
+    onDiscard: () => void handleDiscard(),
   })
 
   useTrackRecentlyViewed({

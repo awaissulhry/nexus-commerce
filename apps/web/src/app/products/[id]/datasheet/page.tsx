@@ -32,7 +32,7 @@
 import { prisma } from '@nexus/database'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Download, FileText } from 'lucide-react'
+import { ArrowLeft, Download, FileText, Pencil } from 'lucide-react'
 import { getServerLocale, getServerT } from '@/lib/i18n/server'
 import HeaderHealthPulse from './HeaderHealthPulse'
 import AttributesTab from './AttributesTab'
@@ -192,6 +192,19 @@ export default async function ProductDatasheetHubPage({
           >
             <FileText className="w-4 h-4" />
             {t('products.datasheetHub.print')}
+          </Link>
+          {/* DSP.9 — Edit CTA. Pre-DSP.9 the datasheet was read-only
+              with no explicit editing affordance; operators clicked
+              cells expecting them to be editable. Primary-tone button
+              so the path to editing is the most prominent header
+              action. Lands on the multi-tab product editor. */}
+          <Link
+            href={`/products/${product.id}/edit`}
+            className="inline-flex items-center gap-1.5 h-8 px-3 text-md font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600"
+            title={t('products.datasheetHub.editTooltip')}
+          >
+            <Pencil className="w-4 h-4" />
+            {t('products.datasheetHub.edit')}
           </Link>
         </div>
       </header>

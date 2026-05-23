@@ -4231,6 +4231,8 @@
   "products.datasheetHub.backToProduct": "Back to product",
   "products.datasheetHub.print": "Printable spec sheet",
   "products.datasheetHub.exportJson": "Export JSON",
+  "products.datasheetHub.edit": "Edit",
+  "products.datasheetHub.editTooltip": "Open the multi-tab editor to change master data, images, channels, and more",
   "products.datasheetHub.exportJsonTooltip": "Download a single JSON file with master + translations + channels + certificates + reviews + variants. Audit-grade.",
   "products.datasheetHub.tabsAria": "Datasheet sections",
   "products.datasheetHub.tab.overview": "Overview",
@@ -4641,7 +4643,7 @@
   "listWizard.stepper.title.plain": "Step {id}: {title}",
   "listWizard.stepper.mobileProgress": "Step {current} of {total}",
 
-  "listWizard.nav.saveExit": "Save & exit",
+  "listWizard.nav.saveExit": "Save draft & close",
   "listWizard.nav.discard": "Discard",
   "listWizard.nav.discardTooltip": "Discard this draft (the wizard will be removed)",
   "listWizard.nav.saving": "Saving…",
