@@ -1,5 +1,5 @@
 import type { LabelItem, TemplateConfig } from './types'
-import { getRowValue } from './LabelPreview'
+import { getRowValue, pickAttr } from './LabelPreview'
 
 function esc(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;')
@@ -53,8 +53,12 @@ function barcodeSvg(value: string, widthMm: number, heightMm: number): string {
 
   // Use module width of 1 unit, then scale uniformly to fit widthMm.
   // Uniform scaling preserves all bar-width ratios → barcode stays scannable.
+  // CODE128 quiet zone (10× module each side) is included in the total
+  // so the printed slot is unchanged; the bars themselves are slightly
+  // narrower, with the required white margin inside.
+  const QUIET_MODULES = 10
   const bars: { x: number; w: number }[] = []
-  let cursor = 0
+  let cursor = QUIET_MODULES
   for (const sym of sequence) {
     const pat = PATTERNS[sym]
     if (!pat) continue
@@ -66,7 +70,7 @@ function barcodeSvg(value: string, widthMm: number, heightMm: number): string {
       isBar = !isBar
     }
   }
-  const totalUnits = cursor
+  const totalUnits = cursor + QUIET_MODULES
   const scale = widthMm / totalUnits
 
   const rects = bars.map(b =>
@@ -108,7 +112,7 @@ function renderLabelHtml(item: LabelItem, template: TemplateConfig): string {
 
   const activeRows = template.rows.filter(r => r.show)
   const attrs = item.variationAttributes ?? {}
-  const sizeVal = attrs['Size'] ?? attrs['size'] ?? ''
+  const sizeVal = pickAttr(attrs, 'size')
 
   // Use font-aware char width estimate (monospace = 0.62×, proportional = 0.58×)
   const isMono = /mono|courier/i.test(fontFam)
@@ -126,6 +130,9 @@ function renderLabelHtml(item: LabelItem, template: TemplateConfig): string {
        ${template.showCondition ? `<div style="font-size:${heightMm * 0.052 * conditionScale}mm;font-family:${fontFam};color:#333;text-align:center;margin-top:0.5mm;white-space:nowrap;overflow:hidden;width:${barW}mm;">${esc(template.condition || 'New')}</div>` : ''}`
     : `<div style="width:${barW}mm;height:${barH}mm;border:0.3mm dashed #ccc;border-radius:1mm;display:flex;align-items:center;justify-content:center;color:#bbb;font-size:${heightMm * 0.07}mm;">No FNSKU</div>`
 
+  // Badge cap — same 45% of left-col-inner as preview + PDF.
+  const leftInnerMm = leftColMm - 2 * padMm
+  const badgeMaxMm  = leftInnerMm * 0.45
   const rowsHtml = activeRows.map((row, i) => {
     const value = getRowValue(row, item)
     const isFirst = i === 0
@@ -134,16 +141,32 @@ function renderLabelHtml(item: LabelItem, template: TemplateConfig): string {
     const badgeFs = heightMm * 0.07 * badgeScale
     const tx = row.textTransform ?? 'uppercase'
     const fw = row.boldValue !== false ? (isFirst ? 900 : 700) : 400
+    const badgeMinMm = heightMm * 0.45 * badgeScale
     return `<div style="display:flex;align-items:center;gap:${widthMm * 0.015}mm;margin-bottom:${heightMm * 0.025}mm;">
-      <div style="background:#111;color:#fff;font-weight:700;font-size:${badgeFs}mm;padding:${heightMm * 0.02}mm ${heightMm * 0.03}mm;border-radius:0.8mm;white-space:nowrap;letter-spacing:0.03em;text-transform:uppercase;flex-shrink:0;min-width:${heightMm * 0.45 * badgeScale}mm;text-align:center;">${esc(row.badgeText || '—')}</div>
+      <div style="background:#111;color:#fff;font-weight:700;font-size:${badgeFs}mm;padding:${heightMm * 0.02}mm ${heightMm * 0.03}mm;border-radius:0.8mm;white-space:nowrap;letter-spacing:0.03em;text-transform:uppercase;flex-shrink:0;min-width:${badgeMinMm}mm;max-width:${badgeMaxMm}mm;overflow:hidden;text-overflow:ellipsis;text-align:center;">${esc(row.badgeText || '—')}</div>
       <div style="font-weight:${fw};font-size:${fs}mm;color:#000;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:${isFirst ? '-0.02em' : '0.02em'};text-transform:${tx};line-height:1.1;">${esc(value || '—')}</div>
     </div>`
   }).join('')
 
+  // Size box with the same overflow shrink as the PDF (cap at 60% of right-col height).
+  const sizeBoxPadVN = heightMm * 0.01
+  const sizeHdrFsN   = heightMm * 0.06 * sizeHeaderScale
+  const sizeHdrPadVN = heightMm * 0.005
+  const sizeValMtN   = heightMm * 0.01
+  const sizeValFsN   = heightMm * 0.19 * sizeValueScale
+  const sizeHdrHN    = sizeHdrFsN + 2 * sizeHdrPadVN
+  const sizeBoxNatM  = 2 * sizeBoxPadVN + sizeHdrHN + sizeValMtN + sizeValFsN
+  const sizeBoxCapM  = (heightMm - 2 * padMm) * 0.6
+  const sizeBoxK     = template.showSizeBox && sizeBoxNatM > sizeBoxCapM ? sizeBoxCapM / sizeBoxNatM : 1
+  const sbPadV  = sizeBoxPadVN * sizeBoxK
+  const sbHdrFs = sizeHdrFsN   * sizeBoxK
+  const sbHdrPV = sizeHdrPadVN * sizeBoxK
+  const sbValMt = sizeValMtN   * sizeBoxK
+  const sbValFs = sizeValFsN   * sizeBoxK
   const sizeBoxHtml = template.showSizeBox ? `
-    <div style="display:flex;flex-direction:column;align-items:center;border:0.5mm solid #111;border-radius:1mm;padding:${heightMm * 0.01}mm ${heightMm * 0.015}mm;margin-bottom:${padMm}mm;flex-shrink:0;">
-      <div style="background:#111;color:#fff;font-weight:700;font-size:${heightMm * 0.06 * sizeHeaderScale}mm;letter-spacing:0.1em;text-transform:uppercase;width:100%;text-align:center;border-radius:0.5mm;padding:${heightMm * 0.005}mm 0;">${esc(sizeLabel)}</div>
-      <div style="font-size:${Math.min(heightMm * 0.19 * sizeValueScale, innerMm * 0.85)}mm;font-weight:900;color:#000;line-height:1;margin-top:${heightMm * 0.01}mm;">${esc(sizeVal || '—')}</div>
+    <div style="display:flex;flex-direction:column;align-items:center;border:0.5mm solid #111;border-radius:1mm;padding:${sbPadV}mm ${heightMm * 0.015}mm;margin-bottom:${padMm}mm;flex-shrink:0;">
+      <div style="background:#111;color:#fff;font-weight:700;font-size:${sbHdrFs}mm;letter-spacing:0.1em;text-transform:uppercase;width:100%;text-align:center;border-radius:0.5mm;padding:${sbHdrPV}mm 0;">${esc(sizeLabel)}</div>
+      <div style="font-size:${Math.min(sbValFs, innerMm * 0.85)}mm;font-weight:900;color:#000;line-height:1;margin-top:${sbValMt}mm;">${esc(sizeVal || '—')}</div>
     </div>` : ''
 
   const logoHtml = template.showLogo ? (

@@ -76,15 +76,20 @@ export function Barcode128({
     (START_B + codes.reduce((acc, c, i) => acc + c * (i + 1), 0)) % 103
   const sequence = [START_B, ...codes, checksum, STOP]
 
-  // If maxWidthPx provided, compute exact moduleWidthPx to fill that width.
-  // Total module count: START(11) + n×11 chars + CHECKSUM(11) + STOP(13).
+  // CODE128 quiet zone: 10× module width of white margin on each side.
+  // Spec is min(10X, 2.54mm) — we use 10X. When maxWidthPx is supplied,
+  // the bars + quiet zones together fill exactly maxWidthPx, so the slot
+  // the barcode occupies on the label is unchanged.
+  // Module count: 10 (left quiet) + START(11) + n×11 + CHECKSUM(11) + STOP(13) + 10 (right quiet) = n×11 + 55.
+  const QUIET_MODULES = 10
   const effectiveModuleW = maxWidthPx != null
-    ? maxWidthPx / (safe.length * 11 + 35)
+    ? maxWidthPx / (safe.length * 11 + 35 + 2 * QUIET_MODULES)
     : moduleWidthPx
+  const quietPx = QUIET_MODULES * effectiveModuleW
 
   type Bar = { x: number; width: number }
   const bars: Bar[] = []
-  let cursor = 0
+  let cursor = quietPx
   for (const symbol of sequence) {
     const pattern = PATTERNS[symbol]
     if (!pattern) continue
@@ -96,7 +101,7 @@ export function Barcode128({
       isBar = !isBar
     }
   }
-  const totalWidth = maxWidthPx ?? cursor
+  const totalWidth = maxWidthPx ?? (cursor + quietPx)
 
   return (
     <div className={className} aria-label={`Barcode for ${safe}`}>

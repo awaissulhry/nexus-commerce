@@ -162,13 +162,28 @@ function smartTruncateTitle(title: string, firstN: number, lastN: number): strin
   return words.slice(0, firstN).join(' ') + ' ...' + words.slice(-lastN).join(' ')
 }
 
+// Attribute aliases — English primary, Italian fallback.
+// Mirror of LabelPreview.tsx ATTR_ALIASES.
+const ATTR_ALIASES: Record<'color' | 'size' | 'gender', string[]> = {
+  color:  ['Color',  'color',  'Colore',  'colore'],
+  size:   ['Size',   'size',   'Taglia',  'taglia'],
+  gender: ['Gender', 'gender', 'Genere',  'genere'],
+}
+
+function pickAttr(attrs: Record<string, string>, kind: 'color' | 'size' | 'gender'): string {
+  for (const k of ATTR_ALIASES[kind]) {
+    if (attrs[k]) return attrs[k]
+  }
+  return ''
+}
+
 function getRowValue(row: TemplateRow, item: LabelItem): string {
   const attrs = item.variationAttributes ?? {}
   switch (row.valueSource) {
     case 'productName': return item.productName ?? ''
-    case 'color':  return attrs['Color']  ?? attrs['color']  ?? ''
-    case 'size':   return attrs['Size']   ?? attrs['size']   ?? ''
-    case 'gender': return attrs['Gender'] ?? attrs['gender'] ?? ''
+    case 'color':  return pickAttr(attrs, 'color')
+    case 'size':   return pickAttr(attrs, 'size')
+    case 'gender': return pickAttr(attrs, 'gender')
     case 'sku':    return item.sku
     case 'asin':   return item.asin ?? ''
     case 'custom': return row.customValue
@@ -239,7 +254,7 @@ async function drawLabel(
   const fontBold   = resolveFont(template.fontFamily, true)
   const activeRows = (template.rows ?? []).filter(r => r.show)
   const attrs      = item.variationAttributes ?? {}
-  const sizeVal    = attrs['Size'] ?? attrs['size'] ?? ''
+  const sizeVal    = pickAttr(attrs, 'size')
 
   // Rounded corner radius (matches preview borderRadius)
   const labelR = mm(template.labelRadiusMm ?? 5)
@@ -277,78 +292,97 @@ async function drawLabel(
         catch { /* unsupported format */ }
       }
     } else {
-      // Placeholder box — matches preview's black "LOGO" badge
-      // fontSize = logoAreaH * 0.455 so that at default logoH=22% it equals hPt * 0.1
-      const placeH = logoAreaH * 0.5
-      const placeW = Math.min(mm(25), leftInnerW * 0.55)
-      const placeX = lx
-      const placeY = yPt + padPt + (logoAreaH - placeH) / 2
-      const logoFs = fitTextSize(doc, 'LOGO', fontBold, logoAreaH * 0.455, placeW - mm(2))
-      doc.roundedRect(placeX, placeY, placeW, placeH, mm(0.8)).fill('#000000')
+      // Placeholder — intrinsic-sized "LOGO" badge that matches preview pixel-by-pixel.
+      // Preview uses fontSize=hPx*0.1, padding hPx*0.01 (V) × hPx*0.025 (H), borderRadius 4.
+      const logoFs    = hPt * 0.1
+      const logoPadV  = hPt * 0.01
+      const logoPadH  = hPt * 0.025
+      doc.font(fontBold).fontSize(logoFs)
+      const textW     = doc.widthOfString('LOGO')
+      const placeH    = logoFs + 2 * logoPadV
+      const placeW    = Math.min(textW + 2 * logoPadH, leftInnerW)
+      const placeX    = lx
+      const placeY    = yPt + padPt + (logoAreaH - placeH) / 2
+      doc.roundedRect(placeX, placeY, placeW, placeH, 4).fill('#000000')
       doc.font(fontBold).fontSize(logoFs).fillColor('#ffffff')
-         .text('LOGO', placeX, placeY + (placeH - logoFs) / 2, { width: placeW, align: 'center', lineBreak: false })
+         .text('LOGO', placeX, placeY + logoPadV, { width: placeW, align: 'center', lineBreak: false })
     }
   }
 
-  // ── Field rows — centred vertically in remaining left-col space ───
-  // Mirrors CSS: flex column, justifyContent:'center', gap: hPt*L.ROW_GAP
-  const logoGapPt   = logoAreaH > 0 ? padPt : 0   // matches preview marginBottom: padPx
+  // ── Field rows — pre-compute badge cap + value fit + uniform overflow shrink ───
+  // Mirrors LabelPreview.tsx so the on-screen preview matches the PDF.
+  const logoGapPt   = logoAreaH > 0 ? padPt : 0
   const rowsTopY    = yPt + padPt + logoAreaH + logoGapPt
   const rowsAvailH  = yPt + hPt - padPt - rowsTopY
 
-  // Pre-compute each row's natural height to enable vertical centering
-  const rowHeights = activeRows.map((row, i) => {
-    const badgeFs  = hPt * L.BADGE_FS * badgeScale
-    const badgeH   = badgeFs + 2 * hPt * L.BADGE_PAD_V
-    const valueFs  = hPt * (i === 0 ? L.VAL_FS_1 : L.VAL_FS_N) * valueScale * (row.fontScale ?? 1)
-    return Math.max(badgeH, valueFs)
+  const badgePadV = hPt * L.BADGE_PAD_V
+  const badgePadH = hPt * L.BADGE_PAD_H
+  const badgeMinW = hPt * L.BADGE_MIN_W * badgeScale
+  const badgeMaxW = leftInnerW * 0.45   // badge can never eat more than 45% of left col
+  const badgeFsBase = hPt * L.BADGE_FS * badgeScale
+  const colGap    = wPt * L.COL_GAP_W
+  const rowGap    = hPt * L.ROW_GAP
+
+  type ComputedRow = {
+    badgeLabel: string; value: string; vFont: string
+    badgeFs: number; badgeW: number; badgeH: number
+    valueFs: number; valueX: number
+    rowH: number
+  }
+
+  const computed: ComputedRow[] = activeRows.map((row, i) => {
+    const badgeLabel = (row.badgeText || '—').toUpperCase()
+    // Shrink badge font to fit inside badgeMaxW - 2*padH; then compute width.
+    const badgeFs    = fitTextSize(doc, badgeLabel, fontBold, badgeFsBase, badgeMaxW - 2 * badgePadH)
+    doc.font(fontBold).fontSize(badgeFs)
+    const measuredW  = doc.widthOfString(badgeLabel) + 2 * badgePadH
+    const badgeW     = Math.min(badgeMaxW, Math.max(badgeMinW, measuredW))
+    const badgeH     = badgeFs + 2 * badgePadV
+
+    const tx         = row.textTransform ?? 'uppercase'
+    const rawValue   = getRowValue(row, item)
+    const value      = applyTextTransform(rawValue, tx) || '—'
+    const vFont      = row.boldValue !== false ? fontBold : fontBase
+    const desiredVFs = hPt * (i === 0 ? L.VAL_FS_1 : L.VAL_FS_N) * valueScale * (row.fontScale ?? 1)
+    const valueX     = lx + badgeW + colGap
+    const valueW     = Math.max(mm(4), leftInnerW - badgeW - colGap)
+    const valueFs    = fitTextSize(doc, value, vFont, desiredVFs, valueW)
+
+    const rowH = Math.max(badgeH, valueFs * 1.1)
+    return { badgeLabel, value, vFont, badgeFs, badgeW, badgeH, valueFs, valueX, rowH }
   })
 
-  const rowGap      = hPt * L.ROW_GAP
-  const N           = rowHeights.length
-  const totalGroupH = rowHeights.reduce((s, h) => s + h, 0) + (N > 1 ? (N - 1) * rowGap : 0)
-  // Center the group: matches justifyContent:'center'
-  const groupStartY = rowsTopY + Math.max(0, (rowsAvailH - totalGroupH) / 2)
+  const N           = computed.length
+  const naturalGroupH = computed.reduce((s, r) => s + r.rowH, 0) + (N > 1 ? (N - 1) * rowGap : 0)
+  // Uniform shrink if natural stack overflows vertical space — guarantees no
+  // content clipped by the rounded label boundary.
+  const shrink      = naturalGroupH > rowsAvailH && rowsAvailH > 0 ? rowsAvailH / naturalGroupH : 1
+  const finalRowGap = rowGap * shrink
+  const finalGroupH = naturalGroupH * shrink
+  const groupStartY = rowsTopY + Math.max(0, (rowsAvailH - finalGroupH) / 2)
 
   let curRowY = groupStartY
-  activeRows.forEach((row, i) => {
-    const rowH    = rowHeights[i]
+  computed.forEach((c, i) => {
+    const rowH    = c.rowH * shrink
     const rowMidY = curRowY + rowH / 2
 
-    const badgeFs  = hPt * L.BADGE_FS * badgeScale
-    const badgePadV = hPt * L.BADGE_PAD_V
-    const badgePadH = hPt * L.BADGE_PAD_H
-    const badgeH   = badgeFs + 2 * badgePadV
-    const badgeLabel = (row.badgeText || '—').toUpperCase()
+    const badgeFs = c.badgeFs * shrink
+    const badgeH  = c.badgeH  * shrink
+    const badgeW  = c.badgeW  * shrink
+    const badgeY  = rowMidY - badgeH / 2
 
-    // Measure badge width (identical to preview's minWidth: hPx * 0.45 * scale)
-    doc.font(fontBold).fontSize(badgeFs)
-    const measuredBadge = doc.widthOfString(badgeLabel)
-    const badgeMinW     = hPt * L.BADGE_MIN_W * badgeScale
-    const badgeW        = Math.max(badgeMinW, measuredBadge + badgePadH * 2)
-    const badgeY        = rowMidY - badgeH / 2
-
-    // Draw badge (black fill, white text) — rounded corners match preview borderRadius:3
     doc.roundedRect(lx, badgeY, badgeW, badgeH, mm(0.8)).fill('#111111')
     doc.font(fontBold).fontSize(badgeFs).fillColor('#ffffff')
-       .text(badgeLabel, lx, badgeY + badgePadV, { width: badgeW, align: 'center', lineBreak: false })
+       .text(c.badgeLabel, lx, badgeY + (badgeH - badgeFs) / 2, { width: badgeW, align: 'center', lineBreak: false })
 
-    // Value text — gap from badge matches preview wPx * 0.015
-    const tx       = row.textTransform ?? 'uppercase'
-    const rawValue = getRowValue(row, item)
-    const value    = applyTextTransform(rawValue, tx) || '—'
-    const vFont    = row.boldValue !== false ? fontBold : fontBase
-    const valueFs  = hPt * (i === 0 ? L.VAL_FS_1 : L.VAL_FS_N) * valueScale * (row.fontScale ?? 1)
-    const colGap   = wPt * L.COL_GAP_W
-    const valueX   = lx + badgeW + colGap
-    const valueW   = Math.max(mm(4), leftInnerW - badgeW - colGap)
-    const fitted   = fitTextSize(doc, value, vFont, valueFs, valueW)
-    const valueY   = rowMidY - fitted / 2
+    const valueFs = c.valueFs * shrink
+    const valueX  = lx + badgeW + colGap * shrink
+    const valueW  = Math.max(mm(4), leftInnerW - badgeW - colGap * shrink)
+    const valueY  = rowMidY - valueFs / 2
+    doc.font(c.vFont).fontSize(valueFs).fillColor('#000000')
+       .text(c.value, valueX, valueY, { width: valueW, lineBreak: false })
 
-    doc.font(vFont).fontSize(fitted).fillColor('#000000')
-       .text(value, valueX, valueY, { width: valueW, lineBreak: false })
-
-    curRowY += rowH + (i < N - 1 ? rowGap : 0)
+    curRowY += rowH + (i < N - 1 ? finalRowGap : 0)
   })
 
   // Divider line
@@ -367,15 +401,34 @@ async function drawLabel(
   const innerRightW = rightW - padPt * 2
 
   // ── Size box ─────────────────────────────────────────────────────
-  // Dimensions mirror CSS: border + inner padding + header + marginTop + value
+  // Dimensions mirror CSS: border + inner padding + header + marginTop + value.
+  // If aggressive scaling would make the box exceed 60% of right-col height,
+  // shrink all variable parts uniformly so the barcode always has room.
   let sizeBoxTotalH = 0
   let sizeHdrH      = 0
   let sizeValFsBase = 0
+  let sizeBoxPadV   = 0      // top + bottom internal padding (each)
+  let sizeValMt     = 0
+  let sizeHdrPadV   = 0      // header strip top+bottom (each)
 
   if (template.showSizeBox) {
-    sizeHdrH      = hPt * L.SIZE_HDR_FS * sizeHeaderScale + 2 * hPt * L.SIZE_HDR_PAD
+    sizeBoxPadV   = hPt * L.SIZE_BOX_PAD
+    sizeHdrPadV   = hPt * L.SIZE_HDR_PAD
+    sizeValMt     = hPt * L.SIZE_VAL_MT
+    sizeHdrH      = hPt * L.SIZE_HDR_FS * sizeHeaderScale + 2 * sizeHdrPadV
     sizeValFsBase = hPt * L.SIZE_VAL_FS * sizeValueScale
-    sizeBoxTotalH = 2 * hPt * L.SIZE_BOX_PAD + sizeHdrH + hPt * L.SIZE_VAL_MT + sizeValFsBase
+    sizeBoxTotalH = 2 * sizeBoxPadV + sizeHdrH + sizeValMt + sizeValFsBase
+
+    const sizeBoxCap = (hPt - 2 * padPt) * 0.6
+    if (sizeBoxTotalH > sizeBoxCap) {
+      const f = sizeBoxCap / sizeBoxTotalH
+      sizeBoxPadV   *= f
+      sizeHdrPadV   *= f
+      sizeValMt     *= f
+      sizeHdrH      *= f
+      sizeValFsBase *= f
+      sizeBoxTotalH = 2 * sizeBoxPadV + sizeHdrH + sizeValMt + sizeValFsBase
+    }
   }
   const sizeBoxMB = template.showSizeBox ? hPt * L.SIZE_MB : 0
 
@@ -442,15 +495,16 @@ async function drawLabel(
     doc.lineWidth(border).roundedRect(rx, ry, boxW, sizeBoxTotalH, mm(1)).stroke('#111111')
 
     // Header strip — slightly inset from border, with rounded corners matching preview borderRadius:2
-    const hdrY  = ry + hPt * L.SIZE_BOX_PAD
-    const hdrFs = fitTextSize(doc, sizeLabel, fontBold, hPt * L.SIZE_HDR_FS * sizeHeaderScale, boxW - mm(2))
-    const bi    = border / 2
+    const hdrY     = ry + sizeBoxPadV
+    const hdrFsBase = sizeHdrH - 2 * sizeHdrPadV    // post-shrink header font size
+    const hdrFs    = fitTextSize(doc, sizeLabel, fontBold, hdrFsBase, boxW - mm(2))
+    const bi       = border / 2
     doc.roundedRect(rx + bi, hdrY, boxW - 2 * bi, sizeHdrH, mm(0.5)).fill('#111111')
     doc.font(fontBold).fontSize(hdrFs).fillColor('#ffffff')
-       .text(sizeLabel, rx, hdrY + hPt * L.SIZE_HDR_PAD, { width: boxW, align: 'center', lineBreak: false })
+       .text(sizeLabel, rx, hdrY + sizeHdrPadV, { width: boxW, align: 'center', lineBreak: false })
 
     // Size value
-    const valY  = hdrY + sizeHdrH + hPt * L.SIZE_VAL_MT
+    const valY  = hdrY + sizeHdrH + sizeValMt
     const valFs = fitTextSize(doc, sizeVal || '—', fontBold, sizeValFsBase, boxW - mm(2))
     doc.font(fontBold).fontSize(valFs).fillColor('#000000')
        .text(sizeVal || '—', rx, valY, { width: boxW, align: 'center', lineBreak: false })
@@ -466,12 +520,16 @@ async function drawLabel(
     doc.rect(bcX, ry, effBarcodeW, barcodeHPt).fill('#ffffff')
 
     // Barcode bars — use exact scaled widths; no Math.max floor so bar:space
-    // ratios are never distorted (Math.max rounds up thin bars, eating adjacent space)
+    // ratios are never distorted (Math.max rounds up thin bars, eating adjacent space).
+    // CODE128 quiet zone of 10× module width is reserved on each side, so the
+    // bars fit centrally inside effBarcodeW with the required white margin.
     const { bars, totalUnits } = encodeBarcode(item.fnsku)
+    const QUIET_MODULES = 10
     if (totalUnits > 0) {
-      const scale = effBarcodeW / totalUnits
+      const scale = effBarcodeW / (totalUnits + 2 * QUIET_MODULES)
+      const quietPt = QUIET_MODULES * scale
       for (const b of bars) {
-        doc.rect(bcX + b.x * scale, ry, b.w * scale, barcodeHPt).fill('#000000')
+        doc.rect(bcX + quietPt + b.x * scale, ry, b.w * scale, barcodeHPt).fill('#000000')
       }
     }
     ry += barcodeHPt + mm(1)
@@ -484,23 +542,37 @@ async function drawLabel(
       ry += fnskuH
     }
 
-    // Listing title
+    // Listing title — shrink font until wrapped text fits within the line
+    // budget. Never clips mid-word: prefers a smaller readable size over loss.
     if (titleFsRaw > 0 && displayTitle) {
       ry += hPt * L.TITLE_MT
       if (truncMode === 'smart') {
-        // Smart mode: single line, already truncated
+        // Smart mode: single line, fit-shrink to inner width.
         const tFs = fitTextSize(doc, displayTitle, fontBase, titleFsRaw, innerRightW - mm(1))
         doc.font(fontBase).fontSize(tFs).fillColor('#333333')
            .text(displayTitle, rx, ry, { width: innerRightW, align: 'center', lineBreak: false })
         ry += tFs * L.TITLE_LH
       } else {
-        doc.font(fontBase).fontSize(titleFsRaw).fillColor('#333333')
+        // Lines mode: shrink font until heightOfString fits within budget.
+        // If shrink hits the floor and text still overflows, fall back to a
+        // hard height clip so the overflow can't bleed into the condition row.
+        let tFs = titleFsRaw
+        const minTFs = mm(2)
+        while (tFs > minTFs) {
+          doc.font(fontBase).fontSize(tFs)
+          const measured = doc.heightOfString(displayTitle, { width: innerRightW })
+          if (measured <= tFs * L.TITLE_LH * maxTitleLines) break
+          tFs = Math.max(minTFs, tFs - 0.4)
+        }
+        const clipH = tFs * L.TITLE_LH * maxTitleLines + tFs * 0.25
+        doc.font(fontBase).fontSize(tFs).fillColor('#333333')
            .text(displayTitle, rx, ry, {
              width: innerRightW, align: 'center',
              lineBreak: true,
-             height: titleFsRaw * L.TITLE_LH * maxTitleLines,
+             height: clipH,
            })
-        ry += titleFsRaw * L.TITLE_LH * maxTitleLines
+        // Advance by the shrunk budget so subsequent elements pack tightly.
+        ry += tFs * L.TITLE_LH * maxTitleLines
       }
     }
 

@@ -79,8 +79,11 @@ export function TemplateSidebar({ template, onChange, savedTemplates, activeTemp
   const innerMm    = rightColMm - padMm * 2
   const barWidthMm = Math.max(5, innerMm * ((template.barcodeWidthPct ?? 100) / 100))
   const barcodeWarn = barWidthMm < 20
-  // Module width estimate (10-char FNSKU = 145 modules; real value depends on actual FNSKU length)
-  const estimatedModules = 10 * 11 + 35
+  // Module-width estimate for a 10-char FNSKU. Total module count must include
+  // the CODE128 quiet zone (10× module each side) so the displayed module
+  // width matches what's actually printed.
+  // 10 (quiet) + START(11) + 10×11 + CHECKSUM(11) + STOP(13) + 10 (quiet) = 165
+  const estimatedModules = 10 * 11 + 35 + 20
   const moduleWidthMm = barWidthMm / estimatedModules
   const moduleWarn = moduleWidthMm < 0.25
 

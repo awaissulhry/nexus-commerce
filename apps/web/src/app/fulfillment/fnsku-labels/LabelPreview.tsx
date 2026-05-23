@@ -9,14 +9,29 @@ interface Props {
   template: TemplateConfig
 }
 
+/** Attribute aliases — primary English keys + Italian fallbacks.
+ *  Xavia's product DB mixes both ('Color'/'Colore', 'Size'/'Taglia', 'Gender'/'Genere'). */
+const ATTR_ALIASES: Record<'color' | 'size' | 'gender', string[]> = {
+  color:  ['Color',  'color',  'Colore',  'colore'],
+  size:   ['Size',   'size',   'Taglia',  'taglia'],
+  gender: ['Gender', 'gender', 'Genere',  'genere'],
+}
+
+export function pickAttr(attrs: Record<string, string>, kind: 'color' | 'size' | 'gender'): string {
+  for (const k of ATTR_ALIASES[kind]) {
+    if (attrs[k]) return attrs[k]
+  }
+  return ''
+}
+
 export function getRowValue(row: TemplateRow, item: LabelItem): string {
   if (!row.show) return ''
   const attrs = item.variationAttributes ?? {}
   switch (row.valueSource) {
     case 'productName': return item.productName ?? ''
-    case 'color':  return attrs['Color']  ?? attrs['color']  ?? ''
-    case 'size':   return attrs['Size']   ?? attrs['size']   ?? ''
-    case 'gender': return attrs['Gender'] ?? attrs['gender'] ?? ''
+    case 'color':  return pickAttr(attrs, 'color')
+    case 'size':   return pickAttr(attrs, 'size')
+    case 'gender': return pickAttr(attrs, 'gender')
     case 'sku':    return item.sku
     case 'asin':   return item.asin ?? ''
     case 'custom': return row.customValue
@@ -33,6 +48,41 @@ function cssFontStack(family?: string): string {
   if (f.includes('courier') || f.includes('mono')) return "'Courier New', Courier, monospace"
   if (f.includes('times') || f.includes('roman')) return "Georgia, 'Times New Roman', serif"
   return 'Helvetica, Arial, sans-serif'
+}
+
+// Singleton canvas for text measurement. The PDF renderer uses doc.widthOfString
+// for the same purpose — this matches it in the browser so preview and PDF agree.
+let measureCanvas: HTMLCanvasElement | null = null
+function measureTextWidth(text: string, fontPx: number, fontFamily: string, weight: number | string = 400): number {
+  if (typeof document === 'undefined') return text.length * fontPx * 0.6
+  if (!measureCanvas) measureCanvas = document.createElement('canvas')
+  const ctx = measureCanvas.getContext('2d')
+  if (!ctx) return text.length * fontPx * 0.6
+  ctx.font = `${weight} ${fontPx}px ${fontFamily}`
+  return ctx.measureText(text).width
+}
+
+/** Shrink fontPx until text fits within maxWidth. Returns the new size. */
+function fitFontSize(text: string, startPx: number, maxWidth: number, fontFamily: string, weight: number | string, minPx = 5): number {
+  let fs = Math.max(minPx, startPx)
+  while (fs > minPx && measureTextWidth(text, fs, fontFamily, weight) > maxWidth) {
+    fs = Math.max(minPx, fs - 0.4)
+  }
+  return fs
+}
+
+/** Shrink font size until wrapped text fits within `maxLines` of `maxLineWidth`.
+ *  Estimate: text-width / maxLineWidth ≤ maxLines. Conservative (word-wrap
+ *  packs tighter), so we may shrink slightly more than strictly necessary,
+ *  but never clips. Used to keep listing titles inside their line budget. */
+function fitWrappedFontSize(text: string, startPx: number, maxLineWidth: number, fontFamily: string, weight: number | string, maxLines: number, minPx = 5): number {
+  let fs = Math.max(minPx, startPx)
+  while (fs > minPx) {
+    const w = measureTextWidth(text, fs, fontFamily, weight)
+    if (Math.ceil(w / maxLineWidth) <= maxLines) return fs
+    fs = Math.max(minPx, fs - 0.4)
+  }
+  return fs
 }
 
 function smartTruncateTitle(title: string, firstN: number, lastN: number): string {
@@ -57,17 +107,35 @@ export function LabelPreview({ item, template }: Props) {
   // Barcode width: allow > 100% to extend into left col; cap at full label inner width
   const barcodeW = Math.min(Math.max(20, innerW * ((template.barcodeWidthPct ?? 100) / 100)), fullInnerPx)
 
+  // Size box height — natural, then shrunk if it exceeds 60% of right-col
+  // (mirrors PDF service so preview matches output).
+  const sizeBoxPadVNatural = hPx * 0.01
+  const sizeHdrFsNatural   = hPx * 0.06 * (template.sizeHeaderScale ?? 1)
+  const sizeHdrPadVNatural = hPx * 0.005
+  const sizeValMtNatural   = hPx * 0.01
+  const sizeValFsNatural   = hPx * 0.19 * (template.sizeValueScale ?? 1)
+  const sizeHdrHNatural    = sizeHdrFsNatural + 2 * sizeHdrPadVNatural
+  const sizeBoxNatural     = template.showSizeBox
+    ? 2 * sizeBoxPadVNatural + sizeHdrHNatural + sizeValMtNatural + sizeValFsNatural
+    : 0
+  const sizeBoxCap = (hPx - 2 * padPx) * 0.6
+  const sizeBoxShrink = template.showSizeBox && sizeBoxNatural > sizeBoxCap
+    ? sizeBoxCap / sizeBoxNatural
+    : 1
+  const sizeBoxPadV   = sizeBoxPadVNatural * sizeBoxShrink
+  const sizeHdrFs     = sizeHdrFsNatural   * sizeBoxShrink
+  const sizeHdrPadV   = sizeHdrPadVNatural * sizeBoxShrink
+  const sizeValMt     = sizeValMtNatural   * sizeBoxShrink
+  const sizeValFs     = sizeValFsNatural   * sizeBoxShrink
+  const sizeBoxTotalH = sizeBoxNatural     * sizeBoxShrink
+
   // Estimate info stack height to ensure FNSKU text never gets clipped
   const fnskuEstH = hPx * 0.063 * (template.fnskuTextScale ?? 1) * 1.4
   const titleEstH = (template.showListingTitle)
     ? hPx * 0.052 * (template.listingTitleScale ?? 1) * 1.25 * (template.listingTitleLines ?? 2) + 6
     : 0
   const condEstH  = template.showCondition ? hPx * 0.052 * (template.conditionScale ?? 1) * 1.4 + 4 : 0
-  // Approximate size box height
-  const sizeBoxEstH = template.showSizeBox
-    ? (hPx * 0.06 * (template.sizeHeaderScale ?? 1) + hPx * 0.01 + hPx * 0.19 * (template.sizeValueScale ?? 1) + padPx + hPx * 0.025)
-    : 0
-  const rightAvailH = hPx - 2 * padPx - sizeBoxEstH
+  const rightAvailH = hPx - 2 * padPx - sizeBoxTotalH
   const maxBarcodeH = Math.max(20, rightAvailH - fnskuEstH - titleEstH - condEstH - 8)
 
   // Cap barcode height at 55% and also at computed max to prevent FNSKU text clipping
@@ -76,22 +144,70 @@ export function LabelPreview({ item, template }: Props) {
     maxBarcodeH,
   )
 
-  // Fine-grained scale factors (new optional controls)
-  const sizeValueScale    = template.sizeValueScale    ?? 1
-  const sizeHeaderScale   = template.sizeHeaderScale   ?? 1
+  // Fine-grained scale factors (size scales are applied earlier in the size-box
+  // natural-height computation above)
   const fnskuTextScale    = template.fnskuTextScale    ?? 1
   const listingTitleScale = template.listingTitleScale ?? 1
   const conditionScale    = template.conditionScale    ?? 1
   const logoH             = hPx * ((template.logoHeightPct ?? 22) / 100)
 
-  const sizeVal  = (item.variationAttributes ?? {})['Size'] ?? (item.variationAttributes ?? {})['size'] ?? ''
+  const sizeVal = pickAttr(item.variationAttributes ?? {}, 'size')
   const activeRows = template.rows.filter(r => r.show)
 
-  const badgeFs  = hPx * 0.07  * (template.badgeFontScale  ?? 1)
-  const valueFs  = hPx * 0.1   * (template.valueFontScale  ?? 1)
-  const valueFs1 = hPx * 0.13  * (template.valueFontScale  ?? 1) // first row
-  const fontFam  = cssFontStack(template.fontFamily)
+  const badgeFsBase = hPx * 0.07  * (template.badgeFontScale  ?? 1)
+  const valueFs     = hPx * 0.1   * (template.valueFontScale  ?? 1)
+  const valueFs1    = hPx * 0.13  * (template.valueFontScale  ?? 1) // first row
+  const fontFam     = cssFontStack(template.fontFamily)
   const labelRadiusPx = ((template.labelRadiusMm ?? 5) * MM_TO_PX)
+
+  // ── Field-row pre-computation (badge cap + value fit + overflow shrink) ─
+  // Mirrors fnsku-label-pdf.service.ts so preview matches PDF exactly.
+  const leftInnerWPx = leftColPx - 2 * padPx
+  const badgePadHPx  = hPx * 0.03
+  const badgePadVPx  = hPx * 0.02
+  const badgeMinWPx  = hPx * 0.45 * (template.badgeFontScale ?? 1)
+  const badgeMaxWPx  = leftInnerWPx * 0.45   // badge can never eat more than 45% of left col
+  const colGapPx     = Math.round(wPx * 0.015)
+  const rowGapPx     = Math.round(hPx * 0.025)
+  const logoVerticalConsumed = template.showLogo ? (hPx * ((template.logoHeightPct ?? 22) / 100)) + padPx : 0
+  const rowsAvailHPx = Math.max(0, hPx - 2 * padPx - logoVerticalConsumed)
+
+  function applyTransform(s: string, tx?: string): string {
+    if (!s) return s
+    if (tx === 'uppercase')  return s.toUpperCase()
+    if (tx === 'capitalize') return s.charAt(0).toUpperCase() + s.slice(1)
+    return s
+  }
+
+  const computedRows = activeRows.map((row, i) => {
+    const isFirst    = i === 0
+    const tx         = row.textTransform ?? 'uppercase'
+    const rawValue   = getRowValue(row, item)
+    const valueText  = applyTransform(rawValue || '—', tx)
+    const badgeText  = (row.badgeText || '—').toUpperCase()
+    const valueWeight: number = row.boldValue !== false ? (isFirst ? 900 : 700) : 400
+
+    // Badge: shrink badge font to fit inside badgeMaxW - 2*pad, then compute badgeW
+    const badgeFsFit  = fitFontSize(badgeText, badgeFsBase, badgeMaxWPx - 2 * badgePadHPx, fontFam, 700)
+    const measuredBW  = measureTextWidth(badgeText, badgeFsFit, fontFam, 700) + 2 * badgePadHPx
+    const badgeW      = Math.min(badgeMaxWPx, Math.max(badgeMinWPx, measuredBW))
+    const badgeH      = badgeFsFit + 2 * badgePadVPx
+
+    // Value: shrink value font to fit in available value column
+    const desiredValueFs = (isFirst ? valueFs1 : valueFs) * (row.fontScale ?? 1)
+    const valueMaxW      = Math.max(8, leftInnerWPx - badgeW - colGapPx)
+    const valueFsFit     = fitFontSize(valueText, desiredValueFs, valueMaxW, fontFam, valueWeight)
+
+    const rowH = Math.max(badgeH, valueFsFit * 1.1)
+    return { row, isFirst, tx, valueText, badgeText, badgeFsFit, badgeW, badgeH, valueFsFit, valueWeight, rowH }
+  })
+
+  const naturalGroupH = computedRows.reduce((s, r) => s + r.rowH, 0)
+    + Math.max(0, computedRows.length - 1) * rowGapPx
+  // Uniform shrink if rows would overflow vertical space (matches PDF behavior)
+  const rowsOverflowScale = naturalGroupH > rowsAvailHPx && rowsAvailHPx > 0
+    ? rowsAvailHPx / naturalGroupH
+    : 1
 
   // Title display value (apply smart truncation if enabled)
   const rawTitle = item.listingTitle ?? null
@@ -148,38 +264,44 @@ export function LabelPreview({ item, template }: Props) {
             </div>
           )}
 
-          {/* Field rows */}
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: Math.round(hPx * 0.025) }}>
-            {activeRows.map((row, i) => {
-              const value = getRowValue(row, item)
-              const isFirst = i === 0
-              const fs = (isFirst ? valueFs1 : valueFs) * (row.fontScale ?? 1)
-              const tx = row.textTransform ?? 'uppercase'
+          {/* Field rows — pre-computed: badge cap, value fit, uniform overflow shrink */}
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: rowGapPx * rowsOverflowScale }}>
+            {computedRows.map((c) => {
+              const rawValue = getRowValue(c.row, item)
+              const showPlaceholder = !rawValue
+              const finalBadgeFs = c.badgeFsFit * rowsOverflowScale
+              const finalValueFs = c.valueFsFit * rowsOverflowScale
+              const finalBadgeH  = c.badgeH    * rowsOverflowScale
+              const finalBadgeW  = c.badgeW    * rowsOverflowScale
               return (
-                <div key={row.id} style={{ display: 'flex', alignItems: 'center', gap: Math.round(wPx * 0.015) }}>
+                <div key={c.row.id} style={{ display: 'flex', alignItems: 'center', gap: colGapPx }}>
                   <div style={{
                     background: '#111', color: '#fff',
                     fontWeight: 700,
-                    fontSize: badgeFs,
-                    padding: `${hPx * 0.02}px ${hPx * 0.03}px`,
+                    fontSize: finalBadgeFs,
+                    height: finalBadgeH,
+                    width: finalBadgeW,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
                     borderRadius: 3, whiteSpace: 'nowrap',
                     letterSpacing: '0.03em', textTransform: 'uppercase',
-                    flexShrink: 0, minWidth: hPx * 0.45 * (template.badgeFontScale ?? 1), textAlign: 'center',
+                    flexShrink: 0, overflow: 'hidden',
                   }}>
-                    {row.badgeText || '—'}
+                    {c.badgeText}
                   </div>
                   <div style={{
-                    fontWeight: row.boldValue !== false ? (isFirst ? 900 : 700) : 400,
-                    fontSize: fs,
+                    fontWeight: c.valueWeight,
+                    fontSize: finalValueFs,
                     color: '#000',
                     whiteSpace: 'nowrap',
                     overflow: 'hidden',
                     textOverflow: 'ellipsis',
-                    letterSpacing: isFirst ? '-0.02em' : '0.02em',
-                    textTransform: tx as React.CSSProperties['textTransform'],
+                    letterSpacing: c.isFirst ? '-0.02em' : '0.02em',
+                    textTransform: c.tx as React.CSSProperties['textTransform'],
                     lineHeight: 1.1,
                   }}>
-                    {value || <span style={{ color: '#aaa', fontStyle: 'italic', fontWeight: 400, fontSize: badgeFs }}>—</span>}
+                    {showPlaceholder
+                      ? <span style={{ color: '#aaa', fontStyle: 'italic', fontWeight: 400, fontSize: finalBadgeFs }}>—</span>
+                      : c.valueText}
                   </div>
                 </div>
               )
@@ -193,25 +315,25 @@ export function LabelPreview({ item, template }: Props) {
           display: 'flex', flexDirection: 'column',
           padding: `${padPx}px ${padPx}px ${padPx}px ${padPx}px`,
         }}>
-          {/* Size box */}
+          {/* Size box — uses shrunk variables so preview matches PDF */}
           {template.showSizeBox && (
             <div style={{
               display: 'flex', flexDirection: 'column', alignItems: 'center',
               border: '2px solid #111', borderRadius: 4,
-              padding: `${hPx * 0.01}px ${hPx * 0.015}px`,
+              padding: `${sizeBoxPadV}px ${hPx * 0.015}px`,
               marginBottom: padPx, flexShrink: 0,
             }}>
               <div style={{
-                fontSize: hPx * 0.06 * sizeHeaderScale, fontWeight: 700, letterSpacing: '0.1em',
+                fontSize: sizeHdrFs, fontWeight: 700, letterSpacing: '0.1em',
                 textTransform: 'uppercase', background: '#111', color: '#fff',
                 width: '100%', textAlign: 'center', borderRadius: 2,
-                padding: `${hPx * 0.005}px 0`,
+                padding: `${sizeHdrPadV}px 0`,
               }}>
                 {template.sizeBoxLabel || 'SIZE'}
               </div>
               <div style={{
-                fontSize: Math.min(hPx * 0.19 * sizeValueScale, (innerW) * 0.85),
-                fontWeight: 900, color: '#000', lineHeight: 1, marginTop: hPx * 0.01,
+                fontSize: Math.min(sizeValFs, innerW * 0.85),
+                fontWeight: 900, color: '#000', lineHeight: 1, marginTop: sizeValMt,
               }}>
                 {sizeVal || '—'}
               </div>
@@ -253,10 +375,18 @@ export function LabelPreview({ item, template }: Props) {
                     {item.fnsku}
                   </span>
                 </div>
-                {template.showListingTitle && displayTitle && (
-                  (template.titleTruncationMode ?? 'lines') === 'smart' ? (
+                {template.showListingTitle && displayTitle && (() => {
+                  const titleFsRaw = hPx * 0.052 * listingTitleScale
+                  const mode = template.titleTruncationMode ?? 'lines'
+                  const maxLines = template.listingTitleLines ?? 2
+                  // Smart mode: single line, shrink to fit barcode width.
+                  // Lines mode: shrink so wrapped text fits within maxLines × barcodeW.
+                  const titleFs = mode === 'smart'
+                    ? fitFontSize(displayTitle, titleFsRaw, barcodeW, fontFam, 400)
+                    : fitWrappedFontSize(displayTitle, titleFsRaw, barcodeW, fontFam, 400, maxLines)
+                  return mode === 'smart' ? (
                     <div style={{
-                      fontSize: hPx * 0.052 * listingTitleScale,
+                      fontSize: titleFs,
                       color: '#333',
                       marginTop: 3,
                       textAlign: 'center',
@@ -270,7 +400,7 @@ export function LabelPreview({ item, template }: Props) {
                     </div>
                   ) : (
                     <div style={{
-                      fontSize: hPx * 0.052 * listingTitleScale,
+                      fontSize: titleFs,
                       color: '#333',
                       marginTop: 3,
                       textAlign: 'center',
@@ -278,13 +408,13 @@ export function LabelPreview({ item, template }: Props) {
                       maxWidth: barcodeW,
                       overflow: 'hidden',
                       display: '-webkit-box',
-                      WebkitLineClamp: template.listingTitleLines ?? 2,
+                      WebkitLineClamp: maxLines,
                       WebkitBoxOrient: 'vertical',
                     } as React.CSSProperties}>
                       {displayTitle}
                     </div>
                   )
-                )}
+                })()}
                 {template.showCondition && (
                   <div style={{ fontSize: hPx * 0.052 * conditionScale, color: '#333', marginTop: 2, textAlign: 'center' }}>
                     {template.condition || 'New'}

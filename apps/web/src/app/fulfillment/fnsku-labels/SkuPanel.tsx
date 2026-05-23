@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Search, X, Loader2, RefreshCw, Plus, Minus, ClipboardList, AlertTriangle } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
+import { pickAttr } from './LabelPreview'
 import type { LabelItem } from './types'
 
 interface Props {
@@ -166,7 +167,15 @@ export function SkuPanel({ items, onChange, onFetchFnskus, fetchingFnskus }: Pro
   }
 
   const updateFnsku = (idx: number, val: string) => {
-    onChange(items.map((it, i) => i === idx ? { ...it, fnsku: val, fnskuError: undefined } : it))
+    // Typed entry locks the field — re-fetch from SP-API must not overwrite it.
+    // Clearing the field (empty value) releases the lock so the next fetch can fill it.
+    const trimmed = val.trim()
+    onChange(items.map((it, i) => i === idx ? {
+      ...it,
+      fnsku: val,
+      fnskuError: undefined,
+      manuallyEdited: trimmed.length > 0,
+    } : it))
   }
 
   const remove = (idx: number) => {
@@ -217,9 +226,9 @@ export function SkuPanel({ items, onChange, onFetchFnskus, fetchingFnskus }: Pro
             <div className="absolute left-0 right-0 mt-1 mx-3 border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-800 shadow-xl z-50 max-h-64 overflow-y-auto">
               {results.map(p => {
                 const attrs = p.variationAttributes ?? {}
-                const color = attrs['Color'] ?? attrs['color'] ?? ''
-                const size = attrs['Size'] ?? attrs['size'] ?? ''
-                const gender = attrs['Gender'] ?? attrs['gender'] ?? ''
+                const color  = pickAttr(attrs, 'color')
+                const size   = pickAttr(attrs, 'size')
+                const gender = pickAttr(attrs, 'gender')
                 return (
                   <button
                     key={p.sku}
@@ -305,9 +314,9 @@ export function SkuPanel({ items, onChange, onFetchFnskus, fetchingFnskus }: Pro
         )}
         {items.map((it, idx) => {
           const attrs = it.variationAttributes ?? {}
-          const color  = attrs['Color']  ?? attrs['color']  ?? ''
-          const size   = attrs['Size']   ?? attrs['size']   ?? ''
-          const gender = attrs['Gender'] ?? attrs['gender'] ?? ''
+          const color  = pickAttr(attrs, 'color')
+          const size   = pickAttr(attrs, 'size')
+          const gender = pickAttr(attrs, 'gender')
           return (
             <div key={`${it.sku}-${idx}`} className="px-3 py-2.5 border-b border-slate-100 dark:border-slate-800 last:border-0">
               <div className="flex items-start justify-between gap-1">

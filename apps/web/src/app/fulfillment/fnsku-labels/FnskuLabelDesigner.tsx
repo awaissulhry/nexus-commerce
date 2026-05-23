@@ -129,10 +129,13 @@ export default function FnskuLabelDesigner() {
       setItems(prev => prev.map(it => {
         const hit = results.find((r: any) => r.sku === it.sku)
         if (!hit) return { ...it, fnskuLoading: false }
+        // Never overwrite a manually-typed FNSKU — even on force re-fetch.
+        // Other fields (listing title, image, attrs) can still refresh.
+        const protectedFnsku = it.manuallyEdited ? it.fnsku : (hit.fnsku ?? it.fnsku)
         return {
           ...it,
           fnskuLoading: false,
-          fnsku: hit.fnsku ?? it.fnsku,
+          fnsku: protectedFnsku,
           asin: it.asin ?? hit.asin ?? null,
           fnskuError: hit.error,
           productName: it.productName ?? hit.productName,

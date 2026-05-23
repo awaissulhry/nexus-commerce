@@ -79,6 +79,10 @@ export interface LabelItem {
   imageUrl: string | null
   fnskuLoading?: boolean
   fnskuError?: string
+  /** True when the user has typed the FNSKU manually. The re-fetch
+   *  flow MUST NOT overwrite it — typing locks the field in. Cleared
+   *  only when the user clears the field. */
+  manuallyEdited?: boolean
 }
 
 export interface SavedTemplate {
