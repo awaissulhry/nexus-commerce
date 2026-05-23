@@ -645,6 +645,26 @@ const reviewsRoutes: FastifyPluginAsync = async (fastify) => {
     },
   )
 
+  // RV.8.1 — Conversion-rate + per-mp + per-productType analytics.
+  fastify.get<{ Querystring: { windowDays?: string; attributionWindowDays?: string } }>(
+    '/reviews/analytics',
+    async (request, reply) => {
+      const q = request.query
+      const windowDays = q.windowDays ? Math.max(7, Math.min(180, parseInt(q.windowDays, 10))) : 30
+      const attributionWindowDays = q.attributionWindowDays
+        ? Math.max(7, Math.min(60, parseInt(q.attributionWindowDays, 10)))
+        : 21
+      const { computeReviewAnalytics } = await import('../services/reviews/review-analytics.service.js')
+      try {
+        const result = await computeReviewAnalytics({ windowDays, attributionWindowDays })
+        reply.header('Cache-Control', 'private, max-age=300')
+        return result
+      } catch (err: any) {
+        return reply.code(500).send({ error: err.message })
+      }
+    },
+  )
+
   // ────────────────────────────────────────────────────────────────────
   // RV.6.2 — Customer-facing sentiment check landing endpoints.
   //

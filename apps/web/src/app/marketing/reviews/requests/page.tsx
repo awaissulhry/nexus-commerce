@@ -10,11 +10,29 @@
  * 4h under NEXUS_ENABLE_REVIEW_INGEST=1.
  */
 
-import { Mail, AlertCircle } from 'lucide-react'
+import { Mail, AlertCircle, TrendingUp } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { ReviewsNav } from '../_shared/ReviewsNav'
 import { RequestsActionsClient } from './RequestsActionsClient'
 import { RequestRowActions } from './RequestRowActions'
+
+interface Analytics {
+  window: { since: string; until: string; days: number }
+  overall: { sent: number; reviewedAfter: number; conversionRate: number }
+  perMarketplace: Array<{ marketplace: string; sent: number; reviewedAfter: number; conversionRate: number }>
+  perProductType: Array<{ productType: string; sent: number; reviewedAfter: number; conversionRate: number }>
+  daily: Array<{ date: string; sent: number; reviewedAfter: number }>
+}
+
+async function fetchAnalytics(): Promise<Analytics | null> {
+  try {
+    const res = await fetch(`${getBackendUrl()}/api/reviews/analytics?windowDays=30`, { cache: 'no-store' })
+    if (!res.ok) return null
+    return (await res.json()) as Analytics
+  } catch {
+    return null
+  }
+}
 
 export const dynamic = 'force-dynamic'
 
@@ -75,7 +93,7 @@ const TIMING_DISPLAY: Array<{ match: string[]; days: number; label: string }> = 
 ]
 
 export default async function ReviewRequestsPage() {
-  const stats = await fetchStats()
+  const [stats, analytics] = await Promise.all([fetchStats(), fetchAnalytics()])
 
   return (
     <div className="px-4 py-4">
@@ -117,6 +135,84 @@ export default async function ReviewRequestsPage() {
             Negative customers are routed to support before they hit Amazon — average rating lift typically +0.2 to +0.5 stars.
           </p>
         </div>
+      )}
+
+      {/* RV.8.2 — Analytics */}
+      {analytics && analytics.overall.sent > 0 && (
+        <section className="mb-6">
+          <h2 className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2 flex items-center gap-1.5">
+            <TrendingUp className="h-4 w-4 text-emerald-500" />
+            Conversion analytics — last {analytics.window.days} days
+          </h2>
+
+          {/* Overall headline */}
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md p-4 mb-3">
+            <div className="flex items-baseline gap-4 flex-wrap">
+              <div>
+                <div className="text-[10px] uppercase tracking-wider text-slate-500">Sent</div>
+                <div className="text-2xl font-bold tabular-nums">{analytics.overall.sent.toLocaleString()}</div>
+              </div>
+              <div className="text-slate-300">→</div>
+              <div>
+                <div className="text-[10px] uppercase tracking-wider text-slate-500">Reviews after</div>
+                <div className="text-2xl font-bold tabular-nums text-emerald-700 dark:text-emerald-300">
+                  {analytics.overall.reviewedAfter.toLocaleString()}
+                </div>
+              </div>
+              <div className="text-slate-300">·</div>
+              <div>
+                <div className="text-[10px] uppercase tracking-wider text-slate-500">Conversion</div>
+                <div className="text-2xl font-bold tabular-nums text-blue-700 dark:text-blue-300">
+                  {(analytics.overall.conversionRate * 100).toFixed(1)}%
+                </div>
+              </div>
+              <div className="ml-auto text-[11px] text-slate-400">
+                Industry baseline: 5–15%
+              </div>
+            </div>
+            {/* Sparkline */}
+            {analytics.daily.length > 0 && (() => {
+              const max = Math.max(...analytics.daily.map((d) => d.sent), 1)
+              const w = 100 / analytics.daily.length
+              return (
+                <svg className="w-full mt-3" style={{ height: 60 }} viewBox={`0 0 100 60`} preserveAspectRatio="none">
+                  {analytics.daily.map((d, i) => {
+                    const sentH = (d.sent / max) * 56
+                    const reviewedH = (d.reviewedAfter / max) * 56
+                    return (
+                      <g key={d.date}>
+                        <rect x={i * w + 0.2} y={60 - sentH} width={w - 0.4} height={sentH} fill="#94a3b8" opacity={0.6} />
+                        <rect x={i * w + 0.2} y={60 - reviewedH} width={w - 0.4} height={reviewedH} fill="#10b981" />
+                      </g>
+                    )
+                  })}
+                </svg>
+              )
+            })()}
+            <div className="flex items-center gap-4 text-[11px] text-slate-500 mt-1">
+              <span className="inline-flex items-center gap-1">
+                <span className="inline-block w-2 h-2 bg-slate-400 rounded-sm"></span> Sent
+              </span>
+              <span className="inline-flex items-center gap-1">
+                <span className="inline-block w-2 h-2 bg-emerald-500 rounded-sm"></span> Review left after (attributed)
+              </span>
+            </div>
+          </div>
+
+          {/* Breakdowns side-by-side */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <BreakdownTable
+              title="By marketplace"
+              rows={analytics.perMarketplace}
+              labelKey="marketplace"
+            />
+            <BreakdownTable
+              title="By product type"
+              rows={analytics.perProductType}
+              labelKey="productType"
+            />
+          </div>
+        </section>
       )}
 
       {/* Upcoming queue */}
@@ -290,6 +386,64 @@ function Stat({
         {label}
       </div>
       <div className={`text-base font-semibold tabular-nums ${valueClass}`}>{value}</div>
+    </div>
+  )
+}
+
+interface BreakdownRow {
+  marketplace?: string
+  productType?: string
+  sent: number
+  reviewedAfter: number
+  conversionRate: number
+}
+
+function BreakdownTable({
+  title,
+  rows,
+  labelKey,
+}: {
+  title: string
+  rows: BreakdownRow[]
+  labelKey: 'marketplace' | 'productType'
+}) {
+  return (
+    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md overflow-hidden">
+      <div className="px-3 py-2 border-b border-slate-200 dark:border-slate-800 text-[11px] uppercase tracking-wider text-slate-500 font-medium">
+        {title}
+      </div>
+      {rows.length === 0 ? (
+        <div className="px-3 py-4 text-xs text-slate-500 text-center">No data in window.</div>
+      ) : (
+        <table className="w-full text-xs">
+          <thead className="bg-slate-50 dark:bg-slate-950/40">
+            <tr className="text-left text-[10px] uppercase tracking-wider text-slate-500">
+              <th className="px-3 py-1.5">{labelKey === 'marketplace' ? 'Mkt' : 'Product type'}</th>
+              <th className="px-3 py-1.5 text-right">Sent</th>
+              <th className="px-3 py-1.5 text-right">Reviewed</th>
+              <th className="px-3 py-1.5 text-right">Rate</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+            {rows.map((r) => {
+              const label = (r as any)[labelKey] ?? '—'
+              const pct = (r.conversionRate * 100).toFixed(1)
+              const tone =
+                r.conversionRate >= 0.1 ? 'text-emerald-700 dark:text-emerald-300'
+                : r.conversionRate >= 0.05 ? 'text-blue-700 dark:text-blue-300'
+                : 'text-slate-600 dark:text-slate-400'
+              return (
+                <tr key={label}>
+                  <td className="px-3 py-1.5 font-medium text-slate-700 dark:text-slate-300">{label}</td>
+                  <td className="px-3 py-1.5 text-right tabular-nums">{r.sent}</td>
+                  <td className="px-3 py-1.5 text-right tabular-nums text-emerald-700 dark:text-emerald-300">{r.reviewedAfter}</td>
+                  <td className={`px-3 py-1.5 text-right tabular-nums font-semibold ${tone}`}>{pct}%</td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      )}
     </div>
   )
 }
