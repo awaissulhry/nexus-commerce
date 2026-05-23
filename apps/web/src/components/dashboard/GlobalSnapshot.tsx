@@ -16,8 +16,9 @@
 
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
-import { ChevronDown, ChevronUp, ShoppingCart, Package, Mail, RefreshCw } from 'lucide-react'
+import { ArrowUpRight, ShoppingCart, Package, Mail, RefreshCw } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
+import { Modal } from '@/components/ui/Modal'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { getBackendUrl } from '@/lib/backend-url'
 
@@ -501,13 +502,61 @@ export function GlobalSnapshot() {
         </SnapshotTile>
       </div>
 
-      {expanded && (
-        <div className="border-t border-slate-200 dark:border-slate-700 p-4 bg-slate-50 dark:bg-slate-900">
-          {expanded === 'sales' && <SalesPanelPlaceholder data={data} onSelectMarketplace={setMarketplace} />}
-          {expanded === 'openOrders' && <OpenOrdersPanelPlaceholder data={data} onSelectMarketplace={setMarketplace} />}
-          {expanded === 'messages' && <MessagesPanelPlaceholder />}
+      {/* GP-RT.1 — Modal-based detail panels. Replaces the inline
+          expansion that pushed all subsequent dashboard content down.
+          Each tile's detail opens in a centered modal:
+          - Sales + Open Orders → 3xl (1024px) for the wide table +
+            chart
+          - Buyer Messages → md (448px), placeholder is lightweight
+          Canonical <Modal> handles ESC, backdrop click, focus trap,
+          body scroll lock, and ARIA wiring. */}
+      <Modal
+        open={expanded === 'sales'}
+        onClose={() => onToggle('sales')}
+        title={
+          <span className="inline-flex items-center gap-2">
+            <ShoppingCart size={14} className="text-slate-500" aria-hidden />
+            Sales
+          </span>
+        }
+        size="3xl"
+      >
+        <div className="px-1 pb-1">
+          <SalesPanelPlaceholder data={data} onSelectMarketplace={setMarketplace} />
         </div>
-      )}
+      </Modal>
+
+      <Modal
+        open={expanded === 'openOrders'}
+        onClose={() => onToggle('openOrders')}
+        title={
+          <span className="inline-flex items-center gap-2">
+            <Package size={14} className="text-slate-500" aria-hidden />
+            Open Orders
+          </span>
+        }
+        size="3xl"
+      >
+        <div className="px-1 pb-1">
+          <OpenOrdersPanelPlaceholder data={data} onSelectMarketplace={setMarketplace} />
+        </div>
+      </Modal>
+
+      <Modal
+        open={expanded === 'messages'}
+        onClose={() => onToggle('messages')}
+        title={
+          <span className="inline-flex items-center gap-2">
+            <Mail size={14} className="text-slate-500" aria-hidden />
+            Buyer Messages
+          </span>
+        }
+        size="md"
+      >
+        <div className="px-1 pb-1">
+          <MessagesPanelPlaceholder />
+        </div>
+      </Modal>
     </Card>
   )
 }
@@ -581,20 +630,27 @@ function SnapshotTile({
   onToggle: () => void
   children: React.ReactNode
 }) {
+  // GP-RT.1 — tile is now a button that OPENS A MODAL (vs the old
+  // inline-expand behaviour). aria-haspopup="dialog" communicates the
+  // pattern to AT users; aria-expanded reflects whether the modal is
+  // currently open. The arrow-up-right icon replaces chevron-down so
+  // operators visually expect a popup, not an inline expansion.
   return (
     <div className="p-4">
       <button
         type="button"
         onClick={onToggle}
+        aria-haspopup="dialog"
         aria-expanded={expanded}
-        className="w-full flex items-start justify-between gap-2 text-left"
+        title={`Open ${label} detail`}
+        className="w-full flex items-start justify-between gap-2 text-left group hover:opacity-90 transition-opacity"
       >
         <div className="flex items-center gap-1.5 text-sm font-semibold text-slate-700 dark:text-slate-200">
           <Icon size={13} className="text-slate-500 dark:text-slate-400" aria-hidden="true" />
           {label}
         </div>
-        <span className="text-slate-400 dark:text-slate-500">
-          {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+        <span className="text-slate-400 dark:text-slate-500 group-hover:text-slate-600 dark:group-hover:text-slate-300 transition-colors">
+          <ArrowUpRight size={14} aria-hidden="true" />
         </span>
       </button>
       <div className="mt-2">{children}</div>
