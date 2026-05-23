@@ -92,8 +92,11 @@ const returnsRoutes: FastifyPluginAsync = async (fastify) => {
         // R7.1 — daily counts for the trend chart (last 30 days).
         // groupBy on day-truncated createdAt requires raw SQL because
         // Prisma's groupBy doesn't have a date_trunc helper.
+        // DA-RT.4 — TZ-aware bucketing. Without AT TZ 'Europe/Rome' the
+        // group key is UTC, which buckets late-evening returns into the
+        // next day for CET/CEST. Matches all other Order/Return surfaces.
         prisma.$queryRaw<Array<{ day: Date; count: bigint }>>`
-          SELECT date_trunc('day', "createdAt") AS day, COUNT(*)::bigint AS count
+          SELECT date_trunc('day', "createdAt" AT TIME ZONE 'Europe/Rome') AS day, COUNT(*)::bigint AS count
           FROM "Return"
           WHERE "createdAt" >= ${since}
           GROUP BY day
@@ -121,14 +124,28 @@ const returnsRoutes: FastifyPluginAsync = async (fastify) => {
 
       // R7.1 — fill in zero-count days so the chart has a continuous
       // x-axis. Otherwise sparse-day periods misrepresent the trend.
+      // DA-RT.4 — both sides use the local-tz calendar date as key.
+      // Mirrors GA-RT.1's fix for the Global Snapshot sparkline:
+      // dt.toISOString().slice(0,10) returns the UTC date of the
+      // local-midnight instant — which is the PREVIOUS calendar day
+      // for any zone ahead of UTC. Intl.DateTimeFormat gives the
+      // local-tz date so JS keys align with the SQL date_trunc-AT-TZ
+      // bucketed r.day.
+      const isoLocalDay = (d: Date): string =>
+        new Intl.DateTimeFormat('en-CA', {
+          timeZone: 'Europe/Rome',
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+        }).format(d)
       const trendByDay = new Map<string, number>()
       for (const r of dailyRows) {
-        trendByDay.set(r.day.toISOString().slice(0, 10), Number(r.count))
+        trendByDay.set(isoLocalDay(r.day), Number(r.count))
       }
       const dailyTrend: Array<{ date: string; count: number }> = []
       for (let d = 29; d >= 0; d--) {
         const dt = new Date(Date.now() - d * 86_400_000)
-        const key = dt.toISOString().slice(0, 10)
+        const key = isoLocalDay(dt)
         dailyTrend.push({ date: key, count: trendByDay.get(key) ?? 0 })
       }
 

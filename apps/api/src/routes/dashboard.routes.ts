@@ -1827,11 +1827,17 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
         // not createdAt (when our DB ingested it). COALESCE keeps legacy
         // rows without purchaseDate working.
         const groupExpr = sparkBucketIsHour
-          ? `to_char(date_trunc('hour', COALESCE("purchaseDate", "createdAt")), 'YYYY-MM-DD"T"HH24')`
-          : `to_char(date_trunc('day',  COALESCE("purchaseDate", "createdAt")), 'YYYY-MM-DD')`
+          // DA-RT.4 — TZ-aware bucketing. Without AT TZ 'Europe/Rome' the
+          // group key is UTC, which buckets local-evening orders into the
+          // next day for CET/CEST. Matches the day boundaries
+          // sales-aggregate.service (DA-RT.2) + dashboard global-snapshot
+          // (GA-RT.1) use, so cross-page numbers agree.
+          ? `to_char(date_trunc('hour', COALESCE("purchaseDate", "createdAt") AT TIME ZONE 'Europe/Rome'), 'YYYY-MM-DD"T"HH24')`
+          : `to_char(date_trunc('day',  COALESCE("purchaseDate", "createdAt") AT TIME ZONE 'Europe/Rome'), 'YYYY-MM-DD')`
         const orderGroupExpr = sparkBucketIsHour
-          ? `to_char(date_trunc('hour', COALESCE(o."purchaseDate", o."createdAt")), 'YYYY-MM-DD"T"HH24')`
-          : `to_char(date_trunc('day',  COALESCE(o."purchaseDate", o."createdAt")), 'YYYY-MM-DD')`
+          // DA-RT.4 — TZ-aware bucketing (see comment on groupExpr above).
+          ? `to_char(date_trunc('hour', COALESCE(o."purchaseDate", o."createdAt") AT TIME ZONE 'Europe/Rome'), 'YYYY-MM-DD"T"HH24')`
+          : `to_char(date_trunc('day',  COALESCE(o."purchaseDate", o."createdAt") AT TIME ZONE 'Europe/Rome'), 'YYYY-MM-DD')`
         ;[sparkRows, unitsRows] = (await Promise.all([
           prisma.$queryRawUnsafe(
             `SELECT ${groupExpr} AS d,
