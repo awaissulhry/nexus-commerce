@@ -19,6 +19,7 @@
 
 import { runOrdersPoll as runAmazonOrdersPoll } from './amazon-orders-sync.job.js'
 import { runZeroTotalsBackfill as runAmazonZeroTotalsBackfill } from './amazon-zero-totals-backfill.job.js'
+import { runSalesDriftDetector } from './sales-drift-detector.job.js'
 import { runFinancialSync as runAmazonFinancialSync } from './amazon-financial-sync.job.js'
 import { runEbayFinancialSync } from './ebay-financial-sync.job.js'
 import { runInventorySweep as runAmazonInventorySweep } from './amazon-inventory-sync.job.js'
@@ -114,6 +115,11 @@ export const CRON_REGISTRY: Record<string, () => Promise<unknown>> = {
   // PENDING+€0 rows recover the moment Amazon releases OrderTotal,
   // without operator intervention.
   'amazon-zero-totals-backfill': () => runAmazonZeroTotalsBackfill(),
+  // DA-RT.5 — nightly comparison of Order.totalPrice sum vs
+  // DailySalesAggregate.grossRevenue per (day, marketplace). Publishes
+  // sales.drift.detected on tolerance breach so the operator notices
+  // drift before it accumulates across multiple periods.
+  'sales-drift-detector': () => runSalesDriftDetector(),
   'amazon-financial-sync': () => runAmazonFinancialSync(),
   'ebay-financial-sync': () => runEbayFinancialSync(),
   'amazon-inventory-sync': () => runAmazonInventorySweep(),

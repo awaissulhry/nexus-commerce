@@ -162,6 +162,7 @@ import { startRefundRetryCron } from "./jobs/refund-retry.job.js";
 import { startRefundDeadlineTrackerCron } from "./jobs/refund-deadline-tracker.job.js";
 import { startAmazonOrdersCron } from "./jobs/amazon-orders-sync.job.js";
 import { startAmazonZeroTotalsBackfillCron } from "./jobs/amazon-zero-totals-backfill.job.js";
+import { startSalesDriftDetectorCron } from "./jobs/sales-drift-detector.job.js";
 import { startEbayOrdersCron } from "./jobs/ebay-orders-sync.job.js";
 import { startAmazonFinancialSyncCron } from "./jobs/amazon-financial-sync.job.js";
 import { startEbayFinancialSyncCron } from "./jobs/ebay-financial-sync.job.js";
@@ -793,6 +794,17 @@ async function start() {
     // Gated behind NEXUS_ENABLE_AMAZON_ZERO_BACKFILL_CRON=1.
     if (process.env.NEXUS_ENABLE_AMAZON_ZERO_BACKFILL_CRON === '1') {
       startAmazonZeroTotalsBackfillCron();
+    }
+
+    // DA-RT.5 — Sales drift detector. Nightly compares Order.totalPrice
+    // sum vs DailySalesAggregate.grossRevenue per (day, marketplace);
+    // publishes sales.drift.detected on tolerance breach so operator
+    // notification machinery surfaces accumulating drift before it
+    // compounds across multiple periods/markets/months.
+    // Gated behind NEXUS_ENABLE_SALES_DRIFT_DETECTOR=1 (default OFF
+    // during rollout — verify it's not noisy first).
+    if (process.env.NEXUS_ENABLE_SALES_DRIFT_DETECTOR === '1') {
+      startSalesDriftDetectorCron();
     }
 
     // O.2 — Incremental eBay orders polling. Mirror of the Amazon

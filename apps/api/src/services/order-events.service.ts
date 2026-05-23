@@ -108,6 +108,23 @@ export type OrderEvent =
       message?: string
       ts: number
     }
+  // DA-RT.5 — fired by the nightly sales-drift detector cron when
+  // the per-(day, marketplace) sums in two stores disagree beyond
+  // tolerance: Order.totalPrice sum vs DailySalesAggregate.grossRevenue.
+  // Surfaces in operator alerts so the gap doesn't accumulate
+  // invisibly across multiple days/markets/months. payload carries
+  // the delta + which day + which marketplace so the operator can
+  // drill into the specific drift.
+  | {
+      type: 'sales.drift.detected'
+      day: string                    // 'YYYY-MM-DD' (Europe/Rome)
+      marketplace: string | null     // null = global (no marketplace breakdown for this day)
+      orderSumCents: number
+      aggregateSumCents: number
+      deltaCents: number             // orderSumCents - aggregateSumCents
+      deltaPct: number               // relative to max(orderSumCents, aggregateSumCents)
+      ts: number
+    }
   | { type: 'ping'; ts: number }
 
 type Listener = (event: OrderEvent) => void
