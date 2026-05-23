@@ -99,7 +99,12 @@ export const ALL_COLUMNS: ColumnDef[] = [
   { key: 'updated',      label: 'Updated',  labelKey: 'products.col.updated',      width: 110 },
 
   // ── Always-trailing locked column ───────────────────────────────────
-  { key: 'actions', label: '', width: 140, locked: true },
+  // PG.8 widened the action cluster from [Edit | ▾] to
+  // [Eye | Copy | Edit | ▾]. Four segments need ~152px; the body
+  // cell has overflow-hidden so the prior 140px width clipped the
+  // chevron. 180px gives ~25px of slack for the sticky-right edge
+  // divider + future label growth ("Fix" can stretch when localised).
+  { key: 'actions', label: '', width: 180, locked: true },
 ]
 
 /** Amazon-style default — 7 columns matching Manage Products. */
