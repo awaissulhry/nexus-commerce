@@ -13,7 +13,7 @@
 // one-click affordance that doesn't require scrolling into a panel.
 
 import { useEffect, useRef, useState } from 'react'
-import { Loader2, Save, X, Send, ChevronDown } from 'lucide-react'
+import { Loader2, Save, X, Send, ChevronDown, LayoutGrid } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { cn } from '@/lib/utils'
@@ -43,6 +43,9 @@ interface Props {
   onSave: () => void
   onDiscard: () => void
   onPublish: (target: PublishTarget) => void
+  // PB.5 — Opens the cross-channel summary modal. Owner is
+  // ImagesTab so the modal can read the workspace state directly.
+  onOpenCrossChannel?: () => void
 }
 
 function elapsed(ts: string | null): string {
@@ -64,6 +67,7 @@ export default function ImageActionBar({
   onSave,
   onDiscard,
   onPublish,
+  onOpenCrossChannel,
 }: Props) {
   const { t } = useTranslations()
   const [open, setOpen] = useState(false)
@@ -121,9 +125,25 @@ export default function ImageActionBar({
         </>
       )}
 
+      {/* PB.5 — Cross-channel summary trigger. Sits to the left of
+          the Publish dropdown when at least one channel is publishable. */}
+      {anyPublishable && onOpenCrossChannel && (
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={onOpenCrossChannel}
+          disabled={publishing || saving}
+          className="gap-1.5 border border-slate-200 dark:border-slate-700 ml-auto"
+          title="Plan a publish across Amazon + eBay + Shopify in one pass"
+        >
+          <LayoutGrid className="w-3.5 h-3.5" />
+          All channels…
+        </Button>
+      )}
+
       {/* Publish dropdown — visible whenever there is publishable content */}
       {anyPublishable && (
-        <div className="relative ml-auto" ref={dropdownRef}>
+        <div className={cn('relative', !onOpenCrossChannel && 'ml-auto')} ref={dropdownRef}>
           <Button
             size="sm"
             variant={dirtyCount > 0 ? 'secondary' : 'primary'}

@@ -27,6 +27,7 @@ import LightboxModal from './images/LightboxModal'
 import ImageEditorModal from './images/ImageEditorModal'
 import DamPickerModal from './images/DamPickerModal'
 import LifestyleGenerationModal from './images/LifestyleGenerationModal'
+import CrossChannelPublishModal from './images/CrossChannelPublishModal'
 import { fromListing, fromMaster, useLightbox } from './images/useLightbox'
 import type { LightboxImage } from './images/useLightbox'
 import type { ProductImage } from './images/types'
@@ -56,6 +57,8 @@ export default function ImagesTab({ product, discardSignal, onDirtyChange }: Pro
   // still own their own status indicators; this state only guards the
   // top-level action bar's spinner.
   const [publishing, setPublishing] = useState(false)
+  // PB.5 — Cross-channel summary modal.
+  const [crossChannelOpen, setCrossChannelOpen] = useState(false)
   const lightbox = useLightbox()
   const { t } = useTranslations()
 
@@ -629,6 +632,23 @@ export default function ImagesTab({ product, discardSignal, onDirtyChange }: Pro
           showToast(t('products.edit.images.toasts.changesDiscarded'))
         }}
         onPublish={handlePublish}
+        onOpenCrossChannel={() => setCrossChannelOpen(true)}
+      />
+
+      {/* PB.5 — Cross-channel publish summary modal */}
+      <CrossChannelPublishModal
+        open={crossChannelOpen}
+        productId={product.id}
+        masterImages={master}
+        listingImages={listing}
+        pendingUpserts={workspace.pendingUpserts}
+        pendingDeletes={workspace.pendingDeletes}
+        variants={variants}
+        activeAxis={activeAxis}
+        onClose={() => setCrossChannelOpen(false)}
+        onPublishChannel={async (target) => {
+          await handlePublish(target)
+        }}
       />
 
       {/* ── Lightbox modal (IR.3) ────────────────────────────────────── */}
