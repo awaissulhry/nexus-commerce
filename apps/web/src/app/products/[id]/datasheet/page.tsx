@@ -38,6 +38,7 @@ import HeaderHealthPulse from './HeaderHealthPulse'
 import AttributesTab from './AttributesTab'
 import VariantsTab from './VariantsTab'
 import ChannelsTab from './ChannelsTab'
+import OverviewTab from './OverviewTab'
 
 export const dynamic = 'force-dynamic'
 
@@ -202,7 +203,9 @@ export default async function ProductDatasheetHubPage({
         aria-labelledby={`tab-${tab}`}
         className="min-h-[40vh]"
       >
-        {tab === 'attributes' ? (
+        {tab === 'overview' ? (
+          <OverviewTab productId={product.id} locale={locale} t={t} />
+        ) : tab === 'attributes' ? (
           <AttributesTab productId={product.id} locale={locale} t={t} />
         ) : tab === 'variants' && product.isParent ? (
           <VariantsTab
