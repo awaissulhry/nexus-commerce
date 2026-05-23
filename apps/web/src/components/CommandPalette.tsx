@@ -71,6 +71,12 @@ export const COMMANDS: Command[] = [
   { id: 'goto-pricing', label: 'Go to Pricing', icon: Tag, href: '/pricing', group: 'Navigation', chord: 'g r' },
   { id: 'goto-stock', label: 'Go to Stock', icon: Warehouse, href: '/fulfillment/stock', group: 'Navigation', chord: 'g s' },
   { id: 'goto-pos', label: 'Go to Purchase Orders (approval workflow)', icon: FileEdit, href: '/fulfillment/purchase-orders', group: 'Navigation', chord: 'g u' },
+  // PO.18 — deep navigation into the PO workspace lenses.
+  { id: 'pos-create', label: 'New purchase order', icon: FileEdit, href: '/fulfillment/purchase-orders?create=1', group: 'Replenishment', keywords: 'po create draft new ordine acquisto nuovo bozza' },
+  { id: 'pos-late', label: 'Late POs', icon: Activity, href: '/fulfillment/purchase-orders?lateOnly=true', group: 'Replenishment', keywords: 'po purchase order late overdue ritardo scaduto fornitore' },
+  { id: 'pos-awaiting-approval', label: 'POs awaiting approval', icon: FileEdit, href: '/fulfillment/purchase-orders?status=REVIEW', group: 'Replenishment', keywords: 'po approval review attesa approvazione' },
+  { id: 'pos-drafts', label: 'PO drafts', icon: FileEdit, href: '/fulfillment/purchase-orders?status=DRAFT', group: 'Replenishment', keywords: 'po draft bozza' },
+  { id: 'pos-received', label: 'Recently received POs', icon: Activity, href: '/fulfillment/purchase-orders?status=RECEIVED', group: 'Replenishment', keywords: 'po received ricevuto' },
   { id: 'goto-pick-list', label: 'Go to Pick List (warehouse picking)', icon: ClipboardList, href: '/fulfillment/outbound/pick-list', group: 'Navigation', chord: 'g k' },
   { id: 'goto-outbound', label: 'Go to Outbound (pending shipments)', icon: ClipboardList, href: '/fulfillment/outbound', group: 'Navigation', chord: 'g f' },
   { id: 'goto-shipping-rules', label: 'Go to Shipping Rules', icon: FileEdit, href: '/fulfillment/outbound/rules', group: 'Navigation' },

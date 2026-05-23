@@ -416,6 +416,19 @@ export default function PurchaseOrdersClient() {
   const [search, setSearch] = useState('')
   const [createOpen, setCreateOpen] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
+  // PO.18 — palette deep-link: `?create=1` from CommandPalette pops the
+  // Create-PO modal on first render. Strip the param after so a URL
+  // refresh doesn't re-trigger.
+  useEffect(() => {
+    if (searchParams.get('create') === '1') {
+      setCreateOpen(true)
+      const params = new URLSearchParams(searchParams.toString())
+      params.delete('create')
+      const qs = params.toString()
+      router.replace(qs ? `${pathname}?${qs}` : pathname)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
   // PO.13 — scorecard drawer state. Opened from the spend tile's Top
   // Suppliers list and from supplier-name cells in PO rows (when
   // PO.14 adds the supplier picker, this becomes the primary deep-
