@@ -791,10 +791,10 @@ export default function PricingMatrixClient() {
             type="button"
             onClick={() => setPreferencesOpen(true)}
             className="h-11 sm:h-8 px-2.5 text-base inline-flex items-center gap-1.5 border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800 text-slate-600"
-            title="Preferences"
+            title={t('grid.preferences.trigger')}
             aria-haspopup="dialog"
           >
-            <Settings2 size={12} /> Preferences ({visibleColumns.length})
+            <Settings2 size={12} /> {t('grid.preferences.triggerWithCount', { count: visibleColumns.length })}
           </button>
         }
         density={<SharedDensityToggle density={density} onChange={setDensity} />}

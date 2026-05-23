@@ -975,13 +975,15 @@ export default function ReplenishmentWorkspace() {
           {
             id: 'open-forecast',
             icon: Eye,
-            label: 'Open forecast',
+            label: t('replenishment.actions.openForecast'),
             onClick: () => setDrawerProductId(s.productId),
           },
           {
             id: 'draft-po',
             icon: ShoppingCart,
-            label: s.isManufactured ? 'Create work order' : 'Draft PO',
+            label: s.isManufactured
+              ? t('replenishment.actions.createWorkOrder')
+              : t('replenishment.actions.draftPo'),
             disabled: !s.needsReorder,
             onClick: () => { void draftSinglePo(s) },
           },
@@ -990,7 +992,7 @@ export default function ReplenishmentWorkspace() {
           ? [
               {
                 id: 'dismiss',
-                label: 'Dismiss recommendation',
+                label: t('replenishment.actions.dismissRec'),
                 destructive: true,
                 onClick: () => {
                   askDismissReason(
@@ -1367,10 +1369,10 @@ export default function ReplenishmentWorkspace() {
             type="button"
             onClick={() => setPreferencesOpen(true)}
             className="h-11 sm:h-8 px-2.5 text-base inline-flex items-center gap-1.5 border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800 text-slate-600"
-            title="Preferences"
+            title={t('grid.preferences.trigger')}
             aria-haspopup="dialog"
           >
-            <Settings2 size={12} /> Preferences ({visibleColumns.length})
+            <Settings2 size={12} /> {t('grid.preferences.triggerWithCount', { count: visibleColumns.length })}
           </button>
         }
         density={<DensityToggle density={density} onChange={setDensity} />}

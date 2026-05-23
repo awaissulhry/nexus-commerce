@@ -1908,6 +1908,9 @@ function GridLens(props: {
   // grouping state (expandedParents, parentRows, childrenByParent, onToggleExpand)
   // is now owned by ListingsWorkspace so the keyboard handler has access.
 
+  // XG.8 — t() for the Preferences trigger label.
+  const { t } = useTranslations()
+
   // Selection operates on row IDs: productId for parent rows, listing id for others.
   const allSelected =
     parentRows.length > 0 && parentRows.every(r => selected.has(r.id))
@@ -2080,10 +2083,10 @@ function GridLens(props: {
           type="button"
           onClick={() => setColumnPickerOpen(true)}
           className="h-7 px-2 text-base border border-slate-200 dark:border-slate-700 rounded inline-flex items-center gap-1.5 hover:bg-slate-50 dark:hover:bg-slate-800"
-          title="Preferences"
+          title={t('grid.preferences.trigger')}
           aria-haspopup="dialog"
         >
-          <Settings2 size={12} /> Preferences ({visibleColumns.length})
+          <Settings2 size={12} /> {t('grid.preferences.triggerWithCount', { count: visibleColumns.length })}
         </button>
       </div>
 
@@ -2157,6 +2160,7 @@ function CellRenderer({ col, listing, isParentRow = false, onOpenDrawer, onResyn
   const l = listing
   const searchQuery = useContext(SearchContext)
   const { toast } = useToast()
+  const { t } = useTranslations()
 
   // XG.7 — drag-drop upload on the product thumbnail. Posts to the
   // MASTER gallery endpoint (POST /api/products/:productId/images)
@@ -2404,7 +2408,7 @@ function CellRenderer({ col, listing, isParentRow = false, onOpenDrawer, onResyn
           <ActionCluster
             rowId={l.product.id}
             primaryAction={{
-              label: 'Edit product',
+              label: t('listings.actions.editProduct'),
               href: `/products/${l.product.id}/edit`,
             }}
           />
@@ -2417,18 +2421,18 @@ function CellRenderer({ col, listing, isParentRow = false, onOpenDrawer, onResyn
             {
               id: 'peek',
               icon: Eye,
-              label: 'Open listing detail',
+              label: t('listings.actions.openListing'),
               onClick: () => onOpenDrawer(l.id),
             },
             {
               id: 'resync',
               icon: RefreshCw,
-              label: 'Resync',
+              label: t('listings.actions.resync'),
               onClick: () => onResync(l.id),
             },
           ]}
           primaryAction={{
-            label: 'Edit',
+            label: t('listings.actions.edit'),
             href: `/products/${l.productId}/edit?channel=${l.channel}&marketplace=${l.marketplace}`,
           }}
         />
