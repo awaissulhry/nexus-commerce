@@ -19,6 +19,7 @@ import { useImagesWorkspace } from './images/useImagesWorkspace'
 import MasterPanel from './images/MasterPanel'
 import QualityChecklist from './images/QualityChecklist'
 import ImageActionBar from './images/ImageActionBar'
+import type { PublishTarget } from './images/ImageActionBar'
 import AmazonPanel from './images/amazon/AmazonPanel'
 import EbayPanel from './images/ebay/EbayPanel'
 import ShopifyPanel from './images/shopify/ShopifyPanel'
@@ -51,6 +52,10 @@ export default function ImagesTab({ product, discardSignal, onDirtyChange }: Pro
   const [editorImage, setEditorImage] = useState<ProductImage | null>(null)
   const [damPickerOpen, setDamPickerOpen] = useState(false)
   const [lifestyleOpen, setLifestyleOpen] = useState(false)
+  // PB.1 — global publish-dropdown state. Channel-panel publish buttons
+  // still own their own status indicators; this state only guards the
+  // top-level action bar's spinner.
+  const [publishing, setPublishing] = useState(false)
   const lightbox = useLightbox()
   const { t } = useTranslations()
 
@@ -131,6 +136,46 @@ export default function ImagesTab({ product, discardSignal, onDirtyChange }: Pro
     shopify: listing.filter((i) => i.platform === 'SHOPIFY' && i.publishStatus === 'PUBLISHED').length,
   }), [listing])
 
+  // PB.1 — Per-channel status for the global Publish dropdown in the
+  // action bar. hasContent is true once any image exists at master OR
+  // listing level (the publish resolver cascades from master, so a
+  // master-only product can still publish). lastPublishedAt is the
+  // most recent publishedAt across rows for that platform.
+  const channelStatus = useMemo(() => {
+    function maxPubAt(platform: 'AMAZON' | 'EBAY' | 'SHOPIFY'): string | null {
+      const stamps = listing
+        .filter((i) => i.platform === platform && i.publishedAt)
+        .map((i) => i.publishedAt as string)
+      if (stamps.length === 0) return null
+      return stamps.reduce((a, b) => (a > b ? a : b))
+    }
+    function pendingFor(platform: 'AMAZON' | 'EBAY' | 'SHOPIFY'): number {
+      const upserts = Array.from(workspace.pendingUpserts.values()).filter((u) => u.platform === platform).length
+      const deletes = Array.from(workspace.pendingDeletes).filter((id) =>
+        listing.some((l) => l.id === id && l.platform === platform),
+      ).length
+      return upserts + deletes
+    }
+    const masterExists = master.length > 0
+    return {
+      amazon: {
+        hasContent: masterExists || listing.some((i) => i.platform === 'AMAZON'),
+        pendingCount: pendingFor('AMAZON'),
+        lastPublishedAt: maxPubAt('AMAZON'),
+      },
+      ebay: {
+        hasContent: masterExists || listing.some((i) => i.platform === 'EBAY'),
+        pendingCount: pendingFor('EBAY'),
+        lastPublishedAt: maxPubAt('EBAY'),
+      },
+      shopify: {
+        hasContent: masterExists || listing.some((i) => i.platform === 'SHOPIFY'),
+        pendingCount: pendingFor('SHOPIFY'),
+        lastPublishedAt: maxPubAt('SHOPIFY'),
+      },
+    }
+  }, [listing, master, workspace.pendingUpserts, workspace.pendingDeletes])
+
   // Cmd+S to save pending changes from any channel tab.
   // Ref keeps the latest workspace state so the listener binds once.
   const saveRef = useRef<{ save: () => Promise<boolean>; dirty: number }>({
@@ -194,6 +239,74 @@ export default function ImagesTab({ product, discardSignal, onDirtyChange }: Pro
     return Array.from(workspace.pendingUpserts.values()).filter(
       (u) => u.platform === platform,
     ).length
+  }
+
+  // PB.1 — Top-level publish handler used by ImageActionBar's dropdown.
+  // Saves pending changes first (cheap if nothing dirty), then hits the
+  // per-channel publish endpoint. Per-channel panels keep their own
+  // publish bars for fine-grained control; this is the always-visible
+  // one-click affordance.
+  async function handlePublish(target: PublishTarget): Promise<void> {
+    setPublishing(true)
+    try {
+      if (workspace.dirtyCount > 0) {
+        const ok = await savePending()
+        if (!ok) {
+          showToast('Save failed — fix errors before publishing')
+          return
+        }
+      }
+
+      if (target.channel === 'AMAZON') {
+        const markets = target.marketplace === 'ALL'
+          ? (['IT', 'DE', 'FR', 'ES', 'UK'] as const)
+          : [target.marketplace]
+        let okCount = 0
+        let skuTotal = 0
+        for (const m of markets) {
+          try {
+            const res = await beFetch(`/api/products/${product.id}/amazon-images/publish`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ marketplace: m, activeAxis }),
+            })
+            const body = await res.json().catch(() => ({} as any))
+            if (!res.ok) {
+              showToast(`Amazon ${m}: ${body?.error ?? `publish failed (${res.status})`}`)
+              continue
+            }
+            okCount++
+            skuTotal += Array.isArray(body?.skus) ? body.skus.length : 0
+          } catch (err) {
+            showToast(`Amazon ${m}: ${err instanceof Error ? err.message : 'publish failed'}`)
+          }
+        }
+        if (okCount > 0) {
+          showToast(`Amazon: queued ${skuTotal} SKU${skuTotal === 1 ? '' : 's'} across ${okCount} market${okCount === 1 ? '' : 's'}`)
+        }
+        void workspace.reload()
+      } else if (target.channel === 'EBAY') {
+        const res = await beFetch(`/api/products/${product.id}/ebay-images/publish`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ activeAxis }),
+        })
+        const body = await res.json().catch(() => ({} as any))
+        showToast(body?.message ?? (res.ok ? 'Published to eBay' : `eBay publish failed (${res.status})`))
+        void workspace.reload()
+      } else if (target.channel === 'SHOPIFY') {
+        const res = await beFetch(`/api/products/${product.id}/shopify-images/publish`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ activeAxis }),
+        })
+        const body = await res.json().catch(() => ({} as any))
+        showToast(body?.message ?? (res.ok ? 'Published to Shopify' : `Shopify publish failed (${res.status})`))
+        void workspace.reload()
+      }
+    } finally {
+      setPublishing(false)
+    }
   }
 
   // IR.3.3 — open lightbox for a channel cell. listingImageId set → real
@@ -443,6 +556,8 @@ export default function ImagesTab({ product, discardSignal, onDirtyChange }: Pro
       <ImageActionBar
         dirtyCount={dirtyCount}
         saving={saving}
+        publishing={publishing}
+        channelStatus={channelStatus}
         onSave={async () => {
           const ok = await savePending()
           if (ok) showToast(t('products.edit.images.toasts.changesSaved'))
@@ -451,6 +566,7 @@ export default function ImagesTab({ product, discardSignal, onDirtyChange }: Pro
           discardPending()
           showToast(t('products.edit.images.toasts.changesDiscarded'))
         }}
+        onPublish={handlePublish}
       />
 
       {/* ── Lightbox modal (IR.3) ────────────────────────────────────── */}
