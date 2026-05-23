@@ -9,8 +9,8 @@ import Link from 'next/link'
 import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import {
   Boxes, AlertTriangle, LayoutGrid, Sparkles, Search, RefreshCw,
-  ExternalLink, Filter, Settings2, X, ChevronDown,
-  Eye, EyeOff, CheckCircle2, Tag, Link2,
+  ExternalLink, Eye, Filter, Settings2, X, ChevronDown,
+  EyeOff, CheckCircle2, Tag, Link2,
   ArrowUpRight, Package, Plus, Pause, Play,
   Edit3, Bookmark, BookmarkPlus, Star, Trash2,
   Download, FilterX, AlertCircle, Activity, TrendingUp,
@@ -32,12 +32,16 @@ import {
   KeyboardShortcutsModal,
   SharedLensTabs,
   FilterPopover,
+  PreferencesModal,
+  ActionCluster,
   type AutoRefreshInterval,
   type KpiTileSpec,
   type BulkAction,
   type ShortcutGroup,
   type LensTab,
   type FilterDimension,
+  type PreferencesValue,
+  type ActionDef,
 } from '@/app/_shared/grid-lens'
 import PageHeader from '@/components/layout/PageHeader'
 import {
@@ -218,8 +222,12 @@ interface Props {
   channelDefaultVisible?: string[]
 }
 
+// XG.5 — Product (leading) and Actions (trailing) are now locked so
+// the shared PreferencesModal renders them with disabled toggles and
+// PG.6 sticky-left/right freezes pin them on horizontal scroll. Actions
+// widened 140→180 to fit the new [Eye | RefreshCw | Edit | (▾?)] cluster.
 const ALL_COLUMNS = [
-  { key: 'product',     label: 'Product',     subLabel: 'Name | SKU',       width: 420 },
+  { key: 'product',     label: 'Product',     subLabel: 'Name | SKU',       width: 420, locked: true },
   { key: 'channel',     label: 'Channel',     subLabel: 'Platform',         width: 110 },
   { key: 'marketplace', label: 'Market',      subLabel: 'Code',             width: 80  },
   { key: 'status',      label: 'Status',      subLabel: 'Listing state',    width: 130 },
@@ -235,8 +243,20 @@ const ALL_COLUMNS = [
   { key: 'browseNode',  label: 'Browse Node', subLabel: 'Amazon category',  width: 200 },
   { key: 'ebayCat',     label: 'Category',    subLabel: 'eBay ID',          width: 110 },
   { key: 'localeTitle', label: 'Locale Title',subLabel: 'Market title',     width: 240 },
-  { key: 'actions',     label: '',                                           width: 140 },
+  { key: 'actions',     label: '',                                           width: 180, locked: true },
 ] as const
+
+// XG.5 — sort field options for the shared PreferencesModal. Mirrors
+// the sortKeys map passed to SharedVirtualizedGrid below.
+const LISTINGS_SORT_FIELD_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: 'updatedAt',    label: 'Last updated' },
+  { value: 'name',         label: 'Name' },
+  { value: 'channel',      label: 'Channel' },
+  { value: 'marketplace',  label: 'Marketplace' },
+  { value: 'price',        label: 'Price' },
+  { value: 'quantity',     label: 'Stock' },
+  { value: 'lastSyncedAt', label: 'Last sync' },
+]
 
 const DEFAULT_VISIBLE = ['product', 'channel', 'marketplace', 'status', 'syncStatus', 'price', 'quantity', 'lastSync', 'actions']
 
@@ -364,6 +384,27 @@ export default function ListingsWorkspace({ lockChannel, lockMarketplace, titleO
   const [columnPickerOpen, setColumnPickerOpen] = useState(false)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [drawerListingId, setDrawerListingId] = useState<string | null>(null)
+
+  // XG.5 — sticky toggles for the shared PreferencesModal. Per-channel
+  // subpages (/listings/amazon etc.) inherit via the same storageKey
+  // since they share this component.
+  const [stickyFirstColumn, setStickyFirstColumn] = useState<boolean>(true)
+  const [stickyLastColumn, setStickyLastColumn] = useState<boolean>(true)
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    try {
+      const sl = window.localStorage.getItem(`${storageKey}.stickyFirstColumn`)
+      if (sl !== null) setStickyFirstColumn(sl !== 'false')
+      const sr = window.localStorage.getItem(`${storageKey}.stickyLastColumn`)
+      if (sr !== null) setStickyLastColumn(sr !== 'false')
+    } catch { /* ignore */ }
+  }, [storageKey])
+  useEffect(() => {
+    try { window.localStorage.setItem(`${storageKey}.stickyFirstColumn`, String(stickyFirstColumn)) } catch {}
+  }, [storageKey, stickyFirstColumn])
+  useEffect(() => {
+    try { window.localStorage.setItem(`${storageKey}.stickyLastColumn`, String(stickyLastColumn)) } catch {}
+  }, [storageKey, stickyLastColumn])
 
   // U.1 — keyboard navigation on the grid lens. activeRowIndex tracks
   // which row j/k has highlighted; -1 = no active row (default).
@@ -1187,6 +1228,8 @@ export default function ListingsWorkspace({ lockChannel, lockMarketplace, titleO
           childrenByParent={childrenByParent}
           expandedParents={expandedParents}
           onToggleExpand={onToggleExpand}
+          stickyFirstColumn={stickyFirstColumn}
+          stickyLastColumn={stickyLastColumn}
         />
       )}
 
@@ -1813,8 +1856,13 @@ function GridLens(props: {
   childrenByParent: Record<string, ListingGridRow[]>
   expandedParents: Set<string>
   onToggleExpand: (id: string) => void
+  // XG.5 — sticky toggles driven by the Preferences modal at the
+  // workspace level. Default to true so /listings inherits Amazon-
+  // parity freeze the same way /products does.
+  stickyFirstColumn: boolean
+  stickyLastColumn: boolean
 }) {
-  const { grid, visible, visibleColumns, setVisibleColumns, columnPickerOpen, setColumnPickerOpen, sortBy, sortDir, onSort, page, onPage, pageSize, onPageSize, selected, setSelected, onOpenDrawer, onResync, onListingChanged, activeRowIndex, density, setDensity, storageKey, defaultVisible, parentRows, childrenByParent, expandedParents, onToggleExpand } = props
+  const { grid, visible, visibleColumns, setVisibleColumns, columnPickerOpen, setColumnPickerOpen, sortBy, sortDir, onSort, page, onPage, pageSize, onPageSize, selected, setSelected, onOpenDrawer, onResync, onListingChanged, activeRowIndex, density, setDensity, storageKey, defaultVisible, parentRows, childrenByParent, expandedParents, onToggleExpand, stickyFirstColumn, stickyLastColumn } = props
 
   // grouping state (expandedParents, parentRows, childrenByParent, onToggleExpand)
   // is now owned by ListingsWorkspace so the keyboard handler has access.
@@ -1984,22 +2032,18 @@ function GridLens(props: {
         </button>
         {/* Density toggle — same three-segment control as /products */}
         <SharedDensityToggle density={density} onChange={setDensity} />
-        <div className="relative">
-          <button
-            onClick={() => setColumnPickerOpen(!columnPickerOpen)}
-            className="h-7 px-2 text-base border border-slate-200 dark:border-slate-700 rounded inline-flex items-center gap-1.5 hover:bg-slate-50 dark:hover:bg-slate-800"
-          >
-            <Settings2 size={12} /> Columns ({visibleColumns.length})
-          </button>
-          {columnPickerOpen && (
-            <ColumnPickerMenu
-              visible={visibleColumns}
-              setVisible={setVisibleColumns}
-              onClose={() => setColumnPickerOpen(false)}
-              defaultVisible={defaultVisible}
-            />
-          )}
-        </div>
+        {/* XG.5 — Preferences button opens the shared modal. Replaces
+            the bespoke ColumnPickerMenu popover; the modal owns sticky
+            toggles + sort + page size + drag-reorderable visibility. */}
+        <button
+          type="button"
+          onClick={() => setColumnPickerOpen(true)}
+          className="h-7 px-2 text-base border border-slate-200 dark:border-slate-700 rounded inline-flex items-center gap-1.5 hover:bg-slate-50 dark:hover:bg-slate-800"
+          title="Preferences"
+          aria-haspopup="dialog"
+        >
+          <Settings2 size={12} /> Preferences ({visibleColumns.length})
+        </button>
       </div>
 
       {/* G-tree — shared VirtualizedGrid with parent/child expansion.
@@ -2032,6 +2076,8 @@ function GridLens(props: {
         riskFlaggedSkus={_EMPTY_SET}
         storageKey={storageKey}
         showExpandColumn={true}
+        stickyLeft={stickyFirstColumn}
+        stickyRight={stickyLastColumn}
         renderCell={(row, colKey, isChild) => (
           <CellRenderer
             col={colKey}
@@ -2260,34 +2306,45 @@ function CellRenderer({ col, listing, isParentRow = false, onOpenDrawer, onResyn
         <span className="text-slate-300 dark:text-slate-600">—</span>
       )
     case 'actions':
+      // XG.5 — shared ActionCluster. Parent rows render a single
+      // primary "Edit product" action (no per-listing context to
+      // sync/peek). Child (per-listing) rows render the full cluster
+      // with Eye → drawer + RefreshCw → resync + primary Edit deep-
+      // linked to the channel/marketplace. ExternalLink to the
+      // actual channel URL deferred (no URL pattern wired yet).
       if (isParentRow) {
         return (
-          <div className="flex items-center gap-1 justify-end">
-            <Link
-              href={`/products/${l.product.id}/edit`}
-              className="h-6 px-2 text-sm inline-flex items-center text-slate-600 dark:text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/40 rounded"
-            >
-              Edit product
-            </Link>
-          </div>
+          <ActionCluster
+            rowId={l.product.id}
+            primaryAction={{
+              label: 'Edit product',
+              href: `/products/${l.product.id}/edit`,
+            }}
+          />
         )
       }
       return (
-        <div className="flex items-center gap-1 justify-end">
-          <button
-            onClick={() => onResync(l.id)}
-            title="Resync"
-            className="h-6 w-6 inline-flex items-center justify-center text-slate-500 dark:text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/40 rounded"
-          >
-            <RefreshCw size={12} />
-          </button>
-          <Link
-            href={`/products/${l.productId}/edit?channel=${l.channel}&marketplace=${l.marketplace}`}
-            className="h-6 px-2 text-sm inline-flex items-center text-slate-600 dark:text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/40 rounded"
-          >
-            Edit
-          </Link>
-        </div>
+        <ActionCluster
+          rowId={l.id}
+          inlineActions={[
+            {
+              id: 'peek',
+              icon: Eye,
+              label: 'Open listing detail',
+              onClick: () => onOpenDrawer(l.id),
+            },
+            {
+              id: 'resync',
+              icon: RefreshCw,
+              label: 'Resync',
+              onClick: () => onResync(l.id),
+            },
+          ]}
+          primaryAction={{
+            label: 'Edit',
+            href: `/products/${l.productId}/edit?channel=${l.channel}&marketplace=${l.marketplace}`,
+          }}
+        />
       )
     default:
       return null
