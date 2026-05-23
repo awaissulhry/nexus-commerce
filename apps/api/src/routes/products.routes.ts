@@ -19,7 +19,7 @@ import { masterPriceService } from '../services/master-price.service.js'
 import { applyStockMovement } from '../services/stock-movement.service.js'
 import { listEtag, matches } from '../utils/list-etag.js'
 import { productEventService } from '../services/product-event.service.js'
-import { productReadCacheService } from '../services/product-read-cache.service.js'
+import { productReadCacheService, pickFaceImage } from '../services/product-read-cache.service.js'
 import { deriveFulfillmentMethod } from '../services/fulfillment-derivation.service.js'
 
 // ES.3 — module-level cache-ready flag (re-checked every 60s).
@@ -675,9 +675,15 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
                 },
                 version: true,
                 images: {
-                  select: { url: true, type: true },
-                  orderBy: { createdAt: 'asc' },
-                  take: 1,
+                  // PG.2 — fetch enough rows to apply the type=MAIN +
+                  // sortOrder picker on the read side, matching the
+                  // cache path's logic. Direct path doesn't carry the
+                  // parent→child fallback (the cache path does; this
+                  // path is only used for marketplace/missing-channel
+                  // filter modes which rarely hit unimaged parents).
+                  select: { url: true, type: true, sortOrder: true, createdAt: true },
+                  orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
+                  take: 12,
                 },
                 _count: {
                   select: { images: true, channelListings: true, variations: true, children: true },
@@ -954,7 +960,7 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
           family: p.family ?? null,
           workflowStage: p.workflowStage ?? null,
           version: p.version,
-          imageUrl: p.images[0]?.url ?? null,
+          imageUrl: pickFaceImage(p.images ?? []),
           amazonAsin: p.amazonAsin ?? null,
           photoCount,
           channelCount: p._count?.channelListings ?? 0,

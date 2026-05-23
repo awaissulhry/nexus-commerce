@@ -12,6 +12,46 @@ import prisma from '../db.js'
 import type { Prisma } from '@prisma/client'
 import { deriveFulfillmentMethod } from './fulfillment-derivation.service.js'
 
+/**
+ * PG.2 — Catalog thumbnail picker.
+ *
+ * Selects the single "face" image for a product row in priority order:
+ *   1. type='MAIN' with the lowest sortOrder
+ *   2. lowest sortOrder regardless of type
+ *   3. lowest createdAt (final tiebreaker for batch-inserted images that
+ *      share sortOrder=0)
+ *
+ * Pre-PG.2 we picked by createdAt ASC alone, which made the chosen
+ * thumbnail random whenever Amazon's catalog backfill batch-inserted
+ * a parent's image set (all rows share createdAt to the ms — Prisma's
+ * internal id ordering broke the tie, and the operator could never
+ * curate). The new order respects the operator's drag-reorder on the
+ * per-product images tab (sortOrder) and the schema-level type field.
+ *
+ * Pass an already-sorted array if you have one; else use pickFaceImage
+ * with images: { take: ≥1, orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }] }.
+ */
+export type FaceImageCandidate = {
+  url: string
+  type: string
+  sortOrder: number
+  createdAt: Date
+}
+
+export function pickFaceImage(images: FaceImageCandidate[]): string | null {
+  if (images.length === 0) return null
+  // The caller already sorted by [sortOrder ASC, createdAt ASC], so the
+  // first MAIN we encounter is the right one. Falling through gives us
+  // the lowest-sortOrder row of any type.
+  const main = images.find((i) => i.type === 'MAIN')
+  return main?.url ?? images[0]?.url ?? null
+}
+
+export const FACE_IMAGE_ORDER_BY: Prisma.ProductImageOrderByWithRelationInput[] = [
+  { sortOrder: 'asc' },
+  { createdAt: 'asc' },
+]
+
 export class ProductReadCacheService {
   async refresh(productId: string): Promise<void> {
     const product = await prisma.product.findUnique({
@@ -52,9 +92,12 @@ export class ProductReadCacheService {
           },
         },
         images: {
-          take: 1,
-          orderBy: { createdAt: 'asc' },
-          select: { url: true },
+          // PG.2 — take enough rows to find a MAIN if one exists. The
+          // picker prefers MAIN, then lowest sortOrder, then createdAt.
+          // 12 covers Amazon's max main+alt set; we don't need more.
+          take: 12,
+          orderBy: FACE_IMAGE_ORDER_BY,
+          select: { url: true, type: true, sortOrder: true, createdAt: true },
         },
         _count: {
           select: {
@@ -122,6 +165,35 @@ export class ProductReadCacheService {
       fallback: (product.fulfillmentMethod ?? null) as 'FBA' | 'FBM' | null,
     })
 
+    // PG.2 — pick this product's own face image first, then fall back
+    // to a child's image if this is a parent with zero own ProductImage
+    // rows. Without the fallback, parents like AIR-MESH-JACKET-MEN (12
+    // variations, 0 own images) showed an empty thumb on /products
+    // while every child had a full gallery. We pick the alphabetically
+    // first child that has images (stable + deterministic) and reuse
+    // pickFaceImage to choose its best one.
+    let imageUrl = pickFaceImage(product.images)
+    if (!imageUrl && product.isParent) {
+      const firstChildWithImages = await prisma.product.findFirst({
+        where: {
+          parentId: product.id,
+          deletedAt: null,
+          images: { some: {} },
+        },
+        orderBy: { sku: 'asc' },
+        select: {
+          images: {
+            take: 12,
+            orderBy: FACE_IMAGE_ORDER_BY,
+            select: { url: true, type: true, sortOrder: true, createdAt: true },
+          },
+        },
+      })
+      if (firstChildWithImages) {
+        imageUrl = pickFaceImage(firstChildWithImages.images)
+      }
+    }
+
     const channelKeys: string[] = []
     const coverageMap: Record<string, { live: number; draft: number; error: number; total: number }> = {}
     let driftCount = 0
@@ -178,7 +250,7 @@ export class ProductReadCacheService {
       workflowStageJson: product.workflowStage
         ? (product.workflowStage as Prisma.InputJsonValue)
         : null,
-      imageUrl: product.images[0]?.url ?? null,
+      imageUrl,
       photoCount: product._count.images,
       channelCount: product._count.channelListings,
       variantCount: product._count.variations,
@@ -203,6 +275,25 @@ export class ProductReadCacheService {
       create: { id: productId, ...data },
       update: data,
     })
+
+    // PG.2 — propagate to the parent's cache row. When a child's images
+    // change, the parent's PG.2 fallback ("borrow the first child's MAIN
+    // when I have none of my own") needs to re-pick. Lazy import the
+    // queue to keep this module free of the BullMQ import chain at
+    // bootstrap time (cache-service ← worker ← cache-service would be
+    // a cycle if it loaded eagerly). Fire-and-forget; idempotent jobId
+    // dedups rapid bursts.
+    if (product.parentId) {
+      void import('../lib/queue.js')
+        .then(({ readCacheQueue }) =>
+          readCacheQueue.add(
+            'refresh',
+            { productId: product.parentId },
+            { jobId: `cache:refresh:${product.parentId}`, delay: 2000 },
+          ),
+        )
+        .catch(() => {/* parent re-enqueue is best-effort */})
+    }
   }
 
   /** Backfill all products in batches of 100. Returns count refreshed. */
