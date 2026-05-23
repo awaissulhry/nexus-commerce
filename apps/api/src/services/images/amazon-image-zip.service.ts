@@ -30,6 +30,18 @@ export const ALL_AMAZON_MARKETPLACES = ['IT', 'DE', 'FR', 'ES', 'UK'] as const
 type Marketplace = typeof ALL_AMAZON_MARKETPLACES[number]
 const IMAGE_FETCH_TIMEOUT_MS = 15_000
 
+/**
+ * IA.7 — Filename templates for Amazon's bulk-upload page.
+ *
+ * Default `asin` matches Amazon's documented expectation
+ * (https://sellercentral.amazon.it/help/hub/reference/G1881) —
+ * the bulk-upload page resolves files by ASIN. `sku` is offered
+ * for the operator-facing variant where seller SKUs are stable
+ * but ASINs aren't always known (e.g. pre-publish photoshoot
+ * archive). The slot + extension never change shape.
+ */
+export type FilenameTemplate = 'asin' | 'sku'
+
 export interface AmazonZipInput {
   productId: string
   /** 'IT' | 'DE' | 'FR' | 'ES' | 'UK' | 'ALL' (all-markets mode) */
@@ -41,6 +53,8 @@ export interface AmazonZipInput {
   activeAxis?: string | null
   /** Optional explicit variant subset. Undefined = all child variants. */
   variantIds?: string[]
+  /** IA.7 — filename template (default 'asin'). */
+  filenameTemplate?: FilenameTemplate
 }
 
 export interface AmazonZipError {
@@ -89,6 +103,7 @@ async function runMarketplace(
   activeAxis: string | null,
   variantIds: string[] | undefined,
   folderPrefix: string,
+  filenameTemplate: FilenameTemplate,
 ): Promise<MarketplaceRunResult> {
   const [resolved, validation] = await Promise.all([
     resolveAmazonImages(
@@ -136,7 +151,10 @@ async function runMarketplace(
         }
         const contentType = imgRes.headers.get('content-type') ?? 'image/jpeg'
         const ext = mimeToExt(contentType)
-        const filename = `${folderPrefix}${variant.amazonAsin}.${slot}.${ext}`
+        // IA.7 — Filename token from template. ASIN is Amazon's
+        // documented expectation; SKU is the operator-facing fallback.
+        const token = filenameTemplate === 'sku' ? variant.sku : variant.amazonAsin
+        const filename = `${folderPrefix}${token}.${slot}.${ext}`
         const buffer = Buffer.from(await imgRes.arrayBuffer())
         zip.file(filename, buffer)
         fileCount++
@@ -172,6 +190,7 @@ export async function generateAmazonZip(
   // product's stored preference so a script-driven export still
   // resolves group overrides.
   const activeAxis = input.activeAxis ?? product.imageAxisPreference ?? null
+  const filenameTemplate: FilenameTemplate = input.filenameTemplate ?? 'asin'
 
   const zip = new JSZip()
   let totalFileCount = 0
@@ -184,7 +203,7 @@ export async function generateAmazonZip(
     // onto Seller Central's bulk-upload page without colliding ASINs
     // that sell on multiple markets.
     for (const m of ALL_AMAZON_MARKETPLACES) {
-      const r = await runMarketplace(zip, productId, m, activeAxis, variantIds, `${m}/`)
+      const r = await runMarketplace(zip, productId, m, activeAxis, variantIds, `${m}/`, filenameTemplate)
       totalFileCount += r.fileCount
       allSkipped.push(...r.skippedNoAsin.map((sku) => `${m}/${sku}`))
       allErrors.push(...r.errors)
@@ -193,7 +212,7 @@ export async function generateAmazonZip(
     if (!ALL_AMAZON_MARKETPLACES.includes(mkt as Marketplace)) {
       throw new Error(`Invalid marketplace: ${marketplace}`)
     }
-    const r = await runMarketplace(zip, productId, mkt as Marketplace, activeAxis, variantIds, '')
+    const r = await runMarketplace(zip, productId, mkt as Marketplace, activeAxis, variantIds, '', filenameTemplate)
     totalFileCount = r.fileCount
     allSkipped.push(...r.skippedNoAsin)
     allErrors.push(...r.errors)

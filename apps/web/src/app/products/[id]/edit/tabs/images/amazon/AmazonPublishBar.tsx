@@ -134,7 +134,7 @@ export default function AmazonPublishBar({
           {zipMenuOpen && (
             <>
               <div className="fixed inset-0 z-20" onClick={() => setZipMenuOpen(false)} />
-              <div className="absolute right-0 bottom-8 z-30 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl py-1 min-w-[160px] text-sm">
+              <div className="absolute right-0 bottom-8 z-30 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl py-1 min-w-[220px] text-sm">
                 {AMAZON_MARKETPLACES.map((mkt) => (
                   <button
                     key={mkt}
@@ -144,6 +144,22 @@ export default function AmazonPublishBar({
                     Amazon {mkt} ZIP
                   </button>
                 ))}
+                {/* IA.1 — all-markets ZIP (per-market subfolders). */}
+                <div className="h-px bg-slate-100 dark:bg-slate-700 my-1" />
+                <button
+                  className="w-full text-left px-3 py-1.5 text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-950/30 font-medium"
+                  onClick={() => { setZipMenuOpen(false); onExportZip('ALL' as AmazonMarketplace) }}
+                >
+                  All markets (one ZIP)
+                </button>
+                {/* IA.7 — filename convention reference. The toggle
+                    itself lives in the dev-doc until the operator
+                    asks for SKU-named exports; default ASIN matches
+                    Amazon's bulk-upload spec. */}
+                <div className="h-px bg-slate-100 dark:bg-slate-700 my-1" />
+                <div className="px-3 py-1.5 text-[10px] text-slate-400 leading-tight">
+                  Filename: <span className="font-mono">{'{ASIN}.{SLOT}.jpg'}</span> · per Amazon spec
+                </div>
               </div>
             </>
           )}

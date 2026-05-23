@@ -231,12 +231,13 @@ const amazonImagesRoutes: FastifyPluginAsync = async (fastify) => {
       marketplace: string
       activeAxis?: string | null
       variantIds?: string[]
+      filenameTemplate?: 'asin' | 'sku'
     }
   }>(
     '/products/:productId/amazon-images/export-zip',
     async (request, reply) => {
       const { productId } = request.params
-      const { marketplace, activeAxis, variantIds } = request.body ?? ({} as any)
+      const { marketplace, activeAxis, variantIds, filenameTemplate } = request.body ?? ({} as any)
 
       const mkt = (marketplace ?? '').toUpperCase()
       const isAll = mkt === 'ALL'
@@ -252,7 +253,7 @@ const amazonImagesRoutes: FastifyPluginAsync = async (fastify) => {
 
       try {
         const { buffer, filename, fileCount, skippedNoAsin, errors } =
-          await generateAmazonZip({ productId, marketplace: mkt, activeAxis, variantIds })
+          await generateAmazonZip({ productId, marketplace: mkt, activeAxis, variantIds, filenameTemplate })
 
         if (fileCount === 0) {
           return reply.code(422).send({
