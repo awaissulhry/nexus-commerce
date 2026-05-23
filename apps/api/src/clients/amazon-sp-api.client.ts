@@ -68,8 +68,16 @@ interface GetListingsItemOptions {
   sku: string
   marketplaceId: string
   /** SP-API includedData set: which sections to return. Default ['summaries']
-   *  (parent ASIN + status). */
-  includedData?: Array<'summaries' | 'attributes' | 'issues' | 'offers'>
+   *  (parent ASIN + status). 'images' returns the per-marketplace image
+   *  array which IE.4 stores in ChannelLiveImage for drift detection. */
+  includedData?: Array<'summaries' | 'attributes' | 'issues' | 'offers' | 'images'>
+}
+
+export interface SpApiImageVariant {
+  link: string
+  width?: number
+  height?: number
+  variant?: string // 'MAIN' | 'PT01' .. 'PT08' | 'SWCH'
 }
 
 /** W5.49 — DELETE /listings/2021-08-01/items/{sellerId}/{sku}. */
@@ -922,6 +930,12 @@ export class AmazonSpApiClient {
     issues?: SPAPIResponse['issues']
     error?: string
     rawResponse?: SPAPIResponse
+    /** IE.4 — populated when includedData includes 'images'. SP-API
+     *  returns images as `[{ marketplaceId, images: [{ link, width,
+     *  height, variant }] }]` (one outer entry per requested
+     *  marketplaceId). We flatten to a single array for callers since
+     *  every call sends exactly one marketplaceId. */
+    images?: SpApiImageVariant[]
   }> {
     const {
       sellerId,
@@ -987,12 +1001,22 @@ export class AmazonSpApiClient {
       const asin: string | null = summary?.asin ?? data.asin ?? null
       const status: string | null = summary?.status ?? data.status ?? null
 
+      // IE.4 — Image array, when requested via includedData=['images'].
+      // Same per-marketplace shape: one outer entry per request. Empty
+      // when no 'images' in includedData.
+      const rawImagesAny = (data as unknown as { images?: Array<{ images?: SpApiImageVariant[] }> }).images
+      const images: SpApiImageVariant[] | undefined =
+        Array.isArray(rawImagesAny) && rawImagesAny[0]?.images
+          ? rawImagesAny[0].images
+          : undefined
+
       return {
         success: true,
         sku,
         asin,
         status,
         rawResponse: data,
+        images,
       }
     } catch (error) {
       const errorMessage =

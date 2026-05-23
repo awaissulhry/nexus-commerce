@@ -317,6 +317,7 @@ model Product {
   lots                      Lot[] // L.1: lot tracking for recall traceability
   serials                   SerialNumber[] // SR.1: per-unit serial tracking
   channelStockEvents        ChannelStockEvent[] // CS.1: channel→us stock reconciliation
+  channelLiveImages         ChannelLiveImage[]  // IE.4: read-replica of channel-served images
   translations              ProductTranslation[] // H.10: per-language master content
   relationsFrom             ProductRelation[]             @relation("ProductRelationFrom") // H.11
   relationsTo               ProductRelation[]             @relation("ProductRelationTo") // H.11
@@ -3366,6 +3367,63 @@ model WebhookEvent {
 //
 // Idempotency: (channel, channelEventId) unique — webhooks fire
 // duplicates on retries; we accept the same event-id at most once.
+/// IE.4 — Live channel image snapshots.
+///
+/// Stores what Amazon / eBay / Shopify are CURRENTLY serving as the
+/// product's images. Refreshed on demand (operator click) and via
+/// a cron sweep (IE.4b) so the workspace can show "this is what the
+/// buyer sees" alongside Nexus' staged ListingImage rows. The IE.5
+/// drift detector diffs these snapshots against the local intent
+/// and surfaces mismatches.
+///
+/// This table is fed from outside-in (SP-API GetListingsItem, eBay
+/// GetItem, Shopify product.media). Editing here doesn't touch the
+/// channel — it's a read-replica of channel state. Use ListingImage
+/// for the data Nexus intends to send.
+model ChannelLiveImage {
+  id        String  @id @default(cuid())
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  productId String
+
+  // 'AMAZON' | 'EBAY' | 'SHOPIFY'. Three channels supported today;
+  // Italian + EU compliance (project_active_channels) means no Woo / Etsy.
+  channel String
+
+  // Two-letter Amazon marketplace code (IT / DE / FR / ES / UK).
+  // Null for eBay + Shopify which are not per-marketplace today.
+  marketplace String?
+
+  // The SKU we sent — Amazon uses sellerSku as the key when fetching
+  // via GetListingsItem. Null for eBay + Shopify where the channel's
+  // own product id is the natural key (stored separately if needed).
+  externalSku String?
+
+  // Amazon's assigned ASIN at the time of fetch. Surfaced in the UI
+  // so the operator can confirm what's live without round-tripping.
+  asin String?
+
+  // Channel-specific slot identifier. Amazon: MAIN | PT01..PT08 | SWCH.
+  // eBay: position-as-string ('0', '1', …). Shopify: media node id.
+  slot String?
+
+  url       String
+  width     Int?
+  height    Int?
+  sortOrder Int     @default(0)
+
+  // Channel response identifier for short-circuit on next fetch. SP-API
+  // doesn't return ETag headers per-image but the GetListingsItem
+  // response body changes when images change — we hash + store it
+  // here to skip downstream work when nothing moved.
+  etag String?
+
+  fetchedAt DateTime @default(now())
+
+  @@unique([productId, channel, marketplace, externalSku, slot])
+  @@index([productId, channel])
+  @@index([fetchedAt])
+}
+
 model ChannelStockEvent {
   id String @id @default(cuid())
 

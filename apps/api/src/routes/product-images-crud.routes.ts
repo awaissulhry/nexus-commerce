@@ -49,6 +49,7 @@ import {
   hammingHex,
   sha256Buffer,
 } from '../services/images/image-hash.service.js'
+import { refreshAmazonLiveImages } from '../services/images/amazon-live-images.service.js'
 import { productEventService } from '../services/product-event.service.js'
 
 // PG.1b — fire IMAGES_UPDATED to refresh ProductReadCache.imageUrl
@@ -889,6 +890,65 @@ const productImagesCrudRoutes: FastifyPluginAsync = async (fastify) => {
 
       emitImagesUpdated(id, 'delete', { imageId, wasType: existing.type })
       return reply.send({ deleted: true })
+    },
+  )
+
+  // ── GET /api/products/:id/live-channel-images ───────────────────────
+  // IE.4 — Read the cached "what's currently live" snapshot for this
+  // product across all channels + marketplaces. Filtered + sorted for
+  // the IE.5 drift panel to render directly.
+  fastify.get<{
+    Params: { id: string }
+    Querystring: { channel?: string; marketplace?: string }
+  }>(
+    '/products/:id/live-channel-images',
+    async (req, reply) => {
+      const { id } = req.params
+      const where: Record<string, unknown> = { productId: id }
+      if (req.query.channel) where.channel = req.query.channel.toUpperCase()
+      if (req.query.marketplace) where.marketplace = req.query.marketplace.toUpperCase()
+      const rows = await prisma.channelLiveImage.findMany({
+        where,
+        orderBy: [{ channel: 'asc' }, { marketplace: 'asc' }, { externalSku: 'asc' }, { sortOrder: 'asc' }],
+      })
+      return reply.send(rows)
+    },
+  )
+
+  // ── POST /api/products/:id/live-channel-images/refresh ──────────────
+  // IE.4 — Operator-triggered refresh of the live-image snapshot. Today
+  // wired for Amazon only (channel=AMAZON, marketplace required). eBay
+  // + Shopify follow in IE.4b once we settle on the right credentials
+  // path for each.
+  fastify.post<{
+    Params: { id: string }
+    Body: { channel?: string; marketplace?: string; skus?: string[] }
+  }>(
+    '/products/:id/live-channel-images/refresh',
+    async (req, reply) => {
+      const { id } = req.params
+      const channel = (req.body?.channel ?? 'AMAZON').toUpperCase()
+      if (channel !== 'AMAZON') {
+        return reply.status(501).send({
+          error: 'CHANNEL_NOT_IMPLEMENTED',
+          message: 'Only AMAZON refresh is wired in IE.4. eBay + Shopify follow in IE.4b.',
+        })
+      }
+      const marketplace = req.body?.marketplace
+      if (!marketplace) {
+        return reply.status(400).send({ error: 'MARKETPLACE_REQUIRED' })
+      }
+      try {
+        const result = await refreshAmazonLiveImages({
+          productId: id,
+          marketplaceCode: marketplace,
+          skus: req.body?.skus,
+        })
+        return reply.send(result)
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Refresh failed'
+        return reply.status(500).send({ error: 'REFRESH_FAILED', message })
+      }
     },
   )
 }
