@@ -24,6 +24,7 @@ import { beFetch } from '../api'
 import ImagePickerModal from '../ImagePickerModal'
 import CrossChannelSyncBar from '../CrossChannelSyncBar'
 import ChannelPreview from '../ChannelPreview'
+import ChannelValidationBanner, { useChannelValidation } from '../ChannelValidationBanner'
 import ImagePublishHistory from '../ImagePublishHistory'
 import type { ListingImage, PendingUpsert, ProductImage, VariantSummary, WorkspaceProduct } from '../types'
 
@@ -295,6 +296,20 @@ export default function ShopifyPanel({
   const atMax = effectivePool.length >= SHOPIFY_MAX
   const usagePct = Math.min(100, (effectivePool.length / SHOPIFY_MAX) * 100)
 
+  // PB.3a — Validation gate. See EbayPanel for full rationale.
+  const shopifyListing = useMemo(() => listingImages.filter((i) => i.platform === 'SHOPIFY'), [listingImages])
+  const shopifyPending = useMemo(
+    () => Array.from(pendingUpserts.values()).filter((u) => u.platform === 'SHOPIFY'),
+    [pendingUpserts],
+  )
+  const validation = useChannelValidation({
+    channel: 'SHOPIFY',
+    masterImages,
+    channelImages: shopifyListing,
+    pendingForChannel: shopifyPending,
+    pendingDeletes,
+  })
+
   return (
     <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden">
       {/* Header */}
@@ -323,6 +338,15 @@ export default function ShopifyPanel({
           <input ref={fileInputRef} type="file" accept="image/*" multiple className="sr-only" onChange={(e) => handleFiles(Array.from(e.target.files ?? []))} />
         </div>
       </div>
+
+      {/* PB.3a — Pre-publish validation gate */}
+      <ChannelValidationBanner
+        channel="SHOPIFY"
+        masterImages={masterImages}
+        channelImages={shopifyListing}
+        pendingForChannel={shopifyPending}
+        pendingDeletes={pendingDeletes}
+      />
 
       {/* ── Image pool ─────────────────────────────────────────────── */}
       <section
@@ -599,7 +623,10 @@ export default function ShopifyPanel({
             size="sm"
             variant="ghost"
             className="gap-1.5 border border-slate-200 dark:border-slate-700"
-            disabled={publishing}
+            disabled={publishing || validation.blocking.length > 0}
+            title={validation.blocking.length > 0
+              ? `${validation.blocking.length} blocking issue${validation.blocking.length === 1 ? '' : 's'} — see banner above`
+              : undefined}
             onClick={async () => {
               setPublishing(true)
               try {

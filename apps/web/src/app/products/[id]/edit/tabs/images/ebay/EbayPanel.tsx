@@ -25,6 +25,7 @@ import { beFetch } from '../api'
 import ImagePickerModal from '../ImagePickerModal'
 import CrossChannelSyncBar from '../CrossChannelSyncBar'
 import ChannelPreview from '../ChannelPreview'
+import ChannelValidationBanner, { useChannelValidation } from '../ChannelValidationBanner'
 import ImagePublishHistory from '../ImagePublishHistory'
 import type { ListingImage, PendingUpsert, ProductImage, VariantSummary, WorkspaceProduct } from '../types'
 
@@ -286,6 +287,22 @@ export default function EbayPanel({
 
   const atMax = effectiveGallery.length >= EBAY_MAX
 
+  // PB.3a — Validation gate. Pre-filters incoming arrays once and
+  // computes blocking + warnings. The Publish button disables when
+  // validation.blocking.length > 0; the banner explains why inline.
+  const ebayListing = useMemo(() => listingImages.filter((i) => i.platform === 'EBAY'), [listingImages])
+  const ebayPending = useMemo(
+    () => Array.from(pendingUpserts.values()).filter((u) => u.platform === 'EBAY'),
+    [pendingUpserts],
+  )
+  const validation = useChannelValidation({
+    channel: 'EBAY',
+    masterImages,
+    channelImages: ebayListing,
+    pendingForChannel: ebayPending,
+    pendingDeletes,
+  })
+
   return (
     <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden space-y-0">
       {/* Header */}
@@ -312,6 +329,15 @@ export default function EbayPanel({
           <input ref={fileInputRef} type="file" accept="image/*" multiple className="sr-only" onChange={(e) => handleFiles(Array.from(e.target.files ?? []))} />
         </div>
       </div>
+
+      {/* PB.3a — Pre-publish validation gate */}
+      <ChannelValidationBanner
+        channel="EBAY"
+        masterImages={masterImages}
+        channelImages={ebayListing}
+        pendingForChannel={ebayPending}
+        pendingDeletes={pendingDeletes}
+      />
 
       {/* ── Gallery section ─────────────────────────────────────────── */}
       <section
@@ -589,7 +615,10 @@ export default function EbayPanel({
             size="sm"
             variant="ghost"
             className="gap-1.5 border border-slate-200 dark:border-slate-700"
-            disabled={publishing}
+            disabled={publishing || validation.blocking.length > 0}
+            title={validation.blocking.length > 0
+              ? `${validation.blocking.length} blocking issue${validation.blocking.length === 1 ? '' : 's'} — see banner above`
+              : undefined}
             onClick={async () => {
               setPublishing(true)
               try {
