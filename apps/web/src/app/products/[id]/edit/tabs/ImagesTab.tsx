@@ -311,7 +311,12 @@ export default function ImagesTab({ product, discardSignal, onDirtyChange }: Pro
               activeAxis={activeAxis}
               availableAxes={availableAxes}
               addPendingUpsert={workspace.addPendingUpsert}
-              onImagesChange={() => { void workspace.reload() }}
+              // IA.12 — Optimistic: take the new array from MasterPanel
+              // (reordered, appended, edited, deleted) and patch local
+              // state directly. The master-image API endpoints have
+              // already persisted by the time the callback fires;
+              // skipping reload() removes the page-blink.
+              onImagesChange={(next) => workspace.setMasterImages(() => next)}
               onAddToChannel={workspace.addToChannel}
               onToast={showToast}
               onOpenLightbox={(img) => lightbox.open(fromMaster(img), master.map(fromMaster))}

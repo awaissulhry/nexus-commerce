@@ -17,7 +17,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { beFetch } from './api'
-import type { WorkspaceData, PendingUpsert } from './types'
+import type { WorkspaceData, PendingUpsert, ProductImage } from './types'
 
 let _tempIdCounter = 0
 function tempId(): string {
@@ -286,6 +286,21 @@ export function useImagesWorkspace(
     }
   }, [productId])
 
+  // IA.12 — Optimistic patches. Callers update local state instead
+  // of calling reload() after every mutation. The patch functions
+  // are no-ops when the workspace hasn't loaded yet (data === null).
+  // On a background-POST failure, caller falls back to reload() to
+  // re-sync.
+  const setMasterImages = useCallback((updater: (prev: ProductImage[]) => ProductImage[]) => {
+    setData((prev) => (prev ? { ...prev, master: updater(prev.master) } : prev))
+  }, [])
+  const patchMasterImage = useCallback((id: string, patch: Partial<ProductImage>) => {
+    setData((prev) => prev
+      ? { ...prev, master: prev.master.map((m) => (m.id === id ? { ...m, ...patch } : m)) }
+      : prev,
+    )
+  }, [])
+
   return {
     data,
     loading,
@@ -303,5 +318,8 @@ export function useImagesWorkspace(
     savePending,
     discardPending,
     setAxisPreference,
+    // IA.12 — optimistic local patches
+    setMasterImages,
+    patchMasterImage,
   }
 }
