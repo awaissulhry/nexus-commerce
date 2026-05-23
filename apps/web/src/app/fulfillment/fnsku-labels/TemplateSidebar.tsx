@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Plus, Trash2, Save, ChevronUp, ChevronDown } from 'lucide-react'
+import { Plus, Trash2, Save, ChevronUp, ChevronDown, Star, Copy } from 'lucide-react'
 import type { TemplateConfig, TemplateRow, SavedTemplate } from './types'
 
 const VALUE_SOURCES: { value: TemplateRow['valueSource']; label: string }[] = [
@@ -52,9 +52,12 @@ interface Props {
   onSave: (name: string) => Promise<void>
   onUpdate: (patch: any) => void
   onDelete: () => void
+  onSetDefault: (id: string) => void
+  onDuplicate: (template: SavedTemplate) => void
 }
 
-export function TemplateSidebar({ template, onChange, savedTemplates, activeTemplateId, onLoad, onSave, onUpdate, onDelete }: Props) {
+export function TemplateSidebar({ template, onChange, savedTemplates, activeTemplateId, onLoad, onSave, onUpdate, onDelete, onSetDefault, onDuplicate }: Props) {
+  const activeTemplate = savedTemplates.find(t => t.id === activeTemplateId) ?? null
   const [newTemplateName, setNewTemplateName] = useState('')
   const [saving, setSaving] = useState(false)
   const [showSaveInput, setShowSaveInput] = useState(false)
@@ -137,21 +140,56 @@ export function TemplateSidebar({ template, onChange, savedTemplates, activeTemp
             className="w-full h-7 px-2 text-sm rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800"
           >
             <option value="">(unsaved)</option>
-            {savedTemplates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+            {savedTemplates.map(t => {
+              const prefix = t.isDefault ? '★ ' : ''
+              const sizeHint = t.config?.labelSize
+                ? ` (${t.config.labelSize.widthMm}×${t.config.labelSize.heightMm}mm)`
+                : ''
+              return <option key={t.id} value={t.id}>{prefix}{t.name}{sizeHint}</option>
+            })}
           </select>
           <div className="flex gap-1.5 mt-2">
             {activeTemplateId && (
               <button onClick={() => onUpdate({ config: template })}
+                title="Save current edits to this template"
                 className="flex-1 h-6 text-xs rounded border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center justify-center gap-1">
                 <Save size={10} /> Save
               </button>
             )}
             <button onClick={() => setShowSaveInput(v => !v)}
+              title="Save current config as a new named template"
               className="flex-1 h-6 text-xs rounded border border-violet-300 dark:border-violet-700 text-violet-700 dark:text-violet-300 hover:bg-violet-50 dark:hover:bg-violet-950/30 inline-flex items-center justify-center gap-1">
               <Plus size={10} /> New
             </button>
+            {activeTemplate && (
+              <button
+                onClick={() => onDuplicate(activeTemplate)}
+                title={`Duplicate "${activeTemplate.name}" so you can fork without affecting the original`}
+                className="h-6 w-6 text-xs rounded border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center justify-center text-slate-600 dark:text-slate-400"
+              >
+                <Copy size={10} />
+              </button>
+            )}
+            {activeTemplate && !activeTemplate.isDefault && (
+              <button
+                onClick={() => onSetDefault(activeTemplate.id)}
+                title="Set this template as the default that loads on page open"
+                className="h-6 w-6 text-xs rounded border border-amber-200 dark:border-amber-900 text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-950/30 inline-flex items-center justify-center"
+              >
+                <Star size={10} />
+              </button>
+            )}
+            {activeTemplate?.isDefault && (
+              <span
+                title="This is the default template"
+                className="h-6 w-6 text-xs rounded border border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 text-amber-600 dark:text-amber-400 inline-flex items-center justify-center"
+              >
+                <Star size={10} fill="currentColor" />
+              </span>
+            )}
             {activeTemplateId && (
               <button onClick={onDelete}
+                title="Delete this template"
                 className="h-6 w-6 text-xs rounded border border-red-200 dark:border-red-900 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 inline-flex items-center justify-center">
                 <Trash2 size={10} />
               </button>

@@ -526,6 +526,37 @@ export default function FnskuLabelDesigner() {
     setSavedTemplates(prev => prev.map(t => t.id === id ? { ...t, ...patch, config: template } : t))
   }
 
+  const setTemplateDefault = async (id: string) => {
+    // Backend clears other defaults inside a transaction when isDefault:true.
+    const res = await fetch(`${getBackendUrl()}/api/fulfillment/fnsku/templates/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ isDefault: true }),
+    })
+    if (!res.ok) {
+      alert(`Couldn't set default: ${await res.text()}`)
+      return
+    }
+    setSavedTemplates(prev => prev.map(t => ({ ...t, isDefault: t.id === id })))
+  }
+
+  const duplicateTemplate = async (source: SavedTemplate) => {
+    const newName = `${source.name} (copy)`
+    const res = await fetch(`${getBackendUrl()}/api/fulfillment/fnsku/templates`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: newName, config: source.config }),
+    })
+    if (!res.ok) {
+      alert(`Couldn't duplicate: ${await res.text()}`)
+      return
+    }
+    const saved = await res.json()
+    setSavedTemplates(prev => [...prev, saved])
+    setActiveTemplateId(saved.id)
+    setTemplate(saved.config as TemplateConfig)
+  }
+
   const deleteTemplate = async (id: string) => {
     await fetch(`${getBackendUrl()}/api/fulfillment/fnsku/templates/${id}`, { method: 'DELETE' })
     setSavedTemplates(prev => prev.filter(t => t.id !== id))
@@ -771,6 +802,8 @@ export default function FnskuLabelDesigner() {
           onSave={saveTemplate}
           onUpdate={(patch) => activeTemplateId && updateTemplate(activeTemplateId, patch)}
           onDelete={() => activeTemplateId && deleteTemplate(activeTemplateId)}
+          onSetDefault={(id) => setTemplateDefault(id)}
+          onDuplicate={(t) => duplicateTemplate(t)}
         />
       </div>
       <div ref={printRef} />
