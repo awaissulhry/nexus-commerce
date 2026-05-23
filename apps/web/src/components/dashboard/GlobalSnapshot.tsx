@@ -966,22 +966,39 @@ function SalesPanelPlaceholder({ data, onSelectMarketplace }: { data: Snapshot; 
         </div>
       )}
       <div className="flex items-center gap-2 flex-wrap">
-        <label className="text-xs uppercase tracking-wider text-slate-500 font-semibold">Period</label>
+        {/* PV-RT.2 — Amazon-parity controls cluster: Period | Currency
+            | Table/Graph. No "Period" label — Amazon's dropdown
+            ("Today so far ▼") communicates its own role. */}
         <select
           value={period}
           onChange={(e) => setPeriod(e.target.value as PeriodKey)}
+          aria-label="Period"
           className="h-7 px-2 text-sm border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900"
         >
           {(['today', 'yesterday', '7d', '30d', '90d'] as PeriodKey[]).map((p) => (
             <option key={p} value={p}>{PERIOD_LABELS[p]}</option>
           ))}
         </select>
-        <div className="inline-flex items-center bg-slate-100 dark:bg-slate-800 rounded p-0.5 ml-2">
+        {/* PV-RT.2 — Currency dropdown placeholder. EUR-only today;
+            FX conversion (GA-RT.4) will add native + EUR-equivalent
+            options. Disabled state communicates the stub honestly
+            instead of pretending the dropdown does something. */}
+        <select
+          value="EUR"
+          disabled
+          aria-label="Currency"
+          title="FX conversion coming soon — multi-currency rollup deferred to GA-RT.4. Headline + table currently EUR only; non-EUR sales surface as chips beside the tile total."
+          className="h-7 px-2 text-sm border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-500 cursor-not-allowed opacity-70"
+        >
+          <option value="EUR">EUR</option>
+        </select>
+        <div className="inline-flex items-center bg-slate-100 dark:bg-slate-800 rounded p-0.5">
           {(['table', 'graph'] as const).map((v) => (
             <button
               key={v}
               type="button"
               onClick={() => setView(v)}
+              aria-pressed={view === v}
               className={`h-6 px-2.5 text-xs font-medium rounded ${view === v ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-sm' : 'text-slate-600 dark:text-slate-400'}`}
             >
               {v.charAt(0).toUpperCase() + v.slice(1)}
