@@ -27,6 +27,7 @@ import {
   pollAndUpdateFeedJob,
 } from '../../services/images/amazon-image-feed.service.js'
 import { generateAmazonZip } from '../../services/images/amazon-image-zip.service.js'
+import { buildAmazonImagePreview } from '../../services/images/amazon-image-preview.service.js'
 import prisma from '../../db.js'
 
 const VALID_MARKETPLACES = new Set(['IT', 'DE', 'FR', 'ES', 'UK'])
@@ -86,6 +87,41 @@ const amazonImagesRoutes: FastifyPluginAsync = async (fastify) => {
       try {
         const result = await pollAndUpdateFeedJob(jobId)
         return result
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        return reply.code(500).send({ error: msg })
+      }
+    },
+  )
+
+  // ── GET /api/products/:productId/amazon-images/preview ─────────────
+  // IA.2 — Pre-publish preview. Returns the per-ASIN per-slot plan
+  // the publisher would submit on the next Submit click, including
+  // coverage stats (filled/total, hasMain). FE renders this as a
+  // confirmation table so the operator commits with their eyes open.
+  fastify.get<{
+    Params: { productId: string }
+    Querystring: { marketplace?: string; activeAxis?: string }
+  }>(
+    '/products/:productId/amazon-images/preview',
+    async (request, reply) => {
+      const { productId } = request.params
+      const mkt = (request.query.marketplace ?? '').toUpperCase()
+      if (!VALID_MARKETPLACES.has(mkt)) {
+        return reply.code(400).send({ error: `Invalid marketplace: ${mkt}` })
+      }
+      const product = await prisma.product.findUnique({
+        where: { id: productId },
+        select: { id: true },
+      })
+      if (!product) return reply.code(404).send({ error: 'Product not found' })
+      try {
+        const preview = await buildAmazonImagePreview({
+          productId,
+          marketplace: mkt,
+          activeAxis: request.query.activeAxis ?? null,
+        })
+        return preview
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
         return reply.code(500).send({ error: msg })

@@ -9,6 +9,7 @@ import { AlertTriangle, ChevronDown, Clock, Eye, Info, Loader2 } from 'lucide-re
 import { beFetch } from '../api'
 import AmazonMatrix from './AmazonMatrix'
 import AmazonPublishBar from './AmazonPublishBar'
+import PublishPreviewModal from './PublishPreviewModal'
 import MatrixFilterBar, { readFilterFromUrl, type CellStatus } from './MatrixFilterBar'
 import ImagePickerModal from '../ImagePickerModal'
 import CrossChannelSyncBar from '../CrossChannelSyncBar'
@@ -106,6 +107,10 @@ export default function AmazonPanel({
   const [historyOpen, setHistoryOpen] = useState(false)
   // IE.5 — drift modal state
   const [driftModal, setDriftModal] = useState<{ live: ChannelLiveImage; nexusUrl: string | null } | null>(null)
+  // IA.2 — Pre-publish preview state. Set to the marketplace the
+  // operator wants to preview (must not be 'ALL'); modal fetches the
+  // resolver plan and renders the per-ASIN × per-slot table.
+  const [previewMarketplace, setPreviewMarketplace] = useState<AmazonMarketplace | null>(null)
   // IE.11 — filter state. Seeded from URL params so deep-links land
   // on the filtered view; MatrixFilterBar writes back via
   // history.replaceState on every toggle.
@@ -414,6 +419,7 @@ export default function AmazonPanel({
         onPublishAll={amazon.publishAll}
         onExportZip={handleExportZip}
         isExporting={isExporting}
+        onPreview={(mkt) => setPreviewMarketplace(mkt)}
       />
 
       {/* IM.7 — Cross-channel sync */}
@@ -499,6 +505,18 @@ export default function AmazonPanel({
           ? (url) => { void onAdoptToMaster(url, 'AMAZON', driftModal?.live.marketplace ?? null, driftModal?.live.slot ?? null) }
           : undefined}
       />
+
+      {/* IA.2 — Pre-publish preview modal */}
+      {previewMarketplace !== null && previewMarketplace !== 'ALL' && (
+        <PublishPreviewModal
+          open
+          productId={productId}
+          marketplace={previewMarketplace}
+          activeAxis={activeAxis}
+          onClose={() => setPreviewMarketplace(null)}
+          onConfirmPublish={() => amazon.publish(previewMarketplace)}
+        />
+      )}
     </div>
   )
 }

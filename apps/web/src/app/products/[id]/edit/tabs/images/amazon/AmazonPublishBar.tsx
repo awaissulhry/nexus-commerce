@@ -30,6 +30,8 @@ interface Props {
   onPublishAll: () => void
   onExportZip: (marketplace: AmazonMarketplace) => void
   isExporting: boolean
+  // IA.2 — Open the pre-publish preview modal for a given marketplace.
+  onPreview?: (marketplace: AmazonMarketplace) => void
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -61,6 +63,7 @@ export default function AmazonPublishBar({
   onPublishAll,
   onExportZip,
   isExporting,
+  onPreview,
 }: Props) {
   const [zipMenuOpen, setZipMenuOpen] = useState(false)
 
@@ -99,6 +102,22 @@ export default function AmazonPublishBar({
           {publishingAll ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
           Publish all markets
         </Button>
+
+        {/* IA.2 — Pre-publish preview. Only relevant when a specific
+            marketplace is active; "All Markets" routes to per-market
+            preview from the table. */}
+        {onPreview && activeMarketplace !== 'ALL' && (
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => onPreview(activeMarketplace)}
+            disabled={publishing || publishingAll}
+            className="text-xs gap-1 ml-1 border border-slate-200 dark:border-slate-700"
+            title="Preview what will publish before submitting"
+          >
+            Preview
+          </Button>
+        )}
 
         {/* ZIP fallback */}
         <div className="relative ml-auto">
