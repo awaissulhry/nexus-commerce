@@ -30,6 +30,7 @@ import {
   isBenignFailure,
   benignSuppressedReason,
 } from '../services/reviews/amazon-solicitations.service.js'
+import { sendSentimentCheckEmail } from '../services/reviews/sentiment-check-email.service.js'
 
 let scheduledTask: ReturnType<typeof cron.schedule> | null = null
 let lastRunAt: Date | null = null
@@ -57,6 +58,7 @@ interface MailerTickResult {
   failed: number
   skipped: number
   retried: number
+  sentimentEmails?: number
   paused?: boolean
   durationMs: number
 }
@@ -128,15 +130,101 @@ export async function runReviewMailerOnce(): Promise<MailerTickResult> {
           },
         },
       },
+      // RV.6.4 — pre-load any linked sentiment check so we can branch on
+      // its response before firing Solicitations / writing emails.
+      sentimentCheck: true,
     },
     take: 200,
   })
 
   let sent = 0, failed = 0, skipped = 0
+  let sentimentEmailsSent = 0
 
   for (const req of due) {
     const order = req.order
     const attemptCount = req.attemptCount + 1
+    const sentimentCheck = req.sentimentCheck
+
+    // RV.6.4 — sentiment diversion branch. Fires BEFORE any Solicitations
+    // call. State machine:
+    //   - response=NONE + email never sent  → send "How was it?", defer 5d
+    //   - response=NONE + email sent + 5d elapsed → fallback to Solicitations
+    //   - response=POSITIVE → proceed to Solicitations now
+    //   - response=NEGATIVE → SKIPPED (defensive; click handler already did this)
+    if (sentimentCheck) {
+      if (sentimentCheck.response === 'NEGATIVE') {
+        await prisma.reviewRequest.update({
+          where: { id: req.id },
+          data: {
+            status: 'SKIPPED',
+            suppressedReason: 'Diverted to support (negative sentiment)',
+            providerResponseCode: 'DIVERTED_NEGATIVE',
+            attemptCount,
+            lastAttemptAt: new Date(),
+          },
+        })
+        skipped += 1
+        continue
+      }
+
+      if (sentimentCheck.response === 'NONE') {
+        if (!sentimentCheck.sentimentEmailSentAt) {
+          // First processing — send the "How was it?" email.
+          if (!order.customerEmail) {
+            // Can't divert without an email. Fall back to direct Solicitations
+            // path below (don't continue — let normal flow handle).
+          } else {
+            const baseUrl = (process.env.NEXUS_WEB_URL ?? 'https://nexus-commerce-three.vercel.app').replace(/\/$/, '')
+            const result = await sendSentimentCheckEmail({
+              to: order.customerEmail,
+              customerName: order.customerName,
+              productName: order.items[0]?.product?.name ?? null,
+              baseUrl: `${baseUrl}/r/${sentimentCheck.token}`,
+              channelOrderId: order.channelOrderId,
+              locale: (order.marketplace ?? 'IT').toUpperCase() === 'IT' ? 'it' : 'en',
+            })
+            if (result.ok) {
+              await prisma.reviewSentimentCheck.update({
+                where: { id: sentimentCheck.id },
+                data: { sentimentEmailSentAt: new Date() },
+              })
+              // Defer the ReviewRequest by 5d — that's our fallback window.
+              await prisma.reviewRequest.update({
+                where: { id: req.id },
+                data: {
+                  scheduledFor: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000),
+                  lastAttemptAt: new Date(),
+                },
+              })
+              sentimentEmailsSent += 1
+              continue
+            } else if (result.dryRun) {
+              skipped += 1
+              continue
+            } else {
+              // Sentiment email failed → retry on backoff like any other send.
+              const nextRetryAt = backoffNextRetryAt(attemptCount)
+              await prisma.reviewRequest.update({
+                where: { id: req.id },
+                data: {
+                  status: 'FAILED',
+                  errorMessage: `sentiment_email: ${result.error ?? 'send failed'}`,
+                  attemptCount,
+                  lastAttemptAt: new Date(),
+                  nextRetryAt,
+                },
+              })
+              failed += 1
+              continue
+            }
+          }
+        }
+        // Email sent ≥5d ago, no response → fallback to direct Solicitations.
+        // Fall through to the normal Amazon/email branch below.
+      }
+      // response=POSITIVE → fall through to normal Solicitations path.
+    }
+
     try {
       if (order.channel === 'AMAZON') {
         // Verify 4-30d window still valid
@@ -270,8 +358,8 @@ export async function runReviewMailerOnce(): Promise<MailerTickResult> {
   const durationMs = Date.now() - startedAt
   lastRunAt = new Date()
   const retried = retriedRows.count
-  lastSummary = `scheduled=${scheduleResult.scheduled} retried=${retried} due=${due.length} sent=${sent} failed=${failed} skipped=${skipped} durationMs=${durationMs}`
-  return { scheduled: scheduleResult.scheduled, retried, due: due.length, sent, failed, skipped, durationMs }
+  lastSummary = `scheduled=${scheduleResult.scheduled} retried=${retried} due=${due.length} sent=${sent} sentimentEmails=${sentimentEmailsSent} failed=${failed} skipped=${skipped} durationMs=${durationMs}`
+  return { scheduled: scheduleResult.scheduled, retried, due: due.length, sent, sentimentEmails: sentimentEmailsSent, failed, skipped, durationMs }
 }
 
 export async function runReviewMailerCron(): Promise<void> {

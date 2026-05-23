@@ -28,6 +28,7 @@ type Rule = {
   minOrderTotalCents: number | null
   notes: string | null
   requestCount: number
+  useSentimentDiversion?: boolean
 }
 
 const SCOPES: Array<{ value: string; label: string; helpText: string }> = [
@@ -229,6 +230,7 @@ function RuleEditor({ rule, onClose, onSaved }: { rule: Rule | null; onClose: ()
   const [exclusions, setExclusions] = useState<string[]>(rule?.exclusions ?? ['has_active_return', 'has_refund'])
   const [minOrderTotal, setMinOrderTotal] = useState<string>(rule?.minOrderTotalCents != null ? (rule.minOrderTotalCents / 100).toFixed(2) : '')
   const [notes, setNotes] = useState(rule?.notes ?? '')
+  const [useSentimentDiversion, setUseSentimentDiversion] = useState<boolean>(rule?.useSentimentDiversion ?? false)
   const [busy, setBusy] = useState(false)
 
   const save = async () => {
@@ -245,6 +247,7 @@ function RuleEditor({ rule, onClose, onSaved }: { rule: Rule | null; onClose: ()
         exclusions,
         minOrderTotalCents: minOrderTotal ? Math.round(Number(minOrderTotal) * 100) : null,
         notes: notes || null,
+        useSentimentDiversion,
       }
       const res = await fetch(`${getBackendUrl()}/api/review-rules${rule ? `/${rule.id}` : ''}`, {
         method: rule ? 'PATCH' : 'POST',
@@ -357,6 +360,33 @@ function RuleEditor({ rule, onClose, onSaved }: { rule: Rule | null; onClose: ()
           <div>
             <label className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">Notes</label>
             <textarea value={notes} onChange={(e) => setNotes(e.target.value)} className="w-full h-16 px-2 py-1.5 text-base border border-slate-200 dark:border-slate-700 rounded mt-1" />
+          </div>
+
+          {/* RV.6.5 — Negative-feedback diversion toggle */}
+          <div className="rounded border border-slate-200 dark:border-slate-700 p-3 bg-slate-50/50 dark:bg-slate-950/30">
+            <label className="flex items-start gap-2 text-base text-slate-700 dark:text-slate-300 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={useSentimentDiversion}
+                onChange={(e) => setUseSentimentDiversion(e.target.checked)}
+                className="mt-1"
+              />
+              <div>
+                <div className="font-medium">Use negative-feedback diversion (review funnel)</div>
+                <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                  Before the Amazon Solicitations API call, send a branded
+                  &quot;How was it?&quot; email with two buttons. Happy customers
+                  proceed to the normal review request; unhappy ones are
+                  routed to your support inbox before they leave a public
+                  1-star. Standard rating-lift technique used by major sellers.
+                </div>
+                <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                  <span className="font-medium">Timing:</span> sentiment email fires at
+                  delivered + {minDays}d. If no response within 5d, fallback
+                  fires the Amazon Solicitations directly.
+                </div>
+              </div>
+            </label>
           </div>
 
           <label className="flex items-center gap-2 text-base text-slate-700 dark:text-slate-300">

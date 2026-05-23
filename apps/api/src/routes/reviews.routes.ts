@@ -12,6 +12,8 @@
 
 import type { FastifyPluginAsync } from 'fastify'
 import prisma from '../db.js'
+import { logger } from '../utils/logger.js'
+import { sendEmail } from '../services/email/transport.js'
 import {
   runReviewIngestOnce,
   summarizeReviewIngest,
@@ -496,6 +498,12 @@ const reviewsRoutes: FastifyPluginAsync = async (fastify) => {
     const retrying = await prisma.reviewRequest.count({
       where: { status: 'FAILED', nextRetryAt: { not: null }, attemptCount: { lt: 3 } },
     })
+    // RV.6.5 — sentiment-check counts for the diversion funnel.
+    const [sentimentPending, sentimentPositive, sentimentNegative] = await Promise.all([
+      prisma.reviewSentimentCheck.count({ where: { response: 'NONE', sentimentEmailSentAt: { not: null } } }),
+      prisma.reviewSentimentCheck.count({ where: { response: 'POSITIVE' } }),
+      prisma.reviewSentimentCheck.count({ where: { response: 'NEGATIVE' } }),
+    ])
     // RV.4.2 — include the mailer pause state so the dashboard renders the toggle correctly
     const mailerState = await prisma.reviewMailerState.upsert({
       where: { id: 'default' },
@@ -524,6 +532,11 @@ const reviewsRoutes: FastifyPluginAsync = async (fastify) => {
     reply.header('Cache-Control', 'private, max-age=30')
     return {
       scheduled, sent, failed, skipped, due, retrying, upcoming,
+      sentiment: {
+        pending: sentimentPending,
+        positive: sentimentPositive,
+        negative: sentimentNegative,
+      },
       mailer: {
         isPaused: mailerState.isPaused,
         pausedReason: mailerState.pausedReason,
@@ -629,6 +642,171 @@ const reviewsRoutes: FastifyPluginAsync = async (fastify) => {
         if (error.code === 'P2025') return reply.code(404).send({ error: 'Request not found' })
         return reply.code(500).send({ error: error.message })
       }
+    },
+  )
+
+  // ────────────────────────────────────────────────────────────────────
+  // RV.6.2 — Customer-facing sentiment check landing endpoints.
+  //
+  // These are public (token = authentication). The token is a 32-char
+  // URL-safe cryptographically random string — not the row id, never
+  // includes orderId. The frontend pages live at:
+  //   /r/[token]/positive
+  //   /r/[token]/negative
+  //
+  // Idempotent: re-clicking the same link after a response returns the
+  // existing outcome instead of re-firing.
+  // ────────────────────────────────────────────────────────────────────
+
+  // GET — state lookup for the landing page render
+  fastify.get<{ Params: { token: string } }>(
+    '/r/:token',
+    async (request, reply) => {
+      const { token } = request.params
+      const check = await prisma.reviewSentimentCheck.findUnique({
+        where: { token },
+        include: {
+          order: { select: { customerName: true, channelOrderId: true, marketplace: true } },
+        },
+      })
+      if (!check) return reply.code(404).send({ error: 'Not found' })
+      return {
+        token,
+        response: check.response,
+        respondedAt: check.respondedAt,
+        order: {
+          customerName: check.order.customerName,
+          channelOrderId: check.order.channelOrderId,
+          marketplace: check.order.marketplace,
+        },
+      }
+    },
+  )
+
+  // POST positive — happy customer; fire downstream Solicitations.
+  fastify.post<{ Params: { token: string } }>(
+    '/r/:token/positive',
+    async (request, reply) => {
+      const { token } = request.params
+      const ip = (request.headers['x-forwarded-for']?.toString().split(',')[0] ?? request.ip ?? '').slice(0, 64)
+      const ua = (request.headers['user-agent'] ?? '').slice(0, 256)
+
+      const check = await prisma.reviewSentimentCheck.findUnique({
+        where: { token },
+        include: {
+          order: { select: { id: true, channel: true, channelOrderId: true, marketplace: true, deliveredAt: true } },
+          reviewRequest: true,
+        },
+      })
+      if (!check) return reply.code(404).send({ error: 'Not found' })
+      // Idempotent — re-clicks just return the existing response.
+      if (check.response !== 'NONE') {
+        return { ok: true, response: check.response, alreadyResponded: true }
+      }
+
+      await prisma.reviewSentimentCheck.update({
+        where: { id: check.id },
+        data: {
+          response: 'POSITIVE',
+          respondedAt: new Date(),
+          respondedFromIp: ip,
+          respondedFromUserAgent: ua,
+        },
+      })
+
+      // If the order is Amazon AND we have a linked ReviewRequest AND it's
+      // still inside the 4-30d window, fire Solicitations now. Otherwise
+      // mark SCHEDULED+now so the next mailer tick handles it.
+      if (check.reviewRequest && check.order.channel === 'AMAZON') {
+        await prisma.reviewRequest.update({
+          where: { id: check.reviewRequest.id },
+          data: { status: 'SCHEDULED', scheduledFor: new Date(), suppressedReason: null, errorMessage: null, attemptCount: 0, nextRetryAt: null },
+        })
+      }
+      return { ok: true, response: 'POSITIVE' }
+    },
+  )
+
+  // POST negative — unhappy customer; capture feedback, route to support.
+  fastify.post<{ Params: { token: string }; Body: { feedback?: string; name?: string } }>(
+    '/r/:token/negative',
+    async (request, reply) => {
+      const { token } = request.params
+      const body = (request.body ?? {}) as { feedback?: string; name?: string }
+      const feedback = (body.feedback ?? '').toString().slice(0, 4000)
+      const ip = (request.headers['x-forwarded-for']?.toString().split(',')[0] ?? request.ip ?? '').slice(0, 64)
+      const ua = (request.headers['user-agent'] ?? '').slice(0, 256)
+
+      const check = await prisma.reviewSentimentCheck.findUnique({
+        where: { token },
+        include: {
+          order: { select: { id: true, channel: true, channelOrderId: true, marketplace: true, customerName: true, customerEmail: true } },
+          reviewRequest: true,
+        },
+      })
+      if (!check) return reply.code(404).send({ error: 'Not found' })
+      if (check.response !== 'NONE') {
+        return { ok: true, response: check.response, alreadyResponded: true }
+      }
+
+      await prisma.reviewSentimentCheck.update({
+        where: { id: check.id },
+        data: {
+          response: 'NEGATIVE',
+          respondedAt: new Date(),
+          respondedFromIp: ip,
+          respondedFromUserAgent: ua,
+          feedback: feedback || null,
+        },
+      })
+
+      // Mark the downstream ReviewRequest as SKIPPED with a clear reason —
+      // the operator can see in the dashboard why this order was diverted.
+      if (check.reviewRequest) {
+        await prisma.reviewRequest.update({
+          where: { id: check.reviewRequest.id },
+          data: {
+            status: 'SKIPPED',
+            suppressedReason: 'Diverted to support (negative sentiment check)',
+            providerResponseCode: 'DIVERTED_NEGATIVE',
+            errorMessage: null,
+          },
+        })
+      }
+
+      // Email the support inbox with the order context + customer feedback.
+      // Best-effort; failure here doesn't block the response.
+      try {
+        const supportEmail = process.env.NEXUS_SUPPORT_INBOX ?? 'support@xavia.it'
+        const subject = `[Reviews] Negative sentiment — order ${check.order.channelOrderId ?? check.order.id}`
+        const html = `
+          <h2>Negative sentiment check</h2>
+          <p>Customer flagged an issue via the post-purchase review-funnel email.</p>
+          <ul>
+            <li><b>Order:</b> ${check.order.channelOrderId ?? check.order.id}</li>
+            <li><b>Channel:</b> ${check.order.channel} ${check.order.marketplace ? `· ${check.order.marketplace}` : ''}</li>
+            <li><b>Customer:</b> ${(check.order.customerName ?? '—').replace(/</g, '&lt;')} &lt;${check.order.customerEmail ?? '—'}&gt;</li>
+          </ul>
+          <h3>Customer feedback:</h3>
+          <blockquote style="border-left:3px solid #ccc;padding-left:12px;color:#444;">
+            ${feedback ? feedback.replace(/</g, '&lt;').replace(/\n/g, '<br>') : '<i>(no feedback text — they clicked the negative button without typing)</i>'}
+          </blockquote>
+          <p>Reach out to resolve <b>before</b> they leave a public review.</p>
+        `
+        await sendEmail({
+          to: supportEmail,
+          subject,
+          html,
+          tag: 'review-diversion-support',
+        })
+      } catch (err) {
+        logger.warn('[review-diversion] failed to email support', {
+          orderId: check.order.id,
+          error: err instanceof Error ? err.message : String(err),
+        })
+      }
+
+      return { ok: true, response: 'NEGATIVE' }
     },
   )
 }

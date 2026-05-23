@@ -76,6 +76,7 @@ const ordersReviewsRoutes: FastifyPluginAsync = async (fastify) => {
           exclusions: r.exclusions,
           minOrderTotalCents: r.minOrderTotalCents,
           notes: r.notes,
+          useSentimentDiversion: r.useSentimentDiversion,
           requestCount: r._count.requests,
           updatedAt: r.updatedAt,
         })),
@@ -105,6 +106,7 @@ const ordersReviewsRoutes: FastifyPluginAsync = async (fastify) => {
           exclusions: Array.isArray(body.exclusions) ? body.exclusions : [],
           minOrderTotalCents: body.minOrderTotalCents ?? null,
           notes: body.notes ?? null,
+          useSentimentDiversion: body.useSentimentDiversion === true,
           createdBy: 'default-user',
         },
       })
@@ -135,6 +137,7 @@ const ordersReviewsRoutes: FastifyPluginAsync = async (fastify) => {
       if (body.minOrderTotalCents !== undefined) data.minOrderTotalCents = body.minOrderTotalCents
       if (body.notes !== undefined) data.notes = body.notes
       if (body.marketplace !== undefined) data.marketplace = body.marketplace
+      if (body.useSentimentDiversion !== undefined) data.useSentimentDiversion = body.useSentimentDiversion === true
       const rule = await prisma.reviewRule.update({ where: { id }, data })
       return rule
     } catch (err: any) {

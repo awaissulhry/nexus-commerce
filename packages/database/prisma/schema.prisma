@@ -3663,6 +3663,7 @@ model Order {
   shipments             Shipment[]
   returns               Return[]
   reviewRequests        ReviewRequest[]
+  reviewSentimentChecks ReviewSentimentCheck[]
   tags                  OrderTag[]
   mcfShipments          MCFShipment[] // S.24
   riskScore             OrderRiskScore? // O.22 — at most one per order
@@ -9338,8 +9339,9 @@ model ReviewRequest {
   lastAttemptAt DateTime?
   nextRetryAt   DateTime?
 
-  order Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  rule  ReviewRule? @relation(fields: [ruleId], references: [id], onDelete: SetNull)
+  order          Order                 @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  rule           ReviewRule?           @relation(fields: [ruleId], references: [id], onDelete: SetNull)
+  sentimentCheck ReviewSentimentCheck?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -9374,13 +9376,63 @@ model ReviewRule {
   createdBy            String?
   notes                String?
 
-  requests ReviewRequest[]
+  requests        ReviewRequest[]
+  sentimentChecks ReviewSentimentCheck[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // RV.6.1 — Negative-feedback diversion toggle. When true, the scheduler
+  // routes matching orders through a "How was it?" sentiment check before
+  // any Amazon Solicitations API call. Unhappy customers get diverted to
+  // support; happy customers proceed to the normal review request. Off by
+  // default for backward compatibility.
+  useSentimentDiversion Boolean @default(false)
+
   @@unique([name, scope, marketplace])
   @@index([scope, isActive])
+}
+
+// RV.6.1 — Negative-feedback diversion state machine.
+//
+// One row per (order, rule) pair. Lifecycle:
+//   1. Created with response='NONE' when scheduler routes an order through
+//      diversion.
+//   2. Mailer sends the "How was it?" email at deliveredAt + 5 days; sets
+//      sentimentEmailSentAt.
+//   3. Customer clicks one of the two CTA buttons in the email:
+//      → /r/{token}/positive page records POSITIVE + triggers the
+//        downstream Amazon Solicitations on the linked ReviewRequest.
+//      → /r/{token}/negative page records NEGATIVE + emails support;
+//        ReviewRequest gets SKIPPED with "diverted to support".
+//   4. If no click within 5 days, mailer follows the rule's fallback —
+//      either fire Solicitations anyway or mark SKIPPED.
+//
+// Token: cryptographically random URL-safe string, unique. Used as the
+// public path identifier so we never expose orderId or row id.
+model ReviewSentimentCheck {
+  id                     String    @id @default(cuid())
+  token                  String    @unique
+  orderId                String
+  ruleId                 String?
+  reviewRequestId        String?   @unique
+  sentimentEmailSentAt   DateTime?
+  response               String    @default("NONE") // NONE | POSITIVE | NEGATIVE
+  respondedAt            DateTime?
+  respondedFromIp        String?
+  respondedFromUserAgent String?
+  feedback               String? // captured on the negative landing page
+  expiresAt              DateTime?
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+
+  order         Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  rule          ReviewRule?    @relation(fields: [ruleId], references: [id], onDelete: SetNull)
+  reviewRequest ReviewRequest? @relation(fields: [reviewRequestId], references: [id], onDelete: SetNull)
+
+  @@index([orderId])
+  @@index([response, sentimentEmailSentAt])
+  @@index([expiresAt])
 }
 
 // RV.4.1 — Operational kill switch for the review request mailer.
@@ -9389,12 +9441,12 @@ model ReviewRule {
 // incident, a brand crisis, or a marketing freeze — without restarting
 // the API or flipping env flags.
 model ReviewMailerState {
-  id            String   @id @default("default")
-  isPaused      Boolean  @default(false)
-  pausedReason  String?
-  pausedAt      DateTime?
-  pausedBy      String?
-  updatedAt     DateTime @updatedAt
+  id           String    @id @default("default")
+  isPaused     Boolean   @default(false)
+  pausedReason String?
+  pausedAt     DateTime?
+  pausedBy     String?
+  updatedAt    DateTime  @updatedAt
 }
 
 model OrderTag {

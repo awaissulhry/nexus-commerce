@@ -39,6 +39,11 @@ interface Stats {
       }>
     } | null
   }>
+  sentiment?: {
+    pending: number
+    positive: number
+    negative: number
+  }
   mailer?: {
     isPaused: boolean
     pausedReason: string | null
@@ -96,6 +101,23 @@ export default async function ReviewRequestsPage() {
       </div>
 
       <RequestsActionsClient mailer={stats.mailer} />
+
+      {/* RV.6.5 — sentiment-check funnel tiles */}
+      {stats.sentiment && (stats.sentiment.pending + stats.sentiment.positive + stats.sentiment.negative > 0) && (
+        <div className="mb-4">
+          <h2 className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+            Sentiment funnel (negative-feedback diversion)
+          </h2>
+          <div className="grid grid-cols-3 gap-3">
+            <Stat label="Awaiting response" value={stats.sentiment.pending} tone={stats.sentiment.pending > 0 ? 'amber' : null} />
+            <Stat label="😊 Positive" value={stats.sentiment.positive} tone="emerald" />
+            <Stat label="😕 Negative (diverted)" value={stats.sentiment.negative} tone={stats.sentiment.negative > 0 ? 'rose' : null} />
+          </div>
+          <p className="mt-1 text-[11px] text-slate-400">
+            Negative customers are routed to support before they hit Amazon — average rating lift typically +0.2 to +0.5 stars.
+          </p>
+        </div>
+      )}
 
       {/* Upcoming queue */}
       <section className="mb-6">

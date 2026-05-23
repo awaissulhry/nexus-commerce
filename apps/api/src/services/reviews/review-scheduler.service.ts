@@ -16,12 +16,23 @@
  *     safe to run every few hours.
  */
 
+import { randomBytes } from 'node:crypto'
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 
 // Active-return statuses suppress review requests — mirrored from
 // orders-reviews.routes.ts. Refunds suppress too (financialTransactions).
 const ACTIVE_RETURN_STATUSES = ['REQUESTED', 'AUTHORIZED', 'IN_TRANSIT', 'RECEIVED', 'INSPECTING'] as const
+
+/**
+ * RV.6.1 — URL-safe 32-char token used as the public identifier for the
+ * customer-facing sentiment landing page (/r/[token]/positive|/negative).
+ * Never exposes the orderId or row id. Generated from 24 random bytes
+ * encoded as base64url (32 chars).
+ */
+function newSentimentToken(): string {
+  return randomBytes(24).toString('base64url')
+}
 
 // ── Timing table ──────────────────────────────────────────────────────────
 
@@ -243,7 +254,15 @@ export async function schedulePendingOrders(): Promise<ScheduleResult> {
         }
       }
 
-      await prisma.reviewRequest.create({
+      // RV.6.4 — when the matched rule has sentiment diversion enabled
+      // (and we have a customer email to send the "How was it?" mail to),
+      // create both the ReviewRequest and a paired ReviewSentimentCheck.
+      // The mailer's tick will route through the diversion email before
+      // ever hitting the Amazon Solicitations API. Diversion only runs on
+      // channels we can actually email — Amazon orders have the customer
+      // email via SP-API too, so this works there.
+      const useDiversion = matchedRule?.useSentimentDiversion === true && !!order.customerEmail
+      const newRequest = await prisma.reviewRequest.create({
         data: {
           orderId: order.id,
           channel: order.channel,
@@ -253,6 +272,18 @@ export async function schedulePendingOrders(): Promise<ScheduleResult> {
           ruleId: matchedRule?.id ?? null,
         },
       })
+      if (useDiversion) {
+        const expiresAt = new Date(scheduledFor.getTime() + 30 * 24 * 60 * 60 * 1000)
+        await prisma.reviewSentimentCheck.create({
+          data: {
+            token: newSentimentToken(),
+            orderId: order.id,
+            ruleId: matchedRule.id,
+            reviewRequestId: newRequest.id,
+            expiresAt,
+          },
+        })
+      }
       result.scheduled += 1
       logger.info('[review-scheduler] scheduled', {
         orderId: order.id,
@@ -261,6 +292,7 @@ export async function schedulePendingOrders(): Promise<ScheduleResult> {
         scheduledFor,
         ruleName: matchedRule?.name ?? null,
         ruleScope: matchedRule?.scope ?? null,
+        diversion: useDiversion,
       })
     } catch (err) {
       result.errors += 1
