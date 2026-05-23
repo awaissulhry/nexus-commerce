@@ -202,6 +202,11 @@ import {
   getListenerCount,
 } from '../services/inbound-events.service.js'
 import {
+  publishPoEvent,
+  subscribePoEvents,
+  getPoListenerCount,
+} from '../services/po-events.service.js'
+import {
   listCarriers as listInboundCarriers,
   validateTrackingFormat,
 } from '../services/carriers.service.js'
@@ -5639,6 +5644,19 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
         userId: body.userId ?? null,
         cancelReason: body.reason ?? null,
       })
+      // PO.4 — broadcast on real change. Skip the no-op idempotent
+      // case (fromStatus === toStatus) so listeners don't re-render
+      // for a duplicate click.
+      if (r.fromStatus !== r.toStatus) {
+        publishPoEvent({
+          type: 'po.transitioned',
+          poId: r.poId,
+          poNumber: r.poNumber,
+          fromStatus: r.fromStatus,
+          toStatus: r.toStatus,
+          ts: Date.now(),
+        })
+      }
       return r
     } catch (err: any) {
       const msg = err?.message ?? String(err)
@@ -5953,6 +5971,14 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
         },
         include: { items: true },
       })
+      // PO.4 — emit po.created so the list refreshes on every peer
+      // browser sub-second.
+      publishPoEvent({
+        type: 'po.created',
+        poId: po.id,
+        poNumber: po.poNumber,
+        ts: Date.now(),
+      })
       return po
     } catch (error: any) {
       fastify.log.error({ err: error }, '[POST /fulfillment/purchase-orders] failed')
@@ -6006,11 +6032,69 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
         },
         include: { items: true },
       })
+      // PO.4 — both events fire so subscribers can choose granularity:
+      //   po.received  → PO-aware pages (this list, detail page)
+      //   inbound.created → inbound/stock/replenishment pages
+      publishPoEvent({
+        type: 'po.received',
+        poId: po.id,
+        shipmentId: inbound.id,
+        ts: Date.now(),
+      })
+      publishInboundEvent({
+        type: 'inbound.created',
+        shipmentId: inbound.id,
+        ts: Date.now(),
+      })
       return { inboundShipmentId: inbound.id, items: inbound.items }
     } catch (error: any) {
       fastify.log.error({ err: error }, '[po/:id/receive] failed')
       return reply.code(500).send({ error: error?.message ?? String(error) })
     }
+  })
+
+  // PO.4 — Server-sent events for purchase orders. Mirrors the inbound
+  // SSE handler above. Subscribers connect via EventSource at
+  // /api/fulfillment/purchase-orders/events; named events fire as
+  // operators move POs through the lifecycle or receive against them.
+  fastify.get('/fulfillment/purchase-orders/events', async (request, reply) => {
+    reply.raw.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+      'X-Accel-Buffering': 'no',
+    })
+    reply.raw.write(
+      `event: ping\ndata: ${JSON.stringify({ ts: Date.now(), connected: true })}\n\n`,
+    )
+
+    const send = (event: any) => {
+      try {
+        reply.raw.write(`event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`)
+      } catch {
+        // dead connection; close handler cleans up
+      }
+    }
+
+    const unsubscribe = subscribePoEvents(send)
+    const heartbeat = setInterval(() => {
+      try {
+        reply.raw.write(`: heartbeat ${Date.now()}\n\n`)
+      } catch {
+        /* ignore */
+      }
+    }, 25_000)
+
+    request.raw.on('close', () => {
+      clearInterval(heartbeat)
+      unsubscribe()
+    })
+
+    await new Promise(() => {})
+  })
+
+  fastify.get('/fulfillment/purchase-orders/events/stats', async () => {
+    return { listenerCount: getPoListenerCount() }
   })
 
   // ═══════════════════════════════════════════════════════════════════
@@ -11804,6 +11888,13 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
       const ids = Array.isArray(body?.ids) ? body.ids : []
       const r = await flipPoDeletedAt(ids, new Date(), request, reply)
       if (r === undefined) return
+      // PO.4 — fan out one po.deleted per id so peer browsers can
+      // remove the rows from their local list without a full refetch.
+      if (r.changed > 0) {
+        for (const id of ids) {
+          publishPoEvent({ type: 'po.deleted', poId: id, ts: Date.now() })
+        }
+      }
       return { ok: true, ...r }
     } catch (err: any) {
       fastify.log.error({ err }, '[purchase-orders/bulk-soft-delete] failed')
@@ -11817,6 +11908,11 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
       const ids = Array.isArray(body?.ids) ? body.ids : []
       const r = await flipPoDeletedAt(ids, null, request, reply)
       if (r === undefined) return
+      if (r.changed > 0) {
+        for (const id of ids) {
+          publishPoEvent({ type: 'po.restored', poId: id, ts: Date.now() })
+        }
+      }
       return { ok: true, ...r }
     } catch (err: any) {
       fastify.log.error({ err }, '[purchase-orders/bulk-restore] failed')

@@ -38,6 +38,7 @@ import { Skeleton } from '@/components/ui/Skeleton'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useInboundEvents } from '@/lib/sync/use-inbound-events'
+import { usePoEvents } from '@/lib/sync/use-po-events'
 import { useInvalidationChannel } from '@/lib/sync/invalidation-channel'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { cn } from '@/lib/utils'
@@ -48,6 +49,7 @@ import {
   relativeTime,
   statusVariant,
 } from '../_shared/po-lens'
+import { PoLiveSyncChip } from '../_shared/PoLiveSyncChip'
 
 // ── Types ──────────────────────────────────────────────────────────
 
@@ -239,15 +241,34 @@ export default function PurchaseOrderDetailClient({ id }: { id: string }) {
     refresh()
   }, [refresh])
 
-  // F-RT.1 — inbound SSE pipe so a receive against this PO auto-
-  // refreshes status + quantityReceived rollup. PO.4 will swap to
-  // proper po.* events but inbound.* gives us the practical hot path.
+  // PO.4 — both event streams open. PO events drive the page's
+  // primary hot path (transitioned / received / updated); inbound
+  // events still bleed in for receive flows that don't emit a PO
+  // event yet. The dual subscription is cheap (one EventSource each)
+  // and a single useInvalidationChannel collapses both into one
+  // refresh.
   useInboundEvents()
+  const { connected: poStreamConnected, lastEventAt: poStreamLastEventAt } = usePoEvents()
   useInvalidationChannel(
-    ['inbound.received', 'inbound.updated', 'inbound.discrepancy', 'inbound.created'],
-    useCallback(() => {
-      refresh()
-    }, [refresh]),
+    [
+      'inbound.received',
+      'inbound.updated',
+      'inbound.discrepancy',
+      'inbound.created',
+      'po.updated',
+      'po.transitioned',
+      'po.received',
+      'po.deleted',
+      'po.restored',
+    ],
+    useCallback(
+      (event) => {
+        // Refresh only when the event targets this PO (when id is
+        // available) or when it's a list-wide invalidation.
+        if (!event.id || event.id === id) refresh()
+      },
+      [refresh, id],
+    ),
   )
 
   const handleTransition = useCallback(
@@ -337,6 +358,10 @@ export default function PurchaseOrderDetailClient({ id }: { id: string }) {
           ]}
           actions={
             <div className="flex items-center gap-2">
+              <PoLiveSyncChip
+                connected={poStreamConnected}
+                lastEventAt={poStreamLastEventAt}
+              />
               <Link
                 href="/fulfillment/purchase-orders"
                 className="h-8 px-3 inline-flex items-center gap-1.5 text-base border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800"

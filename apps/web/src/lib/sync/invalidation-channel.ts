@@ -94,6 +94,15 @@ export type InvalidationType =
   | 'inbound.received'
   | 'inbound.discrepancy'
   | 'inbound.cancelled'
+  // PO.4 — purchase-order lifecycle events. Drives the list +
+  // detail page on cross-tab updates and from the inbound SSE pipe
+  // when a peer browser receives against a PO.
+  | 'po.created'
+  | 'po.updated'
+  | 'po.transitioned'
+  | 'po.deleted'
+  | 'po.restored'
+  | 'po.received'
 
 export interface InvalidationEvent {
   type: InvalidationType

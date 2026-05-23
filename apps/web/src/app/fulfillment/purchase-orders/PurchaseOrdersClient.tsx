@@ -55,6 +55,7 @@ import {
 import { getBackendUrl } from '@/lib/backend-url'
 import { useInvalidationChannel } from '@/lib/sync/invalidation-channel'
 import { useInboundEvents } from '@/lib/sync/use-inbound-events'
+import { usePoEvents } from '@/lib/sync/use-po-events'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { cn } from '@/lib/utils'
 import {
@@ -70,6 +71,7 @@ import {
   type StatusFilter,
   type WorkflowTransition,
 } from './_shared/po-lens'
+import { PoLiveSyncChip } from './_shared/PoLiveSyncChip'
 
 // ── Audit-trail panel (still used by the card lens) ────────────────
 
@@ -429,10 +431,23 @@ export default function PurchaseOrdersClient() {
     fetchPos()
   }, [fetchPos])
 
-  // F-RT.1 — inbound SSE pipe + invalidation listener.
+  // PO.4 — PO SSE pipe is now the primary trigger; the inbound pipe
+  // still bleeds in for receive-driven status flips so we keep both.
   useInboundEvents()
+  const { connected: poStreamConnected, lastEventAt: poStreamLastEventAt } = usePoEvents()
   useInvalidationChannel(
-    ['inbound.received', 'inbound.discrepancy', 'inbound.updated', 'inbound.created'],
+    [
+      'inbound.received',
+      'inbound.discrepancy',
+      'inbound.updated',
+      'inbound.created',
+      'po.created',
+      'po.updated',
+      'po.transitioned',
+      'po.deleted',
+      'po.restored',
+      'po.received',
+    ],
     useCallback(() => {
       fetchPos()
     }, [fetchPos]),
@@ -611,11 +626,17 @@ export default function PurchaseOrdersClient() {
           />
         }
         freshness={
-          <FreshnessIndicator
-            lastFetchedAt={lastFetchedAt}
-            onRefresh={fetchPos}
-            loading={loading}
-          />
+          <div className="inline-flex items-center gap-2">
+            <PoLiveSyncChip
+              connected={poStreamConnected}
+              lastEventAt={poStreamLastEventAt}
+            />
+            <FreshnessIndicator
+              lastFetchedAt={lastFetchedAt}
+              onRefresh={fetchPos}
+              loading={loading}
+            />
+          </div>
         }
         trailingSlot={
           <div className="inline-flex items-center gap-2">
