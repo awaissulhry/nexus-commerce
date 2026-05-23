@@ -43,6 +43,10 @@ import { ArrowLeft } from 'lucide-react'
 import PrintButtonClient from './PrintButtonClient'
 import PrintBodyFlag from './PrintBodyFlag'
 import DatasheetQR from './DatasheetQR'
+import PrintVariantMatrix, {
+  type PrintVariantChild,
+} from './PrintVariantMatrix'
+import { detectVariantAxes } from '../variantAxes'
 import DatasheetModePicker from './DatasheetModePicker'
 import DatasheetLocalePicker from './DatasheetLocalePicker'
 import DatasheetPaperPicker from './DatasheetPaperPicker'
@@ -206,7 +210,12 @@ export default async function ProductDatasheetPage({
         where: { isPublished: true, listingStatus: 'ACTIVE' },
         select: { channel: true, marketplace: true },
       },
-      // W5.48 — variations table for parent products
+      // W5.48 — variations table for parent products.
+      // VR.10 — extended with categoryAttributes + channelListings
+      // variation fields so PrintVariantMatrix can detect axes for
+      // the 2-D Color × Size print rendering when applicable. Take
+      // bumped to 30 because the matrix view fits more on one page
+      // than the legacy linear table.
       children: {
         select: {
           id: true,
@@ -214,9 +223,17 @@ export default async function ProductDatasheetPage({
           name: true,
           basePrice: true,
           totalStock: true,
+          status: true,
+          categoryAttributes: true,
+          channelListings: {
+            select: {
+              variationTheme: true,
+              variationMapping: true,
+            },
+          },
         },
         orderBy: { sku: 'asc' },
-        take: 12,
+        take: 30,
       },
       _count: { select: { children: true } },
     },
@@ -287,15 +304,26 @@ export default async function ProductDatasheetPage({
             select: { channel: true, marketplace: true },
           },
           children: {
+            // VR.10 — same fields as the main path; the fallback
+            // print should still surface the variant matrix when
+            // axes are detectable.
             select: {
               id: true,
               sku: true,
               name: true,
               basePrice: true,
               totalStock: true,
+              status: true,
+              categoryAttributes: true,
+              channelListings: {
+                select: {
+                  variationTheme: true,
+                  variationMapping: true,
+                },
+              },
             },
             orderBy: { sku: 'asc' },
-            take: 12,
+            take: 30,
           },
           _count: { select: { children: true } },
         },
@@ -508,6 +536,34 @@ export default async function ProductDatasheetPage({
     return 0 // preserve DB order
   })
   const heroImage = rankedImages[0] ?? null
+
+  // VR.10 — Detect variation axes on the children. When axes
+  // resolve (variationTheme / variationMapping / shared
+  // categoryAttributes ≥ 60 %), the print swaps the legacy linear
+  // variations table for a compact 2-D Color × Size matrix. Axis-
+  // less parents (legacy multipacks, parent-only groupings) keep
+  // the linear table — flat reads better there.
+  const printVariantChildren = product.children.map<PrintVariantChild>((c) => ({
+    id: c.id,
+    sku: c.sku,
+    name: c.name,
+    basePrice: c.basePrice,
+    totalStock: c.totalStock,
+    status: c.status,
+    categoryAttributes: c.categoryAttributes,
+    channelListings: c.channelListings,
+  }))
+  const printVariantAxes = detectVariantAxes(
+    printVariantChildren.map((c) => ({
+      id: c.id,
+      categoryAttributes: c.categoryAttributes,
+      channelListings: c.channelListings,
+    })),
+  )
+  const showPrintVariantMatrix =
+    product.isParent &&
+    printVariantChildren.length > 0 &&
+    printVariantAxes.axes.length > 0
   const thumbImages = rankedImages.slice(1, 5)
 
   // DS.8 — Translation coverage chip. When the operator's print
@@ -1018,7 +1074,25 @@ export default async function ProductDatasheetPage({
             The Cols match the most-common B2B handout questions:
             "what's the SKU, what does it look like, what's it cost,
             do you have stock?". */}
-        {product.isParent && product.children.length > 0 && (
+        {/* VR.10 — When axes are detected, render the 2-D matrix
+            instead of the linear variations table below. Axis-less
+            parents keep the legacy linear render. */}
+        {showPrintVariantMatrix && (
+          <PrintVariantMatrix
+            children={printVariantChildren}
+            locale={locale}
+            sectionLabel={t(
+              product._count.children === 1
+                ? 'products.datasheet.section.variations.one'
+                : 'products.datasheet.section.variations.other',
+              { count: product._count.children },
+            )}
+          />
+        )}
+
+        {!showPrintVariantMatrix &&
+          product.isParent &&
+          product.children.length > 0 && (
           <section className="mt-6 print:break-inside-avoid">
             <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-1.5">
               {t(
