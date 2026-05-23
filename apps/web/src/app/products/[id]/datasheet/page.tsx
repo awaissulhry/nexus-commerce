@@ -114,6 +114,12 @@ export default async function ProductDatasheetHubPage({
   const tabs = buildTabs(product.isParent)
   const tab = parseTab(sp.tab, tabs)
 
+  // VR.2 — Variants layout: 'matrix' (default) or 'flat'. Falls
+  // back to 'matrix' silently for anything unrecognized; the tab
+  // re-resolves to flat when no axes are detected.
+  const layoutParam =
+    typeof sp.layout === 'string' && sp.layout === 'flat' ? 'flat' : 'matrix'
+
   return (
     <div className="space-y-4">
       {/* ── Header ─────────────────────────────────────────────────── */}
@@ -198,7 +204,12 @@ export default async function ProductDatasheetHubPage({
         {tab === 'attributes' ? (
           <AttributesTab productId={product.id} locale={locale} t={t} />
         ) : tab === 'variants' && product.isParent ? (
-          <VariantsTab parentId={product.id} locale={locale} t={t} />
+          <VariantsTab
+            parentId={product.id}
+            layout={layoutParam}
+            locale={locale}
+            t={t}
+          />
         ) : (
           <TabStub tab={tab} t={t} />
         )}
