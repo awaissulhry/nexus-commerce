@@ -27,7 +27,9 @@ import {
   CheckCircle2,
   XCircle,
   DownloadCloud,
+  FileCode,
 } from 'lucide-react'
+import PayloadPreviewModal from './_shared/PayloadPreviewModal'
 import { getBackendUrl } from '@/lib/backend-url'
 import { Input } from '@/components/ui/Input'
 import { useToast } from '@/components/ui/Toast'
@@ -87,6 +89,12 @@ export default function MappingsClient() {
       message: string
     }>
   } | null>(null)
+
+  // D.6 — preview-payload modal state
+  const [previewOpen, setPreviewOpen] = useState(false)
+  const [previewLoading, setPreviewLoading] = useState(false)
+  const [previewError, setPreviewError] = useState<string | null>(null)
+  const [previewResult, setPreviewResult] = useState<any>(null)
 
   // ── Load marketplaces ───────────────────────────────────────────
   const fetchMarketplaces = useCallback(async () => {
@@ -286,6 +294,33 @@ export default function MappingsClient() {
       setValidating(false)
     }
   }, [active, validateProductId, toast])
+
+  // D.6 — fetch + open dry-run payload preview for a product
+  const handlePreview = useCallback(async () => {
+    if (!active) return
+    const pid = validateProductId.trim()
+    if (pid === '') return
+    setPreviewOpen(true)
+    setPreviewLoading(true)
+    setPreviewError(null)
+    setPreviewResult(null)
+    try {
+      const r = await fetch(
+        `${getBackendUrl()}/api/pim/mappings/${active.channel}/${active.code}/preview/${encodeURIComponent(pid)}`,
+        { cache: 'no-store' },
+      )
+      if (!r.ok) {
+        const body = await r.json().catch(() => ({}))
+        throw new Error(body?.error ?? `HTTP ${r.status}`)
+      }
+      const data = await r.json()
+      setPreviewResult(data)
+    } catch (e: any) {
+      setPreviewError(e?.message ?? 'Preview failed')
+    } finally {
+      setPreviewLoading(false)
+    }
+  }, [active, validateProductId])
 
   // ── Filtered marketplace list ───────────────────────────────────
   const filteredMarketplaces = useMemo(() => {
@@ -514,6 +549,16 @@ export default function MappingsClient() {
                   )}
                   Validate
                 </button>
+                <button
+                  type="button"
+                  onClick={() => void handlePreview()}
+                  disabled={validateProductId.trim() === ''}
+                  className="inline-flex items-center gap-1 px-3 py-1.5 rounded text-xs font-medium text-zinc-700 border border-zinc-300 hover:bg-zinc-100 dark:text-zinc-300 dark:border-zinc-700 dark:hover:bg-zinc-800 disabled:opacity-40 disabled:cursor-not-allowed"
+                  title="See the exact JSON payload that would publish for this product"
+                >
+                  <FileCode className="w-3 h-3" />
+                  Preview payload
+                </button>
               </div>
               {validationResult && (
                 <div
@@ -583,6 +628,14 @@ export default function MappingsClient() {
           </>
         )}
       </main>
+
+      <PayloadPreviewModal
+        open={previewOpen}
+        onClose={() => setPreviewOpen(false)}
+        result={previewResult}
+        loading={previewLoading}
+        error={previewError}
+      />
     </div>
   )
 }

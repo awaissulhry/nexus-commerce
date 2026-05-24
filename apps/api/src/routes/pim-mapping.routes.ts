@@ -37,6 +37,7 @@ import {
   type FieldMappingRule,
 } from '../services/pim/schema-mapping.service.js'
 import { validatePublish } from '../services/pim/publish-validator.js'
+import { previewPayload } from '../services/pim/payload-preview.js'
 import { syncSchemaToChannelSchema } from '../services/pim/schema-sync-bridge.js'
 import { CategorySchemaService } from '../services/categories/schema-sync.service.js'
 import { AmazonService } from '../services/marketplaces/amazon.service.js'
@@ -244,6 +245,33 @@ const pimMappingRoutes: FastifyPluginAsync = async (fastify) => {
       })
     }
   })
+
+  // ── GET /pim/mappings/:channel/:code/preview/:productId ─────────
+  // PIM D.6 — Dry-run payload preview. Runs the mapping rules against
+  // one product (resolves source/fallback, applies transforms), returns
+  // the exact payload that would publish + per-field provenance for
+  // operator inspection.
+  fastify.get<{
+    Params: { channel: string; code: string; productId: string }
+    Querystring: { locale?: string }
+  }>(
+    '/pim/mappings/:channel/:code/preview/:productId',
+    async (request, reply) => {
+      const { channel, code, productId } = request.params
+      const locale = request.query.locale ?? 'en'
+      try {
+        const result = await previewPayload({ productId, channel, marketplace: code, locale })
+        return reply.send(result)
+      } catch (err: any) {
+        const msg = err?.message ?? 'Preview failed'
+        if (msg.startsWith('Product not found') || msg.startsWith('Marketplace not found')) {
+          return reply.status(404).send({ error: msg })
+        }
+        request.log.error({ err }, 'payload-preview failed')
+        return reply.status(500).send({ error: msg })
+      }
+    },
+  )
 
   // ── GET /pim/mappings/:channel/:code/validate/:productId ────────
   // PIM D.5 — Pre-publish validation. Walks mapping rules + resolves
