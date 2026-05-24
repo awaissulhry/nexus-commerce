@@ -1,39 +1,32 @@
 /**
- * PIM C.6 — Saved views (personal, localStorage-backed).
+ * PIM C.6 / C.6b — Saved views (server-backed via existing SavedView model).
  *
- * A saved view is a named bundle of matrix UI state (visible columns,
- * search, sort). Operators switch between views to focus on different
- * tasks: "Pricing focus" hides Channels and shows Price/Min/Max; "Stock
- * focus" highlights inventory; "All columns" is the everything view.
+ * Storage swap from C.6 localStorage → server-side SavedView rows
+ * (surface='catalog-matrix'). UX in SavedViewsMenu unchanged; only
+ * the storage primitives became async.
  *
- * Built-in views ship pre-seeded and read-only (operators can't edit/
- * delete them — they'd have to clone first). Custom views live next
- * to them in the dropdown and support full CRUD.
+ * Active view ID stays in localStorage — that's a per-device
+ * preference (which view this operator last applied here), not a
+ * shareable artifact.
  *
- * C.6b will swap the storage layer for a SavedView Prisma model so
- * views can be shared across the team. Shape stays the same so the
- * UI doesn't change.
+ * Built-in views stay as a static const — they don't need a server
+ * round-trip and operators can't edit/delete them anyway.
  */
 
+import { getBackendUrl } from '@/lib/backend-url'
+
 export interface SavedView {
-  /** Stable id used as React key + localStorage map key. */
   id: string
-  /** Display name in the dropdown + save dialog. */
   name: string
-  /** Visible column ids in order. Same as columnDefs.ts. */
   columnIds: string[]
-  /** Optional baseline search string applied on view switch. */
   search?: string
-  /** Optional initial sort. Phase C.6b adds the sort UI; the field
-   *  is wired now so saved views are forward-compatible. */
   sortBy?: string
   sortDir?: 'asc' | 'desc'
-  /** When true, view is built-in and read-only (no edit/delete). */
   builtin?: boolean
 }
 
 // ────────────────────────────────────────────────────────────────────
-// Pre-seeded built-in views
+// Pre-seeded built-in views — read-only, no server round-trip needed
 // ────────────────────────────────────────────────────────────────────
 
 export const BUILTIN_VIEWS: SavedView[] = [
@@ -75,42 +68,94 @@ export const BUILTIN_VIEWS: SavedView[] = [
 ]
 
 // ────────────────────────────────────────────────────────────────────
-// Storage
+// Server storage (custom views — shared across operators)
 // ────────────────────────────────────────────────────────────────────
 
-const STORAGE_KEY = 'catalog-matrix:saved-views:v1'
-const ACTIVE_KEY = 'catalog-matrix:active-view:v1'
+const SURFACE = 'catalog-matrix'
 
-/** Load custom (operator-created) views from localStorage. Built-ins
- *  are listed separately by the consumer and never go through here. */
-export function loadCustomViews(): SavedView[] {
-  if (typeof window === 'undefined') return []
+interface ServerRow {
+  id: string
+  name: string
+  filters: { columnIds?: string[]; search?: string; sortBy?: string; sortDir?: 'asc' | 'desc' } | null
+}
+
+/** Server → SavedView mapper. Filters JSON holds our per-view state. */
+function fromServer(row: ServerRow): SavedView {
+  const f = row.filters ?? {}
+  return {
+    id: row.id,
+    name: row.name,
+    columnIds: Array.isArray(f.columnIds) ? f.columnIds : [],
+    search: f.search,
+    sortBy: f.sortBy,
+    sortDir: f.sortDir,
+  }
+}
+
+/** Load custom (operator-created) views. Built-ins are listed
+ *  separately by the consumer. Returns [] on failure (the menu
+ *  surfaces built-ins regardless so a backend hiccup doesn't strand
+ *  the operator). */
+export async function loadCustomViews(): Promise<SavedView[]> {
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY)
-    if (!raw) return []
-    const parsed = JSON.parse(raw)
-    if (!Array.isArray(parsed)) return []
-    return parsed.filter(
-      (v): v is SavedView =>
-        v && typeof v === 'object' && typeof v.id === 'string' && typeof v.name === 'string'
-        && Array.isArray(v.columnIds) && !v.builtin,
-    )
+    const r = await fetch(`${getBackendUrl()}/api/saved-views?surface=${SURFACE}`, {
+      cache: 'no-store',
+    })
+    if (!r.ok) return []
+    const data = (await r.json()) as { items: ServerRow[] }
+    return data.items.map(fromServer)
   } catch {
     return []
   }
 }
 
-export function saveCustomViews(views: SavedView[]): void {
-  if (typeof window === 'undefined') return
+/** Create a new custom view server-side. Returns the saved view with
+ *  the server's generated id. */
+export async function createCustomView(input: {
+  name: string
+  columnIds: string[]
+  search?: string
+}): Promise<SavedView | null> {
   try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(views.filter((v) => !v.builtin)))
+    const r = await fetch(`${getBackendUrl()}/api/saved-views`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: input.name.trim() || 'Untitled view',
+        surface: SURFACE,
+        filters: {
+          columnIds: input.columnIds,
+          search: input.search?.trim() || undefined,
+        },
+      }),
+    })
+    if (!r.ok) return null
+    const data = (await r.json()) as { item?: ServerRow } | ServerRow
+    const row = (data as { item?: ServerRow }).item ?? (data as ServerRow)
+    return row && row.id ? fromServer(row) : null
   } catch {
-    /* quota / disabled — swallow */
+    return null
   }
 }
 
-/** Track which view the operator currently has applied. Survives
- *  reloads so the matrix re-opens with the same lens. */
+/** Delete a custom view server-side. Returns true on success. */
+export async function deleteCustomView(id: string): Promise<boolean> {
+  try {
+    const r = await fetch(`${getBackendUrl()}/api/saved-views/${id}`, {
+      method: 'DELETE',
+    })
+    return r.ok
+  } catch {
+    return false
+  }
+}
+
+// ────────────────────────────────────────────────────────────────────
+// Active-view ID — per-device preference, stays in localStorage
+// ────────────────────────────────────────────────────────────────────
+
+const ACTIVE_KEY = 'catalog-matrix:active-view:v1'
+
 export function loadActiveViewId(): string | null {
   if (typeof window === 'undefined') return null
   try {
@@ -128,36 +173,4 @@ export function saveActiveViewId(id: string | null): void {
   } catch {
     /* swallow */
   }
-}
-
-// ────────────────────────────────────────────────────────────────────
-// Helpers
-// ────────────────────────────────────────────────────────────────────
-
-/** Build a new custom view from the current matrix state. */
-export function newCustomView(input: {
-  name: string
-  columnIds: string[]
-  search?: string
-}): SavedView {
-  // ID format: "view:<timestamp>:<random>" so they sort chronologically
-  // in dev tools + avoid collisions when two views are created in the
-  // same millisecond.
-  const id = `view:${Date.now()}:${Math.random().toString(36).slice(2, 7)}`
-  return {
-    id,
-    name: input.name.trim() || 'Untitled view',
-    columnIds: input.columnIds,
-    search: input.search?.trim() || undefined,
-  }
-}
-
-/** Return all views the operator can pick from (built-ins + custom). */
-export function listAllViews(): SavedView[] {
-  return [...BUILTIN_VIEWS, ...loadCustomViews()]
-}
-
-/** Find a view by id across both built-in and custom lists. */
-export function findView(id: string): SavedView | null {
-  return listAllViews().find((v) => v.id === id) ?? null
 }

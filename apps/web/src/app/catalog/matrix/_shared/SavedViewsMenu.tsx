@@ -26,8 +26,8 @@ import { cn } from '@/lib/utils'
 import {
   BUILTIN_VIEWS,
   loadCustomViews,
-  saveCustomViews,
-  newCustomView,
+  createCustomView,
+  deleteCustomView,
   type SavedView,
 } from './savedViews'
 
@@ -44,10 +44,24 @@ interface Props {
 
 export default function SavedViewsMenu({ activeViewId, onApply, currentState }: Props) {
   const [open, setOpen] = useState(false)
-  const [customViews, setCustomViews] = useState<SavedView[]>(() => loadCustomViews())
+  const [customViews, setCustomViews] = useState<SavedView[]>([])
   const [naming, setNaming] = useState(false)
+  const [saving, setSaving] = useState(false)
   const [draftName, setDraftName] = useState('')
   const ref = useRef<HTMLDivElement>(null)
+
+  // C.6b — fetch custom views server-side. Refresh whenever the menu
+  // opens so cross-operator changes appear without a page reload.
+  useEffect(() => {
+    if (!open) return
+    let cancelled = false
+    void loadCustomViews().then((views) => {
+      if (!cancelled) setCustomViews(views)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [open])
 
   // Close on outside click
   useEffect(() => {
@@ -70,27 +84,31 @@ export default function SavedViewsMenu({ activeViewId, onApply, currentState }: 
     setOpen(false)
   }
 
-  const handleSaveAs = () => {
+  const handleSaveAs = async () => {
     const name = draftName.trim()
     if (name === '') return
-    const v = newCustomView({
-      name,
-      columnIds: currentState.columnIds,
-      search: currentState.search,
-    })
-    const next = [...customViews, v]
-    setCustomViews(next)
-    saveCustomViews(next)
-    setDraftName('')
-    setNaming(false)
-    onApply(v)
-    setOpen(false)
+    setSaving(true)
+    try {
+      const v = await createCustomView({
+        name,
+        columnIds: currentState.columnIds,
+        search: currentState.search,
+      })
+      if (!v) return // toast covered by parent caller's onApply path
+      setCustomViews((prev) => [...prev, v])
+      setDraftName('')
+      setNaming(false)
+      onApply(v)
+      setOpen(false)
+    } finally {
+      setSaving(false)
+    }
   }
 
-  const handleDelete = (id: string) => {
-    const next = customViews.filter((v) => v.id !== id)
-    setCustomViews(next)
-    saveCustomViews(next)
+  const handleDelete = async (id: string) => {
+    const ok = await deleteCustomView(id)
+    if (!ok) return
+    setCustomViews((prev) => prev.filter((v) => v.id !== id))
     // If the deleted view was active, fall back to built-in default.
     if (id === activeViewId) {
       onApply(BUILTIN_VIEWS[0])
@@ -140,7 +158,7 @@ export default function SavedViewsMenu({ activeViewId, onApply, currentState }: 
                   view={v}
                   active={v.id === activeViewId}
                   onApply={handleApply}
-                  onDelete={handleDelete}
+                  onDelete={(id) => void handleDelete(id)}
                 />
               ))}
             </>
@@ -158,7 +176,7 @@ export default function SavedViewsMenu({ activeViewId, onApply, currentState }: 
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') {
                       e.preventDefault()
-                      handleSaveAs()
+                      void handleSaveAs()
                     } else if (e.key === 'Escape') {
                       e.preventDefault()
                       setNaming(false)
@@ -168,11 +186,11 @@ export default function SavedViewsMenu({ activeViewId, onApply, currentState }: 
                 />
                 <button
                   type="button"
-                  onClick={handleSaveAs}
-                  disabled={draftName.trim() === ''}
+                  onClick={() => void handleSaveAs()}
+                  disabled={draftName.trim() === '' || saving}
                   className="px-2 py-1 text-xs rounded bg-zinc-900 text-white hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300 disabled:opacity-40"
                 >
-                  Save
+                  {saving ? 'Saving…' : 'Save'}
                 </button>
               </div>
             ) : (
