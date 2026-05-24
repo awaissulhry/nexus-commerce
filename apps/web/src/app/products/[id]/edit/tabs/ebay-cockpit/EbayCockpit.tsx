@@ -26,7 +26,6 @@ import ChannelListingTab from '../ChannelListingTab'
 import { useEbayCompositor } from './useEbayCompositor'
 import { useCockpitMode } from './useCockpitMode'
 import EbayLivePreview from './EbayLivePreview'
-import type { ComposedListing } from './types'
 import { FieldSourceProvider } from './field-source/FieldSourceProvider'
 import SourceDiffModal from './field-source/SourceDiffModal'
 import ListingEssentialsCard from './cards/ListingEssentialsCard'
@@ -35,6 +34,7 @@ import AspectsCard from './cards/AspectsCard'
 import VariationsMatrixCard from './cards/VariationsMatrixCard'
 import ImagesCard from './cards/ImagesCard'
 import PricingPoliciesCard from './cards/PricingPoliciesCard'
+import HealthScoreRail from './health/HealthScoreRail'
 import { useEbayChannelEvents } from './realtime/useEbayChannelEvents'
 import HeartbeatDot from './realtime/HeartbeatDot'
 import CrossTabChangeToast from './realtime/CrossTabChangeToast'
@@ -266,7 +266,30 @@ export default function EbayCockpit(props: Props) {
         {previewOpen && (
           <div className="p-4 grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-4 bg-slate-50/40 dark:bg-slate-900/30">
             <EbayLivePreview composed={composed} />
-            <HealthRail composed={composed} />
+            <HealthScoreRail
+              marketplace={marketplace}
+              categoryId={composed.categoryId.value}
+              categoryName={composed.categoryLabel.value}
+              categoryPath={((listing?.platformAttributes as Record<string, unknown> | null)
+                ?.categoryPath as string | undefined) ?? null}
+              title={composed.title.value}
+              description={composed.description.value}
+              brand={composed.brand.value}
+              gtin={(product?.gtin as string | null) ?? null}
+              mpn={(product?.mpn as string | null) ?? null}
+              priceValue={composed.price.value}
+              imageCount={composed.galleryUrls.value.length}
+              itemSpecifics={
+                (((listing?.platformAttributes as Record<string, unknown> | null)
+                  ?.itemSpecifics as Record<string, unknown> | undefined) ?? {})
+              }
+              policies={{
+                fulfillmentPolicyId: ((listing?.platformAttributes as Record<string, unknown> | null)?.fulfillmentPolicyId as string | null) ?? null,
+                paymentPolicyId: ((listing?.platformAttributes as Record<string, unknown> | null)?.paymentPolicyId as string | null) ?? null,
+                returnPolicyId: ((listing?.platformAttributes as Record<string, unknown> | null)?.returnPolicyId as string | null) ?? null,
+                merchantLocationKey: ((listing?.platformAttributes as Record<string, unknown> | null)?.merchantLocationKey as string | null) ?? null,
+              }}
+            />
           </div>
         )}
       </Card>
@@ -464,48 +487,7 @@ export default function EbayCockpit(props: Props) {
   )
 }
 
-// ── Health rail (EC.9 placeholder) ─────────────────────────────────────
-function HealthRail({ composed }: { composed: ComposedListing }) {
-  // EC.1 surfaces a few derived counters as a visual placeholder. EC.9
-  // replaces this with the real 0–100 health score + category-specific
-  // gates + competitor benchmark.
-  const titleOk = composed.healthHints.titleLength > 0 && composed.healthHints.titleLength <= 80
-  const descOk = composed.healthHints.descriptionLength >= 200
-  const imagesOk = composed.galleryUrls.value.length >= 4
-  const categoryOk = composed.categoryId.value != null
-  const checks: Array<{ label: string; ok: boolean; hint?: string }> = [
-    { label: 'Title ≤ 80 chars', ok: titleOk, hint: `${composed.healthHints.titleLength}/80` },
-    { label: 'Description ≥ 200', ok: descOk, hint: `${composed.healthHints.descriptionLength}` },
-    { label: 'Images ≥ 4', ok: imagesOk, hint: `${composed.galleryUrls.value.length}` },
-    { label: 'Category set', ok: categoryOk },
-    { label: 'Brand set', ok: composed.brand.value != null },
-  ]
-  const passed = checks.filter((c) => c.ok).length
-  return (
-    <div className="rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3 space-y-2">
-      <div className="flex items-baseline justify-between">
-        <div className="text-sm font-semibold text-slate-800 dark:text-slate-200">Pre-publish health</div>
-        <div className="text-xs text-slate-500">{passed}/{checks.length}</div>
-      </div>
-      <div className="space-y-1">
-        {checks.map((c) => (
-          <div key={c.label} className="flex items-center justify-between text-xs">
-            <span className="text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-              <span className={cn('w-1.5 h-1.5 rounded-full', c.ok ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600')} />
-              {c.label}
-            </span>
-            {c.hint && <span className="font-mono text-[10.5px] text-slate-400">{c.hint}</span>}
-          </div>
-        ))}
-      </div>
-      <div className="pt-1 mt-1 border-t border-slate-100 dark:border-slate-800 text-[10.5px] text-slate-400 italic">
-        Placeholder — full score lands in EC.9.
-      </div>
-    </div>
-  )
-}
-
-// ── Placeholder card (EC.4–EC.8 fillers) ───────────────────────────────
+// ── Placeholder card (remaining EC.13 fillers) ─────────────────────────
 function PlaceholderCard({
   icon,
   title,
