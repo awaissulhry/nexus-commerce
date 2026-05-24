@@ -23,6 +23,7 @@ import { Button } from '@/components/ui/Button'
 import { useToast } from '@/components/ui/Toast'
 import LocaleColumn, { type LocaleSlot } from './_shared/LocaleColumn'
 import TechAttrsEditor from './_shared/TechAttrsEditor'
+import CascadePreviewCard from './_shared/CascadePreviewCard'
 
 interface GlobalView {
   productId: string
@@ -196,6 +197,10 @@ export default function GlobalTab({ productId, onDirtyChange }: Props) {
     )
   }
 
+  // E.4 — bump cascade refresh after each successful save so counts
+  // reflect any followMaster* flips that happened on linked listings.
+  const cascadeRefreshKey = pristine ? Number(JSON.stringify(pristine).length % 10000) : 0
+
   return (
     <div className="flex flex-col gap-6">
       {view.isVariant && (
@@ -205,6 +210,8 @@ export default function GlobalTab({ productId, onDirtyChange }: Props) {
           overrides the parent for this variant.
         </div>
       )}
+
+      <CascadePreviewCard productId={productId} refreshKey={cascadeRefreshKey} />
 
       <Card>
         <div className="flex items-center justify-between mb-4">

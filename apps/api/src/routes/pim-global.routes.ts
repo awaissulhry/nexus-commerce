@@ -437,6 +437,128 @@ const pimGlobalRoutes: FastifyPluginAsync = async (fastify) => {
     },
   )
 
+  // ── GET /products/:id/cascade-preview ───────────────────────────
+  // PIM E.4 — Surface the fan-out of a master-field change. Returns
+  // per-channel × per-marketplace listing counts that would inherit
+  // (followMasterX=true) versus override (followMasterX=false), plus
+  // the variant-child count for the product.
+  //
+  // The mapping is field-aware but not field-required: callers ask
+  // "what does a master-level change touch?" and we return the
+  // summary for each tracked SSOT field (title, description, price,
+  // quantity, bulletPoints) so the UI can show "if you change title,
+  // N listings inherit + M override; if you change price, …".
+  fastify.get<{ Params: { id: string } }>(
+    '/products/:id/cascade-preview',
+    async (request, reply) => {
+      const { id } = request.params
+
+      const product = await prisma.product.findUnique({
+        where: { id },
+        select: {
+          id: true,
+          sku: true,
+          parentId: true,
+        },
+      })
+      if (!product) return reply.status(404).send({ error: 'Product not found' })
+
+      // Variant children — direct count.
+      const variantCount = await prisma.product.count({
+        where: { parentId: id, deletedAt: null },
+      })
+
+      // Channel listings for this product.
+      const listings = await prisma.channelListing.findMany({
+        where: { productId: id },
+        select: {
+          id: true,
+          channel: true,
+          marketplace: true,
+          listingStatus: true,
+          followMasterTitle: true,
+          followMasterDescription: true,
+          followMasterPrice: true,
+          followMasterQuantity: true,
+          followMasterBulletPoints: true,
+        },
+      })
+
+      // Per-(channel, marketplace) breakdown: counts of listings whose
+      // followMasterX is true for each tracked SSOT field. Operator
+      // sees "title: 7 listings inherit, 3 override" at a glance.
+      type CellKey = string
+      const cells = new Map<
+        CellKey,
+        {
+          channel: string
+          marketplace: string
+          total: number
+          inheritByField: Record<string, number>
+          overrideByField: Record<string, number>
+        }
+      >()
+      const trackedFields = [
+        'title',
+        'description',
+        'price',
+        'quantity',
+        'bulletPoints',
+      ] as const
+      const followFlagMap: Record<(typeof trackedFields)[number], string> = {
+        title: 'followMasterTitle',
+        description: 'followMasterDescription',
+        price: 'followMasterPrice',
+        quantity: 'followMasterQuantity',
+        bulletPoints: 'followMasterBulletPoints',
+      }
+
+      for (const l of listings) {
+        const key = `${l.channel}::${l.marketplace}`
+        const cell = cells.get(key) ?? {
+          channel: l.channel,
+          marketplace: l.marketplace,
+          total: 0,
+          inheritByField: Object.fromEntries(trackedFields.map((f) => [f, 0])),
+          overrideByField: Object.fromEntries(trackedFields.map((f) => [f, 0])),
+        }
+        cell.total++
+        for (const f of trackedFields) {
+          const flagValue = (l as unknown as Record<string, unknown>)[followFlagMap[f]]
+          // Default (undefined) === follow master (matches resolver convention).
+          const follows = flagValue === undefined ? true : Boolean(flagValue)
+          if (follows) cell.inheritByField[f]++
+          else cell.overrideByField[f]++
+        }
+        cells.set(key, cell)
+      }
+
+      // Aggregate totals across all marketplaces.
+      const totals: Record<string, { inherit: number; override: number }> = {}
+      for (const f of trackedFields) totals[f] = { inherit: 0, override: 0 }
+      for (const cell of cells.values()) {
+        for (const f of trackedFields) {
+          totals[f].inherit += cell.inheritByField[f]
+          totals[f].override += cell.overrideByField[f]
+        }
+      }
+
+      return reply.send({
+        productId: id,
+        productSku: product.sku,
+        isVariant: product.parentId !== null,
+        variantCount,
+        totalListings: listings.length,
+        marketplaceCount: cells.size,
+        cells: Array.from(cells.values()).sort((a, b) => {
+          if (a.channel !== b.channel) return a.channel.localeCompare(b.channel)
+          return a.marketplace.localeCompare(b.marketplace)
+        }),
+        totals,
+      })
+    },
+  )
+
   // ── DELETE /products/:id/global/technical/:key ──────────────────
   // Remove one key from categoryAttributes. Returns 200 with no
   // change when the key wasn't present (idempotent).
