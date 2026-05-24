@@ -415,3 +415,65 @@ URL-sync time. The latter rewrites the address bar via
    GlobalSections from TC.1), the parent tab owns the registry
    entry and coordinates the children via composed flush/discard.
    Never let two sub-components fight over the same registry key.
+
+---
+
+## AG-series — Amazon tab column grouping (added 2026-05-24)
+
+The Amazon tab on `/products/[id]/edit` now renders its schema
+fields in the same per-marketplace coloured groups that the
+`/products/amazon-flat-file` editor publishes — `offer_identity`
+in blue, `variations` in purple, then Amazon's locale-specific
+`__propertyGroups` in a rotating palette (emerald / orange / teal /
+amber / etc.). Switching marketplace (IT → DE → FR) re-fetches the
+manifest and re-paints the groups so the operator always sees the
+shape Amazon publishes for that locale.
+
+### Hard constraint
+**Zero changes to `/products/amazon-flat-file` or `components/flat-file/FlatFileGrid.tsx`.** The two existing inline `GROUP_COLORS` blocks stay untouched; the Amazon tab carries its own copy under
+`apps/web/src/app/products/[id]/edit/tabs/_shared/amazon-group-colors.ts`.
+Triplicate-by-design; future de-dup is a separate engagement.
+
+### Manifest source
+- Same HTTP endpoint as the flat-file editor: `GET /api/amazon/flat-file/template?marketplace={mp}&productType={pt}`.
+- Server-side cached 5 min per (marketplace, productType) — EH.4.
+- Consumed in `ChannelFieldEditor.tsx` only when `amazonGrouping` prop is set (Amazon channel tab only — eBay / Shopify pass undefined and keep their existing ungrouped flow).
+- AbortController cancels stale fetches on rapid marketplace switching.
+
+### Render shape
+- **Grouped path** (active when manifest loaded): each manifest group renders as a `<section>` with:
+  - Header strip painted with `gColor(color).header` (saturated bg + dark text)
+  - Body painted with `gColor(color).band` (light wash) + inner `bg-white/60` for FieldCard readability
+  - Sticky `top-24` so the header pins under the page tab strip while the operator scrolls
+  - Optional 1-line description subtitle (from `manifest.groups[].description`)
+- **Loading path**: `<AmazonGroupSkeleton>` renders 6 coloured shimmer sections matching the typical palette order.
+- **Error path**: amber inline badge above the flat-list fallback + Retry button (bumps an internal counter that re-fires the fetch effect).
+- **Default path** (eBay / Shopify / no productType / amazonGrouping undefined): existing `FieldGroupSection` + `groupFields()` rendering, untouched.
+- The per-field `<FieldCard>` rendering is shared by all paths via a closure-local `renderFieldCard()` helper — saves / variants / AI / translate / dirty tracking all unchanged.
+
+### Storage keys
+```ts
+localStorage['amazon-tab:closed-groups:{marketplace}:{productType}'] = ['group-id', …]
+```
+- Empty Set is **not** persisted (key removed) to keep localStorage tidy.
+- Per (marketplace × productType) so collapse decisions on DE don't leak into IT — Amazon's group sets differ per locale.
+- Managed by `useAmazonClosedGroups({ marketplace, productType })` in `apps/web/src/app/products/[id]/edit/tabs/_shared/useAmazonClosedGroups.ts`.
+
+### Keyboard contract (AG.9)
+- Tab → arrow-key cycle: ArrowDown / ArrowUp move focus between sibling group headers (wrapping); Home / End jump to ends.
+- Enter / Space toggle the focused group (native `<button>` behaviour).
+- Polite `aria-live` region announces "Expanded X group" / "Collapsed X group".
+- Each header carries `aria-expanded` + `aria-controls`.
+- Per-group dirty count surfaces in `aria-label` for the amber dot ("3 unsaved fields in Compliance").
+
+### Anti-patterns (do not introduce)
+1. **Modifying the existing inline `GROUP_COLORS` in `AmazonFlatFileClient.tsx` or `FlatFileGrid.tsx` as part of this engagement.** Out of scope — those two are intentionally left alone.
+2. **Global closed-groups key.** Must include `{marketplace}:{productType}` to avoid cross-locale leakage.
+3. **Replacing the existing `/listings/:ch/:mp/schema` endpoint with the flat-file manifest.** The schema endpoint stays authoritative for field values, validation, variant overrides, readiness. The manifest is grouping + colour metadata only.
+4. **Passing `amazonGrouping` for non-Amazon channels.** eBay / Shopify keep their existing `ChannelGroupsManager` (user-defined) grouping; conflating sources would break those tabs.
+
+### Files
+- `apps/web/src/app/products/[id]/edit/tabs/_shared/amazon-group-colors.ts` — colour palette (copy-equal to flat-file's inline map).
+- `apps/web/src/app/products/[id]/edit/tabs/_shared/useAmazonClosedGroups.ts` — collapse state hook.
+- `apps/web/src/app/products/_shared/ChannelFieldEditor.tsx` — manifest fetch, bucketing, grouped render, skeleton, error, sticky headers, a11y.
+- `apps/web/src/app/products/[id]/edit/tabs/ChannelListingTab.tsx` — passes `amazonGrouping` only when `channel === 'AMAZON'`.

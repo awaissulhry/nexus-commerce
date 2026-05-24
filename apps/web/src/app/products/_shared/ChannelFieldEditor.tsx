@@ -21,6 +21,9 @@ import {
   type Primitive,
   type UnionManifest,
 } from './attribute-editor'
+import { gColor } from '@/app/products/[id]/edit/tabs/_shared/amazon-group-colors'
+import { useAmazonClosedGroups } from '@/app/products/[id]/edit/tabs/_shared/useAmazonClosedGroups'
+import { ChevronDown, ChevronRight } from 'lucide-react'
 
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error'
 
@@ -80,6 +83,173 @@ interface Props {
    *  waiting for the debounce timer. Called with the flush function
    *  once the manifest loads, and with `null` on unmount. */
   bindFlushAll?: (fn: (() => Promise<void>) | null) => void
+  /** AG.2 — when present, ChannelFieldEditor pulls the per-marketplace
+   *  Amazon flat-file manifest in parallel with its own schema fetch
+   *  and uses it to bucket fields into coloured groups. Only set on
+   *  the Amazon channel tab; eBay/Shopify leave it undefined and get
+   *  the existing ungrouped rendering. AG.3 consumes the resulting
+   *  fieldId→group map. */
+  amazonGrouping?: {
+    marketplace: string
+    productType: string | null
+  }
+}
+
+/** AG.2 — minimal subset of the FlatFileManifest we actually read.
+ *  Defined locally so this module doesn't take a dependency on the
+ *  AmazonFlatFileService types (which would couple us to the API). */
+interface AmazonGroupingManifest {
+  groups: Array<{
+    id: string
+    labelEn: string
+    labelLocal: string
+    color: string
+    description?: string
+    columns: Array<{
+      id: string
+      fieldRef: string
+    }>
+  }>
+}
+
+export interface AmazonGroupInfo {
+  groupId: string
+  groupLabel: string
+  groupColor: string
+  /** Index in `manifest.groups` — used to preserve manifest order
+   *  when rendering. */
+  groupIndex: number
+}
+
+/** AG.3 — Output shape of `bucketAmazonGroups`. Wraps each manifest
+ *  group with the schema fields that belong to it, in manifest order.
+ *  Fields that don't match any manifest group fall into a synthetic
+ *  tail bucket so they're still rendered (never lost). AG.8 adds
+ *  the manifest's optional `description` so the section header can
+ *  surface it as a one-line subtitle. */
+interface AmazonGroupBucket {
+  groupId: string
+  groupLabel: string
+  groupColor: string
+  groupDescription?: string
+  fields: UnionManifest['fields']
+}
+
+/** AG.9 — Data-attribute marker on each Amazon group header. Used
+ *  by `focusSiblingAmazonHeader` to enumerate sibling headers in
+ *  DOM order for ArrowUp/Down/Home/End keyboard navigation. */
+const AMAZON_HEADER_DATA_ATTR = 'data-amazon-group-header'
+
+function focusSiblingAmazonHeader(
+  current: HTMLElement,
+  direction: 'next' | 'prev' | 'first' | 'last',
+): void {
+  const all = Array.from(
+    document.querySelectorAll<HTMLElement>(`[${AMAZON_HEADER_DATA_ATTR}]`),
+  )
+  if (all.length === 0) return
+  const currentIndex = all.indexOf(current)
+  if (currentIndex < 0) return
+  let targetIndex: number
+  switch (direction) {
+    case 'next':
+      targetIndex = (currentIndex + 1) % all.length
+      break
+    case 'prev':
+      targetIndex = (currentIndex - 1 + all.length) % all.length
+      break
+    case 'first':
+      targetIndex = 0
+      break
+    case 'last':
+      targetIndex = all.length - 1
+      break
+  }
+  all[targetIndex]?.focus()
+}
+
+/** AG.6 — Skeleton shown while the Amazon flat-file manifest is
+ *  in-flight. Renders six coloured-band sections in the palette
+ *  order the API tends to produce (blue/purple/emerald/orange/teal/
+ *  amber) so the operator gets an honest "groups will appear here"
+ *  preview rather than a generic spinner. Layout-stable: each
+ *  pseudo-section roughly matches the dimensions of a real one
+ *  (header strip + body padding) to keep CLS at zero when the real
+ *  manifest replaces it.  */
+const SKELETON_PALETTE = ['blue', 'purple', 'emerald', 'orange', 'teal', 'amber'] as const
+
+function AmazonGroupSkeleton() {
+  return (
+    <div className="space-y-3" aria-hidden>
+      {SKELETON_PALETTE.map((colorKey) => {
+        const theme = gColor(colorKey)
+        return (
+          <section
+            key={colorKey}
+            className={cn(
+              'border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden animate-pulse',
+              theme.band,
+            )}
+          >
+            <div
+              className={cn(
+                'px-4 py-2.5 flex items-center gap-2',
+                theme.header,
+              )}
+            >
+              <div className="w-3.5 h-3.5 rounded bg-current opacity-30" />
+              <div className="h-3 w-32 rounded bg-current opacity-30" />
+              <div className="h-3 w-12 rounded bg-current opacity-20" />
+            </div>
+            <div className="p-3 space-y-2 bg-white/60 dark:bg-slate-900/60">
+              <div className="h-3 w-3/4 rounded bg-slate-200 dark:bg-slate-700" />
+              <div className="h-3 w-2/3 rounded bg-slate-200 dark:bg-slate-700" />
+              <div className="h-3 w-5/6 rounded bg-slate-200 dark:bg-slate-700" />
+            </div>
+          </section>
+        )
+      })}
+    </div>
+  )
+}
+
+/** AG.3 — Bucket the schema's flat field list into the manifest's
+ *  ordered groups. Unknown fields (no matching column.id /
+ *  column.fieldRef in the manifest) land in a synthetic "Other"
+ *  group with the slate colour at the end so the operator never
+ *  loses a field. Empty groups are dropped — no point rendering a
+ *  coloured band with zero fields inside. */
+function bucketAmazonGroups(
+  fields: UnionManifest['fields'],
+  fieldGroupMap: Map<string, AmazonGroupInfo>,
+  manifest: AmazonGroupingManifest,
+): AmazonGroupBucket[] {
+  // Seed buckets in manifest order so the visible group order matches
+  // what the flat-file editor shows for the same marketplace.
+  const byIndex: AmazonGroupBucket[] = manifest.groups.map((g) => ({
+    groupId: g.id,
+    groupLabel: g.labelLocal || g.labelEn,
+    groupColor: g.color,
+    groupDescription: g.description,
+    fields: [],
+  }))
+  const otherBucket: AmazonGroupBucket = {
+    groupId: '__other__',
+    groupLabel: 'Other',
+    groupColor: 'slate',
+    fields: [],
+  }
+  for (const field of fields) {
+    const info = fieldGroupMap.get(field.id)
+    if (info && byIndex[info.groupIndex]) {
+      byIndex[info.groupIndex].fields.push(field)
+    } else {
+      otherBucket.fields.push(field)
+    }
+  }
+  const result = byIndex.filter((b) => b.fields.length > 0)
+  if (otherBucket.fields.length > 0) result.push(otherBucket)
+  return result
 }
 
 /** Maps schema field ids to the master product columns they inherit
@@ -158,10 +328,44 @@ export default function ChannelFieldEditor({
   bindTranslateAll,
   onSchemaReadiness,
   bindFlushAll,
+  amazonGrouping,
 }: Props) {
   const [manifest, setManifest] = useState<UnionManifest | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  // AG.2 — Per-marketplace Amazon flat-file manifest used purely for
+  // grouping + colour metadata. Independent of the primary schema
+  // fetch above: a failure here means we fall back to ungrouped
+  // rendering, never blocks editing.
+  const [amazonManifest, setAmazonManifest] =
+    useState<AmazonGroupingManifest | null>(null)
+  // AG.5 — Explicit in-flight flag. Distinct from `amazonManifest ===
+  // null` (which also covers "no productType" / "not Amazon" / "fetch
+  // failed"), so AG.6's skeleton can render only when we're actively
+  // loading rather than every time the manifest is empty.
+  const [amazonManifestLoading, setAmazonManifestLoading] = useState(false)
+  // AG.6 — Error surface for the manifest fetch. Null when there's
+  // nothing to show; populated with the error message on non-Abort
+  // failure so the inline retry badge can render.
+  const [amazonManifestError, setAmazonManifestError] = useState<string | null>(
+    null,
+  )
+  // AG.6 — Operator-driven retry counter; bumping it adds a fresh
+  // value to the fetch effect's deps and triggers a re-attempt.
+  const [amazonManifestRetry, setAmazonManifestRetry] = useState(0)
+  // AG.9 — Live-region message announced by the off-screen
+  // `aria-live="polite"` span when an operator collapses or expands
+  // a group. Text only — no visual surface.
+  const [amazonGroupAnnouncement, setAmazonGroupAnnouncement] = useState('')
+  // AG.4 — Per-(marketplace, productType) collapse state. Returns
+  // empty Set when no localStorage entry exists yet → all groups
+  // open by default. Always called (even for non-Amazon channels)
+  // so hook order stays stable; on non-Amazon tabs the marketplace
+  // string still feeds the key but the result is never consulted.
+  const closedGroupsHook = useAmazonClosedGroups({
+    marketplace: amazonGrouping?.marketplace ?? marketplace,
+    productType: amazonGrouping?.productType ?? null,
+  })
   // When the API returns code='no_ebay_category' or 'no_product_type' we show
   // a friendly nudge rather than a generic error block.
   const [noCategorySet, setNoCategorySet] = useState(false)
@@ -310,6 +514,100 @@ export default function ChannelFieldEditor({
       cancelled = true
     }
   }, [productId, channel, marketplace, reloadKey, showAllOptional, forceRefresh])
+
+  // ── AG.2 — Amazon flat-file manifest (grouping + colours only) ──
+  // Fires only when the parent passes `amazonGrouping` (i.e. the
+  // Amazon channel tab). Cancels in-flight fetches on marketplace
+  // change so rapidly clicking IT → DE → FR doesn't leave a stale
+  // manifest from the wrong locale. Server caches the response for
+  // 5 min per (marketplace, productType) — EH.4.
+  useEffect(() => {
+    if (!amazonGrouping) {
+      setAmazonManifest(null)
+      setAmazonManifestLoading(false)
+      setAmazonManifestError(null)
+      return
+    }
+    const { marketplace: mp, productType: pt } = amazonGrouping
+    if (!pt) {
+      // Without a productType the /template endpoint returns 400;
+      // skip the call entirely and let the editor render flat. Once
+      // an operator sets the productType (via Setup card or
+      // elsewhere), this effect re-fires.
+      setAmazonManifest(null)
+      setAmazonManifestLoading(false)
+      setAmazonManifestError(null)
+      return
+    }
+    // AG.5 — Per-fetch AbortController. Rapid IT → DE → FR clicks
+    // cancel earlier in-flight requests so we never apply a stale
+    // marketplace's manifest. AbortError is silenced below so the
+    // loading flag isn't toggled off by the cancelled request —
+    // the next fetch will set it true again immediately.
+    // AG.6 — Clear the prior manifest on each new fetch so an in-
+    // progress marketplace switch shows the AG.6 skeleton rather
+    // than the stale IT groups while DE loads.
+    const controller = new AbortController()
+    setAmazonManifest(null)
+    setAmazonManifestLoading(true)
+    setAmazonManifestError(null)
+    const url = `${getBackendUrl()}/api/amazon/flat-file/template` +
+      `?marketplace=${encodeURIComponent(mp)}` +
+      `&productType=${encodeURIComponent(pt)}`
+    fetch(url, { signal: controller.signal })
+      .then(async (r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`)
+        return (await r.json()) as AmazonGroupingManifest
+      })
+      .then((m) => {
+        setAmazonManifest(m)
+        setAmazonManifestLoading(false)
+      })
+      .catch((err) => {
+        // AbortError on marketplace switch is expected — leave state
+        // alone; the new effect run already flipped loading→true.
+        if (err?.name === 'AbortError') return
+        // AG.6 — clear the manifest + record the error + drop the
+        // loading flag so the retry badge renders above the flat-
+        // list fallback.
+        setAmazonManifest(null)
+        setAmazonManifestLoading(false)
+        setAmazonManifestError(
+          err instanceof Error ? err.message : String(err),
+        )
+      })
+    return () => controller.abort()
+  }, [
+    amazonGrouping?.marketplace,
+    amazonGrouping?.productType,
+    amazonGrouping,
+    amazonManifestRetry,
+  ])
+
+  // ── AG.2 — fieldId → group lookup map ───────────────────────────
+  // Walks the manifest once per load and builds a Map keyed by both
+  // `column.id` and `column.fieldRef` so AG.3's bucketing code can
+  // find the group regardless of which identifier the existing schema
+  // endpoint surfaces for a given field. Fields not in any manifest
+  // group resolve to undefined → AG.3 puts them in a synthetic "Other"
+  // tail group with the slate colour.
+  const amazonGroupByFieldId = useMemo<Map<string, AmazonGroupInfo>>(() => {
+    const map = new Map<string, AmazonGroupInfo>()
+    if (!amazonManifest) return map
+    amazonManifest.groups.forEach((g, groupIndex) => {
+      const info: AmazonGroupInfo = {
+        groupId: g.id,
+        groupLabel: g.labelLocal || g.labelEn,
+        groupColor: g.color,
+        groupIndex,
+      }
+      for (const col of g.columns) {
+        if (col.id) map.set(col.id, info)
+        if (col.fieldRef) map.set(col.fieldRef, info)
+      }
+    })
+    return map
+  }, [amazonManifest])
 
   // ── Q.8 — load/save channel groups from localStorage ────────
   useEffect(() => {
@@ -1197,119 +1495,352 @@ export default function ChannelFieldEditor({
         </div>
       )}
 
+      {/* AG.9 — Polite live region for Amazon group collapse/expand
+          announcements. Sits outside the conditional field block so
+          messages still announce when the manifest temporarily
+          unmounts during marketplace switch. */}
+      {amazonGrouping && (
+        <span
+          aria-live="polite"
+          aria-atomic="true"
+          className="sr-only"
+        >
+          {amazonGroupAnnouncement}
+        </span>
+      )}
+
       {manifest && manifest.fields.length > 0 && (
         <div className="space-y-3">
-          {groupFields(manifest.fields).map((group) => {
-            const groupIds = new Set(group.fields.map((f) => f.id))
-            const requiredCount = group.fields.filter((f) =>
-              f.requiredFor.includes(channelKey),
-            ).length
-            const unsatCount = unsatisfied.filter((u) =>
-              groupIds.has(u.id),
-            ).length
-            const filledCount = group.fields.filter(
-              (f) => !isEmpty(values[f.id]),
-            ).length
-            return (
-              <FieldGroupSection
-                key={group.name}
-                name={group.name}
-                count={group.fields.length}
-                requiredCount={requiredCount}
-                unsatisfiedCount={unsatCount}
-                filledCount={filledCount}
-                defaultExpanded={
-                  requiredCount > 0 || unsatCount > 0 || filledCount > 0
-                }
-                headerAction={
-                  siblings.length > 1 ? (
-                    <CopyFromSiblingMenu
-                      label="Copy from"
-                      compact
-                      activeChannelKey={channelKey}
-                      siblings={siblings}
-                      countSiblingValues={(sourceKey) =>
-                        countSiblingValues(
-                          sourceKey,
-                          group.fields.map((f) => f.id),
-                        )
-                      }
-                      onPick={(sourceKey) =>
-                        copyFromSibling(
-                          sourceKey,
-                          group.fields.map((f) => f.id),
-                        )
-                      }
-                    />
-                  ) : undefined
-                }
-              >
-                {group.fields.map((field) => {
-                  const fieldUnsatisfied = unsatisfied
-                    .filter((u) => u.id === field.id)
-                    .map((u) => u.channelKey)
-                  const masterValue = getMasterValue(product, field.id)
-                  const overrides: Record<string, Primitive | undefined> = {
-                    [channelKey]: values[field.id],
+          {/* AG.6 — Error badge: appears above the flat-list fallback
+              whenever the Amazon grouping manifest failed to load.
+              Editing keeps working via the ungrouped list below; the
+              badge lets the operator retry without reloading the page. */}
+          {amazonGrouping &&
+            !amazonManifestLoading &&
+            amazonManifestError &&
+            !amazonManifest && (
+              <div className="flex items-center gap-2 text-base text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 rounded-md px-3 py-2">
+                <AlertCircle className="w-4 h-4 flex-shrink-0" aria-hidden />
+                <span className="flex-1 min-w-0">
+                  Could not load Amazon grouping — showing flat list.
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setAmazonManifestRetry((n) => n + 1)}
+                  className="text-amber-800 dark:text-amber-200 hover:underline font-medium text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/40 rounded px-1"
+                >
+                  Retry
+                </button>
+              </div>
+            )}
+          {/* AG.3 — Two render paths: when amazonGrouping is active AND
+              the per-marketplace manifest loaded, fields render in
+              coloured Amazon groups (offer_identity / variations /
+              schema groups) that match the flat-file editor's
+              palette. Otherwise the existing FieldGroupSection
+              rendering is preserved as-is for eBay / Shopify / loading
+              / failure paths. The per-field FieldCard render is
+              extracted to `renderFieldCard()` below so both paths
+              share identical edit / variant / AI / translate logic.
+              AG.6 — Loading skeleton replaces the field render while
+              the per-marketplace manifest is in-flight, so operators
+              see coloured shimmer bands instead of an unrelated flat
+              list during the fetch. */}
+          {(() => {
+            // AG.6 — Skeleton (priority over both other paths)
+            if (amazonGrouping && amazonManifestLoading) {
+              return <AmazonGroupSkeleton />
+            }
+            // Inline per-field renderer — closure-captures values,
+            // siblings, variantAttrs, etc. so both grouping paths
+            // produce identical FieldCards (no behaviour drift).
+            const renderFieldCard = (field: UnionManifest['fields'][number]) => {
+              const fieldUnsatisfied = unsatisfied
+                .filter((u) => u.id === field.id)
+                .map((u) => u.channelKey)
+              const masterValue = getMasterValue(product, field.id)
+              const overrides: Record<string, Primitive | undefined> = {
+                [channelKey]: values[field.id],
+              }
+              for (const s of siblings) {
+                const k = `${s.channel}:${s.marketplace}`.toUpperCase()
+                if (k === channelKey) continue
+                const v = getListingFieldValue(s, field.id)
+                if (!isEmpty(v)) overrides[k] = v
+              }
+              return (
+                <FieldCard
+                  key={field.id}
+                  field={field}
+                  viewMode={{ channelKey }}
+                  baseValue={masterValue}
+                  onBaseChange={(v) => setBase(field.id, v)}
+                  onAIGenerate={
+                    AI_SUPPORTED_FIELDS.has(field.id)
+                      ? () => aiGenerate(field.id)
+                      : undefined
                   }
-                  for (const s of siblings) {
-                    const k = `${s.channel}:${s.marketplace}`.toUpperCase()
-                    if (k === channelKey) continue
-                    const v = getListingFieldValue(s, field.id)
-                    if (!isEmpty(v)) overrides[k] = v
+                  aiBusy={aiBusyFields.has(field.id)}
+                  onTranslate={onTranslate}
+                  translateBusy={translateBusy}
+                  onApplyToChannels={broadcastToChannels}
+                  channelGroups={channelGroups}
+                  allChannelKeys={allChannelKeys}
+                  overrides={overrides}
+                  onOverrideChange={(ck, v) => {
+                    if (ck === channelKey) {
+                      setBase(field.id, v as Primitive)
+                    }
+                  }}
+                  variations={manifest.variations}
+                  variantValues={Object.fromEntries(
+                    manifest.variations.map((v) => [
+                      v.id,
+                      variantAttrs[v.id]?.[field.id],
+                    ]),
+                  )}
+                  onVariantChange={(variationId, v) =>
+                    setVariant(variationId, field.id, v)
                   }
-                  return (
-                    <FieldCard
-                      key={field.id}
-                      field={field}
-                      viewMode={{ channelKey }}
-                      baseValue={masterValue}
-                      onBaseChange={(v) => setBase(field.id, v)}
-                      onAIGenerate={
-                        AI_SUPPORTED_FIELDS.has(field.id)
-                          ? () => aiGenerate(field.id)
-                          : undefined
-                      }
-                      aiBusy={aiBusyFields.has(field.id)}
-                      onTranslate={onTranslate}
-                      translateBusy={translateBusy}
-                      onApplyToChannels={broadcastToChannels}
-                      channelGroups={channelGroups}
-                      allChannelKeys={allChannelKeys}
-                      overrides={overrides}
-                      onOverrideChange={(ck, v) => {
-                        if (ck === channelKey) {
-                          setBase(field.id, v as Primitive)
+                  variantsExpanded={expandedVariants.has(field.id)}
+                  onToggleVariants={() =>
+                    setExpandedVariants((prev) => {
+                      const next = new Set(prev)
+                      if (next.has(field.id)) next.delete(field.id)
+                      else next.add(field.id)
+                      return next
+                    })
+                  }
+                  expanded={expandedFields.has(field.id)}
+                  onToggleExpanded={() => toggleExpanded(field.id)}
+                  unsatisfiedChannels={fieldUnsatisfied}
+                />
+              )
+            }
+
+            // AG.3 — Amazon grouped path
+            if (amazonGrouping && amazonManifest) {
+              const buckets = bucketAmazonGroups(
+                manifest.fields,
+                amazonGroupByFieldId,
+                amazonManifest,
+              )
+              return buckets.map((bucket) => {
+                const theme = gColor(bucket.groupColor)
+                // AG.4 — Per-group collapse state read from the hook.
+                // Closed = body omitted from the tree; the header still
+                // renders with a sideways chevron so the operator can
+                // re-expand. localStorage write happens inside toggle.
+                const closed = closedGroupsHook.isClosed(bucket.groupId)
+                const panelId = `amazon-group-panel-${bucket.groupId}`
+                // AG.7 — Dirty count per bucket. dirtyRef is mutated
+                // by setBase / setVariant, and those setters also call
+                // setValues which triggers a re-render — so reading
+                // the ref here yields the fresh count on every paint.
+                // Stays visible even when the group is collapsed so
+                // operators don't have to expand to see which groups
+                // still need attention.
+                let dirtyCount = 0
+                for (const f of bucket.fields) {
+                  if (dirtyRef.current.has(f.id)) dirtyCount++
+                }
+                // AG.8 — Stable id so the smooth scroll-into-view
+                // handler can locate the header after toggle. Sits
+                // alongside the panel id for ARIA wiring.
+                const headerId = `amazon-group-header-${bucket.groupId}`
+                return (
+                  <section
+                    key={bucket.groupId}
+                    aria-label={bucket.groupLabel}
+                    className={cn(
+                      // AG.8 — Removed `overflow-hidden` (which
+                      // clipped the sticky child); rounded-lg + border
+                      // still draws the section frame. Header /body
+                      // each carry their own rounded-t/b so the band
+                      // doesn't bleed past the section's corners.
+                      'border border-slate-200 dark:border-slate-700 rounded-lg',
+                      theme.band,
+                    )}
+                  >
+                    <button
+                      type="button"
+                      id={headerId}
+                      {...{ [AMAZON_HEADER_DATA_ATTR]: '' }}
+                      onClick={() => {
+                        const wasClosed = closed
+                        closedGroupsHook.toggle(bucket.groupId)
+                        // AG.9 — Announce the new state to screen
+                        // readers via the live region below.
+                        setAmazonGroupAnnouncement(
+                          wasClosed
+                            ? `Expanded ${bucket.groupLabel} group`
+                            : `Collapsed ${bucket.groupLabel} group`,
+                        )
+                        // AG.8 — Smooth scroll-into-view when an
+                        // operator expands a previously-closed group
+                        // so the newly-revealed first field lands in
+                        // viewport. rAF gives React a tick to commit
+                        // the open state before we measure.
+                        if (wasClosed) {
+                          requestAnimationFrame(() => {
+                            document
+                              .getElementById(headerId)
+                              ?.scrollIntoView({
+                                behavior: 'smooth',
+                                block: 'start',
+                              })
+                          })
                         }
                       }}
-                      variations={manifest.variations}
-                      variantValues={Object.fromEntries(
-                        manifest.variations.map((v) => [
-                          v.id,
-                          variantAttrs[v.id]?.[field.id],
-                        ]),
+                      onKeyDown={(e) => {
+                        // AG.9 — ArrowUp/Down cycles focus between
+                        // sibling group headers (Home/End jumps to
+                        // ends). Mirrors the W3C ARIA accordion
+                        // keyboard contract — Space/Enter toggle via
+                        // the native button behaviour, no override.
+                        switch (e.key) {
+                          case 'ArrowDown':
+                            e.preventDefault()
+                            focusSiblingAmazonHeader(e.currentTarget, 'next')
+                            break
+                          case 'ArrowUp':
+                            e.preventDefault()
+                            focusSiblingAmazonHeader(e.currentTarget, 'prev')
+                            break
+                          case 'Home':
+                            e.preventDefault()
+                            focusSiblingAmazonHeader(e.currentTarget, 'first')
+                            break
+                          case 'End':
+                            e.preventDefault()
+                            focusSiblingAmazonHeader(e.currentTarget, 'last')
+                            break
+                        }
+                      }}
+                      aria-expanded={!closed}
+                      aria-controls={panelId}
+                      className={cn(
+                        'w-full px-4 py-2.5 flex flex-col gap-0.5 text-left rounded-t-lg',
+                        // AG.8 — Sticky relative to the page scroll.
+                        // top-24 (96 px) sits just under the page
+                        // header (h-14 title row + tab strip) so the
+                        // coloured band stays visible as the operator
+                        // scrolls down through a long group's fields.
+                        'sticky top-24 z-10',
+                        // Permanent subtle bottom shadow gives the
+                        // header a hint of separation from the body
+                        // both when stuck and when not.
+                        'shadow-[inset_0_-1px_0_rgba(0,0,0,0.05)]',
+                        'focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 focus-visible:ring-inset',
+                        'transition-colors hover:brightness-95 dark:hover:brightness-110',
+                        theme.header,
+                        // When body is hidden, the header sits alone
+                        // and inherits the section's rounded-b too so
+                        // the colour band fully encloses it.
+                        closed && 'rounded-b-lg',
                       )}
-                      onVariantChange={(variationId, v) =>
-                        setVariant(variationId, field.id, v)
-                      }
-                      variantsExpanded={expandedVariants.has(field.id)}
-                      onToggleVariants={() =>
-                        setExpandedVariants((prev) => {
-                          const next = new Set(prev)
-                          if (next.has(field.id)) next.delete(field.id)
-                          else next.add(field.id)
-                          return next
-                        })
-                      }
-                      expanded={expandedFields.has(field.id)}
-                      onToggleExpanded={() => toggleExpanded(field.id)}
-                      unsatisfiedChannels={fieldUnsatisfied}
-                    />
-                  )
-                })}
-              </FieldGroupSection>
-            )
-          })}
+                    >
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {closed ? (
+                          <ChevronRight
+                            className="w-3.5 h-3.5 flex-shrink-0 opacity-70"
+                            aria-hidden
+                          />
+                        ) : (
+                          <ChevronDown
+                            className="w-3.5 h-3.5 flex-shrink-0 opacity-70"
+                            aria-hidden
+                          />
+                        )}
+                        <span className="text-md font-semibold">
+                          {bucket.groupLabel}
+                        </span>
+                        <span className="text-sm tabular-nums opacity-80">
+                          {bucket.fields.length} field
+                          {bucket.fields.length === 1 ? '' : 's'}
+                        </span>
+                        {dirtyCount > 0 && (
+                          <span
+                            aria-label={`${dirtyCount} unsaved field${dirtyCount === 1 ? '' : 's'} in ${bucket.groupLabel}`}
+                            title={`${dirtyCount} unsaved field${dirtyCount === 1 ? '' : 's'}`}
+                            className="ml-1 inline-block w-1.5 h-1.5 rounded-full bg-amber-500 dark:bg-amber-400"
+                          />
+                        )}
+                      </div>
+                      {/* AG.8 — Optional group description from Amazon's
+                          __propertyGroups metadata. One-line subtitle
+                          under the title so operators get the group's
+                          purpose without hovering or clicking. */}
+                      {bucket.groupDescription && (
+                        <div className="text-xs opacity-70 line-clamp-1 pl-5">
+                          {bucket.groupDescription}
+                        </div>
+                      )}
+                    </button>
+                    {!closed && (
+                      <div
+                        id={panelId}
+                        className="p-3 space-y-2 bg-white/60 dark:bg-slate-900/60 rounded-b-lg"
+                      >
+                        {bucket.fields.map((field) => renderFieldCard(field))}
+                      </div>
+                    )}
+                  </section>
+                )
+              })
+            }
+
+            // Default path (eBay, Shopify, loading, fallback)
+            return groupFields(manifest.fields).map((group) => {
+              const groupIds = new Set(group.fields.map((f) => f.id))
+              const requiredCount = group.fields.filter((f) =>
+                f.requiredFor.includes(channelKey),
+              ).length
+              const unsatCount = unsatisfied.filter((u) =>
+                groupIds.has(u.id),
+              ).length
+              const filledCount = group.fields.filter(
+                (f) => !isEmpty(values[f.id]),
+              ).length
+              return (
+                <FieldGroupSection
+                  key={group.name}
+                  name={group.name}
+                  count={group.fields.length}
+                  requiredCount={requiredCount}
+                  unsatisfiedCount={unsatCount}
+                  filledCount={filledCount}
+                  defaultExpanded={
+                    requiredCount > 0 || unsatCount > 0 || filledCount > 0
+                  }
+                  headerAction={
+                    siblings.length > 1 ? (
+                      <CopyFromSiblingMenu
+                        label="Copy from"
+                        compact
+                        activeChannelKey={channelKey}
+                        siblings={siblings}
+                        countSiblingValues={(sourceKey) =>
+                          countSiblingValues(
+                            sourceKey,
+                            group.fields.map((f) => f.id),
+                          )
+                        }
+                        onPick={(sourceKey) =>
+                          copyFromSibling(
+                            sourceKey,
+                            group.fields.map((f) => f.id),
+                          )
+                        }
+                      />
+                    ) : undefined
+                  }
+                >
+                  {group.fields.map((field) => renderFieldCard(field))}
+                </FieldGroupSection>
+              )
+            })
+          })()}
         </div>
       )}
 

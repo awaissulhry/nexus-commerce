@@ -508,6 +508,11 @@ export default function ChannelListingTab({
       )}
 
       {/* ── Schema-driven editor (Q.2 + Q.3) ──────────────────── */}
+      {/* AG.2 — amazonGrouping is set only for the Amazon channel
+          tab so ChannelFieldEditor pulls the per-marketplace flat-file
+          manifest and layers grouped coloured sections on top of the
+          existing field rendering. eBay / Shopify pass undefined and
+          keep their current ungrouped flow untouched. */}
       <ChannelFieldEditor
         key={activeProductId}
         productId={activeProductId}
@@ -524,6 +529,15 @@ export default function ChannelListingTab({
         bindFlushAll={(fn) => {
           flushRef.current = fn
         }}
+        amazonGrouping={
+          channel === 'AMAZON'
+            ? {
+                marketplace,
+                productType:
+                  (product?.productType as string | null | undefined) ?? null,
+              }
+            : undefined
+        }
       />
 
       {/* ── Publish review modal ───────────────────────────────── */}
