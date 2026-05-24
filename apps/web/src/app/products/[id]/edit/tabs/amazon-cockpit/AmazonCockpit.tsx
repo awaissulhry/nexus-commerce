@@ -38,7 +38,6 @@ import {
   Hash,
   Truck,
   AlertOctagon,
-  FileBadge,
 } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
@@ -59,6 +58,7 @@ import HealthPanel from './health/HealthPanel'
 import { computeHealthScore, type JumpTarget } from './health/computeHealthScore'
 import VariationMatrix from './variations/VariationMatrix'
 import CategoryCard from './category/CategoryCard'
+import AplusCard from './aplus/AplusCard'
 import { getBackendUrl } from '@/lib/backend-url'
 
 interface MarketInfo {
@@ -494,16 +494,11 @@ export default function AmazonCockpit(props: Props) {
           phase="AC.5"
           value={`${composed.galleryUrls.value.length}/9 images in gallery`}
         />
-        <PlaceholderCard
-          targetId="aplus"
-          icon={<FileBadge className="w-4 h-4" />}
-          title="A+ Content"
-          phase="AC.8"
-          value={
-            composed.aplusSummary.moduleCount > 0
-              ? `${composed.aplusSummary.moduleCount} modules · ${composed.aplusSummary.approvalStatus}${composed.aplusSummary.brandStoryAttached ? ' · Brand Story attached' : ''}`
-              : 'No A+ modules attached — opportunity'
-          }
+        <AplusCard
+          asin={composed.asin.value}
+          brand={composed.brand.value}
+          marketplace={marketInfo.code}
+          onJumpToClassic={() => handleJumpTo('classic')}
         />
         <PlaceholderCard
           targetId="pricing"

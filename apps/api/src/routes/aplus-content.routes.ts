@@ -84,6 +84,10 @@ const aPlusContentRoutes: FastifyPluginAsync = async (fastify) => {
       brand?: string
       search?: string
       limit?: string
+      /** AC.8 — restrict to content attached to a specific ASIN. The
+       *  Listing Cockpit uses this to render the per-product A+ tile
+       *  without falling back to client-side filter-of-the-whole-list. */
+      asin?: string
     }
     const limit = Math.min(
       Math.max(parseInt(q.limit ?? '100', 10) || 100, 1),
@@ -93,6 +97,9 @@ const aPlusContentRoutes: FastifyPluginAsync = async (fastify) => {
     if (q.marketplace) where.marketplace = q.marketplace
     if (q.status && VALID_STATUSES.has(q.status)) where.status = q.status
     if (q.brand) where.brand = q.brand
+    if (q.asin?.trim()) {
+      where.asinAttachments = { some: { asin: q.asin.trim() } }
+    }
     if (q.search?.trim()) {
       const s = q.search.trim()
       where.OR = [
