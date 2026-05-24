@@ -30,6 +30,8 @@ import {
   ExternalLink,
   Loader2,
   RefreshCw,
+  Sparkles,
+  AlertCircle,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -59,6 +61,24 @@ interface Response {
   marketplace: string | null
   active: SuppressionRow[]
   resolved: SuppressionRow[]
+}
+
+// AC.10.2 — POST /listings/:id/diagnose-suppression response shape.
+interface DiagnoseResponse {
+  suppressionId: string
+  diagnosis: {
+    explanation: string | null
+    rootCause: string | null
+    suggestedFix: string[]
+    confidence: 'high' | 'medium' | 'low' | null
+  }
+  provider: { name: string; model: string; costUSD: number | null }
+}
+
+interface DiagnosisResult {
+  diagnosis?: DiagnoseResponse['diagnosis']
+  provider?: DiagnoseResponse['provider']
+  error?: string
 }
 
 interface Props {
@@ -139,6 +159,14 @@ export default function SuppressionCard({
   const [resolvedOpen, setResolvedOpen] = useState(false)
   const [resolvingId, setResolvingId] = useState<string | null>(null)
   const [tick, setTick] = useState(0)
+  // AC.10.2 — per-suppression AI diagnose state. Keyed by suppression
+  // id so multiple rows can each hold their own result without
+  // colliding. Reuses the V.3 POST /listings/:id/diagnose-suppression
+  // endpoint that the syndication drawer already calls.
+  const [diagnoseBusyId, setDiagnoseBusyId] = useState<string | null>(null)
+  const [diagnoses, setDiagnoses] = useState<
+    Record<string, DiagnosisResult>
+  >({})
 
   useEffect(() => {
     let cancelled = false
@@ -162,6 +190,45 @@ export default function SuppressionCard({
       cancelled = true
     }
   }, [productId, marketplace, tick])
+
+  async function handleDiagnose(suppressionId: string, listingId: string) {
+    setDiagnoseBusyId(suppressionId)
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/listings/${encodeURIComponent(listingId)}/diagnose-suppression`,
+        {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: '{}',
+        },
+      )
+      if (!res.ok) {
+        const body = await res.json().catch(() => null)
+        throw new Error(body?.error ?? `HTTP ${res.status}`)
+      }
+      const json = (await res.json()) as DiagnoseResponse
+      setDiagnoses((d) => ({
+        ...d,
+        [suppressionId]: {
+          diagnosis: json.diagnosis,
+          provider: json.provider,
+        },
+      }))
+      announce(
+        `AI diagnosis ready: ${json.diagnosis.rootCause ?? 'unspecified'}`,
+      )
+    } catch (e) {
+      setDiagnoses((d) => ({
+        ...d,
+        [suppressionId]: {
+          error: e instanceof Error ? e.message : String(e),
+        },
+      }))
+    } finally {
+      setDiagnoseBusyId(null)
+    }
+  }
 
   async function handleResolve(id: string) {
     setResolvingId(id)
@@ -372,6 +439,22 @@ export default function SuppressionCard({
                       </button>
                       <button
                         type="button"
+                        onClick={() =>
+                          handleDiagnose(s.id, s.channelListing.id)
+                        }
+                        disabled={diagnoseBusyId === s.id}
+                        className="inline-flex items-center gap-1 h-6 px-2 rounded text-[10.5px] border border-purple-200 dark:border-purple-700 bg-purple-50 dark:bg-purple-950/30 text-purple-700 dark:text-purple-300 hover:bg-purple-100 dark:hover:bg-purple-950/50"
+                        title="Ask the AI provider to explain this suppression and propose fixes"
+                      >
+                        {diagnoseBusyId === s.id ? (
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                        ) : (
+                          <Sparkles className="w-3 h-3" />
+                        )}{' '}
+                        Diagnose
+                      </button>
+                      <button
+                        type="button"
                         onClick={() => handleResolve(s.id)}
                         disabled={resolvingId === s.id}
                         className="inline-flex items-center gap-1 h-6 px-2 rounded text-[10.5px] border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
@@ -385,6 +468,13 @@ export default function SuppressionCard({
                         Mark resolved
                       </button>
                     </div>
+                    {/* AC.10.2 — inline AI diagnosis result. Only
+                        renders for rows the operator clicked
+                        Diagnose on; multiple rows can hold
+                        independent results. */}
+                    {diagnoses[s.id] && (
+                      <DiagnosisPanel result={diagnoses[s.id]!} />
+                    )}
                   </div>
                 </div>
               </li>
@@ -439,6 +529,77 @@ export default function SuppressionCard({
         Live data via HB.11 SP-API defect ingest. AC.10.2 will wire
         the in-cockpit AI diagnose flow (POST /listings/:id/diagnose-suppression).
       </div>
+    </div>
+  )
+}
+
+// AC.10.2 — Inline AI diagnosis result panel.
+//
+// Renders the V.3 endpoint's response: explanation paragraph, root-
+// cause pill, ordered suggested-fix list, confidence chip, and a
+// small provider/cost footer so the operator knows what they paid
+// for. Error case folds into a single rose line.
+function DiagnosisPanel({ result }: { result: DiagnosisResult }) {
+  if (result.error) {
+    return (
+      <div className="mt-2 rounded border border-rose-200 dark:border-rose-800 bg-rose-50 dark:bg-rose-950/30 p-2 inline-flex items-start gap-1.5 text-[11px] text-rose-700 dark:text-rose-400">
+        <AlertCircle className="w-3 h-3 mt-0.5 flex-shrink-0" />
+        <span>{result.error}</span>
+      </div>
+    )
+  }
+  const d = result.diagnosis
+  if (!d) return null
+  const confidenceTone: Record<string, string> = {
+    high: 'bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300',
+    medium: 'bg-amber-100 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300',
+    low: 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400',
+  }
+  return (
+    <div className="mt-2 rounded border border-purple-200 dark:border-purple-800 bg-purple-50/60 dark:bg-purple-950/20 p-2 space-y-1.5">
+      <div className="inline-flex items-center gap-1.5 flex-wrap">
+        <Sparkles className="w-3 h-3 text-purple-600 dark:text-purple-400" />
+        <span className="text-[10.5px] font-semibold uppercase tracking-wide text-purple-700 dark:text-purple-300">
+          AI diagnosis
+        </span>
+        {d.rootCause && (
+          <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-purple-100 dark:bg-purple-950/40 text-purple-800 dark:text-purple-200 text-[10px] font-medium">
+            {d.rootCause}
+          </span>
+        )}
+        {d.confidence && (
+          <span
+            className={cn(
+              'inline-flex items-center px-1.5 py-0.5 rounded text-[9.5px] font-bold uppercase tracking-wide',
+              confidenceTone[d.confidence] ?? confidenceTone.low,
+            )}
+          >
+            {d.confidence} confidence
+          </span>
+        )}
+      </div>
+      {d.explanation && (
+        <p className="text-[11.5px] text-slate-700 dark:text-slate-300 leading-snug">
+          {d.explanation}
+        </p>
+      )}
+      {d.suggestedFix.length > 0 && (
+        <ol className="list-decimal list-outside pl-4 space-y-0.5 text-[11.5px] text-slate-700 dark:text-slate-300">
+          {d.suggestedFix.map((step, i) => (
+            <li key={i} className="leading-snug">
+              {step}
+            </li>
+          ))}
+        </ol>
+      )}
+      {result.provider && (
+        <div className="text-[9.5px] text-slate-400 dark:text-slate-500 font-mono pt-1 border-t border-purple-100 dark:border-purple-900">
+          {result.provider.name} · {result.provider.model}
+          {result.provider.costUSD != null
+            ? ` · $${result.provider.costUSD.toFixed(4)}`
+            : ''}
+        </div>
+      )}
     </div>
   )
 }
