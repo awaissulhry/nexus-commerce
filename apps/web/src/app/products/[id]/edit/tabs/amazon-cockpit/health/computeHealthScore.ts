@@ -32,6 +32,8 @@ export type JumpTarget =
   | 'pricing'
   | 'fulfillment'
   | 'compliance'
+  | 'suppression'     // AC.10 card
+  | 'publish'         // AC.12 PublishCard
   | 'classic'         // catch-all → open the transitional pass-through
 
 export interface HealthCheck {

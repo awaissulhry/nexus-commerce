@@ -60,6 +60,7 @@ import AplusCard from './aplus/AplusCard'
 import PricingCard from './pricing/PricingCard'
 import SuppressionCard from './suppression/SuppressionCard'
 import AutoFillCard from './autofill/AutoFillCard'
+import PublishCard from './publish/PublishCard'
 import { getBackendUrl } from '@/lib/backend-url'
 
 interface MarketInfo {
@@ -397,8 +398,8 @@ export default function AmazonCockpit(props: Props) {
               <Button
                 size="sm"
                 icon={<Send className="w-3.5 h-3.5" />}
-                disabled
-                title="Coming in AC.12 — until then use the classic Publish below"
+                onClick={() => handleJumpTo('publish')}
+                title="Pick markets + submit via JSON_LISTINGS_FEED"
               >
                 Publish
               </Button>
@@ -443,6 +444,14 @@ export default function AmazonCockpit(props: Props) {
           </div>
         )}
       </Card>
+
+      {/* ── AC.12 — Publish flow (full-width, top of cards zone) ──── */}
+      <PublishCard
+        productId={product.id}
+        activeMarketplace={marketInfo.code}
+        activeHealth={report}
+        markets={chips}
+      />
 
       {/* ── AC.11 — Smart auto-fill bar (full-width, top of cards zone) ── */}
       <AutoFillCard
