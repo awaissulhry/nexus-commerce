@@ -437,7 +437,14 @@ export default function AmazonFlatFileClient({
   const [draftBanner, setDraftBanner] = useState<Row[] | null>(null)
 
   const [loading, setLoading] = useState(false)
-  const [loadError, setLoadError] = useState<string | null>(null)
+  // FF-MS.6 — carry which (mp, pt) failed and the HTTP status so the banner
+  // can render a market-specific message + tailored copy for 429/5xx/network
+  // errors. mp/pt are optional: load failures populate them and unlock the
+  // Retry button; operation errors (import/submit/pull) leave them undefined
+  // and the banner falls back to a plain message + dismiss.
+  // Cleared at the start of every loadData() call.
+  type LoadError = { message: string; status?: number; mp?: string; pt?: string; at: number }
+  const [loadError, setLoadError] = useState<LoadError | null>(null)
 
   // Groups the user has explicitly CLOSED — persisted in localStorage.
   // Everything not in this set is open by default (including new groups
@@ -1570,7 +1577,12 @@ export default function AmazonFlatFileClient({
         // Schema refresh — update manifest only, keep current rows unchanged.
         const mRes = await fetch(`${backend}/api/amazon/flat-file/template?${qs}`, { signal: ctrl.signal })
         if (reqId !== loadReqIdRef.current) return
-        if (!mRes.ok) { const e = await mRes.json().catch(() => ({})); throw new Error(e.error ?? `HTTP ${mRes.status}`) }
+        if (!mRes.ok) {
+          const body = await mRes.json().catch(() => ({}))
+          const e = new Error(body.error ?? `HTTP ${mRes.status}`) as Error & { status?: number }
+          e.status = mRes.status
+          throw e
+        }
         const manifest: Manifest = await mRes.json()
         setManifest(manifest)
         // Refresh the cached manifest without disturbing the cached rows.
@@ -1585,7 +1597,12 @@ export default function AmazonFlatFileClient({
           fetch(`${backend}/api/amazon/flat-file/rows?${rowsQs}`, { signal: ctrl.signal }),
         ])
         if (reqId !== loadReqIdRef.current) return
-        if (!mRes.ok) { const e = await mRes.json().catch(() => ({})); throw new Error(e.error ?? `HTTP ${mRes.status}`) }
+        if (!mRes.ok) {
+          const body = await mRes.json().catch(() => ({}))
+          const e = new Error(body.error ?? `HTTP ${mRes.status}`) as Error & { status?: number }
+          e.status = mRes.status
+          throw e
+        }
         const manifest: Manifest = await mRes.json()
         setManifest(manifest)
         const saved = fromDB ? null : loadSavedRows(mp, pt)
@@ -1613,7 +1630,12 @@ export default function AmazonFlatFileClient({
     } catch (e: any) {
       if (e?.name === 'AbortError') return
       if (reqId !== loadReqIdRef.current) return
-      setLoadError(e.message ?? 'Failed to load')
+      setLoadError({
+        message: e?.message ?? 'Failed to load',
+        status: typeof e?.status === 'number' ? e.status : undefined,
+        mp, pt,
+        at: Date.now(),
+      })
     } finally {
       if (reqId === loadReqIdRef.current) setLoading(false)
     }
@@ -1932,7 +1954,7 @@ export default function AmazonFlatFileClient({
       }
     }
     setFeedEntries(entries)
-    if (errors.length) setLoadError(errors.join(' · '))
+    if (errors.length) setLoadError({ message: errors.join(' · '), at: Date.now() })
 
     // Save submission records to history
     const now = new Date().toISOString()
@@ -2038,7 +2060,7 @@ export default function AmazonFlatFileClient({
           updateSubmissionRecord(entry.feedId, { status: entry.status as 'IN_QUEUE' | 'PROCESSING' })
         }
       }
-    } catch (e: any) { setLoadError(e.message) }
+    } catch (e: any) { setLoadError({ message: e?.message ?? 'Polling failed', at: Date.now() }) }
     finally { setPolling(false) }
   }, [feedEntries, marketplace, productType, rows, updateSubmissionRecord, syncToPlatform])
 
@@ -2052,7 +2074,7 @@ export default function AmazonFlatFileClient({
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ content, productType, marketplace }),
     })
-    if (!res.ok) { const e = await res.json().catch(() => ({})); setLoadError(e.error ?? 'Import failed'); return }
+    if (!res.ok) { const e = await res.json().catch(() => ({})); setLoadError({ message: e.error ?? 'Import failed', at: Date.now() }); return }
     const data = await res.json()
     const imported: Row[] = (data.rows ?? []).map((r: any) => ({ ...r, _dirty: true, _isNew: !r._productId }))
     pushSnapshot()
@@ -2142,7 +2164,7 @@ export default function AmazonFlatFileClient({
       setRows(copiedRows)
       setFeedEntries([])
     } catch (e: any) {
-      setLoadError(e.message ?? 'Copy failed')
+      setLoadError({ message: e?.message ?? 'Copy failed', at: Date.now() })
     }
   }, [manifest, rows, productType])
 
@@ -2173,7 +2195,7 @@ export default function AmazonFlatFileClient({
     }
 
     if (!targetSkus.length) {
-      setLoadError('No SKUs to pull')
+      setLoadError({ message: 'No SKUs to pull', at: Date.now() })
       return
     }
 
@@ -2225,7 +2247,7 @@ export default function AmazonFlatFileClient({
       })
       setPullDiffOpen(true)
     } catch (e: any) {
-      setLoadError(e?.message ?? 'Pull from Amazon failed')
+      setLoadError({ message: e?.message ?? 'Pull from Amazon failed', at: Date.now() })
     } finally {
       setPulling(false)
       setPullProgress(null)
@@ -2953,15 +2975,68 @@ export default function AmazonFlatFileClient({
           )}
         </div>
 
-        {/* Error */}
-        {loadError && (
-          <div className="px-4 py-1.5 bg-red-50 dark:bg-red-950/30 border-t border-red-200 dark:border-red-900 flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2 text-xs text-red-700 dark:text-red-400">
-              <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />{loadError}
+        {/* Error — FF-MS.6: when a load failed, identifies the failed market,
+            tailors copy per status code, and offers an inline Retry. For
+            operation errors (import/submit/pull) it falls back to a plain
+            message + dismiss. */}
+        {loadError && (() => {
+          const { status, mp: errMp, pt: errPt, message } = loadError
+          const isLoadFailure = !!(errMp && errPt)
+          const hint = !isLoadFailure
+            ? null
+            : status === 429
+              ? 'Amazon is rate-limiting our requests. Wait a few seconds and retry.'
+              : status === 401 || status === 403
+              ? 'Auth expired — re-connect this marketplace in Settings.'
+              : status === 404
+              ? 'This product type isn’t configured for this marketplace.'
+              : status && status >= 500
+              ? 'Amazon server error. This is usually transient — retry in a moment.'
+              : status == null
+              ? 'Network error — check your connection.'
+              : null
+          return (
+            <div
+              role="alert"
+              className="px-4 py-1.5 bg-red-50 dark:bg-red-950/30 border-t border-red-200 dark:border-red-900 flex items-center justify-between gap-3"
+            >
+              <div className="flex items-center gap-2 text-xs text-red-700 dark:text-red-400 min-w-0">
+                <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+                <span className="truncate">
+                  {isLoadFailure ? (
+                    <>
+                      Failed to load <strong>{errMp} · {errPt}</strong>
+                      {hint && <span className="ml-1 text-red-600/80 dark:text-red-300/80">— {hint}</span>}
+                      <span className="ml-1 text-red-500/60 dark:text-red-400/60">({message})</span>
+                    </>
+                  ) : (
+                    message
+                  )}
+                </span>
+              </div>
+              <div className="flex items-center gap-1 flex-shrink-0">
+                {isLoadFailure && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    loading={loading && marketplace === errMp && productType === errPt}
+                    onClick={() => { setLoadError(null); void loadData(errMp!, errPt!) }}
+                  >
+                    <RefreshCw className="w-3 h-3 mr-1" /> Retry
+                  </Button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setLoadError(null)}
+                  aria-label="Dismiss error"
+                  className="p-1"
+                >
+                  <X className="w-4 h-4 text-red-400 hover:text-red-600" />
+                </button>
+              </div>
             </div>
-            <button onClick={() => setLoadError(null)}><X className="w-4 h-4 text-red-400 hover:text-red-600" /></button>
-          </div>
-        )}
+          )
+        })()}
 
         {/* Draft restore banner — shown when localStorage has unsaved edits
             from a previous session that differ from the DB rows loaded now. */}
@@ -3565,7 +3640,7 @@ export default function AmazonFlatFileClient({
               setPullDiffData({ pulledRows, selectedColumns: cols, skusRequested: skus, skusReturned: pulledRows.length, jobId })
               setPullDiffOpen(true)
             } catch (e: any) {
-              setLoadError(e?.message ?? 'Re-pull failed')
+              setLoadError({ message: e?.message ?? 'Re-pull failed', at: Date.now() })
             } finally {
               setPulling(false)
               setPullProgress(null)
