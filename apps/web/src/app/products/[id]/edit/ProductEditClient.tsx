@@ -18,15 +18,16 @@
  * first and link the discussion in the comment.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { cloneElement, isValidElement, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import {
   ChevronLeft,
   AlertCircle,
   CheckCircle2,
+  ExternalLink,
   FileText,
-  LayoutGrid,
   LifeBuoy,
+  SlidersHorizontal,
   Loader2,
   Save,
   X,
@@ -34,6 +35,14 @@ import {
 import { useDirtyRegistry } from './_shared/useDirtyRegistry'
 import { useEditorShortcuts } from './_shared/useEditorShortcuts'
 import { useNavigationGuard } from './_shared/useNavigationGuard'
+import { useHeaderPrefetch } from './useHeaderPrefetch'
+import {
+  useTabPrefs,
+  type TabKey,
+  type TabPref,
+} from './_shared/useTabPrefs'
+import TabPreferencesModal from './_shared/TabPreferencesModal'
+import { markClick as markNewTabClick } from '@/lib/perf/markNewTabClick'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { IconButton } from '@/components/ui/IconButton'
@@ -42,7 +51,6 @@ import { useToast } from '@/components/ui/Toast'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import ListOnChannelDropdown from './ListOnChannelDropdown'
 import MasterDataTab from './tabs/MasterDataTab'
-import GlobalTab from './tabs/GlobalTab'
 import { AnalyticsTab } from './tabs/AnalyticsTab'
 import { AdsTab } from './tabs/AdsTab'
 import { TimelineTab } from './tabs/TimelineTab'
@@ -104,6 +112,20 @@ interface Props {
 
 const SINGLE_STORE_CHANNELS = new Set(['SHOPIFY', 'WOOCOMMERCE', 'ETSY'])
 const CHANNEL_ORDER = ['AMAZON', 'EBAY', 'SHOPIFY', 'WOOCOMMERCE', 'ETSY']
+
+// EH.1 — anchor styling that mirrors Button variant=ghost size=sm. Kept as
+// a string constant so all three "open in new tab" header anchors stay in
+// sync without forking the Button component for asChild support.
+// EH.9 — whitespace-nowrap so the label + ↗ glyph never wrap onto two
+// lines on narrow viewports (which would jump the anchor's hit target
+// in a way that triggers double-clicks).
+const headerOpenInNewTabClass =
+  'group inline-flex items-center justify-center font-medium border rounded-md transition-colors ' +
+  'h-7 px-2.5 text-base gap-1 whitespace-nowrap ' +
+  'bg-transparent hover:bg-slate-100 text-slate-700 border-transparent ' +
+  'dark:hover:bg-slate-800 dark:text-slate-300 ' +
+  'focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 ' +
+  'focus-visible:ring-offset-1 focus-visible:ring-offset-white dark:focus-visible:ring-offset-slate-900'
 
 /** W5.1 — channel readiness scoring (Salsify cornerstone).
  *
@@ -180,6 +202,17 @@ export default function ProductEditClient({
   const searchParams = useSearchParams()
   const { t } = useTranslations()
   const confirm = useConfirm()
+
+  // EH.7 — Pre-warm the API caches that the Datasheet / Flat File /
+  // Recover new-tab anchors will hit. Mount-warm kicks off on first
+  // render at low priority; the returned hover handlers fire at
+  // normal priority on mouseenter/focus.
+  const headerPrefetch = useHeaderPrefetch({
+    productId: product.id,
+    productType: (product.productType as string | null) ?? null,
+    familyId: ((product as any).parentId as string | undefined) ?? product.id,
+    marketplace: 'IT',
+  })
   // U.30 — read initial tab from `?tab=<x>`. HierarchyLens deep-links
   // to /products/${id}/edit?tab=variations; pre-fix the link silently
   // landed on master.
@@ -189,19 +222,38 @@ export default function ProductEditClient({
   // page navigation.
   const [topTab, setTopTab] = useState<TopTab>(() => {
     const initial = searchParams?.get('tab')
+    // TC.2 — `?tab=global` is the old (pre-TC) URL for the now-merged
+    // Master tab. Quietly map it to 'master' so bookmarks + deep
+    // links from elsewhere don't 404 the operator into a dead tab.
+    if (initial === 'global') return 'master'
     return (initial as TopTab) || 'master'
   })
 
-  // PE.1 — hide low-traffic tabs by default; persisted to localStorage
-  const [showAllTabs, setShowAllTabs] = useState<boolean>(() => {
-    try { return localStorage.getItem('product-edit:show-all-tabs') === '1' } catch { return false }
-  })
+  // TC.6 — visibility + order driven by useTabPrefs (replaces the
+  // legacy binary `showAllTabs` toggle persisted as
+  // `product-edit:show-all-tabs`). TC.8 migrates that legacy key.
+  // TC.7 — Reset-to-defaults is owned by TabPreferencesModal via its
+  // own draft state; the hook's resetToDefaults export stays available
+  // for any future programmatic caller (e.g. an admin "reset all
+  // preferences" tool) but isn't needed here.
+  const { orderedPrefs, setOrderedPrefs } = useTabPrefs()
+  // TC.6 — Customize Tabs modal open/close state.
+  const [tabsModalOpen, setTabsModalOpen] = useState(false)
   // W14.1 — sync state ← URL on every navigation. useState's function
   // initializer runs once, so without this effect a router.push to
   // the same path with a different ?tab would silently no-op. Also
   // handles Cmd+K "Jump to Pricing" → router.replace(?tab=pricing).
   useEffect(() => {
     const next = searchParams?.get('tab')
+    // TC.2 — same legacy shim as the initial-state seed: `?tab=global`
+    // resolves to `master`. We also canonicalise the URL via goToTab
+    // so the address bar matches what the operator actually sees
+    // (no stale ?tab=global hanging around in history).
+    if (next === 'global') {
+      if (topTab !== 'master') setTopTab('master')
+      goToTab('master')
+      return
+    }
     if (next && next !== topTab) {
       setTopTab(next as TopTab)
     }
@@ -552,28 +604,58 @@ export default function ProductEditClient({
     return (marketplaces[c]?.length ?? 0) > 0
   })
 
+  // TC.6 — visible tabs in display order, derived from useTabPrefs
+  // and filtered by what's actually available for this product:
+  //   - Channel tabs (AMAZON/EBAY/SHOPIFY/WOOCOMMERCE/ETSY) only
+  //     render when the channel exists for this product.
+  //   - The currently active tab is always included even if hidden
+  //     in prefs (session-only safety) so URL-deep-linked operators
+  //     don't lose their place.
+  const orderedChannelsSet = useMemo(
+    () => new Set<string>(orderedChannels),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [orderedChannels.join(',')],
+  )
+  const isChannelKey = (k: string) =>
+    k === 'AMAZON' || k === 'EBAY' || k === 'SHOPIFY' || k === 'WOOCOMMERCE' || k === 'ETSY'
+  const visiblePrefs = useMemo<TabPref[]>(() => {
+    const filtered = orderedPrefs.filter((p) => {
+      if (isChannelKey(p.key) && !orderedChannelsSet.has(p.key)) return false
+      return p.visible
+    })
+    // Active-tab safety: if topTab isn't in the filtered set, splice
+    // it in at its prefs-position so the operator can still see where
+    // they are. Channel tabs that don't exist on this product stay
+    // excluded (they'd render no body anyway).
+    if (topTab && !filtered.some((p) => p.key === topTab)) {
+      const isCurrentChannelMissing = isChannelKey(topTab) && !orderedChannelsSet.has(topTab)
+      if (!isCurrentChannelMissing) {
+        const idx = orderedPrefs.findIndex((p) => p.key === topTab)
+        const synthetic: TabPref = { key: topTab as TabKey, visible: true }
+        if (idx < 0) {
+          filtered.push(synthetic)
+        } else {
+          // Insert at a position roughly matching its prefs index.
+          let insertAt = 0
+          for (let i = 0; i < idx; i++) {
+            if (filtered.some((p) => p.key === orderedPrefs[i].key)) insertAt++
+          }
+          filtered.splice(insertAt, 0, synthetic)
+        }
+      }
+    }
+    return filtered
+  }, [orderedPrefs, orderedChannelsSet, topTab])
+
   // W14.3 — flat list of tab keys in display order. Powers arrow-key
   // navigation (ArrowLeft/Right cycle through; Home/End jump to ends)
   // and the `aria-controls` / `aria-labelledby` pairing between each
-  // tab button and its panel below. Variations only renders when the
-  // product is a parent, so it's conditionally included.
-  const tabKeys = useMemo<string[]>(() => {
-    const base = [
-      'master',
-      'images',
-      'locales',
-      'seo',
-      'compliance',
-      'workflow',
-      'relations',
-      'activity',
-      'matrix',
-      'analytics',
-      'ads',
-    ]
-    return [...base, ...orderedChannels]
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [orderedChannels.join(',')])
+  // tab button and its panel below. Tracks `visiblePrefs` so cycling
+  // never lands on a hidden tab.
+  const tabKeys = useMemo<string[]>(
+    () => visiblePrefs.map((p) => p.key),
+    [visiblePrefs],
+  )
 
   // W14.4 — mobile tab strip: scroll indicators + auto-scroll active
   // tab into view. Twelve tabs overflow on iPad portrait + every
@@ -673,6 +755,185 @@ export default function ProductEditClient({
     return fallback
   }
 
+  // TC.6 — single render helper that maps a canonical tab key to its
+  // <TopTabButton>. Centralising the per-tab props (label, count,
+  // readiness, dirty source, click handler) keeps the strip layer
+  // declarative — the new render path is just visiblePrefs.map.
+  const renderTopTab = (key: TabKey) => {
+    const isActive = topTab === key
+    const dirty = dirtyByTab[key]
+    switch (key) {
+      case 'master':
+        return (
+          <TopTabButton
+            key={key}
+            tabKey={key}
+            active={isActive}
+            onClick={() => goToTab('master')}
+            dirty={dirty}
+          >
+            {t('products.edit.tab.master')}
+          </TopTabButton>
+        )
+      case 'images':
+        return (
+          <TopTabButton
+            key={key}
+            tabKey={key}
+            active={isActive}
+            onClick={() => goToTab('images')}
+            dirty={dirty}
+          >
+            {t('products.edit.tab.images')}
+          </TopTabButton>
+        )
+      case 'locales':
+        return (
+          <TopTabButton
+            key={key}
+            tabKey={key}
+            active={isActive}
+            onClick={() => goToTab('locales')}
+            dirty={dirty}
+          >
+            {t('products.edit.tab.locales')}
+          </TopTabButton>
+        )
+      case 'seo':
+        return (
+          <TopTabButton
+            key={key}
+            tabKey={key}
+            active={isActive}
+            onClick={() => goToTab('seo')}
+            dirty={dirty}
+          >
+            {t('products.edit.tab.seo')}
+          </TopTabButton>
+        )
+      case 'compliance':
+        return (
+          <TopTabButton
+            key={key}
+            tabKey={key}
+            active={isActive}
+            onClick={() => goToTab('compliance')}
+            dirty={dirty}
+          >
+            {t('products.edit.tab.compliance')}
+          </TopTabButton>
+        )
+      case 'workflow':
+        return (
+          <TopTabButton
+            key={key}
+            tabKey={key}
+            active={isActive}
+            onClick={() => goToTab('workflow')}
+            dirty={dirty}
+          >
+            {t('products.edit.tab.workflow')}
+          </TopTabButton>
+        )
+      case 'relations':
+        return (
+          <TopTabButton
+            key={key}
+            tabKey={key}
+            active={isActive}
+            onClick={() => goToTab('relations')}
+            dirty={dirty}
+          >
+            {t('products.edit.tab.relations')}
+          </TopTabButton>
+        )
+      case 'activity':
+        return (
+          <TopTabButton
+            key={key}
+            tabKey={key}
+            active={isActive}
+            onClick={() => goToTab('activity')}
+            dirty={dirty}
+          >
+            Timeline
+          </TopTabButton>
+        )
+      case 'matrix':
+        return (
+          <TopTabButton
+            key={key}
+            tabKey={key}
+            active={isActive}
+            onClick={() => goToTab('matrix')}
+            count={product.isParent ? childrenList.length : undefined}
+          >
+            Matrix
+          </TopTabButton>
+        )
+      case 'analytics':
+        return (
+          <TopTabButton
+            key={key}
+            tabKey={key}
+            active={isActive}
+            onClick={() => goToTab('analytics')}
+          >
+            Analytics
+          </TopTabButton>
+        )
+      case 'ads':
+        return (
+          <TopTabButton
+            key={key}
+            tabKey={key}
+            active={isActive}
+            onClick={() => goToTab('ads')}
+          >
+            Ads
+          </TopTabButton>
+        )
+      case 'AMAZON':
+      case 'EBAY':
+      case 'SHOPIFY':
+      case 'WOOCOMMERCE':
+      case 'ETSY': {
+        const channel = key
+        const channelListings = clientListings[channel] ?? []
+        const readiness = channelReadiness(channelListings)
+        // W14.5 — sum dirty across every per-channel-marketplace tab
+        // key so the channel button reflects unsaved across all its
+        // markets, not just the active one.
+        let channelDirty = 0
+        for (const [k, n] of Object.entries(dirtyByTab)) {
+          if (k.startsWith(`channel:${channel}:`)) channelDirty += n
+        }
+        return (
+          <TopTabButton
+            key={channel}
+            tabKey={channel}
+            active={isActive}
+            onClick={() => {
+              if (SINGLE_STORE_CHANNELS.has(channel)) {
+                setMarketSelection((s) => ({ ...s, [channel]: 'GLOBAL' }))
+              } else {
+                ensureMarketSelected(channel)
+              }
+              goToTab(channel)
+            }}
+            count={channelListings.length || undefined}
+            readiness={readiness}
+            dirty={channelDirty}
+          >
+            {LABEL_CASE[channel] ?? channel}
+          </TopTabButton>
+        )
+      }
+      default:
+        return null
+    }
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
       {/* ── Header ─────────────────────────────────────────────── */}
@@ -713,54 +974,72 @@ export default function ProductEditClient({
             </div>
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
-            {product.isParent && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => router.push(`/products/${product.id}/matrix`)}
-                title={t('products.edit.matrixTooltip')}
-              >
-                <LayoutGrid className="w-3.5 h-3.5 mr-1.5" />
-                {t('products.edit.matrix')}
-              </Button>
-            )}
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() =>
-                router.push(`/products/${product.id}/datasheet`)
-              }
+            {/* EH.1 — Matrix header button removed. The in-page Matrix tab
+                (above) is the canonical surface; the standalone /matrix route
+                is still reachable via Cmd+K. */}
+            {/* EH.1 — Datasheet / Flat File / Recover now open in a new tab
+                via real <a target="_blank"> anchors so Cmd+Click, middle-click,
+                and right-click "Open in new tab" all work natively, and the
+                /edit context never gets blown away by a router.push. */}
+            <a
+              href={`/products/${product.id}/datasheet`}
+              target="_blank"
+              rel="noopener noreferrer"
               title={t('products.edit.datasheetTooltip')}
+              onMouseEnter={headerPrefetch.onHoverDatasheet}
+              onFocus={headerPrefetch.onHoverDatasheet}
+              onClick={() => markNewTabClick('datasheet', product.id)}
+              onAuxClick={() => markNewTabClick('datasheet', product.id)}
+              className={headerOpenInNewTabClass}
             >
-              <FileText className="w-3.5 h-3.5 mr-1.5" />
+              <FileText className="w-3.5 h-3.5 mr-1.5" aria-hidden />
               {t('products.edit.datasheet')}
-            </Button>
+              <ExternalLink className="w-3 h-3 ml-1 opacity-60 group-hover:opacity-100 transition-opacity" aria-hidden />
+              <span className="sr-only">{t('products.edit.opensInNewTab')}</span>
+            </a>
             {/* CL.1 — Bulk Edit button + /edit/bulk route removed.
                 MatrixTab covers price/qty bulk edits inline; the
                 channel sub-tabs handle marketplace attribute editing.
                 The standalone bulk page (2,121 lines) was unused. */}
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                const pt = (product.productType as string | null) ?? 'OUTERWEAR'
-                const familyId = (product as any).parentId ?? product.id
-                router.push(`/products/amazon-flat-file?familyId=${familyId}&productType=${pt}&marketplace=IT`)
-              }}
-              title="Open this product family in the Amazon Flat File Editor"
-            >
-              <FileSpreadsheet className="w-3.5 h-3.5 mr-1.5" />
-              Flat File
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => router.push(`/products/${product.id}/recover`)}
+            {(() => {
+              const pt = (product.productType as string | null) ?? 'OUTERWEAR'
+              const familyId = (product as any).parentId ?? product.id
+              const href = `/products/amazon-flat-file?familyId=${familyId}&productType=${pt}&marketplace=IT`
+              return (
+                <a
+                  href={href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title={t('products.edit.flatFileTooltip')}
+                  onMouseEnter={headerPrefetch.onHoverFlatFile}
+                  onFocus={headerPrefetch.onHoverFlatFile}
+                  onClick={() => markNewTabClick('flatFile', familyId)}
+                  onAuxClick={() => markNewTabClick('flatFile', familyId)}
+                  className={headerOpenInNewTabClass}
+                >
+                  <FileSpreadsheet className="w-3.5 h-3.5 mr-1.5" aria-hidden />
+                  {t('products.edit.flatFile')}
+                  <ExternalLink className="w-3 h-3 ml-1 opacity-60 group-hover:opacity-100 transition-opacity" aria-hidden />
+                  <span className="sr-only">{t('products.edit.opensInNewTab')}</span>
+                </a>
+              )
+            })()}
+            <a
+              href={`/products/${product.id}/recover`}
+              target="_blank"
+              rel="noopener noreferrer"
               title={t('products.edit.recoverTooltip')}
+              onMouseEnter={headerPrefetch.onHoverRecover}
+              onFocus={headerPrefetch.onHoverRecover}
+              onClick={() => markNewTabClick('recover', product.id)}
+              onAuxClick={() => markNewTabClick('recover', product.id)}
+              className={headerOpenInNewTabClass}
             >
-              <LifeBuoy className="w-3.5 h-3.5 mr-1.5" />
+              <LifeBuoy className="w-3.5 h-3.5 mr-1.5" aria-hidden />
               {t('products.edit.recover')}
-            </Button>
+              <ExternalLink className="w-3 h-3 ml-1 opacity-60 group-hover:opacity-100 transition-opacity" aria-hidden />
+              <span className="sr-only">{t('products.edit.opensInNewTab')}</span>
+            </a>
             <ListOnChannelDropdown productId={product.id} />
             <Button
               size="sm"
@@ -827,145 +1106,38 @@ export default function ProductEditClient({
             className="flex items-center -mb-px overflow-x-auto scroll-smooth"
             onKeyDown={onTabListKeyDown}
           >
-            <TopTabButton
-              tabKey="global"
-              active={topTab === 'global'}
-              onClick={() => goToTab('global')}
-              dirty={dirtyByTab.global}
-            >
-              Global
-            </TopTabButton>
-            <TopTabButton
-              tabKey="master"
-              active={topTab === 'master'}
-              onClick={() => goToTab('master')}
-              dirty={dirtyByTab.master}
-            >
-              {t('products.edit.tab.master')}
-            </TopTabButton>
-            <TopTabButton
-              tabKey="images"
-              active={topTab === 'images'}
-              onClick={() => goToTab('images')}
-              dirty={dirtyByTab.images}
-            >
-              {t('products.edit.tab.images')}
-            </TopTabButton>
-            {showAllTabs && (<>
-              <TopTabButton
-                tabKey="locales"
-                active={topTab === 'locales'}
-                onClick={() => goToTab('locales')}
-                dirty={dirtyByTab.locales}
-              >
-                {t('products.edit.tab.locales')}
-              </TopTabButton>
-              <TopTabButton
-                tabKey="seo"
-                active={topTab === 'seo'}
-                onClick={() => goToTab('seo')}
-                dirty={dirtyByTab.seo}
-              >
-                {t('products.edit.tab.seo')}
-              </TopTabButton>
-              <TopTabButton
-                tabKey="compliance"
-                active={topTab === 'compliance'}
-                onClick={() => goToTab('compliance')}
-                dirty={dirtyByTab.compliance}
-              >
-                {t('products.edit.tab.compliance')}
-              </TopTabButton>
-              <TopTabButton
-                tabKey="workflow"
-                active={topTab === 'workflow'}
-                onClick={() => goToTab('workflow')}
-                dirty={dirtyByTab.workflow}
-              >
-                {t('products.edit.tab.workflow')}
-              </TopTabButton>
-              <TopTabButton
-                tabKey="relations"
-                active={topTab === 'relations'}
-                onClick={() => goToTab('relations')}
-                dirty={dirtyByTab.relations}
-              >
-                {t('products.edit.tab.relations')}
-              </TopTabButton>
-              <TopTabButton
-                tabKey="activity"
-                active={topTab === 'activity'}
-                onClick={() => goToTab('activity')}
-                dirty={dirtyByTab.activity}
-              >
-                Timeline
-              </TopTabButton>
-            </>)}
-            <TopTabButton
-              tabKey="matrix"
-              active={topTab === 'matrix'}
-              onClick={() => goToTab('matrix')}
-              count={product.isParent ? childrenList.length : undefined}
-            >
-              Matrix
-            </TopTabButton>
-            <TopTabButton
-              tabKey="analytics"
-              active={topTab === 'analytics'}
-              onClick={() => goToTab('analytics')}
-            >
-              Analytics
-            </TopTabButton>
-            <TopTabButton
-              tabKey="ads"
-              active={topTab === 'ads'}
-              onClick={() => goToTab('ads')}
-            >
-              Ads
-            </TopTabButton>
-            {orderedChannels.map((channel) => {
-              const isActive = topTab === channel
-              const channelListings = clientListings[channel] ?? []
-              const readiness = channelReadiness(channelListings)
-              // W14.5 — sum dirty across every per-channel-marketplace
-              // tab key so the channel button reflects unsaved across
-              // all its markets, not just the active one.
-              let channelDirty = 0
-              for (const [k, n] of Object.entries(dirtyByTab)) {
-                if (k.startsWith(`channel:${channel}:`)) channelDirty += n
+            {/* TC.6 — Strip is now driven by useTabPrefs (visibility +
+                order). The renderTopTab helper maps each canonical key
+                to its TopTabButton with the right label / count /
+                readiness / dirty wiring. Channel tabs that aren't on
+                this product are filtered out at visiblePrefs time.
+                The active-but-hidden case is also handled there so the
+                operator never lands on a missing tab.
+                TC.9 — `p.visible=false` here means the tab is only
+                present because it's the currently active topTab
+                (session-only safety). We clone the rendered element
+                with `pinned={false}` so TopTabButton renders the
+                dashed-border cue. cloneElement avoids editing the
+                13 switch cases just to thread one extra prop. */}
+            {visiblePrefs.map((p) => {
+              const element = renderTopTab(p.key)
+              if (!p.visible && isValidElement(element)) {
+                return cloneElement(element, { pinned: false } as { pinned: boolean })
               }
-              return (
-                <TopTabButton
-                  key={channel}
-                  tabKey={channel}
-                  active={isActive}
-                  onClick={() => {
-                    if (SINGLE_STORE_CHANNELS.has(channel)) {
-                      setMarketSelection((s) => ({ ...s, [channel]: 'GLOBAL' }))
-                    } else {
-                      ensureMarketSelected(channel)
-                    }
-                    goToTab(channel)
-                  }}
-                  count={channelListings.length || undefined}
-                  readiness={readiness}
-                  dirty={channelDirty}
-                >
-                  {LABEL_CASE[channel] ?? channel}
-                </TopTabButton>
-              )
+              return element
             })}
-            {/* Toggle secondary tabs — at end of list */}
+            {/* TC.6 — Customize Tabs button at end of strip. Opens
+                TabPreferencesModal; replaces the legacy binary
+                "+ More tabs / Show less" toggle with a proper
+                visibility + reorder UI. */}
             <button
               type="button"
-              onClick={() => {
-                const next = !showAllTabs
-                setShowAllTabs(next)
-                try { localStorage.setItem('product-edit:show-all-tabs', next ? '1' : '0') } catch {}
-              }}
-              className="flex-shrink-0 px-3 py-2 text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 border-b-2 border-transparent whitespace-nowrap transition-colors"
+              onClick={() => setTabsModalOpen(true)}
+              title={t('products.edit.tabs.customize.openButtonTooltip')}
+              aria-label={t('products.edit.tabs.customize.openButton')}
+              className="flex-shrink-0 ml-1 px-2 py-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 border-b-2 border-transparent whitespace-nowrap transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 rounded"
             >
-              {showAllTabs ? 'Show less ←' : '+ More tabs'}
+              <SlidersHorizontal className="w-4 h-4" aria-hidden />
             </button>
           </div>
         </div>
@@ -997,14 +1169,7 @@ export default function ProductEditClient({
             </IconButton>
           </div>
         )}
-        {topTab === 'global' && (
-          <div role="tabpanel" id="panel-global" aria-labelledby="tab-global">
-            <GlobalTab
-              productId={product.id}
-              onDirtyChange={(count) => setTabDirty('global', count)}
-            />
-          </div>
-        )}
+        {/* TC.2 — Global tab body dispatch dropped; merged into Master. */}
 
         {topTab === 'master' && (
           <div role="tabpanel" id="panel-master" aria-labelledby="tab-master">
@@ -1194,6 +1359,19 @@ export default function ProductEditClient({
           )
         })()}
       </main>
+
+      {/* TC.5 / TC.6 — Customize Tabs modal. Mounted at root so its
+          portal escapes the sticky header / scroll container. */}
+      <TabPreferencesModal
+        open={tabsModalOpen}
+        onClose={() => setTabsModalOpen(false)}
+        value={orderedPrefs}
+        onSave={(next) => setOrderedPrefs(next)}
+        onNavigateToTab={(key, autoPinned) => {
+          setOrderedPrefs(autoPinned)
+          goToTab(key)
+        }}
+      />
     </div>
   )
 }
@@ -1206,6 +1384,7 @@ function TopTabButton({
   count,
   readiness,
   dirty,
+  pinned = true,
 }: {
   /** W14.3 — stable id for ARIA tabpanel pairing + keyboard focus
    *  routing. Must match the panel's `aria-labelledby` and the
@@ -1221,6 +1400,12 @@ function TopTabButton({
    *  which still has pending edits without checking the header
    *  aggregate. 0 / undefined → no dot. */
   dirty?: number
+  /** TC.9 — when false, the tab is rendered as a session-only
+   *  visitor (operator is viewing it via URL deep-link or modal
+   *  navigation but it isn't in their pinned set). Visual cue: dashed
+   *  border-bottom + faded text. Click handler unchanged — the
+   *  operator can re-pin via the Customize Tabs modal if desired. */
+  pinned?: boolean
 }) {
   // W5.1 — readiness pill colour-codes the channel: rose for empty,
   // amber while the operator is still filling fields, emerald once
@@ -1245,9 +1430,15 @@ function TopTabButton({
       className={cn(
         'flex items-center gap-1.5 h-10 px-4 text-md font-medium border-b-2 transition-colors whitespace-nowrap',
         active
-          ? 'border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400'
+          ? pinned
+            ? 'border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400'
+            // TC.9 — active-but-not-pinned: dashed border-bottom +
+            // faded text so the operator knows this tab isn't in
+            // their saved strip.
+            : 'border-blue-400/60 border-dashed text-blue-500/70 dark:border-blue-400/50 dark:text-blue-300/70'
           : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
       )}
+      title={pinned ? undefined : 'Not in your pinned tabs — open Customize Tabs to pin'}
     >
       {children}
       {count != null && (

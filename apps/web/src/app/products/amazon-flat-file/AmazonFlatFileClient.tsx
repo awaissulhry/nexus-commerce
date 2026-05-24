@@ -11,18 +11,13 @@ import {
   Search, Send, Trash2, Upload, X, ArrowRightLeft,
   Undo2, Redo2, GripVertical,
 } from 'lucide-react'
-import { FindReplaceBar } from '@/app/_shared/bulk-edit/components/FindReplaceBar'
-import { ConditionalFormatBar } from '@/app/_shared/bulk-edit/components/ConditionalFormatBar'
+import dynamic from 'next/dynamic'
 import { evaluateRule, TONE_CLASSES, type ConditionalRule } from '@/app/_shared/bulk-edit/conditional-format'
 import { type FindCell } from '@/app/_shared/bulk-edit/find-replace'
-import { FFFilterPanel, FF_FILTER_DEFAULT, type FFFilterState } from '../_shared/FFFilterPanel'
-import { AIBulkModal } from './AIBulkModal'
+import { FF_FILTER_DEFAULT, type FFFilterState } from '../_shared/FFFilterPanel'
 import { FFSavedViews, type FFViewState } from '../_shared/FFSavedViews'
-import { FFReplicateModal } from './FFReplicateModal'
-import { PullDiffModal, type PullDiffApplyResult } from './PullDiffModal'
-import { PullHistoryDrawer } from '../_shared/PullHistoryDrawer'
+import { type PullDiffApplyResult } from './PullDiffModal'
 import { PendingPullBanner } from '../_shared/PendingPullBanner'
-import { KeyboardShortcutsModal } from '../../_shared/grid-lens/KeyboardShortcutsModal'
 import { FLAT_FILE_SHORTCUTS } from '../_shared/flat-file-shortcuts'
 import {
   FlatFileIconToolbar,
@@ -37,9 +32,71 @@ import { Badge } from '@/components/ui/Badge'
 import { IconButton } from '@/components/ui/IconButton'
 import { ChannelStrip } from '../ebay-flat-file/ChannelStrip'
 import { OverrideBadge } from '../_shared/OverrideBadge'
-import { CascadeModal } from '../_shared/CascadeModal'
-import { FlatFileAiPanel } from '../_shared/FlatFileAiPanel'
 import type { FlatFileAiChange } from '@/components/flat-file/FlatFileGrid.types'
+
+// EH.5 — Lazy-loaded modals, panels, and bars. Each one only ships
+// to the browser when the operator first opens it, so the initial
+// AmazonFlatFileClient chunk drops from ~600 kB to under ~250 kB.
+// All are client-only (state-gated, no SSR benefit) — ssr: false
+// short-circuits the SSR pass for them entirely.
+const FindReplaceBar = dynamic(
+  () => import('@/app/_shared/bulk-edit/components/FindReplaceBar').then((m) => m.FindReplaceBar),
+  { ssr: false },
+)
+const ConditionalFormatBar = dynamic(
+  () => import('@/app/_shared/bulk-edit/components/ConditionalFormatBar').then((m) => m.ConditionalFormatBar),
+  { ssr: false },
+)
+const FFFilterPanel = dynamic(
+  () => import('../_shared/FFFilterPanel').then((m) => m.FFFilterPanel),
+  { ssr: false },
+)
+const AIBulkModal = dynamic(
+  () => import('./AIBulkModal').then((m) => m.AIBulkModal),
+  { ssr: false },
+)
+const FFReplicateModal = dynamic(
+  () => import('./FFReplicateModal').then((m) => m.FFReplicateModal),
+  { ssr: false },
+)
+const PullDiffModal = dynamic(
+  () => import('./PullDiffModal').then((m) => m.PullDiffModal),
+  { ssr: false },
+)
+const PullHistoryDrawer = dynamic(
+  () => import('../_shared/PullHistoryDrawer').then((m) => m.PullHistoryDrawer),
+  { ssr: false },
+)
+const KeyboardShortcutsModal = dynamic(
+  () => import('../../_shared/grid-lens/KeyboardShortcutsModal').then((m) => m.KeyboardShortcutsModal),
+  { ssr: false },
+)
+const CascadeModal = dynamic(
+  () => import('../_shared/CascadeModal').then((m) => m.CascadeModal),
+  { ssr: false },
+)
+const FlatFileAiPanel = dynamic(
+  () => import('../_shared/FlatFileAiPanel').then((m) => m.FlatFileAiPanel),
+  { ssr: false },
+)
+
+/**
+ * EH.5 — Returns true once `open` has been true at least once, then
+ * stays true forever. Used to gate dynamic-imported modals so:
+ *   - The chunk doesn't load until the operator first opens it
+ *     (gating by `open` directly would unload the modal on close,
+ *     wiping any in-modal state)
+ *   - Subsequent opens are instant (chunk + component stay mounted)
+ *
+ * Mutating a ref during render is legal: it derives from props, not
+ * from state, so it's idempotent and doesn't break React's render
+ * model. The hook returns the same value across renders once true.
+ */
+function useOpenOnce(open: boolean): boolean {
+  const ref = useRef(false)
+  if (open) ref.current = true
+  return ref.current
+}
 
 // ── Types ──────────────────────────────────────────────────────────────
 
@@ -512,6 +569,18 @@ export default function AmazonFlatFileClient({
   } | null>(null)
   const [pullHistoryOpen, setPullHistoryOpen] = useState(false)
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
+
+  // EH.5 — Sticky open-once flags for dynamic-imported modals. Each
+  // resolves to true the first time its `open` state goes true, then
+  // latches. Gating the JSX with these keeps the chunk + component
+  // unmounted until first use (saves initial bundle), then keeps them
+  // mounted afterward (preserves in-modal state across open/close).
+  const findReplaceMounted = useOpenOnce(findReplaceOpen)
+  const cfMounted = useOpenOnce(cfOpen)
+  const filterPanelMounted = useOpenOnce(filterPanelOpen)
+  const aiModalMounted = useOpenOnce(aiModalOpen)
+  const replicateMounted = useOpenOnce(replicateOpen)
+  const pullHistoryMounted = useOpenOnce(pullHistoryOpen)
   const [pendingPullReview, setPendingPullReview] = useState<{
     jobId: string
     rows: Row[]
@@ -2585,12 +2654,14 @@ export default function AmazonFlatFileClient({
                 </span>
               )}
               {/* BF.3 — extended row filter */}
-              <FFFilterPanel
-                open={filterPanelOpen}
-                onOpenChange={setFilterPanelOpen}
-                value={ffFilter}
-                onChange={setFFFilter}
-              />
+              {filterPanelMounted && (
+                <FFFilterPanel
+                  open={filterPanelOpen}
+                  onOpenChange={setFilterPanelOpen}
+                  value={ffFilter}
+                  onChange={setFFFilter}
+                />
+              )}
               {/* BM.1 — saved views */}
               <FFSavedViews
                 currentState={{
@@ -3157,7 +3228,7 @@ export default function AmazonFlatFileClient({
       )}
 
       {/* BF.1 — Find & Replace */}
-      {manifest && (
+      {manifest && findReplaceMounted && (
         <div className="fixed top-16 right-4 z-50">
           <FindReplaceBar
             open={findReplaceOpen}
@@ -3184,7 +3255,7 @@ export default function AmazonFlatFileClient({
       )}
 
       {/* BF.2 — Conditional formatting */}
-      {manifest && (
+      {manifest && cfMounted && (
         <div className="fixed top-16 right-4 z-50">
           <ConditionalFormatBar
             open={cfOpen}
@@ -3227,6 +3298,7 @@ export default function AmazonFlatFileClient({
       )}
 
       {/* Pull history drawer — Phase 4 */}
+      {pullHistoryMounted && (
       <PullHistoryDrawer
         open={pullHistoryOpen}
         channel="AMAZON"
@@ -3276,6 +3348,7 @@ export default function AmazonFlatFileClient({
         }}
         onClose={() => setPullHistoryOpen(false)}
       />
+      )}
 
       {/* Pull diff preview — Phase 2 of in-editor pull */}
       {pullDiffData && (
@@ -3293,26 +3366,30 @@ export default function AmazonFlatFileClient({
       )}
 
       {/* BM.2 — Replicate to multiple markets */}
-      <FFReplicateModal
-        open={replicateOpen}
-        onClose={() => setReplicateOpen(false)}
-        sourceMarket={marketplace}
-        groups={manifest?.groups ?? []}
-        rowCount={rows.length}
-        selectedRowCount={selectedRows.size}
-        onReplicate={handleReplicate}
-      />
+      {replicateMounted && (
+        <FFReplicateModal
+          open={replicateOpen}
+          onClose={() => setReplicateOpen(false)}
+          sourceMarket={marketplace}
+          groups={manifest?.groups ?? []}
+          rowCount={rows.length}
+          selectedRowCount={selectedRows.size}
+          onReplicate={handleReplicate}
+        />
+      )}
 
       {/* BF.4 — AI bulk actions */}
-      <AIBulkModal
-        open={aiModalOpen}
-        onClose={() => setAiModalOpen(false)}
-        selectedProductIds={[...selectedRows].flatMap((rowId) => {
-          const row = rows.find((r) => r._rowId === rowId)
-          return row?._productId ? [row._productId as string] : []
-        })}
-        marketplace={marketplace}
-      />
+      {aiModalMounted && (
+        <AIBulkModal
+          open={aiModalOpen}
+          onClose={() => setAiModalOpen(false)}
+          selectedProductIds={[...selectedRows].flatMap((rowId) => {
+            const row = rows.find((r) => r._rowId === rowId)
+            return row?._productId ? [row._productId as string] : []
+          })}
+          marketplace={marketplace}
+        />
+      )}
 
       {pushPanel && manifest && (
         <PushToMarketsPanel

@@ -28,10 +28,24 @@ import {
   startPullPreviewJob,
   getPullPreviewJobStatus,
 } from '../services/amazon/flat-file-pull-preview.service.js'
+import { TtlCache } from '../utils/ttl-cache.js'
+import { ServerTiming } from '../utils/server-timing.js'
 
 const amazon = new AmazonService()
 const schemaService = new CategorySchemaService(prisma, amazon)
 const flatFileService = new AmazonFlatFileService(prisma, schemaService)
+
+// EH.4 — Manifest cache. generateManifest() reads from CategorySchema
+// (already 24 h DB-cached) and then runs label/enum/group derivation
+// over the schema definition (a few thousand allocations + sorts).
+// The end product is identical for any given (marketplace, productType)
+// for as long as the underlying schema hasn't rotated, so we cache the
+// built manifest in-process for 5 min. force=1 still bypasses both
+// caches and re-fetches from SP-API.
+const manifestCache = new TtlCache<unknown>({
+  ttlMs: 5 * 60_000,
+  maxEntries: 200,
+})
 
 function getSellerId(): string {
   return process.env.AMAZON_SELLER_ID ?? process.env.AMAZON_MERCHANT_ID ?? ''
@@ -126,12 +140,35 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
       return reply.code(400).send({ error: 'productType is required' })
     }
 
+    // EH.8 — Server-Timing breakdown. The slow path here is SP-API
+    // (~500-2000 ms cold); knowing whether a given request hit the
+    // manifest cache, the schema DB cache, or the live SP-API tells
+    // us at a glance which layer is the bottleneck on any given tab.
+    const tx = new ServerTiming()
     try {
-      const manifest = await flatFileService.generateManifest(
-        marketplace,
-        productType,
-        force,
+      // EH.4 — Skip the manifest cache on force=1 so the operator's
+      // explicit refresh always re-derives from the schema.
+      const cacheKey = `${marketplace}:${productType}`
+      if (!force) {
+        const cached = manifestCache.get(cacheKey)
+        if (cached !== undefined) {
+          tx.flag('cacheHit')
+          const header = tx.toHeader()
+          if (header) reply.header('Server-Timing', header)
+          return reply.send(cached)
+        }
+        tx.flag('cacheMiss')
+      } else {
+        tx.flag('forced')
+      }
+
+      const manifest = await tx.measure('generateManifest', () =>
+        flatFileService.generateManifest(marketplace, productType, force),
       )
+
+      if (!force) manifestCache.set(cacheKey, manifest)
+      const header = tx.toHeader()
+      if (header) reply.header('Server-Timing', header)
       return reply.send(manifest)
     } catch (err: any) {
       request.log.error(err, 'flat-file/template failed')

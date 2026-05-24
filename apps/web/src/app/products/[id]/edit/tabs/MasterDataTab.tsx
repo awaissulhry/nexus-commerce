@@ -21,6 +21,7 @@ import { Button } from '@/components/ui/Button'
 import { useToast } from '@/components/ui/Toast'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { cn } from '@/lib/utils'
+import MasterGlobalSections from './_shared/MasterGlobalSections'
 
 interface Props {
   product: any
@@ -96,9 +97,19 @@ export default function MasterDataTab({
   // closure snapshot.
   const dataRef = useRef(data)
   useEffect(() => { dataRef.current = data }, [data])
+  // TC.1 — the embedded MasterGlobalSections registers its flush +
+  // discard + dirty count here so MasterDataTab can roll them into
+  // its single "master" registry entry. The parent dirty registry
+  // never learns about the split; from its view there is still one
+  // tab, one flush, one discard.
+  const globalFlushRef = useRef<(() => Promise<void>) | null>(null)
+  const globalDiscardRef = useRef<(() => void) | null>(null)
+  const globalDirtyCountRef = useRef<number>(0)
+
   // DSP.2 — kept as a no-op placeholder; the auto-save debounce path
   // is removed but the ref name is referenced in flush() below.
-  const reportDirty = () => onDirtyChange(dirtyRef.current.size)
+  const reportDirty = () =>
+    onDirtyChange(dirtyRef.current.size + globalDirtyCountRef.current)
 
   // IN.3 — per-field cascade state
   const childCount: number = product.childCount ?? (product.isParent ? 1 : 0)
@@ -153,7 +164,24 @@ export default function MasterDataTab({
 
   const flush = async () => {
     const fields = Array.from(dirtyRef.current)
-    if (fields.length === 0) { setStatus('idle'); return }
+    // TC.1 — even when MasterDataTab itself has no pending fields,
+    // the embedded global sections (locales / physical / technical)
+    // might be dirty. Fire their flush in parallel either way so
+    // header Save persists everything atomically.
+    const globalFlushPromise = globalFlushRef.current
+      ? globalFlushRef.current()
+      : Promise.resolve()
+    if (fields.length === 0) {
+      try {
+        await globalFlushPromise
+        reportDirty()
+        setStatus('idle')
+      } catch (e) {
+        setStatus('error')
+        setError(e instanceof Error ? e.message : String(e))
+      }
+      return
+    }
     // DSP.2 — saving state now set inside flush (no longer at
     // keystroke time), so the operator only sees "saving" while a
     // real network call is in flight.
@@ -166,14 +194,21 @@ export default function MasterDataTab({
     try {
       const headers: Record<string, string> = { 'Content-Type': 'application/json' }
       if (typeof version === 'number') headers['If-Match'] = String(version)
-      const res = await fetch(`${getBackendUrl()}/api/products/bulk`, {
-        method: 'PATCH',
-        headers,
-        body: JSON.stringify({
-          changes,
-          ...(typeof version === 'number' ? { expectedVersion: version } : {}),
+      // TC.1 — run /products/bulk PATCH and the embedded global
+      // sections' PATCH in parallel. Either failing is reported as
+      // an error; we don't try to surface partial success because the
+      // unified Save in the header presents this as one atomic action.
+      const [res] = await Promise.all([
+        fetch(`${getBackendUrl()}/api/products/bulk`, {
+          method: 'PATCH',
+          headers,
+          body: JSON.stringify({
+            changes,
+            ...(typeof version === 'number' ? { expectedVersion: version } : {}),
+          }),
         }),
-      })
+        globalFlushPromise,
+      ])
       if (!res.ok) {
         const body = await res.json().catch(() => null)
         if (res.status === 409 && body?.code === 'VERSION_CONFLICT') {
@@ -250,6 +285,9 @@ export default function MasterDataTab({
     setError(null)
     setConflict(null)
     setVersion(typeof product.version === 'number' ? product.version : null)
+    // TC.1 — also reset the embedded global sections so header Discard
+    // truly clears every dirty state under the "master" tab.
+    globalDiscardRef.current?.()
     reportDirty()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [product])
@@ -423,6 +461,23 @@ export default function MasterDataTab({
           />
         </div>
       </Card>
+
+      {/* TC.1 — Locales / Physical / Technical absorbed from the old
+          Global tab. The block manages its own /api/products/:id/global
+          state but reports flush/discard/dirty up to MasterDataTab so
+          the registry still sees one entry under "master". */}
+      <MasterGlobalSections
+        productId={product.id}
+        discardSignal={discardSignal}
+        onDirtyChange={(count) => {
+          globalDirtyCountRef.current = count
+          reportDirty()
+        }}
+        onRegister={(handlers) => {
+          globalFlushRef.current = handlers.flush
+          globalDiscardRef.current = handlers.discard
+        }}
+      />
 
       <Card
         title={t('products.edit.master.statusTitle')}

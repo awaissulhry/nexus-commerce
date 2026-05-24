@@ -17,6 +17,7 @@ import RecoverClient, {
   type RecoverProduct,
   type RecoveryEvent,
 } from './RecoverClient'
+import NewTabClickPerf from '@/components/perf/NewTabClickPerf'
 
 export const dynamic = 'force-dynamic'
 
@@ -29,17 +30,21 @@ export default async function RecoverPage({ params }: PageProps) {
   const t = await getServerT()
   const backend = getBackendUrl()
 
-  // Reuses /api/products/:id/health — the same endpoint the drawer
-  // pulls from. Returns the master product flattened with a nested
-  // channelListings array, so we get product + listings in one
-  // round-trip. The dedicated /api/products/:id endpoint omits the
-  // channelListings join we need for the picker.
-  let productRes: Response
-  try {
-    productRes = await fetch(`${backend}/api/products/${productId}/health`, {
+  // EH.3 — Parallel fetch of /health (slow: 200–500 ms Prisma joins)
+  // and /recover/events (cheap: ~50 ms). Previously sequential, so
+  // the cheap events query waited on the slow health query for no
+  // reason. .catch(() => null) on each preserves the "network error
+  // vs non-2xx" distinction the original try/catch made.
+  const [productRes, eventsRes] = await Promise.all([
+    fetch(`${backend}/api/products/${productId}/health`, {
       cache: 'no-store',
-    })
-  } catch {
+    }).catch(() => null),
+    fetch(`${backend}/api/products/${productId}/recover/events`, {
+      cache: 'no-store',
+    }).catch(() => null),
+  ])
+
+  if (!productRes) {
     return (
       <FailureView
         productId={productId}
@@ -64,22 +69,22 @@ export default async function RecoverPage({ params }: PageProps) {
   }
   if (!product?.id) notFound()
 
-  const eventsRes = await fetch(
-    `${backend}/api/products/${productId}/recover/events`,
-    { cache: 'no-store' },
-  ).catch(() => null)
   const events: RecoveryEvent[] =
     eventsRes && eventsRes.ok
       ? ((await eventsRes.json()) as { events?: RecoveryEvent[] }).events ?? []
       : []
 
   return (
-    <RecoverClient
-      productId={productId}
-      product={product}
-      listings={product.channelListings ?? []}
-      events={events}
-    />
+    <>
+      {/* EH.8 — Cross-tab click→FCP perf telemetry. */}
+      <NewTabClickPerf button="recover" productId={productId} />
+      <RecoverClient
+        productId={productId}
+        product={product}
+        listings={product.channelListings ?? []}
+        events={events}
+      />
+    </>
   )
 }
 

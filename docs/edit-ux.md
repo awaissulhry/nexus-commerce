@@ -187,3 +187,231 @@ Data conversion) → DSP.3 (Discard modal) → DSP.4 (Publish pre-save)
 → DSP.5 (Channel Listing cleanup) → DSP.6 (Images split-button) →
 DSP.7 (flat-file harmonization) → DSP.8 (nav guard refinement) →
 DSP.9 (polish: labels, i18n, a11y, datasheet, wizard, shortcuts).
+
+---
+
+## EH-series — Open-in-new-tab pattern (added 2026-05-24)
+
+The `/products/[id]/edit` header exposes three secondary surfaces that
+are now opened in a **new browser tab** rather than via `router.push`:
+
+| Surface | URL | Reason for new tab |
+|---------|-----|---------------------|
+| Datasheet | `/products/[id]/datasheet` | 9-tab printable spec sheet; operator usually wants it open alongside the editor. |
+| Flat File | `/products/amazon-flat-file?familyId=…&productType=…&marketplace=IT` | Workbench-style editor; in-place navigation would blow away unsaved /edit state. |
+| Recover | `/products/[id]/recover` | Destructive recovery flow; reduces accidental data loss in the editor. |
+
+Matrix is **not** included — the canonical Matrix surface is the
+in-page tab on `/edit`. The dedicated `/products/[id]/matrix` route
+still exists for direct links (Cmd+K, deep links from other apps) but
+is not exposed from the editor header.
+
+### Anchor markup contract (canonical)
+
+```tsx
+<a
+  href={url}
+  target="_blank"
+  rel="noopener noreferrer"
+  title={t('products.edit.<surface>Tooltip')}
+  onMouseEnter={headerPrefetch.onHover<Surface>}
+  onFocus={headerPrefetch.onHover<Surface>}
+  onClick={() => markNewTabClick('<surface>', productId)}
+  onAuxClick={() => markNewTabClick('<surface>', productId)}
+  className={headerOpenInNewTabClass}
+>
+  <SurfaceIcon className="w-3.5 h-3.5 mr-1.5" aria-hidden />
+  {t('products.edit.<surface>')}
+  <ExternalLink className="w-3 h-3 ml-1 opacity-60 group-hover:opacity-100 transition-opacity" aria-hidden />
+  <span className="sr-only">{t('products.edit.opensInNewTab')}</span>
+</a>
+```
+
+Required attributes:
+- Real `<a>` element with `href` so Cmd+Click, middle-click, right-click "Open Link in New Tab" all work natively.
+- `target="_blank"` + `rel="noopener noreferrer"` — opens new tab + strips `window.opener` + drops referrer.
+- `<span className="sr-only">{opensInNewTab}</span>` — screen-reader hint, concatenated by accessible-name algorithm. Preferred over `aria-label` which would replace the visible text.
+- `aria-hidden` on icon glyphs.
+- `<ExternalLink className="w-3 h-3 ml-1 opacity-60 group-hover:opacity-100">` glyph signals new-tab intent visually. Requires `group` class on the parent anchor.
+- `onMouseEnter` + `onFocus` both fire prefetch (covers mouse hover AND keyboard tab navigation).
+- `onClick` + `onAuxClick` both mark for perf telemetry (covers left-click AND middle-click).
+
+### Cache pre-warming (EH.4 + EH.7)
+
+The new tab is a **fresh document** — no Next.js client-side route
+prefetch applies. The only way to make it feel instant is to populate
+the *backend* API caches before the click lands.
+
+- **Mount-warm**: on `/edit` mount, `useHeaderPrefetch` fires `fetch(..., { priority: 'low' })` for the two slowest endpoints (`/health` for Recover, `/flat-file/template` for Flat File). Datasheet uses Prisma directly so there's no API surface to warm; Suspense streaming (EH.6) is what makes it feel fast.
+- **Hover-warm**: on `onMouseEnter`/`onFocus`, the same endpoints are re-fired at normal priority — by the time the click lands the backend cache is hot.
+- **Server-side cache**:
+  - `/api/products/:id/health` — 30 s TTL, keyed by `${id}::${etag}` (auto-invalidates on any product mutation).
+  - `/api/amazon/flat-file/template` — 5 min TTL keyed by `${marketplace}:${productType}`. `force=1` bypasses.
+
+### Skeleton + Suspense (EH.2 + EH.6)
+
+Each target route has a `loading.tsx` skeleton matching its real layout.
+Datasheet additionally wraps the active-tab dispatch in `<Suspense key={tab} fallback={<TabSkeleton />}>` so the page shell streams first
+and the tab body fills in second.
+
+### Bundle code-splitting (EH.5)
+
+Heavy client modals/panels in `AmazonFlatFileClient.tsx` are wrapped in
+`next/dynamic` + `ssr: false` and gated with the `useOpenOnce` hook so:
+- The chunk doesn't load until the operator first opens it (saves ~300-500 kB on initial Flat File load).
+- Once opened, the component stays mounted on close so in-modal state survives.
+
+Components currently split: `FindReplaceBar`, `ConditionalFormatBar`,
+`FFFilterPanel`, `AIBulkModal`, `FFReplicateModal`, `PullDiffModal`,
+`PullHistoryDrawer`, `KeyboardShortcutsModal`, `CascadeModal`,
+`FlatFileAiPanel`.
+
+### Observability (EH.8)
+
+- API: `Server-Timing` headers on `/health`, `/inventory/:id`, `/flat-file/template` show `listEtag;dur=…`, `prisma;dur=…`, `cacheHit`/`cacheMiss` flags. Visible in DevTools → Network → Timing.
+- Client: `markNewTabClick` writes a `localStorage` mark on click; `<NewTabClickPerf>` reads it on target-page mount, observes `first-contentful-paint`, computes the wall-clock delta, and logs `[EH] <surface> click→FCP: <N>ms` in development.
+
+### Anti-patterns (do not introduce)
+
+1. **`router.push` for secondary editor surfaces.** Use a new-tab anchor instead — preserves `/edit` context, allows side-by-side workflows.
+2. **`onClick={() => window.open(url)}` on a `<button>`.** Pop-up blockers can intercept; loses Cmd+Click semantics. Always use a real `<a href target="_blank">`.
+3. **`aria-label` overriding visible label for "new tab" hint.** Use `<span className="sr-only">` instead so the visible label is preserved in the accessible name.
+4. **Server-Timing without a `description` for boolean flags.** `cacheHit` / `cacheMiss` are dur-less markers — that's fine, but if you add a per-request flag, make sure its name is self-explanatory or include a `desc`.
+
+### Acceptance targets
+
+| Path | Cold (no warm) | Warm (after mount-warm or hover-warm) |
+|------|----------------|----------------------------------------|
+| Skeleton paint | ≤ 50 ms | ≤ 50 ms |
+| Content paint  | ≤ 500 ms | ≤ 200 ms |
+
+The skeleton paint is bounded by Next.js streaming + the operator's
+network; the content paint is bounded by the slowest of: backend
+cache hit (~5 ms), Prisma queries (~50 ms), or SP-API schema fetch
+(only on cache miss — mount-warm makes this rare).
+
+---
+
+## TC-series — Tab Consolidation + Customize Tabs (added 2026-05-24)
+
+Two distinct improvements bundled under the **TC-** ("Tab
+Consolidation") prefix:
+
+1. **Merged Global into Master** — the legacy `Global` tab is gone;
+   its Locales / Physical / Technical sections now live as
+   collapsible cards inside `MasterDataTab`. Operators see one
+   "Master" tab instead of two near-duplicates (Global + Master Data).
+2. **Customize Tabs modal** — the binary `+ More tabs / Show less`
+   toggle is replaced with a per-user visibility + drag-drop reorder
+   modal. Defaults pin 8 tabs (Master, Images, Matrix, Analytics,
+   Ads, Amazon, eBay, Shopify). Everything else is opt-in via the
+   modal's checkboxes.
+
+### Canonical tab catalog
+
+Source of truth: `apps/web/src/app/products/[id]/edit/_shared/useTabPrefs.ts`'s
+`CANONICAL_TABS` constant.
+
+| Key | Label | Default visible | Notes |
+|-----|-------|-----------------|-------|
+| `master` | Master | ✓ | Identity + Content (Locales) + Physical + Status + Technical + Market Availability |
+| `images` | Images | ✓ | |
+| `matrix` | Matrix | ✓ | Renders body only when `product.isParent` |
+| `analytics` | Analytics | ✓ | |
+| `ads` | Ads | ✓ | |
+| `AMAZON` | Amazon | ✓ | Only renders in strip when product has an Amazon listing |
+| `EBAY` | eBay | ✓ | Same — only when product has an eBay listing |
+| `SHOPIFY` | Shopify | ✓ | Same |
+| `locales` | Locales | — | i18n key `products.edit.tab.locales` |
+| `seo` | SEO | — | |
+| `compliance` | Compliance | — | |
+| `workflow` | Workflow | — | |
+| `relations` | Relations | — | |
+| `activity` | Timeline | — | Hardcoded label, no i18n key today |
+| `WOOCOMMERCE` | WooCommerce | — | Channel — only renders in strip when listing exists |
+| `ETSY` | Etsy | — | Same |
+
+Channel tabs always carry their channel code as the key (uppercase).
+Adding a new top-tab is a single-line addition to `CANONICAL_TABS`;
+the reconciliation logic in `useTabPrefs` ensures returning operators
+get the new tab at the end of their saved order as hidden, so
+nobody's customisation is destroyed by the introduction.
+
+### Storage key schema
+
+```ts
+// apps/web/src/app/products/[id]/edit/_shared/useTabPrefs.ts
+localStorage['product-edit:tab-prefs:v1'] = {
+  v: 1,
+  items: [
+    { key: 'master',   visible: true },
+    { key: 'images',   visible: true },
+    { key: 'workflow', visible: false },
+    …
+  ]
+}
+```
+
+- `v` field reserved for future migration (bump to `v2` when the
+  shape changes and add a `migrateFromV1` parallel to TC.8's
+  `migrateFromLegacy`).
+- `items` is the entire ordered catalog. Reconciliation drops stale
+  keys + appends new canonical keys as hidden on read.
+- **Legacy key `product-edit:show-all-tabs`** is read once via
+  `migrateFromLegacy()` then deleted. `"1"` → all-visible v1 entry
+  + eager write (preserves the operator's explicit "show all"
+  preference). `"0"` / absent → no-op, falls through to defaults.
+
+### Active-tab session safety
+
+If the URL points to a hidden tab (e.g. deep link to `?tab=workflow`
+when Workflow isn't pinned), the strip renders it anyway at its
+prefs-position with a dashed bottom border + faded text +
+`title="Not in your pinned tabs — open Customize Tabs to pin"`. The
+operator never lands on a missing tab; they can pin it via the
+modal if they want it permanent. Channel tabs that don't exist on
+the product stay excluded (the body wouldn't render anyway).
+
+### Modal anatomy
+
+`apps/web/src/app/products/[id]/edit/_shared/TabPreferencesModal.tsx`
+
+- `@dnd-kit/sortable` with `PointerSensor` (8 px activation distance
+  — single clicks don't accidentally drag) + `KeyboardSensor` with
+  `sortableKeyboardCoordinates` (Tab to handle → Space → Arrow → Space).
+- Per-row 3 interaction zones: **drag handle**, **checkbox**, **row body**.
+- Row body click navigates to that tab + auto-pins it + closes modal.
+- Footer: **Reset to defaults** (left), **Cancel** + **Save** (right).
+- Min-visible guard: Save disabled when draft has zero visible.
+- Localised drag announcements via `DndContext accessibility={{ announcements }}`.
+- Draft state — Save persists via `setOrderedPrefs`; Cancel discards.
+
+### URL backward compat
+
+`?tab=global` (the old key for the now-merged Master content) is
+silently mapped to `?tab=master` both at initial-state seed and at
+URL-sync time. The latter rewrites the address bar via
+`goToTab('master')` so old bookmarks canonicalise on first visit.
+
+### Anti-patterns (do not introduce)
+
+1. **Hardcoded tab visibility in components.** Visibility decisions
+   must go through `useTabPrefs`. A future "show this tab only for
+   admin users" should layer ACL on top of `useTabPrefs`, not hide
+   tabs at JSX level.
+2. **Bypassing the storage key.** Anything that reads/writes
+   `product-edit:tab-prefs:v1` outside `useTabPrefs.ts` will skip
+   reconciliation + min-visible guard + migration.
+3. **Tab keys not in `CANONICAL_TABS`.** Adding a `<TopTabButton
+   tabKey="newthing">` without a matching `CANONICAL_TABS` entry
+   means the tab can't be hidden or reordered — `visiblePrefs` will
+   never include it.
+4. **Eager writes to localStorage.** TC.7's first-time-user contract:
+   a fresh operator sees defaults from memory only; the v1 entry is
+   written only on explicit Save (or one-time on migration). Don't
+   write on mount, on tab change, etc.
+5. **Two save buttons in one tab.** When a tab composes multiple
+   sub-components with different APIs (like Master + the embedded
+   GlobalSections from TC.1), the parent tab owns the registry
+   entry and coordinates the children via composed flush/discard.
+   Never let two sub-components fight over the same registry key.

@@ -33,9 +33,16 @@ export default async function ProductMatrixPage({ params }: PageProps) {
   const { id } = await params
   const backend = getBackendUrl()
 
-  const productRes = await fetch(`${backend}/api/inventory/${id}`, {
-    cache: 'no-store',
-  })
+  // EH.3 — Parallel fetch. The common path is product.isParent=true,
+  // so eagerly fetching children alongside the product saves the
+  // ~100 ms children waterfall. For the rare non-parent case we
+  // discard the children response (one small DB query wasted) — a
+  // good trade for the parent path being noticeably faster.
+  const [productRes, childrenRes] = await Promise.all([
+    fetch(`${backend}/api/inventory/${id}`, { cache: 'no-store' }),
+    fetch(`${backend}/api/products/${id}/children`, { cache: 'no-store' }),
+  ])
+
   if (productRes.status === 404) notFound()
   if (!productRes.ok) {
     throw new Error(`Failed to load product: HTTP ${productRes.status}`)
@@ -63,10 +70,6 @@ export default async function ProductMatrixPage({ params }: PageProps) {
     )
   }
 
-  const childrenRes = await fetch(
-    `${backend}/api/products/${id}/children`,
-    { cache: 'no-store' },
-  )
   const childrenJson = childrenRes.ok
     ? await childrenRes.json()
     : { children: [] }

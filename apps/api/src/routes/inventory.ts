@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import prisma from "../db.js";
+import { ServerTiming } from "../utils/server-timing.js";
 
 // ── Bulk Upload (Parent-level) ──────────────────────────────────────────
 
@@ -608,12 +609,21 @@ export async function inventoryRoutes(app: FastifyInstance) {
   app.get<{ Params: { id: string } }>(
     "/inventory/:id",
     async (request, reply) => {
+      // EH.8 — Server-Timing so the Matrix new-tab flow surfaces the
+      // Prisma round-trip cost in DevTools alongside health/template.
+      const tx = new ServerTiming();
       try {
         const { id } = request.params;
-        const product = await prisma.product.findUnique({ where: { id } });
+        const product = await tx.measure("prisma", () =>
+          prisma.product.findUnique({ where: { id } }),
+        );
         if (!product) {
+          const header = tx.toHeader();
+          if (header) reply.header("Server-Timing", header);
           return reply.status(404).send({ error: "Product not found" });
         }
+        const header = tx.toHeader();
+        if (header) reply.header("Server-Timing", header);
         return reply.send({
           ...product,
           basePrice: Number(product.basePrice),

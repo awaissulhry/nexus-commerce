@@ -1,5 +1,6 @@
 import { getBackendUrl } from '@/lib/backend-url'
 import AmazonFlatFileClient from './AmazonFlatFileClient'
+import NewTabClickPerf from '@/components/perf/NewTabClickPerf'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -37,12 +38,21 @@ export default async function AmazonFlatFilePage({ searchParams }: PageProps) {
   const rows = rowsJson?.rows ?? []
 
   return (
-    <AmazonFlatFileClient
-      initialManifest={manifest}
-      initialRows={rows}
-      initialMarketplace={marketplace.toUpperCase()}
-      initialProductType={productType.toUpperCase()}
-      familyId={familyId}
-    />
+    <>
+      {/* EH.8 — Cross-tab click→FCP perf telemetry. Falls back to
+          the familyId for keying when present (matches the click
+          mark written by the parent /edit page), otherwise the
+          page was opened directly without a family scope. */}
+      {familyId && (
+        <NewTabClickPerf button="flatFile" productId={familyId} />
+      )}
+      <AmazonFlatFileClient
+        initialManifest={manifest}
+        initialRows={rows}
+        initialMarketplace={marketplace.toUpperCase()}
+        initialProductType={productType.toUpperCase()}
+        familyId={familyId}
+      />
+    </>
   )
 }

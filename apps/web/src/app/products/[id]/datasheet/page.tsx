@@ -32,6 +32,7 @@
 import { prisma } from '@nexus/database'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
+import { Suspense } from 'react'
 import { ArrowLeft, Download, FileText, Pencil } from 'lucide-react'
 import { getServerLocale, getServerT } from '@/lib/i18n/server'
 import HeaderHealthPulse from './HeaderHealthPulse'
@@ -45,6 +46,8 @@ import CompliancePerMarketTab from './CompliancePerMarketTab'
 import ImagesTab from './ImagesTab'
 import HistoryTab from './HistoryTab'
 import HubLiveRefresh from './HubLiveRefresh'
+import TabSkeleton from './TabSkeleton'
+import NewTabClickPerf from '@/components/perf/NewTabClickPerf'
 
 export const dynamic = 'force-dynamic'
 
@@ -142,6 +145,8 @@ export default async function ProductDatasheetHubPage({
 
   return (
     <div className="space-y-4">
+      {/* EH.8 — Cross-tab click→FCP perf telemetry (null-render). */}
+      <NewTabClickPerf button="datasheet" productId={product.id} />
       {/* ATM.15 — Live refresh on product / listing / pricing
           invalidation events. The component is null-rendering but
           drives router.refresh() when matching events land. */}
@@ -244,41 +249,49 @@ export default async function ProductDatasheetHubPage({
       </nav>
 
       {/* ── Tab content (stubs gradually replaced by ATM.3+) ──────── */}
+      {/* EH.6 — Suspense around the active tab so the page shell
+          (header, health pulse, tab nav) streams first while the
+          tab body's own Prisma fetch runs. The `key={tab}` makes
+          React reset the boundary on tab switches, so the new
+          tab's skeleton flashes instead of the previous tab's
+          stale content hanging around until the new fetch lands. */}
       <section
         role="tabpanel"
         aria-labelledby={`tab-${tab}`}
         className="min-h-[40vh]"
       >
-        {tab === 'overview' ? (
-          <OverviewTab productId={product.id} locale={locale} t={t} />
-        ) : tab === 'attributes' ? (
-          <AttributesTab productId={product.id} locale={locale} t={t} />
-        ) : tab === 'variants' && product.isParent ? (
-          <VariantsTab
-            parentId={product.id}
-            layout={layoutParam}
-            locale={locale}
-            t={t}
-          />
-        ) : tab === 'channels' ? (
-          <ChannelsTab productId={product.id} locale={locale} t={t} />
-        ) : tab === 'pricing' ? (
-          <PricingTab productId={product.id} locale={locale} t={t} />
-        ) : tab === 'translations' ? (
-          <TranslationsTab productId={product.id} locale={locale} t={t} />
-        ) : tab === 'compliance' ? (
-          <CompliancePerMarketTab
-            productId={product.id}
-            locale={locale}
-            t={t}
-          />
-        ) : tab === 'images' ? (
-          <ImagesTab productId={product.id} locale={locale} t={t} />
-        ) : tab === 'history' ? (
-          <HistoryTab productId={product.id} locale={locale} t={t} />
-        ) : (
-          <TabStub tab={tab} t={t} />
-        )}
+        <Suspense key={tab} fallback={<TabSkeleton />}>
+          {tab === 'overview' ? (
+            <OverviewTab productId={product.id} locale={locale} t={t} />
+          ) : tab === 'attributes' ? (
+            <AttributesTab productId={product.id} locale={locale} t={t} />
+          ) : tab === 'variants' && product.isParent ? (
+            <VariantsTab
+              parentId={product.id}
+              layout={layoutParam}
+              locale={locale}
+              t={t}
+            />
+          ) : tab === 'channels' ? (
+            <ChannelsTab productId={product.id} locale={locale} t={t} />
+          ) : tab === 'pricing' ? (
+            <PricingTab productId={product.id} locale={locale} t={t} />
+          ) : tab === 'translations' ? (
+            <TranslationsTab productId={product.id} locale={locale} t={t} />
+          ) : tab === 'compliance' ? (
+            <CompliancePerMarketTab
+              productId={product.id}
+              locale={locale}
+              t={t}
+            />
+          ) : tab === 'images' ? (
+            <ImagesTab productId={product.id} locale={locale} t={t} />
+          ) : tab === 'history' ? (
+            <HistoryTab productId={product.id} locale={locale} t={t} />
+          ) : (
+            <TabStub tab={tab} t={t} />
+          )}
+        </Suspense>
       </section>
     </div>
   )

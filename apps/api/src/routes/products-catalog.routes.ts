@@ -5,6 +5,8 @@ import { masterStatusService } from '../services/master-status.service.js'
 import { applyStockMovement } from '../services/stock-movement.service.js'
 import { enqueueContentSyncForProduct } from '../services/content-auto-publish.service.js'
 import { listEtag, matches } from '../utils/list-etag.js'
+import { TtlCache } from '../utils/ttl-cache.js'
+import { ServerTiming } from '../utils/server-timing.js'
 import { computeLocaleCompleteness } from '../services/translation-completeness.service.js'
 import { deriveSyncStatus, ACTIVE_CHANNELS } from '../services/sync-status.service.js'
 import { productReadCacheService } from '../services/product-read-cache.service.js'
@@ -18,6 +20,22 @@ import { allowApiKeyScope } from '../lib/api-key-hook.js'
 // matching row, grid never showed it). Fire-and-forget with one
 // upsert per id; failure logs but doesn't fail the operator action,
 // because the DB write already succeeded.
+// EH.4 — Per-product health response cache.
+//
+// Keyed by the listEtag (count + maxUpdatedAtMs + filter hash). Any
+// product mutation bumps updatedAt → etag changes → key changes →
+// next read repopulates. No manual invalidation needed.
+//
+// 30 s TTL is a belt-and-suspenders backstop in case something
+// updates the underlying row without bumping updatedAt (shouldn't
+// happen — Prisma auto-bumps on update — but the TTL keeps the
+// cache honest). Cap at 2,000 entries so a busy day with ~hundreds
+// of unique products still fits in single-digit MB of RAM.
+const healthCache = new TtlCache<unknown>({
+  ttlMs: 30_000,
+  maxEntries: 2000,
+})
+
 async function refreshCacheRows(productIds: readonly string[]): Promise<void> {
   if (productIds.length === 0) return
   const unique = Array.from(new Set(productIds))
@@ -318,22 +336,47 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
   // HEALTH (per product)
   // ═══════════════════════════════════════════════════════════════════
   fastify.get('/products/:id/health', async (request, reply) => {
+    // EH.8 — Server-Timing breakdown so DevTools shows the
+    // listEtag / cache / Prisma split per request.
+    const tx = new ServerTiming()
     try {
       const { id } = request.params as { id: string }
       // Phase 10b ETag — health is polled aggressively (drawer + edit
       // page + status badges all read it). The score depends on the
       // product row + its image / listing counts, so the freshness key
       // tracks the product's updatedAt scoped by id.
-      const { etag } = await listEtag(prisma, {
-        model: 'product',
-        where: { id },
-        filterContext: { kind: 'health', id },
-      })
+      const { etag } = await tx.measure('listEtag', () =>
+        listEtag(prisma, {
+          model: 'product',
+          where: { id },
+          filterContext: { kind: 'health', id },
+        }),
+      )
       reply.header('ETag', etag)
       reply.header('Cache-Control', 'private, max-age=0, must-revalidate')
       if (matches(request, etag)) {
+        tx.flag('etag304')
+        const header = tx.toHeader()
+        if (header) reply.header('Server-Timing', header)
         return reply.code(304).send()
       }
+
+      // EH.4 — Server-side result cache, keyed by the freshness etag.
+      // The etag already encodes (count + maxUpdatedAtMs + filter hash)
+      // so any product mutation produces a new key automatically. This
+      // path serves the warm-tab case (operator opens /recover after a
+      // mount-warm prefetch, or two tabs racing) without re-running
+      // the expensive findUnique + join + count cascade below.
+      const cacheKey = `${id}::${etag}`
+      const cached = healthCache.get(cacheKey)
+      if (cached !== undefined) {
+        tx.flag('cacheHit')
+        const header = tx.toHeader()
+        if (header) reply.header('Server-Timing', header)
+        return cached
+      }
+      tx.flag('cacheMiss')
+
       // P.6 — extended select. The /health endpoint is the drawer's only
       // data source today (it was meant to also serve the per-product
       // health badge, but the drawer reuses it as its master fetch).
@@ -349,7 +392,8 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
       // the v6/v7 mismatch (see TECH_DEBT #45). Runtime returns
       // exactly the selected fields including _count, images, and
       // channelListings — the cast just unblocks the local typecheck.
-      const p = (await prisma.product.findUnique({
+      const p = (await tx.measure('prisma', () =>
+        prisma.product.findUnique({
         where: { id },
         select: {
           id: true, sku: true, name: true,
@@ -398,7 +442,8 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
             },
           },
         },
-      })) as any
+        }),
+      )) as any
       if (!p) return reply.code(404).send({ error: 'Product not found' })
 
       // Build a list of issues with severity
@@ -455,7 +500,7 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
       // etc. were declared in the drawer's TS type but never returned
       // by this endpoint, so the drawer rendered empty Description /
       // Listings cards on every open. Now they populate.
-      return {
+      const payload = {
         productId: p.id,
         // Backward-compat health-badge fields
         sku: p.sku,
@@ -508,6 +553,13 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
         images: p.images,
         channelListings: p.channelListings,
       }
+
+      // EH.4 — Cache under the etag-derived key. The 30 s TTL acts as a
+      // safety net; the etag-keyed invalidation does the real work.
+      healthCache.set(cacheKey, payload)
+      const header = tx.toHeader()
+      if (header) reply.header('Server-Timing', header)
+      return payload
     } catch (err: any) {
       fastify.log.error({ err }, '[products/:id/health] failed')
       return reply.code(500).send({ error: err?.message ?? String(err) })
