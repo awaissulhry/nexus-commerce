@@ -35,7 +35,6 @@ import {
   Image as ImageIcon,
   DollarSign,
   ShieldCheck,
-  Layers,
   Tag,
   Hash,
   Truck,
@@ -59,6 +58,7 @@ import {
 import type { MarketChip } from '../../_shared/market-switch/types'
 import HealthPanel from './health/HealthPanel'
 import { computeHealthScore, type JumpTarget } from './health/computeHealthScore'
+import VariationMatrix from './variations/VariationMatrix'
 import { getBackendUrl } from '@/lib/backend-url'
 
 interface MarketInfo {
@@ -99,6 +99,17 @@ interface ChildProduct {
   sku: string
   name?: string | null
   variantLabel?: string | null
+  /** AC.6 — variation axis values. `variations` is the API-normalised
+   *  flat map (categoryAttributes.variations); `variantAttributes`
+   *  is the raw categoryAttributes for legacy payloads. The matrix
+   *  reads either. */
+  variations?: Record<string, string> | null
+  variantAttributes?: Record<string, unknown> | null
+  basePrice?: number | string | null
+  totalStock?: number | null
+  lowStockThreshold?: number | null
+  status?: string | null
+  images?: Array<{ url: string; type?: string; sortOrder?: number; isPrimary?: boolean }>
 }
 
 interface Props {
@@ -432,6 +443,26 @@ export default function AmazonCockpit(props: Props) {
         )}
       </Card>
 
+      {/* ── AC.6 — Variation Matrix (full-width, above the card grid) ── */}
+      {childrenList && childrenList.length > 0 && (
+        <VariationMatrix
+          children={childrenList}
+          channelListings={[
+            ...(listing ? [listing] : []),
+            ...siblingListings,
+          ]}
+          activeMarketplace={marketInfo.code}
+          activeCurrency={marketInfo.currency}
+          siblingMarkets={(siblingMarkets ?? []).map((m) => ({
+            code: m.code,
+            name: m.name,
+            currency: m.currency,
+          }))}
+          variationTheme={composed.variationTheme.value}
+          onJumpToClassic={() => handleJumpTo('classic')}
+        />
+      )}
+
       {/* ── Zone 3: Cards placeholders (AC.4–AC.10) ─────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
         <PlaceholderCard
@@ -454,17 +485,6 @@ export default function AmazonCockpit(props: Props) {
             composed.productType.value || composed.browseNodeId.value
               ? `${composed.productType.value ?? '—'} · node ${composed.browseNodeId.value ?? '—'}`
               : 'No product type / browse node assigned'
-          }
-        />
-        <PlaceholderCard
-          targetId="variations"
-          icon={<Layers className="w-4 h-4" />}
-          title="Variations Matrix"
-          phase="AC.6"
-          value={
-            composed.variationSummary.variantCount > 0
-              ? `${composed.variationSummary.publishedVariantCount}/${composed.variationSummary.variantCount} published · theme ${composed.variationTheme.value ?? 'auto-detect'} · axes: ${composed.variationSummary.axes.join(', ') || '—'}`
-              : 'No variations'
           }
         />
         <PlaceholderCard
