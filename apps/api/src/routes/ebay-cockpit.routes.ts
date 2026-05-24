@@ -32,6 +32,12 @@
  *   PATCH /api/ebay/cockpit/variation-matrix    — EC.6: atomic
  *           save of axes + sort order on the parent listing AND
  *           per-cell price/qty overrides on each child listing.
+ *   PATCH /api/ebay/cockpit/offer-policies      — EC.8: persist
+ *           Best Offer settings (enabled / auto-accept / auto-
+ *           decline) and policy refs (fulfillment / payment /
+ *           return / merchantLocationKey) for one (productId,
+ *           marketplace). Merges into platformAttributes — never
+ *           touches categoryId, itemSpecifics, variation axes.
  *
  * All endpoints reuse the EbayCategoryService singleton (in-memory
  * 24h caches for search + aspects). No changes to flat-file routes.
@@ -552,6 +558,74 @@ export default async function ebayCockpitRoutes(fastify: FastifyInstance) {
       marketplace,
       updatedCells: updates.length,
       cells: updates,
+    })
+  })
+
+  // ── PATCH /api/ebay/cockpit/offer-policies ──────────────────────────
+  // Best Offer + policy refs for one (productId, EBAY, marketplace).
+  // Body fields are all optional — supplied keys overwrite, omitted
+  // keys are preserved. categoryId / itemSpecifics / variation axes
+  // are never touched. Pricing stays in its own
+  // (POST /api/products/:id/listings/:ch/:mp/pricing) endpoint —
+  // not folded here because that endpoint also updates pricingRule
+  // + priceAdjustmentPercent on dedicated ChannelListing columns.
+  fastify.patch<{
+    Body: {
+      productId: string
+      marketplace: string
+      bestOfferEnabled?: boolean
+      bestOfferAutoAcceptPrice?: number | null
+      bestOfferMinAcceptPrice?: number | null
+      fulfillmentPolicyId?: string | null
+      paymentPolicyId?: string | null
+      returnPolicyId?: string | null
+      merchantLocationKey?: string | null
+    }
+  }>('/ebay/cockpit/offer-policies', async (request, reply) => {
+    const body = request.body
+    if (!body || typeof body !== 'object') {
+      return reply.code(400).send({ error: 'Body is required' })
+    }
+    const { productId, marketplace, ...rest } = body
+    if (!productId || !marketplace) {
+      return reply.code(400).send({ error: 'productId, marketplace are required' })
+    }
+
+    const existing = await prisma.channelListing.findFirst({
+      where: { productId, channel: 'EBAY', marketplace },
+    })
+    if (!existing) {
+      return reply
+        .code(409)
+        .send({ error: 'No eBay listing for this marketplace — pick a category first.' })
+    }
+
+    const prevPlatform = (existing.platformAttributes ?? {}) as Record<string, unknown>
+    const nextPlatform: Record<string, unknown> = { ...prevPlatform }
+
+    const KEYS: Array<keyof typeof rest> = [
+      'bestOfferEnabled',
+      'bestOfferAutoAcceptPrice',
+      'bestOfferMinAcceptPrice',
+      'fulfillmentPolicyId',
+      'paymentPolicyId',
+      'returnPolicyId',
+      'merchantLocationKey',
+    ]
+    for (const k of KEYS) {
+      if (rest[k] !== undefined) {
+        nextPlatform[k] = rest[k]
+      }
+    }
+
+    const saved = await prisma.channelListing.update({
+      where: { id: existing.id },
+      data: { platformAttributes: nextPlatform as Prisma.InputJsonValue },
+    })
+
+    return reply.send({
+      listingId: saved.id,
+      applied: KEYS.filter((k) => rest[k] !== undefined),
     })
   })
 }

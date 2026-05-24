@@ -17,7 +17,7 @@
 // the corresponding ChannelListingTab section.
 
 import { useState } from 'react'
-import { ChevronDown, ChevronUp, ArrowDownToLine, Sparkles, Send, ExternalLink, Settings2, Package, DollarSign, ShieldCheck } from 'lucide-react'
+import { ChevronDown, ChevronUp, ArrowDownToLine, Sparkles, Send, ExternalLink, Settings2, Package } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
@@ -34,6 +34,7 @@ import CategoryCard from './cards/CategoryCard'
 import AspectsCard from './cards/AspectsCard'
 import VariationsMatrixCard from './cards/VariationsMatrixCard'
 import ImagesCard from './cards/ImagesCard'
+import PricingPoliciesCard from './cards/PricingPoliciesCard'
 import { useEbayChannelEvents } from './realtime/useEbayChannelEvents'
 import HeartbeatDot from './realtime/HeartbeatDot'
 import CrossTabChangeToast from './realtime/CrossTabChangeToast'
@@ -370,24 +371,43 @@ export default function EbayCockpit(props: Props) {
         productUpdatedAt={(product?.updatedAt as string | undefined) ?? null}
       />
 
-      {/* ── Zone 3: Remaining placeholder cards (EC.8–EC.13) ───────── */}
+      {/* ── EC.8 — Pricing + Best Offer + Policies (one card) ──────── */}
+      <PricingPoliciesCard
+        productId={product.id}
+        marketplace={marketplace}
+        currency={marketInfo.currency}
+        initial={{
+          priceOverride: (() => {
+            const v = listing?.priceOverride
+            if (v == null || v === '') return null
+            const n = typeof v === 'string' ? parseFloat(v) : Number(v)
+            return Number.isFinite(n) ? n : null
+          })(),
+          pricingRule: ((listing?.pricingRule as string | undefined) ?? 'FIXED') as 'FIXED' | 'MATCH_AMAZON' | 'PERCENT_OF_MASTER',
+          priceAdjustmentPercent: (() => {
+            const v = listing?.priceAdjustmentPercent
+            if (v == null || v === '') return null
+            const n = typeof v === 'string' ? parseFloat(v) : Number(v)
+            return Number.isFinite(n) ? n : null
+          })(),
+          bestOfferEnabled: !!((listing?.platformAttributes as Record<string, unknown> | null)?.bestOfferEnabled),
+          bestOfferAutoAcceptPrice: ((listing?.platformAttributes as Record<string, unknown> | null)?.bestOfferAutoAcceptPrice as number | null) ?? null,
+          bestOfferMinAcceptPrice: ((listing?.platformAttributes as Record<string, unknown> | null)?.bestOfferMinAcceptPrice as number | null) ?? null,
+          fulfillmentPolicyId: ((listing?.platformAttributes as Record<string, unknown> | null)?.fulfillmentPolicyId as string | null) ?? null,
+          paymentPolicyId: ((listing?.platformAttributes as Record<string, unknown> | null)?.paymentPolicyId as string | null) ?? null,
+          returnPolicyId: ((listing?.platformAttributes as Record<string, unknown> | null)?.returnPolicyId as string | null) ?? null,
+          merchantLocationKey: ((listing?.platformAttributes as Record<string, unknown> | null)?.merchantLocationKey as string | null) ?? null,
+        }}
+        masterPrice={(() => {
+          const v = product.basePrice
+          if (v == null || v === '') return null
+          const n = typeof v === 'string' ? parseFloat(v) : Number(v)
+          return Number.isFinite(n) ? n : null
+        })()}
+      />
+
+      {/* ── Zone 3: Remaining placeholder cards (EC.13) ──────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-        <PlaceholderCard
-          icon={<DollarSign className="w-4 h-4" />}
-          title="Pricing & Best Offer"
-          phase="EC.8"
-          value={
-            composed.price.value != null
-              ? `${composed.currency} ${composed.price.value.toFixed(2)}`
-              : 'No price set'
-          }
-        />
-        <PlaceholderCard
-          icon={<ShieldCheck className="w-4 h-4" />}
-          title="Policies"
-          phase="EC.8"
-          value="Read from ChannelConnection on render"
-        />
         <PlaceholderCard
           icon={<Package className="w-4 h-4" />}
           title="Compatibility (motors)"
