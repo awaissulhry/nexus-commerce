@@ -41,6 +41,7 @@ import { cn } from '@/lib/utils'
 import { getBackendUrl } from '@/lib/backend-url'
 import { setDraftField } from '../../../_shared/draft-bus/useProductDraftBus'
 import { announce } from '../../../_shared/announce/useAnnounce'
+import { postCockpitEvent } from '../../../_shared/telemetry/cockpit-telemetry'
 
 interface ListingLite {
   marketplace: string
@@ -288,6 +289,16 @@ export default function AutoFillCard({
     const msg = `Applied ${accepted.length} field${accepted.length === 1 ? '' : 's'} from ${source}. Save via header to persist.`
     setAppliedFlash(msg)
     announce(msg)
+    postCockpitEvent({
+      type: 'autofill_applied',
+      productId,
+      marketplace,
+      payload: {
+        source,
+        fieldCount: accepted.length,
+        fields: accepted.map((d) => d.field),
+      },
+    })
     window.setTimeout(() => setAppliedFlash(null), 2500)
     setDiffs([])
   }

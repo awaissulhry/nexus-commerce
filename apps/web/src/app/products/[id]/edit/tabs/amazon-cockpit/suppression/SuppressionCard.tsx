@@ -36,6 +36,7 @@ import { getBackendUrl } from '@/lib/backend-url'
 import type { JumpTarget } from '../health/computeHealthScore'
 import type { HealthReport } from '../health/computeHealthScore'
 import { announce } from '../../../_shared/announce/useAnnounce'
+import { postCockpitEvent } from '../../../_shared/telemetry/cockpit-telemetry'
 
 interface SuppressionRow {
   id: string
@@ -177,6 +178,12 @@ export default function SuppressionCard({
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       setTick((t) => t + 1)
       announce('Suppression marked resolved')
+      postCockpitEvent({
+        type: 'suppression_resolved',
+        productId,
+        marketplace,
+        payload: { suppressionId: id },
+      })
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {

@@ -22,7 +22,7 @@
 // cockpit reads the same template manifest and the same Listing
 // records, but the flat-file grid is never modified.
 
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   ChevronDown,
   ChevronUp,
@@ -63,6 +63,7 @@ import AutoFillCard from './autofill/AutoFillCard'
 import PublishCard from './publish/PublishCard'
 import { useCockpitShortcuts } from './useCockpitShortcuts'
 import { LiveRegion } from '../../_shared/announce/useAnnounce'
+import { postCockpitEvent } from '../../_shared/telemetry/cockpit-telemetry'
 import { getBackendUrl } from '@/lib/backend-url'
 
 interface MarketInfo {
@@ -256,6 +257,18 @@ export default function AmazonCockpit(props: Props) {
     onJumpTo: (target) => handleJumpTo(target),
   })
 
+  // AC.14 — one mount-time event per cockpit instance. Drives the
+  // toggle-rate denominator in /api/cockpit/events/stats.
+  useEffect(() => {
+    postCockpitEvent({
+      type: 'cockpit_mounted',
+      productId: product.id,
+      marketplace: marketInfo.code,
+      payload: { language: marketInfo.language },
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   // AC.4 — Pre-publish health report. Recomputed every render — the
   // function is pure and cheap (~15 checks). AC.5 swaps to a memo
   // once the manifest cross-tab pipe lands and the dependency set
@@ -424,7 +437,14 @@ export default function AmazonCockpit(props: Props) {
               </Button>
               <button
                 type="button"
-                onClick={() => setMode('classic')}
+                onClick={() => {
+                  postCockpitEvent({
+                    type: 'classic_toggled',
+                    productId: product.id,
+                    marketplace: marketInfo.code,
+                  })
+                  setMode('classic')
+                }}
                 className="ml-1 inline-flex items-center gap-1 text-xs text-slate-500 hover:text-slate-900 dark:hover:text-slate-200 underline-offset-2 hover:underline"
                 title="Switch back to the legacy Amazon tab for this session"
               >

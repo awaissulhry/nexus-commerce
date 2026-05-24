@@ -43,6 +43,7 @@ import {
   announce,
   announceAssertive,
 } from '../../../_shared/announce/useAnnounce'
+import { postCockpitEvent } from '../../../_shared/telemetry/cockpit-telemetry'
 
 interface MarketRow {
   code: string
@@ -211,6 +212,19 @@ export default function PublishCard({
       announce(
         `Submitted to ${okCount} marketplace${okCount === 1 ? '' : 's'}${failCount > 0 ? `, ${failCount} failed` : ''}. Polling feed status…`,
       )
+      postCockpitEvent({
+        type: 'publish_submitted',
+        productId,
+        payload: {
+          marketplaces: j.submissions.map((s) => s.marketplace),
+          okCount,
+          failCount,
+          dryRun: j.dryRun,
+          healthScore: activeHealth.score,
+          healthStatus: activeHealth.status,
+          activeMarketplace,
+        },
+      })
       // Kick off per-market polling for any submitted feed.
       for (const s of j.submissions) {
         if (s.ok && s.feedId) pollFeed(s.marketplace, s.feedId)
@@ -220,6 +234,15 @@ export default function PublishCard({
       setTopError(msg)
       setPerMarket({})
       announceAssertive(`Publish failed: ${msg}`)
+      postCockpitEvent({
+        type: 'publish_failed',
+        productId,
+        payload: {
+          error: msg,
+          marketplaces: Array.from(selected),
+          activeMarketplace,
+        },
+      })
     } finally {
       setSubmitting(false)
     }
@@ -231,6 +254,8 @@ export default function PublishCard({
    *  operator forgets the tab open. */
   function pollFeed(marketplace: string, feedId: string) {
     let ticks = 0
+    const t0 =
+      typeof performance !== 'undefined' ? performance.now() : Date.now()
     const intervalId = window.setInterval(async () => {
       ticks += 1
       try {
@@ -275,6 +300,10 @@ export default function PublishCard({
 
         if (terminal) {
           window.clearInterval(intervalId)
+          const tEnd =
+            typeof performance !== 'undefined'
+              ? performance.now()
+              : Date.now()
           if (ps === 'DONE') {
             announce(
               `${marketplace}: feed done. ${okRows} ok${errRows > 0 ? `, ${errRows} errors` : ''}.`,
@@ -282,6 +311,18 @@ export default function PublishCard({
           } else if (ps === 'CANCELLED' || ps === 'FATAL') {
             announceAssertive(`${marketplace}: feed ${ps.toLowerCase()}.`)
           }
+          postCockpitEvent({
+            type: 'publish_terminal',
+            productId,
+            marketplace,
+            durationMs: Math.round(tEnd - t0),
+            payload: {
+              feedId,
+              processingStatus: ps,
+              resultsOk: okRows,
+              resultsError: errRows,
+            },
+          })
         } else if (ticks >= 240) {
           window.clearInterval(intervalId)
           setPerMarket((m) => ({

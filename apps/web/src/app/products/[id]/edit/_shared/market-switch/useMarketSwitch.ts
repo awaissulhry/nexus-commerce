@@ -19,6 +19,7 @@ import { useCallback, useEffect, useRef } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import type { MarketChip } from './types'
 import { announce } from '../announce/useAnnounce'
+import { postCockpitEvent } from '../telemetry/cockpit-telemetry'
 
 interface Options {
   /** Channel id, e.g. "AMAZON" or "EBAY". Used as scoping prefix on
@@ -114,6 +115,8 @@ export function useMarketSwitch({
   const switchTo = useCallback(
     async (next: string) => {
       if (next === activeRef.current) return
+      const t0 =
+        typeof performance !== 'undefined' ? performance.now() : Date.now()
       if (isDirty > 0) {
         // window.confirm yields a 3-state intent via two prompts so we
         // can offer Save / Discard / Cancel without pulling a modal
@@ -136,8 +139,17 @@ export function useMarketSwitch({
           discard?.()
         }
       }
+      const from = activeRef.current
       onSwitch(next)
       announce(`Switched to ${next}`)
+      const t1 =
+        typeof performance !== 'undefined' ? performance.now() : Date.now()
+      postCockpitEvent({
+        type: 'market_switched',
+        marketplace: next,
+        durationMs: Math.round(t1 - t0),
+        payload: { from, to: next },
+      })
     },
     [isDirty, flush, discard, onSwitch],
   )
