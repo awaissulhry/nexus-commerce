@@ -1176,6 +1176,74 @@ const syncLogsRoutes: FastifyPluginAsync = async (fastify) => {
       }
     },
   )
+
+  // ── PIM E.1 — listing health rollup per (channel × marketplace) ──
+  // Aggregates ChannelListing.listingStatus into traffic-light buckets
+  // so the /sync-logs hub can render an at-a-glance grid of where the
+  // catalog stands on each marketplace. One query, GROUP BY in
+  // Postgres — fast even at 10k listings.
+  //
+  // Bucket mapping (intentionally lax so unknown statuses degrade
+  // gracefully to "other" rather than getting silently dropped):
+  //   green  ← ACTIVE
+  //   amber  ← DRAFT, PENDING, IN_SYNC, IDLE
+  //   red    ← ERROR, FAILED, ENDED
+  //   gray   ← INACTIVE
+  //   other  ← anything else
+  fastify.get('/sync-logs/listing-health', async (_request, reply) => {
+    type Row = {
+      channel: string
+      marketplace: string
+      listingStatus: string
+      _count: { _all: number }
+    }
+    const rows = (await prisma.channelListing.groupBy({
+      by: ['channel', 'marketplace', 'listingStatus'],
+      _count: { _all: true },
+    })) as unknown as Row[]
+
+    type Bucket = 'green' | 'amber' | 'red' | 'gray' | 'other'
+    const bucketOf = (status: string): Bucket => {
+      const s = (status ?? '').toUpperCase()
+      if (s === 'ACTIVE') return 'green'
+      if (['DRAFT', 'PENDING', 'IN_SYNC', 'IDLE'].includes(s)) return 'amber'
+      if (['ERROR', 'FAILED', 'ENDED'].includes(s)) return 'red'
+      if (s === 'INACTIVE') return 'gray'
+      return 'other'
+    }
+
+    interface Cell {
+      channel: string
+      marketplace: string
+      total: number
+      buckets: Record<Bucket, number>
+      byStatus: Record<string, number>
+    }
+    const key = (ch: string, mk: string) => `${ch}::${mk}`
+    const cells = new Map<string, Cell>()
+    for (const r of rows) {
+      const k = key(r.channel, r.marketplace)
+      const cell = cells.get(k) ?? {
+        channel: r.channel,
+        marketplace: r.marketplace,
+        total: 0,
+        buckets: { green: 0, amber: 0, red: 0, gray: 0, other: 0 },
+        byStatus: {},
+      }
+      const n = r._count._all
+      cell.total += n
+      cell.buckets[bucketOf(r.listingStatus)] += n
+      cell.byStatus[r.listingStatus] = (cell.byStatus[r.listingStatus] ?? 0) + n
+      cells.set(k, cell)
+    }
+
+    const result = Array.from(cells.values()).sort((a, b) => {
+      // Stable sort: channel then marketplace alphabetical.
+      if (a.channel !== b.channel) return a.channel.localeCompare(b.channel)
+      return a.marketplace.localeCompare(b.marketplace)
+    })
+    return reply.send({ cells: result })
+  })
 }
 
 export default syncLogsRoutes

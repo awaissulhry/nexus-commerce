@@ -53,6 +53,7 @@ import { Button } from '@/components/ui/Button'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useTranslations } from '@/lib/i18n/use-translations'
+import ListingHealthGrid from './_shared/ListingHealthGrid'
 
 const POLL_MS = 30_000
 
@@ -459,6 +460,9 @@ export default function SyncLogsHubClient({
           {error}
         </div>
       )}
+
+      {/* PIM E.1 — Listing health rollup per (channel × marketplace). */}
+      <ListingHealthGrid refreshKey={refreshing ? 1 : 0} />
 
       {hasNoData ? (
         <EmptyState
