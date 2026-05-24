@@ -37,6 +37,9 @@ import {
   type FieldMappingRule,
 } from '../services/pim/schema-mapping.service.js'
 import { validatePublish } from '../services/pim/publish-validator.js'
+import { syncSchemaToChannelSchema } from '../services/pim/schema-sync-bridge.js'
+import { CategorySchemaService } from '../services/categories/schema-sync.service.js'
+import { AmazonService } from '../services/marketplaces/amazon.service.js'
 
 const pimMappingRoutes: FastifyPluginAsync = async (fastify) => {
   // ── GET /pim/mappings/marketplaces ──────────────────────────────
@@ -179,6 +182,68 @@ const pimMappingRoutes: FastifyPluginAsync = async (fastify) => {
       }
     },
   )
+
+  // ── POST /pim/mappings/:channel/:code/sync-schema ───────────────
+  // PIM D.1 — Pull live schema from Amazon SP-API for a product type
+  // and lift its fields into ChannelSchema rows so the mapping editor
+  // can render them. Body: { productType: string }
+  //
+  // Returns SchemaSyncResult { upserted, skipped, totalProperties,
+  // schemaSnapshotVersion } — UI surfaces those counts in a toast.
+  //
+  // eBay/Shopify schema sync deferred to D.1b (different APIs, eBay
+  // GetCategorySpecifics + Shopify metafield schema).
+  fastify.post<{
+    Params: { channel: string; code: string }
+    Body: { productType: string }
+  }>('/pim/mappings/:channel/:code/sync-schema', async (request, reply) => {
+    const { channel, code } = request.params
+    const productType = request.body?.productType?.trim()
+    if (!productType) {
+      return reply.status(400).send({ error: 'productType is required' })
+    }
+    if (channel !== 'AMAZON') {
+      return reply.status(400).send({
+        error: `Live schema sync currently supports AMAZON only (got ${channel}). eBay/Shopify land in D.1b.`,
+      })
+    }
+
+    try {
+      // Step 1: ensure the JSON Schema is cached for this productType.
+      // CategorySchemaService.getSchema returns cached on hit, fetches
+      // SP-API on miss. Force-refresh on demand can be added later via
+      // a query flag — D.1 trusts the 24h cache.
+      const amazon = new AmazonService()
+      const catService = new CategorySchemaService(prisma as any, amazon)
+      await catService.getSchema({
+        channel: 'AMAZON',
+        marketplace: code,
+        productType,
+      })
+
+      // Step 2: bridge the cached JSON Schema → ChannelSchema rows +
+      // record snapshot on Marketplace.schemaMapping.
+      const result = await syncSchemaToChannelSchema({
+        channel: 'AMAZON',
+        marketplace: code,
+        productType,
+      })
+
+      return reply.send(result)
+    } catch (err: any) {
+      const msg = err?.message ?? 'Schema sync failed'
+      // Common error: Amazon SP-API not configured (no creds locally).
+      // Surface that distinctly so the operator gets an actionable hint.
+      const isAuthError = /credential|auth|sp-api|access denied/i.test(msg)
+      request.log.error({ err }, '[pim-mapping] sync-schema failed')
+      return reply.status(isAuthError ? 503 : 500).send({
+        error: msg,
+        hint: isAuthError
+          ? 'Configure Amazon SP-API credentials (LWA refresh token + role) for this marketplace.'
+          : undefined,
+      })
+    }
+  })
 
   // ── GET /pim/mappings/:channel/:code/validate/:productId ────────
   // PIM D.5 — Pre-publish validation. Walks mapping rules + resolves

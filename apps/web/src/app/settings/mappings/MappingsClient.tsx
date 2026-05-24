@@ -26,6 +26,7 @@ import {
   PlayCircle,
   CheckCircle2,
   XCircle,
+  DownloadCloud,
 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { Input } from '@/components/ui/Input'
@@ -66,6 +67,10 @@ export default function MappingsClient() {
   const [viewLoading, setViewLoading] = useState(false)
   const [viewError, setViewError] = useState<string | null>(null)
   const [seeding, setSeeding] = useState(false)
+
+  // D.1 — Amazon live-schema sync state
+  const [syncing, setSyncing] = useState(false)
+  const [productType, setProductType] = useState('')
 
   // D.5 — validate-against-product state
   const [validateProductId, setValidateProductId] = useState('')
@@ -219,6 +224,42 @@ export default function MappingsClient() {
       setSeeding(false)
     }
   }, [fetchMarketplaces, fetchView, toast])
+
+  // D.1 — Live SP-API schema sync for the active marketplace.
+  // Operator types an Amazon productType (e.g. "OUTERWEAR",
+  // "LUGGAGE"); endpoint fetches + caches the JSON Schema and lifts
+  // fields into ChannelSchema rows.
+  const handleSyncSchema = useCallback(async () => {
+    if (!active) return
+    const pt = productType.trim().toUpperCase()
+    if (pt === '') return
+    setSyncing(true)
+    try {
+      const r = await fetch(
+        `${getBackendUrl()}/api/pim/mappings/${active.channel}/${active.code}/sync-schema`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ productType: pt }),
+        },
+      )
+      if (!r.ok) {
+        const body = await r.json().catch(() => ({}))
+        const hint = body?.hint ? `\n${body.hint}` : ''
+        throw new Error((body?.error ?? `HTTP ${r.status}`) + hint)
+      }
+      const result = await r.json()
+      toast.success(
+        `Synced ${result.upserted} fields from ${pt}`,
+        { description: `Snapshot ${result.schemaSnapshotVersion}` },
+      )
+      await Promise.all([fetchMarketplaces(), fetchView()])
+    } catch (e: any) {
+      toast.error('Schema sync failed', { description: e?.message })
+    } finally {
+      setSyncing(false)
+    }
+  }, [active, productType, fetchMarketplaces, fetchView, toast])
 
   // D.5 — run pre-publish validation for one product against the
   // active marketplace's mapping rules.
@@ -398,14 +439,41 @@ export default function MappingsClient() {
                       : 'never synced'}
                   </p>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => void fetchView()}
-                  className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
-                >
-                  <RefreshCw className="w-3 h-3" />
-                  Refresh
-                </button>
+                <div className="flex items-center gap-2">
+                  {active?.channel === 'AMAZON' && (
+                    <div className="flex items-center gap-1">
+                      <Input
+                        value={productType}
+                        onChange={(e) => setProductType(e.target.value)}
+                        placeholder="productType (e.g. OUTERWEAR)"
+                        className="w-52 text-xs font-mono"
+                        disabled={syncing}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => void handleSyncSchema()}
+                        disabled={syncing || productType.trim() === ''}
+                        className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800 disabled:opacity-40"
+                        title="Fetch live JSON Schema from Amazon SP-API and upsert fields"
+                      >
+                        {syncing ? (
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                        ) : (
+                          <DownloadCloud className="w-3 h-3" />
+                        )}
+                        Sync schema
+                      </button>
+                    </div>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => void fetchView()}
+                    className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
+                  >
+                    <RefreshCw className="w-3 h-3" />
+                    Refresh
+                  </button>
+                </div>
               </div>
             </header>
             {/* D.5 — Validate-against-product panel */}
