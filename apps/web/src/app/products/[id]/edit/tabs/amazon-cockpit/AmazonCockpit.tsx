@@ -41,6 +41,7 @@ import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { cn } from '@/lib/utils'
+import { useTranslations } from '@/lib/i18n/use-translations'
 import ChannelListingTab from '../ChannelListingTab'
 import { useAmazonCompositor } from './useAmazonCompositor'
 import { useAmazonCockpitMode } from './useAmazonCockpitMode'
@@ -171,6 +172,7 @@ export default function AmazonCockpit(props: Props) {
     discardActiveMarket,
   } = props
   const [, setMode] = useAmazonCockpitMode()
+  const { t } = useTranslations()
   const [previewOpen, setPreviewOpen] = useState(true)
   const [classicOpen, setClassicOpen] = useState(true)
 
@@ -334,7 +336,7 @@ export default function AmazonCockpit(props: Props) {
           {chips.length > 1 && (
             <div className="px-4 py-2 border-b border-slate-100 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/40 flex items-center gap-3 flex-wrap">
               <span className="text-[10.5px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                Markets
+                {t('products.edit.cockpit.amazon.markets')}
               </span>
               <MarketChipStrip
                 markets={chips}
@@ -345,7 +347,7 @@ export default function AmazonCockpit(props: Props) {
                 className="min-w-0 flex-1"
               />
               <span className="text-[10.5px] text-slate-400 hidden md:inline">
-                Alt+1..9 to switch · hover prefetches the schema
+                {t('products.edit.cockpit.amazon.markets.hint')}
               </span>
             </div>
           )}
@@ -421,7 +423,7 @@ export default function AmazonCockpit(props: Props) {
                 disabled
                 title="Coming in AC.11 — until then use the classic Pull below"
               >
-                Pull
+                {t('products.edit.cockpit.amazon.actionPull')}
               </Button>
               <Button
                 variant="secondary"
@@ -430,7 +432,7 @@ export default function AmazonCockpit(props: Props) {
                 disabled
                 title="Coming in AC.11 — until then use the classic AI Translate below"
               >
-                AI improve
+                {t('products.edit.cockpit.amazon.actionAiImprove')}
               </Button>
               <Button
                 size="sm"
@@ -438,7 +440,7 @@ export default function AmazonCockpit(props: Props) {
                 onClick={() => handleJumpTo('publish')}
                 title="Pick markets + submit via JSON_LISTINGS_FEED"
               >
-                Publish
+                {t('products.edit.cockpit.amazon.actionPublish')}
               </Button>
               <button
                 type="button"
@@ -451,9 +453,10 @@ export default function AmazonCockpit(props: Props) {
                   setMode('classic')
                 }}
                 className="ml-1 inline-flex items-center gap-1 text-xs text-slate-500 hover:text-slate-900 dark:hover:text-slate-200 underline-offset-2 hover:underline"
-                title="Switch back to the legacy Amazon tab for this session"
+                title={t('products.edit.cockpit.amazon.classicViewTitle')}
               >
-                <Settings2 className="w-3 h-3" /> Classic view
+                <Settings2 className="w-3 h-3" />{' '}
+                {t('products.edit.cockpit.amazon.classicView')}
               </button>
             </div>
           </div>
@@ -469,10 +472,12 @@ export default function AmazonCockpit(props: Props) {
         >
           <div className="flex items-center gap-2">
             <span className="text-md font-medium text-slate-900 dark:text-slate-100">
-              Live preview
+              {t('products.edit.cockpit.amazon.preview.title')}
             </span>
             <span className="text-xs text-slate-500 dark:text-slate-400">
-              How buyers will see this on Amazon {marketInfo.code}
+              {t('products.edit.cockpit.amazon.preview.subtitle', {
+                market: marketInfo.code,
+              })}
             </span>
           </div>
           {previewOpen ? (
@@ -553,7 +558,7 @@ export default function AmazonCockpit(props: Props) {
         <PlaceholderCard
           targetId="identifiers"
           icon={<Hash className="w-4 h-4" />}
-          title="Identifiers"
+          title={t('products.edit.cockpit.amazon.cards.identifiers')}
           phase="AC.4 + AC.10"
           value={[
             composed.asin.value ? `ASIN ${composed.asin.value}` : 'No ASIN',
@@ -615,7 +620,7 @@ export default function AmazonCockpit(props: Props) {
         <PlaceholderCard
           targetId="fulfillment"
           icon={<Truck className="w-4 h-4" />}
-          title="Fulfillment (FBA/FBM)"
+          title={t('products.edit.cockpit.amazon.cards.fulfillment')}
           phase="AC.9"
           value={
             composed.fulfillmentChannel.value
@@ -633,13 +638,13 @@ export default function AmazonCockpit(props: Props) {
         <PlaceholderCard
           targetId="compliance"
           icon={<ShieldCheck className="w-4 h-4" />}
-          title="Policies & Compliance"
+          title={t('products.edit.cockpit.amazon.cards.compliance')}
           phase="AC.4"
           value="GPSR · Hazmat · Battery · Country of origin — checks land in AC.4"
         />
         <PlaceholderCard
           icon={<Package className="w-4 h-4" />}
-          title="Compatibility"
+          title={t('products.edit.cockpit.amazon.cards.compatibility')}
           phase="AC.13"
           value="Xavia motorcycle gear — model/year fit list editor"
         />
@@ -658,11 +663,13 @@ export default function AmazonCockpit(props: Props) {
         >
           <div className="flex items-center gap-2">
             <span className="text-md font-medium text-slate-900 dark:text-slate-100">
-              Existing Amazon fields
+              {t('products.edit.cockpit.amazon.classic.title')}
             </span>
-            <Badge variant="info">transitional</Badge>
+            <Badge variant="info">
+              {t('products.edit.cockpit.amazon.classic.transitional')}
+            </Badge>
             <span className="text-xs text-slate-500 dark:text-slate-400">
-              All current Amazon tab functionality (AG-series grouped form), kept live while AC.4–AC.10 land
+              {t('products.edit.cockpit.amazon.classic.subtitle')}
             </span>
           </div>
           {classicOpen ? (

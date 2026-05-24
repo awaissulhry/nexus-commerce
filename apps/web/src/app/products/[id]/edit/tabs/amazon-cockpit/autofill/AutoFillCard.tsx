@@ -39,6 +39,7 @@ import {
 import { Button } from '@/components/ui/Button'
 import { cn } from '@/lib/utils'
 import { getBackendUrl } from '@/lib/backend-url'
+import { useTranslations } from '@/lib/i18n/use-translations'
 import { setDraftField } from '../../../_shared/draft-bus/useProductDraftBus'
 import { announce } from '../../../_shared/announce/useAnnounce'
 import { postCockpitEvent } from '../../../_shared/telemetry/cockpit-telemetry'
@@ -108,6 +109,7 @@ export default function AutoFillCard({
   siblingListings = [],
   onJumpToClassic,
 }: Props) {
+  const { t } = useTranslations()
   const currentKeywords = productKeywords ?? []
   const [busy, setBusy] = useState<'master' | 'ai' | 'sibling' | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -389,7 +391,7 @@ export default function AutoFillCard({
         <div className="inline-flex items-center gap-2 min-w-0">
           <Sparkles className="w-4 h-4 text-blue-600 dark:text-blue-400 flex-shrink-0" />
           <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-            Smart auto-fill
+            {t('products.edit.cockpit.amazon.cards.autofill')}
           </span>
           <span className="text-[10.5px] text-slate-500 dark:text-slate-400">
             One-click title + bullets + description from Master, AI, or a sibling market

@@ -19,6 +19,7 @@
 import { useState } from 'react'
 import { ChevronDown, ChevronRight, AlertOctagon } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useTranslations } from '@/lib/i18n/use-translations'
 import type {
   HealthCheck,
   HealthReport,
@@ -87,8 +88,13 @@ const GROUP_META: Record<CheckGroup, { label: string; tone: string; tip: string 
 }
 
 export default function HealthPanel({ report, onJumpTo, className }: Props) {
+  const { t } = useTranslations()
   const [polishOpen, setPolishOpen] = useState(false)
   const style = STATUS_STYLE[report.status]
+  // AC.13.2 — translate the status pill label via the i18n catalog.
+  const statusLabel = t(
+    `products.edit.cockpit.amazon.health.${report.status}`,
+  )
 
   // Group checks for rendering.
   const grouped: Record<CheckGroup, HealthCheck[]> = {
@@ -112,7 +118,7 @@ export default function HealthPanel({ report, onJumpTo, className }: Props) {
         <ScoreDonut score={report.score} ringClass={style.ring} />
         <div className="min-w-0 flex-1">
           <div className={cn('text-sm font-bold', style.text)}>
-            {style.label}
+            {statusLabel}
           </div>
           <div className="text-[11px] text-slate-600 dark:text-slate-400 mt-0.5">
             {report.summary.blocker.pass}/{report.summary.blocker.total} blockers ·{' '}

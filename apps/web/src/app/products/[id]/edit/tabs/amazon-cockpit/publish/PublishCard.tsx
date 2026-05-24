@@ -34,6 +34,7 @@ import {
 import { Button } from '@/components/ui/Button'
 import { cn } from '@/lib/utils'
 import { getBackendUrl } from '@/lib/backend-url'
+import { useTranslations } from '@/lib/i18n/use-translations'
 import type { HealthReport, HealthStatus } from '../health/computeHealthScore'
 import {
   classifyStatus,
@@ -121,6 +122,7 @@ export default function PublishCard({
   activeHealth,
   markets,
 }: Props) {
+  const { t } = useTranslations()
   const [selected, setSelected] = useState<Set<string>>(
     () => new Set([activeMarketplace]),
   )
@@ -399,10 +401,10 @@ export default function PublishCard({
         <div className="inline-flex items-center gap-2">
           <Send className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
           <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-            Publish to Amazon
+            {t('products.edit.cockpit.amazon.publish.title')}
           </span>
           <span className="text-[10.5px] text-slate-500 dark:text-slate-400">
-            Multi-market submit via JSON_LISTINGS_FEED
+            {t('products.edit.cockpit.amazon.publish.subtitle')}
           </span>
         </div>
       </div>
