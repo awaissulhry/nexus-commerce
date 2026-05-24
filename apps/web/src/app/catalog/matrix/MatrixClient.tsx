@@ -49,6 +49,8 @@ import ColumnPicker from './_shared/ColumnPicker'
 import SavedViewsMenu from './_shared/SavedViewsMenu'
 import SelectionBar from './_shared/SelectionBar'
 import BulkApplyDialog, { type FieldKey } from './_shared/BulkApplyDialog'
+import AuditDrawer from './_shared/AuditDrawer'
+import { History } from 'lucide-react'
 import {
   BUILTIN_VIEWS,
   loadActiveViewId,
@@ -185,6 +187,9 @@ export default function MatrixClient() {
   // ── C.7 — bulk row selection ────────────────────────────────────
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [bulkOpen, setBulkOpen] = useState(false)
+
+  // ── B.5 — audit drawer state (open per-row on demand) ───────────
+  const [auditOpen, setAuditOpen] = useState<{ productId: string; label: string } | null>(null)
 
   const toggleSelect = useCallback((id: string) => {
     setSelectedIds((prev) => {
@@ -523,6 +528,7 @@ export default function MatrixClient() {
                       gridCols={gridCols}
                       selected={selectedIds.has(row.parent.id)}
                       onToggleSelect={toggleSelect}
+                      onOpenAudit={(id, label) => setAuditOpen({ productId: id, label })}
                     />
                   ) : (
                     <VariantRow
@@ -534,6 +540,7 @@ export default function MatrixClient() {
                       gridCols={gridCols}
                       selected={selectedIds.has(row.variant!.id)}
                       onToggleSelect={toggleSelect}
+                      onOpenAudit={(id, label) => setAuditOpen({ productId: id, label })}
                     />
                   )}
                 </div>
@@ -559,6 +566,15 @@ export default function MatrixClient() {
         selectedCount={selectedIds.size}
         onApply={handleBulkApply}
       />
+
+      {auditOpen && (
+        <AuditDrawer
+          open={true}
+          onClose={() => setAuditOpen(null)}
+          productId={auditOpen.productId}
+          productLabel={auditOpen.label}
+        />
+      )}
     </div>
   )
 }
@@ -573,6 +589,7 @@ function ParentRow({
   gridCols,
   selected,
   onToggleSelect,
+  onOpenAudit,
 }: {
   row: MatrixRow
   expanded: boolean
@@ -583,6 +600,7 @@ function ParentRow({
   gridCols: string
   selected: boolean
   onToggleSelect: (id: string) => void
+  onOpenAudit: (productId: string, label: string) => void
 }) {
   const hasVariants = row.variants.length > 0
   return (
@@ -607,6 +625,7 @@ function ParentRow({
           hasVariants={hasVariants}
           selected={selected}
           onToggleSelect={onToggleSelect}
+          onOpenAudit={onOpenAudit}
         />
       ))}
     </div>
@@ -623,6 +642,7 @@ function ParentCell({
   hasVariants,
   selected,
   onToggleSelect,
+  onOpenAudit,
 }: {
   col: ColumnDef
   row: MatrixRow
@@ -633,6 +653,7 @@ function ParentCell({
   hasVariants: boolean
   selected: boolean
   onToggleSelect: (id: string) => void
+  onOpenAudit: (productId: string, label: string) => void
 }) {
   switch (col.id) {
     case '__select':
@@ -740,14 +761,23 @@ function ParentCell({
       )
     case '__actions':
       return (
-        <div className="flex items-center justify-center gap-1">
+        <div className="flex items-center justify-center gap-0.5">
           <SaveIndicator status={status} />
+          <button
+            type="button"
+            onClick={() => onOpenAudit(row.id, `${row.sku} — ${row.name ?? 'unnamed'}`)}
+            className="flex items-center justify-center w-5 h-5 rounded text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+            aria-label="View activity"
+            title="View activity"
+          >
+            <History className="w-3 h-3" />
+          </button>
           <Link
             href={`/products/${row.id}/edit`}
-            className="flex items-center justify-center text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200"
+            className="flex items-center justify-center w-5 h-5 rounded text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800"
             aria-label="Edit"
           >
-            <ExternalLink className="w-3.5 h-3.5" />
+            <ExternalLink className="w-3 h-3" />
           </Link>
         </div>
       )
@@ -779,6 +809,7 @@ function VariantRow({
   gridCols,
   selected,
   onToggleSelect,
+  onOpenAudit,
 }: {
   parent: MatrixRow
   variant: MatrixVariant
@@ -788,6 +819,7 @@ function VariantRow({
   gridCols: string
   selected: boolean
   onToggleSelect: (id: string) => void
+  onOpenAudit: (productId: string, label: string) => void
 }) {
   return (
     <div
@@ -810,6 +842,7 @@ function VariantRow({
           onUpdate={onUpdate}
           selected={selected}
           onToggleSelect={onToggleSelect}
+          onOpenAudit={onOpenAudit}
         />
       ))}
     </div>
@@ -824,6 +857,7 @@ function VariantCell({
   onUpdate,
   selected,
   onToggleSelect,
+  onOpenAudit,
 }: {
   col: ColumnDef
   parent: MatrixRow
@@ -832,6 +866,7 @@ function VariantCell({
   onUpdate: (rowId: string, field: string, next: unknown, current: unknown) => void
   selected: boolean
   onToggleSelect: (id: string) => void
+  onOpenAudit: (productId: string, label: string) => void
 }) {
   switch (col.id) {
     case '__select':
@@ -927,14 +962,23 @@ function VariantCell({
       )
     case '__actions':
       return (
-        <div className="flex items-center justify-center gap-1">
+        <div className="flex items-center justify-center gap-0.5">
           <SaveIndicator status={status} compact />
+          <button
+            type="button"
+            onClick={() => onOpenAudit(variant.id, `${variant.sku} — ${variant.name ?? 'unnamed'}`)}
+            className="flex items-center justify-center w-5 h-5 rounded text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+            aria-label="View activity"
+            title="View activity"
+          >
+            <History className="w-3 h-3" />
+          </button>
           <Link
             href={`/products/${variant.id}/edit`}
-            className="flex items-center justify-center text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200"
+            className="flex items-center justify-center w-5 h-5 rounded text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800"
             aria-label="Edit"
           >
-            <ExternalLink className="w-3.5 h-3.5" />
+            <ExternalLink className="w-3 h-3" />
           </Link>
         </div>
       )

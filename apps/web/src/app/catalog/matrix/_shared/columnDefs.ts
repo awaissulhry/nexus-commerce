@@ -52,7 +52,7 @@ export const BUILT_IN_COLUMNS: ColumnDef[] = [
   { id: 'status', label: 'Status', width: '100px', editable: true },
   { id: 'channelCoverage', label: 'Channels', width: 'minmax(160px, 1fr)' },
   // Structural — always last
-  { id: '__actions', label: '', width: '60px', required: true, align: 'center' },
+  { id: '__actions', label: '', width: '80px', required: true, align: 'center' },
 ]
 
 /** Default visibility for built-ins: every non-required column is
