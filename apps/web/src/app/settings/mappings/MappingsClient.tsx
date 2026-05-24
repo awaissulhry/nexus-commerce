@@ -22,6 +22,7 @@ import {
   Search,
   RefreshCw,
   Settings as SettingsIcon,
+  Download,
 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { Input } from '@/components/ui/Input'
@@ -61,6 +62,7 @@ export default function MappingsClient() {
   const [view, setView] = useState<MarketplaceView | null>(null)
   const [viewLoading, setViewLoading] = useState(false)
   const [viewError, setViewError] = useState<string | null>(null)
+  const [seeding, setSeeding] = useState(false)
 
   // ── Load marketplaces ───────────────────────────────────────────
   const fetchMarketplaces = useCallback(async () => {
@@ -172,6 +174,33 @@ export default function MappingsClient() {
     [active, fetchView, fetchMarketplaces, toast],
   )
 
+  // ── D.2b — Seed built-in Amazon/eBay/Shopify field definitions ──
+  // Hits the CE-series endpoint that upserts ~30 well-known fields per
+  // channel. Idempotent: re-running is safe (upsert-by-fieldKey). The
+  // mapping editor refetches counts so operators see new fields land.
+  const handleSeedBuiltIns = useCallback(async () => {
+    setSeeding(true)
+    try {
+      const r = await fetch(`${getBackendUrl()}/api/feed-transform/seed-schemas`, {
+        method: 'POST',
+      })
+      if (!r.ok) {
+        const body = await r.json().catch(() => ({}))
+        throw new Error(body?.error ?? `HTTP ${r.status}`)
+      }
+      const result = await r.json().catch(() => ({}))
+      toast.success(
+        `Seeded ${result?.upserted ?? '?'} built-in fields`,
+        { description: 'Amazon, eBay, and Shopify base schemas' },
+      )
+      await Promise.all([fetchMarketplaces(), fetchView()])
+    } catch (e: any) {
+      toast.error('Seed failed', { description: e?.message })
+    } finally {
+      setSeeding(false)
+    }
+  }, [fetchMarketplaces, fetchView, toast])
+
   // ── Filtered marketplace list ───────────────────────────────────
   const filteredMarketplaces = useMemo(() => {
     const needle = search.trim().toLowerCase()
@@ -206,6 +235,20 @@ export default function MappingsClient() {
               className="pl-6 text-xs"
             />
           </div>
+          <button
+            type="button"
+            onClick={handleSeedBuiltIns}
+            disabled={seeding}
+            className="mt-2 w-full inline-flex items-center justify-center gap-1.5 px-2 py-1.5 rounded text-xs text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800 border border-dashed border-zinc-300 dark:border-zinc-700 disabled:opacity-50"
+            title="Upsert ~30 built-in Amazon/eBay/Shopify field definitions. Safe to re-run."
+          >
+            {seeding ? (
+              <Loader2 className="w-3 h-3 animate-spin" />
+            ) : (
+              <Download className="w-3 h-3" />
+            )}
+            Seed built-in schemas
+          </button>
         </div>
 
         <div className="flex-1 overflow-y-auto">
