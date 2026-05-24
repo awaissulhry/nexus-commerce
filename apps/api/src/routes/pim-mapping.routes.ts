@@ -36,6 +36,7 @@ import {
   InvalidMappingError,
   type FieldMappingRule,
 } from '../services/pim/schema-mapping.service.js'
+import { validatePublish } from '../services/pim/publish-validator.js'
 
 const pimMappingRoutes: FastifyPluginAsync = async (fastify) => {
   // ── GET /pim/mappings/marketplaces ──────────────────────────────
@@ -175,6 +176,32 @@ const pimMappingRoutes: FastifyPluginAsync = async (fastify) => {
           return reply.status(400).send({ error: 'invalid_rule', details: err.errors })
         }
         throw err
+      }
+    },
+  )
+
+  // ── GET /pim/mappings/:channel/:code/validate/:productId ────────
+  // PIM D.5 — Pre-publish validation. Walks mapping rules + resolves
+  // each source against the product via attribute-resolver, returns
+  // structured errors for required fields that don't resolve.
+  fastify.get<{
+    Params: { channel: string; code: string; productId: string }
+    Querystring: { locale?: string }
+  }>(
+    '/pim/mappings/:channel/:code/validate/:productId',
+    async (request, reply) => {
+      const { channel, code, productId } = request.params
+      const locale = request.query.locale ?? 'en'
+      try {
+        const result = await validatePublish({ productId, channel, marketplace: code, locale })
+        return reply.send(result)
+      } catch (err: any) {
+        const msg = err?.message ?? 'Validation failed'
+        if (msg.startsWith('Product not found') || msg.startsWith('Marketplace not found')) {
+          return reply.status(404).send({ error: msg })
+        }
+        request.log.error({ err }, 'publish-validation failed')
+        return reply.status(500).send({ error: msg })
       }
     },
   )

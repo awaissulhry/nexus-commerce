@@ -23,6 +23,9 @@ import {
   RefreshCw,
   Settings as SettingsIcon,
   Download,
+  PlayCircle,
+  CheckCircle2,
+  XCircle,
 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { Input } from '@/components/ui/Input'
@@ -63,6 +66,22 @@ export default function MappingsClient() {
   const [viewLoading, setViewLoading] = useState(false)
   const [viewError, setViewError] = useState<string | null>(null)
   const [seeding, setSeeding] = useState(false)
+
+  // D.5 — validate-against-product state
+  const [validateProductId, setValidateProductId] = useState('')
+  const [validating, setValidating] = useState(false)
+  const [validationResult, setValidationResult] = useState<{
+    productId: string
+    productSku: string
+    totalFields: number
+    requiredFields: number
+    ok: boolean
+    errors: Array<{
+      fieldKey: string
+      code: string
+      message: string
+    }>
+  } | null>(null)
 
   // ── Load marketplaces ───────────────────────────────────────────
   const fetchMarketplaces = useCallback(async () => {
@@ -200,6 +219,32 @@ export default function MappingsClient() {
       setSeeding(false)
     }
   }, [fetchMarketplaces, fetchView, toast])
+
+  // D.5 — run pre-publish validation for one product against the
+  // active marketplace's mapping rules.
+  const handleValidate = useCallback(async () => {
+    if (!active) return
+    const pid = validateProductId.trim()
+    if (pid === '') return
+    setValidating(true)
+    setValidationResult(null)
+    try {
+      const r = await fetch(
+        `${getBackendUrl()}/api/pim/mappings/${active.channel}/${active.code}/validate/${encodeURIComponent(pid)}`,
+        { cache: 'no-store' },
+      )
+      if (!r.ok) {
+        const body = await r.json().catch(() => ({}))
+        throw new Error(body?.error ?? `HTTP ${r.status}`)
+      }
+      const data = await r.json()
+      setValidationResult(data)
+    } catch (e: any) {
+      toast.error('Validation failed', { description: e?.message })
+    } finally {
+      setValidating(false)
+    }
+  }, [active, validateProductId, toast])
 
   // ── Filtered marketplace list ───────────────────────────────────
   const filteredMarketplaces = useMemo(() => {
@@ -363,6 +408,89 @@ export default function MappingsClient() {
                 </button>
               </div>
             </header>
+            {/* D.5 — Validate-against-product panel */}
+            <div className="px-4 py-3 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/40 dark:bg-zinc-900/30">
+              <div className="flex items-center gap-2 mb-1.5">
+                <PlayCircle className="w-3.5 h-3.5 text-blue-600" />
+                <span className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                  Validate against a product
+                </span>
+                <span className="text-[10px] text-zinc-500 italic">
+                  Pre-flight check: resolves every required mapping rule against the
+                  product's data; flags fields that would block publish.
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Input
+                  value={validateProductId}
+                  onChange={(e) => setValidateProductId(e.target.value)}
+                  placeholder="Product ID (e.g. clxxx…)"
+                  className="flex-1 font-mono text-xs"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault()
+                      void handleValidate()
+                    }
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => void handleValidate()}
+                  disabled={validating || validateProductId.trim() === ''}
+                  className="inline-flex items-center gap-1 px-3 py-1.5 rounded text-xs font-medium bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {validating ? (
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                  ) : (
+                    <PlayCircle className="w-3 h-3" />
+                  )}
+                  Validate
+                </button>
+              </div>
+              {validationResult && (
+                <div
+                  className={cn(
+                    'mt-2 rounded border p-2 text-xs',
+                    validationResult.ok
+                      ? 'border-emerald-300 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-900/20'
+                      : 'border-red-300 bg-red-50 dark:border-red-800 dark:bg-red-900/20',
+                  )}
+                >
+                  <div className="flex items-center gap-1.5 mb-1">
+                    {validationResult.ok ? (
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                    ) : (
+                      <XCircle className="w-3.5 h-3.5 text-red-600" />
+                    )}
+                    <span
+                      className={cn(
+                        'font-medium',
+                        validationResult.ok
+                          ? 'text-emerald-700 dark:text-emerald-300'
+                          : 'text-red-700 dark:text-red-300',
+                      )}
+                    >
+                      {validationResult.productSku}{' '}
+                      {validationResult.ok ? '— publish-ready' : '— would block publish'}
+                    </span>
+                    <span className="text-[10px] text-zinc-500 ml-auto">
+                      {validationResult.errors.length} error(s) ·{' '}
+                      {validationResult.totalFields} fields
+                    </span>
+                  </div>
+                  {validationResult.errors.length > 0 && (
+                    <ul className="mt-1 space-y-1 ml-4 list-disc">
+                      {validationResult.errors.map((e, i) => (
+                        <li key={i} className="text-red-700 dark:text-red-300">
+                          <span className="font-mono">{e.fieldKey}</span>: {e.message}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
+            </div>
+
             {view.fields.length === 0 ? (
               <div className="text-center py-16 text-zinc-500 text-sm">
                 No schema fields yet for this marketplace.
