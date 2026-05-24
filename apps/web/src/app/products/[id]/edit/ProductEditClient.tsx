@@ -1324,6 +1324,12 @@ export default function ProductEditClient({
           }
 
           const tabKey = `channel:${channel}:${selectedMarket}`
+          // AC.3 — When Amazon cockpit is active its own chip strip
+          // replaces the MarketplaceSidebar. Hide the left rail so
+          // the cockpit gets full width, and drop the 200px grid
+          // column so the layout collapses to single-column.
+          const amazonCockpitMounted =
+            channel === 'AMAZON' && amazonCockpitMode === 'cockpit'
           return (
             <div
               role="tabpanel"
@@ -1331,10 +1337,10 @@ export default function ProductEditClient({
               aria-labelledby={`tab-${channel}`}
               className={cn(
                 'grid gap-6',
-                !isSingleStore && 'grid-cols-[200px_1fr]',
+                !isSingleStore && !amazonCockpitMounted && 'grid-cols-[200px_1fr]',
               )}
             >
-              {!isSingleStore && (
+              {!isSingleStore && !amazonCockpitMounted && (
                 <MarketplaceSidebar
                   channel={channel}
                   marketplaces={channelMarkets}
@@ -1409,6 +1415,22 @@ export default function ProductEditClient({
                     })
                   }
                   childrenList={childrenList}
+                  /* AC.3 — chip-strip wiring. */
+                  onMarketSwitch={(code) =>
+                    setMarketSelection((s) => ({ ...s, [channel]: code }))
+                  }
+                  getDirtyForMarket={(code) =>
+                    dirtyByTab[`channel:${channel}:${code}`] ?? 0
+                  }
+                  flushActiveMarket={async () => {
+                    const e = registry.byTab[tabKey]
+                    if (e?.flush) await e.flush()
+                  }}
+                  discardActiveMarket={() => {
+                    const e = registry.byTab[tabKey]
+                    if (e?.discard) e.discard()
+                    else setDiscardSignal((n) => n + 1)
+                  }}
                 />
               ) : (
                 <>

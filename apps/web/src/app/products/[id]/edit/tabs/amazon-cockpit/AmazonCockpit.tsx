@@ -22,7 +22,7 @@
 // cockpit reads the same template manifest and the same Listing
 // records, but the flat-file grid is never modified.
 
-import { useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import {
   ChevronDown,
   ChevronUp,
@@ -51,6 +51,14 @@ import { useAmazonCompositor } from './useAmazonCompositor'
 import { useAmazonCockpitMode } from './useAmazonCockpitMode'
 import AmazonLivePreview from './AmazonLivePreview'
 import type { ComposedAmazonListing } from './types'
+import MarketChipStrip from '../../_shared/market-switch/MarketChipStrip'
+import {
+  useMarketSwitch,
+  isManifestWarm,
+  markManifestWarm,
+} from '../../_shared/market-switch/useMarketSwitch'
+import type { MarketChip } from '../../_shared/market-switch/types'
+import { getBackendUrl } from '@/lib/backend-url'
 
 interface MarketInfo {
   code: string
@@ -97,8 +105,9 @@ interface Props {
   marketplace: string
   marketInfo: MarketInfo
   siblingMarkets?: MarketInfo[]
-  /** Listings on OTHER Amazon marketplaces — will feed the Compare-
-   *  markets view in AC.3 and the AC.11 multi-market auto-fill. */
+  /** Listings on OTHER Amazon marketplaces — feeds the Compare-
+   *  markets view (later phase) and the AC.11 multi-market auto-
+   *  fill. Also used by AC.3 to compute the status dot per chip. */
   siblingListings?: Listing[]
   listing: Listing | undefined
   onDirtyChange: (count: number) => void
@@ -108,6 +117,18 @@ interface Props {
     discard: () => void
   }) => void
   childrenList?: ChildProduct[]
+  /** AC.3 — Switch to another marketplace. Parent owns the actual
+   *  state update (setMarketSelection) and remount; the cockpit
+   *  handles the dirty-flush prompt and URL sync. */
+  onMarketSwitch?: (code: string) => void
+  /** AC.3 — Returns unsaved field count for the given market, so
+   *  the chip strip can render a per-market dirty badge. */
+  getDirtyForMarket?: (code: string) => number
+  /** AC.3 — Triggered on dirty-prompt "Save & switch". Defaults to
+   *  the same handler the editor registered via onRegister. */
+  flushActiveMarket?: () => Promise<void>
+  /** AC.3 — Triggered on dirty-prompt "Discard & switch". */
+  discardActiveMarket?: () => void
 }
 
 const STATUS_TONE: Record<string, { bg: string; text: string }> = {
@@ -124,8 +145,13 @@ export default function AmazonCockpit(props: Props) {
     marketplace,
     marketInfo,
     siblingMarkets,
+    siblingListings = [],
     listing,
     childrenList,
+    onMarketSwitch,
+    getDirtyForMarket,
+    flushActiveMarket,
+    discardActiveMarket,
   } = props
   const [, setMode] = useAmazonCockpitMode()
   const [previewOpen, setPreviewOpen] = useState(true)
@@ -141,11 +167,98 @@ export default function AmazonCockpit(props: Props) {
   const tone =
     STATUS_TONE[composed.status.listingStatus] ?? STATUS_TONE.DRAFT
 
+  // AC.3 — Build the chip array from marketInfo + siblingMarkets, in
+  // a stable order (current first, then siblings in their original
+  // marketplace seed order). Per-market status comes from the
+  // listings the parent already fetched; dirty counts come from the
+  // parent's registry via getDirtyForMarket.
+  const chips = useMemo<MarketChip[]>(() => {
+    const ordered: MarketInfo[] = [
+      marketInfo,
+      ...(siblingMarkets ?? []),
+    ].filter(
+      (m, i, arr) => arr.findIndex((x) => x.code === m.code) === i,
+    )
+    return ordered.map((m) => {
+      const l =
+        m.code === marketInfo.code
+          ? listing
+          : siblingListings.find((sl) => sl.marketplace === m.code)
+      return {
+        code: m.code,
+        name: m.name,
+        hasListing: !!l,
+        listingStatus: l?.listingStatus ?? null,
+        dirtyCount: getDirtyForMarket?.(m.code) ?? 0,
+      }
+    })
+  }, [marketInfo, siblingMarkets, listing, siblingListings, getDirtyForMarket])
+
+  // AC.3 — Hover-warm. Primes the schema template cache for the
+  // hovered (marketplace, productType) tuple so a subsequent click
+  // paints instantly. Uses the SAME endpoint the flat-file editor
+  // uses (5-min TtlCache on the API). No state in the cockpit —
+  // we just fire-and-forget the GET; the SWR-style cache lives
+  // server-side. Module-level isManifestWarm guard avoids re-firing
+  // within the 5-min window.
+  const productType =
+    (product?.productType as string | null | undefined) ?? null
+  const handleHoverWarm = useCallback(
+    (code: string) => {
+      if (!productType) return
+      const cacheKey = `amazon:${code}:${productType}`
+      if (isManifestWarm(cacheKey)) return
+      markManifestWarm(cacheKey)
+      const url = `${getBackendUrl()}/api/amazon/flat-file/template?marketplace=${encodeURIComponent(code)}&productType=${encodeURIComponent(productType)}`
+      // No await; pre-warm only.
+      fetch(url, { credentials: 'include' }).catch(() => {
+        // Swallow — pre-warm failures shouldn't ever surface.
+      })
+    },
+    [productType],
+  )
+
+  // AC.3 — Switch hook. Calls back to parent's onMarketSwitch after
+  // resolving the dirty prompt. URL ?market= sync is owned here.
+  const activeDirty = getDirtyForMarket?.(marketInfo.code) ?? 0
+  const { switchTo } = useMarketSwitch({
+    channel: 'AMAZON',
+    active: marketInfo.code,
+    markets: chips,
+    onSwitch: (code) => onMarketSwitch?.(code),
+    flush: flushActiveMarket,
+    discard: discardActiveMarket,
+    isDirty: activeDirty,
+    syncUrl: true,
+  })
+
   return (
     <div className="space-y-4">
       {/* ── Zone 1: Header strip ────────────────────────────────── */}
       <div className="sticky top-14 z-[5]">
         <Card noPadding>
+          {/* AC.3 — Market chip strip. Sits above the title row so
+              operators can flick between markets without scrolling.
+              Alt+1..9 wired via useMarketSwitch; hover prefetch hits
+              the cached flat-file template endpoint. */}
+          {chips.length > 1 && (
+            <div className="px-4 py-2 border-b border-slate-100 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/40 flex items-center gap-3 flex-wrap">
+              <span className="text-[10.5px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                Markets
+              </span>
+              <MarketChipStrip
+                markets={chips}
+                active={marketInfo.code}
+                onSelect={(code) => void switchTo(code)}
+                onHoverWarm={handleHoverWarm}
+                shortcutsHint
+                className="min-w-0 flex-1"
+              />
+              <span className="text-[10.5px] text-slate-400 hidden md:inline">
+                Alt+1..9 to switch · hover prefetches the schema
+              </span>
+            </div>
+          )}
           <div className="px-4 py-3 flex items-center justify-between flex-wrap gap-3">
             <div className="flex items-center gap-3 min-w-0">
               <Badge mono variant={listing ? 'info' : 'warning'}>
