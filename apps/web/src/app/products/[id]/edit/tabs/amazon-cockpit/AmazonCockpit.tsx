@@ -1,0 +1,568 @@
+'use client'
+
+// AC.1 — AmazonCockpit shell.
+//
+// 3-zone layout for the new Amazon listing surface:
+//   • Header strip: market chip, listing status, ASIN, fulfillment
+//     channel pill, "back to classic" link, and placeholder action
+//     buttons (Pull / AI / Publish — wired in AC.11 + AC.12).
+//   • Preview / health band (collapsible): placeholder for the AC.2
+//     live PDP preview + a placeholder for the AC.4 health score.
+//   • Cards section: stubs for Identifiers, Category & Browse Node,
+//     Variations Matrix, Images, A+ Content, Pricing & Offers, FBA/
+//     FBM, Suppression & Quality, Compliance. Each card fills in
+//     across AC.4–AC.10.
+//
+// During AC.1 we ALSO render the existing ChannelListingTab below
+// the cards as a transitional pass-through so no Amazon functionality
+// is lost while the cockpit cards land. The pass-through goes away
+// phase-by-phase as each card supersedes the corresponding section.
+//
+// Hard constraint: /products/amazon-flat-file is OFF-LIMITS. The
+// cockpit reads the same template manifest and the same Listing
+// records, but the flat-file grid is never modified.
+
+import { useState } from 'react'
+import {
+  ChevronDown,
+  ChevronUp,
+  ArrowDownToLine,
+  Sparkles,
+  Send,
+  ExternalLink,
+  Settings2,
+  Package,
+  Image as ImageIcon,
+  DollarSign,
+  ShieldCheck,
+  Layers,
+  Tag,
+  Hash,
+  Truck,
+  AlertOctagon,
+  FileBadge,
+} from 'lucide-react'
+import { Card } from '@/components/ui/Card'
+import { Badge } from '@/components/ui/Badge'
+import { Button } from '@/components/ui/Button'
+import { cn } from '@/lib/utils'
+import ChannelListingTab from '../ChannelListingTab'
+import { useAmazonCompositor } from './useAmazonCompositor'
+import { useAmazonCockpitMode } from './useAmazonCockpitMode'
+import type { ComposedAmazonListing } from './types'
+
+interface MarketInfo {
+  code: string
+  name: string
+  channel: string
+  marketplaceId?: string | null
+  region: string
+  currency: string
+  language: string
+  domainUrl?: string | null
+}
+
+interface Listing {
+  id: string
+  channel: string
+  marketplace: string
+  channelMarket: string
+  region: string
+  title: string | null
+  description: string | null
+  price: string | number | null
+  quantity: number | null
+  isPublished: boolean
+  listingStatus: string
+  externalListingId: string | null
+  bulletPointsOverride: string[] | null
+  pricingRule?: string | null
+  priceOverride?: string | number | null
+  priceAdjustmentPercent?: string | number | null
+  followMasterPrice?: boolean
+  platformAttributes?: Record<string, unknown> | null
+  [key: string]: any
+}
+
+interface ChildProduct {
+  id: string
+  sku: string
+  name?: string | null
+  variantLabel?: string | null
+}
+
+interface Props {
+  product: any
+  marketplace: string
+  marketInfo: MarketInfo
+  siblingMarkets?: MarketInfo[]
+  /** Listings on OTHER Amazon marketplaces — will feed the Compare-
+   *  markets view in AC.3 and the AC.11 multi-market auto-fill. */
+  siblingListings?: Listing[]
+  listing: Listing | undefined
+  onDirtyChange: (count: number) => void
+  onSave: (updated: Listing) => void
+  onRegister?: (handlers: {
+    flush: () => Promise<void>
+    discard: () => void
+  }) => void
+  childrenList?: ChildProduct[]
+}
+
+const STATUS_TONE: Record<string, { bg: string; text: string }> = {
+  ACTIVE:     { bg: 'bg-emerald-100 dark:bg-emerald-950/50', text: 'text-emerald-700 dark:text-emerald-300' },
+  DRAFT:      { bg: 'bg-amber-100 dark:bg-amber-950/50',     text: 'text-amber-700 dark:text-amber-300'     },
+  INACTIVE:   { bg: 'bg-slate-100 dark:bg-slate-800',        text: 'text-slate-600 dark:text-slate-400'     },
+  SUPPRESSED: { bg: 'bg-rose-100 dark:bg-rose-950/50',       text: 'text-rose-700 dark:text-rose-300'       },
+  ERROR:      { bg: 'bg-rose-100 dark:bg-rose-950/50',       text: 'text-rose-700 dark:text-rose-300'       },
+}
+
+export default function AmazonCockpit(props: Props) {
+  const {
+    product,
+    marketplace,
+    marketInfo,
+    siblingMarkets,
+    listing,
+    childrenList,
+  } = props
+  const [, setMode] = useAmazonCockpitMode()
+  const [previewOpen, setPreviewOpen] = useState(true)
+  const [classicOpen, setClassicOpen] = useState(true)
+
+  const composed = useAmazonCompositor({
+    product,
+    listing,
+    marketInfo,
+    children: childrenList?.map((c) => ({ id: c.id })) ?? [],
+  })
+
+  const tone =
+    STATUS_TONE[composed.status.listingStatus] ?? STATUS_TONE.DRAFT
+
+  return (
+    <div className="space-y-4">
+      {/* ── Zone 1: Header strip ────────────────────────────────── */}
+      <div className="sticky top-14 z-[5]">
+        <Card noPadding>
+          <div className="px-4 py-3 flex items-center justify-between flex-wrap gap-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <Badge mono variant={listing ? 'info' : 'warning'}>
+                {marketInfo.code}
+              </Badge>
+              <div className="min-w-0">
+                <div className="text-md font-semibold text-slate-900 dark:text-slate-100 truncate flex items-center gap-2 flex-wrap">
+                  {marketInfo.name}
+                  <span
+                    className={cn(
+                      'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10.5px] font-medium',
+                      tone.bg,
+                      tone.text,
+                    )}
+                  >
+                    {composed.status.listingStatus}
+                  </span>
+                  {composed.fulfillmentChannel.value && (
+                    <span
+                      className={cn(
+                        'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10.5px] font-medium',
+                        composed.fulfillmentChannel.value === 'FBA'
+                          ? 'bg-blue-100 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300'
+                          : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300',
+                      )}
+                    >
+                      <Truck className="w-2.5 h-2.5" />
+                      {composed.fulfillmentChannel.value}
+                    </span>
+                  )}
+                  {composed.status.publicUrl && (
+                    <a
+                      href={composed.status.publicUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-xs text-blue-600 dark:text-blue-400 hover:underline inline-flex items-center gap-0.5"
+                    >
+                      View <ExternalLink className="w-3 h-3" />
+                    </a>
+                  )}
+                </div>
+                <div className="text-sm text-slate-500 dark:text-slate-400 mt-0.5 flex items-center gap-2 flex-wrap">
+                  {composed.asin.value ? (
+                    <span className="font-mono text-xs">
+                      ASIN {composed.asin.value}
+                    </span>
+                  ) : (
+                    <span>No ASIN — listing not yet published on this marketplace</span>
+                  )}
+                  <span>·</span>
+                  <span className="font-mono text-xs">SKU {composed.sku}</span>
+                  <span>·</span>
+                  <span>{marketInfo.currency}</span>
+                  <span>·</span>
+                  <span className="uppercase tracking-wide">
+                    {marketInfo.language}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 flex-wrap">
+              {/* AC.1 — placeholder action buttons. The real Pull /
+                  AI improve / Publish wiring lives in the classic
+                  pane below until AC.11–AC.12 land replacements. */}
+              <Button
+                variant="secondary"
+                size="sm"
+                icon={<ArrowDownToLine className="w-3.5 h-3.5" />}
+                disabled
+                title="Coming in AC.11 — until then use the classic Pull below"
+              >
+                Pull
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                icon={<Sparkles className="w-3.5 h-3.5" />}
+                disabled
+                title="Coming in AC.11 — until then use the classic AI Translate below"
+              >
+                AI improve
+              </Button>
+              <Button
+                size="sm"
+                icon={<Send className="w-3.5 h-3.5" />}
+                disabled
+                title="Coming in AC.12 — until then use the classic Publish below"
+              >
+                Publish
+              </Button>
+              <button
+                type="button"
+                onClick={() => setMode('classic')}
+                className="ml-1 inline-flex items-center gap-1 text-xs text-slate-500 hover:text-slate-900 dark:hover:text-slate-200 underline-offset-2 hover:underline"
+                title="Switch back to the legacy Amazon tab for this session"
+              >
+                <Settings2 className="w-3 h-3" /> Classic view
+              </button>
+            </div>
+          </div>
+        </Card>
+      </div>
+
+      {/* ── Zone 2: Preview + Health band (collapsible) ───────────── */}
+      <Card noPadding>
+        <button
+          type="button"
+          onClick={() => setPreviewOpen((o) => !o)}
+          className="w-full px-4 py-2.5 flex items-center justify-between text-left border-b border-slate-100 dark:border-slate-800"
+        >
+          <div className="flex items-center gap-2">
+            <span className="text-md font-medium text-slate-900 dark:text-slate-100">
+              Live preview
+            </span>
+            <span className="text-xs text-slate-500 dark:text-slate-400">
+              How buyers will see this on Amazon {marketInfo.code}
+            </span>
+          </div>
+          {previewOpen ? (
+            <ChevronUp className="w-4 h-4 text-slate-400" />
+          ) : (
+            <ChevronDown className="w-4 h-4 text-slate-400" />
+          )}
+        </button>
+        {previewOpen && (
+          <div className="p-4 grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-4 bg-slate-50/40 dark:bg-slate-900/30">
+            <PreviewPlaceholder composed={composed} />
+            <HealthRail composed={composed} />
+          </div>
+        )}
+      </Card>
+
+      {/* ── Zone 3: Cards placeholders (AC.4–AC.10) ─────────────── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+        <PlaceholderCard
+          icon={<Hash className="w-4 h-4" />}
+          title="Identifiers"
+          phase="AC.4 + AC.10"
+          value={[
+            composed.asin.value ? `ASIN ${composed.asin.value}` : 'No ASIN',
+            composed.gtin.value ? `GTIN ${composed.gtin.value}` : 'No GTIN',
+            composed.brand.value ? `Brand ${composed.brand.value}` : 'No brand',
+          ].join(' · ')}
+        />
+        <PlaceholderCard
+          icon={<Tag className="w-4 h-4" />}
+          title="Category & Browse Node"
+          phase="AC.7"
+          value={
+            composed.productType.value || composed.browseNodeId.value
+              ? `${composed.productType.value ?? '—'} · node ${composed.browseNodeId.value ?? '—'}`
+              : 'No product type / browse node assigned'
+          }
+        />
+        <PlaceholderCard
+          icon={<Layers className="w-4 h-4" />}
+          title="Variations Matrix"
+          phase="AC.6"
+          value={
+            composed.variationSummary.variantCount > 0
+              ? `${composed.variationSummary.publishedVariantCount}/${composed.variationSummary.variantCount} published · theme ${composed.variationTheme.value ?? 'auto-detect'} · axes: ${composed.variationSummary.axes.join(', ') || '—'}`
+              : 'No variations'
+          }
+        />
+        <PlaceholderCard
+          icon={<ImageIcon className="w-4 h-4" />}
+          title="Images"
+          phase="AC.5"
+          value={`${composed.galleryUrls.value.length}/9 images in gallery`}
+        />
+        <PlaceholderCard
+          icon={<FileBadge className="w-4 h-4" />}
+          title="A+ Content"
+          phase="AC.8"
+          value={
+            composed.aplusSummary.moduleCount > 0
+              ? `${composed.aplusSummary.moduleCount} modules · ${composed.aplusSummary.approvalStatus}${composed.aplusSummary.brandStoryAttached ? ' · Brand Story attached' : ''}`
+              : 'No A+ modules attached — opportunity'
+          }
+        />
+        <PlaceholderCard
+          icon={<DollarSign className="w-4 h-4" />}
+          title="Pricing & Offers"
+          phase="AC.9"
+          value={
+            composed.price.value != null
+              ? `${composed.currency} ${composed.price.value.toFixed(2)} · qty ${composed.quantity.value ?? 0}`
+              : 'No price set'
+          }
+        />
+        <PlaceholderCard
+          icon={<Truck className="w-4 h-4" />}
+          title="Fulfillment (FBA/FBM)"
+          phase="AC.9"
+          value={
+            composed.fulfillmentChannel.value
+              ? `${composed.fulfillmentChannel.value} · ${composed.conditionType.value}`
+              : 'Pick FBA or FBM'
+          }
+        />
+        <PlaceholderCard
+          icon={<AlertOctagon className="w-4 h-4" />}
+          title="Suppression & Listing Quality"
+          phase="AC.10"
+          value="Real-time suppression pull lands in AC.10"
+        />
+        <PlaceholderCard
+          icon={<ShieldCheck className="w-4 h-4" />}
+          title="Policies & Compliance"
+          phase="AC.4"
+          value="GPSR · Hazmat · Battery · Country of origin — checks land in AC.4"
+        />
+        <PlaceholderCard
+          icon={<Package className="w-4 h-4" />}
+          title="Compatibility"
+          phase="AC.13"
+          value="Xavia motorcycle gear — model/year fit list editor"
+        />
+      </div>
+
+      {/* ── Transitional pass-through ─────────────────────────────────
+          AC.1 keeps all existing ChannelListingTab functionality alive
+          below the cards. Each AC.4–AC.10 phase replaces a section of
+          this pane until the pass-through goes away. */}
+      <Card noPadding>
+        <button
+          type="button"
+          onClick={() => setClassicOpen((o) => !o)}
+          className="w-full px-4 py-2.5 flex items-center justify-between text-left border-b border-slate-100 dark:border-slate-800"
+        >
+          <div className="flex items-center gap-2">
+            <span className="text-md font-medium text-slate-900 dark:text-slate-100">
+              Existing Amazon fields
+            </span>
+            <Badge variant="info">transitional</Badge>
+            <span className="text-xs text-slate-500 dark:text-slate-400">
+              All current Amazon tab functionality (AG-series grouped form), kept live while AC.4–AC.10 land
+            </span>
+          </div>
+          {classicOpen ? (
+            <ChevronUp className="w-4 h-4 text-slate-400" />
+          ) : (
+            <ChevronDown className="w-4 h-4 text-slate-400" />
+          )}
+        </button>
+        {classicOpen && (
+          <div className="p-4">
+            <ChannelListingTab
+              product={product}
+              channel="AMAZON"
+              marketplace={marketplace}
+              marketInfo={marketInfo}
+              siblingMarkets={siblingMarkets}
+              listing={listing}
+              onDirtyChange={props.onDirtyChange}
+              onSave={props.onSave}
+              onRegister={props.onRegister}
+              childrenList={childrenList}
+            />
+          </div>
+        )}
+      </Card>
+    </div>
+  )
+}
+
+// ── Preview placeholder (AC.2 fills this in) ──────────────────────────
+function PreviewPlaceholder({ composed }: { composed: ComposedAmazonListing }) {
+  // AC.1 surfaces a stripped-down "what we'd render" card so the
+  // operator can sanity-check title/price/image flow before AC.2
+  // lands the real Amazon-styled mobile + desktop skin.
+  return (
+    <div className="rounded-lg border border-dashed border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 p-4">
+      <div className="flex items-start gap-4">
+        {composed.primaryImageUrl.value ? (
+          <img
+            src={composed.primaryImageUrl.value}
+            alt=""
+            className="w-32 h-32 object-contain rounded border border-slate-200 dark:border-slate-800 bg-white"
+          />
+        ) : (
+          <div className="w-32 h-32 rounded border border-dashed border-slate-300 dark:border-slate-700 grid place-items-center text-xs text-slate-400">
+            No image
+          </div>
+        )}
+        <div className="min-w-0 flex-1">
+          {composed.brand.value && (
+            <div className="text-xs text-blue-600 dark:text-blue-400 mb-0.5">
+              Brand: {composed.brand.value}
+            </div>
+          )}
+          <div className="text-md font-semibold text-slate-900 dark:text-slate-100 line-clamp-2">
+            {composed.title.value || 'Untitled listing'}
+          </div>
+          <div className="mt-2 flex items-baseline gap-2">
+            <span className="text-xl font-bold text-rose-700 dark:text-rose-400">
+              {composed.price.value != null
+                ? `${composed.currency} ${composed.price.value.toFixed(2)}`
+                : '—'}
+            </span>
+            {composed.fulfillmentChannel.value === 'FBA' && (
+              <span className="text-[10.5px] font-semibold px-1.5 py-0.5 rounded bg-blue-600 text-white">
+                Prime
+              </span>
+            )}
+          </div>
+          {composed.bullets.value.length > 0 ? (
+            <ul className="mt-2 list-disc list-inside space-y-0.5 text-xs text-slate-700 dark:text-slate-300">
+              {composed.bullets.value.slice(0, 5).map((b, i) => (
+                <li key={i} className="line-clamp-1">{b}</li>
+              ))}
+            </ul>
+          ) : (
+            <div className="mt-2 text-xs text-slate-400 italic">
+              No bullet points yet — Amazon expects 5
+            </div>
+          )}
+        </div>
+      </div>
+      <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800 text-[10.5px] text-slate-400 italic">
+        Placeholder preview — full mobile + desktop Amazon PDP skin lands in AC.2.
+      </div>
+    </div>
+  )
+}
+
+// ── Health rail (AC.4 placeholder) ─────────────────────────────────────
+function HealthRail({ composed }: { composed: ComposedAmazonListing }) {
+  // AC.1 surfaces a few derived counters as a visual placeholder. AC.4
+  // replaces this with the real 0–100 health score + per-market
+  // required-attribute gates + suppression-reason hints.
+  const titleOk =
+    composed.healthHints.titleLength > 0 &&
+    composed.healthHints.titleLength <= 200
+  const descOk = composed.healthHints.descriptionLength >= 200
+  const bulletsOk = composed.healthHints.bulletCount >= 5
+  const imagesOk = composed.healthHints.imageCount >= 4
+  const gtinOk = composed.healthHints.hasGtin
+  const brandOk = composed.healthHints.hasBrand
+  const productTypeOk = composed.healthHints.hasProductType
+  const checks: Array<{ label: string; ok: boolean; hint?: string }> = [
+    { label: 'Title ≤ 200 chars', ok: titleOk, hint: `${composed.healthHints.titleLength}/200` },
+    { label: 'Description ≥ 200', ok: descOk, hint: `${composed.healthHints.descriptionLength}` },
+    { label: 'Bullets ≥ 5', ok: bulletsOk, hint: `${composed.healthHints.bulletCount}/5` },
+    { label: 'Images ≥ 4', ok: imagesOk, hint: `${composed.healthHints.imageCount}` },
+    { label: 'GTIN present', ok: gtinOk },
+    { label: 'Brand set', ok: brandOk },
+    { label: 'Product type', ok: productTypeOk },
+  ]
+  const passed = checks.filter((c) => c.ok).length
+  return (
+    <div className="rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3 space-y-2">
+      <div className="flex items-baseline justify-between">
+        <div className="text-sm font-semibold text-slate-800 dark:text-slate-200">
+          Pre-publish health
+        </div>
+        <div className="text-xs text-slate-500">
+          {passed}/{checks.length}
+        </div>
+      </div>
+      <div className="space-y-1">
+        {checks.map((c) => (
+          <div
+            key={c.label}
+            className="flex items-center justify-between text-xs"
+          >
+            <span className="text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+              <span
+                className={cn(
+                  'w-1.5 h-1.5 rounded-full',
+                  c.ok ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600',
+                )}
+              />
+              {c.label}
+            </span>
+            {c.hint && (
+              <span className="font-mono text-[10.5px] text-slate-400">
+                {c.hint}
+              </span>
+            )}
+          </div>
+        ))}
+      </div>
+      <div className="pt-1 mt-1 border-t border-slate-100 dark:border-slate-800 text-[10.5px] text-slate-400 italic">
+        Placeholder — full score + suppression rules land in AC.4 + AC.10.
+      </div>
+    </div>
+  )
+}
+
+// ── Placeholder card (AC.4–AC.10 fillers) ──────────────────────────────
+function PlaceholderCard({
+  icon,
+  title,
+  phase,
+  value,
+}: {
+  icon: React.ReactNode
+  title: string
+  phase: string
+  value: string
+}) {
+  return (
+    <div className="rounded-lg border border-dashed border-slate-300 dark:border-slate-700 bg-white/60 dark:bg-slate-900/40 p-3.5">
+      <div className="flex items-center justify-between mb-1.5">
+        <div className="inline-flex items-center gap-2 text-sm font-semibold text-slate-800 dark:text-slate-200">
+          <span className="text-slate-400">{icon}</span>
+          {title}
+        </div>
+        <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400">
+          {phase}
+        </span>
+      </div>
+      <div className="text-xs text-slate-600 dark:text-slate-400">{value}</div>
+      <div className="mt-1.5 text-[10.5px] text-slate-400 italic">
+        Edit via the Existing Amazon fields panel below until this card lands.
+      </div>
+    </div>
+  )
+}

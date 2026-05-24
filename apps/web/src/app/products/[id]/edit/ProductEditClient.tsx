@@ -61,6 +61,8 @@ import MatrixTab from './tabs/MatrixTab'
 import ChannelListingTab from './tabs/ChannelListingTab'
 import EbayCockpit from './tabs/ebay-cockpit/EbayCockpit'
 import { useCockpitMode } from './tabs/ebay-cockpit/useCockpitMode'
+import AmazonCockpit from './tabs/amazon-cockpit/AmazonCockpit'
+import { useAmazonCockpitMode } from './tabs/amazon-cockpit/useAmazonCockpitMode'
 import ComplianceTab from './tabs/ComplianceTab'
 import ImagesTab from './tabs/ImagesTab'
 import SeoTab from './tabs/SeoTab'
@@ -210,6 +212,11 @@ export default function ProductEditClient({
   // Operators can flip back to 'classic' from the cockpit header; the
   // choice persists in localStorage. Other channels ignore this flag.
   const [cockpitMode] = useCockpitMode()
+  // AC.1 — Amazon channel UI mode toggle ('cockpit' vs 'classic').
+  // Separate storage key from eBay so the choice doesn't bleed across
+  // channels. Default 'cockpit' during the AC engagement; once AC.12
+  // (publish flow) stabilises we drop the toggle.
+  const [amazonCockpitMode] = useAmazonCockpitMode()
 
   // EH.7 — Pre-warm the API caches that the Datasheet / Flat File /
   // Recover new-tab anchors will hit. Mount-warm kicks off on first
@@ -1371,10 +1378,45 @@ export default function ProductEditClient({
                   }
                   childrenList={childrenList}
                 />
+              ) : channel === 'AMAZON' && amazonCockpitMode === 'cockpit' ? (
+                /* AC.1 — Route Amazon through the Listing Cockpit when
+                   the operator hasn't opted out. The cockpit embeds
+                   ChannelListingTab (channel=AMAZON, AG-series grouped
+                   form) as a transitional pass-through, so no Amazon
+                   functionality is lost while AC.4–AC.10 cards land.
+                   The /products/amazon-flat-file surface is untouched
+                   — the cockpit reuses the same template manifest
+                   endpoint and the same Listing records. */
+                <AmazonCockpit
+                  key={`${channel}_${selectedMarket}_${discardSignal}_cockpit`}
+                  product={product}
+                  marketplace={selectedMarket}
+                  marketInfo={marketInfo}
+                  siblingMarkets={channelMarkets.filter((m) => m.code !== selectedMarket)}
+                  siblingListings={(clientListings[channel] ?? []).filter(
+                    (l: Listing) => l.marketplace !== selectedMarket,
+                  )}
+                  listing={listing}
+                  onDirtyChange={(count) => setTabDirty(tabKey, count)}
+                  onSave={() => router.refresh()}
+                  onRegister={(handlers) =>
+                    registry.register(tabKey, {
+                      label: t('products.edit.discardScopeChannel', {
+                        channel,
+                        marketplace: selectedMarket,
+                      }),
+                      ...handlers,
+                    })
+                  }
+                  childrenList={childrenList}
+                />
               ) : (
                 <>
                   {channel === 'EBAY' && (
                     <ClassicToCockpitBanner />
+                  )}
+                  {channel === 'AMAZON' && (
+                    <ClassicToAmazonCockpitBanner />
                   )}
                   <ChannelListingTab
                   /* W1.1 — discardSignal in the key forces a fresh remount
@@ -1606,6 +1648,29 @@ function ClassicToCockpitBanner() {
         You&apos;re viewing the classic eBay tab. The new Listing Cockpit
         is available with live preview, dynamic aspects, and a visual
         variation matrix.
+      </span>
+      <button
+        type="button"
+        onClick={() => setMode('cockpit')}
+        className="px-2.5 py-1 rounded bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium whitespace-nowrap"
+      >
+        Switch to Cockpit
+      </button>
+    </div>
+  )
+}
+
+// AC.1 — Sibling banner for the Amazon classic-render branch. Same
+// rationale as the eBay variant; separate hook so the choice is
+// per-channel.
+function ClassicToAmazonCockpitBanner() {
+  const [, setMode] = useAmazonCockpitMode()
+  return (
+    <div className="mb-3 px-3 py-2 rounded border border-blue-200 dark:border-blue-800 bg-blue-50/60 dark:bg-blue-950/30 flex items-center justify-between gap-3 text-sm">
+      <span className="text-blue-800 dark:text-blue-300">
+        You&apos;re viewing the classic Amazon tab. The new Listing Cockpit
+        is available with live PDP preview, pre-publish health, variation
+        matrix, and one-click multi-market publish.
       </span>
       <button
         type="button"
