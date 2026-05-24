@@ -46,6 +46,13 @@ import {
   type ColumnDef,
 } from './_shared/columnDefs'
 import ColumnPicker from './_shared/ColumnPicker'
+import SavedViewsMenu from './_shared/SavedViewsMenu'
+import {
+  BUILTIN_VIEWS,
+  loadActiveViewId,
+  saveActiveViewId,
+  type SavedView,
+} from './_shared/savedViews'
 import { Columns as ColumnsIcon } from 'lucide-react'
 
 const STATUS_OPTIONS = [
@@ -117,9 +124,17 @@ export default function MatrixClient() {
   // ── C.4 — column visibility state (localStorage-persisted) ──────
   const [pickerOpen, setPickerOpen] = useState(false)
   const [visibleIds, setVisibleIds] = useState<Set<string>>(() => {
+    // Prefer last active saved view; otherwise stored visibility;
+    // otherwise the hardcoded defaults.
+    const activeId = loadActiveViewId()
+    if (activeId) {
+      const view = [...BUILTIN_VIEWS].find((v) => v.id === activeId)
+      if (view) return new Set(view.columnIds)
+    }
     const stored = loadVisibleColumnIds()
     return new Set(stored ?? DEFAULT_VISIBLE_IDS)
   })
+  const [activeViewId, setActiveViewId] = useState<string | null>(() => loadActiveViewId())
   const dynamicColumns = useMemo(
     () => (data ? discoverDynamicColumns(data.rows) : []),
     [data],
@@ -154,6 +169,15 @@ export default function MatrixClient() {
     const next = new Set(DEFAULT_VISIBLE_IDS)
     saveVisibleColumnIds(Array.from(next))
     setVisibleIds(next)
+  }, [])
+
+  // ── C.6 — apply a saved view (columns + search) ─────────────────
+  const applyView = useCallback((view: SavedView) => {
+    setVisibleIds(new Set(view.columnIds))
+    saveVisibleColumnIds(view.columnIds)
+    setSearch(view.search ?? '')
+    setActiveViewId(view.id)
+    saveActiveViewId(view.id)
   }, [])
   // Keep required columns always in the set so toggleColumn can't
   // accidentally remove them (the picker disables the row but defense
@@ -356,6 +380,14 @@ export default function MatrixClient() {
               <ColumnsIcon className="w-3 h-3" />
               Columns
             </button>
+            <SavedViewsMenu
+              activeViewId={activeViewId}
+              onApply={applyView}
+              currentState={{
+                columnIds: Array.from(visibleIds),
+                search,
+              }}
+            />
           </div>
         </div>
         <div className="relative max-w-md">
