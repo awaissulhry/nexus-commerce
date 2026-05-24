@@ -148,8 +148,29 @@ const BUILT_IN_SCHEMAS: SeedEntry[] = [
 ]
 
 export async function seedBuiltInSchemas(prisma: PrismaClient): Promise<{ upserted: number }> {
+  return seedBuiltInSchemasFiltered(prisma, () => true)
+}
+
+/**
+ * D.1b — Channel-scoped seed. Lets the /pim/mappings sync-schema
+ * endpoint upsert only the rows for one channel (eBay or Shopify)
+ * without touching the others. Amazon stays on live SP-API (D.1).
+ */
+export async function seedBuiltInSchemasForChannel(
+  prisma: PrismaClient,
+  channel: 'AMAZON' | 'EBAY' | 'SHOPIFY',
+): Promise<{ upserted: number; channel: string }> {
+  const { upserted } = await seedBuiltInSchemasFiltered(prisma, (e) => e.channel === channel)
+  return { upserted, channel }
+}
+
+async function seedBuiltInSchemasFiltered(
+  prisma: PrismaClient,
+  predicate: (entry: SeedEntry) => boolean,
+): Promise<{ upserted: number }> {
   let upserted = 0
   for (const entry of BUILT_IN_SCHEMAS) {
+    if (!predicate(entry)) continue
     await prisma.channelSchema.upsert({
       where: {
         channel_marketplace_fieldKey: {

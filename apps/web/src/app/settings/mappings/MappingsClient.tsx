@@ -241,8 +241,9 @@ export default function MappingsClient() {
   // fields into ChannelSchema rows.
   const handleSyncSchema = useCallback(async () => {
     if (!active) return
+    const requiresProductType = active.channel === 'AMAZON'
     const pt = productType.trim().toUpperCase()
-    if (pt === '') return
+    if (requiresProductType && pt === '') return
     setSyncing(true)
     try {
       const r = await fetch(
@@ -250,7 +251,7 @@ export default function MappingsClient() {
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ productType: pt }),
+          body: JSON.stringify(requiresProductType ? { productType: pt } : {}),
         },
       )
       if (!r.ok) {
@@ -259,10 +260,14 @@ export default function MappingsClient() {
         throw new Error((body?.error ?? `HTTP ${r.status}`) + hint)
       }
       const result = await r.json()
-      toast.success(
-        `Synced ${result.upserted} fields from ${pt}`,
-        { description: `Snapshot ${result.schemaSnapshotVersion}` },
-      )
+      const title = requiresProductType
+        ? `Synced ${result.upserted} fields from ${pt}`
+        : `Seeded ${result.upserted} built-in ${active.channel} fields`
+      toast.success(title, {
+        description: result.source === 'sp-api'
+          ? `Live SP-API snapshot · ${result.schemaSnapshotVersion}`
+          : 'Built-in schema (live API integration in D.1c)',
+      })
       await Promise.all([fetchMarketplaces(), fetchView()])
     } catch (e: any) {
       toast.error('Schema sync failed', { description: e?.message })
@@ -477,21 +482,30 @@ export default function MappingsClient() {
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
-                  {active?.channel === 'AMAZON' && (
+                  {active && (
                     <div className="flex items-center gap-1">
-                      <Input
-                        value={productType}
-                        onChange={(e) => setProductType(e.target.value)}
-                        placeholder="productType (e.g. OUTERWEAR)"
-                        className="w-52 text-xs font-mono"
-                        disabled={syncing}
-                      />
+                      {active.channel === 'AMAZON' && (
+                        <Input
+                          value={productType}
+                          onChange={(e) => setProductType(e.target.value)}
+                          placeholder="productType (e.g. OUTERWEAR)"
+                          className="w-52 text-xs font-mono"
+                          disabled={syncing}
+                        />
+                      )}
                       <button
                         type="button"
                         onClick={() => void handleSyncSchema()}
-                        disabled={syncing || productType.trim() === ''}
+                        disabled={
+                          syncing ||
+                          (active.channel === 'AMAZON' && productType.trim() === '')
+                        }
                         className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800 disabled:opacity-40"
-                        title="Fetch live JSON Schema from Amazon SP-API and upsert fields"
+                        title={
+                          active.channel === 'AMAZON'
+                            ? 'Fetch live JSON Schema from Amazon SP-API and upsert fields'
+                            : `Seed built-in ${active.channel} schema fields (live API integration lands in D.1c)`
+                        }
                       >
                         {syncing ? (
                           <Loader2 className="w-3 h-3 animate-spin" />

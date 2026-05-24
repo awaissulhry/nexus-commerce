@@ -41,6 +41,8 @@ import { previewPayload } from '../services/pim/payload-preview.js'
 import { syncSchemaToChannelSchema } from '../services/pim/schema-sync-bridge.js'
 import { CategorySchemaService } from '../services/categories/schema-sync.service.js'
 import { AmazonService } from '../services/marketplaces/amazon.service.js'
+import { seedBuiltInSchemasForChannel } from '../services/feed/channel-schema.service.js'
+import { recordSchemaSync } from '../services/pim/schema-mapping.service.js'
 
 const pimMappingRoutes: FastifyPluginAsync = async (fastify) => {
   // ── GET /pim/mappings/marketplaces ──────────────────────────────
@@ -196,17 +198,52 @@ const pimMappingRoutes: FastifyPluginAsync = async (fastify) => {
   // GetCategorySpecifics + Shopify metafield schema).
   fastify.post<{
     Params: { channel: string; code: string }
-    Body: { productType: string }
+    Body: { productType?: string }
   }>('/pim/mappings/:channel/:code/sync-schema', async (request, reply) => {
     const { channel, code } = request.params
     const productType = request.body?.productType?.trim()
-    if (!productType) {
-      return reply.status(400).send({ error: 'productType is required' })
+
+    // ── eBay + Shopify: seed built-in schemas (D.1b) ─────────────
+    // Schema is fixed (vs Amazon's per-productType JSON Schema), so
+    // we just re-run the channel-scoped built-in seed. Operators
+    // don't need to supply a productType — the seed covers every
+    // known field for that channel in one shot.
+    //
+    // D.1c will replace this with live API fetches:
+    //   - eBay: GetCategorySpecifics (per leaf category)
+    //   - Shopify: metafield definitions per resource
+    if (channel === 'EBAY' || channel === 'SHOPIFY') {
+      try {
+        const seed = await seedBuiltInSchemasForChannel(prisma as any, channel)
+        const snapshot = `${channel}:built-in:${new Date().toISOString()}`
+        await recordSchemaSync(channel, code, snapshot).catch(() => {
+          /* recordSchemaSync needs the marketplace to exist; quietly
+           * fall through when it doesn't — the seed itself succeeded. */
+        })
+        return reply.send({
+          channel,
+          marketplace: code,
+          productType: 'built-in',
+          schemaSnapshotVersion: snapshot,
+          upserted: seed.upserted,
+          skipped: 0,
+          totalProperties: seed.upserted,
+          source: 'built-in',
+        })
+      } catch (err: any) {
+        request.log.error({ err }, '[pim-mapping] sync-schema (built-in) failed')
+        return reply.status(500).send({ error: err?.message ?? 'Built-in seed failed' })
+      }
     }
+
+    // ── Amazon: live SP-API sync (D.1) ───────────────────────────
     if (channel !== 'AMAZON') {
-      return reply.status(400).send({
-        error: `Live schema sync currently supports AMAZON only (got ${channel}). eBay/Shopify land in D.1b.`,
-      })
+      return reply
+        .status(400)
+        .send({ error: `Unsupported channel for sync-schema: ${channel}` })
+    }
+    if (!productType) {
+      return reply.status(400).send({ error: 'productType is required for AMAZON sync' })
     }
 
     try {
@@ -230,7 +267,7 @@ const pimMappingRoutes: FastifyPluginAsync = async (fastify) => {
         productType,
       })
 
-      return reply.send(result)
+      return reply.send({ ...result, source: 'sp-api' })
     } catch (err: any) {
       const msg = err?.message ?? 'Schema sync failed'
       // Common error: Amazon SP-API not configured (no creds locally).
