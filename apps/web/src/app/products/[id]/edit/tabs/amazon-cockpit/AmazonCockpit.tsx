@@ -49,6 +49,7 @@ import { cn } from '@/lib/utils'
 import ChannelListingTab from '../ChannelListingTab'
 import { useAmazonCompositor } from './useAmazonCompositor'
 import { useAmazonCockpitMode } from './useAmazonCockpitMode'
+import AmazonLivePreview from './AmazonLivePreview'
 import type { ComposedAmazonListing } from './types'
 
 interface MarketInfo {
@@ -272,7 +273,7 @@ export default function AmazonCockpit(props: Props) {
         </button>
         {previewOpen && (
           <div className="p-4 grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-4 bg-slate-50/40 dark:bg-slate-900/30">
-            <PreviewPlaceholder composed={composed} />
+            <AmazonLivePreview composed={composed} />
             <HealthRail composed={composed} />
           </div>
         )}
@@ -408,66 +409,6 @@ export default function AmazonCockpit(props: Props) {
           </div>
         )}
       </Card>
-    </div>
-  )
-}
-
-// ── Preview placeholder (AC.2 fills this in) ──────────────────────────
-function PreviewPlaceholder({ composed }: { composed: ComposedAmazonListing }) {
-  // AC.1 surfaces a stripped-down "what we'd render" card so the
-  // operator can sanity-check title/price/image flow before AC.2
-  // lands the real Amazon-styled mobile + desktop skin.
-  return (
-    <div className="rounded-lg border border-dashed border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 p-4">
-      <div className="flex items-start gap-4">
-        {composed.primaryImageUrl.value ? (
-          <img
-            src={composed.primaryImageUrl.value}
-            alt=""
-            className="w-32 h-32 object-contain rounded border border-slate-200 dark:border-slate-800 bg-white"
-          />
-        ) : (
-          <div className="w-32 h-32 rounded border border-dashed border-slate-300 dark:border-slate-700 grid place-items-center text-xs text-slate-400">
-            No image
-          </div>
-        )}
-        <div className="min-w-0 flex-1">
-          {composed.brand.value && (
-            <div className="text-xs text-blue-600 dark:text-blue-400 mb-0.5">
-              Brand: {composed.brand.value}
-            </div>
-          )}
-          <div className="text-md font-semibold text-slate-900 dark:text-slate-100 line-clamp-2">
-            {composed.title.value || 'Untitled listing'}
-          </div>
-          <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-xl font-bold text-rose-700 dark:text-rose-400">
-              {composed.price.value != null
-                ? `${composed.currency} ${composed.price.value.toFixed(2)}`
-                : '—'}
-            </span>
-            {composed.fulfillmentChannel.value === 'FBA' && (
-              <span className="text-[10.5px] font-semibold px-1.5 py-0.5 rounded bg-blue-600 text-white">
-                Prime
-              </span>
-            )}
-          </div>
-          {composed.bullets.value.length > 0 ? (
-            <ul className="mt-2 list-disc list-inside space-y-0.5 text-xs text-slate-700 dark:text-slate-300">
-              {composed.bullets.value.slice(0, 5).map((b, i) => (
-                <li key={i} className="line-clamp-1">{b}</li>
-              ))}
-            </ul>
-          ) : (
-            <div className="mt-2 text-xs text-slate-400 italic">
-              No bullet points yet — Amazon expects 5
-            </div>
-          )}
-        </div>
-      </div>
-      <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800 text-[10.5px] text-slate-400 italic">
-        Placeholder preview — full mobile + desktop Amazon PDP skin lands in AC.2.
-      </div>
     </div>
   )
 }
