@@ -426,15 +426,16 @@ export default async function ebayCockpitRoutes(fastify: FastifyInstance) {
         ? (parentPlatform._axisSortOrder as Record<string, string[]>)
         : {}
 
+    // EC.6 hotfix — the JSON column is `variantAttributes` on Product
+    // (not `variationAttributes`, which lives on the deprecated
+    // ProductVariation table). Using Prisma's typed select also drops
+    // the $queryRaw dance that masked the column name typo in EC.6.
     const children = await prisma.product.findMany({
       where: { parentId: parentProductId },
       select: {
         id: true,
         sku: true,
-        // ProductVariation rows are deprecated; the canonical shape is
-        // child Product.variationAttributes JSON. Some product schemas
-        // mirror axis values onto the child as well via Phase 31 —
-        // either path lights up the matrix.
+        variantAttributes: true,
       },
     })
 
@@ -455,20 +456,13 @@ export default async function ebayCockpitRoutes(fastify: FastifyInstance) {
     })
     const listingByProductId = new Map(childListings.map((l) => [l.productId, l]))
 
-    // Also re-fetch the children with variationAttributes via raw SQL
-    // since the field isn't typed on Product (it's JSON). Simpler:
-    // re-query with raw select.
-    const childAttrs = await prisma.$queryRaw<
-      Array<{ id: string; variationAttributes: Record<string, string> | null }>
-    >`SELECT id, "variationAttributes" FROM "Product" WHERE id = ANY(${childIds}::text[])`
-    const attrsById = new Map(childAttrs.map((c) => [c.id, c.variationAttributes ?? {}]))
-
     const cells = children.map((c) => {
       const listing = listingByProductId.get(c.id)
+      const attrs = (c.variantAttributes ?? {}) as Record<string, string>
       return {
         childProductId: c.id,
         sku: c.sku,
-        variationAttributes: attrsById.get(c.id) ?? {},
+        variationAttributes: attrs,
         listing: listing
           ? {
               id: listing.id,
