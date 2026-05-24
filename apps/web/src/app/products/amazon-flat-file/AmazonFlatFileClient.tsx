@@ -355,7 +355,11 @@ export default function AmazonFlatFileClient({
   // of silently loading stale data — this ensures the flat file always opens
   // showing what is actually in the DB.
   // ── Per-market storage keys ────────────────────────────────────────────
-  const mp = initialMarketplace.toUpperCase()
+  // FF-MS.1 — derive from the live `marketplace` state, not `initialMarketplace`.
+  // The initial prop is captured once at mount; reading from it meant that
+  // sort/row-order writes always landed in the FIRST market's keys, even after
+  // the user switched. Now writes track the active market.
+  const mp = marketplace.toUpperCase()
   const rowOrderKey = `ff-amazon-${mp}-row-order`
   const sortKey     = `ff-amazon-${mp}-sort`
 
@@ -1500,8 +1504,20 @@ export default function AmazonFlatFileClient({
 
   // ── Load data ──────────────────────────────────────────────────────
 
+  // FF-MS.2 — race-safety guards. Every loadData() call gets a monotonically
+  // increasing reqId AND an AbortController. Rapid market switches (IT→DE→FR)
+  // abort the in-flight fetch and any late-resolving response is dropped, so
+  // the LAST clicked market always wins regardless of network latency.
+  const loadReqIdRef = useRef(0)
+  const loadAbortRef = useRef<AbortController | null>(null)
+
   const loadData = useCallback(async (mp: string, pt: string, force = false, fromDB = false) => {
     if (!pt.trim()) return
+    // Cancel any in-flight load and stake out a new request id.
+    loadAbortRef.current?.abort()
+    const ctrl = new AbortController()
+    loadAbortRef.current = ctrl
+    const reqId = ++loadReqIdRef.current
     setLoading(true)
     setLoadError(null)
     setFeedEntries([])
@@ -1512,7 +1528,8 @@ export default function AmazonFlatFileClient({
     try {
       if (force) {
         // Schema refresh — update manifest only, keep current rows unchanged.
-        const mRes = await fetch(`${backend}/api/amazon/flat-file/template?${qs}`)
+        const mRes = await fetch(`${backend}/api/amazon/flat-file/template?${qs}`, { signal: ctrl.signal })
+        if (reqId !== loadReqIdRef.current) return
         if (!mRes.ok) { const e = await mRes.json().catch(() => ({})); throw new Error(e.error ?? `HTTP ${mRes.status}`) }
         setManifest(await mRes.json())
       } else {
@@ -1520,9 +1537,10 @@ export default function AmazonFlatFileClient({
         // fromDB=true: always use DB rows (called on external invalidation or
         // explicit reload). fromDB=false: prefer localStorage draft if present.
         const [mRes, rRes] = await Promise.all([
-          fetch(`${backend}/api/amazon/flat-file/template?${qs}`),
-          fetch(`${backend}/api/amazon/flat-file/rows?${rowsQs}`),
+          fetch(`${backend}/api/amazon/flat-file/template?${qs}`, { signal: ctrl.signal }),
+          fetch(`${backend}/api/amazon/flat-file/rows?${rowsQs}`, { signal: ctrl.signal }),
         ])
+        if (reqId !== loadReqIdRef.current) return
         if (!mRes.ok) { const e = await mRes.json().catch(() => ({})); throw new Error(e.error ?? `HTTP ${mRes.status}`) }
         setManifest(await mRes.json())
         const saved = fromDB ? null : loadSavedRows(mp, pt)
@@ -1538,16 +1556,48 @@ export default function AmazonFlatFileClient({
           setRows([])
         }
         if (fromDB) setDraftBanner(null)
-        const p = new URLSearchParams(searchParams?.toString() ?? '')
-        p.set('marketplace', mp); p.set('productType', pt)
-        router.replace(`?${p.toString()}`, { scroll: false })
+        // FF-MS.1 — URL is now updated by `navigateTo` BEFORE the fetch starts
+        // (see below), so loadData no longer touches the URL. This avoids the
+        // "switch happens but URL stays put on refresh" class of bugs and lets
+        // the URL→state effect be the single driver of market changes.
       }
     } catch (e: any) {
+      if (e?.name === 'AbortError') return
+      if (reqId !== loadReqIdRef.current) return
       setLoadError(e.message ?? 'Failed to load')
     } finally {
-      setLoading(false)
+      if (reqId === loadReqIdRef.current) setLoading(false)
     }
-  }, [router, searchParams])
+  }, [familyId])
+
+  // ── FF-MS.1 — URL is the source of truth for (marketplace, productType) ──
+  // navigateTo() writes the URL synchronously on click; the effect below
+  // observes URL changes and drives state + re-fetch. This ordering means
+  // a hard refresh during an in-flight switch lands on the NEW market (URL
+  // has already updated) instead of snapping back to the previous one.
+  const navigateTo = useCallback((nextMp: string, nextPt: string) => {
+    const params = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '')
+    params.set('marketplace', nextMp.toUpperCase())
+    params.set('productType', nextPt.toUpperCase())
+    router.replace(`?${params.toString()}`, { scroll: false })
+  }, [router])
+
+  // Read URL params as primitives so the effect's deps are stable.
+  const urlMpRaw = searchParams.get('marketplace')
+  const urlPtRaw = searchParams.get('productType')
+
+  useEffect(() => {
+    const mpUpper = (urlMpRaw ?? initialMarketplace).toUpperCase()
+    const ptUpper = (urlPtRaw ?? initialProductType).toUpperCase()
+    if (mpUpper === marketplace && ptUpper === productType) return
+    setMarketplace(mpUpper)
+    setProductType(ptUpper)
+    // FF-MS.3 — clear the manifest immediately so the user doesn't see
+    // stale fields from the previous market while the new one loads.
+    setManifest(null)
+    void loadData(mpUpper, ptUpper)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [urlMpRaw, urlPtRaw])
 
   // ── Row operations ─────────────────────────────────────────────────
 
@@ -2595,22 +2645,29 @@ export default function AmazonFlatFileClient({
           <div className="flex items-center gap-2">
             <span className="text-xs text-slate-400 font-medium">Market</span>
             <div className="flex gap-0.5">
-              {MARKETPLACES.map((mp) => (
-                <button key={mp} type="button"
-                  onClick={() => { setMarketplace(mp); void loadData(mp, productType) }}
-                  className={cn('text-xs font-medium px-2 py-0.5 rounded border transition-colors',
-                    marketplace === mp
-                      ? 'bg-slate-800 text-white border-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:border-slate-100'
-                      : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-slate-400')}>
-                  {mp}
-                </button>
-              ))}
+              {MARKETPLACES.map((m) => {
+                const isActive = marketplace === m
+                const isSwitching = isActive && loading
+                return (
+                  <button key={m} type="button"
+                    onClick={() => navigateTo(m, productType)}
+                    aria-pressed={isActive}
+                    aria-label={`Switch to ${m} marketplace${isSwitching ? ' (loading)' : ''}`}
+                    className={cn('inline-flex items-center text-xs font-medium px-2 py-0.5 rounded border transition-colors',
+                      isActive
+                        ? 'bg-slate-800 text-white border-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:border-slate-100'
+                        : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-slate-400')}>
+                    {isSwitching && <Loader2 className="w-2.5 h-2.5 mr-1 animate-spin" aria-hidden />}
+                    {m}
+                  </button>
+                )
+              })}
             </div>
           </div>
           <div className="flex items-center gap-2">
             <span className="text-xs text-slate-400 font-medium">Product Type</span>
             <ProductTypeDropdown value={productType} options={productTypes} loading={ptLoading || loading}
-              onChange={(pt) => { setProductType(pt); void loadData(marketplace, pt) }} />
+              onChange={(pt) => navigateTo(marketplace, pt)} />
             {productType && (
               <Button size="sm" variant="ghost"
                 onClick={() => void loadData(marketplace, productType, true)} loading={loading}
@@ -2798,8 +2855,13 @@ export default function AmazonFlatFileClient({
         </div>
       )}
       {loading && (
-        <div className="flex-1 flex items-center justify-center gap-2 text-slate-500 text-sm">
-          <Loader2 className="w-5 h-5 animate-spin" />Loading schema from Amazon…
+        <div
+          className="flex-1 flex items-center justify-center gap-2 text-slate-500 text-sm"
+          role="status"
+          aria-live="polite"
+        >
+          <Loader2 className="w-5 h-5 animate-spin" aria-hidden />
+          Loading {marketplace}{productType ? ` · ${productType}` : ''} schema…
         </div>
       )}
 
