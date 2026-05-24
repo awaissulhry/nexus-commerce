@@ -316,4 +316,61 @@ export default async function productChannelDataRoutes(fastify: FastifyInstance)
       })
     },
   )
+
+  // ── GET /api/products/:id/variant-image-locks ──────────────────────────
+  //
+  // AC.6.4 — Amazon Listing Cockpit's VariationMatrix needs to show the
+  // "Red" image for any Red-variant cell regardless of which size that
+  // variant is. The IM-series ListingImage model already tags images
+  // with (variantGroupKey, variantGroupValue) — e.g. Color/Rosso — so
+  // this endpoint just rolls those rows into a {axisKey: {axisValue: url}}
+  // map. Prefers GLOBAL-scope rows; falls back to the first per-channel
+  // row when no global image exists for a value.
+  //
+  // Shape:
+  //   { locks: { [axisKey]: { [axisValue]: { url, role } } } }
+  fastify.get<{ Params: { id: string } }>(
+    '/products/:id/variant-image-locks',
+    async (request, reply) => {
+      const { id } = request.params
+      const product = await prisma.product.findUnique({
+        where: { id },
+        select: { id: true, isParent: true },
+      })
+      if (!product) return reply.code(404).send({ error: 'Product not found' })
+
+      const rows = await prisma.listingImage.findMany({
+        where: {
+          productId: id,
+          variantGroupKey: { not: null },
+          variantGroupValue: { not: null },
+        },
+        select: {
+          variantGroupKey: true,
+          variantGroupValue: true,
+          url: true,
+          role: true,
+          scope: true,
+          position: true,
+        },
+        orderBy: [{ scope: 'asc' }, { role: 'asc' }, { position: 'asc' }],
+      })
+
+      const locks: Record<
+        string,
+        Record<string, { url: string; role: string }>
+      > = {}
+      for (const r of rows) {
+        if (!r.variantGroupKey || !r.variantGroupValue) continue
+        const key = r.variantGroupKey
+        const val = r.variantGroupValue
+        // First row wins (orderBy makes scope=GLOBAL come first when
+        // present; otherwise lowest-role/lowest-position).
+        if (!locks[key]) locks[key] = {}
+        if (!locks[key][val]) locks[key][val] = { url: r.url, role: r.role }
+      }
+
+      return reply.send({ productId: id, locks })
+    },
+  )
 }

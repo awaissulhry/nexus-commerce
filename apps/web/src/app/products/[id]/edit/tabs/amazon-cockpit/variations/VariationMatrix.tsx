@@ -25,7 +25,7 @@
 // apply are AC.6.2 deliverables — this phase lands the grid + data
 // flow first so operators can SEE the variation state at a glance.
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { cn } from '@/lib/utils'
 import {
   Layers,
@@ -140,6 +140,28 @@ function pickPrimaryImage(images: ChildProduct['images']): string | null {
   return images[0]?.url ?? null
 }
 
+// AC.6.4 — Resolve the color-locked hero image for a child. Tries
+// each of the child's axis values against the locks map; first match
+// wins. Returns null when no match exists so the caller can fall back
+// to the master pick.
+function pickLockedImage(
+  child: ChildProduct,
+  locks: Record<
+    string,
+    Record<string, { url: string; role: string }>
+  > | null,
+): string | null {
+  if (!locks) return null
+  const axes = readAxes(child)
+  for (const [k, v] of Object.entries(axes)) {
+    const bucket = locks[k]
+    if (!bucket) continue
+    const hit = bucket[v]
+    if (hit?.url) return hit.url
+  }
+  return null
+}
+
 export default function VariationMatrix({
   productId,
   children: rawChildren,
@@ -176,6 +198,33 @@ export default function VariationMatrix({
       return next
     })
   }, [rawChildren, variantOverrides])
+
+  // AC.6.4 — Color-locked image swap. Pulls the {axisKey: {axisValue:
+  // url}} map from the new /variant-image-locks endpoint; CellTile
+  // uses the matched url over child.images[0] when an axis value
+  // matches. Falls back silently when the lock isn't set so the
+  // matrix still works for products with no per-color images yet.
+  const [imageLocks, setImageLocks] = useState<Record<
+    string,
+    Record<string, { url: string; role: string }>
+  > | null>(null)
+  useEffect(() => {
+    let cancelled = false
+    fetch(
+      `${getBackendUrl()}/api/products/${encodeURIComponent(productId)}/variant-image-locks`,
+      { credentials: 'include' },
+    )
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        if (!cancelled && j?.locks) setImageLocks(j.locks)
+      })
+      .catch(() => {
+        // Non-fatal — matrix renders fine without color-locks.
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [productId])
 
   // Detect the axis universe across all children. Order: axes that
   // appear most often come first, with deterministic alphabetical
@@ -307,6 +356,7 @@ export default function VariationMatrix({
           childByAxis={childByAxis}
           activeListingByProduct={activeListingByProduct}
           activeCurrency={activeCurrency}
+          imageLocks={imageLocks}
           onJumpToClassic={onJumpToClassic}
         />
       ) : axes.length === 2 ? (
@@ -319,6 +369,7 @@ export default function VariationMatrix({
           childByAxis={childByAxis}
           activeListingByProduct={activeListingByProduct}
           activeCurrency={activeCurrency}
+          imageLocks={imageLocks}
           onJumpToClassic={onJumpToClassic}
         />
       ) : (
@@ -329,6 +380,7 @@ export default function VariationMatrix({
           children={children}
           activeListingByProduct={activeListingByProduct}
           activeCurrency={activeCurrency}
+          imageLocks={imageLocks}
           onJumpToClassic={onJumpToClassic}
         />
       )}
@@ -379,7 +431,7 @@ export default function VariationMatrix({
       <div className="text-[10.5px] text-slate-400 italic">
         Hover a cell → pencil ✎ for inline price + stock edit.
         Hover a row/col header → ▾ for bulk apply across the slice.
-        Color-lock images deferred to AC.6.4.
+        Cells show the colour-locked image when one is set on the Images tab.
       </div>
     </div>
   )
@@ -438,6 +490,7 @@ function OneAxisList({
   childByAxis,
   activeListingByProduct,
   activeCurrency,
+  imageLocks,
   onJumpToClassic,
 }: {
   parentId: string
@@ -446,6 +499,7 @@ function OneAxisList({
   childByAxis: Map<string, ChildProduct>
   activeListingByProduct: Map<string, ListingLike>
   activeCurrency: string
+  imageLocks: Record<string, Record<string, { url: string; role: string }>> | null
   onJumpToClassic?: () => void
 }) {
   return (
@@ -465,6 +519,7 @@ function OneAxisList({
               child={child}
               listing={activeListingByProduct.get(child.id)}
               currency={activeCurrency}
+              lockedImageUrl={pickLockedImage(child, imageLocks)}
               onClick={onJumpToClassic}
             />
           )
@@ -484,6 +539,7 @@ function TwoAxisGrid({
   childByAxis,
   activeListingByProduct,
   activeCurrency,
+  imageLocks,
   onJumpToClassic,
 }: {
   parentId: string
@@ -494,6 +550,7 @@ function TwoAxisGrid({
   childByAxis: Map<string, ChildProduct>
   activeListingByProduct: Map<string, ListingLike>
   activeCurrency: string
+  imageLocks: Record<string, Record<string, { url: string; role: string }>> | null
   onJumpToClassic?: () => void
 }) {
   // AC.6.3 — Bulk row/col apply state. menuOpen tracks which header
@@ -727,6 +784,7 @@ function TwoAxisGrid({
                       child={child}
                       listing={activeListingByProduct.get(child.id)}
                       currency={activeCurrency}
+                      lockedImageUrl={pickLockedImage(child, imageLocks)}
                       onClick={onJumpToClassic}
                     />
                   </td>
@@ -748,6 +806,7 @@ function MultiAxisList({
   children,
   activeListingByProduct,
   activeCurrency,
+  imageLocks,
   onJumpToClassic,
 }: {
   parentId: string
@@ -756,6 +815,7 @@ function MultiAxisList({
   children: ChildProduct[]
   activeListingByProduct: Map<string, ListingLike>
   activeCurrency: string
+  imageLocks: Record<string, Record<string, { url: string; role: string }>> | null
   onJumpToClassic?: () => void
 }) {
   // 3+ axes: prevent visual explosion by rendering children as a flat
@@ -781,6 +841,7 @@ function MultiAxisList({
                 child={child}
                 listing={activeListingByProduct.get(child.id)}
                 currency={activeCurrency}
+                lockedImageUrl={pickLockedImage(child, imageLocks)}
                 onClick={onJumpToClassic}
               />
             )
@@ -798,6 +859,7 @@ function CellTile({
   listing,
   currency,
   compact = false,
+  lockedImageUrl,
   onClick,
 }: {
   /** AC.6.2 — parent product id; passed through to setDraftField
@@ -808,9 +870,14 @@ function CellTile({
   listing: ListingLike | undefined
   currency: string
   compact?: boolean
+  /** AC.6.4 — color-locked hero image URL when the child's axis
+   *  value matches a ListingImage variantGroupKey/Value entry. Wins
+   *  over the master pick so the matrix shows the right colour for
+   *  every Red-{size} cell regardless of the child's own images. */
+  lockedImageUrl?: string | null
   onClick?: () => void
 }) {
-  const img = pickPrimaryImage(child.images)
+  const img = lockedImageUrl ?? pickPrimaryImage(child.images)
   const price = (() => {
     const raw = child.basePrice
     if (raw == null || raw === '') return null
