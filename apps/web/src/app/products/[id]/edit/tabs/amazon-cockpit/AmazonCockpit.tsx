@@ -36,7 +36,6 @@ import {
   ShieldCheck,
   Hash,
   Truck,
-  AlertOctagon,
 } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
@@ -59,6 +58,7 @@ import VariationMatrix from './variations/VariationMatrix'
 import CategoryCard from './category/CategoryCard'
 import AplusCard from './aplus/AplusCard'
 import PricingCard from './pricing/PricingCard'
+import SuppressionCard from './suppression/SuppressionCard'
 import { getBackendUrl } from '@/lib/backend-url'
 
 interface MarketInfo {
@@ -529,11 +529,12 @@ export default function AmazonCockpit(props: Props) {
               : 'Pick FBA or FBM'
           }
         />
-        <PlaceholderCard
-          icon={<AlertOctagon className="w-4 h-4" />}
-          title="Suppression & Listing Quality"
-          phase="AC.10"
-          value="Real-time suppression pull lands in AC.10"
+        <SuppressionCard
+          productId={product.id}
+          marketplace={marketInfo.code}
+          asin={composed.asin.value}
+          healthReport={report}
+          onJumpTo={handleJumpTo}
         />
         <PlaceholderCard
           targetId="compliance"

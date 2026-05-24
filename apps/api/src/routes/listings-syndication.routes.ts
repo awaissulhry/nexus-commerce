@@ -2302,6 +2302,81 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
   })
 
   // ─────────────────────────────────────────────────────────────────
+  // AC.10 — GET /api/products/:id/suppressions?marketplace=<MP>
+  //
+  // Per-product suppression view for the Amazon Listing Cockpit.
+  // Joins via channelListing.productId (parent listing only — child
+  // products' suppressions land on each child's own listing). Returns
+  // the active set + a short history of resolved.
+  //
+  // No new model added. Existing infrastructure:
+  //   - HB.11 cron populates AmazonSuppression from defect reports
+  //   - PATCH /listings/amazon/suppressions/:id flips resolvedAt
+  //   - POST /listings/:id/diagnose-suppression (V.3) returns AI fix
+  // ─────────────────────────────────────────────────────────────────
+  fastify.get<{ Params: { id: string }; Querystring: { marketplace?: string } }>(
+    '/products/:id/suppressions',
+    async (request, reply) => {
+      const { id } = request.params
+      const marketplace = (request.query.marketplace ?? '').toUpperCase()
+
+      const product = await prisma.product.findUnique({
+        where: { id },
+        select: { id: true },
+      })
+      if (!product) {
+        return reply.code(404).send({ error: 'Product not found' })
+      }
+
+      const listingWhere: Record<string, unknown> = {
+        channel: 'AMAZON',
+        productId: id,
+      }
+      if (marketplace) listingWhere.marketplace = marketplace
+
+      const [active, resolved] = await Promise.all([
+        prisma.amazonSuppression.findMany({
+          where: {
+            resolvedAt: null,
+            channelListing: listingWhere,
+          },
+          orderBy: { suppressedAt: 'desc' },
+          include: {
+            channelListing: {
+              select: {
+                id: true,
+                marketplace: true,
+                listingStatus: true,
+                externalListingId: true,
+              },
+            },
+          },
+        }),
+        prisma.amazonSuppression.findMany({
+          where: {
+            resolvedAt: { not: null },
+            channelListing: listingWhere,
+          },
+          orderBy: { resolvedAt: 'desc' },
+          take: 10,
+          include: {
+            channelListing: {
+              select: { id: true, marketplace: true },
+            },
+          },
+        }),
+      ])
+
+      return {
+        productId: id,
+        marketplace: marketplace || null,
+        active,
+        resolved,
+      }
+    },
+  )
+
+  // ─────────────────────────────────────────────────────────────────
   // POST /api/listings/:id/diagnose-suppression — AI explains why a
   // listing is suppressed and what to fix.
   //
