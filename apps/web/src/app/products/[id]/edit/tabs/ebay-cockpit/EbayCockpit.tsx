@@ -30,6 +30,9 @@ import type { ComposedListing } from './types'
 import { FieldSourceProvider } from './field-source/FieldSourceProvider'
 import SourceDiffModal from './field-source/SourceDiffModal'
 import ListingEssentialsCard from './cards/ListingEssentialsCard'
+import { useEbayChannelEvents } from './realtime/useEbayChannelEvents'
+import HeartbeatDot from './realtime/HeartbeatDot'
+import CrossTabChangeToast from './realtime/CrossTabChangeToast'
 
 interface MarketInfo {
   code: string
@@ -112,7 +115,23 @@ export default function EbayCockpit(props: Props) {
     children: childrenList?.map((c) => ({ id: c.id })) ?? [],
   })
 
+  // EC.3 — Real-time event hook filtered to THIS product + marketplace.
+  // Drives the header heartbeat dot, status-chip pulse, and the
+  // CrossTabChangeToast below the header.
+  const events = useEbayChannelEvents({
+    productId: product.id,
+    marketplace,
+    currentListingId: listing?.id,
+    siblingListingIds: siblingListings
+      .map((l) => l.id)
+      .filter((id): id is string => typeof id === 'string'),
+  })
+
   const tone = STATUS_TONE[composed.status.listingStatus] ?? STATUS_TONE.DRAFT
+  // Status chip pulses for 3s after the listing changes elsewhere.
+  const listingPulse =
+    events.listingUpdatedAt != null &&
+    Date.now() - events.listingUpdatedAt < 3000
 
   return (
     <FieldSourceProvider productId={product.id} marketplace={marketplace}>
@@ -130,13 +149,21 @@ export default function EbayCockpit(props: Props) {
                   {marketInfo.name}
                   <span
                     className={cn(
-                      'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10.5px] font-medium',
+                      'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10.5px] font-medium transition-all',
                       tone.bg,
                       tone.text,
+                      // EC.3 — flash a ring for 3s after the listing
+                      // changes elsewhere so the operator notices the
+                      // status came from a remote update.
+                      listingPulse && 'ring-2 ring-emerald-300 dark:ring-emerald-700',
                     )}
                   >
                     {composed.status.listingStatus}
                   </span>
+                  <HeartbeatDot
+                    connected={events.connected}
+                    secondsSinceLast={events.secondsSinceLast}
+                  />
                   {composed.status.publicUrl && (
                     <a
                       href={composed.status.publicUrl}
@@ -204,6 +231,15 @@ export default function EbayCockpit(props: Props) {
           </div>
         </Card>
       </div>
+
+      {/* EC.3 — Cross-tab change toast. Slim banner that surfaces
+          when Master / Translations / Images / a sibling listing
+          changes for THIS product while the cockpit is open. */}
+      <CrossTabChangeToast
+        masterChangedAt={events.masterChangedAt}
+        listingUpdatedAt={events.listingUpdatedAt}
+        siblingChangedAt={events.siblingChangedAt}
+      />
 
       {/* ── Zone 2: Preview + Health band (collapsible) ───────────── */}
       <Card noPadding>
