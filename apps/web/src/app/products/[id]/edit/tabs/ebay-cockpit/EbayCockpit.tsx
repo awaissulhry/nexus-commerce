@@ -31,6 +31,7 @@ import { FieldSourceProvider } from './field-source/FieldSourceProvider'
 import SourceDiffModal from './field-source/SourceDiffModal'
 import ListingEssentialsCard from './cards/ListingEssentialsCard'
 import CategoryCard from './cards/CategoryCard'
+import AspectsCard from './cards/AspectsCard'
 import { useEbayChannelEvents } from './realtime/useEbayChannelEvents'
 import HeartbeatDot from './realtime/HeartbeatDot'
 import CrossTabChangeToast from './realtime/CrossTabChangeToast'
@@ -319,6 +320,37 @@ export default function EbayCockpit(props: Props) {
           path: ((listing?.platformAttributes as Record<string, unknown> | null)
             ?.categoryPath as string | undefined) ?? null,
         }}
+      />
+
+      {/* ── EC.5 — Aspects card (dynamic, Field Source aware) ─────── */}
+      <AspectsCard
+        productId={product.id}
+        marketplace={marketplace}
+        categoryId={composed.categoryId.value}
+        initialItemSpecifics={
+          (((listing?.platformAttributes as Record<string, unknown> | null)
+            ?.itemSpecifics as Record<string, string | string[]> | undefined) ?? {})
+        }
+        master={{
+          brand: (product.brand as string | null) ?? null,
+          color: (product.color as string | null) ?? null,
+          size: (product.size as string | null) ?? null,
+          material: (product.material as string | null) ?? null,
+          gender: (product.gender as string | null) ?? null,
+          productType: (product.productType as string | null) ?? null,
+          weightG: (product.weightG as number | null) ?? null,
+          countryOfOrigin: (product.countryOfOrigin as string | null) ?? null,
+          mpn: (product.mpn as string | null) ?? null,
+          gtin: (product.gtin as string | null) ?? null,
+          ean: (product.ean as string | null) ?? null,
+          upc: (product.upc as string | null) ?? null,
+        }}
+        siblings={siblingListings.map((l) => ({
+          marketplace: l.marketplace,
+          itemSpecifics:
+            (((l.platformAttributes as Record<string, unknown> | null)
+              ?.itemSpecifics as Record<string, string[]> | undefined) ?? {}),
+        }))}
       />
 
       {/* ── Zone 3: Remaining placeholder cards (EC.5–EC.13) ───────── */}

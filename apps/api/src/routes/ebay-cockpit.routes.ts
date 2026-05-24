@@ -18,6 +18,13 @@
  *           {categoryId, categoryName} for one (productId, EBAY,
  *           marketplace). Preserves existing itemSpecifics so
  *           re-categorising never silently clears aspect work.
+ *   PATCH /api/ebay/cockpit/aspects             — EC.5: persist the
+ *           itemSpecifics map (aspectName → value[]) for one
+ *           (productId, EBAY, marketplace). Merges into existing
+ *           platformAttributes so unrelated keys (categoryId,
+ *           policy refs, etc.) are untouched. Accepts BOTH single
+ *           strings and string arrays — eBay aspects are
+ *           multi-value at the wire level.
  *
  * All endpoints reuse the EbayCategoryService singleton (in-memory
  * 24h caches for search + aspects). No changes to flat-file routes.
@@ -247,6 +254,80 @@ export default async function ebayCockpitRoutes(fastify: FastifyInstance) {
       categoryName: categoryName ?? null,
       categoryPath: categoryPath ?? null,
       historyDepth: nextHistory.length,
+    })
+  })
+
+  // ── PATCH /api/ebay/cockpit/aspects ─────────────────────────────────
+  // Persist itemSpecifics for one (productId, EBAY, marketplace).
+  // Body shape: { aspects: Record<aspectName, string | string[]> }
+  // Single strings are wrapped into arrays before persisting so the
+  // wire format always matches eBay's Sell-Inventory contract
+  // (Inventory API + Trading API both expect array values).
+  //
+  // The endpoint MERGES the supplied aspects into existing
+  // itemSpecifics — keys present in the body overwrite, keys absent
+  // are preserved. To CLEAR an aspect, send an empty array.
+  // categoryId / policy refs / other platformAttributes keys are
+  // never touched.
+  fastify.patch<{
+    Body: {
+      productId: string
+      marketplace: string
+      aspects: Record<string, string | string[]>
+    }
+  }>('/ebay/cockpit/aspects', async (request, reply) => {
+    const { productId, marketplace, aspects } = request.body ?? ({} as Record<string, unknown>)
+
+    if (!productId || !marketplace || !aspects || typeof aspects !== 'object') {
+      return reply
+        .code(400)
+        .send({ error: 'productId, marketplace, aspects are required' })
+    }
+
+    const existing = await prisma.channelListing.findFirst({
+      where: { productId, channel: 'EBAY', marketplace },
+    })
+    if (!existing) {
+      // We deliberately refuse to create a ChannelListing from the
+      // aspects endpoint — the category should always be picked
+      // first (EC.4 creates the row). Returning 409 makes the UI's
+      // failure mode legible.
+      return reply.code(409).send({ error: 'No eBay listing for this marketplace — pick a category first.' })
+    }
+
+    const prevPlatform = (existing.platformAttributes ?? {}) as Record<string, unknown>
+    const prevItemSpecifics =
+      typeof prevPlatform.itemSpecifics === 'object' && prevPlatform.itemSpecifics !== null
+        ? (prevPlatform.itemSpecifics as Record<string, string[]>)
+        : {}
+
+    // Normalise: every value becomes string[] (eBay wire format).
+    const normalised: Record<string, string[]> = { ...prevItemSpecifics }
+    for (const [name, raw] of Object.entries(aspects)) {
+      if (Array.isArray(raw)) {
+        const cleaned = raw.map((v) => String(v ?? '').trim()).filter((v) => v.length > 0)
+        if (cleaned.length === 0) delete normalised[name]
+        else normalised[name] = cleaned
+      } else if (raw == null || String(raw).trim() === '') {
+        delete normalised[name]
+      } else {
+        normalised[name] = [String(raw).trim()]
+      }
+    }
+
+    const nextPlatform: Record<string, unknown> = {
+      ...prevPlatform,
+      itemSpecifics: normalised,
+    }
+
+    const saved = await prisma.channelListing.update({
+      where: { id: existing.id },
+      data: { platformAttributes: nextPlatform as Prisma.InputJsonValue },
+    })
+
+    return reply.send({
+      listingId: saved.id,
+      aspectCount: Object.keys(normalised).length,
     })
   })
 }
