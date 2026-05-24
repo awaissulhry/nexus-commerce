@@ -1360,6 +1360,108 @@ const syncLogsRoutes: FastifyPluginAsync = async (fastify) => {
     })
   })
 
+  // ── PIM E.2 — In-flight sync rollup ─────────────────────────────
+  // Snapshot of OutboundSyncQueue activity right now:
+  //   - pending:    syncStatus='PENDING' (queued, not yet picked up)
+  //   - processing: syncStatus='PROCESSING' (worker is on it)
+  //   - completedRecent: syncStatus='COMPLETED' in the last 5 minutes
+  //                      (drives the progress trend — "30 finished in
+  //                       the last 5min, 12 still going")
+  //   - failedRecent:    syncStatus='FAILED' in the last 5 minutes
+  //
+  // Grouped per targetChannel so the UI can render one bar per channel
+  // when there's mixed activity. Operator clicks "Retry all" in E.5 →
+  // sees the bar fill as the queue drains.
+  fastify.get('/sync-logs/in-flight', async (_request, reply) => {
+    const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000)
+
+    // One groupBy covers pending + processing + completedRecent +
+    // failedRecent by selecting on syncStatus + finishedAt. Three
+    // separate findMany counts would be N+1 against the same table.
+    type Row = {
+      targetChannel: string
+      syncStatus: string
+      _count: { _all: number }
+    }
+    // Prisma's groupBy generics struggle to infer when _count is
+    // present without an orderBy / having — the runtime is fine, we
+    // just cast through unknown to short-circuit the deep mapped-type
+    // inference that triggers a TS2615 in this version.
+    const groupBy = prisma.outboundSyncQueue.groupBy.bind(
+      prisma.outboundSyncQueue,
+    ) as unknown as (args: object) => Promise<Row[]>
+    const [activeRows, recentRows] = await Promise.all([
+      groupBy({
+        by: ['targetChannel', 'syncStatus'],
+        where: { syncStatus: { in: ['PENDING', 'PROCESSING'] } },
+        _count: { _all: true },
+      }),
+      groupBy({
+        by: ['targetChannel', 'syncStatus'],
+        where: {
+          syncStatus: { in: ['COMPLETED', 'FAILED'] },
+          updatedAt: { gte: fiveMinAgo },
+        },
+        _count: { _all: true },
+      }),
+    ])
+
+    interface ChannelBucket {
+      channel: string
+      pending: number
+      processing: number
+      completedRecent: number
+      failedRecent: number
+    }
+    const cells = new Map<string, ChannelBucket>()
+    const getCell = (ch: string): ChannelBucket => {
+      let cell = cells.get(ch)
+      if (!cell) {
+        cell = {
+          channel: ch,
+          pending: 0,
+          processing: 0,
+          completedRecent: 0,
+          failedRecent: 0,
+        }
+        cells.set(ch, cell)
+      }
+      return cell
+    }
+    for (const r of activeRows) {
+      const cell = getCell(r.targetChannel)
+      if (r.syncStatus === 'PENDING') cell.pending += r._count._all
+      else if (r.syncStatus === 'PROCESSING') cell.processing += r._count._all
+    }
+    for (const r of recentRows) {
+      const cell = getCell(r.targetChannel)
+      if (r.syncStatus === 'COMPLETED') cell.completedRecent += r._count._all
+      else if (r.syncStatus === 'FAILED') cell.failedRecent += r._count._all
+    }
+
+    const channels = Array.from(cells.values()).sort((a, b) =>
+      a.channel.localeCompare(b.channel),
+    )
+    const totals = channels.reduce(
+      (acc, c) => ({
+        pending: acc.pending + c.pending,
+        processing: acc.processing + c.processing,
+        completedRecent: acc.completedRecent + c.completedRecent,
+        failedRecent: acc.failedRecent + c.failedRecent,
+      }),
+      { pending: 0, processing: 0, completedRecent: 0, failedRecent: 0 },
+    )
+
+    return reply.send({
+      windowMinutes: 5,
+      totals,
+      channels,
+      // Operator-facing flag: is anything actively in flight right now?
+      // Drives whether the UI polls frequently or backs off.
+      hasActivity: totals.pending + totals.processing > 0,
+    })
+  })
+
   // ── PIM E.5 — Retry failed listings (re-enqueue via OutboundSyncQueue) ──
   // Accepts either an explicit list of channelListingIds OR a
   // (channel, marketplace, buckets?) filter that resolves to "every
