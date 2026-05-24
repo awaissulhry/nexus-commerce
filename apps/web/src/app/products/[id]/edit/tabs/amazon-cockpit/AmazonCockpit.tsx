@@ -50,7 +50,6 @@ import ChannelListingTab from '../ChannelListingTab'
 import { useAmazonCompositor } from './useAmazonCompositor'
 import { useAmazonCockpitMode } from './useAmazonCockpitMode'
 import AmazonLivePreview from './AmazonLivePreview'
-import type { ComposedAmazonListing } from './types'
 import MarketChipStrip from '../../_shared/market-switch/MarketChipStrip'
 import {
   useMarketSwitch,
@@ -58,6 +57,8 @@ import {
   markManifestWarm,
 } from '../../_shared/market-switch/useMarketSwitch'
 import type { MarketChip } from '../../_shared/market-switch/types'
+import HealthPanel from './health/HealthPanel'
+import { computeHealthScore, type JumpTarget } from './health/computeHealthScore'
 import { getBackendUrl } from '@/lib/backend-url'
 
 interface MarketInfo {
@@ -232,6 +233,45 @@ export default function AmazonCockpit(props: Props) {
     syncUrl: true,
   })
 
+  // AC.4 — Pre-publish health report. Recomputed every render — the
+  // function is pure and cheap (~15 checks). AC.5 swaps to a memo
+  // once the manifest cross-tab pipe lands and the dependency set
+  // changes shape.
+  const report = useMemo(() => computeHealthScore(composed), [composed])
+
+  // AC.4 — Jump-to-card. Each card carries data-jump-target=<id>; the
+  // health panel rows wire their target through to here. When a card
+  // doesn't exist yet (AC.5–AC.10 cards are stubs) we fall through to
+  // the transitional pass-through and expand it so the operator can
+  // still reach the underlying field.
+  const handleJumpTo = useCallback(
+    (target: JumpTarget) => {
+      const el = document.querySelector<HTMLElement>(
+        `[data-jump-target="${target}"]`,
+      )
+      if (el && target !== 'classic') {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        // Subtle highlight so the operator's eye lands on the card.
+        const prevOutline = el.style.boxShadow
+        el.style.boxShadow = '0 0 0 2px rgba(59, 130, 246, 0.6)'
+        el.style.transition = 'box-shadow 0.3s'
+        window.setTimeout(() => {
+          el.style.boxShadow = prevOutline
+        }, 1400)
+        return
+      }
+      // Fallback: open and scroll to the classic pass-through.
+      setClassicOpen(true)
+      window.setTimeout(() => {
+        const classicEl = document.querySelector<HTMLElement>(
+          '[data-jump-target="classic"]',
+        )
+        classicEl?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      }, 60)
+    },
+    [],
+  )
+
   return (
     <div className="space-y-4">
       {/* ── Zone 1: Header strip ────────────────────────────────── */}
@@ -385,9 +425,9 @@ export default function AmazonCockpit(props: Props) {
           )}
         </button>
         {previewOpen && (
-          <div className="p-4 grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-4 bg-slate-50/40 dark:bg-slate-900/30">
+          <div className="p-4 grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4 bg-slate-50/40 dark:bg-slate-900/30">
             <AmazonLivePreview composed={composed} />
-            <HealthRail composed={composed} />
+            <HealthPanel report={report} onJumpTo={handleJumpTo} />
           </div>
         )}
       </Card>
@@ -395,6 +435,7 @@ export default function AmazonCockpit(props: Props) {
       {/* ── Zone 3: Cards placeholders (AC.4–AC.10) ─────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
         <PlaceholderCard
+          targetId="identifiers"
           icon={<Hash className="w-4 h-4" />}
           title="Identifiers"
           phase="AC.4 + AC.10"
@@ -405,6 +446,7 @@ export default function AmazonCockpit(props: Props) {
           ].join(' · ')}
         />
         <PlaceholderCard
+          targetId="category"
           icon={<Tag className="w-4 h-4" />}
           title="Category & Browse Node"
           phase="AC.7"
@@ -415,6 +457,7 @@ export default function AmazonCockpit(props: Props) {
           }
         />
         <PlaceholderCard
+          targetId="variations"
           icon={<Layers className="w-4 h-4" />}
           title="Variations Matrix"
           phase="AC.6"
@@ -425,12 +468,14 @@ export default function AmazonCockpit(props: Props) {
           }
         />
         <PlaceholderCard
+          targetId="images"
           icon={<ImageIcon className="w-4 h-4" />}
           title="Images"
           phase="AC.5"
           value={`${composed.galleryUrls.value.length}/9 images in gallery`}
         />
         <PlaceholderCard
+          targetId="aplus"
           icon={<FileBadge className="w-4 h-4" />}
           title="A+ Content"
           phase="AC.8"
@@ -441,6 +486,7 @@ export default function AmazonCockpit(props: Props) {
           }
         />
         <PlaceholderCard
+          targetId="pricing"
           icon={<DollarSign className="w-4 h-4" />}
           title="Pricing & Offers"
           phase="AC.9"
@@ -451,6 +497,7 @@ export default function AmazonCockpit(props: Props) {
           }
         />
         <PlaceholderCard
+          targetId="fulfillment"
           icon={<Truck className="w-4 h-4" />}
           title="Fulfillment (FBA/FBM)"
           phase="AC.9"
@@ -467,6 +514,7 @@ export default function AmazonCockpit(props: Props) {
           value="Real-time suppression pull lands in AC.10"
         />
         <PlaceholderCard
+          targetId="compliance"
           icon={<ShieldCheck className="w-4 h-4" />}
           title="Policies & Compliance"
           phase="AC.4"
@@ -484,6 +532,7 @@ export default function AmazonCockpit(props: Props) {
           AC.1 keeps all existing ChannelListingTab functionality alive
           below the cards. Each AC.4–AC.10 phase replaces a section of
           this pane until the pass-through goes away. */}
+      <div data-jump-target="classic">
       <Card noPadding>
         <button
           type="button"
@@ -522,69 +571,6 @@ export default function AmazonCockpit(props: Props) {
           </div>
         )}
       </Card>
-    </div>
-  )
-}
-
-// ── Health rail (AC.4 placeholder) ─────────────────────────────────────
-function HealthRail({ composed }: { composed: ComposedAmazonListing }) {
-  // AC.1 surfaces a few derived counters as a visual placeholder. AC.4
-  // replaces this with the real 0–100 health score + per-market
-  // required-attribute gates + suppression-reason hints.
-  const titleOk =
-    composed.healthHints.titleLength > 0 &&
-    composed.healthHints.titleLength <= 200
-  const descOk = composed.healthHints.descriptionLength >= 200
-  const bulletsOk = composed.healthHints.bulletCount >= 5
-  const imagesOk = composed.healthHints.imageCount >= 4
-  const gtinOk = composed.healthHints.hasGtin
-  const brandOk = composed.healthHints.hasBrand
-  const productTypeOk = composed.healthHints.hasProductType
-  const checks: Array<{ label: string; ok: boolean; hint?: string }> = [
-    { label: 'Title ≤ 200 chars', ok: titleOk, hint: `${composed.healthHints.titleLength}/200` },
-    { label: 'Description ≥ 200', ok: descOk, hint: `${composed.healthHints.descriptionLength}` },
-    { label: 'Bullets ≥ 5', ok: bulletsOk, hint: `${composed.healthHints.bulletCount}/5` },
-    { label: 'Images ≥ 4', ok: imagesOk, hint: `${composed.healthHints.imageCount}` },
-    { label: 'GTIN present', ok: gtinOk },
-    { label: 'Brand set', ok: brandOk },
-    { label: 'Product type', ok: productTypeOk },
-  ]
-  const passed = checks.filter((c) => c.ok).length
-  return (
-    <div className="rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3 space-y-2">
-      <div className="flex items-baseline justify-between">
-        <div className="text-sm font-semibold text-slate-800 dark:text-slate-200">
-          Pre-publish health
-        </div>
-        <div className="text-xs text-slate-500">
-          {passed}/{checks.length}
-        </div>
-      </div>
-      <div className="space-y-1">
-        {checks.map((c) => (
-          <div
-            key={c.label}
-            className="flex items-center justify-between text-xs"
-          >
-            <span className="text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-              <span
-                className={cn(
-                  'w-1.5 h-1.5 rounded-full',
-                  c.ok ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600',
-                )}
-              />
-              {c.label}
-            </span>
-            {c.hint && (
-              <span className="font-mono text-[10.5px] text-slate-400">
-                {c.hint}
-              </span>
-            )}
-          </div>
-        ))}
-      </div>
-      <div className="pt-1 mt-1 border-t border-slate-100 dark:border-slate-800 text-[10.5px] text-slate-400 italic">
-        Placeholder — full score + suppression rules land in AC.4 + AC.10.
       </div>
     </div>
   )
@@ -596,14 +582,22 @@ function PlaceholderCard({
   title,
   phase,
   value,
+  targetId,
 }: {
   icon: React.ReactNode
   title: string
   phase: string
   value: string
+  /** AC.4 — jump-target id. The health panel's onJumpTo handler
+   *  scrolls the cockpit to the card with this attribute. Omit for
+   *  cards that don't yet have a corresponding health-check row. */
+  targetId?: string
 }) {
   return (
-    <div className="rounded-lg border border-dashed border-slate-300 dark:border-slate-700 bg-white/60 dark:bg-slate-900/40 p-3.5">
+    <div
+      data-jump-target={targetId}
+      className="rounded-lg border border-dashed border-slate-300 dark:border-slate-700 bg-white/60 dark:bg-slate-900/40 p-3.5"
+    >
       <div className="flex items-center justify-between mb-1.5">
         <div className="inline-flex items-center gap-2 text-sm font-semibold text-slate-800 dark:text-slate-200">
           <span className="text-slate-400">{icon}</span>
