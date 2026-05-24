@@ -1653,11 +1653,43 @@ export default function AmazonFlatFileClient({
   // a hard refresh during an in-flight switch lands on the NEW market (URL
   // has already updated) instead of snapping back to the previous one.
   const navigateTo = useCallback((nextMp: string, nextPt: string) => {
+    // FF-MS.5 — Force-flush any pending edits to localStorage before we
+    // switch away. The 1s autosave debounce can leave the last few keystrokes
+    // unwritten; this catches them so the draft restore banner has the full
+    // picture when the user returns.
+    if (productType && rowsRef.current.some((r) => r._dirty || r._isNew)) {
+      saveRows(marketplace, productType, rowsRef.current)
+    }
     const params = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '')
     params.set('marketplace', nextMp.toUpperCase())
     params.set('productType', nextPt.toUpperCase())
     router.replace(`?${params.toString()}`, { scroll: false })
-  }, [router])
+  }, [router, marketplace, productType, familyId])
+
+  // FF-MS.5 — Per-market dirty counts for the marketplace selector. Reads
+  // each other market's localStorage draft (for the CURRENT productType) and
+  // counts dirty/new rows. Active market is excluded — its dirty state is
+  // already conveyed by the Save / submit button. Recomputes whenever the
+  // user switches market or PT, which is exactly when a fresh switch could
+  // have stashed a new draft.
+  const otherMarketsDirtyCount = useMemo<Record<string, number>>(() => {
+    if (typeof window === 'undefined' || !productType) return {}
+    const out: Record<string, number> = {}
+    const currentMp = marketplace.toUpperCase()
+    for (const m of MARKETPLACES) {
+      if (m === currentMp) continue
+      try {
+        const raw = localStorage.getItem(rowStorageKey(m, productType))
+        if (!raw) continue
+        const saved = JSON.parse(raw) as Row[]
+        if (!Array.isArray(saved)) continue
+        const n = saved.filter((r) => r._dirty || r._isNew).length
+        if (n > 0) out[m] = n
+      } catch { /* ignore */ }
+    }
+    return out
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [marketplace, productType, familyId])
 
   // Read URL params as primitives so the effect's deps are stable.
   const urlMpRaw = searchParams.get('marketplace')
@@ -2725,19 +2757,28 @@ export default function AmazonFlatFileClient({
               {MARKETPLACES.map((m) => {
                 const isActive = marketplace === m
                 const isSwitching = isActive && loading
+                const dirtyCount = otherMarketsDirtyCount[m] ?? 0
                 return (
                   <button key={m} type="button"
                     onClick={() => navigateTo(m, productType)}
                     onMouseEnter={() => { if (!isActive) void prefetch(m, productType) }}
                     onFocus={() => { if (!isActive) void prefetch(m, productType) }}
                     aria-pressed={isActive}
-                    aria-label={`Switch to ${m} marketplace${isSwitching ? ' (loading)' : ''}`}
+                    aria-label={`Switch to ${m} marketplace${isSwitching ? ' (loading)' : ''}${dirtyCount > 0 ? ` (${dirtyCount} unsaved)` : ''}`}
                     className={cn('inline-flex items-center text-xs font-medium px-2 py-0.5 rounded border transition-colors',
                       isActive
                         ? 'bg-slate-800 text-white border-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:border-slate-100'
                         : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-slate-400')}>
                     {isSwitching && <Loader2 className="w-2.5 h-2.5 mr-1 animate-spin" aria-hidden />}
                     {m}
+                    {dirtyCount > 0 && (
+                      <span
+                        className="ml-1 inline-flex items-center justify-center min-w-[14px] h-3.5 px-1 rounded-sm bg-amber-500 text-white text-[9px] font-semibold leading-none"
+                        title={`${dirtyCount} unsaved change${dirtyCount === 1 ? '' : 's'} on ${m}`}
+                      >
+                        {dirtyCount}
+                      </span>
+                    )}
                   </button>
                 )
               })}
