@@ -554,6 +554,13 @@ export default function AmazonCockpit(props: Props) {
               ?.detectedCategoryPath as string | null | undefined
           }
           marketplace={marketInfo.code}
+          listingId={listing?.id ?? null}
+          onSaved={() =>
+            // Parent's onSave currently does router.refresh() and
+            // ignores the payload; pass the listing if we have it,
+            // otherwise an empty stub so the call type-checks.
+            props.onSave(listing ?? ({} as Listing))
+          }
           onJumpToClassic={() => handleJumpTo('classic')}
         />
         <PlaceholderCard

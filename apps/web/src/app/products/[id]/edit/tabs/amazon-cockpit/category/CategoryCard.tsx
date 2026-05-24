@@ -63,9 +63,18 @@ interface Props {
    *  local state when called. */
   categoryPath?: string | null
   marketplace: string
+  /** AC.7.2 — active ChannelListing id for this (product, AMAZON,
+   *  marketplace). Drives the direct PATCH that persists
+   *  browseNodeId server-side. When null, Apply still pushes to the
+   *  draft bus + copies to clipboard, but the listing-side write is
+   *  skipped (no listing yet). */
+  listingId?: string | null
+  /** AC.7.2 — fires after a successful direct PATCH so the parent
+   *  can router.refresh() and pick up the new productType /
+   *  platformAttributes.browseNodeId in props. */
+  onSaved?: () => void
   /** Click-to-jump back to the classic field editor (AG-series).
-   *  AC.7 scrolls the operator here after Apply since direct write-
-   *  through lands in AC.7.2. */
+   *  Fallback when direct PATCH fails or no listingId. */
   onJumpToClassic?: () => void
 }
 
@@ -75,6 +84,8 @@ export default function CategoryCard({
   browseNodeId,
   categoryPath,
   marketplace,
+  listingId,
+  onSaved,
   onJumpToClassic,
 }: Props) {
   // Detection state — refreshable via the Detect button.
@@ -165,11 +176,98 @@ export default function CategoryCard({
     }
   }
 
+  // AC.7.2 — Direct write-through. Pushes to the draft bus first so
+  // the cockpit preview + health react instantly, then PATCHes the
+  // server (Product.productType via /products/bulk, listing.platform-
+  // Attributes.browseNodeId via /listings/:id with merge). When no
+  // listingId exists we still PATCH the product but skip the listing
+  // side and surface a clear note in the flash. Errors fall back to
+  // the AC.7 behaviour: copy + scroll to classic.
+  const [applyBusy, setApplyBusy] = useState(false)
+
+  async function persistChanges(args: {
+    nextProductType?: string | null
+    nextBrowseNodeId?: string | null
+    label: string
+  }): Promise<void> {
+    setApplyBusy(true)
+    setDetectError(null)
+    try {
+      const tasks: Array<Promise<Response>> = []
+      // 1. Product.productType via the bulk endpoint MasterDataTab
+      //    already uses. Single change row.
+      if (
+        args.nextProductType != null &&
+        args.nextProductType !== productType
+      ) {
+        tasks.push(
+          fetch(`${getBackendUrl()}/api/products/bulk`, {
+            method: 'PATCH',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              changes: [
+                {
+                  id: productId,
+                  field: 'productType',
+                  value: args.nextProductType,
+                },
+              ],
+            }),
+          }),
+        )
+      }
+      // 2. Listing.platformAttributes.browseNodeId via PATCH /listings/:id
+      //    shallow-merge (AC.7.2.1 extension).
+      if (
+        args.nextBrowseNodeId != null &&
+        args.nextBrowseNodeId !== browseNodeId &&
+        listingId
+      ) {
+        tasks.push(
+          fetch(`${getBackendUrl()}/api/listings/${encodeURIComponent(listingId)}`, {
+            method: 'PATCH',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              platformAttributes: { browseNodeId: args.nextBrowseNodeId },
+            }),
+          }),
+        )
+      }
+      if (tasks.length === 0) {
+        showFlash(`${args.label} — already matches, no change.`)
+        return
+      }
+      const results = await Promise.all(tasks)
+      for (const r of results) {
+        if (!r.ok) {
+          const body = await r.json().catch(() => null)
+          throw new Error(body?.error ?? `HTTP ${r.status}`)
+        }
+      }
+      showFlash(
+        `${args.label}${listingId || args.nextBrowseNodeId == null ? '' : ' (listing PATCH skipped — no listing yet)'}.`,
+      )
+      onSaved?.()
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      setDetectError(`Save failed: ${msg}. Falling back to copy + jump.`)
+      // Fallback: copy ID to clipboard and scroll to classic so the
+      // operator can paste manually.
+      const fallback =
+        args.nextProductType ?? args.nextBrowseNodeId ?? ''
+      void navigator.clipboard.writeText(fallback).catch(() => {})
+      onJumpToClassic?.()
+    } finally {
+      setApplyBusy(false)
+    }
+  }
+
   function applySuggestion(s: CategorySuggestion) {
     // Push to the draft bus so the cockpit preview + health card
-    // overlay the suggested values immediately. AC.7.2 wires this to
-    // a real PATCH; for now the operator finalises by saving in the
-    // classic field editor.
+    // overlay the suggested values immediately while the PATCH is
+    // in flight.
     setDraftField(productId, 'productType', s.productType)
     if (s.browseNodes[0] != null) {
       setDraftField(productId, 'browseNodeId', String(s.browseNodes[0]))
@@ -178,13 +276,12 @@ export default function CategoryCard({
       categoryPath: s.pathParts.join(' › '),
       browseNodes: s.browseNodes,
     })
-    void navigator.clipboard
-      .writeText(s.productType)
-      .catch(() => {})
-    showFlash(
-      `Applied "${s.displayName}". Type ID copied — save via the classic editor below.`,
-    )
-    onJumpToClassic?.()
+    void persistChanges({
+      nextProductType: s.productType,
+      nextBrowseNodeId:
+        s.browseNodes[0] != null ? String(s.browseNodes[0]) : null,
+      label: `Applied "${s.displayName}"`,
+    })
   }
 
   function applyDetected() {
@@ -192,13 +289,13 @@ export default function CategoryCard({
     if (detected.browseNodes && detected.browseNodes.length > 0) {
       setDraftField(productId, 'browseNodeId', String(detected.browseNodes[0]))
     }
-    void navigator.clipboard
-      .writeText(detected.browseNodes?.[0]?.toString() ?? '')
-      .catch(() => {})
-    showFlash(
-      'Browse node copied — save via the classic editor below.',
-    )
-    onJumpToClassic?.()
+    void persistChanges({
+      nextBrowseNodeId:
+        detected.browseNodes?.[0] != null
+          ? String(detected.browseNodes[0])
+          : null,
+      label: 'Browse node saved',
+    })
   }
 
   return (
@@ -272,14 +369,20 @@ export default function CategoryCard({
           <div className="flex items-center gap-2 pt-1 mt-1 border-t border-slate-100 dark:border-slate-800">
             <CheckCircle2 className="w-3 h-3 text-emerald-500" />
             <span className="text-[10.5px] text-emerald-700 dark:text-emerald-400 flex-1">
-              Detection ready — apply via the classic editor.
+              Detection ready — click Save to write to the listing.
             </span>
             <button
               type="button"
               onClick={applyDetected}
+              disabled={applyBusy}
               className="inline-flex items-center gap-1 px-2 py-0.5 rounded border border-blue-200 dark:border-blue-700 bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 text-[10.5px] font-medium hover:bg-blue-100 dark:hover:bg-blue-950/60"
             >
-              <Copy className="w-3 h-3" /> Copy & jump
+              {applyBusy ? (
+                <Loader2 className="w-3 h-3 animate-spin" />
+              ) : (
+                <Copy className="w-3 h-3" />
+              )}{' '}
+              {applyBusy ? 'Saving…' : 'Save browse node'}
             </button>
           </div>
         )}
@@ -375,7 +478,9 @@ export default function CategoryCard({
       )}
 
       <div className="text-[10.5px] text-slate-400 italic">
-        AC.7 — direct write-through (productType + browse node setters) lands in AC.7.2; for now Apply copies + jumps.
+        Apply writes productType to Master (PATCH /products/bulk) and
+        browseNodeId to the active listing (PATCH /listings/:id with
+        platformAttributes merge). No listing yet → product-side only.
       </div>
     </div>
   )

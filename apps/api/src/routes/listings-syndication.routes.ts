@@ -1172,6 +1172,11 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
         isPublished?: boolean
         stockBuffer?: number
         expectedVersion?: number
+        /** AC.7.2 — shallow-merge keys into ChannelListing.platformAttributes.
+         *  Used by the Amazon cockpit's CategoryCard to write browseNodeId
+         *  (and future per-listing platform-specific attrs) without
+         *  clobbering siblings the schema editor owns. */
+        platformAttributes?: Record<string, unknown>
       }
 
       const data: any = {}
@@ -1205,7 +1210,19 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
         data.stockBuffer = n
       }
 
-      if (Object.keys(data).length === 0) {
+      // AC.7.2 — platformAttributes shallow-merge. The JSON column
+      // is owned by multiple writers (schema editor, channel adapter,
+      // cockpit cards), so we never overwrite the whole blob — we
+      // read-merge-write the keys the caller sent. Single round-trip
+      // because we already fetch `current` below for version checks.
+      const mergePlatformAttrs =
+        body.platformAttributes &&
+        typeof body.platformAttributes === 'object' &&
+        !Array.isArray(body.platformAttributes)
+          ? body.platformAttributes
+          : null
+
+      if (Object.keys(data).length === 0 && !mergePlatformAttrs) {
         return reply.code(400).send({ error: 'No updatable fields provided' })
       }
 
@@ -1214,7 +1231,7 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
       // we still increment, just no concurrent-edit detection.
       const current = await prisma.channelListing.findUnique({
         where: { id },
-        select: { id: true, version: true },
+        select: { id: true, version: true, platformAttributes: true },
       })
       if (!current) return reply.code(404).send({ error: 'Listing not found' })
       if (
@@ -1228,6 +1245,15 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
       }
 
       data.version = { increment: 1 }
+      if (mergePlatformAttrs) {
+        const existing =
+          current.platformAttributes &&
+          typeof current.platformAttributes === 'object' &&
+          !Array.isArray(current.platformAttributes)
+            ? (current.platformAttributes as Record<string, unknown>)
+            : {}
+        data.platformAttributes = { ...existing, ...mergePlatformAttrs }
+      }
       const updated = await prisma.channelListing.update({ where: { id }, data })
       // S.4 — broadcast so other tabs / cells refresh within 200ms.
       publishListingEvent({ type: 'listing.updated', listingId: id, reason: 'patch', ts: Date.now() })
