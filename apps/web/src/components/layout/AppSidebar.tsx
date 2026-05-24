@@ -21,6 +21,7 @@ import {
   History,
   Plug,
   Settings,
+  Shuffle,
   Search,
   Plus,
   Warehouse,
@@ -858,13 +859,20 @@ export default function AppSidebar() {
             active={pathname.startsWith('/settings/channels')}
           />
           <NavItem
+            href="/settings/mappings"
+            icon={Shuffle}
+            label="Mappings"
+            active={pathname.startsWith('/settings/mappings')}
+          />
+          <NavItem
             href="/settings"
             icon={Settings}
             label="Settings"
             active={
               pathname === '/settings' ||
               (pathname.startsWith('/settings/') &&
-                !pathname.startsWith('/settings/channels'))
+                !pathname.startsWith('/settings/channels') &&
+                !pathname.startsWith('/settings/mappings'))
             }
           />
           <NavItem
