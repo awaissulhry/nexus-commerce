@@ -35,7 +35,6 @@ import {
   Image as ImageIcon,
   DollarSign,
   ShieldCheck,
-  Tag,
   Hash,
   Truck,
   AlertOctagon,
@@ -59,6 +58,7 @@ import type { MarketChip } from '../../_shared/market-switch/types'
 import HealthPanel from './health/HealthPanel'
 import { computeHealthScore, type JumpTarget } from './health/computeHealthScore'
 import VariationMatrix from './variations/VariationMatrix'
+import CategoryCard from './category/CategoryCard'
 import { getBackendUrl } from '@/lib/backend-url'
 
 interface MarketInfo {
@@ -476,16 +476,16 @@ export default function AmazonCockpit(props: Props) {
             composed.brand.value ? `Brand ${composed.brand.value}` : 'No brand',
           ].join(' · ')}
         />
-        <PlaceholderCard
-          targetId="category"
-          icon={<Tag className="w-4 h-4" />}
-          title="Category & Browse Node"
-          phase="AC.7"
-          value={
-            composed.productType.value || composed.browseNodeId.value
-              ? `${composed.productType.value ?? '—'} · node ${composed.browseNodeId.value ?? '—'}`
-              : 'No product type / browse node assigned'
+        <CategoryCard
+          productId={product.id}
+          productType={composed.productType.value}
+          browseNodeId={composed.browseNodeId.value}
+          categoryPath={
+            (listing?.platformAttributes as Record<string, unknown> | null | undefined)
+              ?.detectedCategoryPath as string | null | undefined
           }
+          marketplace={marketInfo.code}
+          onJumpToClassic={() => handleJumpTo('classic')}
         />
         <PlaceholderCard
           targetId="images"

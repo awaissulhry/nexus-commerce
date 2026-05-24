@@ -143,6 +143,15 @@ export function useAmazonCompositor({
       draftBrand !== undefined ? draftBrand : product.brand
     const effectiveProductUpc = draftUpc !== undefined ? draftUpc : product.upc
     const effectiveProductEan = draftEan !== undefined ? draftEan : product.ean
+    // AC.7 — CategoryCard pushes productType + browseNodeId drafts
+    // when the operator clicks Apply on a suggestion. The compositor
+    // mirrors them straight into the read so the preview, health
+    // panel, and Variation Matrix theme chip all reflect the
+    // suggestion immediately even before the operator saves.
+    const draftProductType =
+      typeof draft.productType === 'string' ? draft.productType : undefined
+    const draftBrowseNode =
+      typeof draft.browseNodeId === 'string' ? draft.browseNodeId : undefined
 
     // Title — override > listing.title > master.name (with AC.5
     // draft overlay applied above on effectiveProductName).
@@ -248,17 +257,32 @@ export function useAmazonCompositor({
     )
 
     const productType =
-      (platform.productType as string | null) ?? product.productType ?? null
+      // AC.7 draft overlay beats listing + master.
+      draftProductType ??
+      (platform.productType as string | null) ??
+      product.productType ??
+      null
     const productTypeField: ComposedField<string | null> = field(
       productType,
-      productType ? 'master' : 'default',
+      productType
+        ? draftProductType !== undefined
+          ? 'ai'
+          : 'master'
+        : 'default',
     )
 
-    const browseNode = (platform.browseNodeId as string | null) ??
-      (platform.browse_node_id as string | null) ?? null
+    const browseNode =
+      draftBrowseNode ??
+      (platform.browseNodeId as string | null) ??
+      (platform.browse_node_id as string | null) ??
+      null
     const browseNodeField: ComposedField<string | null> = field(
       browseNode,
-      browseNode ? 'manual' : 'default',
+      browseNode
+        ? draftBrowseNode !== undefined
+          ? 'ai'
+          : 'manual'
+        : 'default',
     )
 
     const variationTheme = (platform.variation_theme as string | null) ??
