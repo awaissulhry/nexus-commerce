@@ -56,11 +56,20 @@
  *           ChannelListing. Returns the adapter's structured
  *           per-step result.
  *   POST  /api/ebay/cockpit/ai-improve          — EC.12: Claude-
- *           backed listing assistant. Two operations: "essentials"
- *           (suggests improved title + description) and "aspects"
- *           (fills empty itemSpecifics from product + master
- *           context). Returns structured JSON the AiImproveModal
- *           renders as a per-field diff with selective apply.
+ *           backed listing assistant. Three operations:
+ *           "essentials" (title + description), "aspects" (fills
+ *           empty itemSpecifics), "compatibility" (EC.13 — suggests
+ *           motorcycle year/make/model fitments from product type +
+ *           brand). Returns structured JSON the AiImproveModal /
+ *           CompatibilityCard render as selective-apply diffs.
+ *   PATCH /api/ebay/cockpit/compatibility       — EC.13: persists
+ *           motors compatibility — { universal: bool, fitments:
+ *           [{year, make, model, submodel?}] } — to
+ *           platformAttributes.compatibility. Used by the
+ *           CompatibilityCard which only mounts for motors-relevant
+ *           categories. Trading API sync (ItemCompatibilityList)
+ *           deferred to EC.13b — the data persists here; the
+ *           publish path picks it up when the wire format is wired.
  *
  * All endpoints reuse the EbayCategoryService singleton (in-memory
  * 24h caches for search + aspects). No changes to flat-file routes.
@@ -992,7 +1001,7 @@ export default async function ebayCockpitRoutes(fastify: FastifyInstance) {
   // product context; EC.12b can wire the dedicated BrandVoice profile.
   fastify.post<{
     Body: {
-      operation: 'essentials' | 'aspects'
+      operation: 'essentials' | 'aspects' | 'compatibility'
       productId: string
       marketplace: string
     }
@@ -1005,8 +1014,8 @@ export default async function ebayCockpitRoutes(fastify: FastifyInstance) {
     if (!operation || !productId || !marketplace) {
       return reply.code(400).send({ error: 'operation, productId, marketplace are required' })
     }
-    if (operation !== 'essentials' && operation !== 'aspects') {
-      return reply.code(400).send({ error: 'operation must be "essentials" or "aspects"' })
+    if (operation !== 'essentials' && operation !== 'aspects' && operation !== 'compatibility') {
+      return reply.code(400).send({ error: 'operation must be "essentials", "aspects", or "compatibility"' })
     }
 
     if (isAiKillSwitchOn()) {
@@ -1087,6 +1096,57 @@ export default async function ebayCockpitRoutes(fastify: FastifyInstance) {
         })
       } catch (err) {
         request.log.error(err, '[ebay/cockpit/ai-improve essentials] failed')
+        return reply.code(500).send({ error: err instanceof Error ? err.message : 'AI call failed' })
+      }
+    }
+
+    // ── operation: compatibility (EC.13) ─────────────────────────────
+    if (operation === 'compatibility') {
+      const isMotors = /helmet|casco|jacket|giacca|giubbotto|glove|guanto|boot|stivali|motor|moto/i
+        .test(`${categoryName ?? ''} ${product.productType ?? ''} ${product.name ?? ''}`)
+      if (!isMotors) {
+        return reply.send({
+          operation: 'compatibility',
+          fitments: [],
+          rationale: 'Product does not appear to be motorcycle gear — no compatibility suggested.',
+        })
+      }
+      const compatPrompt = [
+        `You are an eBay Motors compatibility assistant for ${targetLang}-language listings.`,
+        `Product context:`,
+        `  Brand: ${product.brand ?? '(unset)'}`,
+        `  Product type: ${product.productType ?? '(unset)'}`,
+        `  Name: ${product.name ?? '(unset)'}`,
+        `  Category: ${categoryName ?? '(none)'}`,
+        `  Description: """${(product.description ?? '').slice(0, 800)}"""`,
+        ``,
+        `Task: suggest motorcycle fitments for this gear. Motorcycle GEAR (helmets, jackets, gloves, boots, suits) is usually UNIVERSAL FIT — set "universal": true and skip the fitments list. Only return specific year/make/model fitments when the description explicitly names compatible bikes (e.g., "fits Ducati Panigale V4 2018-2024" or "designed for Harley-Davidson Sportster").`,
+        ``,
+        `When fitments are warranted, prefer 3-12 well-targeted entries over 100 speculative ones. Use real motorcycle make+model names (Ducati / Honda / Kawasaki / Yamaha / Suzuki / BMW / Triumph / Harley-Davidson / KTM / Aprilia / MV Agusta).`,
+        ``,
+        `Respond with ONLY this JSON (no prose):`,
+        `{"universal": boolean, "fitments": [{"year": "2020", "make": "Ducati", "model": "Panigale V4"}], "rationale": string}`,
+        ``,
+        `Set fitments to [] when universal=true.`,
+      ].join('\n')
+      try {
+        const res = await provider.generate({
+          prompt: compatPrompt,
+          jsonMode: true,
+          maxOutputTokens: 1024,
+          temperature: 0.2,
+          feature: 'ebay-cockpit-ai-improve-compatibility',
+          entityType: 'product',
+          entityId: productId,
+        })
+        const parsed = parseAiJson(res.text)
+        return reply.send({
+          operation: 'compatibility',
+          ...parsed,
+          usage: res.usage,
+        })
+      } catch (err) {
+        request.log.error(err, '[ebay/cockpit/ai-improve compatibility] failed')
         return reply.code(500).send({ error: err instanceof Error ? err.message : 'AI call failed' })
       }
     }
@@ -1173,6 +1233,75 @@ export default async function ebayCockpitRoutes(fastify: FastifyInstance) {
       request.log.error(err, '[ebay/cockpit/ai-improve aspects] failed')
       return reply.code(500).send({ error: err instanceof Error ? err.message : 'AI call failed' })
     }
+  })
+
+  // ── PATCH /api/ebay/cockpit/compatibility ───────────────────────────
+  // EC.13 — persist eBay Motors compatibility list for one (productId,
+  // EBAY, marketplace). Body:
+  //   { universal: boolean, fitments: [{year, make, model, submodel?}] }
+  // Universal=true means "fits all motorcycles" — eBay surfaces this
+  // as a single catch-all in the buyer's vehicle-search filter and
+  // the fitments array is ignored.
+  fastify.patch<{
+    Body: {
+      productId: string
+      marketplace: string
+      universal: boolean
+      fitments?: Array<{
+        year: string | number
+        make: string
+        model: string
+        submodel?: string | null
+      }>
+    }
+  }>('/ebay/cockpit/compatibility', async (request, reply) => {
+    const body = request.body
+    if (!body) return reply.code(400).send({ error: 'Body is required' })
+    const { productId, marketplace, universal, fitments } = body
+    if (!productId || !marketplace) {
+      return reply.code(400).send({ error: 'productId, marketplace are required' })
+    }
+    if (typeof universal !== 'boolean') {
+      return reply.code(400).send({ error: 'universal (boolean) is required' })
+    }
+    const existing = await prisma.channelListing.findFirst({
+      where: { productId, channel: 'EBAY', marketplace },
+    })
+    if (!existing) {
+      return reply.code(409).send({
+        error: 'No eBay listing yet — pick a category first.',
+      })
+    }
+    const cleanedFitments = (Array.isArray(fitments) ? fitments : [])
+      .map((f) => ({
+        year: String(f?.year ?? '').trim(),
+        make: String(f?.make ?? '').trim(),
+        model: String(f?.model ?? '').trim(),
+        submodel: f?.submodel ? String(f.submodel).trim() : null,
+      }))
+      .filter((f) => f.year && f.make && f.model)
+      // Cap at 1000 fitments (eBay's effective limit on compatibility
+      // list size — go higher and the Trading API rejects).
+      .slice(0, 1000)
+
+    const prevPlatform = (existing.platformAttributes ?? {}) as Record<string, unknown>
+    const nextPlatform: Record<string, unknown> = {
+      ...prevPlatform,
+      compatibility: {
+        universal,
+        fitments: universal ? [] : cleanedFitments,
+        updatedAt: new Date().toISOString(),
+      },
+    }
+    await prisma.channelListing.update({
+      where: { id: existing.id },
+      data: { platformAttributes: nextPlatform as Prisma.InputJsonValue },
+    })
+    return reply.send({
+      listingId: existing.id,
+      universal,
+      fitmentCount: universal ? 0 : cleanedFitments.length,
+    })
   })
 }
 

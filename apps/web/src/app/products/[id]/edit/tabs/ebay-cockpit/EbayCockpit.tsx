@@ -17,7 +17,7 @@
 // the corresponding ChannelListingTab section.
 
 import { useMemo, useState } from 'react'
-import { ChevronDown, ChevronUp, ArrowDownToLine, Sparkles, Send, ExternalLink, Settings2, Package, History } from 'lucide-react'
+import { ChevronDown, ChevronUp, ArrowDownToLine, Sparkles, Send, ExternalLink, Settings2, History } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
@@ -34,6 +34,7 @@ import AspectsCard from './cards/AspectsCard'
 import VariationsMatrixCard from './cards/VariationsMatrixCard'
 import ImagesCard from './cards/ImagesCard'
 import PricingPoliciesCard from './cards/PricingPoliciesCard'
+import CompatibilityCard from './cards/CompatibilityCard'
 import HealthScoreRail from './health/HealthScoreRail'
 import VersionHistoryDrawer from './versioning/VersionHistoryDrawer'
 import PublishDrawer from './publish/PublishDrawer'
@@ -466,15 +467,35 @@ export default function EbayCockpit(props: Props) {
         })()}
       />
 
-      {/* ── Zone 3: Remaining placeholder cards (EC.13) ──────────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-        <PlaceholderCard
-          icon={<Package className="w-4 h-4" />}
-          title="Compatibility (motors)"
-          phase="EC.13"
-          value="Xavia motorcycle gear — fit list editor"
-        />
-      </div>
+      {/* ── EC.13 — Compatibility (motors) — replaces placeholder ───── */}
+      <CompatibilityCard
+        productId={product.id}
+        marketplace={marketplace}
+        categoryName={composed.categoryLabel.value}
+        categoryPath={((listing?.platformAttributes as Record<string, unknown> | null)
+          ?.categoryPath as string | undefined) ?? null}
+        productName={(product?.name as string | null) ?? null}
+        productType={(product?.productType as string | null) ?? null}
+        initial={(() => {
+          const raw = (listing?.platformAttributes as Record<string, unknown> | null)?.compatibility
+          if (raw && typeof raw === 'object') {
+            const r = raw as Record<string, unknown>
+            return {
+              universal: typeof r.universal === 'boolean' ? r.universal : true,
+              fitments: Array.isArray(r.fitments)
+                ? (r.fitments as Array<Record<string, unknown>>).map((f) => ({
+                    year: String(f?.year ?? ''),
+                    make: String(f?.make ?? ''),
+                    model: String(f?.model ?? ''),
+                    submodel: f?.submodel ? String(f.submodel) : null,
+                  }))
+                : [],
+              updatedAt: typeof r.updatedAt === 'string' ? r.updatedAt : null,
+            }
+          }
+          return { universal: true, fitments: [], updatedAt: null }
+        })()}
+      />
 
       {/* ── Transitional pass-through ─────────────────────────────────
           EC.1 keeps all existing ChannelListingTab functionality alive
@@ -577,33 +598,5 @@ export default function EbayCockpit(props: Props) {
   )
 }
 
-// ── Placeholder card (remaining EC.13 fillers) ─────────────────────────
-function PlaceholderCard({
-  icon,
-  title,
-  phase,
-  value,
-}: {
-  icon: React.ReactNode
-  title: string
-  phase: string
-  value: string
-}) {
-  return (
-    <div className="rounded-lg border border-dashed border-slate-300 dark:border-slate-700 bg-white/60 dark:bg-slate-900/40 p-3.5">
-      <div className="flex items-center justify-between mb-1.5">
-        <div className="inline-flex items-center gap-2 text-sm font-semibold text-slate-800 dark:text-slate-200">
-          <span className="text-slate-400">{icon}</span>
-          {title}
-        </div>
-        <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400">
-          {phase}
-        </span>
-      </div>
-      <div className="text-xs text-slate-600 dark:text-slate-400">{value}</div>
-      <div className="mt-1.5 text-[10.5px] text-slate-400 italic">
-        Edit via the Existing fields panel below until this card lands.
-      </div>
-    </div>
-  )
-}
+// EC.13 closes the last placeholder — every cockpit card is now a
+// real surface. The legacy PlaceholderCard helper was removed.
