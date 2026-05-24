@@ -303,7 +303,12 @@ function DesktopSkin(props: SkinProps) {
   const { composed, currentImg, gallery, galleryIdx, setGalleryIdx } = props
   const isFba = composed.fulfillmentChannel.value === 'FBA'
   return (
-    <div className="p-4 grid grid-cols-[40px_240px_1fr_220px] gap-4 max-w-[920px] mx-auto bg-white dark:bg-slate-950">
+    // The 40+240+220 fixed columns (= ~500px) plus a 1fr middle
+    // can exceed the available width inside the preview band's
+    // narrow containers. Wrap in overflow-x-auto so any overflow
+    // scrolls INSIDE this card instead of pushing the page wider.
+    <div className="overflow-x-auto bg-white dark:bg-slate-950">
+    <div className="p-4 grid grid-cols-[40px_240px_1fr_220px] gap-4 max-w-[920px] mx-auto min-w-[820px]">
       {/* Far-left vertical thumbnail rail (Amazon desktop pattern) */}
       <div className="flex flex-col gap-1.5">
         {gallery.slice(0, 7).map((url, i) => (
@@ -473,6 +478,7 @@ function DesktopSkin(props: SkinProps) {
           <Heart className="w-3 h-3" /> Add to List
         </button>
       </div>
+    </div>
     </div>
   )
 }

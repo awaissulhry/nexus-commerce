@@ -309,7 +309,12 @@ export default function AmazonCockpit(props: Props) {
   )
 
   return (
-    <div className="space-y-4">
+    // min-w-0 lets the cockpit shrink inside its grid parent (the
+    // ProductEditClient gives the channel-tab branch a single-column
+    // grid in cockpit mode). Without min-w-0 a wide descendant
+    // (live preview, variation matrix table, classic pass-through)
+    // can push the column wider than the viewport.
+    <div className="space-y-4 min-w-0 max-w-full">
       {/* AC.13 — Cockpit-wide ARIA live region. Mounted once near
           the top; any nested component can announce() via the
           module-scope util in _shared/announce/useAnnounce. */}
@@ -477,8 +482,12 @@ export default function AmazonCockpit(props: Props) {
           )}
         </button>
         {previewOpen && (
-          <div className="p-4 grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4 bg-slate-50/40 dark:bg-slate-900/30">
-            <AmazonLivePreview composed={composed} />
+          <div className="p-4 grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_320px] gap-4 bg-slate-50/40 dark:bg-slate-900/30">
+            {/* min-w-0 + max-w-full lets the live preview internal-
+                scroll instead of pushing the cockpit grid wider. */}
+            <div className="min-w-0 max-w-full">
+              <AmazonLivePreview composed={composed} />
+            </div>
             <HealthPanel report={report} onJumpTo={handleJumpTo} />
           </div>
         )}
@@ -537,7 +546,10 @@ export default function AmazonCockpit(props: Props) {
       )}
 
       {/* ── Zone 3: Cards placeholders (AC.4–AC.10) ─────────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 min-w-0">
+        {/* Each card is forced to min-w-0 via its child so a wide
+            descendant (e.g. mono ASIN text) can wrap instead of
+            forcing the column wider. */}
         <PlaceholderCard
           targetId="identifiers"
           icon={<Hash className="w-4 h-4" />}

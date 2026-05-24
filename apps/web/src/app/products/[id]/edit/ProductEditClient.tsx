@@ -1355,7 +1355,7 @@ export default function ProductEditClient({
               aria-labelledby={`tab-${channel}`}
               className={cn(
                 'grid gap-6',
-                !isSingleStore && !amazonCockpitMounted && 'grid-cols-[200px_1fr]',
+                !isSingleStore && !amazonCockpitMounted && 'grid-cols-[200px_minmax(0,1fr)]',
               )}
             >
               {!isSingleStore && !amazonCockpitMounted && (
