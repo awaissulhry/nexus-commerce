@@ -59,6 +59,7 @@ import CategoryCard from './category/CategoryCard'
 import AplusCard from './aplus/AplusCard'
 import PricingCard from './pricing/PricingCard'
 import SuppressionCard from './suppression/SuppressionCard'
+import AutoFillCard from './autofill/AutoFillCard'
 import { getBackendUrl } from '@/lib/backend-url'
 
 interface MarketInfo {
@@ -442,6 +443,26 @@ export default function AmazonCockpit(props: Props) {
           </div>
         )}
       </Card>
+
+      {/* ── AC.11 — Smart auto-fill bar (full-width, top of cards zone) ── */}
+      <AutoFillCard
+        productId={product.id}
+        productName={product.name ?? null}
+        productDescription={product.description ?? null}
+        productBrand={product.brand ?? null}
+        marketplace={marketInfo.code}
+        language={marketInfo.language}
+        currentTitle={composed.title.value}
+        currentDescription={composed.description.value}
+        currentBullets={composed.bullets.value}
+        siblingListings={siblingListings.map((l) => ({
+          marketplace: l.marketplace,
+          title: l.title,
+          description: l.description,
+          bulletPointsOverride: l.bulletPointsOverride,
+        }))}
+        onJumpToClassic={() => handleJumpTo('classic')}
+      />
 
       {/* ── AC.6 — Variation Matrix (full-width, above the card grid) ── */}
       {childrenList && childrenList.length > 0 && (

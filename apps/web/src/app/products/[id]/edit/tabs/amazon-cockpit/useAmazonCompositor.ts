@@ -152,6 +152,17 @@ export function useAmazonCompositor({
       typeof draft.productType === 'string' ? draft.productType : undefined
     const draftBrowseNode =
       typeof draft.browseNodeId === 'string' ? draft.browseNodeId : undefined
+    // AC.11 — AutoFillCard pushes description + bullets drafts. The
+    // compositor overlays both so the preview's "Product description"
+    // block, "About this item" list, and the AC.4 health checks
+    // (description >= 200, bullets >= 5) react instantly.
+    const draftDescription =
+      typeof draft.description === 'string' ? draft.description : undefined
+    const draftBullets = Array.isArray(draft.bullets)
+      ? (draft.bullets as unknown[]).filter(
+          (b): b is string => typeof b === 'string',
+        )
+      : undefined
 
     // Title — override > listing.title > master.name (with AC.5
     // draft overlay applied above on effectiveProductName).
@@ -166,9 +177,11 @@ export function useAmazonCompositor({
       titleField = field(effectiveProductName ?? '', 'master')
     }
 
-    // Description.
+    // Description — AC.11 draft overlay beats listing + master.
     let descField: ComposedField<string>
-    if (listing?.descriptionOverride) {
+    if (draftDescription !== undefined) {
+      descField = field(draftDescription, 'ai')
+    } else if (listing?.descriptionOverride) {
       descField = field(listing.descriptionOverride, 'manual')
     } else if (listing?.description) {
       descField = field(
@@ -179,15 +192,23 @@ export function useAmazonCompositor({
       descField = field(product.description ?? '', 'master')
     }
 
-    // Bullet points — Amazon's 5-bullet block lives on
+    // Bullet points — Amazon's 5-bullet block. AC.11 draft beats
     // listing.bulletPointsOverride; if absent we surface an empty
     // array (master doesn't have a bullet field today).
-    const bulletList = Array.isArray(listing?.bulletPointsOverride)
-      ? listing!.bulletPointsOverride!.filter((s): s is string => typeof s === 'string')
-      : []
+    const bulletList =
+      draftBullets ??
+      (Array.isArray(listing?.bulletPointsOverride)
+        ? listing!.bulletPointsOverride!.filter(
+            (s): s is string => typeof s === 'string',
+          )
+        : [])
     const bulletsField: ComposedField<string[]> = field(
       bulletList,
-      bulletList.length > 0 ? 'manual' : 'default',
+      bulletList.length > 0
+        ? draftBullets !== undefined
+          ? 'ai'
+          : 'manual'
+        : 'default',
     )
 
     // Price.
