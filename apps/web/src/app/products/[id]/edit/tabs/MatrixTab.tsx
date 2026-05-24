@@ -27,6 +27,10 @@ import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { getBackendUrl } from '@/lib/backend-url'
 import { emitInvalidation, useInvalidationChannel } from '@/lib/sync/invalidation-channel'
+import {
+  setDraftField,
+  clearDraft,
+} from '../_shared/draft-bus/useProductDraftBus'
 import { cn } from '@/lib/utils'
 import ChannelPricingSection from './ChannelPricingSection'
 import ChannelInventorySection from './ChannelInventorySection'
@@ -285,6 +289,43 @@ export default function MatrixTab({ product, discardSignal = 0 }: Props) {
   }, [backend, product.id])
 
   useEffect(() => { void refetch() }, [refetch])
+
+  // AC.5d — Mirror current children's basePrice + totalStock into the
+  // draft bus so the Amazon Listing Cockpit's VariationMatrix overlays
+  // the matrix tab's optimistic state onto its per-cell tiles. Keyed
+  // by child id; null/undefined values are filtered so the cockpit
+  // falls back to its own children prop where we don't have an update.
+  useEffect(() => {
+    if (children.length === 0) return
+    const overrides: Record<string, { basePrice?: number; totalStock?: number }> = {}
+    for (const c of children) {
+      const entry: { basePrice?: number; totalStock?: number } = {}
+      const bp =
+        c.basePrice == null
+          ? null
+          : typeof c.basePrice === 'string'
+          ? parseFloat(c.basePrice)
+          : Number(c.basePrice)
+      if (bp != null && Number.isFinite(bp)) entry.basePrice = bp
+      if (typeof c.totalStock === 'number' && Number.isFinite(c.totalStock)) {
+        entry.totalStock = c.totalStock
+      }
+      if (Object.keys(entry).length > 0) overrides[c.id] = entry
+    }
+    if (Object.keys(overrides).length > 0) {
+      setDraftField(product.id, 'variantOverrides', overrides)
+    } else {
+      clearDraft(product.id, 'variantOverrides')
+    }
+  }, [children, product.id])
+
+  // AC.5d — clear bus key on unmount so the cockpit reseeds from its
+  // own childrenList prop next mount.
+  useEffect(() => {
+    return () => {
+      clearDraft(product.id, 'variantOverrides')
+    }
+  }, [product.id])
 
   // Background sync — grid stays visible, data updates silently.
   useInvalidationChannel(['product.updated', 'channel-pricing.updated'], () => { void refetch() })

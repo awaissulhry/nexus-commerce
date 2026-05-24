@@ -32,6 +32,7 @@ import {
   classifyStatus,
   marketFlag,
 } from '../../../_shared/market-switch/types'
+import { useProductDraft } from '../../../_shared/draft-bus/useProductDraftBus'
 
 interface ChildProduct {
   id: string
@@ -63,6 +64,10 @@ interface SiblingMarketInfo {
 }
 
 interface Props {
+  /** AC.5d — parent product id. Used to subscribe to draft.variant-
+   *  Overrides so optimistic edits in MatrixTab flow into the per-
+   *  cell tiles before save. */
+  productId: string
   children: ChildProduct[]
   /** All listings on the channel for THIS product family, across every
    *  marketplace. Used to derive the per-cell status dot for the active
@@ -120,7 +125,8 @@ function pickPrimaryImage(images: ChildProduct['images']): string | null {
 }
 
 export default function VariationMatrix({
-  children,
+  productId,
+  children: rawChildren,
   channelListings,
   activeMarketplace,
   activeCurrency,
@@ -128,6 +134,32 @@ export default function VariationMatrix({
   variationTheme,
   onJumpToClassic,
 }: Props) {
+  // AC.5d — overlay MatrixTab's optimistic variant edits. The bus
+  // entry shape is Record<childId, { basePrice?, totalStock? }>;
+  // when present, the matching field beats the parent-fetched
+  // ChildProduct value. Without bus data, behaviour is unchanged.
+  const draft = useProductDraft(productId)
+  const variantOverrides =
+    draft.variantOverrides &&
+    typeof draft.variantOverrides === 'object' &&
+    !Array.isArray(draft.variantOverrides)
+      ? (draft.variantOverrides as Record<
+          string,
+          { basePrice?: number; totalStock?: number }
+        >)
+      : null
+  const children = useMemo<ChildProduct[]>(() => {
+    if (!variantOverrides) return rawChildren
+    return rawChildren.map((c) => {
+      const o = variantOverrides[c.id]
+      if (!o) return c
+      const next = { ...c }
+      if (typeof o.basePrice === 'number') next.basePrice = o.basePrice
+      if (typeof o.totalStock === 'number') next.totalStock = o.totalStock
+      return next
+    })
+  }, [rawChildren, variantOverrides])
+
   // Detect the axis universe across all children. Order: axes that
   // appear most often come first, with deterministic alphabetical
   // tie-break.

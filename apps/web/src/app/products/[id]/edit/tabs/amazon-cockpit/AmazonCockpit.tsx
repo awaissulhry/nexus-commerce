@@ -515,6 +515,7 @@ export default function AmazonCockpit(props: Props) {
       {/* ── AC.6 — Variation Matrix (full-width, above the card grid) ── */}
       {childrenList && childrenList.length > 0 && (
         <VariationMatrix
+          productId={product.id}
           children={childrenList}
           channelListings={[
             ...(listing ? [listing] : []),
