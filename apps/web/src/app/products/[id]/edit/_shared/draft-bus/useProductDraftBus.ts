@@ -26,6 +26,9 @@ export type DraftValue =
   | number
   | boolean
   | string[]
+  // AC.5b — image arrays are objects with url/type/sortOrder/isPrimary.
+  // Widen to any-value arrays so consumer types can stay tight.
+  | unknown[]
   | Record<string, unknown>
   | null
   | undefined

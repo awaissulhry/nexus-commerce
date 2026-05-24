@@ -18,10 +18,27 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { beFetch } from './api'
 import type { WorkspaceData, PendingUpsert, ProductImage } from './types'
+import { setDraftField } from '../../_shared/draft-bus/useProductDraftBus'
 
 let _tempIdCounter = 0
 function tempId(): string {
   return `tmp_${++_tempIdCounter}`
+}
+
+// AC.5b — Project master ProductImage[] into the shape the cockpit
+// compositor expects (url + type + sortOrder + isPrimary). Strips
+// pending/temp rows that don't have a real URL yet so the preview
+// doesn't show broken thumbs. Read by useAmazonCompositor.
+function pushImagesDraft(productId: string, master: ProductImage[]): void {
+  const projected = master
+    .filter((m) => typeof m.url === 'string' && m.url.length > 0)
+    .map((m) => ({
+      url: m.url,
+      type: m.type,
+      sortOrder: m.sortOrder ?? 0,
+      isPrimary: !!m.isPrimary,
+    }))
+  setDraftField(productId, 'images', projected)
 }
 
 export function useImagesWorkspace(
@@ -58,6 +75,13 @@ export function useImagesWorkspace(
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const json = await res.json()
       setData(json)
+      // AC.5b — seed the cockpit's draft bus with the workspace's
+      // master images on load + reload. If another tab uploaded
+      // since the SSR fetch, the cockpit picks the new list up here
+      // rather than waiting for an explicit edit.
+      if (Array.isArray(json?.master)) {
+        pushImagesDraft(productId, json.master as ProductImage[])
+      }
     } catch (err) {
       setLoadError(err instanceof Error ? err.message : 'Failed to load images')
     } finally {
@@ -292,14 +316,27 @@ export function useImagesWorkspace(
   // On a background-POST failure, caller falls back to reload() to
   // re-sync.
   const setMasterImages = useCallback((updater: (prev: ProductImage[]) => ProductImage[]) => {
-    setData((prev) => (prev ? { ...prev, master: updater(prev.master) } : prev))
-  }, [])
+    setData((prev) => {
+      if (!prev) return prev
+      const next = updater(prev.master)
+      // AC.5b — push the new master image list into the in-page
+      // draft bus so the Amazon Listing Cockpit's preview + health
+      // panel react instantly to image edits (reorder, primary
+      // change, add, delete) without waiting for a router.refresh.
+      // useAmazonCompositor reads draft.images and overlays the
+      // url/sortOrder/isPrimary/type quad onto product.images.
+      pushImagesDraft(productId, next)
+      return { ...prev, master: next }
+    })
+  }, [productId])
   const patchMasterImage = useCallback((id: string, patch: Partial<ProductImage>) => {
-    setData((prev) => prev
-      ? { ...prev, master: prev.master.map((m) => (m.id === id ? { ...m, ...patch } : m)) }
-      : prev,
-    )
-  }, [])
+    setData((prev) => {
+      if (!prev) return prev
+      const next = prev.master.map((m) => (m.id === id ? { ...m, ...patch } : m))
+      pushImagesDraft(productId, next)
+      return { ...prev, master: next }
+    })
+  }, [productId])
 
   // IA.19 — Restore pending state to a captured snapshot. Used by
   // the undo-last-drag affordance: operator drags → we snapshot

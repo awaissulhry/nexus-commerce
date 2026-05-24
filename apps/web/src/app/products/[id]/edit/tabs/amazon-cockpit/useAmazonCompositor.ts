@@ -163,6 +163,23 @@ export function useAmazonCompositor({
           (b): b is string => typeof b === 'string',
         )
       : undefined
+    // AC.5b — ImagesTab's useImagesWorkspace pushes the current
+    // master images list whenever the operator edits (reorder, set
+    // primary, add, delete) AND on workspace load/reload. The
+    // compositor overlays the projected list onto product.images
+    // so the cockpit preview gallery + AC.4 image-count check
+    // react instantly.
+    const draftImages = Array.isArray(draft.images)
+      ? (draft.images as unknown[]).filter(
+          (i): i is { url: string; type?: string; sortOrder?: number; isPrimary?: boolean } =>
+            !!i &&
+            typeof i === 'object' &&
+            'url' in i &&
+            typeof (i as { url: unknown }).url === 'string',
+        )
+      : undefined
+    const effectiveImages: ProductLike['images'] =
+      draftImages !== undefined ? draftImages : product.images
 
     // Title — override > listing.title > master.name (with AC.5
     // draft overlay applied above on effectiveProductName).
@@ -246,8 +263,8 @@ export function useAmazonCompositor({
     )
 
     // Images.
-    const primaryImageUrl = pickPrimaryImage(product.images)
-    const gallery = pickGallery(product.images)
+    const primaryImageUrl = pickPrimaryImage(effectiveImages)
+    const gallery = pickGallery(effectiveImages)
     const primaryImgField: ComposedField<string | null> = field(
       primaryImageUrl,
       primaryImageUrl ? 'master' : 'default',
