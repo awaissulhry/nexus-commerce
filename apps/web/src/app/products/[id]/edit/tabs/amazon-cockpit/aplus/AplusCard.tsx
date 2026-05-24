@@ -194,8 +194,8 @@ export default function AplusCard({
     attached?.filter(
       (a) => a.status === 'APPROVED' || a.status === 'PUBLISHED',
     ).length ?? 0
-  const aplusLibraryHref = `/marketing/content/a-plus?brand=${encodeURIComponent(brand ?? '')}&marketplace=${encodeURIComponent(marketplace)}`
-  const brandStoryHref = `/marketing/content/brand-story?brand=${encodeURIComponent(brand ?? '')}&marketplace=${encodeURIComponent(marketplace)}`
+  const aplusLibraryHref = `/marketing/aplus?brand=${encodeURIComponent(brand ?? '')}&marketplace=${encodeURIComponent(marketplace)}`
+  const brandStoryHref = `/marketing/brand-story?brand=${encodeURIComponent(brand ?? '')}&marketplace=${encodeURIComponent(marketplace)}`
 
   return (
     <div
@@ -255,7 +255,7 @@ export default function AplusCard({
             </a>{' '}
             or{' '}
             <a
-              href="/marketing/content/a-plus/new"
+              href="/marketing/aplus/new"
               target="_blank"
               rel="noreferrer"
               className="underline hover:text-amber-900 dark:hover:text-amber-200 inline-flex items-center gap-0.5"
@@ -270,7 +270,7 @@ export default function AplusCard({
             {attached!.map((row) => (
               <li key={row.id}>
                 <a
-                  href={`/marketing/content/a-plus/${row.id}`}
+                  href={`/marketing/aplus/${row.id}`}
                   target="_blank"
                   rel="noreferrer"
                   className="flex items-center gap-2 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:border-blue-400 dark:hover:border-blue-500 hover:bg-blue-50/60 dark:hover:bg-blue-950/30 transition-colors p-2"
@@ -324,7 +324,7 @@ export default function AplusCard({
           </div>
         ) : brandStory ? (
           <a
-            href={`/marketing/content/brand-story/${brandStory.id}`}
+            href={`/marketing/brand-story/${brandStory.id}`}
             target="_blank"
             rel="noreferrer"
             className="flex items-center gap-2 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:border-blue-400 dark:hover:border-blue-500 hover:bg-blue-50/60 dark:hover:bg-blue-950/30 transition-colors p-2"
