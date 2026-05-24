@@ -25,6 +25,13 @@
  *           policy refs, etc.) are untouched. Accepts BOTH single
  *           strings and string arrays — eBay aspects are
  *           multi-value at the wire level.
+ *   GET   /api/ebay/cockpit/variation-cells     — EC.6: per-child
+ *           cell snapshots for the variation matrix (SKU, axis
+ *           values, price, qty, listing status) for a given
+ *           (parentProductId, marketplace).
+ *   PATCH /api/ebay/cockpit/variation-matrix    — EC.6: atomic
+ *           save of axes + sort order on the parent listing AND
+ *           per-cell price/qty overrides on each child listing.
  *
  * All endpoints reuse the EbayCategoryService singleton (in-memory
  * 24h caches for search + aspects). No changes to flat-file routes.
@@ -328,6 +335,223 @@ export default async function ebayCockpitRoutes(fastify: FastifyInstance) {
     return reply.send({
       listingId: saved.id,
       aspectCount: Object.keys(normalised).length,
+    })
+  })
+
+  // ── GET /api/ebay/cockpit/variation-cells ───────────────────────────
+  // Per-child cell snapshot for the variation matrix. Returns one row
+  // per child product with axis values, current eBay listing price /
+  // quantity / status for the given marketplace, plus the parent
+  // listing's saved axis choice + sort order.
+  fastify.get<{
+    Querystring: { parentProductId: string; marketplace: string }
+  }>('/ebay/cockpit/variation-cells', async (request, reply) => {
+    const { parentProductId, marketplace } = request.query
+    if (!parentProductId || !marketplace) {
+      return reply.code(400).send({ error: 'parentProductId, marketplace are required' })
+    }
+
+    const parent = await prisma.product.findUnique({
+      where: { id: parentProductId },
+      select: { id: true, variationAxes: true },
+    })
+    if (!parent) {
+      return reply.code(404).send({ error: 'Parent product not found' })
+    }
+
+    const parentListing = await prisma.channelListing.findFirst({
+      where: { productId: parentProductId, channel: 'EBAY', marketplace },
+      select: { id: true, platformAttributes: true },
+    })
+    const parentPlatform = (parentListing?.platformAttributes ?? {}) as Record<string, unknown>
+    const pickedAxes = Array.isArray(parentPlatform._variationAxes)
+      ? (parentPlatform._variationAxes as string[]).filter((s) => typeof s === 'string')
+      : []
+    const axisSortOrder =
+      typeof parentPlatform._axisSortOrder === 'object' && parentPlatform._axisSortOrder !== null
+        ? (parentPlatform._axisSortOrder as Record<string, string[]>)
+        : {}
+
+    const children = await prisma.product.findMany({
+      where: { parentId: parentProductId },
+      select: {
+        id: true,
+        sku: true,
+        // ProductVariation rows are deprecated; the canonical shape is
+        // child Product.variationAttributes JSON. Some product schemas
+        // mirror axis values onto the child as well via Phase 31 —
+        // either path lights up the matrix.
+      },
+    })
+
+    // Pull each child's eBay listing for this marketplace in one go.
+    const childIds = children.map((c) => c.id)
+    const childListings = await prisma.channelListing.findMany({
+      where: { productId: { in: childIds }, channel: 'EBAY', marketplace },
+      select: {
+        id: true,
+        productId: true,
+        priceOverride: true,
+        price: true,
+        quantity: true,
+        listingStatus: true,
+        externalListingId: true,
+        platformAttributes: true,
+      },
+    })
+    const listingByProductId = new Map(childListings.map((l) => [l.productId, l]))
+
+    // Also re-fetch the children with variationAttributes via raw SQL
+    // since the field isn't typed on Product (it's JSON). Simpler:
+    // re-query with raw select.
+    const childAttrs = await prisma.$queryRaw<
+      Array<{ id: string; variationAttributes: Record<string, string> | null }>
+    >`SELECT id, "variationAttributes" FROM "Product" WHERE id = ANY(${childIds}::text[])`
+    const attrsById = new Map(childAttrs.map((c) => [c.id, c.variationAttributes ?? {}]))
+
+    const cells = children.map((c) => {
+      const listing = listingByProductId.get(c.id)
+      return {
+        childProductId: c.id,
+        sku: c.sku,
+        variationAttributes: attrsById.get(c.id) ?? {},
+        listing: listing
+          ? {
+              id: listing.id,
+              priceOverride: listing.priceOverride ? Number(listing.priceOverride) : null,
+              price: listing.price ? Number(listing.price) : null,
+              quantity: listing.quantity ?? null,
+              listingStatus: listing.listingStatus,
+              externalListingId: listing.externalListingId,
+            }
+          : null,
+      }
+    })
+
+    return reply.send({
+      parentProductId,
+      marketplace,
+      declaredAxes: parent.variationAxes ?? [],
+      pickedAxes,
+      axisSortOrder,
+      cells,
+      childCount: cells.length,
+    })
+  })
+
+  // ── PATCH /api/ebay/cockpit/variation-matrix ────────────────────────
+  // Atomic save: parent's chosen axes + sort order + per-cell child
+  // overrides. Anything missing from the body is left alone — partial
+  // edits are safe. Returns the same shape as the GET so the UI can
+  // refresh from the response without a second round-trip.
+  //
+  // Body:
+  //   {
+  //     parentProductId, marketplace,
+  //     pickedAxes?:    string[]             // ≤ 2 axes
+  //     axisSortOrder?: { [axis]: string[] }
+  //     cells?:         [{ childProductId, priceOverride?, quantity? }]
+  //   }
+  fastify.patch<{
+    Body: {
+      parentProductId: string
+      marketplace: string
+      pickedAxes?: string[]
+      axisSortOrder?: Record<string, string[]>
+      cells?: Array<{
+        childProductId: string
+        priceOverride?: number | null
+        quantity?: number | null
+      }>
+    }
+  }>('/ebay/cockpit/variation-matrix', async (request, reply) => {
+    const body = request.body
+    if (!body || typeof body !== 'object') {
+      return reply.code(400).send({ error: 'Body is required' })
+    }
+    const { parentProductId, marketplace, pickedAxes, axisSortOrder, cells } = body
+
+    if (!parentProductId || !marketplace) {
+      return reply.code(400).send({ error: 'parentProductId, marketplace are required' })
+    }
+
+    // ── Parent: axes + sort order on platformAttributes ────────────
+    if (pickedAxes !== undefined || axisSortOrder !== undefined) {
+      const parentListing = await prisma.channelListing.findFirst({
+        where: { productId: parentProductId, channel: 'EBAY', marketplace },
+      })
+      const prevPlatform = (parentListing?.platformAttributes ?? {}) as Record<string, unknown>
+      const nextPlatform: Record<string, unknown> = { ...prevPlatform }
+      if (pickedAxes !== undefined) {
+        nextPlatform._variationAxes = (pickedAxes ?? []).slice(0, 2)
+      }
+      if (axisSortOrder !== undefined) {
+        nextPlatform._axisSortOrder = axisSortOrder
+      }
+
+      if (parentListing) {
+        await prisma.channelListing.update({
+          where: { id: parentListing.id },
+          data: { platformAttributes: nextPlatform as Prisma.InputJsonValue },
+        })
+      } else {
+        await prisma.channelListing.create({
+          data: {
+            productId: parentProductId,
+            channel: 'EBAY',
+            region: marketplace.toUpperCase(),
+            marketplace,
+            channelMarket: `EBAY_${marketplace.toUpperCase()}`,
+            listingStatus: 'DRAFT',
+            isPublished: false,
+            platformAttributes: nextPlatform as Prisma.InputJsonValue,
+          },
+        })
+      }
+    }
+
+    // ── Per-cell child overrides ───────────────────────────────────
+    const updates: Array<{ childProductId: string; listingId: string }> = []
+    if (Array.isArray(cells) && cells.length > 0) {
+      for (const cell of cells) {
+        if (!cell?.childProductId) continue
+        const existing = await prisma.channelListing.findFirst({
+          where: { productId: cell.childProductId, channel: 'EBAY', marketplace },
+        })
+        const data: Prisma.ChannelListingUpdateInput = {}
+        if (cell.priceOverride !== undefined) {
+          data.priceOverride = cell.priceOverride === null ? null : new Prisma.Decimal(cell.priceOverride)
+        }
+        if (cell.quantity !== undefined) {
+          data.quantity = cell.quantity
+        }
+        const saved = existing
+          ? await prisma.channelListing.update({
+              where: { id: existing.id },
+              data,
+            })
+          : await prisma.channelListing.create({
+              data: {
+                productId: cell.childProductId,
+                channel: 'EBAY',
+                region: marketplace.toUpperCase(),
+                marketplace,
+                channelMarket: `EBAY_${marketplace.toUpperCase()}`,
+                listingStatus: 'DRAFT',
+                isPublished: false,
+                priceOverride: cell.priceOverride != null ? new Prisma.Decimal(cell.priceOverride) : null,
+                quantity: cell.quantity ?? null,
+              },
+            })
+        updates.push({ childProductId: cell.childProductId, listingId: saved.id })
+      }
+    }
+
+    return reply.send({
+      parentProductId,
+      marketplace,
+      updatedCells: updates.length,
+      cells: updates,
     })
   })
 }

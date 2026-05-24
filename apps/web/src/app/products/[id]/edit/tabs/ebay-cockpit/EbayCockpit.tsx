@@ -17,7 +17,7 @@
 // the corresponding ChannelListingTab section.
 
 import { useState } from 'react'
-import { ChevronDown, ChevronUp, ArrowDownToLine, Sparkles, Send, ExternalLink, Settings2, Package, Image as ImageIcon, DollarSign, ShieldCheck, Layers } from 'lucide-react'
+import { ChevronDown, ChevronUp, ArrowDownToLine, Sparkles, Send, ExternalLink, Settings2, Package, Image as ImageIcon, DollarSign, ShieldCheck } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
@@ -32,6 +32,7 @@ import SourceDiffModal from './field-source/SourceDiffModal'
 import ListingEssentialsCard from './cards/ListingEssentialsCard'
 import CategoryCard from './cards/CategoryCard'
 import AspectsCard from './cards/AspectsCard'
+import VariationsMatrixCard from './cards/VariationsMatrixCard'
 import { useEbayChannelEvents } from './realtime/useEbayChannelEvents'
 import HeartbeatDot from './realtime/HeartbeatDot'
 import CrossTabChangeToast from './realtime/CrossTabChangeToast'
@@ -353,18 +354,16 @@ export default function EbayCockpit(props: Props) {
         }))}
       />
 
-      {/* ── Zone 3: Remaining placeholder cards (EC.5–EC.13) ───────── */}
+      {/* ── EC.6 — Variations Matrix (replaces placeholder) ─────────── */}
+      <VariationsMatrixCard
+        productId={product.id}
+        marketplace={marketplace}
+        currency={marketInfo.currency}
+        isParentWithChildren={(childrenList?.length ?? 0) > 0}
+      />
+
+      {/* ── Zone 3: Remaining placeholder cards (EC.7–EC.13) ───────── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-        <PlaceholderCard
-          icon={<Layers className="w-4 h-4" />}
-          title="Variations Matrix"
-          phase="EC.6"
-          value={
-            composed.variationSummary.variantCount > 0
-              ? `${composed.variationSummary.variantCount} variants · axes: ${composed.variationSummary.axes.join(', ') || '—'}`
-              : 'No variations'
-          }
-        />
         <PlaceholderCard
           icon={<ImageIcon className="w-4 h-4" />}
           title="Images"
