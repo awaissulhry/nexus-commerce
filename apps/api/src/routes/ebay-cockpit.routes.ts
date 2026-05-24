@@ -55,6 +55,12 @@
  *           externalListingId + listingUrl + listingStatus on the
  *           ChannelListing. Returns the adapter's structured
  *           per-step result.
+ *   POST  /api/ebay/cockpit/ai-improve          — EC.12: Claude-
+ *           backed listing assistant. Two operations: "essentials"
+ *           (suggests improved title + description) and "aspects"
+ *           (fills empty itemSpecifics from product + master
+ *           context). Returns structured JSON the AiImproveModal
+ *           renders as a per-field diff with selective apply.
  *
  * All endpoints reuse the EbayCategoryService singleton (in-memory
  * 24h caches for search + aspects). No changes to flat-file routes.
@@ -65,6 +71,7 @@ import { Prisma } from '@nexus/database'
 import prisma from '../db.js'
 import { EbayCategoryService } from '../services/ebay-category.service.js'
 import { EbayPublishAdapter } from '../services/listing-wizard/ebay-publish.adapter.js'
+import { getProvider, isAiKillSwitchOn } from '../services/ai/providers/index.js'
 
 const ebayCategoryService = new EbayCategoryService()
 
@@ -961,4 +968,229 @@ export default async function ebayCockpitRoutes(fastify: FastifyInstance) {
       snapshotId: prePublishEntry.id,
     })
   })
+
+  // ── POST /api/ebay/cockpit/ai-improve ───────────────────────────────
+  // Claude-backed listing assistant. Two operations covering the two
+  // surfaces that benefit most from AI improvement: free-text content
+  // (essentials = title + description) and structured aspects.
+  //
+  // Body:
+  //   {
+  //     operation: 'essentials' | 'aspects',
+  //     productId, marketplace,
+  //     current: { title, description, ... } | { itemSpecifics, ... }
+  //   }
+  //
+  // Returns:
+  //   essentials → { title, description, rationale, projectedUplift }
+  //   aspects    → { aspects: { [aspectId]: value }, rationale,
+  //                   projectedUplift }
+  //
+  // Per-marketplace language: prompt asks for native-language output
+  // (IT → italiano, DE → deutsch, FR → français, ES → español, UK →
+  // English). Brand voice is supplied implicitly via current values +
+  // product context; EC.12b can wire the dedicated BrandVoice profile.
+  fastify.post<{
+    Body: {
+      operation: 'essentials' | 'aspects'
+      productId: string
+      marketplace: string
+    }
+  }>('/ebay/cockpit/ai-improve', {
+    config: { rateLimit: { max: 12, timeWindow: '1 minute' } },
+  }, async (request, reply) => {
+    const body = request.body
+    if (!body) return reply.code(400).send({ error: 'Body is required' })
+    const { operation, productId, marketplace } = body
+    if (!operation || !productId || !marketplace) {
+      return reply.code(400).send({ error: 'operation, productId, marketplace are required' })
+    }
+    if (operation !== 'essentials' && operation !== 'aspects') {
+      return reply.code(400).send({ error: 'operation must be "essentials" or "aspects"' })
+    }
+
+    if (isAiKillSwitchOn()) {
+      return reply.code(503).send({ error: 'AI features are currently disabled (kill switch active).' })
+    }
+    const provider = getProvider('anthropic')
+    if (!provider) {
+      return reply.code(500).send({ error: 'Anthropic provider not configured. Set ANTHROPIC_API_KEY.' })
+    }
+
+    // Load context — product + listing + (for aspects) the category
+    // schema so the AI knows which aspects exist + which are missing.
+    const product = await prisma.product.findUnique({
+      where: { id: productId },
+      select: {
+        id: true, sku: true, name: true, description: true, brand: true,
+        productType: true,
+      },
+    })
+    if (!product) return reply.code(404).send({ error: 'Product not found' })
+    const listing = await prisma.channelListing.findFirst({
+      where: { productId, channel: 'EBAY', marketplace },
+    })
+    const platform = (listing?.platformAttributes ?? {}) as Record<string, unknown>
+    const categoryId = (platform.categoryId as string | undefined) ?? null
+    const categoryName = (platform.categoryName as string | undefined) ?? null
+
+    const LANG: Record<string, string> = {
+      IT: 'Italian',  DE: 'German', FR: 'French',
+      ES: 'Spanish',  UK: 'British English', US: 'American English',
+    }
+    const targetLang = LANG[marketplace.toUpperCase()] ?? 'English'
+
+    if (operation === 'essentials') {
+      const currentTitle = (listing?.title ?? product.name ?? '').slice(0, 200)
+      const currentDesc = listing?.description ?? product.description ?? ''
+      const prompt = [
+        `You are an eBay listing copywriter for marketplace EBAY_${marketplace.toUpperCase()} (${targetLang}).`,
+        `Product context:`,
+        `  SKU: ${product.sku}`,
+        `  Brand: ${product.brand ?? '(unset)'}`,
+        `  Product type: ${product.productType ?? '(unset)'}`,
+        `  Master name: ${product.name ?? '(unset)'}`,
+        `  Category: ${categoryName ?? categoryId ?? '(none picked)'}`,
+        ``,
+        `Current eBay title (${currentTitle.length} chars): "${currentTitle}"`,
+        `Current eBay description (${currentDesc.length} chars): """${currentDesc.slice(0, 1200)}"""`,
+        ``,
+        `Task: rewrite the title and description to be best-in-class for eBay search ranking + buyer conversion on this marketplace.`,
+        ``,
+        `Rules:`,
+        `- Title: max 80 chars, no ALL CAPS, front-load the most-searched keywords for ${product.productType ?? 'this product'}, end with brand + key spec.`,
+        `- Description: 200-1500 chars, plain text (no HTML in output), in ${targetLang}. Include a short opening hook, 3-5 bullet-style benefits, key specs, and a brief shipping/returns reassurance.`,
+        `- Match Italian motorcycle gear ecommerce voice (the brand is Xavia) — confident but not hyperbolic, focused on protection and craftsmanship for jackets/helmets/gloves/boots.`,
+        `- Use ${targetLang} exclusively for the visible text. Brand names and SKUs stay in their original form.`,
+        ``,
+        `Respond with ONLY this JSON shape (no prose before or after):`,
+        `{"title": string, "description": string, "rationale": string, "projectedUplift": string}`,
+        ``,
+        `projectedUplift is a short hint like "+12% est. CTR" or "+8% search visibility" based on what improved.`,
+      ].join('\n')
+
+      try {
+        const res = await provider.generate({
+          prompt,
+          jsonMode: true,
+          maxOutputTokens: 1024,
+          temperature: 0.3,
+          feature: 'ebay-cockpit-ai-improve-essentials',
+          entityType: 'product',
+          entityId: productId,
+        })
+        const parsed = parseAiJson(res.text)
+        return reply.send({
+          operation,
+          ...parsed,
+          usage: res.usage,
+        })
+      } catch (err) {
+        request.log.error(err, '[ebay/cockpit/ai-improve essentials] failed')
+        return reply.code(500).send({ error: err instanceof Error ? err.message : 'AI call failed' })
+      }
+    }
+
+    // ── operation: aspects ─────────────────────────────────────────
+    if (!categoryId) {
+      return reply.code(409).send({ error: 'No category picked — AI aspect suggestions need a category.' })
+    }
+    let schemaAspects: Array<{ id: string; label: string; required: boolean; recommended: boolean; options?: string[] }> = []
+    try {
+      const schema = await ebayCategoryService.getCategoryAspectsRich(
+        categoryId,
+        normaliseMarketplace(marketplace),
+        { throwOnError: false },
+      )
+      schemaAspects = schema.map((a) => {
+        const isEnum = a.mode === 'SELECTION_ONLY' && a.values.length > 0
+        return {
+          id: `aspect_${a.name.replace(/\s+/g, '_')}`,
+          label: a.englishName ? `${a.name} (${a.englishName})` : a.name,
+          required: a.required || a.usage === 'REQUIRED',
+          recommended: a.usage === 'RECOMMENDED',
+          options: isEnum ? a.values : undefined,
+        }
+      })
+    } catch {
+      // Schema fetch failure — AI still helps if we know nothing, but
+      // the result will be lower-quality. Continue with empty schema.
+    }
+
+    const currentSpecs = (platform.itemSpecifics ?? {}) as Record<string, string[] | string>
+    const currentLines = Object.entries(currentSpecs).map(([k, v]) => `  ${k}: ${Array.isArray(v) ? v.join('; ') : v}`).join('\n')
+    const schemaLines = schemaAspects.slice(0, 60).map((a) => {
+      const tag = a.required ? '[REQUIRED]' : a.recommended ? '[recommended]' : '[optional]'
+      const opts = a.options && a.options.length > 0 ? ` (one of: ${a.options.slice(0, 12).join(' | ')}${a.options.length > 12 ? '…' : ''})` : ''
+      return `  ${a.id}: ${a.label} ${tag}${opts}`
+    }).join('\n')
+
+    const prompt = [
+      `You are an eBay aspects assistant for marketplace EBAY_${marketplace.toUpperCase()} (${targetLang}).`,
+      `Product context:`,
+      `  Brand: ${product.brand ?? '(unset)'}`,
+      `  Master name: ${product.name ?? '(unset)'}`,
+      `  Product type: ${product.productType ?? '(unset)'}`,
+      `  Category: ${categoryName ?? categoryId}`,
+      `  Master description: """${(product.description ?? '').slice(0, 800)}"""`,
+      ``,
+      `Currently filled aspects:`,
+      currentLines || '  (none filled yet)',
+      ``,
+      `Available aspects in this category's schema:`,
+      schemaLines || '  (schema unavailable — infer common eBay aspects from product type)',
+      ``,
+      `Task: suggest values for as many EMPTY aspects as you can with high confidence, focusing on REQUIRED then recommended. Skip aspects whose value you'd be guessing. Use the localised aspect IDs (left of the colon) as keys.`,
+      ``,
+      `Rules:`,
+      `- For SELECTION_ONLY aspects (with enum options), suggest one of the listed values exactly.`,
+      `- For free-text aspects, write the value in ${targetLang}.`,
+      `- Do NOT touch aspects already filled.`,
+      `- Brand-name aspects always use "${product.brand ?? '(brand)'}".`,
+      `- If unsure, skip the aspect — false confidence hurts more than a missing aspect.`,
+      ``,
+      `Respond with ONLY this JSON shape (no prose):`,
+      `{"aspects": {"aspect_Brand": "Xavia", "aspect_Size": "M"}, "rationale": string, "projectedUplift": string}`,
+    ].join('\n')
+
+    try {
+      const res = await provider.generate({
+        prompt,
+        jsonMode: true,
+        maxOutputTokens: 2048,
+        temperature: 0.2,
+        feature: 'ebay-cockpit-ai-improve-aspects',
+        entityType: 'product',
+        entityId: productId,
+      })
+      const parsed = parseAiJson(res.text)
+      return reply.send({
+        operation,
+        ...parsed,
+        usage: res.usage,
+      })
+    } catch (err) {
+      request.log.error(err, '[ebay/cockpit/ai-improve aspects] failed')
+      return reply.code(500).send({ error: err instanceof Error ? err.message : 'AI call failed' })
+    }
+  })
+}
+
+// JSON parse that tolerates a stray prose intro or markdown fence —
+// Anthropic occasionally wraps JSON in ```json ... ``` despite the
+// system prompt's "ONLY this JSON" instruction.
+function parseAiJson(raw: string): Record<string, unknown> {
+  const trimmed = raw.trim()
+  const cleaned = trimmed
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/\s*```$/, '')
+    .trim()
+  try {
+    return JSON.parse(cleaned)
+  } catch {
+    // Try to extract the first {...} block.
+    const m = cleaned.match(/\{[\s\S]*\}/)
+    if (!m) throw new Error(`AI returned non-JSON: ${cleaned.slice(0, 200)}`)
+    return JSON.parse(m[0])
+  }
 }

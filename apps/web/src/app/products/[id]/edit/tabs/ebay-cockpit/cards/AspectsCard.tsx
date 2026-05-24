@@ -23,7 +23,7 @@
 // to the DSP-series flush registry.
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Loader2, AlertCircle, Save, CheckCircle2 } from 'lucide-react'
+import { Loader2, AlertCircle, Save, CheckCircle2, Sparkles } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useRouter } from 'next/navigation'
 import { Card } from '@/components/ui/Card'
@@ -32,6 +32,7 @@ import { cn } from '@/lib/utils'
 import FieldSourceRow from '../field-source/FieldSourceRow'
 import type { FieldSource } from '../field-source/types'
 import { resolveMasterValue } from './aspect-master-map'
+import AiImproveModal from '../ai/AiImproveModal'
 
 interface SchemaAspect {
   id: string
@@ -110,6 +111,7 @@ export default function AspectsCard({
   const [saving, setSaving] = useState(false)
   const [savedFlash, setSavedFlash] = useState(false)
   const [dirtyValues, setDirtyValues] = useState<Record<string, string>>({})
+  const [aiOpen, setAiOpen] = useState(false)
 
   const initialFlat = useMemo<Record<string, string>>(() => {
     const out: Record<string, string> = {}
@@ -241,6 +243,19 @@ export default function AspectsCard({
             <CheckCircle2 className="w-3 h-3" /> Required complete
           </span>
         )}
+        {schema && (
+          <button
+            type="button"
+            onClick={() => setAiOpen(true)}
+            className={cn(
+              'inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded border border-amber-200 dark:border-amber-800 bg-amber-50/60 dark:bg-amber-950/30 text-amber-800 dark:text-amber-300 hover:bg-amber-100',
+              !(requiredMissing > 0 || schema.aspects.length > Object.keys(initialFlat).length) && 'ml-auto',
+            )}
+            title="AI-suggest values for empty aspects"
+          >
+            <Sparkles className="w-3 h-3" /> AI suggest
+          </button>
+        )}
       </div>
 
       <div className="p-4 space-y-4">
@@ -336,6 +351,25 @@ export default function AspectsCard({
           </button>
         </div>
       )}
+
+      <AiImproveModal
+        open={aiOpen}
+        operation="aspects"
+        productId={productId}
+        marketplace={marketplace}
+        currentAspects={(() => {
+          const out: Record<string, string> = {}
+          for (const [k, v] of Object.entries(initialFlat)) out[k] = v
+          for (const [k, v] of Object.entries(dirtyValues)) out[k] = v
+          return out
+        })()}
+        onApplyAspects={(next) => {
+          // Merge AI-suggested values into the dirty buffer so the
+          // operator can review / edit before hitting Save aspects.
+          setDirtyValues((d) => ({ ...d, ...next }))
+        }}
+        onClose={() => setAiOpen(false)}
+      />
     </Card>
   )
 }

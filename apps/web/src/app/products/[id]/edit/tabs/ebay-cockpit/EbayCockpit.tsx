@@ -332,6 +332,7 @@ export default function EbayCockpit(props: Props) {
 
       {/* ── EC.2 — Listing Essentials (Field Source System demo) ──── */}
       <ListingEssentialsCard
+        productId={product.id}
         marketplace={marketplace}
         currency={marketInfo.currency}
         initial={{

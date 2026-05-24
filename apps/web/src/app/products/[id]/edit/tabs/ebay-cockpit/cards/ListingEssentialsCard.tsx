@@ -14,10 +14,13 @@
 // hoists into platformAttributes._fieldSources. Until then the card
 // is fully testable end-to-end via localStorage persistence.
 
+import { useState } from 'react'
 import { Sparkles } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import FieldSourceRow from '../field-source/FieldSourceRow'
+import { useFieldSourceContext } from '../field-source/FieldSourceProvider'
+import AiImproveModal from '../ai/AiImproveModal'
 import type { FieldSource } from '../field-source/types'
 
 interface SiblingPreview {
@@ -28,6 +31,7 @@ interface SiblingPreview {
 }
 
 interface Props {
+  productId: string
   marketplace: string
   currency: string
   initial: {
@@ -44,12 +48,19 @@ interface Props {
 }
 
 export default function ListingEssentialsCard({
+  productId,
   marketplace,
   currency,
   initial,
   master,
   siblings,
 }: Props) {
+  const fsCtx = useFieldSourceContext()
+  const [aiOpen, setAiOpen] = useState(false)
+  // Read current title/description from the field-source store so the
+  // AI modal's "before" side reflects what the operator actually sees.
+  const titleState = fsCtx.read(`${marketplace}.title`, initial.title)
+  const descState = fsCtx.read(`${marketplace}.description`, initial.description)
   // AI resolver is a stub for EC.2 — EC.12 wires the real list-wizard
   // backed assistant. Today it returns a deterministic transform so
   // the diff modal has something to show.
@@ -84,6 +95,14 @@ export default function ListingEssentialsCard({
         <span className="text-xs text-slate-500 dark:text-slate-400 ml-auto">
           Per-field source · lock · undo · diff-then-apply
         </span>
+        <button
+          type="button"
+          onClick={() => setAiOpen(true)}
+          className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded border border-amber-200 dark:border-amber-800 bg-amber-50/60 dark:bg-amber-950/30 text-amber-800 dark:text-amber-300 hover:bg-amber-100"
+          title="AI-improve title + description for this marketplace"
+        >
+          <Sparkles className="w-3 h-3" /> AI improve
+        </button>
       </div>
 
       <div className="p-4 space-y-4">
@@ -185,11 +204,35 @@ export default function ListingEssentialsCard({
         </FieldSourceRow>
 
         <div className="text-[10.5px] text-slate-400 italic pt-1 border-t border-slate-100 dark:border-slate-800">
-          EC.2 substrate — state lives in localStorage during the EC engagement,
-          hoisted to ChannelListing.platformAttributes._fieldSources by EC.10&apos;s
-          save flow. AI source is stubbed; EC.12 wires the real assistant.
+          State lives in localStorage during the EC engagement, hoisted to
+          ChannelListing.platformAttributes._fieldSources by EC.10&apos;s
+          save flow. Per-field AI source is stubbed (deterministic);
+          card-level AI improve calls the real Claude assistant.
         </div>
       </div>
+
+      <AiImproveModal
+        open={aiOpen}
+        operation="essentials"
+        productId={productId}
+        marketplace={marketplace}
+        currentEssentials={{
+          title: titleState.value,
+          description: descState.value,
+        }}
+        onApplyEssentials={(next) => {
+          // Push through the Field Source store with source='ai' so
+          // the source badge updates AND undo history captures the
+          // prior value for one-click revert.
+          if (next.title !== undefined) {
+            fsCtx.applySwitch(`${marketplace}.title`, 'ai', next.title)
+          }
+          if (next.description !== undefined) {
+            fsCtx.applySwitch(`${marketplace}.description`, 'ai', next.description)
+          }
+        }}
+        onClose={() => setAiOpen(false)}
+      />
     </Card>
   )
 }
