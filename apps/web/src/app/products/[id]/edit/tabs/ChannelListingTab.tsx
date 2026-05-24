@@ -10,6 +10,7 @@ import { useTranslations } from '@/lib/i18n/use-translations'
 import { cn } from '@/lib/utils'
 import ChannelFieldEditor from '../../../_shared/ChannelFieldEditor'
 import InheritancePanel from './_shared/InheritancePanel'
+import DiffVsMasterPanel from './_shared/DiffVsMasterPanel'
 
 interface MarketInfo {
   code: string
@@ -491,6 +492,15 @@ export default function ChannelListingTab({
       {/* ── PIM B.2 — Inheritance panel ───────────────────────── */}
       {listing?.id && (
         <InheritancePanel
+          productId={activeProductId}
+          channelListingId={listing.id}
+          targetLabel={`${marketInfo.channel} ${marketInfo.code}`}
+        />
+      )}
+
+      {/* ── PIM B.3 — Diff vs master ──────────────────────────── */}
+      {listing?.id && (
+        <DiffVsMasterPanel
           productId={activeProductId}
           channelListingId={listing.id}
           targetLabel={`${marketInfo.channel} ${marketInfo.code}`}
