@@ -255,21 +255,37 @@ export default function MatrixClient() {
 
   /** Optimistic field-level setter — updates local state immediately,
    *  buffers a server PATCH via the mutation hook. The hook rolls
-   *  back on error using the `rollback` snapshot. */
+   *  back on error using the `rollback` snapshot.
+   *
+   *  C.4b — attr_* prefix routes the write into categoryAttributes
+   *  on the local row (server side, /products/bulk already understands
+   *  attr_* — see products.routes.ts D.3e batched attr writes).
+   */
   const updateField = useCallback(
     (rowId: string, field: string, nextValue: unknown, currentValue: unknown) => {
+      const isAttr = field.startsWith('attr_')
+      const attrKey = isAttr ? field.slice('attr_'.length) : null
+
+      const patchRow = <T extends { categoryAttributes: Record<string, unknown> | null }>(
+        target: T,
+      ): T => {
+        if (isAttr && attrKey) {
+          const base = target.categoryAttributes ?? {}
+          return { ...target, categoryAttributes: { ...base, [attrKey]: nextValue } }
+        }
+        return { ...target, [field]: nextValue as never }
+      }
+
       setData((d) => {
         if (!d) return d
         return {
           ...d,
           rows: d.rows.map((row) => {
-            if (row.id === rowId) return { ...row, [field]: nextValue as never }
+            if (row.id === rowId) return patchRow(row)
             if (row.variants.some((v) => v.id === rowId)) {
               return {
                 ...row,
-                variants: row.variants.map((v) =>
-                  v.id === rowId ? { ...v, [field]: nextValue as never } : v,
-                ),
+                variants: row.variants.map((v) => (v.id === rowId ? patchRow(v) : v)),
               }
             }
             return row
@@ -782,18 +798,21 @@ function ParentCell({
         </div>
       )
     default:
-      // C.4 — dynamic categoryAttributes column. Read-only display
-      // for now; C.4b will add inline edit via the same EditableCell.
+      // C.4b — dynamic categoryAttributes column with inline edit.
+      // Routes writes through `attr_<key>` so /products/bulk lands the
+      // value in categoryAttributes[key] (D.3e batched attr writes).
       if (col.dynamic) {
+        const attrKey = col.id.slice('attr:'.length)
         const v = dynamicAttrValue(row, col.id)
         return (
-          <div className="text-xs text-zinc-700 dark:text-zinc-300 truncate px-1">
-            {v == null ? (
-              <span className="italic text-zinc-400">—</span>
-            ) : (
-              formatDynamicValue(v)
-            )}
-          </div>
+          <EditableCell
+            kind="text"
+            cellKey={`${row.id}:${col.id}`}
+            value={v == null ? null : (typeof v === 'string' || typeof v === 'number' ? v : formatDynamicValue(v))}
+            placeholder="—"
+            onCommit={(next) => onUpdate(row.id, `attr_${attrKey}`, next, v)}
+            className="text-xs"
+          />
         )
       }
       return <div />
@@ -984,29 +1003,40 @@ function VariantCell({
       )
     default:
       if (col.dynamic) {
-        // For variants, surface variant's own attr value; fall back
-        // to parent's so inherited values still show.
+        // C.4b — editable dynamic attribute on variant rows. Variant
+        // value wins; parent value shows as inherited ghost (matches
+        // C.5 inheritance treatment for built-in editable columns).
+        const attrKey = col.id.slice('attr:'.length)
         const own = dynamicAttrValue(variant, col.id)
-        const inherited = own == null ? dynamicAttrValue(parent, col.id) : null
-        const v = own ?? inherited
+        const parentVal = dynamicAttrValue(parent, col.id)
+        const inheritedVal =
+          parentVal == null
+            ? null
+            : typeof parentVal === 'string' || typeof parentVal === 'number'
+              ? parentVal
+              : formatDynamicValue(parentVal)
+        const ownVal =
+          own == null
+            ? null
+            : typeof own === 'string' || typeof own === 'number'
+              ? own
+              : formatDynamicValue(own)
         return (
-          <div
-            className={cn(
-              'text-xs truncate px-1',
-              own == null && inherited != null
-                ? 'italic text-zinc-400'
-                : 'text-zinc-700 dark:text-zinc-300',
-            )}
-            title={
-              own == null && inherited != null ? 'inherited from parent' : undefined
+          <EditableCell
+            kind="text"
+            cellKey={`${variant.id}:${col.id}`}
+            value={ownVal}
+            compact
+            inheritedFromValue={inheritedVal}
+            inheritedSourceLabel={parentVal != null ? 'parent' : undefined}
+            onCommit={(next) => onUpdate(variant.id, `attr_${attrKey}`, next, own)}
+            onReset={
+              parentVal != null
+                ? () => onUpdate(variant.id, `attr_${attrKey}`, parentVal, own)
+                : undefined
             }
-          >
-            {v == null ? (
-              <span className="italic text-zinc-400">—</span>
-            ) : (
-              formatDynamicValue(v)
-            )}
-          </div>
+            className="text-xs"
+          />
         )
       }
       return <div />
