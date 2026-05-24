@@ -55,6 +55,9 @@ interface Props {
   productName: string | null
   productDescription: string | null
   productBrand: string | null
+  /** AC.11.2 — current product.keywords (string[]). Used as the
+   *  diff baseline for the 4th field. */
+  productKeywords?: string[] | null
   marketplace: string
   language: string
   /** Current values seen by the cockpit (with draft overlays applied).
@@ -68,7 +71,7 @@ interface Props {
   onJumpToClassic?: () => void
 }
 
-type FieldKey = 'name' | 'description' | 'bullets'
+type FieldKey = 'name' | 'description' | 'bullets' | 'keywords'
 
 interface DiffEntry {
   field: FieldKey
@@ -96,6 +99,7 @@ export default function AutoFillCard({
   productName,
   productDescription,
   productBrand,
+  productKeywords,
   marketplace,
   language,
   currentTitle,
@@ -104,6 +108,7 @@ export default function AutoFillCard({
   siblingListings = [],
   onJumpToClassic,
 }: Props) {
+  const currentKeywords = productKeywords ?? []
   const [busy, setBusy] = useState<'master' | 'ai' | 'sibling' | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [diffs, setDiffs] = useState<DiffEntry[]>([])
@@ -120,7 +125,15 @@ export default function AutoFillCard({
 
   // ── Compute diff helpers ─────────────────────────────────────────────
   function diffFor(
-    proposed: { name?: string; description?: string; bullets?: string[] },
+    proposed: {
+      name?: string
+      description?: string
+      bullets?: string[]
+      /** AC.11.2 — Amazon search-terms field. Persisted as
+       *  product.keywords (string[]). Shown in the diff as one term
+       *  per line. */
+      keywords?: string[]
+    },
   ): DiffEntry[] {
     const out: DiffEntry[] = []
     if (proposed.name != null && proposed.name !== currentTitle) {
@@ -157,6 +170,19 @@ export default function AutoFillCard({
         })
       }
     }
+    if (proposed.keywords != null) {
+      const before = currentKeywords.join('\n')
+      const after = proposed.keywords.join('\n')
+      if (before !== after) {
+        out.push({
+          field: 'keywords',
+          label: 'Search terms (keywords)',
+          current: before,
+          proposed: after,
+          selected: true,
+        })
+      }
+    }
     return out
   }
 
@@ -166,6 +192,14 @@ export default function AutoFillCard({
     const proposed = {
       name: productName ?? undefined,
       description: productDescription ?? undefined,
+      // AC.11.2 — master.keywords is the existing source-of-truth
+      // for product search terms. Pulling here surfaces it for the
+      // operator instead of regenerating via AI when the master
+      // already has good keywords.
+      keywords:
+        productKeywords && productKeywords.length > 0
+          ? productKeywords
+          : undefined,
     }
     const d = diffFor(proposed)
     if (d.length === 0) {
@@ -190,7 +224,7 @@ export default function AutoFillCard({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             productIds: [productId],
-            fields: ['title', 'description', 'bullets'],
+            fields: ['title', 'description', 'bullets', 'keywords'],
             marketplace,
             dryRun: true,
           }),
@@ -205,6 +239,21 @@ export default function AutoFillCard({
       if (!r) throw new Error('No result returned')
       if (!r.ok) throw new Error(r.error ?? 'AI generation failed')
       const g = r.generated ?? {}
+      // AC.11.2 — keywords may come back as either string[] (one
+      // term per row) or a single comma/whitespace-separated string;
+      // normalise to string[].
+      const rawKeywords = g.keywords?.content
+      const parsedKeywords: string[] | undefined = Array.isArray(rawKeywords)
+        ? (rawKeywords as unknown[])
+            .filter((k): k is string => typeof k === 'string')
+            .map((k) => k.trim())
+            .filter(Boolean)
+        : typeof rawKeywords === 'string'
+        ? rawKeywords
+            .split(/[,\n]/)
+            .map((k) => k.trim())
+            .filter(Boolean)
+        : undefined
       const proposed = {
         name:
           typeof g.title?.content === 'string'
@@ -219,6 +268,7 @@ export default function AutoFillCard({
               (b) => typeof b === 'string',
             ) as string[])
           : undefined,
+        keywords: parsedKeywords,
       }
       const d = diffFor(proposed)
       if (d.length === 0) {
@@ -273,6 +323,27 @@ export default function AutoFillCard({
       setDiffs([])
       return
     }
+    // Persist keywords separately — Product.keywords isn't covered
+    // by MasterDataTab's flush set so the bus alone won't save it.
+    // PATCH /products/bulk is the same single-field write the master
+    // tab uses for the fields it owns. Fired in the background.
+    const keywordsDiff = accepted.find((d) => d.field === 'keywords')
+    if (keywordsDiff) {
+      const list = keywordsDiff.proposed
+        .split('\n')
+        .map((s) => s.trim())
+        .filter(Boolean)
+      void fetch(`${getBackendUrl()}/api/products/bulk`, {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          changes: [{ id: productId, field: 'keywords', value: list }],
+        }),
+      }).catch(() => {
+        // Non-fatal — operator can re-fire from the Master tab.
+      })
+    }
     for (const d of accepted) {
       if (d.field === 'name') {
         setDraftField(productId, 'name', d.proposed)
@@ -283,6 +354,12 @@ export default function AutoFillCard({
           productId,
           'bullets',
           d.proposed.split('\n').filter(Boolean),
+        )
+      } else if (d.field === 'keywords') {
+        setDraftField(
+          productId,
+          'keywords',
+          d.proposed.split('\n').map((s) => s.trim()).filter(Boolean),
         )
       }
     }

@@ -498,6 +498,9 @@ export default function AmazonCockpit(props: Props) {
         productName={product.name ?? null}
         productDescription={product.description ?? null}
         productBrand={product.brand ?? null}
+        productKeywords={
+          Array.isArray(product.keywords) ? (product.keywords as string[]) : null
+        }
         marketplace={marketInfo.code}
         language={marketInfo.language}
         currentTitle={composed.title.value}
