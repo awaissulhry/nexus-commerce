@@ -56,28 +56,48 @@ const catalogMatrixRoutes: FastifyPluginAsync = async (fastify) => {
   // Returns rows[] of master/standalone products with variant children
   // pre-joined. Soft-deleted rows excluded. Sorted alphabetically by SKU
   // (stable for the operator's mental model; client can re-sort).
-  fastify.get('/catalog/matrix', async (_request, reply) => {
-    // Load top-level products: anything that's a parent OR a standalone
-    // (not the child of another product). Children are fetched in the
-    // next query and folded in.
-    const parents = await prisma.product.findMany({
-      where: {
-        deletedAt: null,
-        parentId: null,
-      },
-      select: {
-        id: true,
-        sku: true,
-        name: true,
-        brand: true,
-        status: true,
-        basePrice: true,
-        totalStock: true,
-        isParent: true,
-        categoryAttributes: true,
-      },
-      orderBy: { sku: 'asc' },
-    })
+  //
+  // C.2 — cursor pagination. Default limit 1000 covers Xavia (~279
+  // SKUs) in one fetch; larger catalogs walk via ?cursor=<sku>&limit=N.
+  // Cursor is the SKU since the order-by is sku ASC — guarantees a
+  // stable next page without offset (offset breaks under concurrent
+  // inserts). totalParents returned alongside so the UI can show
+  // "loaded X of Y" progress.
+  fastify.get<{
+    Querystring: { cursor?: string; limit?: string }
+  }>('/catalog/matrix', async (request, reply) => {
+    const limit = Math.min(Math.max(Number(request.query.limit ?? 1000), 1), 5000)
+    const cursor = request.query.cursor?.trim() || undefined
+
+    // Total count is cheap (indexed) and surfaces "X loaded of Y" in
+    // the UI. Runs in parallel with the parent fetch.
+    const [totalParents, parents] = await Promise.all([
+      prisma.product.count({ where: { deletedAt: null, parentId: null } }),
+      prisma.product.findMany({
+        where: {
+          deletedAt: null,
+          parentId: null,
+          ...(cursor ? { sku: { gt: cursor } } : {}),
+        },
+        select: {
+          id: true,
+          sku: true,
+          name: true,
+          brand: true,
+          status: true,
+          basePrice: true,
+          totalStock: true,
+          isParent: true,
+          categoryAttributes: true,
+        },
+        orderBy: { sku: 'asc' },
+        take: limit + 1, // peek for hasMore
+      }),
+    ])
+
+    const hasMore = parents.length > limit
+    if (hasMore) parents.pop()
+    const nextCursor = hasMore ? parents[parents.length - 1].sku : null
 
     const parentIds = parents.map((p) => p.id)
 
@@ -173,6 +193,12 @@ const catalogMatrixRoutes: FastifyPluginAsync = async (fastify) => {
       rows,
       totalRows: rows.length,
       totalVariants: children.length,
+      // C.2 — pagination metadata. nextCursor=null when there are no
+      // more pages; UI hides the Load-more button. totalParents lets
+      // the header show "Showing X of Y parents".
+      totalParents,
+      nextCursor,
+      hasMore,
     })
   })
 }

@@ -101,6 +101,10 @@ interface MatrixResponse {
   rows: MatrixRow[]
   totalRows: number
   totalVariants: number
+  // C.2 — pagination metadata
+  totalParents: number
+  nextCursor: string | null
+  hasMore: boolean
 }
 
 /** Each visible row in the virtualizer is either a parent row or one
@@ -320,7 +324,37 @@ export default function MatrixClient() {
     [data, selectedIds, updateField],
   )
 
-  // ── Fetch ───────────────────────────────────────────────────────
+  // ── Fetch + paginate ────────────────────────────────────────────
+  const [loadingMore, setLoadingMore] = useState(false)
+  const loadMore = useCallback(async () => {
+    if (!data?.nextCursor || loadingMore) return
+    setLoadingMore(true)
+    try {
+      const url = new URL(`${getBackendUrl()}/api/catalog/matrix`)
+      url.searchParams.set('cursor', data.nextCursor)
+      const r = await fetch(url.toString(), { cache: 'no-store' })
+      if (!r.ok) throw new Error(`HTTP ${r.status}`)
+      const next = (await r.json()) as MatrixResponse
+      setData((prev) =>
+        prev
+          ? {
+              ...prev,
+              rows: [...prev.rows, ...next.rows],
+              totalRows: prev.totalRows + next.rows.length,
+              totalVariants: prev.totalVariants + next.totalVariants,
+              totalParents: next.totalParents,
+              nextCursor: next.nextCursor,
+              hasMore: next.hasMore,
+            }
+          : next,
+      )
+    } catch (err: any) {
+      toast.error('Load more failed', { description: err?.message })
+    } finally {
+      setLoadingMore(false)
+    }
+  }, [data?.nextCursor, loadingMore, toast])
+
   useEffect(() => {
     let cancelled = false
     setLoading(true)
@@ -418,7 +452,11 @@ export default function MatrixClient() {
           <div className="flex items-center gap-3 text-xs text-zinc-500">
             {data && (
               <span>
-                {data.totalRows} parents · {data.totalVariants} variants
+                {data.totalRows}
+                {data.totalRows < data.totalParents && (
+                  <span className="text-zinc-400"> of {data.totalParents}</span>
+                )}{' '}
+                parents · {data.totalVariants} variants
               </span>
             )}
             <button
@@ -562,6 +600,24 @@ export default function MatrixClient() {
                 </div>
               )
             })}
+          </div>
+        )}
+        {/* C.2 — Load more affordance, only when server has more rows. */}
+        {data && data.hasMore && (
+          <div className="flex items-center justify-center py-4 border-t border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/30">
+            <button
+              type="button"
+              onClick={() => void loadMore()}
+              disabled={loadingMore}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded text-xs text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 disabled:opacity-50"
+            >
+              {loadingMore ? (
+                <Loader2 className="w-3 h-3 animate-spin" />
+              ) : (
+                <ChevronDown className="w-3 h-3" />
+              )}
+              Load more ({data.totalParents - data.totalRows} remaining)
+            </button>
           </div>
         )}
       </div>
