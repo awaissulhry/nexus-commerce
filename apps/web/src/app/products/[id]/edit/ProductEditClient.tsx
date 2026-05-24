@@ -59,6 +59,8 @@ import RelationsTab from './tabs/RelationsTab'
 import LocalesTab from './tabs/LocalesTab'
 import MatrixTab from './tabs/MatrixTab'
 import ChannelListingTab from './tabs/ChannelListingTab'
+import EbayCockpit from './tabs/ebay-cockpit/EbayCockpit'
+import { useCockpitMode } from './tabs/ebay-cockpit/useCockpitMode'
 import ComplianceTab from './tabs/ComplianceTab'
 import ImagesTab from './tabs/ImagesTab'
 import SeoTab from './tabs/SeoTab'
@@ -202,6 +204,12 @@ export default function ProductEditClient({
   const searchParams = useSearchParams()
   const { t } = useTranslations()
   const confirm = useConfirm()
+
+  // EC.1 — eBay channel UI mode toggle ('cockpit' vs 'classic').
+  // Default is 'cockpit' for the eBay channel during the EC engagement.
+  // Operators can flip back to 'classic' from the cockpit header; the
+  // choice persists in localStorage. Other channels ignore this flag.
+  const [cockpitMode] = useCockpitMode()
 
   // EH.7 — Pre-warm the API caches that the Datasheet / Flat File /
   // Recover new-tab anchors will hit. Mount-warm kicks off on first
@@ -1330,31 +1338,65 @@ export default function ProductEditClient({
                   }
                 />
               )}
-              <ChannelListingTab
-                /* W1.1 — discardSignal in the key forces a fresh remount
-                 * when the user discards: cleanup effects fire, debounce
-                 * timers cancel, and the editor reseeds from server data
-                 * via its own fetch chain. */
-                key={`${channel}_${selectedMarket}_${discardSignal}`}
-                product={product}
-                channel={channel}
-                marketplace={selectedMarket}
-                marketInfo={marketInfo}
-                siblingMarkets={channelMarkets.filter((m) => m.code !== selectedMarket)}
-                listing={listing}
-                onDirtyChange={(count) => setTabDirty(tabKey, count)}
-                onSave={() => router.refresh()}
-                onRegister={(handlers) =>
-                  registry.register(tabKey, {
-                    label: t('products.edit.discardScopeChannel', {
-                      channel,
-                      marketplace: selectedMarket,
-                    }),
-                    ...handlers,
-                  })
-                }
-                childrenList={childrenList}
-              />
+              {/* EC.1 — Route eBay through the Listing Cockpit when the
+                  operator hasn't opted out. Every other channel keeps
+                  the classic ChannelListingTab unchanged. The cockpit
+                  itself currently embeds ChannelListingTab as a
+                  transitional pass-through, so no eBay functionality
+                  is lost while EC.4–EC.8 cards land. */}
+              {channel === 'EBAY' && cockpitMode === 'cockpit' ? (
+                <EbayCockpit
+                  key={`${channel}_${selectedMarket}_${discardSignal}_cockpit`}
+                  product={product}
+                  marketplace={selectedMarket}
+                  marketInfo={marketInfo}
+                  siblingMarkets={channelMarkets.filter((m) => m.code !== selectedMarket)}
+                  listing={listing}
+                  onDirtyChange={(count) => setTabDirty(tabKey, count)}
+                  onSave={() => router.refresh()}
+                  onRegister={(handlers) =>
+                    registry.register(tabKey, {
+                      label: t('products.edit.discardScopeChannel', {
+                        channel,
+                        marketplace: selectedMarket,
+                      }),
+                      ...handlers,
+                    })
+                  }
+                  childrenList={childrenList}
+                />
+              ) : (
+                <>
+                  {channel === 'EBAY' && (
+                    <ClassicToCockpitBanner />
+                  )}
+                  <ChannelListingTab
+                  /* W1.1 — discardSignal in the key forces a fresh remount
+                   * when the user discards: cleanup effects fire, debounce
+                   * timers cancel, and the editor reseeds from server data
+                   * via its own fetch chain. */
+                  key={`${channel}_${selectedMarket}_${discardSignal}`}
+                  product={product}
+                  channel={channel}
+                  marketplace={selectedMarket}
+                  marketInfo={marketInfo}
+                  siblingMarkets={channelMarkets.filter((m) => m.code !== selectedMarket)}
+                  listing={listing}
+                  onDirtyChange={(count) => setTabDirty(tabKey, count)}
+                  onSave={() => router.refresh()}
+                  onRegister={(handlers) =>
+                    registry.register(tabKey, {
+                      label: t('products.edit.discardScopeChannel', {
+                        channel,
+                        marketplace: selectedMarket,
+                      }),
+                      ...handlers,
+                    })
+                  }
+                  childrenList={childrenList}
+                />
+                </>
+              )}
             </div>
           )
         })()}
@@ -1542,5 +1584,30 @@ function MarketplaceSidebar({
         })}
       </ul>
     </aside>
+  )
+}
+
+// EC.1 — Surfaces a one-click return path to the cockpit when an
+// operator has opted into classic view. Lives in this file (vs the
+// cockpit folder) because it's mounted on the classic-render branch
+// of the eBay channel tab — keeping it co-located with the mount
+// site avoids a circular import path on ChannelListingTab.
+function ClassicToCockpitBanner() {
+  const [, setMode] = useCockpitMode()
+  return (
+    <div className="mb-3 px-3 py-2 rounded border border-blue-200 dark:border-blue-800 bg-blue-50/60 dark:bg-blue-950/30 flex items-center justify-between gap-3 text-sm">
+      <span className="text-blue-800 dark:text-blue-300">
+        You&apos;re viewing the classic eBay tab. The new Listing Cockpit
+        is available with live preview, dynamic aspects, and a visual
+        variation matrix.
+      </span>
+      <button
+        type="button"
+        onClick={() => setMode('cockpit')}
+        className="px-2.5 py-1 rounded bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium whitespace-nowrap"
+      >
+        Switch to Cockpit
+      </button>
+    </div>
   )
 }

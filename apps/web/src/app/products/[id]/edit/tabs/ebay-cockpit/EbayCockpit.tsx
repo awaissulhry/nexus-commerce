@@ -1,0 +1,383 @@
+'use client'
+
+// EC.1.2 — EbayCockpit shell.
+//
+// 3-zone layout for the new eBay listing surface:
+//   • Header strip: market chip, status, "back to classic" link, action
+//     placeholders (Pull / AI / Publish — wired in EC.10).
+//   • Preview / health band (collapsible): live eBay-styled preview + a
+//     placeholder for the EC.9 health score panel.
+//   • Cards section: placeholder cards for Category, Aspects,
+//     Variations, Images, Pricing, Policies. Each card is a stub in
+//     EC.1 — they fill in across EC.4–EC.8.
+//
+// During EC.1 we ALSO render the existing ChannelListingTab below the
+// cards as a transitional pass-through so no data wiring is lost.
+// The pass-through goes away phase-by-phase as each card supersedes
+// the corresponding ChannelListingTab section.
+
+import { useState } from 'react'
+import { ChevronDown, ChevronUp, ArrowDownToLine, Sparkles, Send, ExternalLink, Settings2, Package, Image as ImageIcon, DollarSign, ShieldCheck, Layers, Tag } from 'lucide-react'
+import { Card } from '@/components/ui/Card'
+import { Badge } from '@/components/ui/Badge'
+import { Button } from '@/components/ui/Button'
+import { cn } from '@/lib/utils'
+import ChannelListingTab from '../ChannelListingTab'
+import { useEbayCompositor } from './useEbayCompositor'
+import { useCockpitMode } from './useCockpitMode'
+import EbayLivePreview from './EbayLivePreview'
+import type { ComposedListing } from './types'
+
+interface MarketInfo {
+  code: string
+  name: string
+  channel: string
+  marketplaceId?: string | null
+  region: string
+  currency: string
+  language: string
+  domainUrl?: string | null
+}
+
+interface Listing {
+  id: string
+  channel: string
+  marketplace: string
+  channelMarket: string
+  region: string
+  title: string | null
+  description: string | null
+  price: string | number | null
+  quantity: number | null
+  isPublished: boolean
+  listingStatus: string
+  externalListingId: string | null
+  bulletPointsOverride: string[] | null
+  pricingRule?: string | null
+  priceOverride?: string | number | null
+  priceAdjustmentPercent?: string | number | null
+  followMasterPrice?: boolean
+  [key: string]: any
+}
+
+interface ChildProduct {
+  id: string
+  sku: string
+  name?: string | null
+  variantLabel?: string | null
+}
+
+interface Props {
+  product: any
+  marketplace: string
+  marketInfo: MarketInfo
+  siblingMarkets?: MarketInfo[]
+  listing: Listing | undefined
+  onDirtyChange: (count: number) => void
+  onSave: (updated: Listing) => void
+  onRegister?: (handlers: {
+    flush: () => Promise<void>
+    discard: () => void
+  }) => void
+  childrenList?: ChildProduct[]
+}
+
+const STATUS_TONE: Record<string, { bg: string; text: string }> = {
+  ACTIVE:    { bg: 'bg-emerald-100 dark:bg-emerald-950/50', text: 'text-emerald-700 dark:text-emerald-300' },
+  DRAFT:     { bg: 'bg-amber-100 dark:bg-amber-950/50',     text: 'text-amber-700 dark:text-amber-300'     },
+  ENDED:     { bg: 'bg-slate-100 dark:bg-slate-800',        text: 'text-slate-600 dark:text-slate-400'     },
+  INACTIVE:  { bg: 'bg-slate-100 dark:bg-slate-800',        text: 'text-slate-600 dark:text-slate-400'     },
+  ERROR:     { bg: 'bg-rose-100 dark:bg-rose-950/50',       text: 'text-rose-700 dark:text-rose-300'       },
+}
+
+export default function EbayCockpit(props: Props) {
+  const { product, marketplace, marketInfo, siblingMarkets, listing, childrenList } = props
+  const [, setMode] = useCockpitMode()
+  const [previewOpen, setPreviewOpen] = useState(true)
+  const [classicOpen, setClassicOpen] = useState(true)
+
+  const composed = useEbayCompositor({
+    product,
+    listing,
+    marketInfo,
+    children: childrenList?.map((c) => ({ id: c.id })) ?? [],
+  })
+
+  const tone = STATUS_TONE[composed.status.listingStatus] ?? STATUS_TONE.DRAFT
+
+  return (
+    <div className="space-y-4">
+      {/* ── Zone 1: Header strip ────────────────────────────────── */}
+      <div className="sticky top-14 z-[5]">
+        <Card noPadding>
+          <div className="px-4 py-3 flex items-center justify-between flex-wrap gap-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <Badge mono variant={listing ? 'info' : 'warning'}>
+                {marketInfo.code}
+              </Badge>
+              <div className="min-w-0">
+                <div className="text-md font-semibold text-slate-900 dark:text-slate-100 truncate flex items-center gap-2">
+                  {marketInfo.name}
+                  <span
+                    className={cn(
+                      'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10.5px] font-medium',
+                      tone.bg,
+                      tone.text,
+                    )}
+                  >
+                    {composed.status.listingStatus}
+                  </span>
+                  {composed.status.publicUrl && (
+                    <a
+                      href={composed.status.publicUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-xs text-blue-600 dark:text-blue-400 hover:underline inline-flex items-center gap-0.5"
+                    >
+                      View <ExternalLink className="w-3 h-3" />
+                    </a>
+                  )}
+                </div>
+                <div className="text-sm text-slate-500 dark:text-slate-400 mt-0.5 flex items-center gap-2 flex-wrap">
+                  {composed.status.externalListingId ? (
+                    <span className="font-mono text-xs">{composed.status.externalListingId}</span>
+                  ) : (
+                    <span>Not yet listed on this marketplace</span>
+                  )}
+                  <span>·</span>
+                  <span>{marketInfo.currency}</span>
+                  <span>·</span>
+                  <span className="uppercase tracking-wide">{marketInfo.language}</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 flex-wrap">
+              {/* EC.1 — these buttons are placeholders. The real Pull /
+                  Translate / Publish wiring lives in the classic pane
+                  below until EC.4–EC.10 land their replacements. */}
+              <Button
+                variant="secondary"
+                size="sm"
+                icon={<ArrowDownToLine className="w-3.5 h-3.5" />}
+                disabled
+                title="Coming in EC.6 — until then use the classic Pull below"
+              >
+                Pull
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                icon={<Sparkles className="w-3.5 h-3.5" />}
+                disabled
+                title="Coming in EC.12 — until then use the classic AI Translate below"
+              >
+                AI improve
+              </Button>
+              <Button
+                size="sm"
+                icon={<Send className="w-3.5 h-3.5" />}
+                disabled
+                title="Coming in EC.10 (Inventory API publish) — until then use the classic Publish below"
+              >
+                Publish
+              </Button>
+              <button
+                type="button"
+                onClick={() => setMode('classic')}
+                className="ml-1 inline-flex items-center gap-1 text-xs text-slate-500 hover:text-slate-900 dark:hover:text-slate-200 underline-offset-2 hover:underline"
+                title="Switch back to the legacy view for this session"
+              >
+                <Settings2 className="w-3 h-3" /> Classic view
+              </button>
+            </div>
+          </div>
+        </Card>
+      </div>
+
+      {/* ── Zone 2: Preview + Health band (collapsible) ───────────── */}
+      <Card noPadding>
+        <button
+          type="button"
+          onClick={() => setPreviewOpen((o) => !o)}
+          className="w-full px-4 py-2.5 flex items-center justify-between text-left border-b border-slate-100 dark:border-slate-800"
+        >
+          <div className="flex items-center gap-2">
+            <span className="text-md font-medium text-slate-900 dark:text-slate-100">
+              Live preview
+            </span>
+            <span className="text-xs text-slate-500 dark:text-slate-400">
+              How operators see this on eBay {marketInfo.code}
+            </span>
+          </div>
+          {previewOpen ? <ChevronUp className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
+        </button>
+        {previewOpen && (
+          <div className="p-4 grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-4 bg-slate-50/40 dark:bg-slate-900/30">
+            <EbayLivePreview composed={composed} />
+            <HealthRail composed={composed} />
+          </div>
+        )}
+      </Card>
+
+      {/* ── Zone 3: Cards placeholders (EC.4–EC.8) ────────────────── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+        <PlaceholderCard
+          icon={<Tag className="w-4 h-4" />}
+          title="Category & Aspects"
+          phase="EC.4 + EC.5"
+          value={composed.categoryLabel.value ?? composed.categoryId.value ?? 'No category picked'}
+        />
+        <PlaceholderCard
+          icon={<Layers className="w-4 h-4" />}
+          title="Variations Matrix"
+          phase="EC.6"
+          value={
+            composed.variationSummary.variantCount > 0
+              ? `${composed.variationSummary.variantCount} variants · axes: ${composed.variationSummary.axes.join(', ') || '—'}`
+              : 'No variations'
+          }
+        />
+        <PlaceholderCard
+          icon={<ImageIcon className="w-4 h-4" />}
+          title="Images"
+          phase="EC.7"
+          value={`${composed.galleryUrls.value.length} images in gallery`}
+        />
+        <PlaceholderCard
+          icon={<DollarSign className="w-4 h-4" />}
+          title="Pricing & Best Offer"
+          phase="EC.8"
+          value={
+            composed.price.value != null
+              ? `${composed.currency} ${composed.price.value.toFixed(2)}`
+              : 'No price set'
+          }
+        />
+        <PlaceholderCard
+          icon={<ShieldCheck className="w-4 h-4" />}
+          title="Policies"
+          phase="EC.8"
+          value="Read from ChannelConnection on render"
+        />
+        <PlaceholderCard
+          icon={<Package className="w-4 h-4" />}
+          title="Compatibility (motors)"
+          phase="EC.13"
+          value="Xavia motorcycle gear — fit list editor"
+        />
+      </div>
+
+      {/* ── Transitional pass-through ─────────────────────────────────
+          EC.1 keeps all existing ChannelListingTab functionality alive
+          below the cards. Each EC.4–EC.8 phase replaces a corresponding
+          section of this pane until the pass-through goes away. */}
+      <Card noPadding>
+        <button
+          type="button"
+          onClick={() => setClassicOpen((o) => !o)}
+          className="w-full px-4 py-2.5 flex items-center justify-between text-left border-b border-slate-100 dark:border-slate-800"
+        >
+          <div className="flex items-center gap-2">
+            <span className="text-md font-medium text-slate-900 dark:text-slate-100">
+              Existing fields
+            </span>
+            <Badge variant="info">transitional</Badge>
+            <span className="text-xs text-slate-500 dark:text-slate-400">
+              All current eBay tab functionality, kept live while EC.4–EC.8 land
+            </span>
+          </div>
+          {classicOpen ? <ChevronUp className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
+        </button>
+        {classicOpen && (
+          <div className="p-4">
+            <ChannelListingTab
+              product={product}
+              channel="EBAY"
+              marketplace={marketplace}
+              marketInfo={marketInfo}
+              siblingMarkets={siblingMarkets}
+              listing={listing}
+              onDirtyChange={props.onDirtyChange}
+              onSave={props.onSave}
+              onRegister={props.onRegister}
+              childrenList={childrenList}
+            />
+          </div>
+        )}
+      </Card>
+    </div>
+  )
+}
+
+// ── Health rail (EC.9 placeholder) ─────────────────────────────────────
+function HealthRail({ composed }: { composed: ComposedListing }) {
+  // EC.1 surfaces a few derived counters as a visual placeholder. EC.9
+  // replaces this with the real 0–100 health score + category-specific
+  // gates + competitor benchmark.
+  const titleOk = composed.healthHints.titleLength > 0 && composed.healthHints.titleLength <= 80
+  const descOk = composed.healthHints.descriptionLength >= 200
+  const imagesOk = composed.galleryUrls.value.length >= 4
+  const categoryOk = composed.categoryId.value != null
+  const checks: Array<{ label: string; ok: boolean; hint?: string }> = [
+    { label: 'Title ≤ 80 chars', ok: titleOk, hint: `${composed.healthHints.titleLength}/80` },
+    { label: 'Description ≥ 200', ok: descOk, hint: `${composed.healthHints.descriptionLength}` },
+    { label: 'Images ≥ 4', ok: imagesOk, hint: `${composed.galleryUrls.value.length}` },
+    { label: 'Category set', ok: categoryOk },
+    { label: 'Brand set', ok: composed.brand.value != null },
+  ]
+  const passed = checks.filter((c) => c.ok).length
+  return (
+    <div className="rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3 space-y-2">
+      <div className="flex items-baseline justify-between">
+        <div className="text-sm font-semibold text-slate-800 dark:text-slate-200">Pre-publish health</div>
+        <div className="text-xs text-slate-500">{passed}/{checks.length}</div>
+      </div>
+      <div className="space-y-1">
+        {checks.map((c) => (
+          <div key={c.label} className="flex items-center justify-between text-xs">
+            <span className="text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+              <span className={cn('w-1.5 h-1.5 rounded-full', c.ok ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600')} />
+              {c.label}
+            </span>
+            {c.hint && <span className="font-mono text-[10.5px] text-slate-400">{c.hint}</span>}
+          </div>
+        ))}
+      </div>
+      <div className="pt-1 mt-1 border-t border-slate-100 dark:border-slate-800 text-[10.5px] text-slate-400 italic">
+        Placeholder — full score lands in EC.9.
+      </div>
+    </div>
+  )
+}
+
+// ── Placeholder card (EC.4–EC.8 fillers) ───────────────────────────────
+function PlaceholderCard({
+  icon,
+  title,
+  phase,
+  value,
+}: {
+  icon: React.ReactNode
+  title: string
+  phase: string
+  value: string
+}) {
+  return (
+    <div className="rounded-lg border border-dashed border-slate-300 dark:border-slate-700 bg-white/60 dark:bg-slate-900/40 p-3.5">
+      <div className="flex items-center justify-between mb-1.5">
+        <div className="inline-flex items-center gap-2 text-sm font-semibold text-slate-800 dark:text-slate-200">
+          <span className="text-slate-400">{icon}</span>
+          {title}
+        </div>
+        <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400">
+          {phase}
+        </span>
+      </div>
+      <div className="text-xs text-slate-600 dark:text-slate-400">{value}</div>
+      <div className="mt-1.5 text-[10.5px] text-slate-400 italic">
+        Edit via the Existing fields panel below until this card lands.
+      </div>
+    </div>
+  )
+}
