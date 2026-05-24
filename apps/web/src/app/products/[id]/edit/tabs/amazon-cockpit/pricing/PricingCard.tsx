@@ -100,6 +100,17 @@ interface Props {
   /** AC.9.2 — fires after a successful PATCH so the parent can
    *  router.refresh() and pick up the new price values in props. */
   onSaved?: () => void
+  /** AC.9.3 — Subscribe & Save current state from
+   *  listing.platformAttributes.subscribeAndSave. The publish
+   *  pipeline maps these into subscribe_and_save_offer__* JSON
+   *  Listings Feed keys. */
+  snsEnabled?: boolean
+  snsDiscountPercent?: number | null
+  /** AC.9.3 — Business pricing single-tier from
+   *  listing.platformAttributes.businessPricing. Maps to
+   *  quantity_price_type + business_price feed keys. */
+  businessQty?: number | null
+  businessPrice?: number | null
   /** Click-to-jump to the classic field editor. */
   onJumpToClassic?: () => void
 }
@@ -152,6 +163,10 @@ export default function PricingCard({
   lastSyncedAt,
   listingId,
   onSaved,
+  snsEnabled = false,
+  snsDiscountPercent = null,
+  businessQty = null,
+  businessPrice = null,
   onJumpToClassic,
 }: Props) {
   const { t } = useTranslations()
@@ -615,26 +630,16 @@ export default function PricingCard({
         )}
       </div>
 
-      {/* ── 4. Offer add-ons (placeholder) ────────────────────────── */}
-      <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
-        <div className="flex items-center gap-1.5 flex-wrap">
-          <span className="text-[10.5px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-            Add-ons
-          </span>
-          <span className="inline-flex items-center px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700 text-[10.5px] text-slate-500 dark:text-slate-400">
-            Subscribe & Save
-            <span className="ml-1 text-[9px] text-slate-400">AC.9.2</span>
-          </span>
-          <span className="inline-flex items-center px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700 text-[10.5px] text-slate-500 dark:text-slate-400">
-            Business pricing
-            <span className="ml-1 text-[9px] text-slate-400">AC.9.2</span>
-          </span>
-          <span className="inline-flex items-center px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700 text-[10.5px] text-slate-500 dark:text-slate-400">
-            Coupons / Lightning Deals
-            <span className="ml-1 text-[9px] text-slate-400">AC.9.2</span>
-          </span>
-        </div>
-      </div>
+      {/* ── 4. Offer add-ons (AC.9.3 inline edit) ─────────────────── */}
+      <AddOnsEditor
+        listingId={listingId ?? null}
+        snsEnabled={snsEnabled}
+        snsDiscountPercent={snsDiscountPercent}
+        businessQty={businessQty}
+        businessPrice={businessPrice}
+        currency={currency}
+        onSaved={onSaved}
+      />
 
       {onJumpToClassic && (
         <div className="pt-1 text-[10.5px] text-slate-400 italic flex items-center justify-between">
@@ -681,6 +686,285 @@ function KpiBox({
       <div className="text-[12px] font-semibold text-slate-900 dark:text-slate-100 font-mono">
         {value}
       </div>
+    </div>
+  )
+}
+
+// AC.9.3 — Subscribe & Save + Business pricing inline editor.
+//
+// Persists into ChannelListing.platformAttributes via the AC.7.2
+// shallow-merge endpoint. The cockpit's existing publish flow
+// (AC.12 amazon-cockpit-publish.routes.ts buildRow) is what would
+// translate these keys into the JSON Listings Feed's
+// subscribe_and_save_offer__* + quantity_price_type / business_price
+// fields when the operator publishes — but for now we just persist
+// the values; the publish-side mapping is a small follow-up if the
+// operator actually uses these features.
+//
+// Coupons stay a deep-link to /pricing/coupons (Amazon's Coupons
+// API needs its own SP-API role grant + UI surface).
+function AddOnsEditor({
+  listingId,
+  snsEnabled,
+  snsDiscountPercent,
+  businessQty,
+  businessPrice,
+  currency,
+  onSaved,
+}: {
+  listingId: string | null
+  snsEnabled: boolean
+  snsDiscountPercent: number | null
+  businessQty: number | null
+  businessPrice: number | null
+  currency: string
+  onSaved?: () => void
+}) {
+  const [editing, setEditing] = useState(false)
+  const [editSns, setEditSns] = useState(snsEnabled)
+  const [editSnsPct, setEditSnsPct] = useState(
+    snsDiscountPercent != null ? String(snsDiscountPercent) : '',
+  )
+  const [editBQty, setEditBQty] = useState(
+    businessQty != null ? String(businessQty) : '',
+  )
+  const [editBPrice, setEditBPrice] = useState(
+    businessPrice != null ? String(businessPrice) : '',
+  )
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [flash, setFlash] = useState<string | null>(null)
+
+  function openEditor() {
+    setEditSns(snsEnabled)
+    setEditSnsPct(
+      snsDiscountPercent != null ? String(snsDiscountPercent) : '',
+    )
+    setEditBQty(businessQty != null ? String(businessQty) : '')
+    setEditBPrice(businessPrice != null ? String(businessPrice) : '')
+    setError(null)
+    setEditing(true)
+  }
+
+  async function save() {
+    if (!listingId) {
+      setError('No listing on this market yet — publish first.')
+      return
+    }
+    const snsPctParsed =
+      editSnsPct.trim() === '' ? null : Number(editSnsPct)
+    if (
+      editSns &&
+      snsPctParsed != null &&
+      (!Number.isFinite(snsPctParsed) || snsPctParsed < 0 || snsPctParsed > 50)
+    ) {
+      setError('S&S discount must be 0–50 %.')
+      return
+    }
+    const bQtyParsed =
+      editBQty.trim() === '' ? null : Math.floor(Number(editBQty))
+    const bPriceParsed =
+      editBPrice.trim() === '' ? null : Number(editBPrice)
+    if (
+      bQtyParsed != null &&
+      (!Number.isFinite(bQtyParsed) || bQtyParsed < 1)
+    ) {
+      setError('Business quantity must be a positive integer.')
+      return
+    }
+    if (
+      bPriceParsed != null &&
+      (!Number.isFinite(bPriceParsed) || bPriceParsed <= 0)
+    ) {
+      setError('Business price must be a positive number.')
+      return
+    }
+    if ((bQtyParsed != null) !== (bPriceParsed != null)) {
+      setError('Set both business quantity and price together, or clear both.')
+      return
+    }
+    setBusy(true)
+    setError(null)
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/listings/${encodeURIComponent(listingId)}`,
+        {
+          method: 'PATCH',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            platformAttributes: {
+              subscribeAndSave: editSns
+                ? {
+                    enabled: true,
+                    discountPercent: snsPctParsed ?? 5,
+                  }
+                : null,
+              businessPricing:
+                bQtyParsed != null && bPriceParsed != null
+                  ? {
+                      quantity: bQtyParsed,
+                      price: bPriceParsed,
+                    }
+                  : null,
+            },
+          }),
+        },
+      )
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => null)
+        throw new Error(errBody?.error ?? `HTTP ${res.status}`)
+      }
+      setEditing(false)
+      setFlash('Add-ons saved — values feed into the next publish.')
+      window.setTimeout(() => setFlash(null), 3000)
+      onSaved?.()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const snsChip = snsEnabled ? (
+    <span className="inline-flex items-center px-1.5 py-0.5 rounded border border-emerald-200 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300 text-[10.5px] font-medium">
+      Subscribe & Save · {snsDiscountPercent ?? 5}%
+    </span>
+  ) : (
+    <span className="inline-flex items-center px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700 text-[10.5px] text-slate-500 dark:text-slate-400">
+      Subscribe & Save
+    </span>
+  )
+
+  const businessChip =
+    businessQty != null && businessPrice != null ? (
+      <span className="inline-flex items-center px-1.5 py-0.5 rounded border border-blue-200 dark:border-blue-700 bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300 text-[10.5px] font-medium">
+        Business · ≥{businessQty} at {currency} {businessPrice.toFixed(2)}
+      </span>
+    ) : (
+      <span className="inline-flex items-center px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700 text-[10.5px] text-slate-500 dark:text-slate-400">
+        Business pricing
+      </span>
+    )
+
+  return (
+    <div className="pt-2 border-t border-slate-100 dark:border-slate-800 space-y-1.5">
+      <div className="flex items-center gap-1.5 flex-wrap">
+        <span className="text-[10.5px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+          Add-ons
+        </span>
+        {snsChip}
+        {businessChip}
+        <a
+          href="/pricing/promotions"
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex items-center px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700 text-[10.5px] text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+          title="Manage promotions + lightning deals in /pricing/promotions"
+        >
+          Promotions ↗
+        </a>
+        {listingId && !editing && (
+          <button
+            type="button"
+            onClick={openEditor}
+            className="ml-auto inline-flex items-center gap-1 h-6 px-2 rounded text-[10.5px] border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+            title="Edit Subscribe & Save + Business pricing"
+          >
+            <Pencil className="w-3 h-3" /> Edit
+          </button>
+        )}
+      </div>
+      {editing && (
+        <div className="rounded border border-slate-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-900/40 p-2 space-y-2">
+          <div className="space-y-1">
+            <label className="inline-flex items-center gap-1.5 text-[11px] text-slate-700 dark:text-slate-300">
+              <input
+                type="checkbox"
+                checked={editSns}
+                onChange={(e) => setEditSns(e.target.checked)}
+                disabled={busy}
+                className="w-3.5 h-3.5"
+              />
+              Subscribe & Save
+              <input
+                type="number"
+                step="1"
+                min="0"
+                max="50"
+                value={editSnsPct}
+                onChange={(e) => setEditSnsPct(e.target.value)}
+                placeholder="5"
+                disabled={busy || !editSns}
+                className="w-12 h-6 px-1 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[11px] font-mono text-slate-900 dark:text-slate-100 disabled:opacity-50"
+              />
+              <span className="text-[10.5px] text-slate-500 dark:text-slate-400">
+                % off recurring delivery
+              </span>
+            </label>
+          </div>
+          <div className="grid grid-cols-2 gap-1.5">
+            <label className="text-[10.5px] uppercase tracking-wide text-slate-500 dark:text-slate-400">
+              Business qty ≥
+              <input
+                type="number"
+                step="1"
+                min="1"
+                value={editBQty}
+                onChange={(e) => setEditBQty(e.target.value)}
+                placeholder="—"
+                disabled={busy}
+                className="mt-0.5 w-full h-6 px-1 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[11px] font-mono text-slate-900 dark:text-slate-100"
+              />
+            </label>
+            <label className="text-[10.5px] uppercase tracking-wide text-slate-500 dark:text-slate-400">
+              Business price ({currency})
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                value={editBPrice}
+                onChange={(e) => setEditBPrice(e.target.value)}
+                placeholder="—"
+                disabled={busy}
+                className="mt-0.5 w-full h-6 px-1 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[11px] font-mono text-slate-900 dark:text-slate-100"
+              />
+            </label>
+          </div>
+          {error && (
+            <div className="text-[10.5px] text-rose-700 dark:text-rose-400">
+              {error}
+            </div>
+          )}
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => void save()}
+              disabled={busy}
+              className="inline-flex items-center gap-1 h-6 px-2 rounded text-[11px] font-medium bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50"
+            >
+              {busy ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
+              {busy ? 'Saving…' : 'Save'}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setEditing(false)
+                setError(null)
+              }}
+              disabled={busy}
+              className="inline-flex items-center h-6 px-2 rounded text-[11px] border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+      {flash && (
+        <div className="text-[10.5px] text-emerald-700 dark:text-emerald-400 inline-flex items-center gap-1">
+          <Check className="w-3 h-3" /> {flash}
+        </div>
+      )}
     </div>
   )
 }

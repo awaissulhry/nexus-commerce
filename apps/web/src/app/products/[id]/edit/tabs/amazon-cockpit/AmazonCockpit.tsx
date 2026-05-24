@@ -615,6 +615,37 @@ export default function AmazonCockpit(props: Props) {
           }
           listingId={listing?.id ?? null}
           onSaved={() => props.onSave(listing ?? ({} as Listing))}
+          snsEnabled={
+            (
+              (
+                listing?.platformAttributes as Record<string, unknown> | null | undefined
+              )?.subscribeAndSave as Record<string, unknown> | null | undefined
+            )?.enabled === true
+          }
+          snsDiscountPercent={(() => {
+            const v = (
+              (
+                listing?.platformAttributes as Record<string, unknown> | null | undefined
+              )?.subscribeAndSave as Record<string, unknown> | null | undefined
+            )?.discountPercent
+            return typeof v === 'number' ? v : null
+          })()}
+          businessQty={(() => {
+            const v = (
+              (
+                listing?.platformAttributes as Record<string, unknown> | null | undefined
+              )?.businessPricing as Record<string, unknown> | null | undefined
+            )?.quantity
+            return typeof v === 'number' ? v : null
+          })()}
+          businessPrice={(() => {
+            const v = (
+              (
+                listing?.platformAttributes as Record<string, unknown> | null | undefined
+              )?.businessPricing as Record<string, unknown> | null | undefined
+            )?.price
+            return typeof v === 'number' ? v : null
+          })()}
           onJumpToClassic={() => handleJumpTo('classic')}
         />
         <PlaceholderCard
