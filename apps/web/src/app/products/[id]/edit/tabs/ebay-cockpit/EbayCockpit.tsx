@@ -27,6 +27,9 @@ import { useEbayCompositor } from './useEbayCompositor'
 import { useCockpitMode } from './useCockpitMode'
 import EbayLivePreview from './EbayLivePreview'
 import type { ComposedListing } from './types'
+import { FieldSourceProvider } from './field-source/FieldSourceProvider'
+import SourceDiffModal from './field-source/SourceDiffModal'
+import ListingEssentialsCard from './cards/ListingEssentialsCard'
 
 interface MarketInfo {
   code: string
@@ -72,6 +75,12 @@ interface Props {
   marketplace: string
   marketInfo: MarketInfo
   siblingMarkets?: MarketInfo[]
+  /** EC.2 — listings for OTHER marketplaces on the same channel.
+   *  Feeds the Sibling source resolver in ListingEssentialsCard so
+   *  operators can pull title/description/price from a sister IT/DE
+   *  listing. Optional because ProductEditClient may not always
+   *  provide it. */
+  siblingListings?: Listing[]
   listing: Listing | undefined
   onDirtyChange: (count: number) => void
   onSave: (updated: Listing) => void
@@ -91,7 +100,7 @@ const STATUS_TONE: Record<string, { bg: string; text: string }> = {
 }
 
 export default function EbayCockpit(props: Props) {
-  const { product, marketplace, marketInfo, siblingMarkets, listing, childrenList } = props
+  const { product, marketplace, marketInfo, siblingMarkets, siblingListings = [], listing, childrenList } = props
   const [, setMode] = useCockpitMode()
   const [previewOpen, setPreviewOpen] = useState(true)
   const [classicOpen, setClassicOpen] = useState(true)
@@ -106,6 +115,7 @@ export default function EbayCockpit(props: Props) {
   const tone = STATUS_TONE[composed.status.listingStatus] ?? STATUS_TONE.DRAFT
 
   return (
+    <FieldSourceProvider productId={product.id} marketplace={marketplace}>
     <div className="space-y-4">
       {/* ── Zone 1: Header strip ────────────────────────────────── */}
       <div className="sticky top-14 z-[5]">
@@ -220,6 +230,44 @@ export default function EbayCockpit(props: Props) {
         )}
       </Card>
 
+      {/* ── EC.2 — Listing Essentials (Field Source System demo) ──── */}
+      <ListingEssentialsCard
+        marketplace={marketplace}
+        currency={marketInfo.currency}
+        initial={{
+          title: { source: composed.title.source, value: composed.title.value },
+          description: { source: composed.description.source, value: composed.description.value },
+          price: {
+            source: composed.price.source,
+            value: composed.price.value != null ? String(composed.price.value) : '',
+          },
+        }}
+        master={{
+          name: product.name ?? '',
+          description: product.description ?? '',
+          price: (() => {
+            const raw = product.basePrice
+            if (raw == null || raw === '') return null
+            const n = typeof raw === 'string' ? parseFloat(raw) : Number(raw)
+            return Number.isFinite(n) ? n : null
+          })(),
+        }}
+        siblings={siblingListings.map((l) => {
+          const priceRaw = l.priceOverride ?? l.price
+          const priceNum = priceRaw == null
+            ? null
+            : typeof priceRaw === 'string'
+            ? parseFloat(priceRaw)
+            : Number(priceRaw)
+          return {
+            marketplace: l.marketplace,
+            title: l.title ?? '',
+            description: l.description ?? '',
+            price: Number.isFinite(priceNum) ? (priceNum as number) : null,
+          }
+        })}
+      />
+
       {/* ── Zone 3: Cards placeholders (EC.4–EC.8) ────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
         <PlaceholderCard
@@ -306,7 +354,13 @@ export default function EbayCockpit(props: Props) {
           </div>
         )}
       </Card>
+
+      {/* EC.2 — Diff modal slot. Renders only when a source switch is
+          pending; the slot is owned by FieldSourceProvider and only
+          one modal can be open across the entire cockpit at a time. */}
+      <SourceDiffModal />
     </div>
+    </FieldSourceProvider>
   )
 }
 

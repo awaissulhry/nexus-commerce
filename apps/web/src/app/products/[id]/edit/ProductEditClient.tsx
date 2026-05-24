@@ -1351,6 +1351,12 @@ export default function ProductEditClient({
                   marketplace={selectedMarket}
                   marketInfo={marketInfo}
                   siblingMarkets={channelMarkets.filter((m) => m.code !== selectedMarket)}
+                  /* EC.2 — sibling listings on the SAME channel for
+                     OTHER marketplaces; feeds the Sibling source
+                     resolver in ListingEssentialsCard. */
+                  siblingListings={(clientListings[channel] ?? []).filter(
+                    (l: Listing) => l.marketplace !== selectedMarket,
+                  )}
                   listing={listing}
                   onDirtyChange={(count) => setTabDirty(tabKey, count)}
                   onSave={() => router.refresh()}
