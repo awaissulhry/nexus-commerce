@@ -70,6 +70,15 @@
  *           categories. Trading API sync (ItemCompatibilityList)
  *           deferred to EC.13b — the data persists here; the
  *           publish path picks it up when the wire format is wired.
+ *   GET   /api/ebay/cockpit/template-candidates — EC.14: returns
+ *           same-productType products with current eBay listing
+ *           snapshot for diff preview. Used by the Apply-to-Siblings
+ *           modal.
+ *   POST  /api/ebay/cockpit/template-apply      — EC.14: copies
+ *           layout (aspects + policies + best offer + variation
+ *           axes + compatibility) from a donor listing to N target
+ *           listings. Per-target pre-apply snapshot for rollback.
+ *           Scoped — operator picks which layers to copy.
  *
  * All endpoints reuse the EbayCategoryService singleton (in-memory
  * 24h caches for search + aspects). No changes to flat-file routes.
@@ -1301,6 +1310,269 @@ export default async function ebayCockpitRoutes(fastify: FastifyInstance) {
       listingId: existing.id,
       universal,
       fitmentCount: universal ? 0 : cleanedFitments.length,
+    })
+  })
+
+  // ── GET /api/ebay/cockpit/template-candidates ───────────────────────
+  // EC.14 — returns same-productType products (excluding the donor)
+  // with their current eBay listing state for diff preview. Used by
+  // the Apply-to-Siblings modal to show "which products will get
+  // changed and by how much".
+  //
+  // Filters by productType OR by donor's eBay categoryId — whichever
+  // is set. Returns at most `limit` rows (default 50, max 200).
+  fastify.get<{
+    Querystring: {
+      productId: string
+      marketplace: string
+      limit?: string
+    }
+  }>('/ebay/cockpit/template-candidates', async (request, reply) => {
+    const { productId, marketplace } = request.query
+    const limit = Math.min(parseInt(request.query.limit ?? '50', 10) || 50, 200)
+    if (!productId || !marketplace) {
+      return reply.code(400).send({ error: 'productId, marketplace are required' })
+    }
+
+    const donor = await prisma.product.findUnique({
+      where: { id: productId },
+      select: { id: true, sku: true, productType: true, parentId: true },
+    })
+    if (!donor) return reply.code(404).send({ error: 'Donor product not found' })
+
+    const donorListing = await prisma.channelListing.findFirst({
+      where: { productId, channel: 'EBAY', marketplace },
+      select: { platformAttributes: true },
+    })
+    const donorPlatform = (donorListing?.platformAttributes ?? {}) as Record<string, unknown>
+    const donorCategoryId = (donorPlatform.categoryId as string | undefined) ?? null
+
+    // Candidates: same productType (when set), excluding the donor
+    // itself + child variants of the donor. Keeps the candidate list
+    // small + relevant.
+    const where: Record<string, unknown> = {
+      id: { not: productId },
+      deletedAt: null,
+      // Exclude children of the donor (we don't apply a parent's
+      // layout to its own variants — that's what EC.6 handles).
+      parentId: donor.parentId ?? { not: productId },
+    }
+    if (donor.productType) where.productType = donor.productType
+
+    const candidates = await prisma.product.findMany({
+      where,
+      take: limit,
+      orderBy: { sku: 'asc' },
+      select: { id: true, sku: true, name: true, productType: true },
+    })
+
+    // Pull each candidate's eBay listing snapshot in one query.
+    const candidateListings = await prisma.channelListing.findMany({
+      where: {
+        productId: { in: candidates.map((c) => c.id) },
+        channel: 'EBAY',
+        marketplace,
+      },
+      select: { productId: true, platformAttributes: true, listingStatus: true, externalListingId: true },
+    })
+    const byProduct = new Map(candidateListings.map((l) => [l.productId, l]))
+
+    return reply.send({
+      donor: {
+        id: donor.id,
+        sku: donor.sku,
+        productType: donor.productType,
+        categoryId: donorCategoryId,
+      },
+      candidates: candidates.map((c) => {
+        const l = byProduct.get(c.id)
+        const p = (l?.platformAttributes ?? {}) as Record<string, unknown>
+        const itemSpecifics = (p.itemSpecifics ?? {}) as Record<string, unknown>
+        return {
+          productId: c.id,
+          sku: c.sku,
+          name: c.name,
+          productType: c.productType,
+          hasListing: !!l,
+          listingStatus: l?.listingStatus ?? null,
+          externalListingId: l?.externalListingId ?? null,
+          summary: {
+            categoryId: (p.categoryId as string | undefined) ?? null,
+            categoryName: (p.categoryName as string | undefined) ?? null,
+            aspectCount: Object.keys(itemSpecifics).length,
+            hasBestOffer: p.bestOfferEnabled === true,
+            hasPolicies:
+              !!p.fulfillmentPolicyId || !!p.paymentPolicyId || !!p.returnPolicyId,
+            variationAxes: Array.isArray(p._variationAxes) ? (p._variationAxes as string[]) : [],
+            hasCompatibility:
+              !!p.compatibility && typeof p.compatibility === 'object',
+          },
+        }
+      }),
+      total: candidates.length,
+    })
+  })
+
+  // ── POST /api/ebay/cockpit/template-apply ───────────────────────────
+  // EC.14 — copies donor's layout (scope-filtered) onto each target.
+  // Each target gets its own pre-apply snapshot in _versionHistory
+  // under reason="pre-template-apply" so undo is one click per
+  // target via the existing snapshot/restore endpoint.
+  //
+  // Scope flags pick which layers to copy. All default to true:
+  //   aspects      — itemSpecifics (the heaviest layer, usually wanted)
+  //   policies     — fulfillment/payment/return policy refs + location
+  //   bestOffer    — bestOfferEnabled + auto-accept/decline thresholds
+  //   variations   — _variationAxes + _axisSortOrder
+  //   compatibility — Motors compatibility object
+  //   category     — categoryId/Name/Path (OFF by default — risky if
+  //                  siblings are in a slightly different sub-category)
+  fastify.post<{
+    Body: {
+      donorProductId: string
+      marketplace: string
+      targetProductIds: string[]
+      scope?: {
+        aspects?: boolean
+        policies?: boolean
+        bestOffer?: boolean
+        variations?: boolean
+        compatibility?: boolean
+        category?: boolean
+      }
+    }
+  }>('/ebay/cockpit/template-apply', async (request, reply) => {
+    const body = request.body
+    if (!body) return reply.code(400).send({ error: 'Body is required' })
+    const { donorProductId, marketplace, targetProductIds, scope = {} } = body
+    if (!donorProductId || !marketplace) {
+      return reply.code(400).send({ error: 'donorProductId, marketplace are required' })
+    }
+    if (!Array.isArray(targetProductIds) || targetProductIds.length === 0) {
+      return reply.code(400).send({ error: 'targetProductIds must be a non-empty array' })
+    }
+    if (targetProductIds.length > 200) {
+      return reply.code(400).send({ error: 'Max 200 targets per call' })
+    }
+    const flags = {
+      aspects:        scope.aspects        !== false,
+      policies:       scope.policies       !== false,
+      bestOffer:      scope.bestOffer      !== false,
+      variations:     scope.variations     !== false,
+      compatibility:  scope.compatibility  !== false,
+      category:       scope.category       === true, // opt-IN
+    }
+
+    const donor = await prisma.channelListing.findFirst({
+      where: { productId: donorProductId, channel: 'EBAY', marketplace },
+    })
+    if (!donor) {
+      return reply.code(404).send({ error: 'Donor has no eBay listing for this marketplace' })
+    }
+    const donorPlatform = (donor.platformAttributes ?? {}) as Record<string, unknown>
+
+    // Build the layout slice to copy.
+    const layout: Record<string, unknown> = {}
+    if (flags.aspects && donorPlatform.itemSpecifics) {
+      layout.itemSpecifics = donorPlatform.itemSpecifics
+    }
+    if (flags.policies) {
+      for (const k of ['fulfillmentPolicyId', 'paymentPolicyId', 'returnPolicyId', 'merchantLocationKey']) {
+        if (donorPlatform[k] !== undefined) layout[k] = donorPlatform[k]
+      }
+    }
+    if (flags.bestOffer) {
+      for (const k of ['bestOfferEnabled', 'bestOfferAutoAcceptPrice', 'bestOfferMinAcceptPrice']) {
+        if (donorPlatform[k] !== undefined) layout[k] = donorPlatform[k]
+      }
+    }
+    if (flags.variations) {
+      if (donorPlatform._variationAxes !== undefined) layout._variationAxes = donorPlatform._variationAxes
+      if (donorPlatform._axisSortOrder !== undefined) layout._axisSortOrder = donorPlatform._axisSortOrder
+    }
+    if (flags.compatibility && donorPlatform.compatibility !== undefined) {
+      layout.compatibility = donorPlatform.compatibility
+    }
+    if (flags.category) {
+      for (const k of ['categoryId', 'categoryName', 'categoryPath']) {
+        if (donorPlatform[k] !== undefined) layout[k] = donorPlatform[k]
+      }
+    }
+
+    if (Object.keys(layout).length === 0) {
+      return reply.code(400).send({ error: 'Nothing to copy — every scope flag is off or donor has no data.' })
+    }
+
+    const results: Array<{ productId: string; ok: boolean; snapshotId?: string; error?: string }> = []
+
+    for (const targetId of targetProductIds) {
+      try {
+        if (targetId === donorProductId) {
+          results.push({ productId: targetId, ok: false, error: 'Cannot apply to donor itself' })
+          continue
+        }
+        const target = await prisma.channelListing.findFirst({
+          where: { productId: targetId, channel: 'EBAY', marketplace },
+        })
+
+        // Find-or-create the target listing.
+        const isCreate = !target
+        const prevPlatform = ((target?.platformAttributes ?? {}) as Record<string, unknown>)
+        const { _versionHistory: prevHistRaw, ...snapshotPlatform } = prevPlatform
+        const prevHistory = Array.isArray(prevHistRaw) ? (prevHistRaw as unknown[]) : []
+        const snapshotEntry = {
+          id: `snap_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`,
+          ts: new Date().toISOString(),
+          reason: 'pre-template-apply',
+          snapshot: {
+            platformAttributes: snapshotPlatform,
+            priceOverride: target?.priceOverride != null ? Number(target.priceOverride) : null,
+            quantity: target?.quantity ?? null,
+          },
+        }
+        const nextHistory = [snapshotEntry, ...prevHistory].slice(0, 10)
+        const nextPlatform: Record<string, unknown> = {
+          ...prevPlatform,
+          ...layout,
+          _versionHistory: nextHistory,
+        }
+        if (isCreate) {
+          await prisma.channelListing.create({
+            data: {
+              productId: targetId,
+              channel: 'EBAY',
+              region: marketplace.toUpperCase(),
+              marketplace,
+              channelMarket: `EBAY_${marketplace.toUpperCase()}`,
+              listingStatus: 'DRAFT',
+              isPublished: false,
+              platformAttributes: nextPlatform as Prisma.InputJsonValue,
+            },
+          })
+        } else {
+          await prisma.channelListing.update({
+            where: { id: target!.id },
+            data: { platformAttributes: nextPlatform as Prisma.InputJsonValue },
+          })
+        }
+        results.push({ productId: targetId, ok: true, snapshotId: snapshotEntry.id })
+      } catch (err) {
+        results.push({
+          productId: targetId,
+          ok: false,
+          error: err instanceof Error ? err.message : String(err),
+        })
+      }
+    }
+
+    return reply.send({
+      donorProductId,
+      marketplace,
+      scope: flags,
+      layerKeys: Object.keys(layout),
+      results,
+      okCount: results.filter((r) => r.ok).length,
+      failCount: results.filter((r) => !r.ok).length,
     })
   })
 }

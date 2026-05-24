@@ -17,7 +17,7 @@
 // the corresponding ChannelListingTab section.
 
 import { useMemo, useState } from 'react'
-import { ChevronDown, ChevronUp, ArrowDownToLine, Sparkles, Send, ExternalLink, Settings2, History } from 'lucide-react'
+import { ChevronDown, ChevronUp, ArrowDownToLine, Sparkles, Send, ExternalLink, Settings2, History, Layers } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
@@ -35,6 +35,7 @@ import VariationsMatrixCard from './cards/VariationsMatrixCard'
 import ImagesCard from './cards/ImagesCard'
 import PricingPoliciesCard from './cards/PricingPoliciesCard'
 import CompatibilityCard from './cards/CompatibilityCard'
+import ApplyToSiblingsModal from './templates/ApplyToSiblingsModal'
 import HealthScoreRail from './health/HealthScoreRail'
 import VersionHistoryDrawer from './versioning/VersionHistoryDrawer'
 import PublishDrawer from './publish/PublishDrawer'
@@ -117,6 +118,7 @@ export default function EbayCockpit(props: Props) {
   const [classicOpen, setClassicOpen] = useState(true)
   const [versionDrawerOpen, setVersionDrawerOpen] = useState(false)
   const [publishDrawerOpen, setPublishDrawerOpen] = useState(false)
+  const [siblingsModalOpen, setSiblingsModalOpen] = useState(false)
 
   // EC.10 — Version history. Snapshots live on
   // ChannelListing.platformAttributes._versionHistory[] (capped 10),
@@ -248,6 +250,14 @@ export default function EbayCockpit(props: Props) {
               >
                 Publish
               </Button>
+              <button
+                type="button"
+                onClick={() => setSiblingsModalOpen(true)}
+                className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
+                title="Copy this product's eBay layout to similar products"
+              >
+                <Layers className="w-3 h-3" /> Apply to siblings
+              </button>
               <button
                 type="button"
                 onClick={() => setVersionDrawerOpen(true)}
@@ -592,6 +602,14 @@ export default function EbayCockpit(props: Props) {
         }}
         open={publishDrawerOpen}
         onClose={() => setPublishDrawerOpen(false)}
+      />
+
+      {/* EC.14 — Apply layout to siblings. */}
+      <ApplyToSiblingsModal
+        productId={product.id}
+        marketplace={marketplace}
+        open={siblingsModalOpen}
+        onClose={() => setSiblingsModalOpen(false)}
       />
     </div>
     </FieldSourceProvider>
