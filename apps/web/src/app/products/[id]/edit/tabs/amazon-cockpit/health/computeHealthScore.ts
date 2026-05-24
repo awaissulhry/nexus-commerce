@@ -33,6 +33,7 @@ export type JumpTarget =
   | 'fulfillment'
   | 'compliance'
   | 'suppression'     // AC.10 card
+  | 'autofill'        // AC.11 card
   | 'publish'         // AC.12 PublishCard
   | 'classic'         // catch-all → open the transitional pass-through
 

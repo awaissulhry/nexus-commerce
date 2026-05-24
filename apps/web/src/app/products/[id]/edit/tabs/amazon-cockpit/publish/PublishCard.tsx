@@ -39,6 +39,10 @@ import {
   classifyStatus,
   marketFlag,
 } from '../../../_shared/market-switch/types'
+import {
+  announce,
+  announceAssertive,
+} from '../../../_shared/announce/useAnnounce'
 
 interface MarketRow {
   code: string
@@ -202,13 +206,20 @@ export default function PublishCard({
         }
       }
       setPerMarket(next)
+      const okCount = j.submissions.filter((s) => s.ok).length
+      const failCount = j.submissions.length - okCount
+      announce(
+        `Submitted to ${okCount} marketplace${okCount === 1 ? '' : 's'}${failCount > 0 ? `, ${failCount} failed` : ''}. Polling feed status…`,
+      )
       // Kick off per-market polling for any submitted feed.
       for (const s of j.submissions) {
         if (s.ok && s.feedId) pollFeed(s.marketplace, s.feedId)
       }
     } catch (e) {
-      setTopError(e instanceof Error ? e.message : String(e))
+      const msg = e instanceof Error ? e.message : String(e)
+      setTopError(msg)
       setPerMarket({})
+      announceAssertive(`Publish failed: ${msg}`)
     } finally {
       setSubmitting(false)
     }
@@ -264,6 +275,13 @@ export default function PublishCard({
 
         if (terminal) {
           window.clearInterval(intervalId)
+          if (ps === 'DONE') {
+            announce(
+              `${marketplace}: feed done. ${okRows} ok${errRows > 0 ? `, ${errRows} errors` : ''}.`,
+            )
+          } else if (ps === 'CANCELLED' || ps === 'FATAL') {
+            announceAssertive(`${marketplace}: feed ${ps.toLowerCase()}.`)
+          }
         } else if (ticks >= 240) {
           window.clearInterval(intervalId)
           setPerMarket((m) => ({

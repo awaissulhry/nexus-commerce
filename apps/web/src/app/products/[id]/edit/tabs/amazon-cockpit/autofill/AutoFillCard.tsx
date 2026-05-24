@@ -40,6 +40,7 @@ import { Button } from '@/components/ui/Button'
 import { cn } from '@/lib/utils'
 import { getBackendUrl } from '@/lib/backend-url'
 import { setDraftField } from '../../../_shared/draft-bus/useProductDraftBus'
+import { announce } from '../../../_shared/announce/useAnnounce'
 
 interface ListingLite {
   marketplace: string
@@ -284,9 +285,9 @@ export default function AutoFillCard({
         )
       }
     }
-    setAppliedFlash(
-      `Applied ${accepted.length} field${accepted.length === 1 ? '' : 's'} from ${source}. Save via header to persist.`,
-    )
+    const msg = `Applied ${accepted.length} field${accepted.length === 1 ? '' : 's'} from ${source}. Save via header to persist.`
+    setAppliedFlash(msg)
+    announce(msg)
     window.setTimeout(() => setAppliedFlash(null), 2500)
     setDiffs([])
   }

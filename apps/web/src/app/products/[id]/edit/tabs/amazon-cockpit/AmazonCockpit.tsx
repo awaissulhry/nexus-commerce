@@ -61,6 +61,8 @@ import PricingCard from './pricing/PricingCard'
 import SuppressionCard from './suppression/SuppressionCard'
 import AutoFillCard from './autofill/AutoFillCard'
 import PublishCard from './publish/PublishCard'
+import { useCockpitShortcuts } from './useCockpitShortcuts'
+import { LiveRegion } from '../../_shared/announce/useAnnounce'
 import { getBackendUrl } from '@/lib/backend-url'
 
 interface MarketInfo {
@@ -246,6 +248,14 @@ export default function AmazonCockpit(props: Props) {
     syncUrl: true,
   })
 
+  // AC.13 — cockpit-scoped keyboard shortcuts (Cmd+Shift+P, 1..9).
+  // Editor-level Cmd+S / Esc come from useEditorShortcuts at the
+  // ProductEditClient level, so we don't duplicate them here.
+  useCockpitShortcuts({
+    enabled: true,
+    onJumpTo: (target) => handleJumpTo(target),
+  })
+
   // AC.4 — Pre-publish health report. Recomputed every render — the
   // function is pure and cheap (~15 checks). AC.5 swaps to a memo
   // once the manifest cross-tab pipe lands and the dependency set
@@ -287,8 +297,17 @@ export default function AmazonCockpit(props: Props) {
 
   return (
     <div className="space-y-4">
+      {/* AC.13 — Cockpit-wide ARIA live region. Mounted once near
+          the top; any nested component can announce() via the
+          module-scope util in _shared/announce/useAnnounce. */}
+      <LiveRegion />
+
       {/* ── Zone 1: Header strip ────────────────────────────────── */}
-      <div className="sticky top-14 z-[5]">
+      <div
+        className="sticky top-14 z-[5]"
+        role="region"
+        aria-label="Amazon Listing Cockpit header"
+      >
         <Card noPadding>
           {/* AC.3 — Market chip strip. Sits above the title row so
               operators can flick between markets without scrolling.

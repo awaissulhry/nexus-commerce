@@ -18,6 +18,7 @@
 import { useCallback, useEffect, useRef } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import type { MarketChip } from './types'
+import { announce } from '../announce/useAnnounce'
 
 interface Options {
   /** Channel id, e.g. "AMAZON" or "EBAY". Used as scoping prefix on
@@ -136,6 +137,7 @@ export function useMarketSwitch({
         }
       }
       onSwitch(next)
+      announce(`Switched to ${next}`)
     },
     [isDirty, flush, discard, onSwitch],
   )

@@ -35,6 +35,7 @@ import { cn } from '@/lib/utils'
 import { getBackendUrl } from '@/lib/backend-url'
 import type { JumpTarget } from '../health/computeHealthScore'
 import type { HealthReport } from '../health/computeHealthScore'
+import { announce } from '../../../_shared/announce/useAnnounce'
 
 interface SuppressionRow {
   id: string
@@ -175,6 +176,7 @@ export default function SuppressionCard({
       )
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       setTick((t) => t + 1)
+      announce('Suppression marked resolved')
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
