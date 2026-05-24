@@ -758,14 +758,31 @@ export default function ProductEditClient({
   const getListing = (channel: string, marketplace: string) =>
     clientListings[channel]?.find((l) => l.marketplace === marketplace)
 
+  // Preferred default market for a channel when nothing is selected
+  // yet. Priority:
+  //   1. Xavia's primary market 'IT' when present (per
+  //      project_xavia_context memory — Amazon IT is the home market;
+  //      caught during AC-series verification when GALE-JACKET landed
+  //      on BE alphabetical).
+  //   2. First market that already has a ChannelListing (operator has
+  //      done work there).
+  //   3. First market alphabetically (channelMarkets[0]).
+  //   4. 'GLOBAL' literal for single-store channels.
+  const preferredMarketCode = (channel: string): string => {
+    const channelMarkets = marketplaces[channel] ?? []
+    const it = channelMarkets.find((m) => m.code === 'IT')
+    if (it) return it.code
+    const firstWithListing = channelMarkets.find((m) =>
+      hasListing(channel, m.code),
+    )
+    if (firstWithListing) return firstWithListing.code
+    return channelMarkets[0]?.code ?? 'GLOBAL'
+  }
+
   const ensureMarketSelected = (channel: string): string => {
     const existing = marketSelection[channel]
     if (existing) return existing
-    const channelMarkets = marketplaces[channel] ?? []
-    const firstWithListing = channelMarkets.find((m) =>
-      hasListing(channel, m.code)
-    )
-    const fallback = firstWithListing?.code ?? channelMarkets[0]?.code ?? 'GLOBAL'
+    const fallback = preferredMarketCode(channel)
     setMarketSelection((s) => ({ ...s, [channel]: fallback }))
     return fallback
   }
@@ -1311,7 +1328,8 @@ export default function ProductEditClient({
           const channel = topTab
           const isSingleStore = SINGLE_STORE_CHANNELS.has(channel)
           const channelMarkets = marketplaces[channel] ?? []
-          const selectedMarket = marketSelection[channel] ?? channelMarkets[0]?.code ?? 'GLOBAL'
+          const selectedMarket =
+            marketSelection[channel] ?? preferredMarketCode(channel)
           const marketInfo = channelMarkets.find((m) => m.code === selectedMarket)
           const listing = marketInfo ? getListing(channel, marketInfo.code) : undefined
 
