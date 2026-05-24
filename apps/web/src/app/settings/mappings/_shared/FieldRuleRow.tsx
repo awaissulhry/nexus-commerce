@@ -14,6 +14,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Save, Trash2, AlertTriangle } from 'lucide-react'
 import { Input } from '@/components/ui/Input'
 import { cn } from '@/lib/utils'
+import TransformsEditor, { type TransformOp } from './TransformsEditor'
 
 export interface FieldRow {
   fieldKey: string
@@ -45,8 +46,8 @@ export default function FieldRuleRow({ field, onSave, onDelete }: Props) {
   const [requiredFlag, setRequiredFlag] = useState<boolean>(
     field.rule?.required ?? field.required,
   )
-  const [transformsJson, setTransformsJson] = useState(
-    field.rule?.transforms ? JSON.stringify(field.rule.transforms, null, 0) : '',
+  const [transforms, setTransforms] = useState<TransformOp[]>(
+    (field.rule?.transforms ?? []) as TransformOp[],
   )
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -58,39 +59,29 @@ export default function FieldRuleRow({ field, onSave, onDelete }: Props) {
     setSource(field.rule?.source ?? '')
     setFallback(field.rule?.fallback ?? '')
     setRequiredFlag(field.rule?.required ?? field.required)
-    setTransformsJson(field.rule?.transforms ? JSON.stringify(field.rule.transforms, null, 0) : '')
+    setTransforms((field.rule?.transforms ?? []) as TransformOp[])
     setParseError(null)
   }, [field.rule, field.required])
 
   const isMapped = field.rule != null
+  const transformsKey = JSON.stringify(transforms)
+  const ruleTransformsKey = JSON.stringify(field.rule?.transforms ?? [])
   const isDirty =
     source !== (field.rule?.source ?? '') ||
     fallback !== (field.rule?.fallback ?? '') ||
     requiredFlag !== (field.rule?.required ?? field.required) ||
-    transformsJson !== (field.rule?.transforms ? JSON.stringify(field.rule.transforms, null, 0) : '')
+    transformsKey !== ruleTransformsKey
 
   const handleSave = useCallback(async () => {
     if (source.trim() === '') {
       setParseError('source is required')
       return
     }
-    let transforms: FieldMappingRule['transforms']
-    if (transformsJson.trim() !== '') {
-      try {
-        const parsed = JSON.parse(transformsJson)
-        if (!Array.isArray(parsed)) throw new Error('transforms must be an array')
-        transforms = parsed
-      } catch (e: any) {
-        setParseError(`transforms JSON parse: ${e.message}`)
-        return
-      }
-    }
-
     const rule: FieldMappingRule = {
       source: source.trim(),
       fallback: fallback.trim() || undefined,
       required: requiredFlag || undefined,
-      transforms,
+      transforms: transforms.length > 0 ? transforms : undefined,
     }
     setSaving(true)
     setParseError(null)
@@ -99,7 +90,7 @@ export default function FieldRuleRow({ field, onSave, onDelete }: Props) {
     } finally {
       setSaving(false)
     }
-  }, [source, fallback, requiredFlag, transformsJson, field.fieldKey, onSave])
+  }, [source, fallback, requiredFlag, transforms, field.fieldKey, onSave])
 
   const handleDelete = useCallback(async () => {
     if (!isMapped) return
@@ -166,14 +157,8 @@ export default function FieldRuleRow({ field, onSave, onDelete }: Props) {
         </Labeled>
       </div>
 
-      <Labeled label="Transforms (JSON array)" hint='e.g. [{"type":"truncate","max":200}]'>
-        <textarea
-          value={transformsJson}
-          onChange={(e) => setTransformsJson(e.target.value)}
-          rows={2}
-          placeholder="[]"
-          className="w-full px-2 py-1.5 text-xs rounded border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 focus:outline-none focus:ring-1 focus:ring-blue-400 font-mono"
-        />
+      <Labeled label="Transforms" hint="Applied in order; previewable via D.6">
+        <TransformsEditor value={transforms} onChange={setTransforms} />
       </Labeled>
 
       <div className="flex items-center justify-between mt-2">
