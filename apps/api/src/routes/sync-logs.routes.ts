@@ -1276,27 +1276,38 @@ const syncLogsRoutes: FastifyPluginAsync = async (fastify) => {
     const limit = Math.min(Math.max(Number(request.query.limit ?? 50), 1), 200)
 
     // Map buckets → listingStatus values (mirror of the rollup mapping
-    // in /sync-logs/listing-health above).
+    // in /sync-logs/listing-health above). 'dlq' is the E.5 surface:
+    // listings whose syncRetryCount exhausted the back-off, regardless
+    // of listingStatus.
     const statusByBucket: Record<string, string[]> = {
       red: ['ERROR', 'FAILED', 'ENDED'],
       amber: ['DRAFT', 'PENDING', 'IN_SYNC', 'IDLE'],
       gray: ['INACTIVE'],
     }
-    const statuses = requestedBuckets.flatMap((b) => statusByBucket[b] ?? [])
-    if (statuses.length === 0) {
-      return reply.status(400).send({ error: 'no valid buckets (try red, amber, or gray)' })
+    const wantsDlq = requestedBuckets.includes('dlq')
+    const nonDlqBuckets = requestedBuckets.filter((b) => b !== 'dlq')
+    const statuses = nonDlqBuckets.flatMap((b) => statusByBucket[b] ?? [])
+    if (statuses.length === 0 && !wantsDlq) {
+      return reply.status(400).send({ error: 'no valid buckets (try red, amber, gray, or dlq)' })
     }
+
+    // Build where clause: combine statuses + DLQ via OR so a single
+    // query covers both branches.
+    const orClauses: object[] = []
+    if (statuses.length > 0) orClauses.push({ listingStatus: { in: statuses } })
+    if (wantsDlq) orClauses.push({ syncRetryCount: { gte: 3 } })
 
     const listings = await prisma.channelListing.findMany({
       where: {
         channel,
         marketplace,
-        listingStatus: { in: statuses },
+        OR: orClauses,
       },
       select: {
         id: true,
         listingStatus: true,
         syncStatus: true,
+        syncRetryCount: true,
         lastSyncedAt: true,
         lastSyncError: true,
         externalListingId: true,
@@ -1319,6 +1330,12 @@ const syncLogsRoutes: FastifyPluginAsync = async (fastify) => {
       channelListingId: l.id,
       listingStatus: l.listingStatus,
       syncStatus: l.syncStatus,
+      syncRetryCount: l.syncRetryCount,
+      // E.5 — operator-facing DLQ flag. Surfaced when retry count
+      // exhausts the back-off (default 3). The UI badges these so an
+      // operator scanning the modal can spot stuck listings without
+      // having to read the retry-count column.
+      isDlq: (l.syncRetryCount ?? 0) >= 3,
       lastSyncedAt: l.lastSyncedAt,
       lastSyncError: l.lastSyncError,
       externalListingId: l.externalListingId,
@@ -1340,6 +1357,132 @@ const syncLogsRoutes: FastifyPluginAsync = async (fastify) => {
       total: rows.length,
       hasMore,
       rows,
+    })
+  })
+
+  // ── PIM E.5 — Retry failed listings (re-enqueue via OutboundSyncQueue) ──
+  // Accepts either an explicit list of channelListingIds OR a
+  // (channel, marketplace, buckets?) filter that resolves to "every
+  // failing listing in this cell." For each match, enqueues a
+  // FULL_SYNC row in OutboundSyncQueue with retryCount reset to 0 so
+  // the next sync worker tick picks them up.
+  //
+  // Returns summary { enqueued, skipped, errors } so the UI can toast
+  // "Retried 12 of 14 (2 not found)."
+  fastify.post<{
+    Body: {
+      channelListingIds?: string[]
+      channel?: string
+      marketplace?: string
+      buckets?: string[]
+      maxRetries?: number
+    }
+  }>('/sync-logs/failing-listings/retry', async (request, reply) => {
+    const { channelListingIds, channel, marketplace, buckets, maxRetries = 3 } =
+      request.body ?? {}
+
+    // Resolve the target listing set: explicit ids OR filter.
+    let targetListings: Array<{
+      id: string
+      productId: string
+      channel: string
+      marketplace: string
+    }> = []
+
+    if (Array.isArray(channelListingIds) && channelListingIds.length > 0) {
+      targetListings = await prisma.channelListing.findMany({
+        where: { id: { in: channelListingIds } },
+        select: { id: true, productId: true, channel: true, marketplace: true },
+      })
+    } else if (channel && marketplace) {
+      const statusByBucket: Record<string, string[]> = {
+        red: ['ERROR', 'FAILED', 'ENDED'],
+        amber: ['DRAFT', 'PENDING', 'IN_SYNC', 'IDLE'],
+        gray: ['INACTIVE'],
+      }
+      const bks = (Array.isArray(buckets) && buckets.length > 0 ? buckets : ['red']).filter(
+        (b) => statusByBucket[b],
+      )
+      const statuses = bks.flatMap((b) => statusByBucket[b] ?? [])
+      if (statuses.length === 0) {
+        return reply.status(400).send({ error: 'no valid buckets' })
+      }
+      targetListings = await prisma.channelListing.findMany({
+        where: { channel, marketplace, listingStatus: { in: statuses } },
+        select: { id: true, productId: true, channel: true, marketplace: true },
+      })
+    } else {
+      return reply.status(400).send({
+        error: 'either channelListingIds[] OR (channel + marketplace) required',
+      })
+    }
+
+    if (targetListings.length === 0) {
+      return reply.send({ enqueued: 0, skipped: 0, errors: 0, message: 'no listings matched' })
+    }
+
+    // Enqueue. Reuse OutboundSyncQueue directly (single insertMany)
+    // rather than going through OutboundSyncService.queueProductUpdate
+    // per row — saves N round-trips and keeps the retry path simple.
+    // The sync worker reads PENDING rows and processes them in the
+    // existing 5-minute tick.
+    type QueueRow = {
+      productId: string
+      targetChannel: string
+      syncStatus: string
+      syncType: string
+      payload: object
+      retryCount: number
+      maxRetries: number
+    }
+    const rows: QueueRow[] = targetListings
+      .filter((l) => ['AMAZON', 'EBAY', 'SHOPIFY', 'WOOCOMMERCE'].includes(l.channel))
+      .map((l) => ({
+        productId: l.productId,
+        targetChannel: l.channel,
+        syncStatus: 'PENDING',
+        syncType: 'FULL_SYNC',
+        payload: {
+          source: 'E.5_retry',
+          marketplace: l.marketplace,
+          channelListingId: l.id,
+        },
+        retryCount: 0,
+        maxRetries,
+      }))
+
+    const skipped = targetListings.length - rows.length
+
+    let enqueued = 0
+    let errors = 0
+    try {
+      const result = await prisma.outboundSyncQueue.createMany({ data: rows as any })
+      enqueued = result.count
+    } catch (err: any) {
+      errors = rows.length
+      request.log.error({ err }, '[sync-logs/retry] createMany failed')
+      return reply.status(500).send({
+        enqueued: 0,
+        skipped,
+        errors,
+        message: err?.message ?? 'enqueue failed',
+      })
+    }
+
+    // Reset the listing-side syncRetryCount so the dashboard reflects
+    // that operator-driven retries reset the back-off window.
+    if (targetListings.length > 0) {
+      await prisma.channelListing.updateMany({
+        where: { id: { in: targetListings.map((l) => l.id) } },
+        data: { syncRetryCount: 0, syncStatus: 'PENDING' },
+      })
+    }
+
+    return reply.send({
+      enqueued,
+      skipped,
+      errors,
+      total: targetListings.length,
     })
   })
 }

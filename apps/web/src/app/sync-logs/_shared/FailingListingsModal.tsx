@@ -23,16 +23,21 @@ import {
   Clock,
   AlertTriangle,
   Minus,
+  RotateCw,
+  Skull,
 } from 'lucide-react'
+import { useToast } from '@/components/ui/Toast'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
 
-type Bucket = 'red' | 'amber' | 'gray'
+type Bucket = 'red' | 'amber' | 'gray' | 'dlq'
 
 interface FailingRow {
   channelListingId: string
   listingStatus: string
   syncStatus: string | null
+  syncRetryCount: number | null
+  isDlq: boolean
   lastSyncedAt: string | null
   lastSyncError: string | null
   externalListingId: string | null
@@ -59,11 +64,13 @@ export default function FailingListingsModal({
   marketplace,
   initialBuckets = ['red'],
 }: Props) {
+  const { toast } = useToast()
   const [buckets, setBuckets] = useState<Bucket[]>(initialBuckets)
   const [rows, setRows] = useState<FailingRow[]>([])
   const [hasMore, setHasMore] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [retrying, setRetrying] = useState(false)
 
   // Reset to initial buckets each time the modal opens for a new cell.
   useEffect(() => {
@@ -99,6 +106,36 @@ export default function FailingListingsModal({
     void fetchRows()
   }, [fetchRows])
 
+  // E.5 — Retry every currently-listed failing listing. Reuses the
+  // same filter so what you see is what gets retried.
+  const handleRetryAll = useCallback(async () => {
+    setRetrying(true)
+    try {
+      const r = await fetch(`${getBackendUrl()}/api/sync-logs/failing-listings/retry`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ channel, marketplace, buckets }),
+      })
+      if (!r.ok) {
+        const body = await r.json().catch(() => ({}))
+        throw new Error(body?.message ?? body?.error ?? `HTTP ${r.status}`)
+      }
+      const result = await r.json()
+      const enq = result?.enqueued ?? 0
+      const skp = result?.skipped ?? 0
+      const total = result?.total ?? 0
+      toast.success(
+        `Retried ${enq} of ${total}`,
+        { description: skp > 0 ? `${skp} skipped (channel not in retry scope)` : undefined },
+      )
+      await fetchRows()
+    } catch (e: any) {
+      toast.error('Retry failed', { description: e?.message })
+    } finally {
+      setRetrying(false)
+    }
+  }, [channel, marketplace, buckets, fetchRows, toast])
+
   if (!open) return null
 
   const toggleBucket = (b: Bucket) => {
@@ -133,6 +170,22 @@ export default function FailingListingsModal({
           </div>
           <div className="flex items-center gap-3">
             <BucketFilter buckets={buckets} onToggle={toggleBucket} />
+            {rows.length > 0 && (
+              <button
+                type="button"
+                onClick={() => void handleRetryAll()}
+                disabled={retrying}
+                className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                title="Re-enqueue every listing currently shown for a new sync attempt"
+              >
+                {retrying ? (
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                ) : (
+                  <RotateCw className="w-3 h-3" />
+                )}
+                Retry all
+              </button>
+            )}
             <button
               type="button"
               onClick={onClose}
@@ -197,6 +250,7 @@ function BucketFilter({
     { b: 'red', label: 'Failed', Icon: AlertCircle },
     { b: 'amber', label: 'Pending', Icon: Clock },
     { b: 'gray', label: 'Inactive', Icon: Minus },
+    { b: 'dlq', label: 'DLQ', Icon: Skull },
   ]
   return (
     <div className="flex items-center gap-1">
@@ -214,6 +268,8 @@ function BucketFilter({
                   ? 'border-red-300 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-900/30 dark:text-red-300'
                   : b === 'amber'
                   ? 'border-amber-300 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900/30 dark:text-amber-300'
+                  : b === 'dlq'
+                  ? 'border-purple-300 bg-purple-50 text-purple-700 dark:border-purple-800 dark:bg-purple-900/30 dark:text-purple-300'
                   : 'border-zinc-300 bg-zinc-100 text-zinc-700 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300'
                 : 'border-zinc-200 text-zinc-400 hover:text-zinc-700 dark:border-zinc-800 dark:hover:text-zinc-300',
             )}
@@ -256,6 +312,23 @@ function FailingRowItem({
               {row.titleOverride ?? row.productName ?? <em>unnamed</em>}
             </span>
             <StatusBadge status={row.listingStatus} />
+            {row.isDlq && (
+              <span
+                className="inline-flex items-center gap-0.5 text-[9px] font-medium px-1 py-0.5 rounded bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300"
+                title={`Exceeded retry back-off (count: ${row.syncRetryCount ?? '?'})`}
+              >
+                <Skull className="w-2 h-2" />
+                DLQ
+              </span>
+            )}
+            {!row.isDlq && (row.syncRetryCount ?? 0) > 0 && (
+              <span
+                className="text-[9px] text-zinc-500"
+                title={`Retried ${row.syncRetryCount} times`}
+              >
+                retry {row.syncRetryCount}
+              </span>
+            )}
           </div>
           {row.lastSyncError && (
             <div className="flex items-start gap-1 text-[11px] text-red-700 dark:text-red-300 mt-1 break-words">
