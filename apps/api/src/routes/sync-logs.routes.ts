@@ -1244,6 +1244,104 @@ const syncLogsRoutes: FastifyPluginAsync = async (fastify) => {
     })
     return reply.send({ cells: result })
   })
+
+  // ── PIM E.3 — failing listings drill-down ────────────────────────
+  // Lists the ChannelListing rows that are in a non-healthy state for
+  // a given (channel, marketplace) tuple. Powers the FailingListings
+  // modal: operator clicks a red cell in the health grid, sees the
+  // exact products that need attention, click-throughs land on the
+  // right channel tab of the right product.
+  //
+  // Query params:
+  //   channel       required
+  //   marketplace   required
+  //   buckets       comma-separated: red|amber|gray (default: red)
+  //   limit         default 50, max 200
+  fastify.get<{
+    Querystring: {
+      channel?: string
+      marketplace?: string
+      buckets?: string
+      limit?: string
+    }
+  }>('/sync-logs/failing-listings', async (request, reply) => {
+    const { channel, marketplace } = request.query
+    if (!channel || !marketplace) {
+      return reply.status(400).send({ error: 'channel and marketplace are required' })
+    }
+    const requestedBuckets = (request.query.buckets ?? 'red')
+      .split(',')
+      .map((b) => b.trim().toLowerCase())
+      .filter((b) => b.length > 0)
+    const limit = Math.min(Math.max(Number(request.query.limit ?? 50), 1), 200)
+
+    // Map buckets → listingStatus values (mirror of the rollup mapping
+    // in /sync-logs/listing-health above).
+    const statusByBucket: Record<string, string[]> = {
+      red: ['ERROR', 'FAILED', 'ENDED'],
+      amber: ['DRAFT', 'PENDING', 'IN_SYNC', 'IDLE'],
+      gray: ['INACTIVE'],
+    }
+    const statuses = requestedBuckets.flatMap((b) => statusByBucket[b] ?? [])
+    if (statuses.length === 0) {
+      return reply.status(400).send({ error: 'no valid buckets (try red, amber, or gray)' })
+    }
+
+    const listings = await prisma.channelListing.findMany({
+      where: {
+        channel,
+        marketplace,
+        listingStatus: { in: statuses },
+      },
+      select: {
+        id: true,
+        listingStatus: true,
+        syncStatus: true,
+        lastSyncedAt: true,
+        lastSyncError: true,
+        externalListingId: true,
+        title: true,
+        product: {
+          select: {
+            id: true,
+            sku: true,
+            name: true,
+            parentId: true,
+          },
+        },
+      },
+      orderBy: [{ lastSyncedAt: 'desc' }, { id: 'desc' }],
+      take: limit + 1, // peek for hasNext
+    })
+
+    const hasMore = listings.length > limit
+    const rows = (hasMore ? listings.slice(0, limit) : listings).map((l) => ({
+      channelListingId: l.id,
+      listingStatus: l.listingStatus,
+      syncStatus: l.syncStatus,
+      lastSyncedAt: l.lastSyncedAt,
+      lastSyncError: l.lastSyncError,
+      externalListingId: l.externalListingId,
+      titleOverride: l.title,
+      productId: l.product.id,
+      productSku: l.product.sku,
+      productName: l.product.name,
+      // For variant rows, the parent gives the edit page a more natural
+      // landing surface (parent shows all variants + the variant tab).
+      // E.3 still drills to the variant id so the channel panel for that
+      // variant opens.
+      parentProductId: l.product.parentId,
+    }))
+
+    return reply.send({
+      channel,
+      marketplace,
+      buckets: requestedBuckets,
+      total: rows.length,
+      hasMore,
+      rows,
+    })
+  })
 }
 
 export default syncLogsRoutes

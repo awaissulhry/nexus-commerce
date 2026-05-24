@@ -18,7 +18,7 @@
  * polling timer).
  */
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import {
   AlertCircle,
@@ -29,6 +29,7 @@ import {
 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
+import FailingListingsModal from './FailingListingsModal'
 
 type Bucket = 'green' | 'amber' | 'red' | 'gray' | 'other'
 
@@ -49,6 +50,18 @@ export default function ListingHealthGrid({ refreshKey = 0, className }: Props) 
   const [cells, setCells] = useState<HealthCell[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  // E.3 — modal state for the failing-listings drill-down.
+  const [drilling, setDrilling] = useState<{
+    channel: string
+    marketplace: string
+    initialBuckets: Array<'red' | 'amber' | 'gray'>
+  } | null>(null)
+  const openDrilldown = useCallback(
+    (channel: string, marketplace: string, initialBuckets: Array<'red' | 'amber' | 'gray'>) => {
+      setDrilling({ channel, marketplace, initialBuckets })
+    },
+    [],
+  )
 
   useEffect(() => {
     let cancelled = false
@@ -134,14 +147,38 @@ export default function ListingHealthGrid({ refreshKey = 0, className }: Props) 
       </header>
       <div className="p-3 grid gap-2 grid-cols-[repeat(auto-fill,minmax(220px,1fr))]">
         {cells.map((c) => (
-          <Cell key={`${c.channel}::${c.marketplace}`} cell={c} />
+          <Cell
+            key={`${c.channel}::${c.marketplace}`}
+            cell={c}
+            onDrilldown={openDrilldown}
+          />
         ))}
       </div>
+
+      {drilling && (
+        <FailingListingsModal
+          open={true}
+          onClose={() => setDrilling(null)}
+          channel={drilling.channel}
+          marketplace={drilling.marketplace}
+          initialBuckets={drilling.initialBuckets}
+        />
+      )}
     </section>
   )
 }
 
-function Cell({ cell }: { cell: HealthCell }) {
+function Cell({
+  cell,
+  onDrilldown,
+}: {
+  cell: HealthCell
+  onDrilldown: (
+    channel: string,
+    marketplace: string,
+    initialBuckets: Array<'red' | 'amber' | 'gray'>,
+  ) => void
+}) {
   const dominant: Bucket = (() => {
     const order: Bucket[] = ['red', 'amber', 'gray', 'other', 'green']
     for (const b of order) {
@@ -150,23 +187,24 @@ function Cell({ cell }: { cell: HealthCell }) {
     return 'green'
   })()
 
-  // Click-through: red cells go to errors view, green cells to listings.
-  const href =
-    dominant === 'red'
-      ? `/sync-logs/errors?channel=${encodeURIComponent(cell.channel)}&marketplace=${encodeURIComponent(cell.marketplace)}`
-      : `/listings?channel=${encodeURIComponent(cell.channel)}&marketplace=${encodeURIComponent(cell.marketplace)}`
+  // Healthy cells go straight to /listings filtered.
+  // Anything with red/amber/gray opens the inline drilldown modal —
+  // operator stays in /sync-logs context, picks a listing, and
+  // deep-links to the right channel tab from there.
+  const isHealthy = dominant === 'green'
+  const greenHref = `/listings?channel=${encodeURIComponent(cell.channel)}&marketplace=${encodeURIComponent(cell.marketplace)}`
 
-  return (
-    <Link
-      href={href}
-      className={cn(
-        'block rounded border p-2.5 transition-all hover:shadow-sm',
-        toneClasses(dominant),
-      )}
-      title={`${Object.entries(cell.byStatus)
-        .map(([k, v]) => `${k}: ${v}`)
-        .join(' · ')}`}
-    >
+  const title = `${Object.entries(cell.byStatus)
+    .map(([k, v]) => `${k}: ${v}`)
+    .join(' · ')}`
+
+  const className = cn(
+    'block w-full text-left rounded border p-2.5 transition-all hover:shadow-sm',
+    toneClasses(dominant),
+  )
+
+  const body = (
+    <>
       <div className="flex items-center justify-between mb-1.5">
         <div className="flex items-center gap-1.5 min-w-0">
           <DominantIcon bucket={dominant} />
@@ -180,7 +218,36 @@ function Cell({ cell }: { cell: HealthCell }) {
         </span>
       </div>
       <StackedBar cell={cell} />
-    </Link>
+    </>
+  )
+
+  if (isHealthy) {
+    return (
+      <Link href={greenHref} className={className} title={title}>
+        {body}
+      </Link>
+    )
+  }
+
+  // Map the dominant bucket → which buckets to pre-select in the
+  // drilldown (always include red so operators see real failures, plus
+  // the dominant if it's red/amber/gray).
+  const initialBuckets: Array<'red' | 'amber' | 'gray'> = (() => {
+    if (dominant === 'red' || dominant === 'amber' || dominant === 'gray') {
+      return Array.from(new Set<'red' | 'amber' | 'gray'>(['red', dominant]))
+    }
+    return ['red']
+  })()
+
+  return (
+    <button
+      type="button"
+      onClick={() => onDrilldown(cell.channel, cell.marketplace, initialBuckets)}
+      className={className}
+      title={title}
+    >
+      {body}
+    </button>
   )
 }
 
