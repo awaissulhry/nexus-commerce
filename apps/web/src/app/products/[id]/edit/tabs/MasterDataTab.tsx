@@ -15,6 +15,10 @@ import {
 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { emitInvalidation } from '@/lib/sync/invalidation-channel'
+import {
+  setDraftField,
+  clearDraft,
+} from '../_shared/draft-bus/useProductDraftBus'
 import { Card } from '@/components/ui/Card'
 import { Input } from '@/components/ui/Input'
 import { Button } from '@/components/ui/Button'
@@ -122,6 +126,13 @@ export default function MasterDataTab({
     setData((prev) => ({ ...prev, [field]: value }))
     dirtyRef.current.add(field)
     reportDirty()
+    // AC.5 — push the field into the in-page draft bus so the
+    // Listing Cockpit (and any future tab subscribing to drafts)
+    // re-renders preview + health without waiting for header Save.
+    // Empty string is published as-is; consumers decide whether
+    // an empty draft should beat the master prop (compositor
+    // currently treats explicit '' as a real override).
+    setDraftField(product.id, field, value)
     // DSP.2 — pre-DSP.2 the change auto-saved via a 600ms debounce.
     // Now: just mark dirty + clear any stale error. The save fires
     // only when the operator clicks header Save All (via flush()
@@ -285,6 +296,11 @@ export default function MasterDataTab({
     setError(null)
     setConflict(null)
     setVersion(typeof product.version === 'number' ? product.version : null)
+    // AC.5 — discard also wipes the draft bus for this product so
+    // the Listing Cockpit (and any other draft subscriber) reseeds
+    // from the freshly-fetched product props instead of replaying
+    // the dropped edits.
+    clearDraft(product.id)
     // TC.1 — also reset the embedded global sections so header Discard
     // truly clears every dirty state under the "master" tab.
     globalDiscardRef.current?.()

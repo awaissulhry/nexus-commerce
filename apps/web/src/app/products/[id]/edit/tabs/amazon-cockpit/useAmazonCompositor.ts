@@ -3,14 +3,16 @@
 // Folds the in-memory product + active Amazon ChannelListing into a
 // single ComposedAmazonListing the preview / cards can render against.
 //
-// AC.1 keeps the read surface local: only walks props the parent has
-// already fetched (`product`, `listing`, `marketInfo`). Cross-tab data
-// sources (LocalesTab translations, ImagesTab live channel strip,
-// MatrixTab variant edits in flight) land in AC.5 alongside the cross-
-// tab SSE pipe.
+// AC.1 walks parent-fetched props (`product`, `listing`, `marketInfo`).
+// AC.5 layers the in-page draft bus on top so unsaved edits in
+// MasterDataTab (and later ImagesTab / LocalesTab / MatrixTab) feed
+// straight into the preview + health panel WITHOUT a save. Cross-
+// window updates ride a separate rail (SSE + invalidation channel)
+// already plumbed by ProductEditClient.
 
 import { useMemo } from 'react'
 import type { ComposedAmazonListing, ComposedField, FieldSource } from './types'
+import { useProductDraft } from '../../_shared/draft-bus/useProductDraftBus'
 
 interface MarketInfo {
   code: string
@@ -121,10 +123,29 @@ export function useAmazonCompositor({
   marketInfo,
   children = [],
 }: Args): ComposedAmazonListing {
+  // AC.5 — subscribe to the in-page draft bus so an unsaved keystroke
+  // in MasterDataTab (or any other tab pushing to the bus) re-runs
+  // the compositor and updates the preview + health panel live.
+  const draft = useProductDraft(product.id)
   return useMemo<ComposedAmazonListing>(() => {
     const platform = (listing?.platformAttributes ?? {}) as Record<string, unknown>
 
-    // Title — override > listing.title > master.name.
+    // AC.5 — overlay master draft fields onto the product props.
+    // Empty string is treated as a real value (operator explicitly
+    // cleared the field); undefined means no draft. The draft snapshot
+    // is shallow-cloned in the bus so reads here are stable.
+    const draftName = typeof draft.name === 'string' ? draft.name : undefined
+    const draftBrand = typeof draft.brand === 'string' ? draft.brand : undefined
+    const draftUpc = typeof draft.upc === 'string' ? draft.upc : undefined
+    const draftEan = typeof draft.ean === 'string' ? draft.ean : undefined
+    const effectiveProductName = draftName !== undefined ? draftName : product.name
+    const effectiveProductBrand =
+      draftBrand !== undefined ? draftBrand : product.brand
+    const effectiveProductUpc = draftUpc !== undefined ? draftUpc : product.upc
+    const effectiveProductEan = draftEan !== undefined ? draftEan : product.ean
+
+    // Title — override > listing.title > master.name (with AC.5
+    // draft overlay applied above on effectiveProductName).
     let titleField: ComposedField<string>
     if (listing?.titleOverride) {
       titleField = field(listing.titleOverride, 'manual')
@@ -133,7 +154,7 @@ export function useAmazonCompositor({
     } else if (listing?.title) {
       titleField = field(listing.title, listing.followMasterTitle === false ? 'manual' : 'master')
     } else {
-      titleField = field(product.name ?? '', 'master')
+      titleField = field(effectiveProductName ?? '', 'master')
     }
 
     // Description.
@@ -215,7 +236,12 @@ export function useAmazonCompositor({
 
     const gtin =
       (platform.externally_assigned_product_identifier as string | null) ??
-      product.gtin ?? product.ean ?? product.upc ?? null
+      product.gtin ??
+      // AC.5 — draft overlay on UPC/EAN if MasterDataTab has unsaved
+      // edits to either identifier.
+      effectiveProductEan ??
+      effectiveProductUpc ??
+      null
     const gtinField: ComposedField<string | null> = field(
       gtin,
       gtin ? 'master' : 'default',
@@ -242,10 +268,10 @@ export function useAmazonCompositor({
       variationTheme ? 'manual' : 'default',
     )
 
-    // Brand.
+    // Brand — AC.5 draft overlay applied above.
     const brandField: ComposedField<string | null> = field(
-      product.brand ?? null,
-      product.brand ? 'master' : 'default',
+      effectiveProductBrand ?? null,
+      effectiveProductBrand ? 'master' : 'default',
     )
 
     // Fulfillment channel — pull from platformAttributes; otherwise
@@ -340,9 +366,10 @@ export function useAmazonCompositor({
         bulletCount: bulletList.length,
         imageCount: gallery.length,
         hasGtin: !!gtin,
-        hasBrand: !!product.brand,
+        hasBrand: !!effectiveProductBrand,
         hasProductType: !!productType,
       },
     }
-  }, [product, listing, marketInfo, children])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [product, listing, marketInfo, children, draft])
 }
