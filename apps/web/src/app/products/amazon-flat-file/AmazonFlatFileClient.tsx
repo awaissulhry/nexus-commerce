@@ -1511,6 +1511,30 @@ export default function AmazonFlatFileClient({
   const loadReqIdRef = useRef(0)
   const loadAbortRef = useRef<AbortController | null>(null)
 
+  // FF-MS.4 — Stale-while-revalidate client cache. Keyed by (MP:PT), survives
+  // for the component's lifetime (a full reload re-hydrates from SSR). The
+  // 5-min freshness window matches the backend TtlCache so cache hits and
+  // server hits agree on what "stale" means. On a hit we paint the field
+  // grid immediately and skip the loading skeleton; a background fetch then
+  // revalidates and writes through.
+  const SWR_TTL_MS = 5 * 60 * 1000
+  const cacheKey = (mp: string, pt: string) => `${mp.toUpperCase()}:${pt.toUpperCase()}`
+  type Snapshot = { manifest: Manifest; rows: Row[]; fetchedAt: number }
+  const cacheRef = useRef<Map<string, Snapshot>>(new Map())
+  const prefetchInFlightRef = useRef<Set<string>>(new Set())
+
+  // Seed cache with the SSR snapshot so the very first market we landed on
+  // is already warm. Subsequent switches back to it are instant.
+  useEffect(() => {
+    if (initialManifest && initialMarketplace && initialProductType) {
+      cacheRef.current.set(
+        cacheKey(initialMarketplace, initialProductType),
+        { manifest: initialManifest, rows: initialRows ?? [], fetchedAt: Date.now() },
+      )
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   const loadData = useCallback(async (mp: string, pt: string, force = false, fromDB = false) => {
     if (!pt.trim()) return
     // Cancel any in-flight load and stake out a new request id.
@@ -1518,9 +1542,25 @@ export default function AmazonFlatFileClient({
     const ctrl = new AbortController()
     loadAbortRef.current = ctrl
     const reqId = ++loadReqIdRef.current
-    setLoading(true)
     setLoadError(null)
     setFeedEntries([])
+
+    // FF-MS.4 — Optimistic paint from cache. If a fresh snapshot exists we
+    // surface it before the fetch even starts; the network call still runs
+    // to revalidate. force=true (Refresh schema) and fromDB=true bypass
+    // the cache because the caller explicitly wants server-fresh data.
+    let paintedFromCache = false
+    if (!force && !fromDB) {
+      const snap = cacheRef.current.get(cacheKey(mp, pt))
+      if (snap && (Date.now() - snap.fetchedAt) < SWR_TTL_MS) {
+        setManifest(snap.manifest)
+        const saved = loadSavedRows(mp, pt)
+        setRows(saved && saved.length > 0 ? mergeAsinCache(saved, mp) : snap.rows)
+        paintedFromCache = true
+      }
+    }
+    if (!paintedFromCache) setLoading(true)
+
     const backend = getBackendUrl()
     const qs = new URLSearchParams({ marketplace: mp, productType: pt, ...(force ? { force: '1' } : {}) })
     const rowsQs = new URLSearchParams({ marketplace: mp, productType: pt })
@@ -1531,7 +1571,11 @@ export default function AmazonFlatFileClient({
         const mRes = await fetch(`${backend}/api/amazon/flat-file/template?${qs}`, { signal: ctrl.signal })
         if (reqId !== loadReqIdRef.current) return
         if (!mRes.ok) { const e = await mRes.json().catch(() => ({})); throw new Error(e.error ?? `HTTP ${mRes.status}`) }
-        setManifest(await mRes.json())
+        const manifest: Manifest = await mRes.json()
+        setManifest(manifest)
+        // Refresh the cached manifest without disturbing the cached rows.
+        const prev = cacheRef.current.get(cacheKey(mp, pt))
+        cacheRef.current.set(cacheKey(mp, pt), { manifest, rows: prev?.rows ?? [], fetchedAt: Date.now() })
       } else {
         // Full load — fetch manifest + rows in parallel.
         // fromDB=true: always use DB rows (called on external invalidation or
@@ -1542,13 +1586,16 @@ export default function AmazonFlatFileClient({
         ])
         if (reqId !== loadReqIdRef.current) return
         if (!mRes.ok) { const e = await mRes.json().catch(() => ({})); throw new Error(e.error ?? `HTTP ${mRes.status}`) }
-        setManifest(await mRes.json())
+        const manifest: Manifest = await mRes.json()
+        setManifest(manifest)
         const saved = fromDB ? null : loadSavedRows(mp, pt)
+        let freshRows: Row[] = []
         if (saved && saved.length > 0) {
-          setRows(mergeAsinCache(saved, mp))
+          freshRows = mergeAsinCache(saved, mp)
+          setRows(freshRows)
         } else if (rRes.ok) {
           const d = await rRes.json()
-          const freshRows = mergeAsinCache(d.rows ?? [], mp)
+          freshRows = mergeAsinCache(d.rows ?? [], mp)
           setRows(freshRows)
           // Update localStorage so the next page open starts fresh too.
           if (fromDB) saveRows(mp, pt, freshRows)
@@ -1556,6 +1603,8 @@ export default function AmazonFlatFileClient({
           setRows([])
         }
         if (fromDB) setDraftBanner(null)
+        // FF-MS.4 — Write through to the SWR cache so next visit is instant.
+        cacheRef.current.set(cacheKey(mp, pt), { manifest, rows: freshRows, fetchedAt: Date.now() })
         // FF-MS.1 — URL is now updated by `navigateTo` BEFORE the fetch starts
         // (see below), so loadData no longer touches the URL. This avoids the
         // "switch happens but URL stays put on refresh" class of bugs and lets
@@ -1568,6 +1617,34 @@ export default function AmazonFlatFileClient({
     } finally {
       if (reqId === loadReqIdRef.current) setLoading(false)
     }
+  }, [familyId, initialManifest, initialMarketplace, initialProductType, initialRows])
+
+  // FF-MS.4 — Best-effort hover/focus prefetch for market buttons. Fires a
+  // fetch for the (mp, currentPT) pair so the click is instant. Aborts if
+  // the snapshot is already fresh or another prefetch is in-flight. Errors
+  // are swallowed because this is purely speculative work.
+  const prefetch = useCallback(async (mp: string, pt: string) => {
+    if (!pt.trim()) return
+    const key = cacheKey(mp, pt)
+    const cached = cacheRef.current.get(key)
+    if (cached && (Date.now() - cached.fetchedAt) < SWR_TTL_MS) return
+    if (prefetchInFlightRef.current.has(key)) return
+    prefetchInFlightRef.current.add(key)
+    try {
+      const backend = getBackendUrl()
+      const qs = new URLSearchParams({ marketplace: mp.toUpperCase(), productType: pt.toUpperCase() })
+      const rowsQs = new URLSearchParams({ marketplace: mp.toUpperCase(), productType: pt.toUpperCase() })
+      if (familyId) rowsQs.set('productId', familyId)
+      const [mRes, rRes] = await Promise.all([
+        fetch(`${backend}/api/amazon/flat-file/template?${qs}`),
+        fetch(`${backend}/api/amazon/flat-file/rows?${rowsQs}`),
+      ])
+      if (!mRes.ok) return
+      const manifest: Manifest = await mRes.json()
+      const rows: Row[] = rRes.ok ? mergeAsinCache((await rRes.json()).rows ?? [], mp) : []
+      cacheRef.current.set(key, { manifest, rows, fetchedAt: Date.now() })
+    } catch { /* prefetch is best-effort */ }
+    finally { prefetchInFlightRef.current.delete(key) }
   }, [familyId])
 
   // ── FF-MS.1 — URL is the source of truth for (marketplace, productType) ──
@@ -2651,6 +2728,8 @@ export default function AmazonFlatFileClient({
                 return (
                   <button key={m} type="button"
                     onClick={() => navigateTo(m, productType)}
+                    onMouseEnter={() => { if (!isActive) void prefetch(m, productType) }}
+                    onFocus={() => { if (!isActive) void prefetch(m, productType) }}
                     aria-pressed={isActive}
                     aria-label={`Switch to ${m} marketplace${isSwitching ? ' (loading)' : ''}`}
                     className={cn('inline-flex items-center text-xs font-medium px-2 py-0.5 rounded border transition-colors',
