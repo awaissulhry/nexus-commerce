@@ -58,6 +58,10 @@ import { useToast } from '@/components/ui/Toast'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { cn } from '@/lib/utils'
+import {
+  setDraftField,
+  clearDraft,
+} from '../_shared/draft-bus/useProductDraftBus'
 
 const SUPPORTED_LOCALES = ['en', 'de', 'fr', 'es', 'nl', 'pl', 'sv'] as const
 
@@ -176,6 +180,48 @@ export default function LocalesTab({
     for (const set of Object.values(dirtyMapRef.current)) n += set.size
     onDirtyChange(n)
   }, [onDirtyChange])
+
+  // AC.5c — Mirror the drafts map into the in-page draft bus so the
+  // Amazon Listing Cockpit's compositor can overlay per-locale name
+  // + description onto the master values when marketInfo.language
+  // matches. Empty/whitespace-only fields are filtered out so the
+  // bus doesn't beat master data with blank translations.
+  useEffect(() => {
+    const localeMap: Record<
+      string,
+      { name?: string; description?: string; bulletPoints?: string[] }
+    > = {}
+    for (const [lang, d] of Object.entries(drafts)) {
+      const entry: {
+        name?: string
+        description?: string
+        bulletPoints?: string[]
+      } = {}
+      if (d.name.trim().length > 0) entry.name = d.name
+      if (d.description.trim().length > 0) entry.description = d.description
+      const bullets = d.bulletPoints
+        .split('\n')
+        .map((b) => b.trim())
+        .filter((b) => b.length > 0)
+      if (bullets.length > 0) entry.bulletPoints = bullets
+      if (Object.keys(entry).length > 0) localeMap[lang] = entry
+    }
+    if (Object.keys(localeMap).length > 0) {
+      setDraftField(product.id, 'localeTranslations', localeMap)
+    } else {
+      // No non-empty drafts — clear the bus key so the cockpit
+      // falls back to listing.* / master values cleanly.
+      clearDraft(product.id, 'localeTranslations')
+    }
+  }, [drafts, product.id])
+
+  // AC.5c — clear bus key on unmount + discard so a stale overlay
+  // can't survive after the operator leaves the tab.
+  useEffect(() => {
+    return () => {
+      clearDraft(product.id, 'localeTranslations')
+    }
+  }, [product.id])
 
   const refresh = useCallback(async () => {
     setLoading(true)

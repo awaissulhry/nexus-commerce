@@ -180,9 +180,35 @@ export function useAmazonCompositor({
       : undefined
     const effectiveImages: ProductLike['images'] =
       draftImages !== undefined ? draftImages : product.images
+    // AC.5c — locale-specific translation overlay. LocalesTab pushes
+    // its drafts map into draft.localeTranslations keyed by lang
+    // code. Pick the entry matching this market's language (the
+    // active marketInfo.language, e.g. 'it'/'de'/'fr'). When found,
+    // its name + description beat master/listing values in the
+    // resolution chain below — tagged FieldSource 'translations'.
+    const localeKey = (marketInfo.language ?? '').toLowerCase().split(/[-_]/)[0]
+    const localeMap =
+      draft.localeTranslations &&
+      typeof draft.localeTranslations === 'object' &&
+      !Array.isArray(draft.localeTranslations)
+        ? (draft.localeTranslations as Record<
+            string,
+            { name?: string; description?: string; bulletPoints?: string[] }
+          >)
+        : null
+    const localeEntry = localeMap && localeKey ? localeMap[localeKey] : null
+    const localeName =
+      localeEntry && typeof localeEntry.name === 'string'
+        ? localeEntry.name
+        : undefined
+    const localeDescription =
+      localeEntry && typeof localeEntry.description === 'string'
+        ? localeEntry.description
+        : undefined
 
-    // Title — override > listing.title > master.name (with AC.5
-    // draft overlay applied above on effectiveProductName).
+    // Title — override > listing.title > locale translation > master
+    // (with AC.5 draft overlay on effectiveProductName, AC.5c locale
+    // overlay slotted between listing and master).
     let titleField: ComposedField<string>
     if (listing?.titleOverride) {
       titleField = field(listing.titleOverride, 'manual')
@@ -190,11 +216,14 @@ export function useAmazonCompositor({
       titleField = field(listing.title, 'manual')
     } else if (listing?.title) {
       titleField = field(listing.title, listing.followMasterTitle === false ? 'manual' : 'master')
+    } else if (localeName && localeName.trim().length > 0) {
+      titleField = field(localeName, 'translations')
     } else {
       titleField = field(effectiveProductName ?? '', 'master')
     }
 
-    // Description — AC.11 draft overlay beats listing + master.
+    // Description — AC.11 draft > listing override/value > AC.5c
+    // locale translation > master.description.
     let descField: ComposedField<string>
     if (draftDescription !== undefined) {
       descField = field(draftDescription, 'ai')
@@ -205,6 +234,8 @@ export function useAmazonCompositor({
         listing.description,
         listing.followMasterDescription === false ? 'manual' : 'master',
       )
+    } else if (localeDescription && localeDescription.trim().length > 0) {
+      descField = field(localeDescription, 'translations')
     } else {
       descField = field(product.description ?? '', 'master')
     }
