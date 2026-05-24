@@ -36,6 +36,7 @@ import ImagesCard from './cards/ImagesCard'
 import PricingPoliciesCard from './cards/PricingPoliciesCard'
 import CompatibilityCard from './cards/CompatibilityCard'
 import ApplyToSiblingsModal from './templates/ApplyToSiblingsModal'
+import MasterDivergenceBanner from './backwrite/MasterDivergenceBanner'
 import HealthScoreRail from './health/HealthScoreRail'
 import VersionHistoryDrawer from './versioning/VersionHistoryDrawer'
 import PublishDrawer from './publish/PublishDrawer'
@@ -291,6 +292,34 @@ export default function EbayCockpit(props: Props) {
         masterChangedAt={events.masterChangedAt}
         listingUpdatedAt={events.listingUpdatedAt}
         siblingChangedAt={events.siblingChangedAt}
+      />
+
+      {/* EC.15 — Cross-tab BACK-write. Fires when cockpit edits
+          (title / description / price) diverge from the Product
+          master AND were authored locally (manual / ai / sibling).
+          Prompts to promote the cockpit value back UP to Master so
+          every other channel sees the improvement. */}
+      <MasterDivergenceBanner
+        productId={product.id}
+        marketplace={marketplace}
+        initial={{
+          title: { source: composed.title.source, value: composed.title.value },
+          description: { source: composed.description.source, value: composed.description.value },
+          price: {
+            source: composed.price.source,
+            value: composed.price.value != null ? String(composed.price.value) : '',
+          },
+        }}
+        master={{
+          name: (product?.name as string | null) ?? null,
+          description: (product?.description as string | null) ?? null,
+          basePrice: (() => {
+            const v = product.basePrice
+            if (v == null || v === '') return null
+            const n = typeof v === 'string' ? parseFloat(v) : Number(v)
+            return Number.isFinite(n) ? n : null
+          })(),
+        }}
       />
 
       {/* ── Zone 2: Preview + Health band (collapsible) ───────────── */}

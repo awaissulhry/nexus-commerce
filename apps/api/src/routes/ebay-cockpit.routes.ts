@@ -79,6 +79,11 @@
  *           axes + compatibility) from a donor listing to N target
  *           listings. Per-target pre-apply snapshot for rollback.
  *           Scoped — operator picks which layers to copy.
+ *   POST  /api/ebay/cockpit/promote-to-master   — EC.15: pushes
+ *           cockpit-edited title / description / basePrice back
+ *           into the Product master record. Closes the loop so
+ *           the cockpit isn't a divergence factory. Operator opts
+ *           in per field via the MasterDivergenceBanner.
  *
  * All endpoints reuse the EbayCategoryService singleton (in-memory
  * 24h caches for search + aspects). No changes to flat-file routes.
@@ -1574,6 +1579,85 @@ export default async function ebayCockpitRoutes(fastify: FastifyInstance) {
       okCount: results.filter((r) => r.ok).length,
       failCount: results.filter((r) => !r.ok).length,
     })
+  })
+
+  // ── POST /api/ebay/cockpit/promote-to-master ────────────────────────
+  // EC.15 — Push cockpit-improved content back up to the Product
+  // master record. The cockpit is per-channel-per-marketplace, but
+  // when an operator writes a better title (or generates one via AI)
+  // they often want that title to be the master, not a per-channel
+  // override that silently diverges from every other channel.
+  //
+  // Body: { productId, fields: { name?, description?, basePrice? } }
+  // Only the supplied fields update; omitted ones are untouched.
+  // Returns the updated product slice so the cockpit can refresh
+  // without re-fetching the full payload.
+  fastify.post<{
+    Body: {
+      productId: string
+      fields: {
+        name?: string | null
+        description?: string | null
+        basePrice?: number | null
+      }
+    }
+  }>('/ebay/cockpit/promote-to-master', async (request, reply) => {
+    const body = request.body
+    if (!body) return reply.code(400).send({ error: 'Body is required' })
+    const { productId, fields } = body
+    if (!productId || !fields || typeof fields !== 'object') {
+      return reply.code(400).send({ error: 'productId, fields are required' })
+    }
+
+    const data: Record<string, unknown> = {}
+    if (fields.name !== undefined) {
+      const trimmed = String(fields.name ?? '').trim()
+      if (trimmed.length === 0) {
+        return reply.code(400).send({ error: 'name cannot be empty when promoting' })
+      }
+      data.name = trimmed
+    }
+    if (fields.description !== undefined) {
+      data.description = fields.description === null
+        ? null
+        : String(fields.description)
+    }
+    if (fields.basePrice !== undefined) {
+      if (fields.basePrice === null) {
+        data.basePrice = null
+      } else {
+        const n = Number(fields.basePrice)
+        if (!Number.isFinite(n) || n < 0) {
+          return reply.code(400).send({ error: 'basePrice must be a non-negative number' })
+        }
+        data.basePrice = new Prisma.Decimal(n)
+      }
+    }
+    if (Object.keys(data).length === 0) {
+      return reply.code(400).send({ error: 'No supported fields supplied (name/description/basePrice).' })
+    }
+
+    try {
+      const updated = await prisma.product.update({
+        where: { id: productId },
+        data,
+        select: { id: true, sku: true, name: true, description: true, basePrice: true, updatedAt: true },
+      })
+      return reply.send({
+        product: {
+          ...updated,
+          basePrice: updated.basePrice != null ? Number(updated.basePrice) : null,
+        },
+        promotedFields: Object.keys(data),
+      })
+    } catch (err) {
+      request.log.error(err, '[ebay/cockpit/promote-to-master] failed')
+      const message = err instanceof Error ? err.message : String(err)
+      if (message.includes('Record to update not found')) {
+        return reply.code(404).send({ error: 'Product not found' })
+      }
+      return reply.code(500).send({ error: message })
+    }
   })
 }
 
