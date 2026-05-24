@@ -15,6 +15,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import Link from 'next/link'
 import {
   Loader2,
   AlertCircle,
@@ -28,6 +29,7 @@ import {
   XCircle,
   DownloadCloud,
   FileCode,
+  Columns,
 } from 'lucide-react'
 import PayloadPreviewModal from './_shared/PayloadPreviewModal'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -500,6 +502,14 @@ export default function MappingsClient() {
                       </button>
                     </div>
                   )}
+                  <Link
+                    href={`/settings/mappings/canvas/${active.channel}/${active.code}`}
+                    className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20"
+                    title="Open the two-column visual mapping canvas (D.4)"
+                  >
+                    <Columns className="w-3 h-3" />
+                    Canvas
+                  </Link>
                   <button
                     type="button"
                     onClick={() => void fetchView()}
