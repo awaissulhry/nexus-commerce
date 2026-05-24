@@ -25,14 +25,29 @@
 // apply are AC.6.2 deliverables — this phase lands the grid + data
 // flow first so operators can SEE the variation state at a glance.
 
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { cn } from '@/lib/utils'
-import { Layers, Package, AlertTriangle, ImageIcon } from 'lucide-react'
+import {
+  Layers,
+  Package,
+  AlertTriangle,
+  ImageIcon,
+  Pencil,
+  Loader2,
+  Check,
+  X,
+  ExternalLink,
+} from 'lucide-react'
 import {
   classifyStatus,
   marketFlag,
 } from '../../../_shared/market-switch/types'
-import { useProductDraft } from '../../../_shared/draft-bus/useProductDraftBus'
+import {
+  setDraftField,
+  useProductDraft,
+  readDraft,
+} from '../../../_shared/draft-bus/useProductDraftBus'
+import { getBackendUrl } from '@/lib/backend-url'
 
 interface ChildProduct {
   id: string
@@ -284,6 +299,7 @@ export default function VariationMatrix({
       {/* Matrix body */}
       {axes.length === 1 ? (
         <OneAxisList
+          parentId={productId}
           axis={axes[0]!}
           values={byAxis[axes[0]!] ?? []}
           childByAxis={childByAxis}
@@ -293,6 +309,7 @@ export default function VariationMatrix({
         />
       ) : axes.length === 2 ? (
         <TwoAxisGrid
+          parentId={productId}
           rowAxis={axes[0]!}
           colAxis={axes[1]!}
           rowValues={byAxis[axes[0]!] ?? []}
@@ -304,6 +321,7 @@ export default function VariationMatrix({
         />
       ) : (
         <MultiAxisList
+          parentId={productId}
           axes={axes}
           byAxis={byAxis}
           children={children}
@@ -357,8 +375,8 @@ export default function VariationMatrix({
       )}
 
       <div className="text-[10.5px] text-slate-400 italic">
-        AC.6 — read-only matrix. Inline cell editing, color-locked images,
-        and bulk row/col apply land in AC.6.2.
+        Hover a cell → pencil ✎ for inline price + stock edit.
+        Color-lock images and bulk row/col apply land in AC.6.3.
       </div>
     </div>
   )
@@ -411,6 +429,7 @@ function ThemeBadge({
 
 // ── One-axis row list ──────────────────────────────────────────────────
 function OneAxisList({
+  parentId,
   axis,
   values,
   childByAxis,
@@ -418,6 +437,7 @@ function OneAxisList({
   activeCurrency,
   onJumpToClassic,
 }: {
+  parentId: string
   axis: string
   values: string[]
   childByAxis: Map<string, ChildProduct>
@@ -437,6 +457,7 @@ function OneAxisList({
           return (
             <CellTile
               key={v}
+              parentId={parentId}
               label={v}
               child={child}
               listing={activeListingByProduct.get(child.id)}
@@ -452,6 +473,7 @@ function OneAxisList({
 
 // ── Two-axis grid ──────────────────────────────────────────────────────
 function TwoAxisGrid({
+  parentId,
   rowAxis,
   colAxis,
   rowValues,
@@ -461,6 +483,7 @@ function TwoAxisGrid({
   activeCurrency,
   onJumpToClassic,
 }: {
+  parentId: string
   rowAxis: string
   colAxis: string
   rowValues: string[]
@@ -512,6 +535,7 @@ function TwoAxisGrid({
                   <td key={c} className="align-top w-[140px]">
                     <CellTile
                       compact
+                      parentId={parentId}
                       label={`${r} · ${c}`}
                       child={child}
                       listing={activeListingByProduct.get(child.id)}
@@ -531,6 +555,7 @@ function TwoAxisGrid({
 
 // ── Many-axis flat list ────────────────────────────────────────────────
 function MultiAxisList({
+  parentId,
   axes,
   byAxis,
   children,
@@ -538,6 +563,7 @@ function MultiAxisList({
   activeCurrency,
   onJumpToClassic,
 }: {
+  parentId: string
   axes: string[]
   byAxis: Record<string, string[]>
   children: ChildProduct[]
@@ -563,6 +589,7 @@ function MultiAxisList({
             return (
               <CellTile
                 key={child.id}
+                parentId={parentId}
                 label={label}
                 child={child}
                 listing={activeListingByProduct.get(child.id)}
@@ -578,6 +605,7 @@ function MultiAxisList({
 
 // ── Single cell tile (shared 1D / 2D / 3+ axis renderer) ───────────────
 function CellTile({
+  parentId,
   label,
   child,
   listing,
@@ -585,6 +613,9 @@ function CellTile({
   compact = false,
   onClick,
 }: {
+  /** AC.6.2 — parent product id; passed through to setDraftField
+   *  for the optimistic per-child price/stock overlay. */
+  parentId: string
   label: string
   child: ChildProduct
   listing: ListingLike | undefined
@@ -618,14 +649,89 @@ function CellTile({
       ? 'bg-slate-300 dark:bg-slate-600'
       : null
 
+  // AC.6.2 — inline edit state. Pencil button opens a mini-form
+  // that PATCHes /api/products/:childId (same endpoint MatrixTab
+  // uses). Optimistic overlay via the AC.5d draft bus so the tile
+  // repaints during the request.
+  const [editing, setEditing] = useState(false)
+  const [editPrice, setEditPrice] = useState('')
+  const [editStock, setEditStock] = useState('')
+  const [editBusy, setEditBusy] = useState(false)
+  const [editError, setEditError] = useState<string | null>(null)
+  const [savedFlash, setSavedFlash] = useState(false)
+
+  function openEditor(e: React.MouseEvent) {
+    e.stopPropagation()
+    setEditPrice(price != null ? price.toFixed(2) : '')
+    setEditStock(String(stock ?? 0))
+    setEditError(null)
+    setEditing(true)
+  }
+
+  async function saveEdit() {
+    const priceN = editPrice.trim() === '' ? null : Number(editPrice)
+    const stockN = editStock.trim() === '' ? null : Math.floor(Number(editStock))
+    if (priceN != null && (!Number.isFinite(priceN) || priceN < 0)) {
+      setEditError('Price must be a non-negative number.')
+      return
+    }
+    if (stockN != null && (!Number.isFinite(stockN) || stockN < 0)) {
+      setEditError('Stock must be a non-negative integer.')
+      return
+    }
+    const priceChanged = priceN !== price
+    const stockChanged = stockN !== stock
+    if (!priceChanged && !stockChanged) {
+      setEditing(false)
+      return
+    }
+    setEditBusy(true)
+    setEditError(null)
+    // Optimistic: write to the AC.5d bus key the parent matrix
+    // already subscribes to via useProductDraft.
+    setDraftField(parentId, 'variantOverrides', {
+      ...readVariantOverrides(parentId),
+      [child.id]: {
+        ...(readVariantOverrides(parentId)[child.id] ?? {}),
+        ...(priceChanged ? { basePrice: priceN ?? undefined } : {}),
+        ...(stockChanged ? { totalStock: stockN ?? undefined } : {}),
+      },
+    })
+    try {
+      const body: Record<string, unknown> = {}
+      if (priceChanged) body.basePrice = priceN
+      if (stockChanged) body.totalStock = stockN
+      const res = await fetch(
+        `${getBackendUrl()}/api/products/${encodeURIComponent(child.id)}`,
+        {
+          method: 'PATCH',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        },
+      )
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => null)
+        throw new Error(errBody?.error ?? `HTTP ${res.status}`)
+      }
+      setSavedFlash(true)
+      window.setTimeout(() => setSavedFlash(false), 1800)
+      setEditing(false)
+    } catch (e) {
+      setEditError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setEditBusy(false)
+    }
+  }
+
   return (
-    <button
-      type="button"
-      onClick={onClick}
+    <div
       className={cn(
-        'w-full text-left rounded border bg-white dark:bg-slate-900 hover:border-blue-400 dark:hover:border-blue-500 transition-colors group',
+        'w-full text-left rounded border bg-white dark:bg-slate-900 transition-colors group relative',
         'border-slate-200 dark:border-slate-700',
         compact ? 'p-1.5' : 'p-2',
+        savedFlash && 'ring-1 ring-emerald-400',
+        !editing && 'hover:border-blue-400 dark:hover:border-blue-500',
       )}
       title={`${child.sku} · ${label}`}
     >
@@ -699,6 +805,122 @@ function CellTile({
           </div>
         </div>
       </div>
-    </button>
+      {/* AC.6.2 — inline editor + action chrome. Pencil opens the
+          mini-form; arrow icon preserves the click-to-jump behaviour
+          from AC.6. Hidden during editing so the inputs don't fight
+          for the same corner space. */}
+      {!editing ? (
+        <div className="absolute top-1 right-1 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+          <button
+            type="button"
+            onClick={openEditor}
+            className="w-5 h-5 rounded bg-white/95 dark:bg-slate-800/95 border border-slate-200 dark:border-slate-700 grid place-items-center text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700"
+            title="Edit base price + stock"
+            aria-label="Edit cell"
+          >
+            <Pencil className="w-2.5 h-2.5" />
+          </button>
+          {onClick && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                onClick()
+              }}
+              className="w-5 h-5 rounded bg-white/95 dark:bg-slate-800/95 border border-slate-200 dark:border-slate-700 grid place-items-center text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700"
+              title="Open variant in classic editor"
+              aria-label="Open in classic editor"
+            >
+              <ExternalLink className="w-2.5 h-2.5" />
+            </button>
+          )}
+        </div>
+      ) : (
+        <div
+          className="mt-1.5 pt-1.5 border-t border-slate-200 dark:border-slate-700 space-y-1"
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !editBusy) void saveEdit()
+            else if (e.key === 'Escape' && !editBusy) {
+              setEditing(false)
+              setEditError(null)
+            }
+          }}
+        >
+          <div className="grid grid-cols-2 gap-1">
+            <label className="text-[9.5px] uppercase tracking-wide text-slate-500 dark:text-slate-400">
+              Price
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                value={editPrice}
+                onChange={(e) => setEditPrice(e.target.value)}
+                className="mt-0.5 w-full h-6 px-1 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[11px] font-mono text-slate-900 dark:text-slate-100"
+                disabled={editBusy}
+                autoFocus
+              />
+            </label>
+            <label className="text-[9.5px] uppercase tracking-wide text-slate-500 dark:text-slate-400">
+              Stock
+              <input
+                type="number"
+                step="1"
+                min="0"
+                value={editStock}
+                onChange={(e) => setEditStock(e.target.value)}
+                className="mt-0.5 w-full h-6 px-1 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[11px] font-mono text-slate-900 dark:text-slate-100"
+                disabled={editBusy}
+              />
+            </label>
+          </div>
+          {editError && (
+            <div className="text-[10px] text-rose-700 dark:text-rose-400">
+              {editError}
+            </div>
+          )}
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => void saveEdit()}
+              disabled={editBusy}
+              className="inline-flex items-center gap-0.5 h-5 px-1.5 rounded text-[10px] font-medium bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50"
+            >
+              {editBusy ? (
+                <Loader2 className="w-2.5 h-2.5 animate-spin" />
+              ) : (
+                <Check className="w-2.5 h-2.5" />
+              )}
+              {editBusy ? 'Saving' : 'Save'}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setEditing(false)
+                setEditError(null)
+              }}
+              disabled={editBusy}
+              className="inline-flex items-center gap-0.5 h-5 px-1.5 rounded text-[10px] border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+            >
+              <X className="w-2.5 h-2.5" /> Cancel
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
   )
+}
+
+// AC.6.2 — Snapshot helper for the optimistic overlay merge. Reads
+// draft.variantOverrides via the bus's non-React getter so event
+// handlers can splice in the new entry without losing siblings.
+function readVariantOverrides(productId: string): Record<
+  string,
+  { basePrice?: number; totalStock?: number }
+> {
+  const all = readDraft(productId)
+  const v = all.variantOverrides
+  if (v && typeof v === 'object' && !Array.isArray(v)) {
+    return v as Record<string, { basePrice?: number; totalStock?: number }>
+  }
+  return {}
 }
