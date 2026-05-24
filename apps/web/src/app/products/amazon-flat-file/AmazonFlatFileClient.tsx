@@ -1708,6 +1708,36 @@ export default function AmazonFlatFileClient({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [urlMpRaw, urlPtRaw])
 
+  // FF-MS.7 — Alt+1..5 (Option+1..5 on Mac) switches between IT/DE/FR/ES/UK.
+  // We match by `e.code` (Digit1..Digit5) because Option+digit on Mac produces
+  // special characters (¡™£¢∞) in `e.key`, but the physical key code stays
+  // stable. Suppressed when:
+  //   - any other modifier is held (avoids stomping browser shortcuts)
+  //   - a cell is in edit mode
+  //   - focus is in any text field (input/textarea/select/contenteditable)
+  // so typing in the data grid or the search box never accidentally triggers
+  // a market switch.
+  useEffect(() => {
+    function onKey(e: globalThis.KeyboardEvent) {
+      if (!e.altKey || e.metaKey || e.ctrlKey || e.shiftKey) return
+      if (isEditingRef.current) return
+      const target = e.target as HTMLElement | null
+      const tag = target?.tagName?.toLowerCase()
+      if (tag === 'input' || tag === 'textarea' || tag === 'select') return
+      if (target?.isContentEditable) return
+      const m = /^Digit([1-9])$/.exec(e.code)
+      if (!m) return
+      const idx = Number(m[1]) - 1
+      if (idx < 0 || idx >= MARKETPLACES.length) return
+      const next = MARKETPLACES[idx]
+      if (next === marketplace) return
+      e.preventDefault()
+      navigateTo(next, productType)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [marketplace, productType, navigateTo])
+
   // ── Row operations ─────────────────────────────────────────────────
 
   const deleteSelected = useCallback(() => {
@@ -2754,17 +2784,19 @@ export default function AmazonFlatFileClient({
           <div className="flex items-center gap-2">
             <span className="text-xs text-slate-400 font-medium">Market</span>
             <div className="flex gap-0.5">
-              {MARKETPLACES.map((m) => {
+              {MARKETPLACES.map((m, idx) => {
                 const isActive = marketplace === m
                 const isSwitching = isActive && loading
                 const dirtyCount = otherMarketsDirtyCount[m] ?? 0
+                const shortcutHint = idx < 9 ? ` (Alt+${idx + 1})` : ''
                 return (
                   <button key={m} type="button"
                     onClick={() => navigateTo(m, productType)}
                     onMouseEnter={() => { if (!isActive) void prefetch(m, productType) }}
                     onFocus={() => { if (!isActive) void prefetch(m, productType) }}
                     aria-pressed={isActive}
-                    aria-label={`Switch to ${m} marketplace${isSwitching ? ' (loading)' : ''}${dirtyCount > 0 ? ` (${dirtyCount} unsaved)` : ''}`}
+                    aria-label={`Switch to ${m} marketplace${shortcutHint}${isSwitching ? ' (loading)' : ''}${dirtyCount > 0 ? ` (${dirtyCount} unsaved)` : ''}`}
+                    title={`${m} marketplace${shortcutHint}${dirtyCount > 0 ? ` — ${dirtyCount} unsaved change${dirtyCount === 1 ? '' : 's'}` : ''}`}
                     className={cn('inline-flex items-center text-xs font-medium px-2 py-0.5 rounded border transition-colors',
                       isActive
                         ? 'bg-slate-800 text-white border-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:border-slate-100'
@@ -3449,10 +3481,22 @@ export default function AmazonFlatFileClient({
         </div>
       )}
 
-      {/* PE: keyboard shortcuts modal */}
+      {/* PE: keyboard shortcuts modal — extended with Amazon-only entries (FF-MS.7). */}
       {shortcutsOpen && (
         <KeyboardShortcutsModal
-          groups={FLAT_FILE_SHORTCUTS}
+          groups={[
+            ...FLAT_FILE_SHORTCUTS,
+            {
+              title: 'Marketplace',
+              rows: [
+                { keys: ['⌥', '1'], label: 'Switch to IT' },
+                { keys: ['⌥', '2'], label: 'Switch to DE' },
+                { keys: ['⌥', '3'], label: 'Switch to FR' },
+                { keys: ['⌥', '4'], label: 'Switch to ES' },
+                { keys: ['⌥', '5'], label: 'Switch to UK' },
+              ],
+            },
+          ]}
           onClose={() => setShortcutsOpen(false)}
         />
       )}
