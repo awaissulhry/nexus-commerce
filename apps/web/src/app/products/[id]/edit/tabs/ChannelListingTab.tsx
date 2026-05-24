@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Sparkles, ArrowDownToLine, AlertTriangle, Copy, DollarSign, Send, CheckCircle2, XCircle, Loader2 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { Button } from '@/components/ui/Button'
@@ -90,6 +90,19 @@ export default function ChannelListingTab({
     childrenList.length > 0 ? (childrenList[0]?.id ?? null) : null,
   )
   const activeProductId = selectedChildId ?? product.id
+  // HOTFIX — Memoise the amazonGrouping prop so its reference is
+  // stable across parent re-renders. Without this, ProductEditClient
+  // re-renders (which happen on every keystroke / state change) mint
+  // a fresh object → ChannelFieldEditor's manifest-fetch effect
+  // re-fires → API gets hammered → 429.
+  const amazonGroupingProp = useMemo(() => {
+    if (channel !== 'AMAZON') return undefined
+    return {
+      marketplace,
+      productType:
+        (product?.productType as string | null | undefined) ?? null,
+    }
+  }, [channel, marketplace, product?.productType])
   const [pulling, setPulling] = useState(false)
   const [translating, setTranslating] = useState(false)
   // DSP.5 — saving/savedFlash removed; header Save All owns the state.
@@ -529,15 +542,7 @@ export default function ChannelListingTab({
         bindFlushAll={(fn) => {
           flushRef.current = fn
         }}
-        amazonGrouping={
-          channel === 'AMAZON'
-            ? {
-                marketplace,
-                productType:
-                  (product?.productType as string | null | undefined) ?? null,
-              }
-            : undefined
-        }
+        amazonGrouping={amazonGroupingProp}
       />
 
       {/* ── Publish review modal ───────────────────────────────── */}

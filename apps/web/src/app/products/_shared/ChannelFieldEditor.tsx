@@ -577,10 +577,15 @@ export default function ChannelFieldEditor({
         )
       })
     return () => controller.abort()
+    // HOTFIX — amazonGrouping object reference is intentionally NOT in
+    // the dep array. The primitive `marketplace` + `productType` values
+    // are; including the object too caused every parent re-render to
+    // mint a new reference and retrigger the fetch, hammering
+    // /api/amazon/flat-file/template and producing 429 in prod.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     amazonGrouping?.marketplace,
     amazonGrouping?.productType,
-    amazonGrouping,
     amazonManifestRetry,
   ])
 
