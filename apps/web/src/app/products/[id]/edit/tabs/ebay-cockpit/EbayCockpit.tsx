@@ -17,7 +17,7 @@
 // the corresponding ChannelListingTab section.
 
 import { useState } from 'react'
-import { ChevronDown, ChevronUp, ArrowDownToLine, Sparkles, Send, ExternalLink, Settings2, Package, Image as ImageIcon, DollarSign, ShieldCheck, Layers, Tag } from 'lucide-react'
+import { ChevronDown, ChevronUp, ArrowDownToLine, Sparkles, Send, ExternalLink, Settings2, Package, Image as ImageIcon, DollarSign, ShieldCheck, Layers } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
@@ -30,6 +30,7 @@ import type { ComposedListing } from './types'
 import { FieldSourceProvider } from './field-source/FieldSourceProvider'
 import SourceDiffModal from './field-source/SourceDiffModal'
 import ListingEssentialsCard from './cards/ListingEssentialsCard'
+import CategoryCard from './cards/CategoryCard'
 import { useEbayChannelEvents } from './realtime/useEbayChannelEvents'
 import HeartbeatDot from './realtime/HeartbeatDot'
 import CrossTabChangeToast from './realtime/CrossTabChangeToast'
@@ -304,14 +305,24 @@ export default function EbayCockpit(props: Props) {
         })}
       />
 
-      {/* ── Zone 3: Cards placeholders (EC.4–EC.8) ────────────────── */}
+      {/* ── EC.4 — Category card (replaces the EC.1 placeholder) ───── */}
+      <CategoryCard
+        productId={product.id}
+        marketplace={marketplace}
+        marketName={marketInfo.name}
+        siblingMarketCodes={(siblingMarkets ?? []).map((m) => m.code)}
+        seedTitle={composed.title.value}
+        seedDescription={composed.description.value}
+        current={{
+          id: composed.categoryId.value,
+          name: composed.categoryLabel.value,
+          path: ((listing?.platformAttributes as Record<string, unknown> | null)
+            ?.categoryPath as string | undefined) ?? null,
+        }}
+      />
+
+      {/* ── Zone 3: Remaining placeholder cards (EC.5–EC.13) ───────── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-        <PlaceholderCard
-          icon={<Tag className="w-4 h-4" />}
-          title="Category & Aspects"
-          phase="EC.4 + EC.5"
-          value={composed.categoryLabel.value ?? composed.categoryId.value ?? 'No category picked'}
-        />
         <PlaceholderCard
           icon={<Layers className="w-4 h-4" />}
           title="Variations Matrix"
