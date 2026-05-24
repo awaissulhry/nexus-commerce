@@ -1530,6 +1530,31 @@ export default function AmazonFlatFileClient({
   const cacheRef = useRef<Map<string, Snapshot>>(new Map())
   const prefetchInFlightRef = useRef<Set<string>>(new Set())
 
+  // FF-MS.9 — Switch-latency telemetry. navigateTo() stamps {from, to,
+  // startedAt}; loadData() reads it back the moment the new manifest is
+  // committed and records click→ready ms tagged with the source (cache
+  // vs fetch). Logged to console.info in dev; production code keeps the
+  // performance.measure entries so DevTools / RUM probes can pick them up.
+  const switchPerfRef = useRef<{ from: string; to: string; startedAt: number } | null>(null)
+  const recordSwitchPerf = (mp: string, pt: string, source: 'cache' | 'fetch') => {
+    const perf = switchPerfRef.current
+    if (!perf) return
+    if (perf.to !== `${mp.toUpperCase()}·${pt.toUpperCase()}`) return
+    const now = typeof performance !== 'undefined' ? performance.now() : Date.now()
+    const ms = Math.round(now - perf.startedAt)
+    if (process.env.NODE_ENV !== 'production') {
+      const tag = ms > 1000 ? 'slow' : ms < 50 ? 'instant' : 'ok'
+      // eslint-disable-next-line no-console
+      console.info(`[FF-MS] ${perf.from} → ${perf.to} · ${ms}ms (${source}, ${tag})`)
+    }
+    try {
+      if (typeof performance !== 'undefined' && 'measure' in performance) {
+        performance.measure(`ff-ms:switch:${source}`, { start: perf.startedAt, end: now })
+      }
+    } catch { /* some browsers reject options syntax; non-fatal */ }
+    switchPerfRef.current = null
+  }
+
   // Seed cache with the SSR snapshot so the very first market we landed on
   // is already warm. Subsequent switches back to it are instant.
   useEffect(() => {
@@ -1564,6 +1589,7 @@ export default function AmazonFlatFileClient({
         const saved = loadSavedRows(mp, pt)
         setRows(saved && saved.length > 0 ? mergeAsinCache(saved, mp) : snap.rows)
         paintedFromCache = true
+        recordSwitchPerf(mp, pt, 'cache')
       }
     }
     if (!paintedFromCache) setLoading(true)
@@ -1622,6 +1648,9 @@ export default function AmazonFlatFileClient({
         if (fromDB) setDraftBanner(null)
         // FF-MS.4 — Write through to the SWR cache so next visit is instant.
         cacheRef.current.set(cacheKey(mp, pt), { manifest, rows: freshRows, fetchedAt: Date.now() })
+        // FF-MS.9 — Only record fetch-source telemetry if cache didn't already
+        // resolve this switch — otherwise we'd double-log a cache+fetch pair.
+        if (!paintedFromCache) recordSwitchPerf(mp, pt, 'fetch')
         // FF-MS.1 — URL is now updated by `navigateTo` BEFORE the fetch starts
         // (see below), so loadData no longer touches the URL. This avoids the
         // "switch happens but URL stays put on refresh" class of bugs and lets
@@ -1682,9 +1711,20 @@ export default function AmazonFlatFileClient({
     if (productType && rowsRef.current.some((r) => r._dirty || r._isNew)) {
       saveRows(marketplace, productType, rowsRef.current)
     }
+    // FF-MS.9 — Start the switch-latency timer. loadData() reads this back
+    // to compute click→ready ms and tags it with source (cache vs fetch).
+    const nextMpU = nextMp.toUpperCase()
+    const nextPtU = nextPt.toUpperCase()
+    if (nextMpU !== marketplace.toUpperCase() || nextPtU !== productType.toUpperCase()) {
+      switchPerfRef.current = {
+        from: `${marketplace}·${productType}`,
+        to: `${nextMpU}·${nextPtU}`,
+        startedAt: typeof performance !== 'undefined' ? performance.now() : Date.now(),
+      }
+    }
     const params = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '')
-    params.set('marketplace', nextMp.toUpperCase())
-    params.set('productType', nextPt.toUpperCase())
+    params.set('marketplace', nextMpU)
+    params.set('productType', nextPtU)
     router.replace(`?${params.toString()}`, { scroll: false })
   }, [router, marketplace, productType, familyId])
 
