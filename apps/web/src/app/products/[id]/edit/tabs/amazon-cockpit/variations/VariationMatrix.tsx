@@ -48,6 +48,7 @@ import {
   readDraft,
 } from '../../../_shared/draft-bus/useProductDraftBus'
 import { getBackendUrl } from '@/lib/backend-url'
+import { useTranslations } from '@/lib/i18n/use-translations'
 
 interface ChildProduct {
   id: string
@@ -149,6 +150,7 @@ export default function VariationMatrix({
   variationTheme,
   onJumpToClassic,
 }: Props) {
+  const { t } = useTranslations()
   // AC.5d — overlay MatrixTab's optimistic variant edits. The bus
   // entry shape is Record<childId, { basePrice?, totalStock? }>;
   // when present, the matching field beats the parent-fetched
@@ -258,7 +260,7 @@ export default function VariationMatrix({
       <div className="rounded-lg border border-dashed border-slate-300 dark:border-slate-700 bg-white/60 dark:bg-slate-900/40 p-3.5">
         <div className="text-sm font-semibold text-slate-800 dark:text-slate-200 inline-flex items-center gap-2">
           <Layers className="w-4 h-4 text-slate-400" />
-          Variations
+          {t('products.edit.cockpit.amazon.cards.variations')}
         </div>
         <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">
           No child variants modelled. Add variants on the Variations tab.
@@ -277,7 +279,7 @@ export default function VariationMatrix({
         <div className="flex items-center gap-2 min-w-0">
           <Layers className="w-4 h-4 text-slate-500 flex-shrink-0" />
           <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-            Variations
+            {t('products.edit.cockpit.amazon.cards.variations')}
           </span>
           <span className="text-[11px] text-slate-500 dark:text-slate-400">
             {children.length} children · axes {axes.join(' × ') || '—'}
@@ -291,7 +293,7 @@ export default function VariationMatrix({
             className="inline-flex items-center gap-1 h-6 px-2 rounded text-[10.5px] border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
             title="Edit a child — opens the classic field editor"
           >
-            Edit children →
+            {t('products.edit.cockpit.amazon.variations.editChildren')}
           </button>
         </div>
       </div>
@@ -1111,6 +1113,7 @@ function BulkPopover({
   onApplyStock: () => void
   onClose: () => void
 }) {
+  const { t } = useTranslations()
   return (
     <div
       role="menu"
@@ -1118,7 +1121,7 @@ function BulkPopover({
       onClick={(e) => e.stopPropagation()}
     >
       <div className="px-2 py-1 text-[10px] uppercase tracking-wide font-semibold text-slate-500 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800">
-        Bulk apply · {label}
+        {t('products.edit.cockpit.amazon.variations.bulkApply')} · {label}
       </div>
       <button
         type="button"
@@ -1127,7 +1130,7 @@ function BulkPopover({
         onClick={onApplyPrice}
         className="w-full text-left px-2 py-1.5 rounded text-[11.5px] text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-50"
       >
-        Copy price to all
+        {t('products.edit.cockpit.amazon.variations.copyPriceToAll')}
       </button>
       <button
         type="button"
@@ -1136,7 +1139,7 @@ function BulkPopover({
         onClick={onApplyStock}
         className="w-full text-left px-2 py-1.5 rounded text-[11.5px] text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-50"
       >
-        Copy stock to all
+        {t('products.edit.cockpit.amazon.variations.copyStockToAll')}
       </button>
       <button
         type="button"
@@ -1144,7 +1147,7 @@ function BulkPopover({
         disabled={busy}
         className="w-full text-left px-2 py-1 text-[10.5px] text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
       >
-        Cancel
+        {t('products.edit.cockpit.amazon.variations.cancel')}
       </button>
     </div>
   )

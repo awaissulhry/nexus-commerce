@@ -30,6 +30,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { getBackendUrl } from '@/lib/backend-url'
+import { useTranslations } from '@/lib/i18n/use-translations'
 
 interface AplusContentRow {
   id: string
@@ -112,6 +113,7 @@ export default function AplusCard({
   marketplace,
   onJumpToClassic,
 }: Props) {
+  const { t } = useTranslations()
   const [attached, setAttached] = useState<AplusContentRow[] | null>(null)
   const [libraryCount, setLibraryCount] = useState<number | null>(null)
   const [brandStory, setBrandStory] = useState<BrandStoryRow | null>(null)
@@ -207,7 +209,7 @@ export default function AplusCard({
         <div className="inline-flex items-center gap-2 min-w-0">
           <FileBadge className="w-4 h-4 text-slate-500 flex-shrink-0" />
           <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-            A+ Content & Brand Story
+            {t('products.edit.cockpit.amazon.cards.aplus')}
           </span>
           {loading && (
             <Loader2 className="w-3 h-3 animate-spin text-slate-400" />
@@ -220,7 +222,8 @@ export default function AplusCard({
           className="text-[11px] text-blue-600 dark:text-blue-400 hover:underline inline-flex items-center gap-0.5"
           title="Open the A+ Content library"
         >
-          Library <ExternalLink className="w-3 h-3" />
+          {t('products.edit.cockpit.amazon.aplus.library')}{' '}
+          <ExternalLink className="w-3 h-3" />
         </a>
       </div>
 

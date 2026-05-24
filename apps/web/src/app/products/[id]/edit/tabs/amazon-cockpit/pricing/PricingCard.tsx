@@ -40,6 +40,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { getBackendUrl } from '@/lib/backend-url'
+import { useTranslations } from '@/lib/i18n/use-translations'
 
 interface BuyBoxObservation {
   id: string
@@ -153,6 +154,7 @@ export default function PricingCard({
   onSaved,
   onJumpToClassic,
 }: Props) {
+  const { t } = useTranslations()
   const [data, setData] = useState<BuyboxResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -271,7 +273,7 @@ export default function PricingCard({
         <div className="inline-flex items-center gap-2 min-w-0">
           <DollarSign className="w-4 h-4 text-slate-500 flex-shrink-0" />
           <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-            Pricing & Offers
+            {t('products.edit.cockpit.amazon.cards.pricing')}
           </span>
           {loading && (
             <Loader2 className="w-3 h-3 animate-spin text-slate-400" />
@@ -285,7 +287,7 @@ export default function PricingCard({
           disabled={loading}
         >
           <RefreshCw className={cn('w-3 h-3', loading && 'animate-spin')} />
-          Refresh
+          {t('products.edit.cockpit.amazon.pricing.refresh')}
         </button>
       </div>
 
@@ -333,7 +335,9 @@ export default function PricingCard({
                 {priceBusy ? (
                   <Loader2 className="w-3 h-3 animate-spin" />
                 ) : null}
-                {priceBusy ? 'Saving…' : 'Save'}
+                {priceBusy
+                  ? t('products.edit.cockpit.amazon.pricing.saving')
+                  : t('products.edit.cockpit.amazon.pricing.save')}
               </button>
               <button
                 type="button"
@@ -344,7 +348,7 @@ export default function PricingCard({
                 disabled={priceBusy}
                 className="inline-flex items-center h-6 px-2 rounded text-[11px] border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
               >
-                Cancel
+                {t('products.edit.cockpit.amazon.pricing.cancel')}
               </button>
             </div>
           </div>
@@ -381,7 +385,7 @@ export default function PricingCard({
                   title="Edit price + sale price"
                 >
                   <Pencil className="w-3 h-3" />
-                  Edit
+                  {t('products.edit.cockpit.amazon.pricing.edit')}
                 </button>
               )}
             </div>

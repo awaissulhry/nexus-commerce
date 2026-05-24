@@ -39,6 +39,7 @@ import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { cn } from '@/lib/utils'
 import { getBackendUrl } from '@/lib/backend-url'
+import { useTranslations } from '@/lib/i18n/use-translations'
 import { setDraftField } from '../../../_shared/draft-bus/useProductDraftBus'
 
 interface BrowsePathResult {
@@ -88,6 +89,7 @@ export default function CategoryCard({
   onSaved,
   onJumpToClassic,
 }: Props) {
+  const { t } = useTranslations()
   // Detection state — refreshable via the Detect button.
   const [detected, setDetected] = useState<BrowsePathResult | null>(
     categoryPath || browseNodeId
@@ -308,7 +310,7 @@ export default function CategoryCard({
         <div className="inline-flex items-center gap-2 min-w-0">
           <Tag className="w-4 h-4 text-slate-500 flex-shrink-0" />
           <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-            Category & Browse Node
+            {t('products.edit.cockpit.amazon.cards.category')}
           </span>
         </div>
         <div className="flex items-center gap-1.5 flex-wrap">
@@ -320,7 +322,9 @@ export default function CategoryCard({
             onClick={handleDetect}
             title="Run Amazon's classifier against this product type"
           >
-            {detectBusy ? 'Detecting…' : 'Detect'}
+            {detectBusy
+              ? t('products.edit.cockpit.amazon.category.detecting')
+              : t('products.edit.cockpit.amazon.category.detect')}
           </Button>
           <Button
             size="sm"
@@ -329,7 +333,7 @@ export default function CategoryCard({
             onClick={() => setSearchOpen((o) => !o)}
             title="Search Amazon's product type list by keyword"
           >
-            Search…
+            {t('products.edit.cockpit.amazon.category.search')}
           </Button>
         </div>
       </div>
@@ -382,7 +386,9 @@ export default function CategoryCard({
               ) : (
                 <Copy className="w-3 h-3" />
               )}{' '}
-              {applyBusy ? 'Saving…' : 'Save browse node'}
+              {applyBusy
+                ? t('products.edit.cockpit.amazon.pricing.saving')
+                : t('products.edit.cockpit.amazon.category.saveBrowseNode')}
             </button>
           </div>
         )}

@@ -35,6 +35,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { getBackendUrl } from '@/lib/backend-url'
+import { useTranslations } from '@/lib/i18n/use-translations'
 import type { JumpTarget } from '../health/computeHealthScore'
 import type { HealthReport } from '../health/computeHealthScore'
 import { announce } from '../../../_shared/announce/useAnnounce'
@@ -153,6 +154,7 @@ export default function SuppressionCard({
   healthReport,
   onJumpTo,
 }: Props) {
+  const { t } = useTranslations()
   const [data, setData] = useState<Response | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -298,7 +300,7 @@ export default function SuppressionCard({
         <div className="inline-flex items-center gap-2 min-w-0">
           <AlertOctagon className={cn('w-4 h-4', headerToneText)} />
           <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-            Suppression & Listing Quality
+            {t('products.edit.cockpit.amazon.cards.suppression')}
           </span>
           <span
             className={cn(
@@ -325,7 +327,7 @@ export default function SuppressionCard({
             disabled={loading}
           >
             <RefreshCw className={cn('w-3 h-3', loading && 'animate-spin')} />
-            Refresh
+            {t('products.edit.cockpit.amazon.suppression.refresh')}
           </button>
           <a
             href={sellerCentralHref}
@@ -334,7 +336,8 @@ export default function SuppressionCard({
             className="inline-flex items-center gap-1 h-6 px-2 rounded text-[10.5px] border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
             title="Open this listing in Seller Central"
           >
-            Seller Central <ExternalLink className="w-3 h-3" />
+            {t('products.edit.cockpit.amazon.suppression.sellerCentral')}{' '}
+            <ExternalLink className="w-3 h-3" />
           </a>
         </div>
       </div>
@@ -451,7 +454,7 @@ export default function SuppressionCard({
                         ) : (
                           <Sparkles className="w-3 h-3" />
                         )}{' '}
-                        Diagnose
+                        {t('products.edit.cockpit.amazon.suppression.diagnose')}
                       </button>
                       <button
                         type="button"
@@ -465,7 +468,7 @@ export default function SuppressionCard({
                         ) : (
                           <CheckCircle2 className="w-3 h-3" />
                         )}{' '}
-                        Mark resolved
+                        {t('products.edit.cockpit.amazon.suppression.markResolved')}
                       </button>
                     </div>
                     {/* AC.10.2 — inline AI diagnosis result. Only
