@@ -30,6 +30,7 @@ import { emitInvalidation, useInvalidationChannel } from '@/lib/sync/invalidatio
 import { cn } from '@/lib/utils'
 import ChannelPricingSection from './ChannelPricingSection'
 import ChannelInventorySection from './ChannelInventorySection'
+import VariantDivergencePanel from './_shared/VariantDivergencePanel'
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
@@ -644,6 +645,18 @@ export default function MatrixTab({ product, discardSignal = 0 }: Props) {
 
   return (
     <div className="space-y-3">
+      {/* PIM B.4 — Variant divergence summary (read-only insight) */}
+      {children.length > 0 && (
+        <VariantDivergencePanel
+          parent={{
+            basePrice: product.basePrice ?? null,
+            totalStock: product.totalStock ?? null,
+            status: product.status ?? null,
+          }}
+          children={children}
+        />
+      )}
+
       {/* MX.1 — Action bar: undo/redo + discard + publish */}
       <div className="flex items-center gap-1 pb-2 border-b border-slate-100 dark:border-slate-800">
         <button
