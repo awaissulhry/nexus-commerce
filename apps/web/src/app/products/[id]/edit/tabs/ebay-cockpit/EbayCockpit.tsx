@@ -16,8 +16,8 @@
 // The pass-through goes away phase-by-phase as each card supersedes
 // the corresponding ChannelListingTab section.
 
-import { useState } from 'react'
-import { ChevronDown, ChevronUp, ArrowDownToLine, Sparkles, Send, ExternalLink, Settings2, Package } from 'lucide-react'
+import { useMemo, useState } from 'react'
+import { ChevronDown, ChevronUp, ArrowDownToLine, Sparkles, Send, ExternalLink, Settings2, Package, History } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
@@ -35,6 +35,7 @@ import VariationsMatrixCard from './cards/VariationsMatrixCard'
 import ImagesCard from './cards/ImagesCard'
 import PricingPoliciesCard from './cards/PricingPoliciesCard'
 import HealthScoreRail from './health/HealthScoreRail'
+import VersionHistoryDrawer from './versioning/VersionHistoryDrawer'
 import { useEbayChannelEvents } from './realtime/useEbayChannelEvents'
 import HeartbeatDot from './realtime/HeartbeatDot'
 import CrossTabChangeToast from './realtime/CrossTabChangeToast'
@@ -112,6 +113,26 @@ export default function EbayCockpit(props: Props) {
   const [, setMode] = useCockpitMode()
   const [previewOpen, setPreviewOpen] = useState(true)
   const [classicOpen, setClassicOpen] = useState(true)
+  const [versionDrawerOpen, setVersionDrawerOpen] = useState(false)
+
+  // EC.10 — Version history. Snapshots live on
+  // ChannelListing.platformAttributes._versionHistory[] (capped 10),
+  // populated by POST /api/ebay/cockpit/snapshot. The drawer reads
+  // straight from the prop and surfaces a Restore button per row.
+  const versionHistory = useMemo(() => {
+    const raw = (listing?.platformAttributes as Record<string, unknown> | null)?._versionHistory
+    if (!Array.isArray(raw)) return []
+    return raw as Array<{
+      id: string
+      ts: string
+      reason: string
+      snapshot: {
+        platformAttributes: Record<string, unknown>
+        priceOverride: number | null
+        quantity: number | null
+      }
+    }>
+  }, [listing])
 
   const composed = useEbayCompositor({
     product,
@@ -224,6 +245,19 @@ export default function EbayCockpit(props: Props) {
               >
                 Publish
               </Button>
+              <button
+                type="button"
+                onClick={() => setVersionDrawerOpen(true)}
+                className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
+                title="Open version history — snapshots + restore"
+              >
+                <History className="w-3 h-3" /> History
+                {versionHistory.length > 0 && (
+                  <span className="text-[10px] font-mono px-1 py-0 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 ml-0.5">
+                    {versionHistory.length}
+                  </span>
+                )}
+              </button>
               <button
                 type="button"
                 onClick={() => setMode('classic')}
@@ -482,6 +516,17 @@ export default function EbayCockpit(props: Props) {
           pending; the slot is owned by FieldSourceProvider and only
           one modal can be open across the entire cockpit at a time. */}
       <SourceDiffModal />
+
+      {/* EC.10 — Version history drawer (snapshots + restore). */}
+      <VersionHistoryDrawer
+        productId={product.id}
+        marketplace={marketplace}
+        marketName={marketInfo.name}
+        currency={marketInfo.currency}
+        history={versionHistory}
+        open={versionDrawerOpen}
+        onClose={() => setVersionDrawerOpen(false)}
+      />
     </div>
     </FieldSourceProvider>
   )

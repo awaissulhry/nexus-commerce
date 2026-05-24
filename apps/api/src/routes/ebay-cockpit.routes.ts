@@ -38,6 +38,15 @@
  *           return / merchantLocationKey) for one (productId,
  *           marketplace). Merges into platformAttributes — never
  *           touches categoryId, itemSpecifics, variation axes.
+ *   POST  /api/ebay/cockpit/snapshot            — EC.10: capture
+ *           the listing's current platformAttributes + price +
+ *           quantity into _versionHistory[]. Capped at 10 most
+ *           recent. Used by the Version History drawer + auto-
+ *           snapshot timer + the pre-publish gate (EC.11).
+ *   POST  /api/ebay/cockpit/snapshot/restore    — EC.10: replays
+ *           a named snapshot back onto the listing. Atomic update;
+ *           the current state itself is snapshotted FIRST so undo
+ *           is one click.
  *
  * All endpoints reuse the EbayCategoryService singleton (in-memory
  * 24h caches for search + aspects). No changes to flat-file routes.
@@ -626,6 +635,145 @@ export default async function ebayCockpitRoutes(fastify: FastifyInstance) {
     return reply.send({
       listingId: saved.id,
       applied: KEYS.filter((k) => rest[k] !== undefined),
+    })
+  })
+
+  // ── POST /api/ebay/cockpit/snapshot ─────────────────────────────────
+  // Capture the listing's current state as a versioned snapshot.
+  // Snapshots live inside platformAttributes._versionHistory as a
+  // capped array (10 most recent). Each entry:
+  //   { id, ts, reason, snapshot: { platformAttributes, priceOverride,
+  //                                 quantity } }
+  // The `reason` field is free-text so the UI can label snapshots
+  // ("auto", "pre-publish", "operator").
+  fastify.post<{
+    Body: {
+      productId: string
+      marketplace: string
+      reason?: string
+    }
+  }>('/ebay/cockpit/snapshot', async (request, reply) => {
+    const body = request.body
+    if (!body) return reply.code(400).send({ error: 'Body is required' })
+    const { productId, marketplace, reason = 'manual' } = body
+    if (!productId || !marketplace) {
+      return reply.code(400).send({ error: 'productId, marketplace are required' })
+    }
+    const listing = await prisma.channelListing.findFirst({
+      where: { productId, channel: 'EBAY', marketplace },
+    })
+    if (!listing) {
+      return reply.code(404).send({ error: 'No eBay listing for this marketplace yet' })
+    }
+    const prevPlatform = (listing.platformAttributes ?? {}) as Record<string, unknown>
+    // Strip the existing _versionHistory from the snapshot itself so
+    // we don't snapshot snapshots (storage blows up otherwise).
+    const { _versionHistory: prevHistoryRaw, ...snapshotPlatform } = prevPlatform
+    const prevHistory = Array.isArray(prevHistoryRaw) ? (prevHistoryRaw as unknown[]) : []
+    const newEntry = {
+      id: `snap_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`,
+      ts: new Date().toISOString(),
+      reason: String(reason).slice(0, 40),
+      snapshot: {
+        platformAttributes: snapshotPlatform,
+        priceOverride: listing.priceOverride != null ? Number(listing.priceOverride) : null,
+        quantity: listing.quantity ?? null,
+      },
+    }
+    const nextHistory = [newEntry, ...prevHistory].slice(0, 10)
+    const nextPlatform: Record<string, unknown> = {
+      ...prevPlatform,
+      _versionHistory: nextHistory,
+    }
+    await prisma.channelListing.update({
+      where: { id: listing.id },
+      data: { platformAttributes: nextPlatform as Prisma.InputJsonValue },
+    })
+    return reply.send({
+      listingId: listing.id,
+      snapshotId: newEntry.id,
+      historyDepth: nextHistory.length,
+    })
+  })
+
+  // ── POST /api/ebay/cockpit/snapshot/restore ─────────────────────────
+  // Replays a named snapshot. The CURRENT state gets snapshotted
+  // first under reason="pre-restore" so the operator can undo with
+  // one more click.
+  fastify.post<{
+    Body: {
+      productId: string
+      marketplace: string
+      snapshotId: string
+    }
+  }>('/ebay/cockpit/snapshot/restore', async (request, reply) => {
+    const body = request.body
+    if (!body) return reply.code(400).send({ error: 'Body is required' })
+    const { productId, marketplace, snapshotId } = body
+    if (!productId || !marketplace || !snapshotId) {
+      return reply.code(400).send({ error: 'productId, marketplace, snapshotId are required' })
+    }
+    const listing = await prisma.channelListing.findFirst({
+      where: { productId, channel: 'EBAY', marketplace },
+    })
+    if (!listing) {
+      return reply.code(404).send({ error: 'No eBay listing for this marketplace' })
+    }
+    const prevPlatform = (listing.platformAttributes ?? {}) as Record<string, unknown>
+    const history = Array.isArray(prevPlatform._versionHistory)
+      ? (prevPlatform._versionHistory as Array<{
+          id: string
+          ts: string
+          reason: string
+          snapshot: {
+            platformAttributes: Record<string, unknown>
+            priceOverride: number | null
+            quantity: number | null
+          }
+        }>)
+      : []
+    const target = history.find((h) => h.id === snapshotId)
+    if (!target) {
+      return reply.code(404).send({ error: 'Snapshot not found in history' })
+    }
+
+    // 1) Snapshot the CURRENT state first under reason="pre-restore"
+    //    so undo is one click. (Same shape as the regular snapshot.)
+    const { _versionHistory: _ignore, ...currentPlatform } = prevPlatform
+    const undoEntry = {
+      id: `snap_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`,
+      ts: new Date().toISOString(),
+      reason: 'pre-restore',
+      snapshot: {
+        platformAttributes: currentPlatform,
+        priceOverride: listing.priceOverride != null ? Number(listing.priceOverride) : null,
+        quantity: listing.quantity ?? null,
+      },
+    }
+
+    // 2) Build the restored platformAttributes from target.snapshot,
+    //    preserving _versionHistory (current + undo) so the operator
+    //    can keep working on history after the restore.
+    const restoredPlatform: Record<string, unknown> = {
+      ...target.snapshot.platformAttributes,
+      _versionHistory: [undoEntry, ...history].slice(0, 10),
+    }
+
+    const saved = await prisma.channelListing.update({
+      where: { id: listing.id },
+      data: {
+        platformAttributes: restoredPlatform as Prisma.InputJsonValue,
+        priceOverride: target.snapshot.priceOverride != null
+          ? new Prisma.Decimal(target.snapshot.priceOverride)
+          : null,
+        quantity: target.snapshot.quantity ?? null,
+      },
+    })
+
+    return reply.send({
+      listingId: saved.id,
+      restoredSnapshotId: snapshotId,
+      undoSnapshotId: undoEntry.id,
     })
   })
 }
