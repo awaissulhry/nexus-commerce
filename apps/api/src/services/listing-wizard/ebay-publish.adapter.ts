@@ -117,6 +117,18 @@ interface EbayPayload {
   }
   condition?: string
   price?: { value: number; currency: string }
+  /** EC.11 — listing-level policy overrides. Preferred over
+   *  connection.connectionMetadata.ebayPolicies when supplied. The
+   *  cockpit picks these per-(productId, marketplace) in EC.8's
+   *  PricingPoliciesCard and writes them to platformAttributes; the
+   *  cockpit publish endpoint copies them into the payload so each
+   *  listing can override the seller-wide defaults. */
+  policies?: {
+    fulfillmentPolicyId?: string
+    paymentPolicyId?: string
+    returnPolicyId?: string
+    merchantLocationKey?: string
+  }
 }
 
 export class EbayPublishAdapter {
@@ -369,11 +381,15 @@ export class EbayPublishAdapter {
       returnPolicyId?: string
       merchantLocationKey?: string
     })
+    // EC.11 — payload.policies (listing-level) takes precedence over
+    // connection-level configured policies. Each field falls back
+    // independently so a partial override is safe.
+    const override = payload.policies ?? {}
     const policies = {
-      fulfillmentPolicyId: configured.fulfillmentPolicyId,
-      paymentPolicyId: configured.paymentPolicyId,
-      returnPolicyId: configured.returnPolicyId,
-      merchantLocationKey: configured.merchantLocationKey,
+      fulfillmentPolicyId: override.fulfillmentPolicyId ?? configured.fulfillmentPolicyId,
+      paymentPolicyId: override.paymentPolicyId ?? configured.paymentPolicyId,
+      returnPolicyId: override.returnPolicyId ?? configured.returnPolicyId,
+      merchantLocationKey: override.merchantLocationKey ?? configured.merchantLocationKey,
     }
     if (
       !policies.fulfillmentPolicyId ||

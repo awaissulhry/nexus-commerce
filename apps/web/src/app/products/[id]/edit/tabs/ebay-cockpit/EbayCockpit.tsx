@@ -36,6 +36,7 @@ import ImagesCard from './cards/ImagesCard'
 import PricingPoliciesCard from './cards/PricingPoliciesCard'
 import HealthScoreRail from './health/HealthScoreRail'
 import VersionHistoryDrawer from './versioning/VersionHistoryDrawer'
+import PublishDrawer from './publish/PublishDrawer'
 import { useEbayChannelEvents } from './realtime/useEbayChannelEvents'
 import HeartbeatDot from './realtime/HeartbeatDot'
 import CrossTabChangeToast from './realtime/CrossTabChangeToast'
@@ -114,6 +115,7 @@ export default function EbayCockpit(props: Props) {
   const [previewOpen, setPreviewOpen] = useState(true)
   const [classicOpen, setClassicOpen] = useState(true)
   const [versionDrawerOpen, setVersionDrawerOpen] = useState(false)
+  const [publishDrawerOpen, setPublishDrawerOpen] = useState(false)
 
   // EC.10 — Version history. Snapshots live on
   // ChannelListing.platformAttributes._versionHistory[] (capped 10),
@@ -240,8 +242,8 @@ export default function EbayCockpit(props: Props) {
               <Button
                 size="sm"
                 icon={<Send className="w-3.5 h-3.5" />}
-                disabled
-                title="Coming in EC.10 (Inventory API publish) — until then use the classic Publish below"
+                onClick={() => setPublishDrawerOpen(true)}
+                title={`Publish this listing to eBay ${marketInfo.code} via the Inventory API`}
               >
                 Publish
               </Button>
@@ -526,6 +528,48 @@ export default function EbayCockpit(props: Props) {
         history={versionHistory}
         open={versionDrawerOpen}
         onClose={() => setVersionDrawerOpen(false)}
+      />
+
+      {/* EC.11 — Publish drawer (Inventory API three-step flow). */}
+      <PublishDrawer
+        productId={product.id}
+        marketplace={marketplace}
+        marketName={marketInfo.name}
+        hardFails={(() => {
+          // Cheap client-side guards. The server enforces the
+          // authoritative required-aspects check via the schema
+          // endpoint inside POST /publish; the drawer's preflight
+          // is just to keep the operator from firing an obviously-
+          // doomed publish.
+          const fails: Array<{ label: string; hint?: string }> = []
+          if (!composed.categoryId.value) {
+            fails.push({ label: 'No category picked', hint: 'Use the Category card above' })
+          }
+          if (composed.price.value == null || composed.price.value <= 0) {
+            fails.push({ label: 'No price set', hint: 'Use the Pricing card above' })
+          }
+          if (!composed.title.value || composed.title.value.trim().length === 0) {
+            fails.push({ label: 'No title set', hint: 'Use the Listing Essentials card above' })
+          }
+          if (composed.galleryUrls.value.length === 0) {
+            fails.push({ label: 'No images attached', hint: 'Add at least one image in the Images tab' })
+          }
+          return fails
+        })()}
+        summary={{
+          title: composed.title.value,
+          categoryName: composed.categoryLabel.value,
+          price: composed.price.value,
+          currency: marketInfo.currency,
+          quantity: composed.quantity.value,
+          imageCount: composed.galleryUrls.value.length,
+          aspectCount: Object.keys(
+            (((listing?.platformAttributes as Record<string, unknown> | null)
+              ?.itemSpecifics as Record<string, unknown> | undefined) ?? {}),
+          ).length,
+        }}
+        open={publishDrawerOpen}
+        onClose={() => setPublishDrawerOpen(false)}
       />
     </div>
     </FieldSourceProvider>

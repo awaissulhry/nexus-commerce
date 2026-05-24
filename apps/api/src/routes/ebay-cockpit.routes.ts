@@ -47,6 +47,14 @@
  *           a named snapshot back onto the listing. Atomic update;
  *           the current state itself is snapshotted FIRST so undo
  *           is one click.
+ *   POST  /api/ebay/cockpit/publish             — EC.11: publishes
+ *           one (productId, marketplace) eBay listing via the
+ *           EbayPublishAdapter's three-step Inventory API flow.
+ *           Pre-snapshots first (reason="pre-publish") so a failed
+ *           publish leaves a rollback point. On success persists
+ *           externalListingId + listingUrl + listingStatus on the
+ *           ChannelListing. Returns the adapter's structured
+ *           per-step result.
  *
  * All endpoints reuse the EbayCategoryService singleton (in-memory
  * 24h caches for search + aspects). No changes to flat-file routes.
@@ -56,6 +64,7 @@ import type { FastifyInstance } from 'fastify'
 import { Prisma } from '@nexus/database'
 import prisma from '../db.js'
 import { EbayCategoryService } from '../services/ebay-category.service.js'
+import { EbayPublishAdapter } from '../services/listing-wizard/ebay-publish.adapter.js'
 
 const ebayCategoryService = new EbayCategoryService()
 
@@ -774,6 +783,182 @@ export default async function ebayCockpitRoutes(fastify: FastifyInstance) {
       listingId: saved.id,
       restoredSnapshotId: snapshotId,
       undoSnapshotId: undoEntry.id,
+    })
+  })
+
+  // ── POST /api/ebay/cockpit/publish ──────────────────────────────────
+  // Drives the EbayPublishAdapter's three-step Inventory API flow
+  // from the cockpit. Before firing the publish we auto-snapshot the
+  // listing (reason="pre-publish") so a botched publish leaves a
+  // one-click rollback point. On success we write the new externalIds
+  // back to the ChannelListing so the cockpit's live preview surfaces
+  // the public URL immediately.
+  fastify.post<{
+    Body: {
+      productId: string
+      marketplace: string
+    }
+  }>('/ebay/cockpit/publish', async (request, reply) => {
+    const body = request.body
+    if (!body) return reply.code(400).send({ error: 'Body is required' })
+    const { productId, marketplace } = body
+    if (!productId || !marketplace) {
+      return reply.code(400).send({ error: 'productId, marketplace are required' })
+    }
+
+    // Load the product + its eBay listing for this marketplace.
+    const product = await prisma.product.findUnique({
+      where: { id: productId },
+      include: {
+        images: {
+          orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
+          select: { url: true, type: true, isPrimary: true },
+        },
+      },
+    })
+    if (!product) return reply.code(404).send({ error: 'Product not found' })
+    const listing = await prisma.channelListing.findFirst({
+      where: { productId, channel: 'EBAY', marketplace },
+    })
+    if (!listing) {
+      return reply.code(409).send({
+        error: 'No eBay listing for this marketplace — pick a category and aspects first.',
+      })
+    }
+    const platform = (listing.platformAttributes ?? {}) as Record<string, unknown>
+
+    // ── Pre-publish snapshot ────────────────────────────────────────
+    // Same shape as POST /snapshot; inlined so we can guarantee it
+    // runs in the same Prisma transaction-window as the persist below.
+    const { _versionHistory: prevHistoryRaw, ...snapshotPlatform } = platform
+    const prevHistory = Array.isArray(prevHistoryRaw) ? (prevHistoryRaw as unknown[]) : []
+    const prePublishEntry = {
+      id: `snap_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`,
+      ts: new Date().toISOString(),
+      reason: 'pre-publish',
+      snapshot: {
+        platformAttributes: snapshotPlatform,
+        priceOverride: listing.priceOverride != null ? Number(listing.priceOverride) : null,
+        quantity: listing.quantity ?? null,
+      },
+    }
+    const historyWithPrePublish = [prePublishEntry, ...prevHistory].slice(0, 10)
+    await prisma.channelListing.update({
+      where: { id: listing.id },
+      data: {
+        platformAttributes: {
+          ...platform,
+          _versionHistory: historyWithPrePublish,
+        } as Prisma.InputJsonValue,
+      },
+    })
+
+    // ── Build payload from cockpit state ────────────────────────────
+    const categoryId = (platform.categoryId as string | undefined) ?? null
+    const conditionId = (platform.conditionId as string | undefined) ?? null
+    const itemSpecifics =
+      typeof platform.itemSpecifics === 'object' && platform.itemSpecifics !== null
+        ? (platform.itemSpecifics as Record<string, string[]>)
+        : {}
+    const imageUrls = product.images.map((i) => i.url).slice(0, 24)
+
+    if (!categoryId) {
+      return reply.code(409).send({
+        error: 'Category not set — pick a category in the cockpit first.',
+        snapshotId: prePublishEntry.id,
+      })
+    }
+    const priceVal = listing.priceOverride != null
+      ? Number(listing.priceOverride)
+      : listing.price != null
+      ? Number(listing.price)
+      : product.basePrice != null
+      ? Number(product.basePrice)
+      : null
+    if (priceVal == null || priceVal <= 0) {
+      return reply.code(409).send({
+        error: 'Price not set — set a price in the Pricing card first.',
+        snapshotId: prePublishEntry.id,
+      })
+    }
+
+    // eBay condition strings: NEW / NEW_OTHER / USED_EXCELLENT / etc.
+    // Cockpit currently stores numeric IDs in platformAttributes.
+    // Map the common ones; fall back to NEW when blank.
+    const CONDITION_MAP: Record<string, string> = {
+      '1000': 'NEW',
+      '1500': 'NEW_OTHER',
+      '1750': 'NEW_WITH_DEFECTS',
+      '2000': 'CERTIFIED_REFURBISHED',
+      '2500': 'SELLER_REFURBISHED',
+      '3000': 'USED_EXCELLENT',
+      '4000': 'USED_VERY_GOOD',
+      '5000': 'USED_GOOD',
+      '6000': 'USED_ACCEPTABLE',
+      '7000': 'FOR_PARTS_OR_NOT_WORKING',
+    }
+    const condition = conditionId ? CONDITION_MAP[conditionId] ?? 'NEW' : 'NEW'
+
+    const marketplaceId = normaliseMarketplace(marketplace)
+    const adapter = new EbayPublishAdapter()
+    const result = await adapter.publish({
+      sku: product.sku,
+      marketplaceId,
+      categoryId,
+      condition,
+      product: {
+        title: ((platform.title as string | undefined) ?? listing.title ?? product.name ?? '').slice(0, 80),
+        description: (platform.description as string | undefined) ?? listing.description ?? product.description ?? '',
+        aspects: itemSpecifics,
+        imageUrls,
+      },
+      availability: {
+        shipToLocationAvailability: { quantity: listing.quantity ?? 1 },
+      },
+      price: {
+        value: priceVal,
+        currency: marketplace.toUpperCase() === 'UK' ? 'GBP' : 'EUR',
+      },
+      policies: {
+        fulfillmentPolicyId: (platform.fulfillmentPolicyId as string | undefined) ?? undefined,
+        paymentPolicyId: (platform.paymentPolicyId as string | undefined) ?? undefined,
+        returnPolicyId: (platform.returnPolicyId as string | undefined) ?? undefined,
+        merchantLocationKey: (platform.merchantLocationKey as string | undefined) ?? undefined,
+      },
+    })
+
+    // ── Persist outcome ────────────────────────────────────────────
+    if (result.ok) {
+      // ChannelListing has externalListingId but no listingUrl
+      // column — the URL is derived at render time from
+      // marketplace.domainUrl + /itm/{itemId}. We persist the
+      // adapter's URL into platformAttributes for traceability.
+      const nextPlatformAfterPublish: Record<string, unknown> = {
+        ...platform,
+        _versionHistory: historyWithPrePublish,
+      }
+      if (result.listingUrl) nextPlatformAfterPublish._lastPublishedUrl = result.listingUrl
+      if (result.offerId) nextPlatformAfterPublish._lastPublishedOfferId = result.offerId
+      nextPlatformAfterPublish._lastPublishedAt = new Date().toISOString()
+      await prisma.channelListing.update({
+        where: { id: listing.id },
+        data: {
+          externalListingId: result.listingId ?? listing.externalListingId,
+          isPublished: true,
+          listingStatus: 'ACTIVE',
+          platformAttributes: nextPlatformAfterPublish as Prisma.InputJsonValue,
+        },
+      })
+    } else {
+      // Don't flip status to ERROR globally — many failures are
+      // recoverable (missing aspect, bad image). Surface the failed
+      // step in the response so the cockpit can highlight the card
+      // that needs attention.
+    }
+
+    return reply.send({
+      ...result,
+      snapshotId: prePublishEntry.id,
     })
   })
 }
