@@ -29,6 +29,10 @@ interface MatrixVariant {
   totalStock: number
   status: string
   channelCoverage: ChannelCoverage[]
+  /** C.4 — categoryAttributes JSONB so the column picker can expose
+   *  any attribute key as its own column. Null when the row has no
+   *  technical attributes set. */
+  categoryAttributes: Record<string, unknown> | null
 }
 
 interface MatrixRow {
@@ -43,6 +47,8 @@ interface MatrixRow {
   variantCount: number
   channelCoverage: ChannelCoverage[]
   variants: MatrixVariant[]
+  /** C.4 — categoryAttributes JSONB (see MatrixVariant comment). */
+  categoryAttributes: Record<string, unknown> | null
 }
 
 const catalogMatrixRoutes: FastifyPluginAsync = async (fastify) => {
@@ -68,6 +74,7 @@ const catalogMatrixRoutes: FastifyPluginAsync = async (fastify) => {
         basePrice: true,
         totalStock: true,
         isParent: true,
+        categoryAttributes: true,
       },
       orderBy: { sku: 'asc' },
     })
@@ -90,6 +97,7 @@ const catalogMatrixRoutes: FastifyPluginAsync = async (fastify) => {
             basePrice: true,
             totalStock: true,
             parentId: true,
+            categoryAttributes: true,
           },
           orderBy: { sku: 'asc' },
         })
@@ -128,6 +136,12 @@ const catalogMatrixRoutes: FastifyPluginAsync = async (fastify) => {
       childrenByParent.set(c.parentId, list)
     }
 
+    const toPlainAttrs = (v: unknown): Record<string, unknown> | null => {
+      if (v === null || v === undefined) return null
+      if (typeof v !== 'object' || Array.isArray(v)) return null
+      return v as Record<string, unknown>
+    }
+
     const rows: MatrixRow[] = parents.map((p) => {
       const variantList = childrenByParent.get(p.id) ?? []
       return {
@@ -141,6 +155,7 @@ const catalogMatrixRoutes: FastifyPluginAsync = async (fastify) => {
         totalStock: p.totalStock,
         variantCount: variantList.length,
         channelCoverage: coverageByProduct.get(p.id) ?? [],
+        categoryAttributes: toPlainAttrs(p.categoryAttributes),
         variants: variantList.map((c) => ({
           id: c.id,
           sku: c.sku,
@@ -149,6 +164,7 @@ const catalogMatrixRoutes: FastifyPluginAsync = async (fastify) => {
           totalStock: c.totalStock,
           status: c.status,
           channelCoverage: coverageByProduct.get(c.id) ?? [],
+          categoryAttributes: toPlainAttrs(c.categoryAttributes),
         })),
       }
     })

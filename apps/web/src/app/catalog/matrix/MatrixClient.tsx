@@ -35,6 +35,18 @@ import { useToast } from '@/components/ui/Toast'
 import { cn } from '@/lib/utils'
 import EditableCell from './_shared/EditableCell'
 import { useMatrixMutation, type RowStatus } from './_shared/useMatrixMutation'
+import {
+  BUILT_IN_COLUMNS,
+  DEFAULT_VISIBLE_IDS,
+  discoverDynamicColumns,
+  dynamicAttrValue,
+  formatDynamicValue,
+  loadVisibleColumnIds,
+  saveVisibleColumnIds,
+  type ColumnDef,
+} from './_shared/columnDefs'
+import ColumnPicker from './_shared/ColumnPicker'
+import { Columns as ColumnsIcon } from 'lucide-react'
 
 const STATUS_OPTIONS = [
   { value: 'ACTIVE', label: 'Active' },
@@ -56,6 +68,7 @@ interface MatrixVariant {
   totalStock: number
   status: string
   channelCoverage: ChannelCoverage[]
+  categoryAttributes: Record<string, unknown> | null
 }
 
 interface MatrixRow {
@@ -70,6 +83,7 @@ interface MatrixRow {
   variantCount: number
   channelCoverage: ChannelCoverage[]
   variants: MatrixVariant[]
+  categoryAttributes: Record<string, unknown> | null
 }
 
 interface MatrixResponse {
@@ -99,6 +113,64 @@ export default function MatrixClient() {
   const [error, setError] = useState<string | null>(null)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [search, setSearch] = useState('')
+
+  // ── C.4 — column visibility state (localStorage-persisted) ──────
+  const [pickerOpen, setPickerOpen] = useState(false)
+  const [visibleIds, setVisibleIds] = useState<Set<string>>(() => {
+    const stored = loadVisibleColumnIds()
+    return new Set(stored ?? DEFAULT_VISIBLE_IDS)
+  })
+  const dynamicColumns = useMemo(
+    () => (data ? discoverDynamicColumns(data.rows) : []),
+    [data],
+  )
+  // Always include required built-ins regardless of stored state.
+  const requiredIds = useMemo(
+    () => new Set(BUILT_IN_COLUMNS.filter((c) => c.required).map((c) => c.id)),
+    [],
+  )
+  const visibleColumns: ColumnDef[] = useMemo(() => {
+    const allCols = [...BUILT_IN_COLUMNS, ...dynamicColumns]
+    return allCols.filter((c) => c.required || visibleIds.has(c.id))
+  }, [dynamicColumns, visibleIds])
+  const gridCols = useMemo(
+    () => visibleColumns.map((c) => c.width).join(' '),
+    [visibleColumns],
+  )
+
+  const toggleColumn = useCallback(
+    (id: string) => {
+      setVisibleIds((prev) => {
+        const next = new Set(prev)
+        if (next.has(id)) next.delete(id)
+        else next.add(id)
+        saveVisibleColumnIds(Array.from(next))
+        return next
+      })
+    },
+    [],
+  )
+  const resetColumns = useCallback(() => {
+    const next = new Set(DEFAULT_VISIBLE_IDS)
+    saveVisibleColumnIds(Array.from(next))
+    setVisibleIds(next)
+  }, [])
+  // Keep required columns always in the set so toggleColumn can't
+  // accidentally remove them (the picker disables the row but defense
+  // in depth here too).
+  useEffect(() => {
+    setVisibleIds((prev) => {
+      let changed = false
+      const next = new Set(prev)
+      for (const id of requiredIds) {
+        if (!next.has(id)) {
+          next.add(id)
+          changed = true
+        }
+      }
+      return changed ? next : prev
+    })
+  }, [requiredIds])
 
   // ── C.3 — optimistic mutation pipeline ──────────────────────────
   // Rollback path: re-apply each pending change's `rollback` value
@@ -276,6 +348,14 @@ export default function MatrixClient() {
             >
               Collapse all
             </button>
+            <button
+              type="button"
+              onClick={() => setPickerOpen(true)}
+              className="inline-flex items-center gap-1.5 px-2 py-1 rounded text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
+            >
+              <ColumnsIcon className="w-3 h-3" />
+              Columns
+            </button>
           </div>
         </div>
         <div className="relative max-w-md">
@@ -296,17 +376,20 @@ export default function MatrixClient() {
           'text-zinc-500 dark:text-zinc-400',
           'border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/50',
         )}
-        style={{ gridTemplateColumns: GRID_COLS }}
+        style={{ gridTemplateColumns: gridCols }}
       >
-        <div className="pl-1" /> {/* expand chevron col */}
-        <div>SKU</div>
-        <div>Name</div>
-        <div>Brand</div>
-        <div className="text-right">Stock</div>
-        <div className="text-right">Price</div>
-        <div>Status</div>
-        <div>Channels</div>
-        <div /> {/* link col */}
+        {visibleColumns.map((c) => (
+          <div
+            key={c.id}
+            className={cn(
+              'truncate px-1',
+              c.align === 'right' && 'text-right',
+              c.align === 'center' && 'text-center',
+            )}
+          >
+            {c.label}
+          </div>
+        ))}
       </div>
 
       {/* Body */}
@@ -356,6 +439,8 @@ export default function MatrixClient() {
                       onToggle={() => toggleExpand(row.parent.id)}
                       onUpdate={updateField}
                       status={mutation.statusByRow[row.parent.id] ?? 'idle'}
+                      visibleColumns={visibleColumns}
+                      gridCols={gridCols}
                     />
                   ) : (
                     <VariantRow
@@ -363,6 +448,8 @@ export default function MatrixClient() {
                       variant={row.variant!}
                       onUpdate={updateField}
                       status={mutation.statusByRow[row.variant!.id] ?? 'idle'}
+                      visibleColumns={visibleColumns}
+                      gridCols={gridCols}
                     />
                   )}
                 </div>
@@ -371,13 +458,19 @@ export default function MatrixClient() {
           </div>
         )}
       </div>
+
+      <ColumnPicker
+        open={pickerOpen}
+        onClose={() => setPickerOpen(false)}
+        builtIn={BUILT_IN_COLUMNS.filter((c) => !c.required)}
+        dynamic={dynamicColumns}
+        visibleIds={visibleIds}
+        onToggle={toggleColumn}
+        onResetToDefault={resetColumns}
+      />
     </div>
   )
 }
-
-// 9 cols: chevron · sku · name · brand · stock · price · status · channels · link
-const GRID_COLS =
-  '36px 160px minmax(200px, 1.5fr) 140px 90px 110px 100px minmax(160px, 1fr) 36px'
 
 function ParentRow({
   row,
@@ -385,12 +478,16 @@ function ParentRow({
   onToggle,
   onUpdate,
   status,
+  visibleColumns,
+  gridCols,
 }: {
   row: MatrixRow
   expanded: boolean
   onToggle: () => void
   onUpdate: (rowId: string, field: string, next: unknown, current: unknown) => void
   status: RowStatus
+  visibleColumns: ColumnDef[]
+  gridCols: string
 }) {
   const hasVariants = row.variants.length > 0
   return (
@@ -400,89 +497,163 @@ function ParentRow({
         'hover:bg-zinc-50 dark:hover:bg-zinc-900/50 transition-colors',
         status === 'error' && 'bg-red-50/40 dark:bg-red-900/10',
       )}
-      style={{ gridTemplateColumns: GRID_COLS, height: ROW_HEIGHT }}
+      style={{ gridTemplateColumns: gridCols, height: ROW_HEIGHT }}
     >
-      <button
-        type="button"
-        onClick={onToggle}
-        disabled={!hasVariants}
-        className={cn(
-          'flex items-center justify-center w-6 h-6 rounded',
-          hasVariants
-            ? 'text-zinc-600 hover:bg-zinc-200 dark:text-zinc-300 dark:hover:bg-zinc-700'
-            : 'text-transparent',
-        )}
-        aria-label={expanded ? 'Collapse variants' : 'Expand variants'}
-      >
-        {hasVariants && (expanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />)}
-      </button>
-      <div className="font-mono text-xs text-zinc-900 dark:text-zinc-100 truncate flex items-center gap-1">
-        {hasVariants && <Package className="w-3 h-3 text-zinc-400" />}
-        {row.sku}
-      </div>
-      <div className="text-zinc-900 dark:text-zinc-100 truncate flex items-center gap-1.5">
-        <span className="truncate">
-          {row.name ?? <span className="italic text-zinc-400">unnamed</span>}
-        </span>
-        {row.variantCount > 0 && (
-          <span className="text-[11px] text-zinc-500">({row.variantCount})</span>
-        )}
-      </div>
-      <EditableCell
-        kind="text"
-        cellKey={`${row.id}:brand`}
-        value={row.brand}
-        placeholder="brand…"
-        onCommit={(next) => onUpdate(row.id, 'brand', next, row.brand)}
-      />
-      <EditableCell
-        kind="number"
-        cellKey={`${row.id}:totalStock`}
-        value={row.totalStock}
-        min={0}
-        step={1}
-        onCommit={(next) =>
-          onUpdate(row.id, 'totalStock', next == null ? 0 : Math.trunc(Number(next)), row.totalStock)
-        }
-        className="text-right tabular-nums"
-      />
-      <EditableCell
-        kind="number"
-        cellKey={`${row.id}:basePrice`}
-        value={row.basePrice}
-        min={0}
-        step={0.01}
-        onCommit={(next) => onUpdate(row.id, 'basePrice', next, row.basePrice)}
-        className="text-right tabular-nums"
-      />
-      <EditableCell
-        kind="select"
-        cellKey={`${row.id}:status`}
-        value={row.status}
-        options={STATUS_OPTIONS}
-        onCommit={(next) => onUpdate(row.id, 'status', next, row.status)}
-      />
-      <div className="flex items-center gap-1 flex-wrap overflow-hidden">
-        {row.channelCoverage.length === 0 ? (
-          <span className="text-[11px] text-zinc-400 italic">none</span>
-        ) : (
-          row.channelCoverage.map((c, i) => (
-            <ChannelChip key={i} coverage={c} />
-          ))
-        )}
-      </div>
-      <div className="flex items-center justify-center gap-1">
-        <SaveIndicator status={status} />
-        <Link
-          href={`/products/${row.id}/edit`}
-          className="flex items-center justify-center text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200"
-          aria-label="Edit"
-        >
-          <ExternalLink className="w-3.5 h-3.5" />
-        </Link>
-      </div>
+      {visibleColumns.map((col) => (
+        <ParentCell
+          key={col.id}
+          col={col}
+          row={row}
+          status={status}
+          onUpdate={onUpdate}
+          expanded={expanded}
+          onToggle={onToggle}
+          hasVariants={hasVariants}
+        />
+      ))}
     </div>
   )
+}
+
+function ParentCell({
+  col,
+  row,
+  status,
+  onUpdate,
+  expanded,
+  onToggle,
+  hasVariants,
+}: {
+  col: ColumnDef
+  row: MatrixRow
+  status: RowStatus
+  onUpdate: (rowId: string, field: string, next: unknown, current: unknown) => void
+  expanded: boolean
+  onToggle: () => void
+  hasVariants: boolean
+}) {
+  switch (col.id) {
+    case '__expand':
+      return (
+        <button
+          type="button"
+          onClick={onToggle}
+          disabled={!hasVariants}
+          className={cn(
+            'flex items-center justify-center w-6 h-6 rounded',
+            hasVariants
+              ? 'text-zinc-600 hover:bg-zinc-200 dark:text-zinc-300 dark:hover:bg-zinc-700'
+              : 'text-transparent',
+          )}
+          aria-label={expanded ? 'Collapse variants' : 'Expand variants'}
+        >
+          {hasVariants && (expanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />)}
+        </button>
+      )
+    case 'sku':
+      return (
+        <div className="font-mono text-xs text-zinc-900 dark:text-zinc-100 truncate flex items-center gap-1">
+          {hasVariants && <Package className="w-3 h-3 text-zinc-400" />}
+          {row.sku}
+        </div>
+      )
+    case 'name':
+      return (
+        <div className="text-zinc-900 dark:text-zinc-100 truncate flex items-center gap-1.5">
+          <span className="truncate">
+            {row.name ?? <span className="italic text-zinc-400">unnamed</span>}
+          </span>
+          {row.variantCount > 0 && (
+            <span className="text-[11px] text-zinc-500">({row.variantCount})</span>
+          )}
+        </div>
+      )
+    case 'brand':
+      return (
+        <EditableCell
+          kind="text"
+          cellKey={`${row.id}:brand`}
+          value={row.brand}
+          placeholder="brand…"
+          onCommit={(next) => onUpdate(row.id, 'brand', next, row.brand)}
+        />
+      )
+    case 'totalStock':
+      return (
+        <EditableCell
+          kind="number"
+          cellKey={`${row.id}:totalStock`}
+          value={row.totalStock}
+          min={0}
+          step={1}
+          onCommit={(next) =>
+            onUpdate(row.id, 'totalStock', next == null ? 0 : Math.trunc(Number(next)), row.totalStock)
+          }
+          className="text-right tabular-nums"
+        />
+      )
+    case 'basePrice':
+      return (
+        <EditableCell
+          kind="number"
+          cellKey={`${row.id}:basePrice`}
+          value={row.basePrice}
+          min={0}
+          step={0.01}
+          onCommit={(next) => onUpdate(row.id, 'basePrice', next, row.basePrice)}
+          className="text-right tabular-nums"
+        />
+      )
+    case 'status':
+      return (
+        <EditableCell
+          kind="select"
+          cellKey={`${row.id}:status`}
+          value={row.status}
+          options={STATUS_OPTIONS}
+          onCommit={(next) => onUpdate(row.id, 'status', next, row.status)}
+        />
+      )
+    case 'channelCoverage':
+      return (
+        <div className="flex items-center gap-1 flex-wrap overflow-hidden">
+          {row.channelCoverage.length === 0 ? (
+            <span className="text-[11px] text-zinc-400 italic">none</span>
+          ) : (
+            row.channelCoverage.map((c, i) => <ChannelChip key={i} coverage={c} />)
+          )}
+        </div>
+      )
+    case '__actions':
+      return (
+        <div className="flex items-center justify-center gap-1">
+          <SaveIndicator status={status} />
+          <Link
+            href={`/products/${row.id}/edit`}
+            className="flex items-center justify-center text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200"
+            aria-label="Edit"
+          >
+            <ExternalLink className="w-3.5 h-3.5" />
+          </Link>
+        </div>
+      )
+    default:
+      // C.4 — dynamic categoryAttributes column. Read-only display
+      // for now; C.4b will add inline edit via the same EditableCell.
+      if (col.dynamic) {
+        const v = dynamicAttrValue(row, col.id)
+        return (
+          <div className="text-xs text-zinc-700 dark:text-zinc-300 truncate px-1">
+            {v == null ? (
+              <span className="italic text-zinc-400">—</span>
+            ) : (
+              formatDynamicValue(v)
+            )}
+          </div>
+        )
+      }
+      return <div />
+  }
 }
 
 function VariantRow({
@@ -490,11 +661,15 @@ function VariantRow({
   variant,
   onUpdate,
   status,
+  visibleColumns,
+  gridCols,
 }: {
   parent: MatrixRow
   variant: MatrixVariant
   onUpdate: (rowId: string, field: string, next: unknown, current: unknown) => void
   status: RowStatus
+  visibleColumns: ColumnDef[]
+  gridCols: string
 }) {
   return (
     <div
@@ -504,77 +679,157 @@ function VariantRow({
         'hover:bg-zinc-100 dark:hover:bg-zinc-800/60 transition-colors',
         status === 'error' && 'bg-red-50/40 dark:bg-red-900/10',
       )}
-      style={{ gridTemplateColumns: GRID_COLS, height: ROW_HEIGHT }}
+      style={{ gridTemplateColumns: gridCols, height: ROW_HEIGHT }}
     >
-      <div /> {/* no expand for variants */}
-      <div className="font-mono text-xs text-zinc-700 dark:text-zinc-300 truncate pl-4 flex items-center gap-1.5">
-        <span className="text-zinc-300 dark:text-zinc-600">└─</span>
-        {variant.sku}
-      </div>
-      <div className="text-zinc-700 dark:text-zinc-300 truncate text-xs">
-        {variant.name ?? <span className="italic text-zinc-400">inherits</span>}
-      </div>
-      <div className="text-zinc-500 dark:text-zinc-400 text-xs truncate italic px-1">
-        {parent.brand ?? '—'}
-      </div>
-      <EditableCell
-        kind="number"
-        cellKey={`${variant.id}:totalStock`}
-        value={variant.totalStock}
-        min={0}
-        step={1}
-        compact
-        inheritedFromValue={parent.totalStock}
-        inheritedSourceLabel="parent"
-        onCommit={(next) =>
-          onUpdate(variant.id, 'totalStock', next == null ? 0 : Math.trunc(Number(next)), variant.totalStock)
-        }
-        onReset={() => onUpdate(variant.id, 'totalStock', parent.totalStock, variant.totalStock)}
-        className="text-right tabular-nums"
-      />
-      <EditableCell
-        kind="number"
-        cellKey={`${variant.id}:basePrice`}
-        value={variant.basePrice}
-        min={0}
-        step={0.01}
-        compact
-        inheritedFromValue={parent.basePrice}
-        inheritedSourceLabel="parent"
-        onCommit={(next) => onUpdate(variant.id, 'basePrice', next, variant.basePrice)}
-        onReset={() => onUpdate(variant.id, 'basePrice', parent.basePrice, variant.basePrice)}
-        className="text-right tabular-nums"
-      />
-      <EditableCell
-        kind="select"
-        cellKey={`${variant.id}:status`}
-        value={variant.status}
-        options={STATUS_OPTIONS}
-        compact
-        inheritedFromValue={parent.status}
-        inheritedSourceLabel="parent"
-        onCommit={(next) => onUpdate(variant.id, 'status', next, variant.status)}
-        onReset={() => onUpdate(variant.id, 'status', parent.status, variant.status)}
-      />
-      <div className="flex items-center gap-1 flex-wrap overflow-hidden">
-        {variant.channelCoverage.length === 0 ? (
-          <span className="text-[11px] text-zinc-400 italic">—</span>
-        ) : (
-          variant.channelCoverage.map((c, i) => <ChannelChip key={i} coverage={c} />)
-        )}
-      </div>
-      <div className="flex items-center justify-center gap-1">
-        <SaveIndicator status={status} compact />
-        <Link
-          href={`/products/${variant.id}/edit`}
-          className="flex items-center justify-center text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200"
-          aria-label="Edit"
-        >
-          <ExternalLink className="w-3.5 h-3.5" />
-        </Link>
-      </div>
+      {visibleColumns.map((col) => (
+        <VariantCell
+          key={col.id}
+          col={col}
+          parent={parent}
+          variant={variant}
+          status={status}
+          onUpdate={onUpdate}
+        />
+      ))}
     </div>
   )
+}
+
+function VariantCell({
+  col,
+  parent,
+  variant,
+  status,
+  onUpdate,
+}: {
+  col: ColumnDef
+  parent: MatrixRow
+  variant: MatrixVariant
+  status: RowStatus
+  onUpdate: (rowId: string, field: string, next: unknown, current: unknown) => void
+}) {
+  switch (col.id) {
+    case '__expand':
+      return <div /> // no expand for variants
+    case 'sku':
+      return (
+        <div className="font-mono text-xs text-zinc-700 dark:text-zinc-300 truncate pl-4 flex items-center gap-1.5">
+          <span className="text-zinc-300 dark:text-zinc-600">└─</span>
+          {variant.sku}
+        </div>
+      )
+    case 'name':
+      return (
+        <div className="text-zinc-700 dark:text-zinc-300 truncate text-xs">
+          {variant.name ?? <span className="italic text-zinc-400">inherits</span>}
+        </div>
+      )
+    case 'brand':
+      return (
+        <div className="text-zinc-500 dark:text-zinc-400 text-xs truncate italic px-1">
+          {parent.brand ?? '—'}
+        </div>
+      )
+    case 'totalStock':
+      return (
+        <EditableCell
+          kind="number"
+          cellKey={`${variant.id}:totalStock`}
+          value={variant.totalStock}
+          min={0}
+          step={1}
+          compact
+          inheritedFromValue={parent.totalStock}
+          inheritedSourceLabel="parent"
+          onCommit={(next) =>
+            onUpdate(variant.id, 'totalStock', next == null ? 0 : Math.trunc(Number(next)), variant.totalStock)
+          }
+          onReset={() => onUpdate(variant.id, 'totalStock', parent.totalStock, variant.totalStock)}
+          className="text-right tabular-nums"
+        />
+      )
+    case 'basePrice':
+      return (
+        <EditableCell
+          kind="number"
+          cellKey={`${variant.id}:basePrice`}
+          value={variant.basePrice}
+          min={0}
+          step={0.01}
+          compact
+          inheritedFromValue={parent.basePrice}
+          inheritedSourceLabel="parent"
+          onCommit={(next) => onUpdate(variant.id, 'basePrice', next, variant.basePrice)}
+          onReset={() => onUpdate(variant.id, 'basePrice', parent.basePrice, variant.basePrice)}
+          className="text-right tabular-nums"
+        />
+      )
+    case 'status':
+      return (
+        <EditableCell
+          kind="select"
+          cellKey={`${variant.id}:status`}
+          value={variant.status}
+          options={STATUS_OPTIONS}
+          compact
+          inheritedFromValue={parent.status}
+          inheritedSourceLabel="parent"
+          onCommit={(next) => onUpdate(variant.id, 'status', next, variant.status)}
+          onReset={() => onUpdate(variant.id, 'status', parent.status, variant.status)}
+        />
+      )
+    case 'channelCoverage':
+      return (
+        <div className="flex items-center gap-1 flex-wrap overflow-hidden">
+          {variant.channelCoverage.length === 0 ? (
+            <span className="text-[11px] text-zinc-400 italic">—</span>
+          ) : (
+            variant.channelCoverage.map((c, i) => <ChannelChip key={i} coverage={c} />)
+          )}
+        </div>
+      )
+    case '__actions':
+      return (
+        <div className="flex items-center justify-center gap-1">
+          <SaveIndicator status={status} compact />
+          <Link
+            href={`/products/${variant.id}/edit`}
+            className="flex items-center justify-center text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200"
+            aria-label="Edit"
+          >
+            <ExternalLink className="w-3.5 h-3.5" />
+          </Link>
+        </div>
+      )
+    default:
+      if (col.dynamic) {
+        // For variants, surface variant's own attr value; fall back
+        // to parent's so inherited values still show.
+        const own = dynamicAttrValue(variant, col.id)
+        const inherited = own == null ? dynamicAttrValue(parent, col.id) : null
+        const v = own ?? inherited
+        return (
+          <div
+            className={cn(
+              'text-xs truncate px-1',
+              own == null && inherited != null
+                ? 'italic text-zinc-400'
+                : 'text-zinc-700 dark:text-zinc-300',
+            )}
+            title={
+              own == null && inherited != null ? 'inherited from parent' : undefined
+            }
+          >
+            {v == null ? (
+              <span className="italic text-zinc-400">—</span>
+            ) : (
+              formatDynamicValue(v)
+            )}
+          </div>
+        )
+      }
+      return <div />
+  }
 }
 
 function SaveIndicator({ status, compact }: { status: RowStatus; compact?: boolean }) {
