@@ -35,6 +35,8 @@ import {
   ExternalLink,
   RefreshCw,
   Lock,
+  Pencil,
+  Check,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -90,6 +92,13 @@ interface Props {
   quantity: number | null
   /** When the listing was last synced to Amazon (lastSyncedAt). */
   lastSyncedAt?: string | null
+  /** AC.9.2 — active ChannelListing id for this (product, AMAZON,
+   *  marketplace). Drives the inline PATCH that persists
+   *  priceOverride + salePrice. Edit affordance is hidden when null. */
+  listingId?: string | null
+  /** AC.9.2 — fires after a successful PATCH so the parent can
+   *  router.refresh() and pick up the new price values in props. */
+  onSaved?: () => void
   /** Click-to-jump to the classic field editor. */
   onJumpToClassic?: () => void
 }
@@ -140,12 +149,82 @@ export default function PricingCard({
   salePrice,
   quantity,
   lastSyncedAt,
+  listingId,
+  onSaved,
   onJumpToClassic,
 }: Props) {
   const [data, setData] = useState<BuyboxResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [tick, setTick] = useState(0)
+  // AC.9.2 — inline price editor state.
+  const [editingPrice, setEditingPrice] = useState(false)
+  const [editPrice, setEditPrice] = useState('')
+  const [editSalePrice, setEditSalePrice] = useState('')
+  const [editError, setEditError] = useState<string | null>(null)
+  const [priceBusy, setPriceBusy] = useState(false)
+  const [savedFlash, setSavedFlash] = useState<string | null>(null)
+
+  async function handleSavePrice() {
+    if (!listingId) {
+      setEditError('No listing on this market yet — publish first.')
+      return
+    }
+    const priceParsed = editPrice.trim() === '' ? null : Number(editPrice)
+    const saleParsed =
+      editSalePrice.trim() === '' ? null : Number(editSalePrice)
+    if (priceParsed != null && (!Number.isFinite(priceParsed) || priceParsed < 0)) {
+      setEditError('Price must be a non-negative number.')
+      return
+    }
+    if (saleParsed != null && (!Number.isFinite(saleParsed) || saleParsed < 0)) {
+      setEditError('Sale price must be a non-negative number.')
+      return
+    }
+    if (priceParsed != null && saleParsed != null && saleParsed >= priceParsed) {
+      setEditError(
+        'Sale price must be less than the regular price (or leave blank).',
+      )
+      return
+    }
+    setPriceBusy(true)
+    setEditError(null)
+    try {
+      const body: Record<string, unknown> = {}
+      // Always include both keys so the server can clear a value with
+      // explicit null. priceOverride === current price → keep field
+      // but no-op.
+      body.priceOverride = priceParsed
+      body.salePrice = saleParsed
+      const res = await fetch(
+        `${getBackendUrl()}/api/listings/${encodeURIComponent(listingId)}`,
+        {
+          method: 'PATCH',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        },
+      )
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => null)
+        throw new Error(errBody?.error ?? `HTTP ${res.status}`)
+      }
+      setEditingPrice(false)
+      setSavedFlash(
+        saleParsed != null
+          ? `Saved — sale price set to ${formatPrice(saleParsed, currency)}.`
+          : priceParsed != null
+            ? `Saved — price set to ${formatPrice(priceParsed, currency)}.`
+            : 'Saved — pricing cleared.',
+      )
+      window.setTimeout(() => setSavedFlash(null), 3000)
+      onSaved?.()
+    } catch (e) {
+      setEditError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setPriceBusy(false)
+    }
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -210,25 +289,109 @@ export default function PricingCard({
         </button>
       </div>
 
-      {/* ── 1. Price block ────────────────────────────────────────── */}
+      {/* ── 1. Price block (AC.9.2 inline editor) ─────────────────── */}
       <div className="rounded border border-slate-100 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/40 p-2.5">
-        <div className="flex items-baseline gap-2 flex-wrap">
-          <span className="text-2xl font-semibold text-slate-900 dark:text-slate-100 leading-none">
-            {formatPrice(salePrice ?? price, currency)}
-          </span>
-          {salePrice != null && price != null && salePrice < price && (
-            <>
-              <span className="text-sm line-through text-slate-400">
-                {formatPrice(price, currency)}
+        {editingPrice ? (
+          <div className="space-y-1.5">
+            <div className="grid grid-cols-2 gap-2">
+              <label className="text-[10.5px] text-slate-500 dark:text-slate-400">
+                Price
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={editPrice}
+                  onChange={(e) => setEditPrice(e.target.value)}
+                  className="mt-0.5 w-full h-7 px-1.5 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 text-[13px] font-mono"
+                  autoFocus
+                />
+              </label>
+              <label className="text-[10.5px] text-slate-500 dark:text-slate-400">
+                Sale price <span className="text-slate-400">(blank = none)</span>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={editSalePrice}
+                  onChange={(e) => setEditSalePrice(e.target.value)}
+                  className="mt-0.5 w-full h-7 px-1.5 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 text-[13px] font-mono"
+                />
+              </label>
+            </div>
+            {editError && (
+              <div className="text-[10.5px] text-rose-700 dark:text-rose-400">
+                {editError}
+              </div>
+            )}
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={handleSavePrice}
+                disabled={priceBusy}
+                className="inline-flex items-center gap-1 h-6 px-2 rounded text-[11px] font-medium bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50"
+              >
+                {priceBusy ? (
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                ) : null}
+                {priceBusy ? 'Saving…' : 'Save'}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setEditingPrice(false)
+                  setEditError(null)
+                }}
+                disabled={priceBusy}
+                className="inline-flex items-center h-6 px-2 rounded text-[11px] border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : (
+          <>
+            <div className="flex items-baseline gap-2 flex-wrap">
+              <span className="text-2xl font-semibold text-slate-900 dark:text-slate-100 leading-none">
+                {formatPrice(salePrice ?? price, currency)}
               </span>
-              {savePct != null && (
-                <span className="text-[11px] font-bold px-1.5 py-0.5 rounded bg-rose-100 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300">
-                  Save {savePct}%
-                </span>
+              {salePrice != null && price != null && salePrice < price && (
+                <>
+                  <span className="text-sm line-through text-slate-400">
+                    {formatPrice(price, currency)}
+                  </span>
+                  {savePct != null && (
+                    <span className="text-[11px] font-bold px-1.5 py-0.5 rounded bg-rose-100 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300">
+                      Save {savePct}%
+                    </span>
+                  )}
+                </>
               )}
-            </>
-          )}
-        </div>
+              {listingId && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditPrice(price != null ? price.toFixed(2) : '')
+                    setEditSalePrice(
+                      salePrice != null ? salePrice.toFixed(2) : '',
+                    )
+                    setEditError(null)
+                    setEditingPrice(true)
+                  }}
+                  className="ml-auto inline-flex items-center gap-1 h-6 px-2 rounded text-[10.5px] border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+                  title="Edit price + sale price"
+                >
+                  <Pencil className="w-3 h-3" />
+                  Edit
+                </button>
+              )}
+            </div>
+            {savedFlash && (
+              <div className="mt-1 text-[10.5px] text-emerald-700 dark:text-emerald-400 inline-flex items-center gap-1">
+                <Check className="w-3 h-3" /> {savedFlash}
+              </div>
+            )}
+          </>
+        )}
         <div className="mt-1 flex items-center gap-2 flex-wrap text-[11px] text-slate-500 dark:text-slate-400">
           <span>
             Qty{' '}
@@ -472,7 +635,7 @@ export default function PricingCard({
       {onJumpToClassic && (
         <div className="pt-1 text-[10.5px] text-slate-400 italic flex items-center justify-between">
           <span>
-            AC.9 — direct edit of sale price + S&S land in AC.9.2.
+            S&S / business pricing / coupons need SP-API surfaces — deferred to AC.9.3.
           </span>
           <button
             type="button"

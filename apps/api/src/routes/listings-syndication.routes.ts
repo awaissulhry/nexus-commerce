@@ -1177,6 +1177,12 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
          *  (and future per-listing platform-specific attrs) without
          *  clobbering siblings the schema editor owns. */
         platformAttributes?: Record<string, unknown>
+        /** AC.9.2 — direct price override + sale-price write.
+         *  PricingCard's inline editor sends these as numbers (or
+         *  null to clear). Decimal columns; we coerce + Number-
+         *  validate before storing. */
+        priceOverride?: number | string | null
+        salePrice?: number | string | null
       }
 
       const data: any = {}
@@ -1208,6 +1214,35 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
           return reply.code(400).send({ error: 'stockBuffer must be a non-negative integer' })
         }
         data.stockBuffer = n
+      }
+      // AC.9.2 — price override + sale price. null clears the
+      // column; numbers must parse and be >= 0 (Amazon rejects
+      // negative offer prices outright).
+      if ('priceOverride' in body) {
+        if (body.priceOverride === null) {
+          data.priceOverride = null
+        } else if (body.priceOverride != null) {
+          const n = Number(body.priceOverride)
+          if (!Number.isFinite(n) || n < 0) {
+            return reply
+              .code(400)
+              .send({ error: 'priceOverride must be a non-negative number or null' })
+          }
+          data.priceOverride = n
+        }
+      }
+      if ('salePrice' in body) {
+        if (body.salePrice === null) {
+          data.salePrice = null
+        } else if (body.salePrice != null) {
+          const n = Number(body.salePrice)
+          if (!Number.isFinite(n) || n < 0) {
+            return reply
+              .code(400)
+              .send({ error: 'salePrice must be a non-negative number or null' })
+          }
+          data.salePrice = n
+        }
       }
 
       // AC.7.2 — platformAttributes shallow-merge. The JSON column

@@ -592,6 +592,8 @@ export default function AmazonCockpit(props: Props) {
           lastSyncedAt={
             (listing?.lastSyncedAt as string | null | undefined) ?? null
           }
+          listingId={listing?.id ?? null}
+          onSaved={() => props.onSave(listing ?? ({} as Listing))}
           onJumpToClassic={() => handleJumpTo('classic')}
         />
         <PlaceholderCard
