@@ -376,7 +376,8 @@ export default function VariationMatrix({
 
       <div className="text-[10.5px] text-slate-400 italic">
         Hover a cell → pencil ✎ for inline price + stock edit.
-        Color-lock images and bulk row/col apply land in AC.6.3.
+        Hover a row/col header → ▾ for bulk apply across the slice.
+        Color-lock images deferred to AC.6.4.
       </div>
     </div>
   )
@@ -493,8 +494,134 @@ function TwoAxisGrid({
   activeCurrency: string
   onJumpToClassic?: () => void
 }) {
+  // AC.6.3 — Bulk row/col apply state. menuOpen tracks which header
+  // (row+axis or col+axis pair) has its popover open. bulkBusy is
+  // the message shown in the popover during the parallel PATCHes.
+  const [menuOpen, setMenuOpen] = useState<
+    | { kind: 'row'; value: string }
+    | { kind: 'col'; value: string }
+    | null
+  >(null)
+  const [bulkBusy, setBulkBusy] = useState(false)
+  const [bulkFlash, setBulkFlash] = useState<string | null>(null)
+
+  function childNumberField(c: ChildProduct, field: 'basePrice' | 'totalStock'): number | null {
+    const raw = c[field]
+    if (raw == null || raw === '') return null
+    const n = typeof raw === 'string' ? parseFloat(raw) : Number(raw)
+    return Number.isFinite(n) ? n : null
+  }
+
+  function rowChildren(r: string): ChildProduct[] {
+    return colValues
+      .map((c) => childByAxis.get(`${r}|${c}`))
+      .filter((c): c is ChildProduct => !!c)
+  }
+
+  function colChildren(c: string): ChildProduct[] {
+    return rowValues
+      .map((r) => childByAxis.get(`${r}|${c}`))
+      .filter((c2): c2 is ChildProduct => !!c2)
+  }
+
+  /** Pick the first child in the slice with a non-null value for the
+   *  given field. That becomes the source the operator implicitly
+   *  chose by clicking the row/col header. Returns null when the
+   *  whole slice is empty. */
+  function sourceValue(
+    members: ChildProduct[],
+    field: 'basePrice' | 'totalStock',
+  ): { sourceId: string; value: number } | null {
+    for (const c of members) {
+      const v = childNumberField(c, field)
+      if (v != null) return { sourceId: c.id, value: v }
+    }
+    return null
+  }
+
+  async function applyBulk(
+    members: ChildProduct[],
+    field: 'basePrice' | 'totalStock',
+    label: string,
+  ) {
+    const src = sourceValue(members, field)
+    if (!src) {
+      setBulkFlash(`No ${field === 'basePrice' ? 'price' : 'stock'} set in ${label} to copy from.`)
+      window.setTimeout(() => setBulkFlash(null), 2500)
+      return
+    }
+    const targets = members.filter((c) => c.id !== src.sourceId)
+    if (targets.length === 0) {
+      setBulkFlash(`${label} has no other variants to fill.`)
+      window.setTimeout(() => setBulkFlash(null), 2500)
+      return
+    }
+    const formatted =
+      field === 'basePrice'
+        ? `${activeCurrency} ${src.value.toFixed(2)}`
+        : `${src.value}`
+    if (
+      !window.confirm(
+        `Apply ${field === 'basePrice' ? 'price' : 'stock'} ${formatted} to ${targets.length} variant${targets.length === 1 ? '' : 's'} in ${label}?`,
+      )
+    ) {
+      return
+    }
+    setBulkBusy(true)
+    // Optimistic overlay first so the cells repaint while the
+    // PATCHes are in flight. Merge with any existing overrides for
+    // siblings we're not touching.
+    const existing = readVariantOverrides(parentId)
+    const next: Record<string, { basePrice?: number; totalStock?: number }> = {
+      ...existing,
+    }
+    for (const t of targets) {
+      next[t.id] = {
+        ...(existing[t.id] ?? {}),
+        [field]: src.value,
+      }
+    }
+    setDraftField(parentId, 'variantOverrides', next)
+    try {
+      const tasks = targets.map((t) =>
+        fetch(
+          `${getBackendUrl()}/api/products/${encodeURIComponent(t.id)}`,
+          {
+            method: 'PATCH',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ [field]: src.value }),
+          },
+        ).then((r) => {
+          if (!r.ok) throw new Error(`HTTP ${r.status} for ${t.sku}`)
+        }),
+      )
+      const results = await Promise.allSettled(tasks)
+      const failed = results.filter((r) => r.status === 'rejected').length
+      const ok = results.length - failed
+      setBulkFlash(
+        failed === 0
+          ? `Applied to ${ok} variant${ok === 1 ? '' : 's'} in ${label}.`
+          : `${ok}/${results.length} applied — ${failed} failed.`,
+      )
+      window.setTimeout(() => setBulkFlash(null), 3500)
+    } catch (e) {
+      setBulkFlash(
+        `Bulk apply failed: ${e instanceof Error ? e.message : String(e)}`,
+      )
+    } finally {
+      setBulkBusy(false)
+      setMenuOpen(null)
+    }
+  }
+
   return (
     <div className="overflow-x-auto">
+      {bulkFlash && (
+        <div className="mb-1.5 inline-flex items-center gap-1.5 text-[10.5px] text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 rounded px-2 py-1">
+          <Check className="w-3 h-3" /> {bulkFlash}
+        </div>
+      )}
       <table className="w-full text-[11px] border-separate border-spacing-1">
         <thead>
           <tr>
@@ -504,9 +631,38 @@ function TwoAxisGrid({
             {colValues.map((c) => (
               <th
                 key={c}
-                className="font-medium text-[10.5px] text-slate-700 dark:text-slate-200 px-1 pb-1 align-bottom whitespace-nowrap"
+                className="font-medium text-[10.5px] text-slate-700 dark:text-slate-200 px-1 pb-1 align-bottom whitespace-nowrap relative group/colhead"
               >
-                {c}
+                <div className="flex items-center gap-0.5 justify-center">
+                  <span>{c}</span>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setMenuOpen((m) =>
+                        m && m.kind === 'col' && m.value === c
+                          ? null
+                          : { kind: 'col', value: c },
+                      )
+                    }
+                    className="w-4 h-4 grid place-items-center rounded text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 opacity-0 group-hover/colhead:opacity-100 transition-opacity"
+                    title={`Bulk apply across all ${rowAxis} at ${c}`}
+                  >
+                    ▾
+                  </button>
+                </div>
+                {menuOpen?.kind === 'col' && menuOpen.value === c && (
+                  <BulkPopover
+                    label={`${colAxis} = ${c}`}
+                    busy={bulkBusy}
+                    onApplyPrice={() =>
+                      applyBulk(colChildren(c), 'basePrice', `${colAxis} = ${c}`)
+                    }
+                    onApplyStock={() =>
+                      applyBulk(colChildren(c), 'totalStock', `${colAxis} = ${c}`)
+                    }
+                    onClose={() => setMenuOpen(null)}
+                  />
+                )}
               </th>
             ))}
           </tr>
@@ -514,8 +670,37 @@ function TwoAxisGrid({
         <tbody>
           {rowValues.map((r) => (
             <tr key={r}>
-              <td className="font-medium text-[11px] text-slate-700 dark:text-slate-200 pr-2 align-middle whitespace-nowrap">
-                {r}
+              <td className="font-medium text-[11px] text-slate-700 dark:text-slate-200 pr-2 align-middle whitespace-nowrap relative group/rowhead">
+                <div className="flex items-center gap-0.5">
+                  <span>{r}</span>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setMenuOpen((m) =>
+                        m && m.kind === 'row' && m.value === r
+                          ? null
+                          : { kind: 'row', value: r },
+                      )
+                    }
+                    className="w-4 h-4 grid place-items-center rounded text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 opacity-0 group-hover/rowhead:opacity-100 transition-opacity"
+                    title={`Bulk apply across all ${colAxis} for ${r}`}
+                  >
+                    ▾
+                  </button>
+                </div>
+                {menuOpen?.kind === 'row' && menuOpen.value === r && (
+                  <BulkPopover
+                    label={`${rowAxis} = ${r}`}
+                    busy={bulkBusy}
+                    onApplyPrice={() =>
+                      applyBulk(rowChildren(r), 'basePrice', `${rowAxis} = ${r}`)
+                    }
+                    onApplyStock={() =>
+                      applyBulk(rowChildren(r), 'totalStock', `${rowAxis} = ${r}`)
+                    }
+                    onClose={() => setMenuOpen(null)}
+                  />
+                )}
               </td>
               {colValues.map((c) => {
                 const child = childByAxis.get(`${r}|${c}`)
@@ -906,6 +1091,61 @@ function CellTile({
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+// AC.6.3 — Bulk row/col apply popover. Anchored to the row/col
+// header that opened it. Two actions: copy first non-null price OR
+// first non-null stock from the slice into all other members.
+function BulkPopover({
+  label,
+  busy,
+  onApplyPrice,
+  onApplyStock,
+  onClose,
+}: {
+  label: string
+  busy: boolean
+  onApplyPrice: () => void
+  onApplyStock: () => void
+  onClose: () => void
+}) {
+  return (
+    <div
+      role="menu"
+      className="absolute top-full left-0 z-20 mt-1 min-w-[200px] rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-lg p-1"
+      onClick={(e) => e.stopPropagation()}
+    >
+      <div className="px-2 py-1 text-[10px] uppercase tracking-wide font-semibold text-slate-500 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800">
+        Bulk apply · {label}
+      </div>
+      <button
+        type="button"
+        role="menuitem"
+        disabled={busy}
+        onClick={onApplyPrice}
+        className="w-full text-left px-2 py-1.5 rounded text-[11.5px] text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-50"
+      >
+        Copy price to all
+      </button>
+      <button
+        type="button"
+        role="menuitem"
+        disabled={busy}
+        onClick={onApplyStock}
+        className="w-full text-left px-2 py-1.5 rounded text-[11.5px] text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-50"
+      >
+        Copy stock to all
+      </button>
+      <button
+        type="button"
+        onClick={onClose}
+        disabled={busy}
+        className="w-full text-left px-2 py-1 text-[10.5px] text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+      >
+        Cancel
+      </button>
     </div>
   )
 }
