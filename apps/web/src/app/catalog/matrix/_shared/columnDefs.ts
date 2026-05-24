@@ -41,6 +41,7 @@ export interface ColumnDef {
  *  order; ColumnPicker reorder lands in C.6. */
 export const BUILT_IN_COLUMNS: ColumnDef[] = [
   // Structural — never hidden, never reordered
+  { id: '__select', label: '', width: '32px', required: true, align: 'center' },
   { id: '__expand', label: '', width: '36px', required: true },
   { id: 'sku', label: 'SKU', width: '160px', required: true },
   { id: 'name', label: 'Name', width: 'minmax(200px, 1.5fr)', required: true },

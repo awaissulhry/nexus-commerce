@@ -41,6 +41,7 @@ export const BUILTIN_VIEWS: SavedView[] = [
     id: 'builtin:default',
     name: 'Default',
     columnIds: [
+      '__select',
       '__expand',
       'sku',
       'name',
@@ -56,19 +57,19 @@ export const BUILTIN_VIEWS: SavedView[] = [
   {
     id: 'builtin:pricing',
     name: 'Pricing focus',
-    columnIds: ['__expand', 'sku', 'name', 'basePrice', 'status', '__actions'],
+    columnIds: ['__select', '__expand', 'sku', 'name', 'basePrice', 'status', '__actions'],
     builtin: true,
   },
   {
     id: 'builtin:stock',
     name: 'Stock focus',
-    columnIds: ['__expand', 'sku', 'name', 'totalStock', 'status', 'channelCoverage', '__actions'],
+    columnIds: ['__select', '__expand', 'sku', 'name', 'totalStock', 'status', 'channelCoverage', '__actions'],
     builtin: true,
   },
   {
     id: 'builtin:content',
     name: 'Content focus',
-    columnIds: ['__expand', 'sku', 'name', 'brand', 'status', 'channelCoverage', '__actions'],
+    columnIds: ['__select', '__expand', 'sku', 'name', 'brand', 'status', 'channelCoverage', '__actions'],
     builtin: true,
   },
 ]

@@ -47,6 +47,8 @@ import {
 } from './_shared/columnDefs'
 import ColumnPicker from './_shared/ColumnPicker'
 import SavedViewsMenu from './_shared/SavedViewsMenu'
+import SelectionBar from './_shared/SelectionBar'
+import BulkApplyDialog, { type FieldKey } from './_shared/BulkApplyDialog'
 import {
   BUILTIN_VIEWS,
   loadActiveViewId,
@@ -179,6 +181,23 @@ export default function MatrixClient() {
     setActiveViewId(view.id)
     saveActiveViewId(view.id)
   }, [])
+
+  // ── C.7 — bulk row selection ────────────────────────────────────
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [bulkOpen, setBulkOpen] = useState(false)
+
+  const toggleSelect = useCallback((id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }, [])
+  const clearSelection = useCallback(() => setSelectedIds(new Set()), [])
+
+  // handleBulkApply declared below, after updateField.
+
   // Keep required columns always in the set so toggleColumn can't
   // accidentally remove them (the picker disables the row but defense
   // in depth here too).
@@ -255,6 +274,29 @@ export default function MatrixClient() {
       mutation.commit({ id: rowId, field, value: nextValue, rollback: currentValue })
     },
     [mutation],
+  )
+
+  // C.7 — bulk apply uses updateField under the hood so optimistic +
+  // rollback semantics match single-cell editing exactly. Declared
+  // here (after updateField) so the closure captures a stable ref.
+  const handleBulkApply = useCallback(
+    (field: FieldKey, value: string | number) => {
+      if (!data) return
+      for (const row of data.rows) {
+        if (selectedIds.has(row.id)) {
+          const current = (row as unknown as Record<string, unknown>)[field]
+          updateField(row.id, field, value, current)
+        }
+        for (const v of row.variants) {
+          if (selectedIds.has(v.id)) {
+            const current = (v as unknown as Record<string, unknown>)[field]
+            updateField(v.id, field, value, current)
+          }
+        }
+      }
+      setBulkOpen(false)
+    },
+    [data, selectedIds, updateField],
   )
 
   // ── Fetch ───────────────────────────────────────────────────────
@@ -401,6 +443,12 @@ export default function MatrixClient() {
         </div>
       </div>
 
+      <SelectionBar
+        count={selectedIds.size}
+        onClear={clearSelection}
+        onOpenBulkApply={() => setBulkOpen(true)}
+      />
+
       {/* Column header row */}
       <div
         className={cn(
@@ -473,6 +521,8 @@ export default function MatrixClient() {
                       status={mutation.statusByRow[row.parent.id] ?? 'idle'}
                       visibleColumns={visibleColumns}
                       gridCols={gridCols}
+                      selected={selectedIds.has(row.parent.id)}
+                      onToggleSelect={toggleSelect}
                     />
                   ) : (
                     <VariantRow
@@ -482,6 +532,8 @@ export default function MatrixClient() {
                       status={mutation.statusByRow[row.variant!.id] ?? 'idle'}
                       visibleColumns={visibleColumns}
                       gridCols={gridCols}
+                      selected={selectedIds.has(row.variant!.id)}
+                      onToggleSelect={toggleSelect}
                     />
                   )}
                 </div>
@@ -500,6 +552,13 @@ export default function MatrixClient() {
         onToggle={toggleColumn}
         onResetToDefault={resetColumns}
       />
+
+      <BulkApplyDialog
+        open={bulkOpen}
+        onClose={() => setBulkOpen(false)}
+        selectedCount={selectedIds.size}
+        onApply={handleBulkApply}
+      />
     </div>
   )
 }
@@ -512,6 +571,8 @@ function ParentRow({
   status,
   visibleColumns,
   gridCols,
+  selected,
+  onToggleSelect,
 }: {
   row: MatrixRow
   expanded: boolean
@@ -520,6 +581,8 @@ function ParentRow({
   status: RowStatus
   visibleColumns: ColumnDef[]
   gridCols: string
+  selected: boolean
+  onToggleSelect: (id: string) => void
 }) {
   const hasVariants = row.variants.length > 0
   return (
@@ -528,6 +591,7 @@ function ParentRow({
         'grid items-center px-4 text-sm border-b border-zinc-100 dark:border-zinc-800/60',
         'hover:bg-zinc-50 dark:hover:bg-zinc-900/50 transition-colors',
         status === 'error' && 'bg-red-50/40 dark:bg-red-900/10',
+        selected && 'bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30',
       )}
       style={{ gridTemplateColumns: gridCols, height: ROW_HEIGHT }}
     >
@@ -541,6 +605,8 @@ function ParentRow({
           expanded={expanded}
           onToggle={onToggle}
           hasVariants={hasVariants}
+          selected={selected}
+          onToggleSelect={onToggleSelect}
         />
       ))}
     </div>
@@ -555,6 +621,8 @@ function ParentCell({
   expanded,
   onToggle,
   hasVariants,
+  selected,
+  onToggleSelect,
 }: {
   col: ColumnDef
   row: MatrixRow
@@ -563,8 +631,22 @@ function ParentCell({
   expanded: boolean
   onToggle: () => void
   hasVariants: boolean
+  selected: boolean
+  onToggleSelect: (id: string) => void
 }) {
   switch (col.id) {
+    case '__select':
+      return (
+        <div className="flex items-center justify-center">
+          <input
+            type="checkbox"
+            checked={selected}
+            onChange={() => onToggleSelect(row.id)}
+            aria-label={`Select ${row.sku}`}
+            className="rounded border-zinc-300 dark:border-zinc-600 text-blue-600 focus:ring-blue-500"
+          />
+        </div>
+      )
     case '__expand':
       return (
         <button
@@ -695,6 +777,8 @@ function VariantRow({
   status,
   visibleColumns,
   gridCols,
+  selected,
+  onToggleSelect,
 }: {
   parent: MatrixRow
   variant: MatrixVariant
@@ -702,6 +786,8 @@ function VariantRow({
   status: RowStatus
   visibleColumns: ColumnDef[]
   gridCols: string
+  selected: boolean
+  onToggleSelect: (id: string) => void
 }) {
   return (
     <div
@@ -710,6 +796,7 @@ function VariantRow({
         'bg-zinc-50/40 dark:bg-zinc-900/30',
         'hover:bg-zinc-100 dark:hover:bg-zinc-800/60 transition-colors',
         status === 'error' && 'bg-red-50/40 dark:bg-red-900/10',
+        selected && 'bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30',
       )}
       style={{ gridTemplateColumns: gridCols, height: ROW_HEIGHT }}
     >
@@ -721,6 +808,8 @@ function VariantRow({
           variant={variant}
           status={status}
           onUpdate={onUpdate}
+          selected={selected}
+          onToggleSelect={onToggleSelect}
         />
       ))}
     </div>
@@ -733,14 +822,30 @@ function VariantCell({
   variant,
   status,
   onUpdate,
+  selected,
+  onToggleSelect,
 }: {
   col: ColumnDef
   parent: MatrixRow
   variant: MatrixVariant
   status: RowStatus
   onUpdate: (rowId: string, field: string, next: unknown, current: unknown) => void
+  selected: boolean
+  onToggleSelect: (id: string) => void
 }) {
   switch (col.id) {
+    case '__select':
+      return (
+        <div className="flex items-center justify-center">
+          <input
+            type="checkbox"
+            checked={selected}
+            onChange={() => onToggleSelect(variant.id)}
+            aria-label={`Select ${variant.sku}`}
+            className="rounded border-zinc-300 dark:border-zinc-600 text-blue-600 focus:ring-blue-500"
+          />
+        </div>
+      )
     case '__expand':
       return <div /> // no expand for variants
     case 'sku':
