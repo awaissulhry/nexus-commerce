@@ -241,7 +241,9 @@ export default function AplusCard({
             No ASIN yet — A+ can be attached only after the listing is
             published.
           </div>
-        ) : attachedCount === 0 && !loading ? (
+        ) : attached === null ? (
+          <div className="text-[11.5px] text-slate-400 italic">Loading…</div>
+        ) : attached.length === 0 ? (
           <div className="rounded border border-dashed border-amber-200 dark:border-amber-800 bg-amber-50/60 dark:bg-amber-950/30 p-2 text-[11.5px] text-amber-800 dark:text-amber-300">
             No A+ modules attached.{' '}
             <a
@@ -267,7 +269,7 @@ export default function AplusCard({
           </div>
         ) : (
           <ul className="space-y-1">
-            {attached!.map((row) => (
+            {attached.map((row) => (
               <li key={row.id}>
                 <a
                   href={`/marketing/aplus/${row.id}`}
