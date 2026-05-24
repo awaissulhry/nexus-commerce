@@ -1357,6 +1357,76 @@ const pricingRoutes: FastifyPluginAsync = async (fastify) => {
 
     return { decisions }
   })
+
+  // AC.9 — Per-product Buy Box state for the Amazon Listing Cockpit.
+  //
+  // Returns the latest BuyBoxHistory observation for the product on a
+  // specific marketplace plus a short tail of recent observations so
+  // the cockpit can show a sparkline-style summary without pulling
+  // the full /pricing/buybox-stats aggregate.
+  //
+  // Channel is hard-coded to AMAZON — Buy Box is an Amazon concept.
+  fastify.get<{ Params: { id: string }; Querystring: { marketplace?: string } }>(
+    '/products/:id/buybox',
+    async (request, reply) => {
+      const { id } = request.params
+      const marketplace = (request.query.marketplace ?? 'IT').toUpperCase()
+
+      const product = await prisma.product.findUnique({
+        where: { id },
+        select: { id: true },
+      })
+      if (!product) {
+        return reply.code(404).send({ error: 'Product not found' })
+      }
+
+      const [current, history] = await Promise.all([
+        prisma.buyBoxHistory.findFirst({
+          where: { productId: id, channel: 'AMAZON', marketplace },
+          orderBy: { observedAt: 'desc' },
+        }),
+        prisma.buyBoxHistory.findMany({
+          where: { productId: id, channel: 'AMAZON', marketplace },
+          orderBy: { observedAt: 'desc' },
+          take: 10,
+        }),
+      ])
+
+      // Active repricing rule (if any) for this (product, channel,
+      // marketplace) — collapses to one extra DB read so the card
+      // doesn't need a second round-trip.
+      const rule = await prisma.repricingRule.findFirst({
+        where: {
+          productId: id,
+          channel: 'AMAZON',
+          OR: [{ marketplace }, { marketplace: null }],
+        },
+        orderBy: [
+          { marketplace: 'desc' }, // exact marketplace first
+          { updatedAt: 'desc' },
+        ],
+      })
+
+      // Recent decisions (only when there's a rule).
+      const decisions = rule
+        ? await prisma.repricingDecision.findMany({
+            where: { ruleId: rule.id },
+            orderBy: { createdAt: 'desc' },
+            take: 5,
+          })
+        : []
+
+      return {
+        productId: id,
+        channel: 'AMAZON',
+        marketplace,
+        current,
+        history,
+        rule,
+        decisions,
+      }
+    },
+  )
 }
 
 export default pricingRoutes

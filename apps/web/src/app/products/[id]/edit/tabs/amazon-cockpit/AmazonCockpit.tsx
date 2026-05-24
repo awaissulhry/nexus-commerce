@@ -33,7 +33,6 @@ import {
   Settings2,
   Package,
   Image as ImageIcon,
-  DollarSign,
   ShieldCheck,
   Hash,
   Truck,
@@ -59,6 +58,7 @@ import { computeHealthScore, type JumpTarget } from './health/computeHealthScore
 import VariationMatrix from './variations/VariationMatrix'
 import CategoryCard from './category/CategoryCard'
 import AplusCard from './aplus/AplusCard'
+import PricingCard from './pricing/PricingCard'
 import { getBackendUrl } from '@/lib/backend-url'
 
 interface MarketInfo {
@@ -500,16 +500,23 @@ export default function AmazonCockpit(props: Props) {
           marketplace={marketInfo.code}
           onJumpToClassic={() => handleJumpTo('classic')}
         />
-        <PlaceholderCard
-          targetId="pricing"
-          icon={<DollarSign className="w-4 h-4" />}
-          title="Pricing & Offers"
-          phase="AC.9"
-          value={
-            composed.price.value != null
-              ? `${composed.currency} ${composed.price.value.toFixed(2)} · qty ${composed.quantity.value ?? 0}`
-              : 'No price set'
+        <PricingCard
+          productId={product.id}
+          marketplace={marketInfo.code}
+          currency={composed.currency}
+          price={composed.price.value}
+          salePrice={
+            listing?.salePrice != null
+              ? typeof listing.salePrice === 'string'
+                ? parseFloat(listing.salePrice)
+                : Number(listing.salePrice)
+              : null
           }
+          quantity={composed.quantity.value}
+          lastSyncedAt={
+            (listing?.lastSyncedAt as string | null | undefined) ?? null
+          }
+          onJumpToClassic={() => handleJumpTo('classic')}
         />
         <PlaceholderCard
           targetId="fulfillment"
