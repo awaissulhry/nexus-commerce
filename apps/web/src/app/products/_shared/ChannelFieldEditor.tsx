@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { AlertCircle, CheckCircle2, Copy, Loader2, RefreshCw } from 'lucide-react'
+import { AlertCircle, CheckCircle2, Copy, Loader2, RefreshCw, Search } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useInvalidationChannel } from '@/lib/sync/invalidation-channel'
 import { cn } from '@/lib/utils'
@@ -442,6 +442,10 @@ export default function ChannelFieldEditor({
 
   const [status, setStatus] = useState<SaveStatus>('idle')
   const [statusMsg, setStatusMsg] = useState<string | null>(null)
+  // AF.3 — field search + filter. Inert by default ('' + 'all'), so
+  // the field render is unchanged until the operator types/filters.
+  const [fieldQuery, setFieldQuery] = useState('')
+  const [fieldFilter, setFieldFilter] = useState<'all' | 'required' | 'empty'>('all')
   const dirtyRef = useRef<Set<string>>(new Set())
   const saveTimer = useRef<number | null>(null)
 
@@ -1355,6 +1359,20 @@ export default function ChannelFieldEditor({
     })
   }, [])
 
+  // AF.3 — does a field pass the active search + filter? Inert when the
+  // query is empty and filter is 'all' (returns true for everything).
+  const fieldMatchesFilter = (field: UnionManifest['fields'][number]) => {
+    const q = fieldQuery.trim().toLowerCase()
+    if (q) {
+      const hay = `${field.label} ${field.id}`.toLowerCase()
+      if (!hay.includes(q)) return false
+    }
+    if (fieldFilter === 'required' && !field.required) return false
+    if (fieldFilter === 'empty' && !isEmpty(values[field.id])) return false
+    return true
+  }
+  const fieldFilterActive = fieldQuery.trim().length > 0 || fieldFilter !== 'all'
+
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -1419,6 +1437,51 @@ export default function ChannelFieldEditor({
           </Button>
         </div>
       </div>
+
+      {/* AF.3 — field search + filter chips. Inert until used; filters
+          which field cards render (renderFieldCard returns null for
+          non-matches). Values/save state are untouched by filtering. */}
+      {manifest && (
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="relative flex-1 min-w-[180px] max-w-xs">
+            <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+            <input
+              type="text"
+              value={fieldQuery}
+              onChange={(e) => setFieldQuery(e.target.value)}
+              placeholder="Search fields…"
+              className="w-full h-7 pl-7 pr-2 text-sm border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 placeholder:text-slate-400"
+            />
+          </div>
+          {(['all', 'required', 'empty'] as const).map((f) => (
+            <button
+              key={f}
+              type="button"
+              onClick={() => setFieldFilter(f)}
+              className={cn(
+                'h-7 px-2 text-xs rounded border',
+                fieldFilter === f
+                  ? 'border-blue-300 text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/40'
+                  : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800',
+              )}
+            >
+              {f === 'all' ? 'All' : f === 'required' ? 'Required' : 'Empty'}
+            </button>
+          ))}
+          {fieldFilterActive && (
+            <button
+              type="button"
+              onClick={() => {
+                setFieldQuery('')
+                setFieldFilter('all')
+              }}
+              className="h-7 px-2 text-xs text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 underline-offset-2 hover:underline"
+            >
+              Clear
+            </button>
+          )}
+        </div>
+      )}
 
       {loading && !manifest && (
         <div className="border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 px-6 py-12 text-center text-md text-slate-500 dark:text-slate-400 flex items-center justify-center gap-2">
@@ -1560,6 +1623,9 @@ export default function ChannelFieldEditor({
             // siblings, variantAttrs, etc. so both grouping paths
             // produce identical FieldCards (no behaviour drift).
             const renderFieldCard = (field: UnionManifest['fields'][number]) => {
+              // AF.3 — skip fields that don't match the active search /
+              // filter. No-op when the filter is inert.
+              if (!fieldMatchesFilter(field)) return null
               const fieldUnsatisfied = unsatisfied
                 .filter((u) => u.id === field.id)
                 .map((u) => u.channelKey)
