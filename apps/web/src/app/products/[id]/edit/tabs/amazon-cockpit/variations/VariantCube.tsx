@@ -473,9 +473,12 @@ function ByVariantTable({
     return ok
   }
 
-  // CUBE.2 — multi-select + bulk edit.
+  // CUBE.2 — multi-select + bulk edit. CUBE.5 — bulkMode adds a
+  // percentage-adjust mode (base price only): each variant's price is
+  // scaled by (1 + value/100) rather than set to an absolute number.
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [bulkField, setBulkField] = useState<'basePrice' | 'totalStock'>('basePrice')
+  const [bulkMode, setBulkMode] = useState<'set' | 'pct'>('set')
   const [bulkValue, setBulkValue] = useState('')
   const [bulkBusy, setBulkBusy] = useState(false)
   const [bulkMsg, setBulkMsg] = useState<string | null>(null)
@@ -526,16 +529,54 @@ function ByVariantTable({
     const prev: Record<string, number | null> = {}
     for (const v of targets) prev[v.id] = bulkField === 'basePrice' ? effBase(v) : effStock(v)
 
+    // CUBE.5 — percentage adjust (base price only): each target gets its
+    // own value (current × factor), so it's a per-id /products/bulk call.
+    const pct = bulkMode === 'pct' && bulkField === 'basePrice'
+    const computed: Record<string, number> = {}
+    if (pct) {
+      const factor = 1 + n / 100
+      for (const v of targets) {
+        const base = effBase(v)
+        if (base != null) computed[v.id] = Math.round(base * factor * 100) / 100
+      }
+    }
+
     setBulkBusy(true)
-    const ok = await patchChildrenBulk(targets.map((v) => v.id), bulkField, n)
+    let ok: boolean
+    if (pct) {
+      const changes = Object.entries(computed).map(([id, value]) => ({ id, field: bulkField, value }))
+      if (changes.length === 0) {
+        setBulkMsg('No priced variants to adjust')
+        setBulkBusy(false)
+        return
+      }
+      try {
+        const r = await fetch(`${getBackendUrl()}/api/products/bulk`, {
+          method: 'PATCH',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ changes }),
+        })
+        ok = r.ok
+      } catch {
+        ok = false
+      }
+    } else {
+      ok = await patchChildrenBulk(targets.map((v) => v.id), bulkField, n)
+    }
+
     if (ok) {
       setEdits((e) => {
         const next = { ...e }
-        for (const v of targets) next[v.id] = { ...next[v.id], [bulkField]: n }
+        for (const v of targets) {
+          const value = pct ? computed[v.id] : n
+          if (value !== undefined) next[v.id] = { ...next[v.id], [bulkField]: value }
+        }
         return next
       })
       setLastBulk({ field: bulkField, prev })
-      setBulkMsg(`Updated ${targets.length}${skipped ? ` · ${skipped} FBA skipped` : ''}`)
+      const verb = pct ? `Adjusted ${Object.keys(computed).length}` : `Updated ${targets.length}`
+      setBulkMsg(`${verb}${skipped ? ` · ${skipped} FBA skipped` : ''}`)
       setBulkValue('')
     } else {
       setBulkMsg('Bulk update failed')
@@ -624,15 +665,29 @@ function ByVariantTable({
           <span className="text-xs font-medium text-blue-700 dark:text-blue-300">
             {selected.size} selected
           </span>
-          <span className="text-xs text-slate-500">· set</span>
           <select
             value={bulkField}
-            onChange={(e) => setBulkField(e.target.value as 'basePrice' | 'totalStock')}
+            onChange={(e) => {
+              const f = e.target.value as 'basePrice' | 'totalStock'
+              setBulkField(f)
+              if (f !== 'basePrice') setBulkMode('set') // %-adjust is price-only
+            }}
             className="h-7 rounded border border-slate-200 px-1 text-xs dark:border-slate-700 dark:bg-slate-900"
           >
             <option value="basePrice">Base price</option>
             <option value="totalStock">Stock</option>
           </select>
+          {bulkField === 'basePrice' && (
+            <select
+              value={bulkMode}
+              onChange={(e) => setBulkMode(e.target.value as 'set' | 'pct')}
+              className="h-7 rounded border border-slate-200 px-1 text-xs dark:border-slate-700 dark:bg-slate-900"
+              title="Set an absolute value, or adjust each variant's price by a percentage"
+            >
+              <option value="set">set to</option>
+              <option value="pct">adjust %</option>
+            </select>
+          )}
           <input
             type="number"
             value={bulkValue}
@@ -640,7 +695,7 @@ function ByVariantTable({
             onKeyDown={(e) => {
               if (e.key === 'Enter') void applyBulk()
             }}
-            placeholder="value"
+            placeholder={bulkMode === 'pct' ? '± %' : 'value'}
             className="h-7 w-24 rounded border border-slate-200 px-2 text-xs dark:border-slate-700 dark:bg-slate-900"
           />
           <button
