@@ -27,7 +27,6 @@ import {
   Send,
   ExternalLink,
   Settings2,
-  Package,
   Truck,
   ListTree,
 } from 'lucide-react'
@@ -56,6 +55,7 @@ import PricingCard from './pricing/PricingCard'
 import SuppressionCard from './suppression/SuppressionCard'
 import FulfillmentCard from './fulfillment/FulfillmentCard'
 import ComplianceCard from './compliance/ComplianceCard'
+import FitCompatibilityCard from './fit/FitCompatibilityCard'
 import AutoFillCard from './autofill/AutoFillCard'
 import PublishCard from './publish/PublishCard'
 import { useCockpitShortcuts } from './useCockpitShortcuts'
@@ -761,10 +761,15 @@ export default function AmazonCockpit(props: Props) {
           }
           onJumpToClassic={() => handleJumpTo('classic')}
         />
-        <PlaceholderCard
-          icon={<Package className="w-4 h-4" />}
-          title={t('products.edit.cockpit.amazon.cards.compatibility')}
-          value="Xavia motorcycle gear — model/year fit list editor"
+        <FitCompatibilityCard
+          productType={composed.productType.value}
+          variationTheme={(product?.variationTheme as string | null) ?? null}
+          variantCount={childrenList?.length ?? 0}
+          attributes={
+            (listing?.platformAttributes as Record<string, unknown> | null | undefined)
+              ?.attributes as Record<string, unknown> | null | undefined
+          }
+          onJumpToClassic={() => handleJumpTo('classic')}
         />
       </CockpitCardGrid>
 
@@ -865,39 +870,3 @@ export default function AmazonCockpit(props: Props) {
   )
 }
 
-// ── Placeholder card (AC.4–AC.10 fillers) ──────────────────────────────
-function PlaceholderCard({
-  icon,
-  title,
-  value,
-  targetId,
-}: {
-  icon: React.ReactNode
-  title: string
-  value: string
-  /** Jump-target id. The health panel's onJumpTo handler scrolls the
-   *  cockpit to the card with this attribute. Omit for cards that don't
-   *  yet have a corresponding health-check row. */
-  targetId?: string
-}) {
-  return (
-    <div
-      data-jump-target={targetId}
-      className="rounded-lg border border-dashed border-slate-300 dark:border-slate-700 bg-white/60 dark:bg-slate-900/40 p-3.5"
-    >
-      <div className="flex items-center justify-between mb-1.5">
-        <div className="inline-flex items-center gap-2 text-sm font-semibold text-slate-800 dark:text-slate-200">
-          <span className="text-slate-400">{icon}</span>
-          {title}
-        </div>
-        <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-400">
-          Soon
-        </span>
-      </div>
-      <div className="text-xs text-slate-600 dark:text-slate-400">{value}</div>
-      <div className="mt-1.5 text-[10.5px] text-slate-400 italic">
-        Edit these in “All fields” for now.
-      </div>
-    </div>
-  )
-}
