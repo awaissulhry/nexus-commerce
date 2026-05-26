@@ -29,22 +29,19 @@ import {
   ShieldCheck,
   ChevronLeft,
   ChevronRight,
-  Smartphone,
-  Monitor,
   Star,
   MapPin,
   Recycle,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
 import { cn } from '@/lib/utils'
+import { PreviewSkinToggle, type Skin } from '../../_shared/cockpit-preview'
 import type { ComposedAmazonListing } from './types'
 
 interface Props {
   composed: ComposedAmazonListing
   className?: string
 }
-
-type Skin = 'mobile' | 'desktop'
 
 const MARKET_FLAG: Record<string, string> = {
   IT: '🇮🇹', DE: '🇩🇪', FR: '🇫🇷', ES: '🇪🇸', UK: '🇬🇧',
@@ -100,34 +97,12 @@ export default function AmazonLivePreview({ composed, className }: Props) {
             {flag} {composed.marketplace.code}
           </span>
         </div>
-        <div className="flex items-center gap-1">
-          <button
-            type="button"
-            onClick={() => setSkin('mobile')}
-            className={cn(
-              'inline-flex items-center gap-1 h-6 px-2 text-[11px] rounded border transition-colors',
-              skin === 'mobile'
-                ? 'border-[#ff9900] bg-[#ff9900]/15 text-white'
-                : 'border-transparent text-slate-300 hover:text-white',
-            )}
-            title="Mobile preview"
-          >
-            <Smartphone className="w-3 h-3" /> Mobile
-          </button>
-          <button
-            type="button"
-            onClick={() => setSkin('desktop')}
-            className={cn(
-              'inline-flex items-center gap-1 h-6 px-2 text-[11px] rounded border transition-colors',
-              skin === 'desktop'
-                ? 'border-[#ff9900] bg-[#ff9900]/15 text-white'
-                : 'border-transparent text-slate-300 hover:text-white',
-            )}
-            title="Desktop preview"
-          >
-            <Monitor className="w-3 h-3" /> Desktop
-          </button>
-        </div>
+        <PreviewSkinToggle
+          skin={skin}
+          onChange={setSkin}
+          activeClass="border-[#ff9900] bg-[#ff9900]/15 text-white"
+          inactiveClass="border-transparent text-slate-300 hover:text-white"
+        />
       </div>
 
       {skin === 'mobile' ? (

@@ -12,17 +12,16 @@
 // to catch obvious problems pre-publish.
 
 import { useState } from 'react'
-import { Heart, ShoppingCart, Truck, Shield, ChevronLeft, ChevronRight, Smartphone, Monitor } from 'lucide-react'
+import { Heart, ShoppingCart, Truck, Shield, ChevronLeft, ChevronRight } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
 import { cn } from '@/lib/utils'
+import { PreviewSkinToggle, type Skin } from '../../_shared/cockpit-preview'
 import type { ComposedListing } from './types'
 
 interface Props {
   composed: ComposedListing
   className?: string
 }
-
-type Skin = 'mobile' | 'desktop'
 
 const MARKET_FLAG: Record<string, string> = {
   IT: '🇮🇹', DE: '🇩🇪', FR: '🇫🇷', ES: '🇪🇸', UK: '🇬🇧', US: '🇺🇸',
@@ -63,34 +62,12 @@ export default function EbayLivePreview({ composed, className }: Props) {
             {flag} {composed.marketplace.code} preview
           </span>
         </div>
-        <div className="flex items-center gap-1">
-          <button
-            type="button"
-            onClick={() => setSkin('mobile')}
-            className={cn(
-              'inline-flex items-center gap-1 h-6 px-2 text-[11px] rounded border transition-colors',
-              skin === 'mobile'
-                ? 'border-slate-400 dark:border-slate-500 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100'
-                : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800',
-            )}
-            title="Mobile preview"
-          >
-            <Smartphone className="w-3 h-3" /> Mobile
-          </button>
-          <button
-            type="button"
-            onClick={() => setSkin('desktop')}
-            className={cn(
-              'inline-flex items-center gap-1 h-6 px-2 text-[11px] rounded border transition-colors',
-              skin === 'desktop'
-                ? 'border-slate-400 dark:border-slate-500 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100'
-                : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800',
-            )}
-            title="Desktop preview"
-          >
-            <Monitor className="w-3 h-3" /> Desktop
-          </button>
-        </div>
+        <PreviewSkinToggle
+          skin={skin}
+          onChange={setSkin}
+          activeClass="border-slate-400 dark:border-slate-500 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100"
+          inactiveClass="border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800"
+        />
       </div>
 
       {/* Body — switches between skins */}
