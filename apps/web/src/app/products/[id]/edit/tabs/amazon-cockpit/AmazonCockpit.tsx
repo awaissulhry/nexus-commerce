@@ -32,6 +32,7 @@ import {
   Package,
   ShieldCheck,
   Truck,
+  ListTree,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
@@ -67,8 +68,10 @@ import {
   CockpitPreviewBand,
   CockpitCardGrid,
   CockpitClassicPassthrough,
+  CockpitDrawer,
   IdentifiersCard,
   ImagesSummaryCard,
+  useCockpitFlag,
 } from '../../_shared/cockpit-shell'
 
 interface MarketInfo {
@@ -179,6 +182,12 @@ export default function AmazonCockpit(props: Props) {
   const { t } = useTranslations()
   const [previewOpen, setPreviewOpen] = useState(true)
   const [classicOpen, setClassicOpen] = useState(true)
+  // AF.4/5 — "All fields" drawer. The full classic editor moves into a
+  // slide-over (decluttered cockpit, one editor surface). Flag-guarded:
+  // when off, fall back to the legacy stacked classic. keepMounted keeps
+  // the editor's dirty/save lifecycle identical to today.
+  const useDrawer = useCockpitFlag('all-fields-drawer', true)
+  const [allFieldsOpen, setAllFieldsOpen] = useState(false)
 
   const composed = useAmazonCompositor({
     product,
@@ -302,7 +311,13 @@ export default function AmazonCockpit(props: Props) {
         }, 1400)
         return
       }
-      // Fallback: open and scroll to the classic pass-through.
+      // Fallback to the classic editor. AF.4/5 — when the drawer is on,
+      // "fix in classic" opens the All-fields drawer instead of scrolling
+      // to the (now removed) stacked pass-through.
+      if (useDrawer) {
+        setAllFieldsOpen(true)
+        return
+      }
       setClassicOpen(true)
       window.setTimeout(() => {
         const classicEl = document.querySelector<HTMLElement>(
@@ -311,7 +326,25 @@ export default function AmazonCockpit(props: Props) {
         classicEl?.scrollIntoView({ behavior: 'smooth', block: 'start' })
       }, 60)
     },
-    [],
+    [useDrawer],
+  )
+
+  // AF.4/5 — single classic-editor element, hosted by EITHER the
+  // All-fields drawer (flag on) or the legacy stacked pass-through
+  // (flag off). One instance only, so dirty/save/onRegister are intact.
+  const classicEditor = (
+    <ChannelListingTab
+      product={product}
+      channel="AMAZON"
+      marketplace={marketplace}
+      marketInfo={marketInfo}
+      siblingMarkets={siblingMarkets}
+      listing={listing}
+      onDirtyChange={props.onDirtyChange}
+      onSave={props.onSave}
+      onRegister={props.onRegister}
+      childrenList={childrenList}
+    />
   )
 
   return (
@@ -441,6 +474,16 @@ export default function AmazonCockpit(props: Props) {
             >
               {t('products.edit.cockpit.amazon.actionPublish')}
             </Button>
+            {useDrawer && (
+              <button
+                type="button"
+                onClick={() => setAllFieldsOpen(true)}
+                className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
+                title={t('products.edit.cockpit.amazon.allFieldsTitle')}
+              >
+                <ListTree className="w-3 h-3" /> {t('products.edit.cockpit.amazon.allFields')}
+              </button>
+            )}
             <button
               type="button"
               onClick={() => {
@@ -666,40 +709,41 @@ export default function AmazonCockpit(props: Props) {
         />
       </CockpitCardGrid>
 
-      {/* ── Transitional pass-through (UC.3 — shared primitive) ───────
-          AC.1 keeps all existing ChannelListingTab functionality alive
-          below the cards. The AF track replaces this with the grouped
-          "All fields" drawer. */}
-      <CockpitClassicPassthrough
-        open={classicOpen}
-        onToggle={() => setClassicOpen((o) => !o)}
-        label={
-          <>
-            <span className="text-md font-medium text-slate-900 dark:text-slate-100">
-              {t('products.edit.cockpit.amazon.classic.title')}
-            </span>
-            <Badge variant="info">
-              {t('products.edit.cockpit.amazon.classic.transitional')}
-            </Badge>
-            <span className="text-xs text-slate-500 dark:text-slate-400">
-              {t('products.edit.cockpit.amazon.classic.subtitle')}
-            </span>
-          </>
-        }
-      >
-        <ChannelListingTab
-          product={product}
-          channel="AMAZON"
-          marketplace={marketplace}
-          marketInfo={marketInfo}
-          siblingMarkets={siblingMarkets}
-          listing={listing}
-          onDirtyChange={props.onDirtyChange}
-          onSave={props.onSave}
-          onRegister={props.onRegister}
-          childrenList={childrenList}
-        />
-      </CockpitClassicPassthrough>
+      {/* ── Zone 4 — classic editor (AF.4/5) ─────────────────────────
+          Full classic editor in a slide-over when the All-fields drawer
+          flag is on (decluttered cockpit); legacy stacked pass-through
+          otherwise. Single instance either way. */}
+      {useDrawer ? (
+        <CockpitDrawer
+          keepMounted
+          open={allFieldsOpen}
+          onClose={() => setAllFieldsOpen(false)}
+          width="full"
+          title={t('products.edit.cockpit.amazon.allFieldsTitle')}
+        >
+          {classicEditor}
+        </CockpitDrawer>
+      ) : (
+        <CockpitClassicPassthrough
+          open={classicOpen}
+          onToggle={() => setClassicOpen((o) => !o)}
+          label={
+            <>
+              <span className="text-md font-medium text-slate-900 dark:text-slate-100">
+                {t('products.edit.cockpit.amazon.classic.title')}
+              </span>
+              <Badge variant="info">
+                {t('products.edit.cockpit.amazon.classic.transitional')}
+              </Badge>
+              <span className="text-xs text-slate-500 dark:text-slate-400">
+                {t('products.edit.cockpit.amazon.classic.subtitle')}
+              </span>
+            </>
+          }
+        >
+          {classicEditor}
+        </CockpitClassicPassthrough>
+      )}
     </div>
   )
 }

@@ -39,6 +39,11 @@ export interface CockpitDrawerProps {
   width?: DrawerWidth
   /** aria-label when `title` is not a plain string. */
   ariaLabel?: string
+  /** Keep children mounted while closed (slide off-screen instead of
+   *  unmount). Use when the body owns dirty state / registered handlers
+   *  that must survive close — e.g. the All-fields editor. Default false
+   *  (unmount on close). */
+  keepMounted?: boolean
 }
 
 export default function CockpitDrawer({
@@ -50,6 +55,7 @@ export default function CockpitDrawer({
   children,
   width = 'xl',
   ariaLabel,
+  keepMounted = false,
 }: CockpitDrawerProps) {
   const panelRef = useRef<HTMLDivElement>(null)
   const restoreFocusRef = useRef<HTMLElement | null>(null)
@@ -84,27 +90,36 @@ export default function CockpitDrawer({
     }
   }, [open, onClose])
 
-  if (!open) return null
+  // Unmount-on-close only when not keepMounted. keepMounted slides the
+  // panel off-screen (transform) so children stay mounted.
+  if (!open && !keepMounted) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end" role="presentation">
-      {/* Backdrop */}
-      <div
-        className="absolute inset-0 bg-slate-900/40 backdrop-blur-[1px]"
-        onClick={onClose}
-        aria-hidden
-      />
+    <div
+      className={cn('fixed inset-0 z-50 flex justify-end', !open && 'pointer-events-none')}
+      role="presentation"
+    >
+      {/* Backdrop — only when open */}
+      {open && (
+        <div
+          className="absolute inset-0 bg-slate-900/40 backdrop-blur-[1px]"
+          onClick={onClose}
+          aria-hidden
+        />
+      )}
 
       {/* Panel */}
       <div
         ref={panelRef}
         role="dialog"
-        aria-modal="true"
+        aria-modal={open ? 'true' : undefined}
+        aria-hidden={!open}
         aria-label={ariaLabel ?? (typeof title === 'string' ? title : 'Drawer')}
         tabIndex={-1}
         className={cn(
           'relative flex h-full flex-col bg-white shadow-2xl outline-none dark:bg-slate-900',
-          'animate-in slide-in-from-right duration-200',
+          'transition-transform duration-200 ease-out',
+          open ? 'translate-x-0' : 'translate-x-full pointer-events-none',
           WIDTH_CLASS[width],
         )}
       >

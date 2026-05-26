@@ -17,7 +17,7 @@
 // the corresponding ChannelListingTab section.
 
 import { useMemo, useState } from 'react'
-import { ArrowDownToLine, Sparkles, Send, ExternalLink, Settings2, History, Layers } from 'lucide-react'
+import { ArrowDownToLine, Sparkles, Send, ExternalLink, Settings2, History, Layers, ListTree } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { cn } from '@/lib/utils'
@@ -27,6 +27,8 @@ import {
   CockpitPreviewBand,
   CockpitCardGrid,
   CockpitClassicPassthrough,
+  CockpitDrawer,
+  useCockpitFlag,
 } from '../../_shared/cockpit-shell'
 import ChannelListingTab from '../ChannelListingTab'
 import { useEbayCompositor } from './useEbayCompositor'
@@ -123,6 +125,10 @@ export default function EbayCockpit(props: Props) {
   const [, setMode] = useCockpitMode()
   const [previewOpen, setPreviewOpen] = useState(true)
   const [classicOpen, setClassicOpen] = useState(true)
+  // AF.4/5 — "All fields" drawer (flag-guarded; keepMounted keeps the
+  // editor's dirty/save lifecycle identical to today).
+  const useDrawer = useCockpitFlag('all-fields-drawer', true)
+  const [allFieldsOpen, setAllFieldsOpen] = useState(false)
   const [versionDrawerOpen, setVersionDrawerOpen] = useState(false)
   const [publishDrawerOpen, setPublishDrawerOpen] = useState(false)
   const [siblingsModalOpen, setSiblingsModalOpen] = useState(false)
@@ -170,6 +176,23 @@ export default function EbayCockpit(props: Props) {
   const listingPulse =
     events.listingUpdatedAt != null &&
     Date.now() - events.listingUpdatedAt < 3000
+
+  // AF.4/5 — single classic-editor element, hosted by EITHER the
+  // All-fields drawer (flag on) or the legacy stacked pass-through.
+  const classicEditor = (
+    <ChannelListingTab
+      product={product}
+      channel="EBAY"
+      marketplace={marketplace}
+      marketInfo={marketInfo}
+      siblingMarkets={siblingMarkets}
+      listing={listing}
+      onDirtyChange={props.onDirtyChange}
+      onSave={props.onSave}
+      onRegister={props.onRegister}
+      childrenList={childrenList}
+    />
+  )
 
   return (
     <FieldSourceProvider productId={product.id} marketplace={marketplace}>
@@ -279,6 +302,16 @@ export default function EbayCockpit(props: Props) {
                 </span>
               )}
             </button>
+            {useDrawer && (
+              <button
+                type="button"
+                onClick={() => setAllFieldsOpen(true)}
+                className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
+                title="Open the full eBay field editor (all attributes)"
+              >
+                <ListTree className="w-3 h-3" /> All fields
+              </button>
+            )}
             <button
               type="button"
               onClick={() => setMode('classic')}
@@ -534,38 +567,39 @@ export default function EbayCockpit(props: Props) {
       />
       </CockpitCardGrid>
 
-      {/* ── Transitional pass-through (UC.4 — shared primitive) ───────
-          EC.1 keeps all existing ChannelListingTab functionality alive
-          below the cards. The AF track replaces this with the grouped
-          "All fields" drawer. */}
-      <CockpitClassicPassthrough
-        open={classicOpen}
-        onToggle={() => setClassicOpen((o) => !o)}
-        label={
-          <>
-            <span className="text-md font-medium text-slate-900 dark:text-slate-100">
-              Existing fields
-            </span>
-            <Badge variant="info">transitional</Badge>
-            <span className="text-xs text-slate-500 dark:text-slate-400">
-              All current eBay tab functionality, kept live while EC.4–EC.8 land
-            </span>
-          </>
-        }
-      >
-        <ChannelListingTab
-          product={product}
-          channel="EBAY"
-          marketplace={marketplace}
-          marketInfo={marketInfo}
-          siblingMarkets={siblingMarkets}
-          listing={listing}
-          onDirtyChange={props.onDirtyChange}
-          onSave={props.onSave}
-          onRegister={props.onRegister}
-          childrenList={childrenList}
-        />
-      </CockpitClassicPassthrough>
+      {/* ── Zone 4 — classic editor (AF.4/5) ─────────────────────────
+          Full classic editor in a slide-over when the All-fields drawer
+          flag is on; legacy stacked pass-through otherwise. Single
+          instance either way. */}
+      {useDrawer ? (
+        <CockpitDrawer
+          keepMounted
+          open={allFieldsOpen}
+          onClose={() => setAllFieldsOpen(false)}
+          width="full"
+          title={`All fields — eBay ${marketInfo.name}`}
+        >
+          {classicEditor}
+        </CockpitDrawer>
+      ) : (
+        <CockpitClassicPassthrough
+          open={classicOpen}
+          onToggle={() => setClassicOpen((o) => !o)}
+          label={
+            <>
+              <span className="text-md font-medium text-slate-900 dark:text-slate-100">
+                Existing fields
+              </span>
+              <Badge variant="info">transitional</Badge>
+              <span className="text-xs text-slate-500 dark:text-slate-400">
+                All current eBay tab functionality, kept live while EC.4–EC.8 land
+              </span>
+            </>
+          }
+        >
+          {classicEditor}
+        </CockpitClassicPassthrough>
+      )}
 
       {/* EC.2 — Diff modal slot. Renders only when a source switch is
           pending; the slot is owned by FieldSourceProvider and only

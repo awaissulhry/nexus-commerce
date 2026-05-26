@@ -3431,6 +3431,8 @@
   "products.edit.cockpit.amazon.markets.hint": "Alt+1..9 per cambiare · hover precarica lo schema",
   "products.edit.cockpit.amazon.classicView": "Vista classica",
   "products.edit.cockpit.amazon.classicViewTitle": "Torna alla scheda Amazon legacy per questa sessione",
+  "products.edit.cockpit.amazon.allFields": "Tutti i campi",
+  "products.edit.cockpit.amazon.allFieldsTitle": "Tutti i campi — Amazon",
   "products.edit.cockpit.amazon.actionPull": "Importa",
   "products.edit.cockpit.amazon.actionAiImprove": "Migliora con AI",
   "products.edit.cockpit.amazon.actionPublish": "Pubblica",
