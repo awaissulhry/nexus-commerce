@@ -52,6 +52,7 @@ import type { MarketChip } from '../../_shared/market-switch/types'
 import HealthPanel from './health/HealthPanel'
 import { computeHealthScore, type JumpTarget } from './health/computeHealthScore'
 import VariationMatrix from './variations/VariationMatrix'
+import VariantCube from './variations/VariantCube'
 import CategoryCard from './category/CategoryCard'
 import AplusCard from './aplus/AplusCard'
 import PricingCard from './pricing/PricingCard'
@@ -581,24 +582,32 @@ export default function AmazonCockpit(props: Props) {
         onJumpToClassic={() => handleJumpTo('classic')}
       />
 
-      {/* ── AC.6 — Variation Matrix (full-width, above the card grid) ── */}
+      {/* ── UC.6 — Variant Cube (wraps the AC.6 axis grid + pivots) ── */}
       {childrenList && childrenList.length > 0 && (
-        <VariationMatrix
+        <VariantCube
           productId={product.id}
-          children={childrenList}
-          channelListings={[
-            ...(listing ? [listing] : []),
-            ...siblingListings,
-          ]}
-          activeMarketplace={marketInfo.code}
+          channel="AMAZON"
+          activeMarket={marketInfo.code}
           activeCurrency={marketInfo.currency}
-          siblingMarkets={(siblingMarkets ?? []).map((m) => ({
-            code: m.code,
-            name: m.name,
-            currency: m.currency,
-          }))}
-          variationTheme={composed.variationTheme.value}
-          onJumpToClassic={() => handleJumpTo('classic')}
+          axisGrid={
+            <VariationMatrix
+              productId={product.id}
+              children={childrenList}
+              channelListings={[
+                ...(listing ? [listing] : []),
+                ...siblingListings,
+              ]}
+              activeMarketplace={marketInfo.code}
+              activeCurrency={marketInfo.currency}
+              siblingMarkets={(siblingMarkets ?? []).map((m) => ({
+                code: m.code,
+                name: m.name,
+                currency: m.currency,
+              }))}
+              variationTheme={composed.variationTheme.value}
+              onJumpToClassic={() => handleJumpTo('classic')}
+            />
+          }
         />
       )}
 
