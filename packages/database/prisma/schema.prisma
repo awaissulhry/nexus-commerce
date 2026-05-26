@@ -351,6 +351,7 @@ model Product {
   reviews                   Review[] // SR.1: ingested customer reviews
   reviewSpikes              ReviewSpike[] // SR.1: detected category spikes
   qualitySnapshots          ListingQualitySnapshot[] // PA.2: listing quality history
+  fieldLinkGroups           FieldLinkGroup[] // FL.1: cross-channel/market field-sharing groups
 
   // H.16 — Compliance master data. HS code = customs classification,
   // mostly 6-digit (HS) or 8-10 digit (CN/HTS); stored as text since
@@ -1622,6 +1623,57 @@ model ChannelListingOverride {
   @@index([channelListingId])
   @@index([fieldName])
   @@index([isActive])
+}
+
+// ── FL.1: FieldLinkGroup — cross-channel/market field sharing ───────────────
+//
+// One row per (product, fieldKey) sharing group. `members` lists the
+// coordinates [{ channel, marketplace, variantId? }] that share this
+// group's canonical value. resolveField(channel, market, fieldKey,
+// variantId?) walks: pinned override (ChannelListingOverride) → linked
+// group (this) → product master → schema default.
+//
+// PARENT fields (≈90%) have one group per (product, fieldKey) spanning
+// channels/markets; CHILD fields (price/qty/image/size-specific) may have
+// several groups distinguished by their variant members — so there is NO
+// DB uniqueness on (productId, fieldKey); the service layer enforces
+// "a coordinate belongs to ≤1 group per field."
+model FieldLinkGroup {
+  id        String  @id @default(cuid())
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  productId String
+
+  // Normalized field key, e.g. "item_name", "purchasable_offer.our_price".
+  fieldKey String
+
+  // Routing — derived from the manifest applicableParentage.
+  parentage FieldParentage @default(PARENT)
+
+  // How a linked value crosses members in different languages.
+  translatePolicy FieldTranslatePolicy @default(TRANSLATE)
+
+  // [{ channel, marketplace, variantId? }] — the coordinate model.
+  members Json @default("[]")
+
+  // Canonical value's source language (for cross-language translate).
+  sourceLanguage String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([productId])
+  @@index([productId, fieldKey])
+}
+
+enum FieldParentage {
+  PARENT
+  CHILD
+}
+
+enum FieldTranslatePolicy {
+  TRANSLATE
+  VERBATIM
+  NONE
 }
 
 // ── S.4: SyncAttempt — per-listing sync audit ──────────────────────────────
