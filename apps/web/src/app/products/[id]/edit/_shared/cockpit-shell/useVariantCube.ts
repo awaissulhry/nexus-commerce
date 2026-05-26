@@ -10,8 +10,9 @@
 // Fixes channel by argument (the cockpit fixes it by tab); markets stay
 // a dimension so the by-market view can pivot across them.
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { getBackendUrl } from '@/lib/backend-url'
+import { useInvalidationChannel } from '@/lib/sync/invalidation-channel'
 
 export interface VariantMarketCell {
   marketplace: string
@@ -140,6 +141,18 @@ export function useVariantCube(productId: string, channel = 'AMAZON') {
   useEffect(() => {
     void refetch()
   }, [refetch])
+
+  // SY.2 — live refresh. When a listing changes anywhere (e.g. a bulk
+  // flat-file commit in the handoff tab), refetch the cube. Debounced so
+  // a burst of per-row events collapses into one reload.
+  const refetchTimer = useRef<number | null>(null)
+  useInvalidationChannel(
+    ['product.updated', 'channel-pricing.updated', 'listing.updated'],
+    () => {
+      if (refetchTimer.current) window.clearTimeout(refetchTimer.current)
+      refetchTimer.current = window.setTimeout(() => void refetch(), 800)
+    },
+  )
 
   // Derived dimensions: axis names + the market codes present.
   const axisNames = useMemo(() => {
