@@ -1,25 +1,25 @@
 'use client'
 
-// UC.1.3 — Shared classic pass-through primitive (Zone 4, transitional).
+// UC.1.3 / UC.3.A — Shared classic pass-through primitive (Zone 4, transitional).
 //
-// Collapsible container that hosts the existing classic editor at the
-// bottom of the cockpit. It carries data-jump-target="classic" so the
+// Collapsible container hosting the existing classic editor at the
+// bottom of the cockpit. Carries data-jump-target="classic" so the
 // health panel's "fix in classic" jumps and the cockpit's "Classic view"
-// link can scroll + expand it.
+// link can scroll + expand it. Toggle bar mirrors CockpitPreviewBand
+// (label left, chevron right) for a consistent look.
 //
-// NOTE: this is the migration-safe Zone 4. The AF track replaces the
-// stacked editor with the grouped "All fields" drawer; until AF.5 flips
-// the flag, this primitive keeps the full classic editor reachable so no
-// field is ever lost.
+// NOTE: migration-safe Zone 4. The AF track replaces the stacked editor
+// with the grouped "All fields" drawer; until AF.5 flips the flag this
+// keeps the full classic editor reachable so no field is ever lost.
 
 import { forwardRef, type ReactNode } from 'react'
-import { ChevronDown, ChevronRight } from 'lucide-react'
+import { ChevronDown, ChevronUp } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
 
 export interface CockpitClassicPassthroughProps {
   open: boolean
   onToggle: () => void
-  /** Label, e.g. "Classic — Amazon flat-file editor". */
+  /** Label node — title + optional badge/subtitle, channel-built. */
   label: ReactNode
   children: ReactNode
 }
@@ -35,20 +35,16 @@ const CockpitClassicPassthrough = forwardRef<
           type="button"
           onClick={onToggle}
           aria-expanded={open}
-          className="flex w-full items-center gap-1 px-3 py-2 text-left text-sm font-medium text-slate-700 hover:text-slate-900 dark:text-slate-200 dark:hover:text-white"
+          className="w-full px-4 py-2.5 flex items-center justify-between text-left border-b border-slate-100 dark:border-slate-800"
         >
+          <div className="flex items-center gap-2">{label}</div>
           {open ? (
-            <ChevronDown className="h-4 w-4" />
+            <ChevronUp className="w-4 h-4 text-slate-400" />
           ) : (
-            <ChevronRight className="h-4 w-4" />
+            <ChevronDown className="w-4 h-4 text-slate-400" />
           )}
-          {label}
         </button>
-        {open && (
-          <div className="border-t border-slate-100 p-3 dark:border-slate-800">
-            {children}
-          </div>
-        )}
+        {open && <div className="p-4">{children}</div>}
       </Card>
     </div>
   )

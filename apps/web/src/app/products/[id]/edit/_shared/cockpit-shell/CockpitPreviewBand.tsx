@@ -1,20 +1,16 @@
 'use client'
 
-// UC.1.3 — Shared preview band primitive (Zone 2).
+// UC.1.3 / UC.3.A — Shared preview band primitive (Zone 2).
 //
-// Collapsible band that pairs a live preview (left) with a health
-// surface (right). `healthVariant` covers both cockpits without
-// compromise:
-//   • 'panel' — health flows beside the preview, flexible width
-//               (Amazon's current layout)
-//   • 'rail'  — fixed-width right rail (eBay's HealthScoreRail)
-//
-// When collapsed it shrinks to just the title bar so the cards rise up.
-// The actual preview + health renderers are slots; UC.7 / UC.8 swap in
-// the shared health/preview frameworks behind these slots later.
+// Collapsible band pairing a live preview (left) with a health surface
+// (right). Faithful to the Amazon band: title + subtitle on the left of
+// the toggle bar, chevron on the right, and a two-column content grid
+// whose right column width is configurable (Amazon 320px panel, eBay
+// 280px rail). The preview + health renderers are slots so UC.7 / UC.8
+// can swap in the shared frameworks behind them.
 
 import type { ReactNode } from 'react'
-import { ChevronDown, ChevronRight } from 'lucide-react'
+import { ChevronDown, ChevronUp } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Card } from '@/components/ui/Card'
 
@@ -23,56 +19,61 @@ export interface CockpitPreviewBandProps {
   onToggle: () => void
   /** Title text/label, e.g. "Live preview". */
   title: ReactNode
-  /** Device toggle ([📱][💻]) rendered next to the title. */
+  /** Muted subtitle next to the title (e.g. the market code). */
+  subtitle?: ReactNode
+  /** Device toggle ([📱][💻]) — rendered next to the subtitle. */
   deviceToggle?: ReactNode
   /** The live preview renderer. */
   preview: ReactNode
   /** The health renderer (donut / rail / panel). Optional. */
   health?: ReactNode
-  /** How the health column sits beside the preview. */
-  healthVariant?: 'panel' | 'rail'
+  /** Fixed width of the health column on lg+ (e.g. "320px", "280px"). */
+  healthWidth?: string
+  /** Extra classes for the content area (e.g. a bg tint). */
+  contentClassName?: string
 }
 
 export default function CockpitPreviewBand({
   open,
   onToggle,
   title,
+  subtitle,
   deviceToggle,
   preview,
   health,
-  healthVariant = 'panel',
+  healthWidth = '320px',
+  contentClassName,
 }: CockpitPreviewBandProps) {
   return (
     <Card noPadding>
-      <div className="flex items-center gap-2 px-3 py-2">
-        <button
-          type="button"
-          onClick={onToggle}
-          aria-expanded={open}
-          className="inline-flex items-center gap-1 text-sm font-medium text-slate-700 hover:text-slate-900 dark:text-slate-200 dark:hover:text-white"
-        >
-          {open ? (
-            <ChevronDown className="h-4 w-4" />
-          ) : (
-            <ChevronRight className="h-4 w-4" />
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={open}
+        className="w-full px-4 py-2.5 flex items-center justify-between text-left border-b border-slate-100 dark:border-slate-800"
+      >
+        <div className="flex items-center gap-2">
+          <span className="text-md font-medium text-slate-900 dark:text-slate-100">
+            {title}
+          </span>
+          {subtitle && (
+            <span className="text-xs text-slate-500 dark:text-slate-400">{subtitle}</span>
           )}
-          {title}
-        </button>
-        {deviceToggle && <div className="ml-2">{deviceToggle}</div>}
-      </div>
+          {deviceToggle}
+        </div>
+        {open ? (
+          <ChevronUp className="w-4 h-4 text-slate-400" />
+        ) : (
+          <ChevronDown className="w-4 h-4 text-slate-400" />
+        )}
+      </button>
 
       {open && (
         <div
-          className={cn(
-            'gap-4 border-t border-slate-100 p-3 dark:border-slate-800',
-            health
-              ? healthVariant === 'rail'
-                ? 'grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_280px]'
-                : 'grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,22rem)]'
-              : 'block',
-          )}
+          className={cn('p-4 gap-4', health ? 'grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_var(--health-w)]' : 'block', contentClassName)}
+          style={health ? ({ ['--health-w' as string]: healthWidth } as React.CSSProperties) : undefined}
         >
-          <div className="min-w-0">{preview}</div>
+          <div className="min-w-0 max-w-full">{preview}</div>
           {health && <div className="min-w-0">{health}</div>}
         </div>
       )}

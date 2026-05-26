@@ -1,16 +1,15 @@
 'use client'
 
-// UC.1.3 — Shared card layout primitive (Zone 3).
+// UC.1.3 / UC.3.A — Shared card layout primitive (Zone 3).
 //
-// Two layouts cover both cockpits without compromise:
-//   • 'grid'       — Amazon's responsive card grid. Columns use
-//                    minmax(0,1fr) so a wide card can never force the
-//                    page into horizontal scroll (AC regression guard).
-//   • 'sequential' — eBay's full-width stacked cards.
+// Two layouts cover both cockpits:
+//   • 'grid'       — Amazon's responsive 2-up card grid
+//                    (grid-cols-1 lg:grid-cols-2 gap-3).
+//   • 'sequential' — eBay's full-width stacked cards (space-y-4).
 //
 // Cards pass through verbatim; this primitive only owns spacing + the
-// overflow-safe track. Jump-to-card targeting (data-jump-target) stays
-// on the individual cards, not here.
+// overflow-safe min-w-0 track. Jump-to-card targeting (data-jump-target)
+// stays on the individual cards.
 
 import type { ReactNode } from 'react'
 import { cn } from '@/lib/utils'
@@ -18,15 +17,12 @@ import { cn } from '@/lib/utils'
 export interface CockpitCardGridProps {
   layout: 'grid' | 'sequential'
   children: ReactNode
-  /** Min column width for the grid layout. Defaults to 22rem. */
-  minColumn?: string
   className?: string
 }
 
 export default function CockpitCardGrid({
   layout,
   children,
-  minColumn = '22rem',
   className,
 }: CockpitCardGridProps) {
   if (layout === 'sequential') {
@@ -34,12 +30,7 @@ export default function CockpitCardGrid({
   }
 
   return (
-    <div
-      className={cn('grid min-w-0 max-w-full gap-4', className)}
-      style={{
-        gridTemplateColumns: `repeat(auto-fill, minmax(min(${minColumn}, 100%), 1fr))`,
-      }}
-    >
+    <div className={cn('grid grid-cols-1 lg:grid-cols-2 gap-3 min-w-0', className)}>
       {children}
     </div>
   )

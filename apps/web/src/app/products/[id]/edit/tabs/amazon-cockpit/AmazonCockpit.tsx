@@ -24,20 +24,15 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
-  ChevronDown,
-  ChevronUp,
   ArrowDownToLine,
   Sparkles,
   Send,
   ExternalLink,
   Settings2,
   Package,
-  Image as ImageIcon,
   ShieldCheck,
-  Hash,
   Truck,
 } from 'lucide-react'
-import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { cn } from '@/lib/utils'
@@ -66,6 +61,15 @@ import { useCockpitShortcuts } from './useCockpitShortcuts'
 import { LiveRegion } from '../../_shared/announce/useAnnounce'
 import { postCockpitEvent } from '../../_shared/telemetry/cockpit-telemetry'
 import { getBackendUrl } from '@/lib/backend-url'
+import {
+  COCKPIT_ROOT,
+  CockpitHeader,
+  CockpitPreviewBand,
+  CockpitCardGrid,
+  CockpitClassicPassthrough,
+  IdentifiersCard,
+  ImagesSummaryCard,
+} from '../../_shared/cockpit-shell'
 
 interface MarketInfo {
   code: string
@@ -316,24 +320,21 @@ export default function AmazonCockpit(props: Props) {
     // grid in cockpit mode). Without min-w-0 a wide descendant
     // (live preview, variation matrix table, classic pass-through)
     // can push the column wider than the viewport.
-    <div className="space-y-4 min-w-0 max-w-full">
+    <div className={COCKPIT_ROOT}>
       {/* AC.13 — Cockpit-wide ARIA live region. Mounted once near
           the top; any nested component can announce() via the
           module-scope util in _shared/announce/useAnnounce. */}
       <LiveRegion />
 
-      {/* ── Zone 1: Header strip ────────────────────────────────── */}
-      <div
-        className="sticky top-14 z-[5]"
-        role="region"
-        aria-label="Amazon Listing Cockpit header"
-      >
-        <Card noPadding>
-          {/* AC.3 — Market chip strip. Sits above the title row so
-              operators can flick between markets without scrolling.
-              Alt+1..9 wired via useMarketSwitch; hover prefetch hits
-              the cached flat-file template endpoint. */}
-          {chips.length > 1 && (
+      {/* ── Zone 1: Header strip (UC.3 — shared CockpitHeader) ────── */}
+      <CockpitHeader
+        ariaLabel="Amazon Listing Cockpit header"
+        chipStrip={
+          // AC.3 — Market chip strip. Sits above the title row so
+          // operators can flick between markets without scrolling.
+          // Alt+1..9 wired via useMarketSwitch; hover prefetch hits
+          // the cached flat-file template endpoint.
+          chips.length > 1 ? (
             <div className="px-4 py-2 border-b border-slate-100 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/40 flex items-center gap-3 flex-wrap">
               <span className="text-[10.5px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                 {t('products.edit.cockpit.amazon.markets')}
@@ -350,153 +351,129 @@ export default function AmazonCockpit(props: Props) {
                 {t('products.edit.cockpit.amazon.markets.hint')}
               </span>
             </div>
-          )}
-          <div className="px-4 py-3 flex items-center justify-between flex-wrap gap-3">
-            <div className="flex items-center gap-3 min-w-0">
-              <Badge mono variant={listing ? 'info' : 'warning'}>
-                {marketInfo.code}
-              </Badge>
-              <div className="min-w-0">
-                <div className="text-md font-semibold text-slate-900 dark:text-slate-100 truncate flex items-center gap-2 flex-wrap">
-                  {marketInfo.name}
-                  <span
-                    className={cn(
-                      'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10.5px] font-medium',
-                      tone.bg,
-                      tone.text,
-                    )}
-                  >
-                    {composed.status.listingStatus}
-                  </span>
-                  {composed.fulfillmentChannel.value && (
-                    <span
-                      className={cn(
-                        'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10.5px] font-medium',
-                        composed.fulfillmentChannel.value === 'FBA'
-                          ? 'bg-blue-100 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300'
-                          : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300',
-                      )}
-                    >
-                      <Truck className="w-2.5 h-2.5" />
-                      {composed.fulfillmentChannel.value}
-                    </span>
-                  )}
-                  {composed.status.publicUrl && (
-                    <a
-                      href={composed.status.publicUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-xs text-blue-600 dark:text-blue-400 hover:underline inline-flex items-center gap-0.5"
-                    >
-                      View <ExternalLink className="w-3 h-3" />
-                    </a>
-                  )}
-                </div>
-                <div className="text-sm text-slate-500 dark:text-slate-400 mt-0.5 flex items-center gap-2 flex-wrap">
-                  {composed.asin.value ? (
-                    <span className="font-mono text-xs">
-                      ASIN {composed.asin.value}
-                    </span>
-                  ) : (
-                    <span>No ASIN — listing not yet published on this marketplace</span>
-                  )}
-                  <span>·</span>
-                  <span className="font-mono text-xs">SKU {composed.sku}</span>
-                  <span>·</span>
-                  <span>{marketInfo.currency}</span>
-                  <span>·</span>
-                  <span className="uppercase tracking-wide">
-                    {marketInfo.language}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2 flex-wrap">
-              {/* AC.1 — placeholder action buttons. The real Pull /
-                  AI improve / Publish wiring lives in the classic
-                  pane below until AC.11–AC.12 land replacements. */}
-              <Button
-                variant="secondary"
-                size="sm"
-                icon={<ArrowDownToLine className="w-3.5 h-3.5" />}
-                disabled
-                title="Coming in AC.11 — until then use the classic Pull below"
-              >
-                {t('products.edit.cockpit.amazon.actionPull')}
-              </Button>
-              <Button
-                variant="secondary"
-                size="sm"
-                icon={<Sparkles className="w-3.5 h-3.5" />}
-                disabled
-                title="Coming in AC.11 — until then use the classic AI Translate below"
-              >
-                {t('products.edit.cockpit.amazon.actionAiImprove')}
-              </Button>
-              <Button
-                size="sm"
-                icon={<Send className="w-3.5 h-3.5" />}
-                onClick={() => handleJumpTo('publish')}
-                title="Pick markets + submit via JSON_LISTINGS_FEED"
-              >
-                {t('products.edit.cockpit.amazon.actionPublish')}
-              </Button>
-              <button
-                type="button"
-                onClick={() => {
-                  postCockpitEvent({
-                    type: 'classic_toggled',
-                    productId: product.id,
-                    marketplace: marketInfo.code,
-                  })
-                  setMode('classic')
-                }}
-                className="ml-1 inline-flex items-center gap-1 text-xs text-slate-500 hover:text-slate-900 dark:hover:text-slate-200 underline-offset-2 hover:underline"
-                title={t('products.edit.cockpit.amazon.classicViewTitle')}
-              >
-                <Settings2 className="w-3 h-3" />{' '}
-                {t('products.edit.cockpit.amazon.classicView')}
-              </button>
-            </div>
-          </div>
-        </Card>
-      </div>
-
-      {/* ── Zone 2: Preview + Health band (collapsible) ───────────── */}
-      <Card noPadding>
-        <button
-          type="button"
-          onClick={() => setPreviewOpen((o) => !o)}
-          className="w-full px-4 py-2.5 flex items-center justify-between text-left border-b border-slate-100 dark:border-slate-800"
-        >
-          <div className="flex items-center gap-2">
-            <span className="text-md font-medium text-slate-900 dark:text-slate-100">
-              {t('products.edit.cockpit.amazon.preview.title')}
+          ) : null
+        }
+        leading={
+          <Badge mono variant={listing ? 'info' : 'warning'}>
+            {marketInfo.code}
+          </Badge>
+        }
+        title={marketInfo.name}
+        titlePills={
+          <>
+            <span
+              className={cn(
+                'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10.5px] font-medium',
+                tone.bg,
+                tone.text,
+              )}
+            >
+              {composed.status.listingStatus}
             </span>
-            <span className="text-xs text-slate-500 dark:text-slate-400">
-              {t('products.edit.cockpit.amazon.preview.subtitle', {
-                market: marketInfo.code,
-              })}
-            </span>
-          </div>
-          {previewOpen ? (
-            <ChevronUp className="w-4 h-4 text-slate-400" />
-          ) : (
-            <ChevronDown className="w-4 h-4 text-slate-400" />
-          )}
-        </button>
-        {previewOpen && (
-          <div className="p-4 grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_320px] gap-4 bg-slate-50/40 dark:bg-slate-900/30">
-            {/* min-w-0 + max-w-full lets the live preview internal-
-                scroll instead of pushing the cockpit grid wider. */}
-            <div className="min-w-0 max-w-full">
-              <AmazonLivePreview composed={composed} />
-            </div>
-            <HealthPanel report={report} onJumpTo={handleJumpTo} />
-          </div>
-        )}
-      </Card>
+            {composed.fulfillmentChannel.value && (
+              <span
+                className={cn(
+                  'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10.5px] font-medium',
+                  composed.fulfillmentChannel.value === 'FBA'
+                    ? 'bg-blue-100 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300'
+                    : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300',
+                )}
+              >
+                <Truck className="w-2.5 h-2.5" />
+                {composed.fulfillmentChannel.value}
+              </span>
+            )}
+            {composed.status.publicUrl && (
+              <a
+                href={composed.status.publicUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="text-xs text-blue-600 dark:text-blue-400 hover:underline inline-flex items-center gap-0.5"
+              >
+                View <ExternalLink className="w-3 h-3" />
+              </a>
+            )}
+          </>
+        }
+        subtitle={
+          <>
+            {composed.asin.value ? (
+              <span className="font-mono text-xs">ASIN {composed.asin.value}</span>
+            ) : (
+              <span>No ASIN — listing not yet published on this marketplace</span>
+            )}
+            <span>·</span>
+            <span className="font-mono text-xs">SKU {composed.sku}</span>
+            <span>·</span>
+            <span>{marketInfo.currency}</span>
+            <span>·</span>
+            <span className="uppercase tracking-wide">{marketInfo.language}</span>
+          </>
+        }
+        actions={
+          <>
+            {/* AC.1 — placeholder action buttons. The real Pull / AI
+                improve / Publish wiring lives in the classic pane below
+                until AC.11–AC.12 land replacements. */}
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={<ArrowDownToLine className="w-3.5 h-3.5" />}
+              disabled
+              title="Coming in AC.11 — until then use the classic Pull below"
+            >
+              {t('products.edit.cockpit.amazon.actionPull')}
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={<Sparkles className="w-3.5 h-3.5" />}
+              disabled
+              title="Coming in AC.11 — until then use the classic AI Translate below"
+            >
+              {t('products.edit.cockpit.amazon.actionAiImprove')}
+            </Button>
+            <Button
+              size="sm"
+              icon={<Send className="w-3.5 h-3.5" />}
+              onClick={() => handleJumpTo('publish')}
+              title="Pick markets + submit via JSON_LISTINGS_FEED"
+            >
+              {t('products.edit.cockpit.amazon.actionPublish')}
+            </Button>
+            <button
+              type="button"
+              onClick={() => {
+                postCockpitEvent({
+                  type: 'classic_toggled',
+                  productId: product.id,
+                  marketplace: marketInfo.code,
+                })
+                setMode('classic')
+              }}
+              className="ml-1 inline-flex items-center gap-1 text-xs text-slate-500 hover:text-slate-900 dark:hover:text-slate-200 underline-offset-2 hover:underline"
+              title={t('products.edit.cockpit.amazon.classicViewTitle')}
+            >
+              <Settings2 className="w-3 h-3" />{' '}
+              {t('products.edit.cockpit.amazon.classicView')}
+            </button>
+          </>
+        }
+      />
+
+      {/* ── Zone 2: Preview + Health band (UC.3 — shared band) ────── */}
+      <CockpitPreviewBand
+        open={previewOpen}
+        onToggle={() => setPreviewOpen((o) => !o)}
+        title={t('products.edit.cockpit.amazon.preview.title')}
+        subtitle={t('products.edit.cockpit.amazon.preview.subtitle', {
+          market: marketInfo.code,
+        })}
+        healthWidth="320px"
+        contentClassName="bg-slate-50/40 dark:bg-slate-900/30"
+        preview={<AmazonLivePreview composed={composed} />}
+        health={<HealthPanel report={report} onJumpTo={handleJumpTo} />}
+      />
 
       {/* ── AC.12 — Publish flow (full-width, top of cards zone) ──── */}
       <PublishCard
@@ -550,21 +527,27 @@ export default function AmazonCockpit(props: Props) {
         />
       )}
 
-      {/* ── Zone 3: Cards placeholders (AC.4–AC.10) ─────────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 min-w-0">
-        {/* Each card is forced to min-w-0 via its child so a wide
-            descendant (e.g. mono ASIN text) can wrap instead of
-            forcing the column wider. */}
-        <PlaceholderCard
-          targetId="identifiers"
-          icon={<Hash className="w-4 h-4" />}
+      {/* ── Zone 3: Cards (UC.3 — shared CockpitCardGrid) ─────────── */}
+      <CockpitCardGrid layout="grid">
+        {/* UC.2/UC.3 — Identifiers now uses the shared IdentifiersCard
+            (replaces the dashed placeholder). */}
+        <IdentifiersCard
           title={t('products.edit.cockpit.amazon.cards.identifiers')}
-          phase="AC.4 + AC.10"
-          value={[
-            composed.asin.value ? `ASIN ${composed.asin.value}` : 'No ASIN',
-            composed.gtin.value ? `GTIN ${composed.gtin.value}` : 'No GTIN',
-            composed.brand.value ? `Brand ${composed.brand.value}` : 'No brand',
-          ].join(' · ')}
+          rows={[
+            { label: 'SKU', value: composed.sku, mono: true },
+            {
+              label: 'ASIN',
+              value: composed.asin.value,
+              mono: true,
+            },
+            {
+              label: 'GTIN',
+              value: composed.gtin.value,
+              mono: true,
+              locked: Boolean(composed.gtin.value),
+            },
+            { label: 'Brand', value: composed.brand.value },
+          ]}
         />
         <CategoryCard
           productId={product.id}
@@ -584,12 +567,14 @@ export default function AmazonCockpit(props: Props) {
           }
           onJumpToClassic={() => handleJumpTo('classic')}
         />
-        <PlaceholderCard
-          targetId="images"
-          icon={<ImageIcon className="w-4 h-4" />}
+        {/* UC.2/UC.3 — Images now uses the shared ImagesSummaryCard
+            (read-only summary; the AC.5 deep editor handoff is added
+            when that card lands). */}
+        <ImagesSummaryCard
           title="Images"
-          phase="AC.5"
-          value={`${composed.galleryUrls.value.length}/9 images in gallery`}
+          primaryImageUrl={composed.primaryImageUrl.value}
+          galleryCount={composed.galleryUrls.value.length}
+          totalSlots={9}
         />
         <AplusCard
           asin={composed.asin.value}
@@ -679,20 +664,17 @@ export default function AmazonCockpit(props: Props) {
           phase="AC.13"
           value="Xavia motorcycle gear — model/year fit list editor"
         />
-      </div>
+      </CockpitCardGrid>
 
-      {/* ── Transitional pass-through ─────────────────────────────────
+      {/* ── Transitional pass-through (UC.3 — shared primitive) ───────
           AC.1 keeps all existing ChannelListingTab functionality alive
-          below the cards. Each AC.4–AC.10 phase replaces a section of
-          this pane until the pass-through goes away. */}
-      <div data-jump-target="classic">
-      <Card noPadding>
-        <button
-          type="button"
-          onClick={() => setClassicOpen((o) => !o)}
-          className="w-full px-4 py-2.5 flex items-center justify-between text-left border-b border-slate-100 dark:border-slate-800"
-        >
-          <div className="flex items-center gap-2">
+          below the cards. The AF track replaces this with the grouped
+          "All fields" drawer. */}
+      <CockpitClassicPassthrough
+        open={classicOpen}
+        onToggle={() => setClassicOpen((o) => !o)}
+        label={
+          <>
             <span className="text-md font-medium text-slate-900 dark:text-slate-100">
               {t('products.edit.cockpit.amazon.classic.title')}
             </span>
@@ -702,31 +684,22 @@ export default function AmazonCockpit(props: Props) {
             <span className="text-xs text-slate-500 dark:text-slate-400">
               {t('products.edit.cockpit.amazon.classic.subtitle')}
             </span>
-          </div>
-          {classicOpen ? (
-            <ChevronUp className="w-4 h-4 text-slate-400" />
-          ) : (
-            <ChevronDown className="w-4 h-4 text-slate-400" />
-          )}
-        </button>
-        {classicOpen && (
-          <div className="p-4">
-            <ChannelListingTab
-              product={product}
-              channel="AMAZON"
-              marketplace={marketplace}
-              marketInfo={marketInfo}
-              siblingMarkets={siblingMarkets}
-              listing={listing}
-              onDirtyChange={props.onDirtyChange}
-              onSave={props.onSave}
-              onRegister={props.onRegister}
-              childrenList={childrenList}
-            />
-          </div>
-        )}
-      </Card>
-      </div>
+          </>
+        }
+      >
+        <ChannelListingTab
+          product={product}
+          channel="AMAZON"
+          marketplace={marketplace}
+          marketInfo={marketInfo}
+          siblingMarkets={siblingMarkets}
+          listing={listing}
+          onDirtyChange={props.onDirtyChange}
+          onSave={props.onSave}
+          onRegister={props.onRegister}
+          childrenList={childrenList}
+        />
+      </CockpitClassicPassthrough>
     </div>
   )
 }
