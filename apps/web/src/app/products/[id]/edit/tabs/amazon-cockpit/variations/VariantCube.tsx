@@ -118,6 +118,26 @@ async function patchChild(id: string, field: 'basePrice' | 'totalStock', value: 
   }
 }
 
+// CUBE.2 — one transactional /products/bulk call for N variants.
+async function patchChildrenBulk(
+  ids: string[],
+  field: 'basePrice' | 'totalStock',
+  value: number,
+): Promise<boolean> {
+  if (ids.length === 0) return true
+  try {
+    const r = await fetch(`${getBackendUrl()}/api/products/bulk`, {
+      method: 'PATCH',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ changes: ids.map((id) => ({ id, field, value })) }),
+    })
+    return r.ok
+  } catch {
+    return false
+  }
+}
+
 type CubeView = 'axis' | 'variant' | 'market'
 
 export interface VariantCubeProps {
@@ -353,6 +373,18 @@ function ByVariantTable({
     return ok
   }
 
+  // CUBE.2 — multi-select + bulk edit.
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [bulkField, setBulkField] = useState<'basePrice' | 'totalStock'>('basePrice')
+  const [bulkValue, setBulkValue] = useState('')
+  const [bulkBusy, setBulkBusy] = useState(false)
+  const [bulkMsg, setBulkMsg] = useState<string | null>(null)
+
+  const rowFbaFor = (v: Variant) => {
+    const cell = v.marketsByCode[activeMarket]
+    return (cell?.fulfillmentChannel ?? (isFba ? 'FBA' : null)) === 'FBA'
+  }
+
   const q = query.trim().toLowerCase()
   const rows = variants.filter((v) => {
     if (lowOnly && !lowEff(v)) return false
@@ -362,6 +394,44 @@ function ByVariantTable({
     }
     return true
   })
+
+  const allSelected = rows.length > 0 && rows.every((v) => selected.has(v.id))
+  const toggleRow = (id: string) =>
+    setSelected((s) => {
+      const n = new Set(s)
+      if (n.has(id)) n.delete(id)
+      else n.add(id)
+      return n
+    })
+  const toggleAll = () =>
+    setSelected(() => (allSelected ? new Set<string>() : new Set(rows.map((v) => v.id))))
+
+  const applyBulk = async () => {
+    const n = parseFloat(bulkValue)
+    if (!Number.isFinite(n)) return
+    const selRows = rows.filter((v) => selected.has(v.id))
+    // Stock can't be set on FBA variants — exclude + report.
+    const targets = bulkField === 'totalStock' ? selRows.filter((v) => !rowFbaFor(v)) : selRows
+    const skipped = selRows.length - targets.length
+    if (targets.length === 0) {
+      setBulkMsg(skipped > 0 ? `${skipped} FBA variant(s) — skipped` : 'Nothing to update')
+      return
+    }
+    setBulkBusy(true)
+    const ok = await patchChildrenBulk(targets.map((v) => v.id), bulkField, n)
+    if (ok) {
+      setEdits((e) => {
+        const next = { ...e }
+        for (const v of targets) next[v.id] = { ...next[v.id], [bulkField]: n }
+        return next
+      })
+      setBulkMsg(`Updated ${targets.length}${skipped ? ` · ${skipped} FBA skipped` : ''}`)
+      setBulkValue('')
+    } else {
+      setBulkMsg('Bulk update failed')
+    }
+    setBulkBusy(false)
+  }
 
   return (
     <div>
@@ -389,10 +459,67 @@ function ByVariantTable({
           {rows.length} / {variants.length}
         </span>
       </div>
+
+      {/* CUBE.2 — bulk action bar (appears when rows are selected). */}
+      {selected.size > 0 && (
+        <div className="mb-1.5 flex flex-wrap items-center gap-2 rounded-md border border-blue-200 bg-blue-50 px-2 py-1.5 dark:border-blue-900 dark:bg-blue-950/40">
+          <span className="text-xs font-medium text-blue-700 dark:text-blue-300">
+            {selected.size} selected
+          </span>
+          <span className="text-xs text-slate-500">· set</span>
+          <select
+            value={bulkField}
+            onChange={(e) => setBulkField(e.target.value as 'basePrice' | 'totalStock')}
+            className="h-7 rounded border border-slate-200 px-1 text-xs dark:border-slate-700 dark:bg-slate-900"
+          >
+            <option value="basePrice">Base price</option>
+            <option value="totalStock">Stock</option>
+          </select>
+          <input
+            type="number"
+            value={bulkValue}
+            onChange={(e) => setBulkValue(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') void applyBulk()
+            }}
+            placeholder="value"
+            className="h-7 w-24 rounded border border-slate-200 px-2 text-xs dark:border-slate-700 dark:bg-slate-900"
+          />
+          <button
+            type="button"
+            onClick={() => void applyBulk()}
+            disabled={bulkBusy || bulkValue.trim() === ''}
+            className="h-7 rounded bg-blue-600 px-2 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-40"
+          >
+            {bulkBusy ? 'Applying…' : `Apply to ${selected.size}`}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setSelected(new Set())
+              setBulkMsg(null)
+            }}
+            className="h-7 rounded px-2 text-xs text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
+          >
+            Clear
+          </button>
+          {bulkMsg && <span className="text-xs text-slate-500">{bulkMsg}</span>}
+        </div>
+      )}
+
       <div className="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800">
-      <table className="w-full min-w-[520px] text-sm">
+      <table className="w-full min-w-[560px] text-sm">
         <thead className="bg-slate-50 text-left text-xs text-slate-500 dark:bg-slate-900/40 dark:text-slate-400">
           <tr>
+            <th className="px-2 py-2">
+              <input
+                type="checkbox"
+                checked={allSelected}
+                onChange={toggleAll}
+                aria-label="Select all variants"
+                className="rounded border-slate-300 dark:border-slate-600"
+              />
+            </th>
             <th className="px-3 py-2 font-medium">Variant</th>
             <th className="px-3 py-2 font-medium">Base price</th>
             <th className="px-3 py-2 font-medium">Listed qty</th>
@@ -408,7 +535,22 @@ function ByVariantTable({
             // active market's default when this variant has no listing yet.
             const rowFba = (cell?.fulfillmentChannel ?? (isFba ? 'FBA' : null)) === 'FBA'
             return (
-              <tr key={v.id} className="text-slate-700 dark:text-slate-300">
+              <tr
+                key={v.id}
+                className={cn(
+                  'text-slate-700 dark:text-slate-300',
+                  selected.has(v.id) && 'bg-blue-50/50 dark:bg-blue-950/20',
+                )}
+              >
+                <td className="px-2 py-1">
+                  <input
+                    type="checkbox"
+                    checked={selected.has(v.id)}
+                    onChange={() => toggleRow(v.id)}
+                    aria-label={`Select ${v.sku}`}
+                    className="rounded border-slate-300 dark:border-slate-600"
+                  />
+                </td>
                 <td className="px-3 py-1.5">
                   <span className="font-medium">{variantLabel(v.axes, v.sku)}</span>
                   <span className="ml-1.5 font-mono text-[10px] text-slate-400">{v.sku}</span>
