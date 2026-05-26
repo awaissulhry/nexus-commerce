@@ -1,0 +1,18 @@
+// UC.1 — Shared cockpit-shell primitives barrel.
+//
+// The Lego the per-channel cockpits compose. Nothing here imports from a
+// specific channel; channels import from here (UC.3 / UC.4). Created with
+// ZERO changes to either cockpit — migration is a separate phase.
+
+export * from './tokens'
+export { useCockpitModeBase } from './useCockpitModeBase'
+export type { CockpitMode, CockpitModeConfig } from './useCockpitModeBase'
+export { useCockpitFlag, readCockpitFlag, setCockpitFlag } from './useCockpitFlag'
+export { default as CockpitHeader } from './CockpitHeader'
+export type { CockpitHeaderProps } from './CockpitHeader'
+export { default as CockpitPreviewBand } from './CockpitPreviewBand'
+export type { CockpitPreviewBandProps } from './CockpitPreviewBand'
+export { default as CockpitCardGrid } from './CockpitCardGrid'
+export type { CockpitCardGridProps } from './CockpitCardGrid'
+export { default as CockpitClassicPassthrough } from './CockpitClassicPassthrough'
+export type { CockpitClassicPassthroughProps } from './CockpitClassicPassthrough'
