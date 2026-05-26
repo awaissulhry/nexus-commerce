@@ -602,6 +602,7 @@ export default function AmazonCockpit(props: Props) {
           channel="AMAZON"
           activeMarket={marketInfo.code}
           activeCurrency={marketInfo.currency}
+          activeFulfillment={composed.fulfillmentChannel.value}
           axisGrid={
             <VariationMatrix
               productId={product.id}

@@ -25,11 +25,16 @@ function EditableNumberCell({
   onSave,
   prefix,
   decimals = 0,
+  readOnly = false,
+  readOnlyHint,
 }: {
   value: number | null
   onSave: (next: number) => Promise<boolean>
   prefix?: string
   decimals?: number
+  /** Disable editing (e.g. FBA quantity is Amazon-managed). */
+  readOnly?: boolean
+  readOnlyHint?: string
 }) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState('')
@@ -37,6 +42,18 @@ function EditableNumberCell({
 
   const display =
     value == null ? '—' : `${prefix ? prefix + ' ' : ''}${value.toFixed(decimals)}`
+
+  if (readOnly) {
+    return (
+      <span
+        className="inline-flex items-center gap-1 px-1 py-0.5 tabular-nums text-slate-500 dark:text-slate-400"
+        title={readOnlyHint}
+      >
+        {display}
+        {readOnlyHint && <span aria-hidden className="text-[10px] text-slate-400">🔒</span>}
+      </span>
+    )
+  }
 
   if (!editing) {
     return (
@@ -108,6 +125,9 @@ export interface VariantCubeProps {
   channel?: string
   activeMarket: string
   activeCurrency: string
+  /** Active market's fulfilment. When 'FBA', quantity/stock is Amazon-
+   *  managed and not editable. */
+  activeFulfillment?: 'FBA' | 'FBM' | null
   /** The existing VariationMatrix, rendered as the axis-grid view. */
   axisGrid: ReactNode
 }
@@ -122,6 +142,7 @@ export default function VariantCube({
   channel = 'AMAZON',
   activeMarket,
   activeCurrency,
+  activeFulfillment,
   axisGrid,
 }: VariantCubeProps) {
   const [view, setView] = useState<CubeView>('axis')
@@ -160,6 +181,7 @@ export default function VariantCube({
           error={error}
           activeMarket={activeMarket}
           activeCurrency={activeCurrency}
+          activeFulfillment={activeFulfillment}
         />
       )}
 
@@ -268,12 +290,14 @@ function ByVariantView({
   error,
   activeMarket,
   activeCurrency,
+  activeFulfillment,
 }: {
   variants: ReturnType<typeof useVariantCube>['variants']
   loading: boolean
   error: string | null
   activeMarket: string
   activeCurrency: string
+  activeFulfillment?: 'FBA' | 'FBM' | null
 }) {
   if (loading) {
     return <div className="py-8 text-center text-sm text-slate-400">Loading variants…</div>
@@ -290,6 +314,7 @@ function ByVariantView({
       variants={variants}
       activeMarket={activeMarket}
       activeCurrency={activeCurrency}
+      activeFulfillment={activeFulfillment}
     />
   )
 }
@@ -300,11 +325,14 @@ function ByVariantTable({
   variants,
   activeMarket,
   activeCurrency,
+  activeFulfillment,
 }: {
   variants: ReturnType<typeof useVariantCube>['variants']
   activeMarket: string
   activeCurrency: string
+  activeFulfillment?: 'FBA' | 'FBM' | null
 }) {
+  const isFba = activeFulfillment === 'FBA'
   const [query, setQuery] = useState('')
   const [lowOnly, setLowOnly] = useState(false)
   // CUBE.1 — optimistic overlay of edited values (kept after a successful
@@ -396,9 +424,13 @@ function ByVariantTable({
                     <EditableNumberCell
                       value={effStock(v)}
                       decimals={0}
+                      readOnly={isFba}
+                      readOnlyHint={
+                        isFba ? 'Quantity is managed by Amazon for FBA offers' : undefined
+                      }
                       onSave={(n) => saveField(v.id, 'totalStock', n)}
                     />
-                    {low && <span className="ml-1 text-[10px]">⚠</span>}
+                    {low && !isFba && <span className="ml-1 text-[10px]">⚠</span>}
                   </span>
                 </td>
                 <td className="px-3 py-1.5 text-xs text-slate-500">
