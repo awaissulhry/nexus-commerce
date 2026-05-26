@@ -744,6 +744,7 @@ export default function AmazonCockpit(props: Props) {
           productId={product.id}
           marketplace={marketInfo.code}
           seedFulfillment={composed.fulfillmentChannel.value as 'FBA' | 'FBM' | null}
+          productFulfillment={(product?.fulfillmentMethod as string | null) ?? null}
           conditionType={composed.conditionType.value}
           onJumpToClassic={() => handleJumpTo('classic')}
         />

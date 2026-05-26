@@ -58,14 +58,27 @@ interface Props {
    *  inventory fetch resolves, and for condition which inventory
    *  doesn't carry). */
   seedFulfillment: Method
+  /** Product-level fulfilment default (Product.fulfillmentMethod). Used
+   *  as the last fallback when neither the per-market listing attribute
+   *  nor the composed seed carry a method — many listings only set the
+   *  catalogue-level method, not the per-marketplace attribute. */
+  productFulfillment?: string | null
   conditionType: string | null
   onJumpToClassic?: () => void
+}
+
+function normalizeMethod(raw: string | null | undefined): Method {
+  const v = (raw ?? '').toUpperCase()
+  if (v === 'FBA' || v === 'AFN' || v === 'AMAZON') return 'FBA'
+  if (v === 'FBM' || v === 'MFN' || v === 'MERCHANT' || v === 'SELLER') return 'FBM'
+  return null
 }
 
 export default function FulfillmentCard({
   productId,
   marketplace,
   seedFulfillment,
+  productFulfillment,
   conditionType,
   onJumpToClassic,
 }: Props) {
@@ -98,7 +111,8 @@ export default function FulfillmentCard({
   }, [productId, t])
 
   const productRow = data?.product.markets.find((m) => m.marketplace === marketplace) ?? null
-  const method: Method = productRow?.fulfillmentChannel ?? seedFulfillment
+  const method: Method =
+    productRow?.fulfillmentChannel ?? seedFulfillment ?? normalizeMethod(productFulfillment)
 
   // Per-variant method counts on THIS market — surfaces mixed fulfilment.
   const variantMethods = (data?.variants ?? [])
