@@ -34,6 +34,9 @@ export type {
   ScopeMember,
   FieldScopeResult,
 } from './FieldScopePopover'
+// FL.3b — link-group persistence client
+export { useFieldLinks } from './useFieldLinks'
+export type { FieldLinkGroupDto, FieldLinkMember, SetScopeOptions } from './useFieldLinks'
 export { default as IdentifiersCard } from './cards/IdentifiersCard'
 export type { IdentifiersCardProps, IdentifierRow } from './cards/IdentifiersCard'
 export { default as ImagesSummaryCard } from './cards/ImagesSummaryCard'

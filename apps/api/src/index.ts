@@ -113,6 +113,7 @@ import auditLogRoutes from "./routes/audit-log.routes.js";
 import syncLogsRoutes from "./routes/sync-logs.routes.js";
 import { listingsSyndicationRoutes } from "./routes/listings-syndication.routes.js";
 import { listingHealthRoutes } from "./routes/listing-health.routes.js";
+import { fieldLinksRoutes } from "./routes/field-links.routes.js";
 import productsCatalogRoutes from "./routes/products-catalog.routes.js";
 import productsAiRoutes from "./routes/products-ai.routes.js";
 import productsImagesRoutes from "./routes/products-images.routes.js";
@@ -467,6 +468,7 @@ app.register(catalogOrganizeRoutes, { prefix: '/api/catalog' });
 // endpoint conventions" for why /api/listings/health and
 // /api/catalog/:productId/listing-health coexist as distinct concepts.
 app.register(listingHealthRoutes);
+app.register(fieldLinksRoutes);
 app.register(outboundRoutes);
 app.register(matrixRoutes);
 app.register(inboundRoutes);

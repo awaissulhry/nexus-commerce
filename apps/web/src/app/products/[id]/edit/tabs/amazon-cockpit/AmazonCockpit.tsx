@@ -73,6 +73,7 @@ import {
   ImagesSummaryCard,
   useCockpitFlag,
   FieldScopePopover,
+  useFieldLinks,
   type FieldScope,
   type ScopeMember,
 } from '../../_shared/cockpit-shell'
@@ -191,11 +192,11 @@ export default function AmazonCockpit(props: Props) {
   // the editor's dirty/save lifecycle identical to today.
   const useDrawer = useCockpitFlag('all-fields-drawer', true)
   const [allFieldsOpen, setAllFieldsOpen] = useState(false)
-  // FL.3 (UI) — per-field scope control demo on the Brand field. The
-  // chosen scope is session-local until FL.3b wires persistence to
-  // FieldLinkGroup. scopeToSource maps the choice to a provenance badge.
+  // FL.3 / FL.3b — per-field scope control, persisted via FieldLinkGroup.
+  // Demonstrated on the Brand field; the chosen scope is stored and
+  // reloaded across sessions (degrades to inert if the table is absent).
   const [brandScopeOpen, setBrandScopeOpen] = useState(false)
-  const [brandScope, setBrandScope] = useState<FieldScope | null>(null)
+  const fieldLinks = useFieldLinks(product.id)
 
   const composed = useAmazonCompositor({
     product,
@@ -337,16 +338,14 @@ export default function AmazonCockpit(props: Props) {
     [useDrawer],
   )
 
-  // FL.3 — Amazon-market members offered in the scope popover, and the
-  // map from chosen scope → provenance badge source.
+  // FL.3 — Amazon-market members offered in the scope popover.
   const scopeMembers: ScopeMember[] = chips.map((c) => ({
     key: `AMAZON:${c.code}`,
     channel: 'AMAZON',
     marketplace: c.code,
     label: `Amazon ${c.code}`,
   }))
-  const scopeToSource = (s: FieldScope) =>
-    s === 'linked' ? 'linked' : s === 'independent' ? 'manual' : 'master'
+  const brandScope: FieldScope = fieldLinks.scopeFor('brand')
 
   // AF.4/5 — single classic-editor element, hosted by EITHER the
   // All-fields drawer (flag on) or the legacy stacked pass-through
@@ -612,7 +611,7 @@ export default function AmazonCockpit(props: Props) {
             {
               label: 'Brand',
               value: composed.brand.value,
-              source: brandScope ? scopeToSource(brandScope) : composed.brand.source,
+              source: brandScope === 'linked' ? 'linked' : composed.brand.source,
               onSourceClick: () => setBrandScopeOpen(true),
             },
           ]}
@@ -777,10 +776,13 @@ export default function AmazonCockpit(props: Props) {
         onClose={() => setBrandScopeOpen(false)}
         fieldLabel="Brand"
         marketLabel={`Amazon ${marketInfo.code}`}
-        scope={brandScope ?? 'master'}
+        scope={brandScope}
+        selectedMembers={fieldLinks.memberKeysFor('brand')}
         members={scopeMembers}
         canTranslate={false}
-        onApply={(r) => setBrandScope(r.scope)}
+        onApply={(r) =>
+          void fieldLinks.setScope('brand', r, { sourceLanguage: marketInfo.language })
+        }
       />
     </div>
   )
