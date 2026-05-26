@@ -28,7 +28,6 @@ import {
   ExternalLink,
   Settings2,
   Package,
-  ShieldCheck,
   Truck,
   ListTree,
 } from 'lucide-react'
@@ -56,6 +55,7 @@ import AplusCard from './aplus/AplusCard'
 import PricingCard from './pricing/PricingCard'
 import SuppressionCard from './suppression/SuppressionCard'
 import FulfillmentCard from './fulfillment/FulfillmentCard'
+import ComplianceCard from './compliance/ComplianceCard'
 import AutoFillCard from './autofill/AutoFillCard'
 import PublishCard from './publish/PublishCard'
 import { useCockpitShortcuts } from './useCockpitShortcuts'
@@ -754,11 +754,12 @@ export default function AmazonCockpit(props: Props) {
           healthReport={report}
           onJumpTo={handleJumpTo}
         />
-        <PlaceholderCard
-          targetId="compliance"
-          icon={<ShieldCheck className="w-4 h-4" />}
-          title={t('products.edit.cockpit.amazon.cards.compliance')}
-          value="GPSR · Hazmat · Battery · Country of origin"
+        <ComplianceCard
+          attributes={
+            (listing?.platformAttributes as Record<string, unknown> | null | undefined)
+              ?.attributes as Record<string, unknown> | null | undefined
+          }
+          onJumpToClassic={() => handleJumpTo('classic')}
         />
         <PlaceholderCard
           icon={<Package className="w-4 h-4" />}
