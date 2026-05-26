@@ -16,7 +16,7 @@
 import { useState } from 'react'
 import { Tag, ChevronRight, History } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
-import { Badge } from '@/components/ui/Badge'
+import { useTranslations } from '@/lib/i18n/use-translations'
 import CategoryPickerModal from './CategoryPickerModal'
 
 interface Props {
@@ -39,6 +39,7 @@ export default function CategoryCard({
   seedDescription,
   current,
 }: Props) {
+  const { t } = useTranslations()
   const [open, setOpen] = useState(false)
 
   return (
@@ -46,12 +47,8 @@ export default function CategoryCard({
       <div className="px-4 py-2.5 border-b border-slate-100 dark:border-slate-800 flex items-center gap-2">
         <Tag className="w-4 h-4 text-blue-500" />
         <div className="text-md font-medium text-slate-900 dark:text-slate-100">
-          Category
+          {t('products.edit.cockpit.ebay.category.title')}
         </div>
-        <Badge variant="info">EC.4</Badge>
-        <span className="text-xs text-slate-500 dark:text-slate-400 ml-auto">
-          Aspects land in EC.5
-        </span>
       </div>
 
       <div className="p-4 space-y-2">
@@ -77,28 +74,26 @@ export default function CategoryCard({
               onClick={() => setOpen(true)}
               className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 whitespace-nowrap"
             >
-              Change <ChevronRight className="w-3 h-3" />
+              {t('products.edit.cockpit.ebay.category.change')} <ChevronRight className="w-3 h-3" />
             </button>
           </div>
         ) : (
           <div className="flex items-center justify-between gap-3">
             <div className="text-xs text-slate-500 dark:text-slate-400">
-              No category picked yet — eBay won&apos;t accept the listing
-              until one is set.
+              {t('products.edit.cockpit.ebay.category.noneYet')}
             </div>
             <button
               type="button"
               onClick={() => setOpen(true)}
               className="px-2.5 py-1 text-xs font-medium rounded bg-blue-600 hover:bg-blue-700 text-white whitespace-nowrap"
             >
-              Pick category
+              {t('products.edit.cockpit.ebay.category.pick')}
             </button>
           </div>
         )}
         <div className="text-[10.5px] text-slate-400 italic pt-1 border-t border-slate-100 dark:border-slate-800 flex items-center gap-1">
           <History className="w-3 h-3" />
-          Re-categorising preserves your aspect work — the new schema is
-          reconciled at render time, not destructively rewritten.
+          {t('products.edit.cockpit.ebay.category.footer')}
         </div>
       </div>
 
