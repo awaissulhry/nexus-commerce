@@ -17,7 +17,7 @@
 // the corresponding ChannelListingTab section.
 
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowDownToLine, Sparkles, Send, ExternalLink, Settings2, History, Layers, ListTree } from 'lucide-react'
+import { Send, ExternalLink, Settings2, History, Layers, ListTree } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { cn } from '@/lib/utils'
@@ -328,27 +328,9 @@ export default function EbayCockpit(props: Props) {
         }
         actions={
           <>
-            {/* EC.1 — these buttons are placeholders. The real Pull /
-                Translate wiring lives in the classic pane below until
-                EC.6 / EC.12 land their replacements. */}
-            <Button
-              variant="secondary"
-              size="sm"
-              icon={<ArrowDownToLine className="w-3.5 h-3.5" />}
-              disabled
-              title="Coming in EC.6 — until then use the classic Pull below"
-            >
-              Pull
-            </Button>
-            <Button
-              variant="secondary"
-              size="sm"
-              icon={<Sparkles className="w-3.5 h-3.5" />}
-              disabled
-              title="Coming in EC.12 — until then use the classic AI Translate below"
-            >
-              AI improve
-            </Button>
+            {/* P.1 — removed the disabled Pull / AI placeholder buttons
+                (their tooltips referenced the old stacked classic editor,
+                now the All-fields drawer). */}
             <Button
               size="sm"
               icon={<Send className="w-3.5 h-3.5" />}

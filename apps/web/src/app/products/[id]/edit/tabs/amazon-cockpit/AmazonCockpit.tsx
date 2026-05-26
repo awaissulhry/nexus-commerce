@@ -24,8 +24,6 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
-  ArrowDownToLine,
-  Sparkles,
   Send,
   ExternalLink,
   Settings2,
@@ -473,27 +471,10 @@ export default function AmazonCockpit(props: Props) {
         }
         actions={
           <>
-            {/* AC.1 — placeholder action buttons. The real Pull / AI
-                improve / Publish wiring lives in the classic pane below
-                until AC.11–AC.12 land replacements. */}
-            <Button
-              variant="secondary"
-              size="sm"
-              icon={<ArrowDownToLine className="w-3.5 h-3.5" />}
-              disabled
-              title="Coming in AC.11 — until then use the classic Pull below"
-            >
-              {t('products.edit.cockpit.amazon.actionPull')}
-            </Button>
-            <Button
-              variant="secondary"
-              size="sm"
-              icon={<Sparkles className="w-3.5 h-3.5" />}
-              disabled
-              title="Coming in AC.11 — until then use the classic AI Translate below"
-            >
-              {t('products.edit.cockpit.amazon.actionAiImprove')}
-            </Button>
+            {/* P.1 — the disabled Pull / AI placeholder buttons were
+                removed: pulling from master + AI fill live in the
+                Auto-fill card, and their tooltips referenced the old
+                stacked classic editor (now the All-fields drawer). */}
             <Button
               size="sm"
               icon={<Send className="w-3.5 h-3.5" />}
