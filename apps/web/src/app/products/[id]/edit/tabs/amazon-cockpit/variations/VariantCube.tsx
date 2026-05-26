@@ -215,11 +215,16 @@ export default function VariantCube({
 
   return (
     <div className="min-w-0">
-      <div className="mb-2 flex items-center gap-1">
+      <div className="mb-1 flex items-center gap-1">
         {tab('axis', 'Axis grid')}
         {tab('variant', 'By variant')}
         {tab('market', 'By market')}
         <span className="ml-2 text-xs text-slate-400">· {activeMarket}</span>
+      </div>
+      <div className="mb-2 text-[11px] text-slate-400">
+        {view === 'axis' && 'Colour × size grid — edit a cell, or use the ▾ on a header to fill a whole row/column.'}
+        {view === 'variant' && `Every variant on ${activeMarket} — edit inline, or tick rows to set many at once.`}
+        {view === 'market' && 'Compare and edit one field across all markets; ⇥ fills a variant across markets.'}
       </div>
 
       {view === 'axis' && axisGrid}

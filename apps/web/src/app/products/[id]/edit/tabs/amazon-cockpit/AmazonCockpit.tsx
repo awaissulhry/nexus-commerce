@@ -758,7 +758,7 @@ export default function AmazonCockpit(props: Props) {
           open={allFieldsOpen}
           onClose={() => setAllFieldsOpen(false)}
           width="full"
-          title={t('products.edit.cockpit.amazon.allFieldsTitle')}
+          title={`${t('products.edit.cockpit.amazon.allFieldsTitle')} · ${marketInfo.code}`}
         >
           {classicEditor}
         </CockpitDrawer>
