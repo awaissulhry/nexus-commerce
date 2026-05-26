@@ -14,7 +14,92 @@
 
 import { useState, type ReactNode } from 'react'
 import { cn } from '@/lib/utils'
+import { getBackendUrl } from '@/lib/backend-url'
 import { useVariantCube } from '../../../_shared/cockpit-shell'
+
+// CUBE.1 — single editable numeric cell. Click → input; Enter/blur saves
+// via the provided onSave; Esc cancels. Shows a saving/error state. Used
+// for the per-variant master fields (base price, stock).
+function EditableNumberCell({
+  value,
+  onSave,
+  prefix,
+  decimals = 0,
+}: {
+  value: number | null
+  onSave: (next: number) => Promise<boolean>
+  prefix?: string
+  decimals?: number
+}) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState('')
+  const [state, setState] = useState<'idle' | 'saving' | 'error'>('idle')
+
+  const display =
+    value == null ? '—' : `${prefix ? prefix + ' ' : ''}${value.toFixed(decimals)}`
+
+  if (!editing) {
+    return (
+      <button
+        type="button"
+        onClick={() => {
+          setDraft(value == null ? '' : String(value))
+          setEditing(true)
+          setState('idle')
+        }}
+        className={cn(
+          'w-full rounded px-1 py-0.5 text-left tabular-nums hover:bg-slate-100 dark:hover:bg-slate-800',
+          state === 'error' && 'text-rose-500',
+        )}
+        title="Click to edit"
+      >
+        {display}
+        {state === 'error' && <span className="ml-1 text-[10px]">retry</span>}
+      </button>
+    )
+  }
+
+  const commit = async () => {
+    const n = parseFloat(draft)
+    if (!Number.isFinite(n) || n === value) {
+      setEditing(false)
+      return
+    }
+    setState('saving')
+    const ok = await onSave(n)
+    setEditing(false)
+    setState(ok ? 'idle' : 'error')
+  }
+
+  return (
+    <input
+      autoFocus
+      type="number"
+      value={draft}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') void commit()
+        if (e.key === 'Escape') setEditing(false)
+      }}
+      className="w-20 rounded border border-blue-300 px-1 py-0.5 text-sm tabular-nums dark:border-blue-700 dark:bg-slate-900"
+    />
+  )
+}
+
+async function patchChild(id: string, field: 'basePrice' | 'totalStock', value: number): Promise<boolean> {
+  try {
+    const r = await fetch(`${getBackendUrl()}/api/products/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ [field]: value }),
+    })
+    return r.ok
+  } catch {
+    return false
+  }
+}
 
 type CubeView = 'axis' | 'variant' | 'market'
 
@@ -200,37 +285,49 @@ function ByVariantView({
     return <div className="py-8 text-center text-sm text-slate-400">No variants.</div>
   }
 
-  const fmtPrice = (n: number | null) => (n == null ? '—' : `${activeCurrency} ${n.toFixed(2)}`)
-  const isLow = (v: (typeof variants)[number]) =>
-    v.lowStockThreshold != null && v.totalStock != null && v.totalStock <= v.lowStockThreshold
-
   return (
     <ByVariantTable
       variants={variants}
-      fmtPrice={fmtPrice}
-      isLow={isLow}
       activeMarket={activeMarket}
+      activeCurrency={activeCurrency}
     />
   )
 }
 
+type VariantEdit = { basePrice?: number; totalStock?: number }
+
 function ByVariantTable({
   variants,
-  fmtPrice,
-  isLow,
   activeMarket,
+  activeCurrency,
 }: {
   variants: ReturnType<typeof useVariantCube>['variants']
-  fmtPrice: (n: number | null) => string
-  isLow: (v: ReturnType<typeof useVariantCube>['variants'][number]) => boolean
   activeMarket: string
+  activeCurrency: string
 }) {
   const [query, setQuery] = useState('')
   const [lowOnly, setLowOnly] = useState(false)
+  // CUBE.1 — optimistic overlay of edited values (kept after a successful
+  // save so the cell doesn't flip back before the next cube refetch).
+  const [edits, setEdits] = useState<Record<string, VariantEdit>>({})
+
+  type Variant = ReturnType<typeof useVariantCube>['variants'][number]
+  const effBase = (v: Variant) => edits[v.id]?.basePrice ?? v.basePrice
+  const effStock = (v: Variant) => edits[v.id]?.totalStock ?? v.totalStock
+  const lowEff = (v: Variant) => {
+    const s = effStock(v)
+    return v.lowStockThreshold != null && s != null && s <= v.lowStockThreshold
+  }
+
+  const saveField = async (id: string, field: 'basePrice' | 'totalStock', n: number) => {
+    const ok = await patchChild(id, field, n)
+    if (ok) setEdits((e) => ({ ...e, [id]: { ...e[id], [field]: n } }))
+    return ok
+  }
 
   const q = query.trim().toLowerCase()
   const rows = variants.filter((v) => {
-    if (lowOnly && !isLow(v)) return false
+    if (lowOnly && !lowEff(v)) return false
     if (q) {
       const hay = `${variantLabel(v.axes, v.sku)} ${v.sku}`.toLowerCase()
       if (!hay.includes(q)) return false
@@ -269,7 +366,7 @@ function ByVariantTable({
         <thead className="bg-slate-50 text-left text-xs text-slate-500 dark:bg-slate-900/40 dark:text-slate-400">
           <tr>
             <th className="px-3 py-2 font-medium">Variant</th>
-            <th className="px-3 py-2 font-medium">Price</th>
+            <th className="px-3 py-2 font-medium">Base price</th>
             <th className="px-3 py-2 font-medium">Listed qty</th>
             <th className="px-3 py-2 font-medium">Stock</th>
             <th className="px-3 py-2 font-medium">Status</th>
@@ -278,18 +375,31 @@ function ByVariantTable({
         <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
           {rows.map((v) => {
             const cell = v.marketsByCode[activeMarket]
-            const low = isLow(v)
+            const low = lowEff(v)
             return (
               <tr key={v.id} className="text-slate-700 dark:text-slate-300">
                 <td className="px-3 py-1.5">
                   <span className="font-medium">{variantLabel(v.axes, v.sku)}</span>
                   <span className="ml-1.5 font-mono text-[10px] text-slate-400">{v.sku}</span>
                 </td>
-                <td className="px-3 py-1.5">{fmtPrice(cell?.price ?? v.basePrice)}</td>
+                <td className="px-3 py-1">
+                  <EditableNumberCell
+                    value={effBase(v)}
+                    prefix={activeCurrency}
+                    decimals={2}
+                    onSave={(n) => saveField(v.id, 'basePrice', n)}
+                  />
+                </td>
                 <td className="px-3 py-1.5">{cell?.listedQty ?? '—'}</td>
-                <td className={cn('px-3 py-1.5', low && 'text-amber-600 dark:text-amber-400')}>
-                  {v.totalStock ?? '—'}
-                  {low && <span className="ml-1 text-[10px]">⚠</span>}
+                <td className={cn('px-3 py-1', low && 'text-amber-600 dark:text-amber-400')}>
+                  <span className="inline-flex items-center">
+                    <EditableNumberCell
+                      value={effStock(v)}
+                      decimals={0}
+                      onSave={(n) => saveField(v.id, 'totalStock', n)}
+                    />
+                    {low && <span className="ml-1 text-[10px]">⚠</span>}
+                  </span>
                 </td>
                 <td className="px-3 py-1.5 text-xs text-slate-500">
                   {cell?.listingStatus || v.status || '—'}
