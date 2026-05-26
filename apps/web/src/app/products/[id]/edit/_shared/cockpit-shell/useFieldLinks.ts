@@ -10,6 +10,10 @@ import { useCallback, useEffect, useState } from 'react'
 import { getBackendUrl } from '@/lib/backend-url'
 import type { FieldScope, FieldScopeResult } from './FieldScopePopover'
 
+// Field keys that represent a price → propagation routes them through
+// /channel-pricing (the real price column) instead of the attributes PUT.
+const PRICE_FIELD_KEYS = new Set(['our_price', 'price', 'purchasable_offer.our_price'])
+
 export interface FieldLinkMember {
   channel: string
   marketplace: string
@@ -183,17 +187,47 @@ export function useFieldLinks(productId: string) {
     [productId],
   )
 
-  // FL.4 — apply confirmed entries by writing each member through the
-  // editor's own PUT contract (correct by construction).
+  // FL.4 — apply confirmed entries. Price routes through /channel-pricing
+  // (writes the real price column); everything else writes through the
+  // editor's own listing-attributes PUT (item_name→title, etc.).
   const applyPropagation = useCallback(
     async (
       fieldKey: string,
       entries: PropagationEntryDto[],
     ): Promise<{ ok: number; fail: number }> => {
+      const actionable = entries.filter((e) => e.action !== 'skip' && e.proposedValue != null)
+      if (actionable.length === 0) return { ok: 0, fail: 0 }
+
+      // Price → one /channel-pricing call (per-(channel, marketplace) price).
+      if (PRICE_FIELD_KEYS.has(fieldKey)) {
+        const updates = actionable
+          .map((e) => ({
+            marketplace: e.marketplace,
+            channel: e.channel,
+            price: parseFloat(e.proposedValue as string),
+          }))
+          .filter((u) => Number.isFinite(u.price))
+        if (updates.length === 0) return { ok: 0, fail: 0 }
+        try {
+          const r = await fetch(
+            `${getBackendUrl()}/api/products/${productId}/channel-pricing`,
+            {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              credentials: 'include',
+              body: JSON.stringify({ updates }),
+            },
+          )
+          return r.ok ? { ok: updates.length, fail: 0 } : { ok: 0, fail: updates.length }
+        } catch {
+          return { ok: 0, fail: updates.length }
+        }
+      }
+
+      // Text / other → per-member listing-attributes PUT.
       let ok = 0
       let fail = 0
-      for (const e of entries) {
-        if (e.action === 'skip' || e.proposedValue == null) continue
+      for (const e of actionable) {
         try {
           const r = await fetch(
             `${getBackendUrl()}/api/products/${productId}/listings/${e.channel}/${e.marketplace}`,
