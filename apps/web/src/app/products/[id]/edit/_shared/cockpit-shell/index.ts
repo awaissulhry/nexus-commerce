@@ -16,3 +16,10 @@ export { default as CockpitCardGrid } from './CockpitCardGrid'
 export type { CockpitCardGridProps } from './CockpitCardGrid'
 export { default as CockpitClassicPassthrough } from './CockpitClassicPassthrough'
 export type { CockpitClassicPassthroughProps } from './CockpitClassicPassthrough'
+
+// UC.2 — contracts + shared cards
+export * from './contracts'
+export { default as IdentifiersCard } from './cards/IdentifiersCard'
+export type { IdentifiersCardProps, IdentifierRow } from './cards/IdentifiersCard'
+export { default as ImagesSummaryCard } from './cards/ImagesSummaryCard'
+export type { ImagesSummaryCardProps } from './cards/ImagesSummaryCard'
