@@ -479,6 +479,11 @@ function ByVariantTable({
   const [bulkValue, setBulkValue] = useState('')
   const [bulkBusy, setBulkBusy] = useState(false)
   const [bulkMsg, setBulkMsg] = useState<string | null>(null)
+  // CUBE.5 — last bulk op's pre-values, for one-step Undo.
+  const [lastBulk, setLastBulk] = useState<{
+    field: 'basePrice' | 'totalStock'
+    prev: Record<string, number | null>
+  } | null>(null)
 
   const rowFbaFor = (v: Variant) => {
     const cell = v.marketsByCode[activeMarket]
@@ -517,6 +522,10 @@ function ByVariantTable({
       setBulkMsg(skipped > 0 ? `${skipped} FBA variant(s) — skipped` : 'Nothing to update')
       return
     }
+    // Capture pre-values for Undo before writing.
+    const prev: Record<string, number | null> = {}
+    for (const v of targets) prev[v.id] = bulkField === 'basePrice' ? effBase(v) : effStock(v)
+
     setBulkBusy(true)
     const ok = await patchChildrenBulk(targets.map((v) => v.id), bulkField, n)
     if (ok) {
@@ -525,11 +534,49 @@ function ByVariantTable({
         for (const v of targets) next[v.id] = { ...next[v.id], [bulkField]: n }
         return next
       })
+      setLastBulk({ field: bulkField, prev })
       setBulkMsg(`Updated ${targets.length}${skipped ? ` · ${skipped} FBA skipped` : ''}`)
       setBulkValue('')
     } else {
       setBulkMsg('Bulk update failed')
     }
+    setBulkBusy(false)
+  }
+
+  // CUBE.5 — restore each target to its captured pre-value (per-id).
+  const undoBulk = async () => {
+    if (!lastBulk) return
+    const entries = Object.entries(lastBulk.prev).filter(
+      ([, v]) => v != null,
+    ) as Array<[string, number]>
+    if (entries.length === 0) {
+      setLastBulk(null)
+      return
+    }
+    setBulkBusy(true)
+    try {
+      const r = await fetch(`${getBackendUrl()}/api/products/bulk`, {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          changes: entries.map(([id, v]) => ({ id, field: lastBulk.field, value: v })),
+        }),
+      })
+      if (r.ok) {
+        setEdits((e) => {
+          const next = { ...e }
+          for (const [id, v] of entries) next[id] = { ...next[id], [lastBulk.field]: v }
+          return next
+        })
+        setBulkMsg(`Reverted ${entries.length}`)
+      } else {
+        setBulkMsg('Undo failed')
+      }
+    } catch {
+      setBulkMsg('Undo failed')
+    }
+    setLastBulk(null)
     setBulkBusy(false)
   }
 
@@ -558,6 +605,17 @@ function ByVariantTable({
         <span className="text-xs text-slate-400">
           {rows.length} / {variants.length}
         </span>
+        {lastBulk && (
+          <button
+            type="button"
+            onClick={() => void undoBulk()}
+            disabled={bulkBusy}
+            title="Revert the last bulk change"
+            className="ml-auto inline-flex items-center gap-1 h-7 rounded border border-slate-200 px-2 text-xs text-slate-600 hover:bg-slate-100 disabled:opacity-40 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+          >
+            ↩ Undo bulk
+          </button>
+        )}
       </div>
 
       {/* CUBE.2 — bulk action bar (appears when rows are selected). */}
