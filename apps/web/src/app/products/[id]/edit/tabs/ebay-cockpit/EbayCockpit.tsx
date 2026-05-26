@@ -29,7 +29,24 @@ import {
   CockpitClassicPassthrough,
   CockpitDrawer,
   useCockpitFlag,
+  IdentifiersCard,
+  FieldScopePopover,
+  PropagationDiffModal,
+  useFieldLinks,
+  type ScopeMember,
+  type PropagatePreview,
+  type FieldSource,
 } from '../../_shared/cockpit-shell'
+
+/** A linkable content field surfaced in the Shared-fields card.
+ *  fieldKey matches the Amazon keys so a link group can span channels. */
+interface LinkField {
+  fieldKey: string
+  label: string
+  value: string | null
+  translatable: boolean
+  source: FieldSource
+}
 import MarketChipStrip from '../../_shared/market-switch/MarketChipStrip'
 import { useMarketSwitch } from '../../_shared/market-switch/useMarketSwitch'
 import { compareMarketChips, type MarketChip } from '../../_shared/market-switch/types'
@@ -143,6 +160,13 @@ export default function EbayCockpit(props: Props) {
   const useDrawer = useCockpitFlag('all-fields-drawer', true)
   const [allFieldsOpen, setAllFieldsOpen] = useState(false)
   const [versionDrawerOpen, setVersionDrawerOpen] = useState(false)
+  // FL — per-field scope control (parity with Amazon). Same fieldKeys so
+  // a link group can span Amazon + eBay.
+  const fieldLinks = useFieldLinks(product.id)
+  const [scopeFieldKey, setScopeFieldKey] = useState<string | null>(null)
+  const [propagateField, setPropagateField] = useState<LinkField | null>(null)
+  const [propagateData, setPropagateData] = useState<PropagatePreview | null>(null)
+  const [propagateBusy, setPropagateBusy] = useState(false)
   const [publishDrawerOpen, setPublishDrawerOpen] = useState(false)
   const [siblingsModalOpen, setSiblingsModalOpen] = useState(false)
 
@@ -236,6 +260,28 @@ export default function EbayCockpit(props: Props) {
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // FL — scope members + linkable content fields (same fieldKeys as
+  // Amazon so a link group spans channels).
+  const scopeMembers: ScopeMember[] = chips.map((c) => ({
+    key: `EBAY:${c.code}`,
+    channel: 'EBAY',
+    marketplace: c.code,
+    label: `eBay ${c.code}`,
+  }))
+  const linkFields: LinkField[] = [
+    { fieldKey: 'item_name', label: 'Title', value: composed.title.value || null, translatable: true, source: composed.title.source },
+    { fieldKey: 'product_description', label: 'Description', value: composed.description.value || null, translatable: true, source: composed.description.source },
+    { fieldKey: 'our_price', label: 'Price', value: composed.price.value != null ? `${composed.currency} ${composed.price.value.toFixed(2)}` : null, translatable: false, source: composed.price.source },
+    { fieldKey: 'brand', label: 'Brand', value: composed.brand.value || null, translatable: false, source: composed.brand.source },
+  ]
+  const activeScopeField = scopeFieldKey ? linkFields.find((f) => f.fieldKey === scopeFieldKey) ?? null : null
+  const scopeRows = linkFields.map((f) => ({
+    label: f.label,
+    value: f.value,
+    source: fieldLinks.scopeFor(f.fieldKey) === 'linked' ? ('linked' as const) : f.source,
+    onSourceClick: () => setScopeFieldKey(f.fieldKey),
+  }))
 
   // AF.4/5 — single classic-editor element, hosted by EITHER the
   // All-fields drawer (flag on) or the legacy stacked pass-through.
@@ -468,6 +514,9 @@ export default function EbayCockpit(props: Props) {
 
       {/* ── Zone 3: Cards (UC.4 — shared CockpitCardGrid, sequential) ─ */}
       <CockpitCardGrid layout="sequential">
+      {/* FL — Shared fields: scope pill (master / linked / independent)
+          + propagate per linkable content field. */}
+      <IdentifiersCard title="Shared fields" rows={scopeRows} />
       {/* ── EC.2 — Listing Essentials (Field Source System demo) ──── */}
       <ListingEssentialsCard
         productId={product.id}
@@ -733,6 +782,62 @@ export default function EbayCockpit(props: Props) {
         marketplace={marketplace}
         open={siblingsModalOpen}
         onClose={() => setSiblingsModalOpen(false)}
+      />
+
+      {/* FL — per-field scope control + propagation (generic). */}
+      <FieldScopePopover
+        open={scopeFieldKey !== null}
+        onClose={() => setScopeFieldKey(null)}
+        fieldLabel={activeScopeField?.label ?? ''}
+        marketLabel={`eBay ${marketInfo.code}`}
+        scope={scopeFieldKey ? fieldLinks.scopeFor(scopeFieldKey) : 'master'}
+        selectedMembers={scopeFieldKey ? fieldLinks.memberKeysFor(scopeFieldKey) : []}
+        members={scopeMembers}
+        canTranslate={activeScopeField?.translatable ?? false}
+        onApply={(r) => {
+          if (scopeFieldKey) {
+            void fieldLinks.setScope(scopeFieldKey, r, { sourceLanguage: marketInfo.language })
+          }
+        }}
+        onPropagate={() => {
+          const f = activeScopeField
+          if (!f) return
+          setScopeFieldKey(null)
+          void (async () => {
+            const preview = await fieldLinks.propagatePreview(f.fieldKey, f.value ?? '', {
+              channel: 'EBAY',
+              marketplace: marketInfo.code,
+              language: marketInfo.language,
+            })
+            setPropagateData(preview)
+            setPropagateField(f)
+          })()
+        }}
+      />
+      <PropagationDiffModal
+        open={propagateField !== null}
+        onClose={() => {
+          if (!propagateBusy) {
+            setPropagateField(null)
+            setPropagateData(null)
+          }
+        }}
+        fieldLabel={propagateField?.label ?? ''}
+        entries={propagateData?.entries ?? []}
+        translatable={propagateData?.translatable ?? false}
+        aiBudgetExceeded={propagateData?.aiBudgetExceeded}
+        busy={propagateBusy}
+        onApply={(selected) => {
+          const f = propagateField
+          if (!f) return
+          void (async () => {
+            setPropagateBusy(true)
+            await fieldLinks.applyPropagation(f.fieldKey, selected)
+            setPropagateBusy(false)
+            setPropagateField(null)
+            setPropagateData(null)
+          })()
+        }}
       />
     </div>
     </FieldSourceProvider>
