@@ -404,6 +404,9 @@ function ByVariantTable({
           {rows.map((v) => {
             const cell = v.marketsByCode[activeMarket]
             const low = lowEff(v)
+            // Per-SKU fulfilment (from /channel-inventory); fall back to the
+            // active market's default when this variant has no listing yet.
+            const rowFba = (cell?.fulfillmentChannel ?? (isFba ? 'FBA' : null)) === 'FBA'
             return (
               <tr key={v.id} className="text-slate-700 dark:text-slate-300">
                 <td className="px-3 py-1.5">
@@ -424,13 +427,13 @@ function ByVariantTable({
                     <EditableNumberCell
                       value={effStock(v)}
                       decimals={0}
-                      readOnly={isFba}
+                      readOnly={rowFba}
                       readOnlyHint={
-                        isFba ? 'Quantity is managed by Amazon for FBA offers' : undefined
+                        rowFba ? 'Quantity is managed by Amazon for FBA offers' : undefined
                       }
                       onSave={(n) => saveField(v.id, 'totalStock', n)}
                     />
-                    {low && !isFba && <span className="ml-1 text-[10px]">⚠</span>}
+                    {low && !rowFba && <span className="ml-1 text-[10px]">⚠</span>}
                   </span>
                 </td>
                 <td className="px-3 py-1.5 text-xs text-slate-500">

@@ -11,6 +11,17 @@
 import type { FastifyInstance } from 'fastify'
 import prisma from '../db.js'
 
+// Normalize Amazon's fulfilment value (stored on
+// ChannelListing.platformAttributes.fulfillmentChannel) to FBA/FBM. AFN =
+// Amazon-fulfilled (FBA), MFN/MERCHANT = merchant-fulfilled (FBM).
+function normalizeFulfillment(pa: unknown): 'FBA' | 'FBM' | null {
+  const raw = (pa as Record<string, unknown> | null | undefined)?.fulfillmentChannel
+  const s = typeof raw === 'string' ? raw.toUpperCase() : ''
+  if (s === 'AFN' || s === 'FBA') return 'FBA'
+  if (s === 'MFN' || s === 'FBM' || s === 'MERCHANT') return 'FBM'
+  return null
+}
+
 export default async function productChannelDataRoutes(fastify: FastifyInstance) {
 
   // ── GET /api/products/:id/channel-pricing ───────────────────────────────
@@ -206,7 +217,7 @@ export default async function productChannelDataRoutes(fastify: FastifyInstance)
       // Product-level ChannelListing (used for non-parent + product summary row)
       const channelListings = await prisma.channelListing.findMany({
         where: { productId: id, channel },
-        select: { marketplace: true, channel: true, quantity: true, stockBuffer: true, listingStatus: true, lastSyncedAt: true },
+        select: { marketplace: true, channel: true, quantity: true, stockBuffer: true, listingStatus: true, lastSyncedAt: true, platformAttributes: true },
         orderBy: { marketplace: 'asc' },
       })
 
@@ -217,6 +228,7 @@ export default async function productChannelDataRoutes(fastify: FastifyInstance)
         buffer: cl.stockBuffer ?? 0,
         listingStatus: cl.listingStatus,
         lastSyncedAt: cl.lastSyncedAt?.toISOString() ?? null,
+        fulfillmentChannel: normalizeFulfillment(cl.platformAttributes),
       }))
 
       let variantRows: Array<{
@@ -235,7 +247,7 @@ export default async function productChannelDataRoutes(fastify: FastifyInstance)
             id: true, sku: true, totalStock: true, variantAttributes: true,
             channelListings: {
               where: { channel },
-              select: { marketplace: true, channel: true, quantity: true, stockBuffer: true, listingStatus: true, lastSyncedAt: true },
+              select: { marketplace: true, channel: true, quantity: true, stockBuffer: true, listingStatus: true, lastSyncedAt: true, platformAttributes: true },
             },
           },
           orderBy: { sku: 'asc' },
@@ -253,6 +265,7 @@ export default async function productChannelDataRoutes(fastify: FastifyInstance)
             buffer: cl.stockBuffer ?? 0,
             listingStatus: cl.listingStatus,
             lastSyncedAt: cl.lastSyncedAt?.toISOString() ?? null,
+            fulfillmentChannel: normalizeFulfillment(cl.platformAttributes),
           })),
         }))
       }

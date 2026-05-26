@@ -22,6 +22,8 @@ export interface VariantMarketCell {
   physicalStock: number
   listingStatus: string
   lastSyncedAt: string | null
+  /** FBA = Amazon-managed inventory (quantity not seller-editable). */
+  fulfillmentChannel: 'FBA' | 'FBM' | null
 }
 
 export interface CubeVariant {
@@ -89,6 +91,7 @@ export function useVariantCube(productId: string, channel = 'AMAZON') {
             physicalStock: 0,
             listingStatus: '',
             lastSyncedAt: null,
+            fulfillmentChannel: null,
           } as VariantMarketCell)
         byMarket[mp] = cell
         cells.set(variantId, byMarket)
@@ -115,6 +118,7 @@ export function useVariantCube(productId: string, channel = 'AMAZON') {
             cell.listedQty = m.listedQty ?? cell.listedQty
             cell.physicalStock = v.physicalStock ?? cell.physicalStock
             if (m.listingStatus && !cell.listingStatus) cell.listingStatus = m.listingStatus
+            if (m.fulfillmentChannel) cell.fulfillmentChannel = m.fulfillmentChannel
           }
         }
       }
