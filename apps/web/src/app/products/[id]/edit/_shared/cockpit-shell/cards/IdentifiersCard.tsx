@@ -23,6 +23,9 @@ export interface IdentifierRow {
   locked?: boolean
   /** FL.2 — provenance source; renders a muted badge after the value. */
   source?: FieldSource
+  /** FL.3 — when set, the source badge becomes a button opening the
+   *  per-field scope popover. */
+  onSourceClick?: () => void
 }
 
 export interface IdentifiersCardProps {
@@ -61,7 +64,9 @@ export default function IdentifiersCard({
                 <span className="truncate">
                   {row.value ?? <span className="text-slate-400">—</span>}
                 </span>
-                {row.source && <FieldSourceBadge source={row.source} />}
+                {row.source && (
+                  <FieldSourceBadge source={row.source} onClick={row.onSourceClick} />
+                )}
               </dd>
             </div>
           ))}

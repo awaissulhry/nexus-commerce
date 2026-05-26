@@ -72,6 +72,9 @@ import {
   IdentifiersCard,
   ImagesSummaryCard,
   useCockpitFlag,
+  FieldScopePopover,
+  type FieldScope,
+  type ScopeMember,
 } from '../../_shared/cockpit-shell'
 
 interface MarketInfo {
@@ -188,6 +191,11 @@ export default function AmazonCockpit(props: Props) {
   // the editor's dirty/save lifecycle identical to today.
   const useDrawer = useCockpitFlag('all-fields-drawer', true)
   const [allFieldsOpen, setAllFieldsOpen] = useState(false)
+  // FL.3 (UI) — per-field scope control demo on the Brand field. The
+  // chosen scope is session-local until FL.3b wires persistence to
+  // FieldLinkGroup. scopeToSource maps the choice to a provenance badge.
+  const [brandScopeOpen, setBrandScopeOpen] = useState(false)
+  const [brandScope, setBrandScope] = useState<FieldScope | null>(null)
 
   const composed = useAmazonCompositor({
     product,
@@ -328,6 +336,17 @@ export default function AmazonCockpit(props: Props) {
     },
     [useDrawer],
   )
+
+  // FL.3 — Amazon-market members offered in the scope popover, and the
+  // map from chosen scope → provenance badge source.
+  const scopeMembers: ScopeMember[] = chips.map((c) => ({
+    key: `AMAZON:${c.code}`,
+    channel: 'AMAZON',
+    marketplace: c.code,
+    label: `Amazon ${c.code}`,
+  }))
+  const scopeToSource = (s: FieldScope) =>
+    s === 'linked' ? 'linked' : s === 'independent' ? 'manual' : 'master'
 
   // AF.4/5 — single classic-editor element, hosted by EITHER the
   // All-fields drawer (flag on) or the legacy stacked pass-through
@@ -590,7 +609,12 @@ export default function AmazonCockpit(props: Props) {
               mono: true,
               source: 'locked',
             },
-            { label: 'Brand', value: composed.brand.value, source: composed.brand.source },
+            {
+              label: 'Brand',
+              value: composed.brand.value,
+              source: brandScope ? scopeToSource(brandScope) : composed.brand.source,
+              onSourceClick: () => setBrandScopeOpen(true),
+            },
           ]}
         />
         <CategoryCard
@@ -745,6 +769,19 @@ export default function AmazonCockpit(props: Props) {
           {classicEditor}
         </CockpitClassicPassthrough>
       )}
+
+      {/* FL.3 (UI) — per-field scope control. Session-local until FL.3b
+          wires persistence to FieldLinkGroup. */}
+      <FieldScopePopover
+        open={brandScopeOpen}
+        onClose={() => setBrandScopeOpen(false)}
+        fieldLabel="Brand"
+        marketLabel={`Amazon ${marketInfo.code}`}
+        scope={brandScope ?? 'master'}
+        members={scopeMembers}
+        canTranslate={false}
+        onApply={(r) => setBrandScope(r.scope)}
+      />
     </div>
   )
 }

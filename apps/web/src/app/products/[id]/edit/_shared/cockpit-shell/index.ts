@@ -26,6 +26,14 @@ export * from './contracts'
 // FL.2 — provenance badge
 export { default as FieldSourceBadge } from './FieldSourceBadge'
 export type { FieldSourceBadgeProps } from './FieldSourceBadge'
+// FL.3 — per-field scope control
+export { default as FieldScopePopover } from './FieldScopePopover'
+export type {
+  FieldScopePopoverProps,
+  FieldScope,
+  ScopeMember,
+  FieldScopeResult,
+} from './FieldScopePopover'
 export { default as IdentifiersCard } from './cards/IdentifiersCard'
 export type { IdentifiersCardProps, IdentifierRow } from './cards/IdentifiersCard'
 export { default as ImagesSummaryCard } from './cards/ImagesSummaryCard'
