@@ -642,27 +642,23 @@ function TwoAxisGrid({
     }
     setDraftField(parentId, 'variantOverrides', next)
     try {
-      const tasks = targets.map((t) =>
-        fetch(
-          `${getBackendUrl()}/api/products/${encodeURIComponent(t.id)}`,
-          {
-            method: 'PATCH',
-            credentials: 'include',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ [field]: src.value }),
-          },
-        ).then((r) => {
-          if (!r.ok) throw new Error(`HTTP ${r.status} for ${t.sku}`)
+      // UC.5 — one transactional /products/bulk call instead of N
+      // parallel per-product PATCHes (same field + code path, far fewer
+      // round-trips at hundreds of variants).
+      const res = await fetch(`${getBackendUrl()}/api/products/bulk`, {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          changes: targets.map((t) => ({ id: t.id, field, value: src.value })),
         }),
-      )
-      const results = await Promise.allSettled(tasks)
-      const failed = results.filter((r) => r.status === 'rejected').length
-      const ok = results.length - failed
-      setBulkFlash(
-        failed === 0
-          ? `Applied to ${ok} variant${ok === 1 ? '' : 's'} in ${label}.`
-          : `${ok}/${results.length} applied — ${failed} failed.`,
-      )
+      })
+      if (!res.ok) {
+        const body = (await res.json().catch(() => null)) as { error?: string } | null
+        throw new Error(body?.error ?? `HTTP ${res.status}`)
+      }
+      const ok = targets.length
+      setBulkFlash(`Applied to ${ok} variant${ok === 1 ? '' : 's'} in ${label}.`)
       window.setTimeout(() => setBulkFlash(null), 3500)
     } catch (e) {
       setBulkFlash(
