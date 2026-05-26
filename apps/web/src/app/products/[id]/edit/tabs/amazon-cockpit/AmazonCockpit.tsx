@@ -48,7 +48,7 @@ import {
   isManifestWarm,
   markManifestWarm,
 } from '../../_shared/market-switch/useMarketSwitch'
-import type { MarketChip } from '../../_shared/market-switch/types'
+import { compareMarketChips, type MarketChip } from '../../_shared/market-switch/types'
 import HealthPanel from './health/HealthPanel'
 import { computeHealthScore, type JumpTarget } from './health/computeHealthScore'
 import VariationMatrix from './variations/VariationMatrix'
@@ -228,19 +228,21 @@ export default function AmazonCockpit(props: Props) {
     ].filter(
       (m, i, arr) => arr.findIndex((x) => x.code === m.code) === i,
     )
-    return ordered.map((m) => {
-      const l =
-        m.code === marketInfo.code
-          ? listing
-          : siblingListings.find((sl) => sl.marketplace === m.code)
-      return {
-        code: m.code,
-        name: m.name,
-        hasListing: !!l,
-        listingStatus: l?.listingStatus ?? null,
-        dirtyCount: getDirtyForMarket?.(m.code) ?? 0,
-      }
-    })
+    return ordered
+      .map((m) => {
+        const l =
+          m.code === marketInfo.code
+            ? listing
+            : siblingListings.find((sl) => sl.marketplace === m.code)
+        return {
+          code: m.code,
+          name: m.name,
+          hasListing: !!l,
+          listingStatus: l?.listingStatus ?? null,
+          dirtyCount: getDirtyForMarket?.(m.code) ?? 0,
+        }
+      })
+      .sort(compareMarketChips)
   }, [marketInfo, siblingMarkets, listing, siblingListings, getDirtyForMarket])
 
   // AC.3 — Hover-warm. Primes the schema template cache for the

@@ -32,7 +32,7 @@ import {
 } from '../../_shared/cockpit-shell'
 import MarketChipStrip from '../../_shared/market-switch/MarketChipStrip'
 import { useMarketSwitch } from '../../_shared/market-switch/useMarketSwitch'
-import type { MarketChip } from '../../_shared/market-switch/types'
+import { compareMarketChips, type MarketChip } from '../../_shared/market-switch/types'
 import { postCockpitEvent } from '../../_shared/telemetry/cockpit-telemetry'
 import ChannelListingTab from '../ChannelListingTab'
 import { useEbayCompositor } from './useEbayCompositor'
@@ -197,19 +197,21 @@ export default function EbayCockpit(props: Props) {
     const ordered: MarketInfo[] = [marketInfo, ...(siblingMarkets ?? [])].filter(
       (m, i, arr) => arr.findIndex((x) => x.code === m.code) === i,
     )
-    return ordered.map((m) => {
-      const l =
-        m.code === marketInfo.code
-          ? listing
-          : siblingListings.find((sl) => sl.marketplace === m.code)
-      return {
-        code: m.code,
-        name: m.name,
-        hasListing: !!l,
-        listingStatus: l?.listingStatus ?? null,
-        dirtyCount: getDirtyForMarket?.(m.code) ?? 0,
-      }
-    })
+    return ordered
+      .map((m) => {
+        const l =
+          m.code === marketInfo.code
+            ? listing
+            : siblingListings.find((sl) => sl.marketplace === m.code)
+        return {
+          code: m.code,
+          name: m.name,
+          hasListing: !!l,
+          listingStatus: l?.listingStatus ?? null,
+          dirtyCount: getDirtyForMarket?.(m.code) ?? 0,
+        }
+      })
+      .sort(compareMarketChips)
   }, [marketInfo, siblingMarkets, listing, siblingListings, getDirtyForMarket])
 
   const activeDirty = getDirtyForMarket?.(marketInfo.code) ?? 0

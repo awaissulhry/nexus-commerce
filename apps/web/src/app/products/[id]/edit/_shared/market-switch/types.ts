@@ -37,6 +37,24 @@ export function marketFlag(code: string): string {
   return FLAG[code] ?? '🌐'
 }
 
+// FX.2 — Stable chip order. Cockpits build the chip list as
+// [activeMarket, ...siblings], which makes the selected chip jump to the
+// front on every switch. Sorting by a canonical order (Xavia primary IT
+// first, then the common EU markets, then alphabetical) keeps positions
+// fixed so only the highlight moves.
+const MARKET_ORDER = [
+  'IT', 'DE', 'FR', 'ES', 'UK', 'GB', 'NL', 'SE', 'PL', 'BE', 'IE', 'AT', 'CH', 'PT', 'US', 'JP',
+]
+
+export function compareMarketChips(a: MarketChip, b: MarketChip): number {
+  const ia = MARKET_ORDER.indexOf(a.code.toUpperCase())
+  const ib = MARKET_ORDER.indexOf(b.code.toUpperCase())
+  const ra = ia === -1 ? MARKET_ORDER.length : ia
+  const rb = ib === -1 ? MARKET_ORDER.length : ib
+  if (ra !== rb) return ra - rb
+  return a.code.localeCompare(b.code)
+}
+
 export function classifyStatus(
   hasListing: boolean,
   status?: string | null,
