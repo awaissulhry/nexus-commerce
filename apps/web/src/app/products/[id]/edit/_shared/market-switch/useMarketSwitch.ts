@@ -53,6 +53,17 @@ interface Options {
  *  here without importing flat-file code. */
 const warmedKeys = new Map<string, number>()
 
+// FX.1 — Per-(path, channel) URL-adoption guard. The cockpit REMOUNTS on
+// every market switch (its key includes the selected market), so a plain
+// per-instance ref re-runs the adopt effect each remount. At that moment
+// useSearchParams still reflects the OLD ?market= (router.replace from the
+// previous instance hasn't propagated), so the adopt would call
+// onSwitch(oldMarket) and revert the switch — the "can't change market"
+// bug. Keying by pathname+channel at module scope means we adopt the URL
+// exactly once per product+channel (genuine deep-link) and never re-adopt
+// on a switch-remount. A different product (pathname change) adopts afresh.
+const adoptedPaths = new Set<string>()
+
 export function isManifestWarm(key: string, ttlMs = 5 * 60_000): boolean {
   const at = warmedKeys.get(key)
   if (!at) return false
@@ -68,6 +79,7 @@ export function markManifestWarm(key: string): void {
 }
 
 export function useMarketSwitch({
+  channel,
   active,
   markets,
   onSwitch,
@@ -82,21 +94,22 @@ export function useMarketSwitch({
   const activeRef = useRef(active)
   activeRef.current = active
 
-  // Read ?market= on mount and adopt it if the parent's state hasn't
-  // already converged. Guard prevents an infinite ping-pong with the
-  // write effect below.
-  const adoptedRef = useRef(false)
+  // Read ?market= and adopt it ONCE per product+channel (genuine deep
+  // link). The module-scope guard (keyed by pathname+channel) survives the
+  // remount that a market switch triggers, so we never re-adopt a stale
+  // URL and revert the switch.
   useEffect(() => {
-    if (!syncUrl || adoptedRef.current) return
-    adoptedRef.current = true
+    if (!syncUrl) return
+    const adoptKey = `${pathname}__${channel}`
+    if (adoptedPaths.has(adoptKey)) return
+    adoptedPaths.add(adoptKey)
     const url = params?.get('market')
     if (!url || url === active) return
     const known = markets.some((m) => m.code === url)
     if (known) onSwitch(url)
-    // We intentionally skip onSwitch from deps — the hook only adopts
-    // the URL once on mount.
+    // onSwitch intentionally omitted — adopt fires once per path+channel.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [params, markets, active, syncUrl])
+  }, [params, markets, active, syncUrl, pathname, channel])
 
   // Write the URL when `active` changes. Use replace (no history
   // entry per chip click — would clutter back/forward). Only writes
