@@ -21,6 +21,7 @@ import { Send, ExternalLink, Settings2, History, Layers, ListTree } from 'lucide
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { cn } from '@/lib/utils'
+import { useTranslations } from '@/lib/i18n/use-translations'
 import {
   COCKPIT_ROOT,
   CockpitHeader,
@@ -152,6 +153,7 @@ export default function EbayCockpit(props: Props) {
     product, marketplace, marketInfo, siblingMarkets, siblingListings = [], listing, childrenList,
     onMarketSwitch, getDirtyForMarket, flushActiveMarket, discardActiveMarket,
   } = props
+  const { t } = useTranslations()
   const [, setMode] = useCockpitMode()
   const [previewOpen, setPreviewOpen] = useState(true)
   const [classicOpen, setClassicOpen] = useState(true)
@@ -310,7 +312,7 @@ export default function EbayCockpit(props: Props) {
           chips.length > 1 ? (
             <div className="px-4 py-2 border-b border-slate-100 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/40 flex items-center gap-3 flex-wrap">
               <span className="text-[10.5px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                Markets
+                {t('products.edit.cockpit.ebay.markets')}
               </span>
               <MarketChipStrip
                 markets={chips}
@@ -364,7 +366,7 @@ export default function EbayCockpit(props: Props) {
             {composed.status.externalListingId ? (
               <span className="font-mono text-xs">{composed.status.externalListingId}</span>
             ) : (
-              <span>Not yet listed on this marketplace</span>
+              <span>{t('products.edit.cockpit.ebay.notListed')}</span>
             )}
             <span>·</span>
             <span>{marketInfo.currency}</span>
@@ -381,25 +383,25 @@ export default function EbayCockpit(props: Props) {
               size="sm"
               icon={<Send className="w-3.5 h-3.5" />}
               onClick={() => setPublishDrawerOpen(true)}
-              title={`Publish this listing to eBay ${marketInfo.code} via the Inventory API`}
+              title={t('products.edit.cockpit.ebay.publishTitle', { market: marketInfo.code })}
             >
-              Publish
+              {t('products.edit.cockpit.ebay.publish')}
             </Button>
             <button
               type="button"
               onClick={() => setSiblingsModalOpen(true)}
               className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
-              title="Copy this product's eBay layout to similar products"
+              title={t('products.edit.cockpit.ebay.applyToSiblingsTitle')}
             >
-              <Layers className="w-3 h-3" /> Apply to siblings
+              <Layers className="w-3 h-3" /> {t('products.edit.cockpit.ebay.applyToSiblings')}
             </button>
             <button
               type="button"
               onClick={() => setVersionDrawerOpen(true)}
               className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
-              title="Open version history — snapshots + restore"
+              title={t('products.edit.cockpit.ebay.historyTitle')}
             >
-              <History className="w-3 h-3" /> History
+              <History className="w-3 h-3" /> {t('products.edit.cockpit.ebay.history')}
               {versionHistory.length > 0 && (
                 <span className="text-[10px] font-mono px-1 py-0 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 ml-0.5">
                   {versionHistory.length}
@@ -411,9 +413,9 @@ export default function EbayCockpit(props: Props) {
                 type="button"
                 onClick={() => setAllFieldsOpen(true)}
                 className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
-                title="Open the full eBay field editor (all attributes)"
+                title={t('products.edit.cockpit.ebay.allFieldsTitle')}
               >
-                <ListTree className="w-3 h-3" /> All fields
+                <ListTree className="w-3 h-3" /> {t('products.edit.cockpit.ebay.allFields')}
               </button>
             )}
             {/* SY.1 — outbound handoff to the bulk eBay flat-file editor. */}
@@ -422,17 +424,17 @@ export default function EbayCockpit(props: Props) {
               target="_blank"
               rel="noreferrer"
               className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
-              title="Open this product in the bulk eBay flat-file editor (new tab)"
+              title={t('products.edit.cockpit.ebay.editInBulkTitle')}
             >
-              Edit in bulk <ExternalLink className="w-3 h-3" />
+              {t('products.edit.cockpit.ebay.editInBulk')} <ExternalLink className="w-3 h-3" />
             </a>
             <button
               type="button"
               onClick={() => setMode('classic')}
               className="ml-1 inline-flex items-center gap-1 text-xs text-slate-500 hover:text-slate-900 dark:hover:text-slate-200 underline-offset-2 hover:underline"
-              title="Switch back to the legacy view for this session"
+              title={t('products.edit.cockpit.ebay.classicViewTitle')}
             >
-              <Settings2 className="w-3 h-3" /> Classic view
+              <Settings2 className="w-3 h-3" /> {t('products.edit.cockpit.ebay.classicView')}
             </button>
           </>
         }
@@ -479,8 +481,8 @@ export default function EbayCockpit(props: Props) {
       <CockpitPreviewBand
         open={previewOpen}
         onToggle={() => setPreviewOpen((o) => !o)}
-        title="Live preview"
-        subtitle={`How operators see this on eBay ${marketInfo.code}`}
+        title={t('products.edit.cockpit.ebay.preview.title')}
+        subtitle={t('products.edit.cockpit.ebay.preview.subtitle', { market: marketInfo.code })}
         healthWidth="280px"
         contentClassName="bg-slate-50/40 dark:bg-slate-900/30"
         preview={<EbayLivePreview composed={composed} />}
@@ -516,7 +518,7 @@ export default function EbayCockpit(props: Props) {
       <CockpitCardGrid layout="sequential">
       {/* FL — Shared fields: scope pill (master / linked / independent)
           + propagate per linkable content field. */}
-      <IdentifiersCard title="Shared fields" rows={scopeRows} />
+      <IdentifiersCard title={t('products.edit.cockpit.ebay.sharedFields')} rows={scopeRows} />
       {/* ── EC.2 — Listing Essentials (Field Source System demo) ──── */}
       <ListingEssentialsCard
         productId={product.id}
@@ -694,7 +696,7 @@ export default function EbayCockpit(props: Props) {
           open={allFieldsOpen}
           onClose={() => setAllFieldsOpen(false)}
           width="full"
-          title={`All fields — eBay ${marketInfo.name}`}
+          title={`${t('products.edit.cockpit.ebay.allFields')} — eBay ${marketInfo.code}`}
         >
           {classicEditor}
         </CockpitDrawer>
@@ -705,11 +707,11 @@ export default function EbayCockpit(props: Props) {
           label={
             <>
               <span className="text-md font-medium text-slate-900 dark:text-slate-100">
-                Existing fields
+                {t('products.edit.cockpit.ebay.classic.title')}
               </span>
-              <Badge variant="info">transitional</Badge>
+              <Badge variant="info">{t('products.edit.cockpit.ebay.classic.transitional')}</Badge>
               <span className="text-xs text-slate-500 dark:text-slate-400">
-                All current eBay tab functionality, kept live while EC.4–EC.8 land
+                {t('products.edit.cockpit.ebay.classic.subtitle')}
               </span>
             </>
           }
