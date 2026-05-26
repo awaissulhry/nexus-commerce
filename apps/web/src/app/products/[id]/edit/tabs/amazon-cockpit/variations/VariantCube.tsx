@@ -138,6 +138,36 @@ async function patchChildrenBulk(
   }
 }
 
+// CUBE.3 — per-(variant, market) channel price/qty via /channel-pricing.
+// One call carries N updates (used for both single-cell and fill-row).
+interface ChannelUpdate {
+  variantId: string
+  marketplace: string
+  price?: number
+  quantity?: number
+}
+async function patchChannelPricing(
+  productId: string,
+  channel: string,
+  updates: ChannelUpdate[],
+): Promise<boolean> {
+  if (updates.length === 0) return true
+  try {
+    const r = await fetch(
+      `${getBackendUrl()}/api/products/${encodeURIComponent(productId)}/channel-pricing`,
+      {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ updates: updates.map((u) => ({ ...u, channel })) }),
+      },
+    )
+    return r.ok
+  } catch {
+    return false
+  }
+}
+
 type CubeView = 'axis' | 'variant' | 'market'
 
 export interface VariantCubeProps {
@@ -207,6 +237,8 @@ export default function VariantCube({
 
       {view === 'market' && (
         <ByMarketView
+          productId={productId}
+          channel={channel}
           variants={variants}
           marketCodes={marketCodes}
           loading={loading}
@@ -221,12 +253,16 @@ export default function VariantCube({
 type MarketField = 'price' | 'listedQty'
 
 function ByMarketView({
+  productId,
+  channel,
   variants,
   marketCodes,
   loading,
   error,
   activeCurrency,
 }: {
+  productId: string
+  channel: string
   variants: ReturnType<typeof useVariantCube>['variants']
   marketCodes: string[]
   loading: boolean
@@ -234,25 +270,61 @@ function ByMarketView({
   activeCurrency: string
 }) {
   const [field, setField] = useState<MarketField>('price')
+  // CUBE.3 — optimistic overlay keyed `${field}:${variantId}:${market}`.
+  const [edits, setEdits] = useState<Record<string, number>>({})
+
+  type Variant = ReturnType<typeof useVariantCube>['variants'][number]
+  const key = (v: Variant, mp: string) => `${field}:${v.id}:${mp}`
+  const rawCell = (v: Variant, mp: string): number | null => {
+    const cell = v.marketsByCode[mp]
+    if (!cell) return field === 'price' ? v.basePrice : null
+    return field === 'price' ? cell.price ?? v.basePrice : cell.listedQty
+  }
+  const effCell = (v: Variant, mp: string): number | null => {
+    const e = edits[key(v, mp)]
+    return e === undefined ? rawCell(v, mp) : e
+  }
+  const isCellFba = (v: Variant, mp: string) =>
+    field === 'listedQty' && v.marketsByCode[mp]?.fulfillmentChannel === 'FBA'
+
+  const saveCell = async (v: Variant, mp: string, n: number): Promise<boolean> => {
+    const update: ChannelUpdate =
+      field === 'price'
+        ? { variantId: v.id, marketplace: mp, price: n }
+        : { variantId: v.id, marketplace: mp, quantity: n }
+    const ok = await patchChannelPricing(productId, channel, [update])
+    if (ok) setEdits((e) => ({ ...e, [key(v, mp)]: n }))
+    return ok
+  }
+
+  const fillRow = async (v: Variant) => {
+    let src: number | null = null
+    for (const mp of marketCodes) {
+      const x = effCell(v, mp)
+      if (x != null) { src = x; break }
+    }
+    if (src == null) return
+    const targets = marketCodes.filter((mp) => !isCellFba(v, mp))
+    const updates: ChannelUpdate[] = targets.map((mp) =>
+      field === 'price'
+        ? { variantId: v.id, marketplace: mp, price: src as number }
+        : { variantId: v.id, marketplace: mp, quantity: src as number },
+    )
+    const ok = await patchChannelPricing(productId, channel, updates)
+    if (ok) {
+      setEdits((e) => {
+        const next = { ...e }
+        for (const mp of targets) next[key(v, mp)] = src as number
+        return next
+      })
+    }
+  }
 
   if (loading) return <div className="py-8 text-center text-sm text-slate-400">Loading variants…</div>
   if (error) return <div className="py-8 text-center text-sm text-rose-500">{error}</div>
   if (variants.length === 0) return <div className="py-8 text-center text-sm text-slate-400">No variants.</div>
   if (marketCodes.length === 0)
     return <div className="py-8 text-center text-sm text-slate-400">No market data yet.</div>
-
-  const cellValue = (
-    v: ReturnType<typeof useVariantCube>['variants'][number],
-    mp: string,
-  ): string => {
-    const cell = v.marketsByCode[mp]
-    if (!cell) return '—'
-    if (field === 'price') {
-      const p = cell.price ?? v.basePrice
-      return p == null ? '—' : `${activeCurrency} ${p.toFixed(2)}`
-    }
-    return cell.listedQty == null ? '—' : String(cell.listedQty)
-  }
 
   const fieldBtn = (f: MarketField, label: string) => (
     <button
@@ -275,6 +347,9 @@ function ByMarketView({
         <span className="text-xs text-slate-400">Field:</span>
         {fieldBtn('price', 'Price')}
         {fieldBtn('listedQty', 'Listed qty')}
+        <span className="ml-2 text-[10.5px] text-slate-400">
+          click a cell to edit · ⇥ fills the row across markets
+        </span>
       </div>
       <div className="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800">
         <table className="w-full text-sm">
@@ -284,17 +359,37 @@ function ByMarketView({
               {marketCodes.map((mp) => (
                 <th key={mp} className="px-3 py-2 font-medium">{mp}</th>
               ))}
+              <th className="px-2 py-2" />
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
             {variants.map((v) => (
               <tr key={v.id} className="text-slate-700 dark:text-slate-300">
-                <td className="px-3 py-1.5">
+                <td className="px-3 py-1">
                   <span className="font-medium">{variantLabel(v.axes, v.sku)}</span>
                 </td>
                 {marketCodes.map((mp) => (
-                  <td key={mp} className="px-3 py-1.5 tabular-nums">{cellValue(v, mp)}</td>
+                  <td key={mp} className="px-3 py-1 tabular-nums">
+                    <EditableNumberCell
+                      value={effCell(v, mp)}
+                      prefix={field === 'price' ? activeCurrency : undefined}
+                      decimals={field === 'price' ? 2 : 0}
+                      readOnly={isCellFba(v, mp)}
+                      readOnlyHint={isCellFba(v, mp) ? 'Quantity is managed by Amazon for FBA offers' : undefined}
+                      onSave={(n) => saveCell(v, mp, n)}
+                    />
+                  </td>
                 ))}
+                <td className="px-2 py-1">
+                  <button
+                    type="button"
+                    onClick={() => void fillRow(v)}
+                    title="Fill this variant's value across all markets"
+                    className="rounded px-1.5 py-0.5 text-xs text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800"
+                  >
+                    ⇥ fill
+                  </button>
+                </td>
               </tr>
             ))}
           </tbody>
