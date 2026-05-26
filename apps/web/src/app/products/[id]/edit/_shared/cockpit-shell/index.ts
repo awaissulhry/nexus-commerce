@@ -17,6 +17,10 @@ export type { CockpitCardGridProps } from './CockpitCardGrid'
 export { default as CockpitClassicPassthrough } from './CockpitClassicPassthrough'
 export type { CockpitClassicPassthroughProps } from './CockpitClassicPassthrough'
 
+// AF.1 — slide-over drawer
+export { default as CockpitDrawer } from './CockpitDrawer'
+export type { CockpitDrawerProps } from './CockpitDrawer'
+
 // UC.2 — contracts + shared cards
 export * from './contracts'
 export { default as IdentifiersCard } from './cards/IdentifiersCard'
