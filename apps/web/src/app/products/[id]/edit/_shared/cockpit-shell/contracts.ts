@@ -24,7 +24,9 @@ export type FieldSource =
  *  muted Level-0 marker shown inline; `label` is the hover/aria text;
  *  `tone` maps to the shared status palette for any chip rendering. */
 export interface FieldSourceMeta {
-  glyph: string
+  /** Short chip label (e.g. "Linked"). */
+  short: string
+  /** Full tooltip/aria label (e.g. "Linked across markets"). */
   label: string
   tone: StatusTone
 }
@@ -32,22 +34,22 @@ export interface FieldSourceMeta {
 export function describeFieldSource(source: FieldSource): FieldSourceMeta {
   switch (source) {
     case 'linked':
-      return { glyph: '🔗', label: 'Linked across markets', tone: 'sky' }
+      return { short: 'Linked', label: 'Linked across markets', tone: 'sky' }
     case 'locked':
-      return { glyph: '🔒', label: 'Locked to master', tone: 'slate' }
+      return { short: 'Locked', label: 'Locked to master', tone: 'slate' }
     case 'master':
-      return { glyph: '⬆', label: 'Follows master', tone: 'slate' }
+      return { short: 'Master', label: 'Follows master', tone: 'slate' }
     case 'manual':
-      return { glyph: '✏️', label: 'Manually set', tone: 'amber' }
+      return { short: 'Manual', label: 'Manually set', tone: 'amber' }
     case 'ai':
-      return { glyph: '🤖', label: 'AI-generated', tone: 'sky' }
+      return { short: 'AI', label: 'AI-generated', tone: 'sky' }
     case 'sibling':
-      return { glyph: '↗', label: 'Copied from a sibling market', tone: 'slate' }
+      return { short: 'Sibling', label: 'Copied from a sibling market', tone: 'slate' }
     case 'translations':
-      return { glyph: '🌐', label: 'From translations', tone: 'slate' }
+      return { short: 'Translated', label: 'From translations', tone: 'slate' }
     case 'default':
     default:
-      return { glyph: '·', label: 'Default / unset', tone: 'slate' }
+      return { short: 'Default', label: 'Default / unset', tone: 'slate' }
   }
 }
 

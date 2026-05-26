@@ -64,8 +64,11 @@ export default function IdentifiersCard({
                 <span className="truncate">
                   {row.value ?? <span className="text-slate-400">—</span>}
                 </span>
-                {row.source && (
-                  <FieldSourceBadge source={row.source} onClick={row.onSourceClick} />
+                {(row.source || row.onSourceClick) && (
+                  <FieldSourceBadge
+                    source={row.source ?? 'default'}
+                    onClick={row.onSourceClick}
+                  />
                 )}
               </dd>
             </div>

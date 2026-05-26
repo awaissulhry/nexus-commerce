@@ -14,7 +14,7 @@
 // Rendered as a small centred dialog so positioning is robust.
 
 import { useEffect, useState } from 'react'
-import { X } from 'lucide-react'
+import { X, ArrowUpFromLine, Link2, Pencil, type LucideIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 export type FieldScope = 'master' | 'linked' | 'independent'
@@ -106,12 +106,12 @@ export default function FieldScopePopover({
 
   const Radio = ({
     value,
-    glyph,
+    icon: Icon,
     title,
     hint,
   }: {
     value: FieldScope
-    glyph: string
+    icon: LucideIcon
     title: string
     hint: string
   }) => (
@@ -125,9 +125,7 @@ export default function FieldScopePopover({
           : 'border-slate-200 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800',
       )}
     >
-      <span aria-hidden className="mt-0.5">
-        {glyph}
-      </span>
+      <Icon aria-hidden className="mt-0.5 h-4 w-4 shrink-0 text-slate-500 dark:text-slate-400" />
       <span className="min-w-0">
         <span className="block text-sm font-medium text-slate-800 dark:text-slate-200">
           {title}
@@ -164,9 +162,9 @@ export default function FieldScopePopover({
         </div>
 
         <div className="space-y-2">
-          <Radio value="master" glyph="⬆" title="Follow master" hint="Inherit the product value (auto-translate per market)" />
-          <Radio value="linked" glyph="🔗" title="Linked group" hint="Share with a chosen set of channels × markets" />
-          <Radio value="independent" glyph="✏️" title="Independent" hint="Pin this cell only" />
+          <Radio value="master" icon={ArrowUpFromLine} title="Follow master" hint="Inherit the product value (auto-translate per market)" />
+          <Radio value="linked" icon={Link2} title="Linked group" hint="Share with a chosen set of channels × markets" />
+          <Radio value="independent" icon={Pencil} title="Independent" hint="Pin this cell only" />
         </div>
 
         {draftScope === 'linked' && (

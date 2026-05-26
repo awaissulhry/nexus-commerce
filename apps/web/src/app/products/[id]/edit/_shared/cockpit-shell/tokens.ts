@@ -61,6 +61,15 @@ export const STATUS_PILL: Record<StatusTone, string> = {
     'bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-950/40 dark:text-sky-300 dark:border-sky-900',
 }
 
+/** Text-only colour keyed by tone (used by static provenance icons). */
+export const STATUS_TEXT: Record<StatusTone, string> = {
+  emerald: 'text-emerald-600 dark:text-emerald-400',
+  amber: 'text-amber-600 dark:text-amber-400',
+  slate: 'text-slate-500 dark:text-slate-400',
+  rose: 'text-rose-600 dark:text-rose-400',
+  sky: 'text-sky-600 dark:text-sky-400',
+}
+
 /** Solid dot colour keyed by tone (used in the header + chip strip). */
 export const STATUS_DOT: Record<StatusTone, string> = {
   emerald: 'bg-emerald-500',
