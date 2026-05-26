@@ -104,36 +104,18 @@ export default function FieldScopePopover({
     onClose()
   }
 
-  const Radio = ({
-    value,
-    icon: Icon,
-    title,
-    hint,
-  }: {
+  // Plain data (not a nested component) → stable host <button> elements
+  // that don't remount on every parent re-render, so the click sticks.
+  const scopeOptions: Array<{
     value: FieldScope
     icon: LucideIcon
     title: string
     hint: string
-  }) => (
-    <button
-      type="button"
-      onClick={() => setDraftScope(value)}
-      className={cn(
-        'flex w-full items-start gap-2 rounded-md border px-3 py-2 text-left',
-        draftScope === value
-          ? 'border-blue-300 bg-blue-50 dark:border-blue-800 dark:bg-blue-950/40'
-          : 'border-slate-200 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800',
-      )}
-    >
-      <Icon aria-hidden className="mt-0.5 h-4 w-4 shrink-0 text-slate-500 dark:text-slate-400" />
-      <span className="min-w-0">
-        <span className="block text-sm font-medium text-slate-800 dark:text-slate-200">
-          {title}
-        </span>
-        <span className="block text-xs text-slate-500 dark:text-slate-400">{hint}</span>
-      </span>
-    </button>
-  )
+  }> = [
+    { value: 'master', icon: ArrowUpFromLine, title: 'Follow master', hint: 'Inherit the product value (auto-translate per market)' },
+    { value: 'linked', icon: Link2, title: 'Linked group', hint: 'Share with a chosen set of channels × markets' },
+    { value: 'independent', icon: Pencil, title: 'Independent', hint: 'Pin this cell only' },
+  ]
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4" role="presentation">
@@ -162,9 +144,28 @@ export default function FieldScopePopover({
         </div>
 
         <div className="space-y-2">
-          <Radio value="master" icon={ArrowUpFromLine} title="Follow master" hint="Inherit the product value (auto-translate per market)" />
-          <Radio value="linked" icon={Link2} title="Linked group" hint="Share with a chosen set of channels × markets" />
-          <Radio value="independent" icon={Pencil} title="Independent" hint="Pin this cell only" />
+          {scopeOptions.map(({ value, icon: Icon, title, hint }) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => setDraftScope(value)}
+              aria-pressed={draftScope === value}
+              className={cn(
+                'flex w-full items-start gap-2 rounded-md border px-3 py-2 text-left',
+                draftScope === value
+                  ? 'border-blue-300 bg-blue-50 dark:border-blue-800 dark:bg-blue-950/40'
+                  : 'border-slate-200 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800',
+              )}
+            >
+              <Icon aria-hidden className="mt-0.5 h-4 w-4 shrink-0 text-slate-500 dark:text-slate-400" />
+              <span className="min-w-0">
+                <span className="block text-sm font-medium text-slate-800 dark:text-slate-200">
+                  {title}
+                </span>
+                <span className="block text-xs text-slate-500 dark:text-slate-400">{hint}</span>
+              </span>
+            </button>
+          ))}
         </div>
 
         {draftScope === 'linked' && (
