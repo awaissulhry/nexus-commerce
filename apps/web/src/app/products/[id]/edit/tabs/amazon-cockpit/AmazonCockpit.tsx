@@ -47,7 +47,7 @@ import {
   markManifestWarm,
 } from '../../_shared/market-switch/useMarketSwitch'
 import { compareMarketChips, type MarketChip } from '../../_shared/market-switch/types'
-import HealthPanel from './health/HealthPanel'
+import { HealthPanel } from '../../_shared/cockpit-health'
 import { computeHealthScore, type JumpTarget } from './health/computeHealthScore'
 import VariationMatrix from './variations/VariationMatrix'
 import VariantCube from './variations/VariantCube'
@@ -569,7 +569,14 @@ export default function AmazonCockpit(props: Props) {
         healthWidth="320px"
         contentClassName="bg-slate-50/40 dark:bg-slate-900/30"
         preview={<AmazonLivePreview composed={composed} />}
-        health={<HealthPanel report={report} onJumpTo={handleJumpTo} />}
+        health={
+          <HealthPanel
+            report={report}
+            onJumpTo={(target) => handleJumpTo(target as JumpTarget)}
+            statusLabel={t(`products.edit.cockpit.amazon.health.${report.status}`)}
+            suppressionNote="Listing suppressed — check Seller Central → Manage Inventory → Suppressed."
+          />
+        }
       />
 
       {/* ── AC.12 — Publish flow (full-width, top of cards zone) ──── */}
