@@ -55,6 +55,7 @@ import CategoryCard from './category/CategoryCard'
 import AplusCard from './aplus/AplusCard'
 import PricingCard from './pricing/PricingCard'
 import SuppressionCard from './suppression/SuppressionCard'
+import FulfillmentCard from './fulfillment/FulfillmentCard'
 import AutoFillCard from './autofill/AutoFillCard'
 import PublishCard from './publish/PublishCard'
 import { useCockpitShortcuts } from './useCockpitShortcuts'
@@ -739,15 +740,12 @@ export default function AmazonCockpit(props: Props) {
           })()}
           onJumpToClassic={() => handleJumpTo('classic')}
         />
-        <PlaceholderCard
-          targetId="fulfillment"
-          icon={<Truck className="w-4 h-4" />}
-          title={t('products.edit.cockpit.amazon.cards.fulfillment')}
-          value={
-            composed.fulfillmentChannel.value
-              ? `${composed.fulfillmentChannel.value} · ${composed.conditionType.value}`
-              : 'Pick FBA or FBM'
-          }
+        <FulfillmentCard
+          productId={product.id}
+          marketplace={marketInfo.code}
+          seedFulfillment={composed.fulfillmentChannel.value as 'FBA' | 'FBM' | null}
+          conditionType={composed.conditionType.value}
+          onJumpToClassic={() => handleJumpTo('classic')}
         />
         <SuppressionCard
           productId={product.id}
