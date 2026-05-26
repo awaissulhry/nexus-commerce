@@ -8,6 +8,7 @@
 // `extends` explicit, and FL.2 collapses the duplicated FieldSource.
 
 import type { ReactNode } from 'react'
+import type { StatusTone } from './tokens'
 
 export type FieldSource =
   | 'manual' // operator typed it on the listing
@@ -16,9 +17,39 @@ export type FieldSource =
   | 'ai' // AI-suggested (list-wizard / cockpit assistant)
   | 'sibling' // copied from another marketplace's listing
   | 'default' // fallback / nothing set yet
-// FL.2 extends this with 'linked' (shares a FieldLinkGroup) and 'locked'
-// (identity field pinned to master). Kept out until the engine lands so
-// the channel types stay in lockstep with this until then.
+  | 'linked' // FL.2 — shares a FieldLinkGroup canonical value
+  | 'locked' // FL.2 — identity field pinned to master, not editable
+
+/** FL.2 — presentation metadata for a provenance source. `glyph` is the
+ *  muted Level-0 marker shown inline; `label` is the hover/aria text;
+ *  `tone` maps to the shared status palette for any chip rendering. */
+export interface FieldSourceMeta {
+  glyph: string
+  label: string
+  tone: StatusTone
+}
+
+export function describeFieldSource(source: FieldSource): FieldSourceMeta {
+  switch (source) {
+    case 'linked':
+      return { glyph: '🔗', label: 'Linked across markets', tone: 'sky' }
+    case 'locked':
+      return { glyph: '🔒', label: 'Locked to master', tone: 'slate' }
+    case 'master':
+      return { glyph: '⬆', label: 'Follows master', tone: 'slate' }
+    case 'manual':
+      return { glyph: '✏️', label: 'Manually set', tone: 'amber' }
+    case 'ai':
+      return { glyph: '🤖', label: 'AI-generated', tone: 'sky' }
+    case 'sibling':
+      return { glyph: '↗', label: 'Copied from a sibling market', tone: 'slate' }
+    case 'translations':
+      return { glyph: '🌐', label: 'From translations', tone: 'slate' }
+    case 'default':
+    default:
+      return { glyph: '·', label: 'Default / unset', tone: 'slate' }
+  }
+}
 
 export interface ComposedField<T> {
   value: T

@@ -23,6 +23,9 @@ export type { CockpitDrawerProps } from './CockpitDrawer'
 
 // UC.2 — contracts + shared cards
 export * from './contracts'
+// FL.2 — provenance badge
+export { default as FieldSourceBadge } from './FieldSourceBadge'
+export type { FieldSourceBadgeProps } from './FieldSourceBadge'
 export { default as IdentifiersCard } from './cards/IdentifiersCard'
 export type { IdentifiersCardProps, IdentifierRow } from './cards/IdentifiersCard'
 export { default as ImagesSummaryCard } from './cards/ImagesSummaryCard'

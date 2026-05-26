@@ -577,19 +577,20 @@ export default function AmazonCockpit(props: Props) {
         <IdentifiersCard
           title={t('products.edit.cockpit.amazon.cards.identifiers')}
           rows={[
-            { label: 'SKU', value: composed.sku, mono: true },
+            { label: 'SKU', value: composed.sku, mono: true, source: 'locked' },
             {
               label: 'ASIN',
               value: composed.asin.value,
               mono: true,
+              source: composed.asin.source,
             },
             {
               label: 'GTIN',
               value: composed.gtin.value,
               mono: true,
-              locked: Boolean(composed.gtin.value),
+              source: 'locked',
             },
-            { label: 'Brand', value: composed.brand.value },
+            { label: 'Brand', value: composed.brand.value, source: composed.brand.source },
           ]}
         />
         <CategoryCard

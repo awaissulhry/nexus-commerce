@@ -11,6 +11,8 @@
 
 import type { ReactNode } from 'react'
 import { Card } from '@/components/ui/Card'
+import FieldSourceBadge from '../FieldSourceBadge'
+import type { FieldSource } from '../contracts'
 
 export interface IdentifierRow {
   label: string
@@ -19,6 +21,8 @@ export interface IdentifierRow {
   mono?: boolean
   /** Show a small lock glyph — identity field pinned to master. */
   locked?: boolean
+  /** FL.2 — provenance source; renders a muted badge after the value. */
+  source?: FieldSource
 }
 
 export interface IdentifiersCardProps {
@@ -45,16 +49,19 @@ export default function IdentifiersCard({
               <dt className="shrink-0 text-slate-500 dark:text-slate-400">{row.label}</dt>
               <dd
                 className={[
-                  'min-w-0 truncate text-right text-slate-800 dark:text-slate-200',
+                  'min-w-0 flex items-center justify-end gap-1 truncate text-right text-slate-800 dark:text-slate-200',
                   row.mono ? 'font-mono text-xs' : '',
                 ].join(' ')}
               >
                 {row.locked && (
-                  <span aria-hidden className="mr-1 text-slate-400" title="Locked to master">
+                  <span aria-hidden className="text-slate-400" title="Locked to master">
                     🔒
                   </span>
                 )}
-                {row.value ?? <span className="text-slate-400">—</span>}
+                <span className="truncate">
+                  {row.value ?? <span className="text-slate-400">—</span>}
+                </span>
+                {row.source && <FieldSourceBadge source={row.source} />}
               </dd>
             </div>
           ))}
