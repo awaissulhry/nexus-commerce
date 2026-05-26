@@ -1401,6 +1401,21 @@ export default function ProductEditClient({
                     })
                   }
                   childrenList={childrenList}
+                  onMarketSwitch={(code) =>
+                    setMarketSelection((s) => ({ ...s, [channel]: code }))
+                  }
+                  getDirtyForMarket={(code) =>
+                    dirtyByTab[`channel:${channel}:${code}`] ?? 0
+                  }
+                  flushActiveMarket={async () => {
+                    const e = registry.byTab[tabKey]
+                    if (e?.flush) await e.flush()
+                  }}
+                  discardActiveMarket={() => {
+                    const e = registry.byTab[tabKey]
+                    if (e?.discard) e.discard()
+                    else setDiscardSignal((n) => n + 1)
+                  }}
                 />
               ) : channel === 'AMAZON' && amazonCockpitMode === 'cockpit' ? (
                 /* AC.1 — Route Amazon through the Listing Cockpit when

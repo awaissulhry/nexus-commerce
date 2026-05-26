@@ -16,7 +16,7 @@
 // The pass-through goes away phase-by-phase as each card supersedes
 // the corresponding ChannelListingTab section.
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { ArrowDownToLine, Sparkles, Send, ExternalLink, Settings2, History, Layers, ListTree } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
@@ -30,6 +30,10 @@ import {
   CockpitDrawer,
   useCockpitFlag,
 } from '../../_shared/cockpit-shell'
+import MarketChipStrip from '../../_shared/market-switch/MarketChipStrip'
+import { useMarketSwitch } from '../../_shared/market-switch/useMarketSwitch'
+import type { MarketChip } from '../../_shared/market-switch/types'
+import { postCockpitEvent } from '../../_shared/telemetry/cockpit-telemetry'
 import ChannelListingTab from '../ChannelListingTab'
 import { useEbayCompositor } from './useEbayCompositor'
 import { useCockpitMode } from './useCockpitMode'
@@ -110,6 +114,12 @@ interface Props {
     discard: () => void
   }) => void
   childrenList?: ChildProduct[]
+  /** UC.9.1 — market-switch wiring (parity with Amazon). Optional so
+   *  the cockpit still renders if the parent doesn't provide them. */
+  onMarketSwitch?: (code: string) => void
+  getDirtyForMarket?: (code: string) => number
+  flushActiveMarket?: () => Promise<void>
+  discardActiveMarket?: () => void
 }
 
 const STATUS_TONE: Record<string, { bg: string; text: string }> = {
@@ -121,7 +131,10 @@ const STATUS_TONE: Record<string, { bg: string; text: string }> = {
 }
 
 export default function EbayCockpit(props: Props) {
-  const { product, marketplace, marketInfo, siblingMarkets, siblingListings = [], listing, childrenList } = props
+  const {
+    product, marketplace, marketInfo, siblingMarkets, siblingListings = [], listing, childrenList,
+    onMarketSwitch, getDirtyForMarket, flushActiveMarket, discardActiveMarket,
+  } = props
   const [, setMode] = useCockpitMode()
   const [previewOpen, setPreviewOpen] = useState(true)
   const [classicOpen, setClassicOpen] = useState(true)
@@ -177,6 +190,51 @@ export default function EbayCockpit(props: Props) {
     events.listingUpdatedAt != null &&
     Date.now() - events.listingUpdatedAt < 3000
 
+  // UC.9.1 — market chips (parity with Amazon). Built from marketInfo +
+  // siblingMarkets, per-market status from the listings the parent
+  // already fetched, dirty counts via getDirtyForMarket.
+  const chips = useMemo<MarketChip[]>(() => {
+    const ordered: MarketInfo[] = [marketInfo, ...(siblingMarkets ?? [])].filter(
+      (m, i, arr) => arr.findIndex((x) => x.code === m.code) === i,
+    )
+    return ordered.map((m) => {
+      const l =
+        m.code === marketInfo.code
+          ? listing
+          : siblingListings.find((sl) => sl.marketplace === m.code)
+      return {
+        code: m.code,
+        name: m.name,
+        hasListing: !!l,
+        listingStatus: l?.listingStatus ?? null,
+        dirtyCount: getDirtyForMarket?.(m.code) ?? 0,
+      }
+    })
+  }, [marketInfo, siblingMarkets, listing, siblingListings, getDirtyForMarket])
+
+  const activeDirty = getDirtyForMarket?.(marketInfo.code) ?? 0
+  const { switchTo } = useMarketSwitch({
+    channel: 'EBAY',
+    active: marketInfo.code,
+    markets: chips,
+    onSwitch: (code) => onMarketSwitch?.(code),
+    flush: flushActiveMarket,
+    discard: discardActiveMarket,
+    isDirty: activeDirty,
+    syncUrl: true,
+  })
+
+  // UC.9.3 — telemetry parity: one mount event per cockpit instance.
+  useEffect(() => {
+    postCockpitEvent({
+      type: 'cockpit_mounted',
+      productId: product.id,
+      marketplace: marketInfo.code,
+      payload: { channel: 'EBAY', language: marketInfo.language },
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   // AF.4/5 — single classic-editor element, hosted by EITHER the
   // All-fields drawer (flag on) or the legacy stacked pass-through.
   const classicEditor = (
@@ -200,6 +258,22 @@ export default function EbayCockpit(props: Props) {
       {/* ── Zone 1: Header strip (UC.4 — shared CockpitHeader) ─────── */}
       <CockpitHeader
         ariaLabel="eBay Listing Cockpit header"
+        chipStrip={
+          chips.length > 1 ? (
+            <div className="px-4 py-2 border-b border-slate-100 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/40 flex items-center gap-3 flex-wrap">
+              <span className="text-[10.5px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                Markets
+              </span>
+              <MarketChipStrip
+                markets={chips}
+                active={marketInfo.code}
+                onSelect={(code) => void switchTo(code)}
+                shortcutsHint
+                className="min-w-0 flex-1"
+              />
+            </div>
+          ) : null
+        }
         leading={
           <Badge mono variant={listing ? 'info' : 'warning'}>
             {marketInfo.code}
