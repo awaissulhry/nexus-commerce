@@ -75,10 +75,19 @@ import {
   PropagationDiffModal,
   LinkSuggestionsBanner,
   useFieldLinks,
-  type FieldScope,
   type ScopeMember,
   type PropagatePreview,
+  type FieldSource,
 } from '../../_shared/cockpit-shell'
+
+/** A linkable content field surfaced in the Shared-fields card. */
+interface LinkField {
+  fieldKey: string
+  label: string
+  value: string | null
+  translatable: boolean
+  source: FieldSource
+}
 
 interface MarketInfo {
   code: string
@@ -194,13 +203,13 @@ export default function AmazonCockpit(props: Props) {
   // the editor's dirty/save lifecycle identical to today.
   const useDrawer = useCockpitFlag('all-fields-drawer', true)
   const [allFieldsOpen, setAllFieldsOpen] = useState(false)
-  // FL.3 / FL.3b — per-field scope control, persisted via FieldLinkGroup.
-  // Demonstrated on the Brand field; the chosen scope is stored and
-  // reloaded across sessions (degrades to inert if the table is absent).
-  const [brandScopeOpen, setBrandScopeOpen] = useState(false)
+  // FL.3 / FL.3b / FL — per-field scope control across ALL linkable
+  // fields (not just a demo). One popover + one diff-modal serve every
+  // field, keyed by the open field. Persisted via FieldLinkGroup;
+  // degrades to inert if the table is absent.
   const fieldLinks = useFieldLinks(product.id)
-  // FL.4 — propagation diff modal state for the Brand demo.
-  const [propagateOpen, setPropagateOpen] = useState(false)
+  const [scopeFieldKey, setScopeFieldKey] = useState<string | null>(null)
+  const [propagateField, setPropagateField] = useState<LinkField | null>(null)
   const [propagateData, setPropagateData] = useState<PropagatePreview | null>(null)
   const [propagateBusy, setPropagateBusy] = useState(false)
 
@@ -353,7 +362,25 @@ export default function AmazonCockpit(props: Props) {
     marketplace: c.code,
     label: `Amazon ${c.code}`,
   }))
-  const brandScope: FieldScope = fieldLinks.scopeFor('brand')
+
+  // FL — the linkable content fields (Amazon flat-file field ids). Each
+  // gets a scope pill + popover + propagation. Identity codes (SKU/ASIN/
+  // GTIN) stay read-only in the Identifiers card.
+  const linkFields: LinkField[] = [
+    { fieldKey: 'item_name', label: 'Title', value: composed.title.value || null, translatable: true, source: composed.title.source },
+    { fieldKey: 'product_description', label: 'Description', value: composed.description.value || null, translatable: true, source: composed.description.source },
+    { fieldKey: 'bullet_point', label: 'Bullets', value: composed.bullets.value.join(' · ') || null, translatable: true, source: composed.bullets.source },
+    { fieldKey: 'our_price', label: 'Price', value: composed.price.value != null ? `${composed.currency} ${composed.price.value.toFixed(2)}` : null, translatable: false, source: composed.price.source },
+    { fieldKey: 'brand', label: 'Brand', value: composed.brand.value || null, translatable: false, source: composed.brand.source },
+  ]
+  const activeScopeField = scopeFieldKey ? linkFields.find((f) => f.fieldKey === scopeFieldKey) ?? null : null
+
+  const scopeRows = linkFields.map((f) => ({
+    label: f.label,
+    value: f.value,
+    source: fieldLinks.scopeFor(f.fieldKey) === 'linked' ? ('linked' as const) : f.source,
+    onSourceClick: () => setScopeFieldKey(f.fieldKey),
+  }))
 
   // AF.4/5 — single classic-editor element, hosted by EITHER the
   // All-fields drawer (flag on) or the legacy stacked pass-through
@@ -614,26 +641,13 @@ export default function AmazonCockpit(props: Props) {
           title={t('products.edit.cockpit.amazon.cards.identifiers')}
           rows={[
             { label: 'SKU', value: composed.sku, mono: true, source: 'locked' },
-            {
-              label: 'ASIN',
-              value: composed.asin.value,
-              mono: true,
-              source: composed.asin.source,
-            },
-            {
-              label: 'GTIN',
-              value: composed.gtin.value,
-              mono: true,
-              source: 'locked',
-            },
-            {
-              label: 'Brand',
-              value: composed.brand.value,
-              source: brandScope === 'linked' ? 'linked' : composed.brand.source,
-              onSourceClick: () => setBrandScopeOpen(true),
-            },
+            { label: 'ASIN', value: composed.asin.value, mono: true, source: composed.asin.source },
+            { label: 'GTIN', value: composed.gtin.value, mono: true, source: 'locked' },
           ]}
         />
+        {/* FL — Shared fields: every linkable content field with a
+            clickable scope pill (master / linked / independent) + propagate. */}
+        <IdentifiersCard title={t('products.edit.cockpit.amazon.cards.sharedFields')} rows={scopeRows} />
         <CategoryCard
           productId={product.id}
           productType={composed.productType.value}
@@ -784,51 +798,60 @@ export default function AmazonCockpit(props: Props) {
         </CockpitClassicPassthrough>
       )}
 
-      {/* FL.3 (UI) — per-field scope control. Session-local until FL.3b
-          wires persistence to FieldLinkGroup. */}
+      {/* FL — per-field scope control, generic across all linkable fields. */}
       <FieldScopePopover
-        open={brandScopeOpen}
-        onClose={() => setBrandScopeOpen(false)}
-        fieldLabel="Brand"
+        open={scopeFieldKey !== null}
+        onClose={() => setScopeFieldKey(null)}
+        fieldLabel={activeScopeField?.label ?? ''}
         marketLabel={`Amazon ${marketInfo.code}`}
-        scope={brandScope}
-        selectedMembers={fieldLinks.memberKeysFor('brand')}
+        scope={scopeFieldKey ? fieldLinks.scopeFor(scopeFieldKey) : 'master'}
+        selectedMembers={scopeFieldKey ? fieldLinks.memberKeysFor(scopeFieldKey) : []}
         members={scopeMembers}
-        canTranslate={false}
-        onApply={(r) =>
-          void fieldLinks.setScope('brand', r, { sourceLanguage: marketInfo.language })
-        }
+        canTranslate={activeScopeField?.translatable ?? false}
+        onApply={(r) => {
+          if (scopeFieldKey) {
+            void fieldLinks.setScope(scopeFieldKey, r, { sourceLanguage: marketInfo.language })
+          }
+        }}
         onPropagate={() => {
-          setBrandScopeOpen(false)
+          const f = activeScopeField
+          if (!f) return
+          setScopeFieldKey(null)
           void (async () => {
-            const preview = await fieldLinks.propagatePreview('brand', composed.brand.value ?? '', {
+            const preview = await fieldLinks.propagatePreview(f.fieldKey, f.value ?? '', {
               channel: 'AMAZON',
               marketplace: marketInfo.code,
               language: marketInfo.language,
             })
             setPropagateData(preview)
-            setPropagateOpen(true)
+            setPropagateField(f) // open the diff modal only once the preview is ready
           })()
         }}
       />
 
       {/* FL.4 — propagation diff (never silent: operator confirms members). */}
       <PropagationDiffModal
-        open={propagateOpen}
+        open={propagateField !== null}
         onClose={() => {
-          if (!propagateBusy) setPropagateOpen(false)
+          if (!propagateBusy) {
+            setPropagateField(null)
+            setPropagateData(null)
+          }
         }}
-        fieldLabel="Brand"
+        fieldLabel={propagateField?.label ?? ''}
         entries={propagateData?.entries ?? []}
         translatable={propagateData?.translatable ?? false}
         aiBudgetExceeded={propagateData?.aiBudgetExceeded}
         busy={propagateBusy}
         onApply={(selected) => {
+          const f = propagateField
+          if (!f) return
           void (async () => {
             setPropagateBusy(true)
-            await fieldLinks.applyPropagation('brand', selected)
+            await fieldLinks.applyPropagation(f.fieldKey, selected)
             setPropagateBusy(false)
-            setPropagateOpen(false)
+            setPropagateField(null)
+            setPropagateData(null)
           })()
         }}
       />

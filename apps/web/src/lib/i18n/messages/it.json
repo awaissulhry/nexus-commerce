@@ -3446,6 +3446,7 @@
   "products.edit.cockpit.amazon.health.suppressed": "Soppresso",
   "products.edit.cockpit.amazon.health.title": "Stato pre-pubblicazione",
   "products.edit.cockpit.amazon.cards.identifiers": "Identificatori",
+  "products.edit.cockpit.amazon.cards.sharedFields": "Campi condivisi",
   "products.edit.cockpit.amazon.cards.category": "Categoria e nodo di navigazione",
   "products.edit.cockpit.amazon.cards.variations": "Varianti",
   "products.edit.cockpit.amazon.cards.variationsMatrix": "Matrice varianti",
