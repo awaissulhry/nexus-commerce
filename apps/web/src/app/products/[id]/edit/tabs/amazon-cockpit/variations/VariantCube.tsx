@@ -201,9 +201,70 @@ function ByVariantView({
   }
 
   const fmtPrice = (n: number | null) => (n == null ? '—' : `${activeCurrency} ${n.toFixed(2)}`)
+  const isLow = (v: (typeof variants)[number]) =>
+    v.lowStockThreshold != null && v.totalStock != null && v.totalStock <= v.lowStockThreshold
 
   return (
-    <div className="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800">
+    <ByVariantTable
+      variants={variants}
+      fmtPrice={fmtPrice}
+      isLow={isLow}
+      activeMarket={activeMarket}
+    />
+  )
+}
+
+function ByVariantTable({
+  variants,
+  fmtPrice,
+  isLow,
+  activeMarket,
+}: {
+  variants: ReturnType<typeof useVariantCube>['variants']
+  fmtPrice: (n: number | null) => string
+  isLow: (v: ReturnType<typeof useVariantCube>['variants'][number]) => boolean
+  activeMarket: string
+}) {
+  const [query, setQuery] = useState('')
+  const [lowOnly, setLowOnly] = useState(false)
+
+  const q = query.trim().toLowerCase()
+  const rows = variants.filter((v) => {
+    if (lowOnly && !isLow(v)) return false
+    if (q) {
+      const hay = `${variantLabel(v.axes, v.sku)} ${v.sku}`.toLowerCase()
+      if (!hay.includes(q)) return false
+    }
+    return true
+  })
+
+  return (
+    <div>
+      <div className="mb-1.5 flex items-center gap-2">
+        <input
+          type="text"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search variants…"
+          className="h-7 w-48 rounded border border-slate-200 px-2 text-sm dark:border-slate-700 dark:bg-slate-900"
+        />
+        <button
+          type="button"
+          onClick={() => setLowOnly((s) => !s)}
+          className={cn(
+            'h-7 rounded border px-2 text-xs',
+            lowOnly
+              ? 'border-amber-300 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300'
+              : 'border-slate-200 text-slate-500 hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800',
+          )}
+        >
+          Low stock only
+        </button>
+        <span className="text-xs text-slate-400">
+          {rows.length} / {variants.length}
+        </span>
+      </div>
+      <div className="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800">
       <table className="w-full min-w-[520px] text-sm">
         <thead className="bg-slate-50 text-left text-xs text-slate-500 dark:bg-slate-900/40 dark:text-slate-400">
           <tr>
@@ -215,12 +276,9 @@ function ByVariantView({
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-          {variants.map((v) => {
+          {rows.map((v) => {
             const cell = v.marketsByCode[activeMarket]
-            const low =
-              v.lowStockThreshold != null &&
-              v.totalStock != null &&
-              v.totalStock <= v.lowStockThreshold
+            const low = isLow(v)
             return (
               <tr key={v.id} className="text-slate-700 dark:text-slate-300">
                 <td className="px-3 py-1.5">
@@ -241,6 +299,7 @@ function ByVariantView({
           })}
         </tbody>
       </table>
+      </div>
     </div>
   )
 }
