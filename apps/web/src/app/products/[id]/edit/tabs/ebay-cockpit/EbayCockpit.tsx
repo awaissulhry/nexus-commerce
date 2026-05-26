@@ -17,11 +17,17 @@
 // the corresponding ChannelListingTab section.
 
 import { useMemo, useState } from 'react'
-import { ChevronDown, ChevronUp, ArrowDownToLine, Sparkles, Send, ExternalLink, Settings2, History, Layers } from 'lucide-react'
-import { Card } from '@/components/ui/Card'
+import { ArrowDownToLine, Sparkles, Send, ExternalLink, Settings2, History, Layers } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { cn } from '@/lib/utils'
+import {
+  COCKPIT_ROOT,
+  CockpitHeader,
+  CockpitPreviewBand,
+  CockpitCardGrid,
+  CockpitClassicPassthrough,
+} from '../../_shared/cockpit-shell'
 import ChannelListingTab from '../ChannelListingTab'
 import { useEbayCompositor } from './useEbayCompositor'
 import { useCockpitMode } from './useCockpitMode'
@@ -167,123 +173,123 @@ export default function EbayCockpit(props: Props) {
 
   return (
     <FieldSourceProvider productId={product.id} marketplace={marketplace}>
-    <div className="space-y-4">
-      {/* ── Zone 1: Header strip ────────────────────────────────── */}
-      <div className="sticky top-14 z-[5]">
-        <Card noPadding>
-          <div className="px-4 py-3 flex items-center justify-between flex-wrap gap-3">
-            <div className="flex items-center gap-3 min-w-0">
-              <Badge mono variant={listing ? 'info' : 'warning'}>
-                {marketInfo.code}
-              </Badge>
-              <div className="min-w-0">
-                <div className="text-md font-semibold text-slate-900 dark:text-slate-100 truncate flex items-center gap-2">
-                  {marketInfo.name}
-                  <span
-                    className={cn(
-                      'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10.5px] font-medium transition-all',
-                      tone.bg,
-                      tone.text,
-                      // EC.3 — flash a ring for 3s after the listing
-                      // changes elsewhere so the operator notices the
-                      // status came from a remote update.
-                      listingPulse && 'ring-2 ring-emerald-300 dark:ring-emerald-700',
-                    )}
-                  >
-                    {composed.status.listingStatus}
-                  </span>
-                  <HeartbeatDot
-                    connected={events.connected}
-                    secondsSinceLast={events.secondsSinceLast}
-                  />
-                  {composed.status.publicUrl && (
-                    <a
-                      href={composed.status.publicUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-xs text-blue-600 dark:text-blue-400 hover:underline inline-flex items-center gap-0.5"
-                    >
-                      View <ExternalLink className="w-3 h-3" />
-                    </a>
-                  )}
-                </div>
-                <div className="text-sm text-slate-500 dark:text-slate-400 mt-0.5 flex items-center gap-2 flex-wrap">
-                  {composed.status.externalListingId ? (
-                    <span className="font-mono text-xs">{composed.status.externalListingId}</span>
-                  ) : (
-                    <span>Not yet listed on this marketplace</span>
-                  )}
-                  <span>·</span>
-                  <span>{marketInfo.currency}</span>
-                  <span>·</span>
-                  <span className="uppercase tracking-wide">{marketInfo.language}</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2 flex-wrap">
-              {/* EC.1 — these buttons are placeholders. The real Pull /
-                  Translate / Publish wiring lives in the classic pane
-                  below until EC.4–EC.10 land their replacements. */}
-              <Button
-                variant="secondary"
-                size="sm"
-                icon={<ArrowDownToLine className="w-3.5 h-3.5" />}
-                disabled
-                title="Coming in EC.6 — until then use the classic Pull below"
+    <div className={COCKPIT_ROOT}>
+      {/* ── Zone 1: Header strip (UC.4 — shared CockpitHeader) ─────── */}
+      <CockpitHeader
+        ariaLabel="eBay Listing Cockpit header"
+        leading={
+          <Badge mono variant={listing ? 'info' : 'warning'}>
+            {marketInfo.code}
+          </Badge>
+        }
+        title={marketInfo.name}
+        titlePills={
+          <>
+            <span
+              className={cn(
+                'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10.5px] font-medium transition-all',
+                tone.bg,
+                tone.text,
+                // EC.3 — flash a ring for 3s after the listing changes
+                // elsewhere so the operator notices the status came
+                // from a remote update.
+                listingPulse && 'ring-2 ring-emerald-300 dark:ring-emerald-700',
+              )}
+            >
+              {composed.status.listingStatus}
+            </span>
+            <HeartbeatDot
+              connected={events.connected}
+              secondsSinceLast={events.secondsSinceLast}
+            />
+            {composed.status.publicUrl && (
+              <a
+                href={composed.status.publicUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="text-xs text-blue-600 dark:text-blue-400 hover:underline inline-flex items-center gap-0.5"
               >
-                Pull
-              </Button>
-              <Button
-                variant="secondary"
-                size="sm"
-                icon={<Sparkles className="w-3.5 h-3.5" />}
-                disabled
-                title="Coming in EC.12 — until then use the classic AI Translate below"
-              >
-                AI improve
-              </Button>
-              <Button
-                size="sm"
-                icon={<Send className="w-3.5 h-3.5" />}
-                onClick={() => setPublishDrawerOpen(true)}
-                title={`Publish this listing to eBay ${marketInfo.code} via the Inventory API`}
-              >
-                Publish
-              </Button>
-              <button
-                type="button"
-                onClick={() => setSiblingsModalOpen(true)}
-                className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
-                title="Copy this product's eBay layout to similar products"
-              >
-                <Layers className="w-3 h-3" /> Apply to siblings
-              </button>
-              <button
-                type="button"
-                onClick={() => setVersionDrawerOpen(true)}
-                className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
-                title="Open version history — snapshots + restore"
-              >
-                <History className="w-3 h-3" /> History
-                {versionHistory.length > 0 && (
-                  <span className="text-[10px] font-mono px-1 py-0 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 ml-0.5">
-                    {versionHistory.length}
-                  </span>
-                )}
-              </button>
-              <button
-                type="button"
-                onClick={() => setMode('classic')}
-                className="ml-1 inline-flex items-center gap-1 text-xs text-slate-500 hover:text-slate-900 dark:hover:text-slate-200 underline-offset-2 hover:underline"
-                title="Switch back to the legacy view for this session"
-              >
-                <Settings2 className="w-3 h-3" /> Classic view
-              </button>
-            </div>
-          </div>
-        </Card>
-      </div>
+                View <ExternalLink className="w-3 h-3" />
+              </a>
+            )}
+          </>
+        }
+        subtitle={
+          <>
+            {composed.status.externalListingId ? (
+              <span className="font-mono text-xs">{composed.status.externalListingId}</span>
+            ) : (
+              <span>Not yet listed on this marketplace</span>
+            )}
+            <span>·</span>
+            <span>{marketInfo.currency}</span>
+            <span>·</span>
+            <span className="uppercase tracking-wide">{marketInfo.language}</span>
+          </>
+        }
+        actions={
+          <>
+            {/* EC.1 — these buttons are placeholders. The real Pull /
+                Translate wiring lives in the classic pane below until
+                EC.6 / EC.12 land their replacements. */}
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={<ArrowDownToLine className="w-3.5 h-3.5" />}
+              disabled
+              title="Coming in EC.6 — until then use the classic Pull below"
+            >
+              Pull
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={<Sparkles className="w-3.5 h-3.5" />}
+              disabled
+              title="Coming in EC.12 — until then use the classic AI Translate below"
+            >
+              AI improve
+            </Button>
+            <Button
+              size="sm"
+              icon={<Send className="w-3.5 h-3.5" />}
+              onClick={() => setPublishDrawerOpen(true)}
+              title={`Publish this listing to eBay ${marketInfo.code} via the Inventory API`}
+            >
+              Publish
+            </Button>
+            <button
+              type="button"
+              onClick={() => setSiblingsModalOpen(true)}
+              className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
+              title="Copy this product's eBay layout to similar products"
+            >
+              <Layers className="w-3 h-3" /> Apply to siblings
+            </button>
+            <button
+              type="button"
+              onClick={() => setVersionDrawerOpen(true)}
+              className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
+              title="Open version history — snapshots + restore"
+            >
+              <History className="w-3 h-3" /> History
+              {versionHistory.length > 0 && (
+                <span className="text-[10px] font-mono px-1 py-0 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 ml-0.5">
+                  {versionHistory.length}
+                </span>
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={() => setMode('classic')}
+              className="ml-1 inline-flex items-center gap-1 text-xs text-slate-500 hover:text-slate-900 dark:hover:text-slate-200 underline-offset-2 hover:underline"
+              title="Switch back to the legacy view for this session"
+            >
+              <Settings2 className="w-3 h-3" /> Classic view
+            </button>
+          </>
+        }
+      />
 
       {/* EC.3 — Cross-tab change toast. Slim banner that surfaces
           when Master / Translations / Images / a sibling listing
@@ -322,54 +328,45 @@ export default function EbayCockpit(props: Props) {
         }}
       />
 
-      {/* ── Zone 2: Preview + Health band (collapsible) ───────────── */}
-      <Card noPadding>
-        <button
-          type="button"
-          onClick={() => setPreviewOpen((o) => !o)}
-          className="w-full px-4 py-2.5 flex items-center justify-between text-left border-b border-slate-100 dark:border-slate-800"
-        >
-          <div className="flex items-center gap-2">
-            <span className="text-md font-medium text-slate-900 dark:text-slate-100">
-              Live preview
-            </span>
-            <span className="text-xs text-slate-500 dark:text-slate-400">
-              How operators see this on eBay {marketInfo.code}
-            </span>
-          </div>
-          {previewOpen ? <ChevronUp className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
-        </button>
-        {previewOpen && (
-          <div className="p-4 grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-4 bg-slate-50/40 dark:bg-slate-900/30">
-            <EbayLivePreview composed={composed} />
-            <HealthScoreRail
-              marketplace={marketplace}
-              categoryId={composed.categoryId.value}
-              categoryName={composed.categoryLabel.value}
-              categoryPath={((listing?.platformAttributes as Record<string, unknown> | null)
-                ?.categoryPath as string | undefined) ?? null}
-              title={composed.title.value}
-              description={composed.description.value}
-              brand={composed.brand.value}
-              gtin={(product?.gtin as string | null) ?? null}
-              mpn={(product?.mpn as string | null) ?? null}
-              priceValue={composed.price.value}
-              imageCount={composed.galleryUrls.value.length}
-              itemSpecifics={
-                (((listing?.platformAttributes as Record<string, unknown> | null)
-                  ?.itemSpecifics as Record<string, unknown> | undefined) ?? {})
-              }
-              policies={{
-                fulfillmentPolicyId: ((listing?.platformAttributes as Record<string, unknown> | null)?.fulfillmentPolicyId as string | null) ?? null,
-                paymentPolicyId: ((listing?.platformAttributes as Record<string, unknown> | null)?.paymentPolicyId as string | null) ?? null,
-                returnPolicyId: ((listing?.platformAttributes as Record<string, unknown> | null)?.returnPolicyId as string | null) ?? null,
-                merchantLocationKey: ((listing?.platformAttributes as Record<string, unknown> | null)?.merchantLocationKey as string | null) ?? null,
-              }}
-            />
-          </div>
-        )}
-      </Card>
+      {/* ── Zone 2: Preview + Health band (UC.4 — shared band) ────── */}
+      <CockpitPreviewBand
+        open={previewOpen}
+        onToggle={() => setPreviewOpen((o) => !o)}
+        title="Live preview"
+        subtitle={`How operators see this on eBay ${marketInfo.code}`}
+        healthWidth="280px"
+        contentClassName="bg-slate-50/40 dark:bg-slate-900/30"
+        preview={<EbayLivePreview composed={composed} />}
+        health={
+          <HealthScoreRail
+            marketplace={marketplace}
+            categoryId={composed.categoryId.value}
+            categoryName={composed.categoryLabel.value}
+            categoryPath={((listing?.platformAttributes as Record<string, unknown> | null)
+              ?.categoryPath as string | undefined) ?? null}
+            title={composed.title.value}
+            description={composed.description.value}
+            brand={composed.brand.value}
+            gtin={(product?.gtin as string | null) ?? null}
+            mpn={(product?.mpn as string | null) ?? null}
+            priceValue={composed.price.value}
+            imageCount={composed.galleryUrls.value.length}
+            itemSpecifics={
+              (((listing?.platformAttributes as Record<string, unknown> | null)
+                ?.itemSpecifics as Record<string, unknown> | undefined) ?? {})
+            }
+            policies={{
+              fulfillmentPolicyId: ((listing?.platformAttributes as Record<string, unknown> | null)?.fulfillmentPolicyId as string | null) ?? null,
+              paymentPolicyId: ((listing?.platformAttributes as Record<string, unknown> | null)?.paymentPolicyId as string | null) ?? null,
+              returnPolicyId: ((listing?.platformAttributes as Record<string, unknown> | null)?.returnPolicyId as string | null) ?? null,
+              merchantLocationKey: ((listing?.platformAttributes as Record<string, unknown> | null)?.merchantLocationKey as string | null) ?? null,
+            }}
+          />
+        }
+      />
 
+      {/* ── Zone 3: Cards (UC.4 — shared CockpitCardGrid, sequential) ─ */}
+      <CockpitCardGrid layout="sequential">
       {/* ── EC.2 — Listing Essentials (Field Source System demo) ──── */}
       <ListingEssentialsCard
         productId={product.id}
@@ -535,18 +532,17 @@ export default function EbayCockpit(props: Props) {
           return { universal: true, fitments: [], updatedAt: null }
         })()}
       />
+      </CockpitCardGrid>
 
-      {/* ── Transitional pass-through ─────────────────────────────────
+      {/* ── Transitional pass-through (UC.4 — shared primitive) ───────
           EC.1 keeps all existing ChannelListingTab functionality alive
-          below the cards. Each EC.4–EC.8 phase replaces a corresponding
-          section of this pane until the pass-through goes away. */}
-      <Card noPadding>
-        <button
-          type="button"
-          onClick={() => setClassicOpen((o) => !o)}
-          className="w-full px-4 py-2.5 flex items-center justify-between text-left border-b border-slate-100 dark:border-slate-800"
-        >
-          <div className="flex items-center gap-2">
+          below the cards. The AF track replaces this with the grouped
+          "All fields" drawer. */}
+      <CockpitClassicPassthrough
+        open={classicOpen}
+        onToggle={() => setClassicOpen((o) => !o)}
+        label={
+          <>
             <span className="text-md font-medium text-slate-900 dark:text-slate-100">
               Existing fields
             </span>
@@ -554,26 +550,22 @@ export default function EbayCockpit(props: Props) {
             <span className="text-xs text-slate-500 dark:text-slate-400">
               All current eBay tab functionality, kept live while EC.4–EC.8 land
             </span>
-          </div>
-          {classicOpen ? <ChevronUp className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
-        </button>
-        {classicOpen && (
-          <div className="p-4">
-            <ChannelListingTab
-              product={product}
-              channel="EBAY"
-              marketplace={marketplace}
-              marketInfo={marketInfo}
-              siblingMarkets={siblingMarkets}
-              listing={listing}
-              onDirtyChange={props.onDirtyChange}
-              onSave={props.onSave}
-              onRegister={props.onRegister}
-              childrenList={childrenList}
-            />
-          </div>
-        )}
-      </Card>
+          </>
+        }
+      >
+        <ChannelListingTab
+          product={product}
+          channel="EBAY"
+          marketplace={marketplace}
+          marketInfo={marketInfo}
+          siblingMarkets={siblingMarkets}
+          listing={listing}
+          onDirtyChange={props.onDirtyChange}
+          onSave={props.onSave}
+          onRegister={props.onRegister}
+          childrenList={childrenList}
+        />
+      </CockpitClassicPassthrough>
 
       {/* EC.2 — Diff modal slot. Renders only when a source switch is
           pending; the slot is owned by FieldSourceProvider and only
