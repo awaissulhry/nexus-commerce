@@ -31,6 +31,29 @@ export interface SetScopeOptions {
   sourceLanguage?: string | null
 }
 
+export interface PropagationEntryDto {
+  channel: string
+  marketplace: string
+  variantId?: string
+  currentValue: string | null
+  proposedValue: string | null
+  action: 'verbatim' | 'translate' | 'skip'
+  language: string | null
+  unchanged: boolean
+}
+
+export interface PropagatePreview {
+  entries: PropagationEntryDto[]
+  translatable: boolean
+  aiBudgetExceeded: boolean
+}
+
+export interface PropagationSource {
+  channel: string
+  marketplace: string
+  language?: string | null
+}
+
 export function useFieldLinks(productId: string) {
   const [groups, setGroups] = useState<Record<string, FieldLinkGroupDto>>({})
   const [unavailable, setUnavailable] = useState(false)
@@ -103,5 +126,78 @@ export function useFieldLinks(productId: string) {
     [groups],
   )
 
-  return { groups, unavailable, reload, setScope, scopeFor, memberKeysFor }
+  // FL.4 — preview the propagation diff for a linked field (plan + AI
+  // translate, no writes).
+  const propagatePreview = useCallback(
+    async (
+      fieldKey: string,
+      editedValue: string,
+      source: PropagationSource,
+    ): Promise<PropagatePreview | null> => {
+      try {
+        const r = await fetch(
+          `${getBackendUrl()}/api/products/${productId}/field-links/${encodeURIComponent(fieldKey)}/propagate-preview`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({
+              editedValue,
+              sourceChannel: source.channel,
+              sourceMarketplace: source.marketplace,
+              sourceLanguage: source.language ?? null,
+            }),
+          },
+        )
+        if (!r.ok) return null
+        return (await r.json()) as PropagatePreview
+      } catch {
+        return null
+      }
+    },
+    [productId],
+  )
+
+  // FL.4 — apply confirmed entries by writing each member through the
+  // editor's own PUT contract (correct by construction).
+  const applyPropagation = useCallback(
+    async (
+      fieldKey: string,
+      entries: PropagationEntryDto[],
+    ): Promise<{ ok: number; fail: number }> => {
+      let ok = 0
+      let fail = 0
+      for (const e of entries) {
+        if (e.action === 'skip' || e.proposedValue == null) continue
+        try {
+          const r = await fetch(
+            `${getBackendUrl()}/api/products/${productId}/listings/${e.channel}/${e.marketplace}`,
+            {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              credentials: 'include',
+              body: JSON.stringify({ attributes: { [fieldKey]: e.proposedValue } }),
+            },
+          )
+          if (r.ok) ok++
+          else fail++
+        } catch {
+          fail++
+        }
+      }
+      return { ok, fail }
+    },
+    [productId],
+  )
+
+  return {
+    groups,
+    unavailable,
+    reload,
+    setScope,
+    scopeFor,
+    memberKeysFor,
+    propagatePreview,
+    applyPropagation,
+  }
 }

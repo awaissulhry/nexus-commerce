@@ -47,6 +47,9 @@ export interface FieldScopePopoverProps {
   /** Whether cross-language members auto-translate (text fields). */
   canTranslate?: boolean
   onApply: (result: FieldScopeResult) => void
+  /** FL.4 — when set and scope is linked, shows a "Propagate to members"
+   *  action that opens the diff modal. */
+  onPropagate?: () => void
 }
 
 export default function FieldScopePopover({
@@ -59,6 +62,7 @@ export default function FieldScopePopover({
   selectedMembers = [],
   canTranslate = true,
   onApply,
+  onPropagate,
 }: FieldScopePopoverProps) {
   const [draftScope, setDraftScope] = useState<FieldScope>(scope)
   const [checked, setChecked] = useState<Set<string>>(new Set(selectedMembers))
@@ -198,6 +202,16 @@ export default function FieldScopePopover({
               </label>
             )}
           </div>
+        )}
+
+        {draftScope === 'linked' && onPropagate && (
+          <button
+            type="button"
+            onClick={onPropagate}
+            className="mt-3 w-full rounded-md border border-blue-200 bg-blue-50 px-3 py-1.5 text-sm font-medium text-blue-700 hover:bg-blue-100 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-300"
+          >
+            Propagate current value to members →
+          </button>
         )}
 
         <div className="mt-4 flex justify-end gap-2">

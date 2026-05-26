@@ -73,9 +73,11 @@ import {
   ImagesSummaryCard,
   useCockpitFlag,
   FieldScopePopover,
+  PropagationDiffModal,
   useFieldLinks,
   type FieldScope,
   type ScopeMember,
+  type PropagatePreview,
 } from '../../_shared/cockpit-shell'
 
 interface MarketInfo {
@@ -197,6 +199,10 @@ export default function AmazonCockpit(props: Props) {
   // reloaded across sessions (degrades to inert if the table is absent).
   const [brandScopeOpen, setBrandScopeOpen] = useState(false)
   const fieldLinks = useFieldLinks(product.id)
+  // FL.4 — propagation diff modal state for the Brand demo.
+  const [propagateOpen, setPropagateOpen] = useState(false)
+  const [propagateData, setPropagateData] = useState<PropagatePreview | null>(null)
+  const [propagateBusy, setPropagateBusy] = useState(false)
 
   const composed = useAmazonCompositor({
     product,
@@ -783,6 +789,39 @@ export default function AmazonCockpit(props: Props) {
         onApply={(r) =>
           void fieldLinks.setScope('brand', r, { sourceLanguage: marketInfo.language })
         }
+        onPropagate={() => {
+          setBrandScopeOpen(false)
+          void (async () => {
+            const preview = await fieldLinks.propagatePreview('brand', composed.brand.value ?? '', {
+              channel: 'AMAZON',
+              marketplace: marketInfo.code,
+              language: marketInfo.language,
+            })
+            setPropagateData(preview)
+            setPropagateOpen(true)
+          })()
+        }}
+      />
+
+      {/* FL.4 — propagation diff (never silent: operator confirms members). */}
+      <PropagationDiffModal
+        open={propagateOpen}
+        onClose={() => {
+          if (!propagateBusy) setPropagateOpen(false)
+        }}
+        fieldLabel="Brand"
+        entries={propagateData?.entries ?? []}
+        translatable={propagateData?.translatable ?? false}
+        aiBudgetExceeded={propagateData?.aiBudgetExceeded}
+        busy={propagateBusy}
+        onApply={(selected) => {
+          void (async () => {
+            setPropagateBusy(true)
+            await fieldLinks.applyPropagation('brand', selected)
+            setPropagateBusy(false)
+            setPropagateOpen(false)
+          })()
+        }}
       />
     </div>
   )

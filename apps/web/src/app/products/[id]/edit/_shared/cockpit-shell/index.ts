@@ -36,7 +36,17 @@ export type {
 } from './FieldScopePopover'
 // FL.3b — link-group persistence client
 export { useFieldLinks } from './useFieldLinks'
-export type { FieldLinkGroupDto, FieldLinkMember, SetScopeOptions } from './useFieldLinks'
+export type {
+  FieldLinkGroupDto,
+  FieldLinkMember,
+  SetScopeOptions,
+  PropagationEntryDto,
+  PropagatePreview,
+  PropagationSource,
+} from './useFieldLinks'
+// FL.4 — propagation diff modal
+export { default as PropagationDiffModal } from './PropagationDiffModal'
+export type { PropagationDiffModalProps } from './PropagationDiffModal'
 export { default as IdentifiersCard } from './cards/IdentifiersCard'
 export type { IdentifiersCardProps, IdentifierRow } from './cards/IdentifiersCard'
 export { default as ImagesSummaryCard } from './cards/ImagesSummaryCard'
