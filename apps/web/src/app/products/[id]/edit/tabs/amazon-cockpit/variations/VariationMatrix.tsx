@@ -429,8 +429,8 @@ export default function VariationMatrix({
       )}
 
       <div className="text-[10.5px] text-slate-400 italic">
-        Hover a cell → pencil ✎ for inline price + stock edit.
-        Hover a row/col header → ▾ for bulk apply across the slice.
+        Click a cell to edit price + stock. Use the ▾ on a row or column
+        header to fill that whole row/column with one value.
         Cells show the colour-locked image when one is set on the Images tab.
       </div>
     </div>
@@ -598,6 +598,17 @@ function TwoAxisGrid({
     return null
   }
 
+  // CUBE.4 — formatted preview of the value a bulk fill would copy, shown
+  // inline in the menu so the operator sees exactly what will be applied.
+  function fillPreview(
+    members: ChildProduct[],
+    field: 'basePrice' | 'totalStock',
+  ): string | null {
+    const s = sourceValue(members, field)
+    if (!s) return null
+    return field === 'basePrice' ? `${activeCurrency} ${s.value.toFixed(2)}` : String(s.value)
+  }
+
   async function applyBulk(
     members: ChildProduct[],
     field: 'basePrice' | 'totalStock',
@@ -699,8 +710,8 @@ function TwoAxisGrid({
                           : { kind: 'col', value: c },
                       )
                     }
-                    className="w-4 h-4 grid place-items-center rounded text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 opacity-0 group-hover/colhead:opacity-100 transition-opacity"
-                    title={`Bulk apply across all ${rowAxis} at ${c}`}
+                    className="w-4 h-4 grid place-items-center rounded text-slate-500 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-600 opacity-70 hover:opacity-100 transition-opacity"
+                    title={`Fill price/stock across all ${rowAxis} at ${c}`}
                   >
                     ▾
                   </button>
@@ -709,6 +720,8 @@ function TwoAxisGrid({
                   <BulkPopover
                     label={`${colAxis} = ${c}`}
                     busy={bulkBusy}
+                    pricePreview={fillPreview(colChildren(c), 'basePrice')}
+                    stockPreview={fillPreview(colChildren(c), 'totalStock')}
                     onApplyPrice={() =>
                       applyBulk(colChildren(c), 'basePrice', `${colAxis} = ${c}`)
                     }
@@ -737,8 +750,8 @@ function TwoAxisGrid({
                           : { kind: 'row', value: r },
                       )
                     }
-                    className="w-4 h-4 grid place-items-center rounded text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 opacity-0 group-hover/rowhead:opacity-100 transition-opacity"
-                    title={`Bulk apply across all ${colAxis} for ${r}`}
+                    className="w-4 h-4 grid place-items-center rounded text-slate-500 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-600 opacity-70 hover:opacity-100 transition-opacity"
+                    title={`Fill price/stock across all ${colAxis} for ${r}`}
                   >
                     ▾
                   </button>
@@ -747,6 +760,8 @@ function TwoAxisGrid({
                   <BulkPopover
                     label={`${rowAxis} = ${r}`}
                     busy={bulkBusy}
+                    pricePreview={fillPreview(rowChildren(r), 'basePrice')}
+                    stockPreview={fillPreview(rowChildren(r), 'totalStock')}
                     onApplyPrice={() =>
                       applyBulk(rowChildren(r), 'basePrice', `${rowAxis} = ${r}`)
                     }
@@ -1169,18 +1184,22 @@ function BulkPopover({
   onApplyPrice,
   onApplyStock,
   onClose,
+  pricePreview,
+  stockPreview,
 }: {
   label: string
   busy: boolean
   onApplyPrice: () => void
   onApplyStock: () => void
   onClose: () => void
+  pricePreview?: string | null
+  stockPreview?: string | null
 }) {
   const { t } = useTranslations()
   return (
     <div
       role="menu"
-      className="absolute top-full left-0 z-20 mt-1 min-w-[200px] rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-lg p-1"
+      className="absolute top-full left-0 z-20 mt-1 min-w-[220px] rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-lg p-1"
       onClick={(e) => e.stopPropagation()}
     >
       <div className="px-2 py-1 text-[10px] uppercase tracking-wide font-semibold text-slate-500 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800">
@@ -1189,20 +1208,26 @@ function BulkPopover({
       <button
         type="button"
         role="menuitem"
-        disabled={busy}
+        disabled={busy || !pricePreview}
         onClick={onApplyPrice}
-        className="w-full text-left px-2 py-1.5 rounded text-[11.5px] text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-50"
+        className="flex w-full items-center justify-between gap-2 px-2 py-1.5 rounded text-[11.5px] text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-50"
       >
-        {t('products.edit.cockpit.amazon.variations.copyPriceToAll')}
+        <span>{t('products.edit.cockpit.amazon.variations.copyPriceToAll')}</span>
+        <span className="font-mono text-slate-500 dark:text-slate-400">
+          {pricePreview ? `→ ${pricePreview}` : '—'}
+        </span>
       </button>
       <button
         type="button"
         role="menuitem"
-        disabled={busy}
+        disabled={busy || !stockPreview}
         onClick={onApplyStock}
-        className="w-full text-left px-2 py-1.5 rounded text-[11.5px] text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-50"
+        className="flex w-full items-center justify-between gap-2 px-2 py-1.5 rounded text-[11.5px] text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-50"
       >
-        {t('products.edit.cockpit.amazon.variations.copyStockToAll')}
+        <span>{t('products.edit.cockpit.amazon.variations.copyStockToAll')}</span>
+        <span className="font-mono text-slate-500 dark:text-slate-400">
+          {stockPreview ? `→ ${stockPreview}` : '—'}
+        </span>
       </button>
       <button
         type="button"
