@@ -47,6 +47,10 @@ export type {
 // FL.4 — propagation diff modal
 export { default as PropagationDiffModal } from './PropagationDiffModal'
 export type { PropagationDiffModalProps } from './PropagationDiffModal'
+// FL.6 — smart link suggestions
+export { default as LinkSuggestionsBanner } from './LinkSuggestionsBanner'
+export type { LinkSuggestionsBannerProps } from './LinkSuggestionsBanner'
+export type { LinkSuggestion } from './useFieldLinks'
 export { default as IdentifiersCard } from './cards/IdentifiersCard'
 export type { IdentifiersCardProps, IdentifierRow } from './cards/IdentifiersCard'
 export { default as ImagesSummaryCard } from './cards/ImagesSummaryCard'

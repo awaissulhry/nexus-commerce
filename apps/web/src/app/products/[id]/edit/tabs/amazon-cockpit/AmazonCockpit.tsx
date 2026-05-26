@@ -74,6 +74,7 @@ import {
   useCockpitFlag,
   FieldScopePopover,
   PropagationDiffModal,
+  LinkSuggestionsBanner,
   useFieldLinks,
   type FieldScope,
   type ScopeMember,
@@ -526,6 +527,13 @@ export default function AmazonCockpit(props: Props) {
             </button>
           </>
         }
+      />
+
+      {/* FL.6.2 — smart link suggestions (identical values across markets). */}
+      <LinkSuggestionsBanner
+        suggestions={fieldLinks.suggestions}
+        onLink={(s) => void fieldLinks.linkSuggestion(s)}
+        onDismiss={fieldLinks.dismissSuggestion}
       />
 
       {/* ── Zone 2: Preview + Health band (UC.3 — shared band) ────── */}

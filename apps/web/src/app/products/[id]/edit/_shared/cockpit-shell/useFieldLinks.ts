@@ -54,9 +54,19 @@ export interface PropagationSource {
   language?: string | null
 }
 
+export interface LinkSuggestion {
+  fieldKey: string
+  label: string
+  sampleValue: string
+  members: Array<{ channel: string; marketplace: string }>
+  count: number
+}
+
 export function useFieldLinks(productId: string) {
   const [groups, setGroups] = useState<Record<string, FieldLinkGroupDto>>({})
   const [unavailable, setUnavailable] = useState(false)
+  const [suggestions, setSuggestions] = useState<LinkSuggestion[]>([])
+  const [dismissed, setDismissed] = useState<Set<string>>(new Set())
 
   const reload = useCallback(async () => {
     try {
@@ -77,9 +87,24 @@ export function useFieldLinks(productId: string) {
     }
   }, [productId])
 
+  const loadSuggestions = useCallback(async () => {
+    try {
+      const r = await fetch(
+        `${getBackendUrl()}/api/products/${productId}/field-links/suggestions`,
+        { credentials: 'include' },
+      )
+      if (!r.ok) return
+      const j = (await r.json()) as { suggestions?: LinkSuggestion[] }
+      setSuggestions(j.suggestions ?? [])
+    } catch {
+      // tolerate
+    }
+  }, [productId])
+
   useEffect(() => {
     void reload()
-  }, [reload])
+    void loadSuggestions()
+  }, [reload, loadSuggestions])
 
   const setScope = useCallback(
     async (fieldKey: string, result: FieldScopeResult, opts?: SetScopeOptions): Promise<boolean> => {
@@ -190,6 +215,28 @@ export function useFieldLinks(productId: string) {
     [productId],
   )
 
+  // FL.6.2 — accept a suggestion: link the field across its members.
+  const linkSuggestion = useCallback(
+    async (s: LinkSuggestion): Promise<boolean> => {
+      const ok = await setScope(s.fieldKey, {
+        scope: 'linked',
+        memberKeys: s.members.map((m) => `${m.channel}:${m.marketplace}`),
+        translate: true,
+      })
+      if (ok) {
+        setSuggestions((prev) => prev.filter((x) => x.fieldKey !== s.fieldKey))
+      }
+      return ok
+    },
+    [setScope],
+  )
+
+  const dismissSuggestion = useCallback((fieldKey: string) => {
+    setDismissed((prev) => new Set(prev).add(fieldKey))
+  }, [])
+
+  const visibleSuggestions = suggestions.filter((s) => !dismissed.has(s.fieldKey))
+
   return {
     groups,
     unavailable,
@@ -199,5 +246,8 @@ export function useFieldLinks(productId: string) {
     memberKeysFor,
     propagatePreview,
     applyPropagation,
+    suggestions: visibleSuggestions,
+    linkSuggestion,
+    dismissSuggestion,
   }
 }

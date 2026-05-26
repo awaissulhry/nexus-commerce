@@ -217,4 +217,71 @@ export async function fieldLinksRoutes(app: FastifyInstance) {
       }
     },
   );
+
+  // FL.6.2 — Smart link suggestions. Scans the product's listings for
+  // fields whose value is already identical across >=2 coordinates and
+  // that aren't linked yet, so the operator can one-click "link all".
+  app.get("/api/products/:id/field-links/suggestions", async (request, reply) => {
+    const { id } = request.params as { id: string };
+    try {
+      const [listings, groups] = await Promise.all([
+        prisma.channelListing.findMany({
+          where: { productId: id },
+          select: { channel: true, marketplace: true, title: true, description: true, price: true },
+        }),
+        prisma.fieldLinkGroup.findMany({ where: { productId: id }, select: { fieldKey: true } }),
+      ]);
+      const linked = new Set(groups.map((g) => g.fieldKey));
+
+      const comparable: Array<{
+        fieldKey: string;
+        label: string;
+        get: (l: (typeof listings)[number]) => string | null;
+      }> = [
+        { fieldKey: "title", label: "Title", get: (l) => l.title },
+        { fieldKey: "description", label: "Description", get: (l) => l.description },
+        { fieldKey: "price", label: "Price", get: (l) => (l.price == null ? null : String(l.price)) },
+      ];
+
+      const suggestions: Array<{
+        fieldKey: string;
+        label: string;
+        sampleValue: string;
+        members: Array<{ channel: string; marketplace: string }>;
+        count: number;
+      }> = [];
+
+      for (const f of comparable) {
+        if (linked.has(f.fieldKey)) continue;
+        const byValue = new Map<string, Array<{ channel: string; marketplace: string }>>();
+        for (const l of listings) {
+          const v = f.get(l);
+          if (v == null || v.trim() === "") continue;
+          const arr = byValue.get(v) ?? [];
+          arr.push({ channel: l.channel, marketplace: l.marketplace });
+          byValue.set(v, arr);
+        }
+        let best: { val: string; members: Array<{ channel: string; marketplace: string }> } | null = null;
+        for (const [val, members] of byValue) {
+          if (members.length >= 2 && (!best || members.length > best.members.length)) {
+            best = { val, members };
+          }
+        }
+        if (best) {
+          suggestions.push({
+            fieldKey: f.fieldKey,
+            label: f.label,
+            sampleValue: best.val.slice(0, 80),
+            members: best.members,
+            count: best.members.length,
+          });
+        }
+      }
+
+      return reply.send({ suggestions });
+    } catch (err) {
+      request.log?.warn({ err }, "field-link suggestions failed");
+      return reply.send({ suggestions: [] });
+    }
+  });
 }
