@@ -510,6 +510,17 @@ export default function AmazonCockpit(props: Props) {
                 <ListTree className="w-3 h-3" /> {t('products.edit.cockpit.amazon.allFields')}
               </button>
             )}
+            {/* SY.1 — outbound handoff to the bulk flat-file editor,
+                pre-filtered to this product family (new tab). */}
+            <a
+              href={`/products/amazon-flat-file?marketplace=${encodeURIComponent(marketInfo.code)}${productType ? `&productType=${encodeURIComponent(productType)}` : ''}&familyId=${encodeURIComponent(product.id)}`}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
+              title={t('products.edit.cockpit.amazon.editInBulkTitle')}
+            >
+              {t('products.edit.cockpit.amazon.editInBulk')} <ExternalLink className="w-3 h-3" />
+            </a>
             <button
               type="button"
               onClick={() => {

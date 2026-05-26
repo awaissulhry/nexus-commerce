@@ -312,6 +312,16 @@ export default function EbayCockpit(props: Props) {
                 <ListTree className="w-3 h-3" /> All fields
               </button>
             )}
+            {/* SY.1 — outbound handoff to the bulk eBay flat-file editor. */}
+            <a
+              href={`/products/ebay-flat-file?marketplace=${encodeURIComponent(marketInfo.code)}&familyId=${encodeURIComponent(product.id)}`}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
+              title="Open this product in the bulk eBay flat-file editor (new tab)"
+            >
+              Edit in bulk <ExternalLink className="w-3 h-3" />
+            </a>
             <button
               type="button"
               onClick={() => setMode('classic')}

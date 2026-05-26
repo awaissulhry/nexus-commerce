@@ -3433,6 +3433,8 @@
   "products.edit.cockpit.amazon.classicViewTitle": "Torna alla scheda Amazon legacy per questa sessione",
   "products.edit.cockpit.amazon.allFields": "Tutti i campi",
   "products.edit.cockpit.amazon.allFieldsTitle": "Tutti i campi — Amazon",
+  "products.edit.cockpit.amazon.editInBulk": "Modifica in blocco",
+  "products.edit.cockpit.amazon.editInBulkTitle": "Apri questo prodotto nell'editor flat-file in blocco (nuova scheda)",
   "products.edit.cockpit.amazon.actionPull": "Importa",
   "products.edit.cockpit.amazon.actionAiImprove": "Migliora con AI",
   "products.edit.cockpit.amazon.actionPublish": "Pubblica",

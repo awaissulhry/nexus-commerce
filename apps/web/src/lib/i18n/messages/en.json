@@ -3429,6 +3429,8 @@
   "products.edit.cockpit.amazon.classicViewTitle": "Switch back to the legacy Amazon tab for this session",
   "products.edit.cockpit.amazon.allFields": "All fields",
   "products.edit.cockpit.amazon.allFieldsTitle": "All fields — Amazon",
+  "products.edit.cockpit.amazon.editInBulk": "Edit in bulk",
+  "products.edit.cockpit.amazon.editInBulkTitle": "Open this product in the bulk flat-file editor (new tab)",
   "products.edit.cockpit.amazon.actionPull": "Pull",
   "products.edit.cockpit.amazon.actionAiImprove": "AI improve",
   "products.edit.cockpit.amazon.actionPublish": "Publish",
