@@ -722,7 +722,6 @@ export default function AmazonCockpit(props: Props) {
           targetId="fulfillment"
           icon={<Truck className="w-4 h-4" />}
           title={t('products.edit.cockpit.amazon.cards.fulfillment')}
-          phase="AC.9"
           value={
             composed.fulfillmentChannel.value
               ? `${composed.fulfillmentChannel.value} · ${composed.conditionType.value}`
@@ -740,13 +739,11 @@ export default function AmazonCockpit(props: Props) {
           targetId="compliance"
           icon={<ShieldCheck className="w-4 h-4" />}
           title={t('products.edit.cockpit.amazon.cards.compliance')}
-          phase="AC.4"
-          value="GPSR · Hazmat · Battery · Country of origin — checks land in AC.4"
+          value="GPSR · Hazmat · Battery · Country of origin"
         />
         <PlaceholderCard
           icon={<Package className="w-4 h-4" />}
           title={t('products.edit.cockpit.amazon.cards.compatibility')}
-          phase="AC.13"
           value="Xavia motorcycle gear — model/year fit list editor"
         />
       </CockpitCardGrid>
@@ -843,17 +840,15 @@ export default function AmazonCockpit(props: Props) {
 function PlaceholderCard({
   icon,
   title,
-  phase,
   value,
   targetId,
 }: {
   icon: React.ReactNode
   title: string
-  phase: string
   value: string
-  /** AC.4 — jump-target id. The health panel's onJumpTo handler
-   *  scrolls the cockpit to the card with this attribute. Omit for
-   *  cards that don't yet have a corresponding health-check row. */
+  /** Jump-target id. The health panel's onJumpTo handler scrolls the
+   *  cockpit to the card with this attribute. Omit for cards that don't
+   *  yet have a corresponding health-check row. */
   targetId?: string
 }) {
   return (
@@ -866,13 +861,13 @@ function PlaceholderCard({
           <span className="text-slate-400">{icon}</span>
           {title}
         </div>
-        <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400">
-          {phase}
+        <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-400">
+          Soon
         </span>
       </div>
       <div className="text-xs text-slate-600 dark:text-slate-400">{value}</div>
       <div className="mt-1.5 text-[10.5px] text-slate-400 italic">
-        Edit via the Existing Amazon fields panel below until this card lands.
+        Edit these in “All fields” for now.
       </div>
     </div>
   )
