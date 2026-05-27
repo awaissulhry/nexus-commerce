@@ -42,3 +42,22 @@ subsequent runs compare. Update with `--update-snapshots`.
 
 CI integration is NOT wired — that's another commit + a GitHub
 Actions workflow with browser caching.
+
+## cockpit-regression.spec.ts (GOV)
+
+Unlike the `test.fixme()` stubs above (written when the editor was behind
+a login wall), the listing-cockpit editor is **currently open** — no auth
+— so `cockpit-regression.spec.ts` drives it for real. It guards the
+UC/AC/EC/CARD/i18n/SSE-CORS work: real cards (no "Soon" placeholders),
+the Variant Cube's three views, **zero SSE/CORS console errors** (the
+SSE-CORS fix), and eBay's health rail.
+
+```bash
+PLAYWRIGHT_BASE_URL=https://nexus-commerce-three.vercel.app \
+  npx playwright test cockpit-regression
+# target product defaults to a Xavia parent; override with
+# PLAYWRIGHT_PRODUCT_ID=<id> if it's wiped/reseeded.
+```
+
+See [docs/cockpit-parity.md](../../../docs/cockpit-parity.md) for the
+parity reference these specs lock in.
