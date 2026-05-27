@@ -5,6 +5,7 @@ import {
   type PropagationMember,
 } from "../services/field-resolution/propagation.js";
 import { translateProductCopy } from "../services/ai/translate.service.js";
+import { auditLogService } from "../services/audit-log.service.js";
 
 // Marketplace → ISO 639-1 language. Used to decide which linked members
 // need translation. EU + a few global markets cover Xavia's footprint.
@@ -93,7 +94,22 @@ export async function fieldLinksRoutes(app: FastifyInstance) {
     try {
       // Non-linked scopes share no canonical value → clear any group.
       if (scope !== "linked") {
+        const prior = await prisma.fieldLinkGroup.findFirst({
+          where: { productId: id, fieldKey },
+        });
         await prisma.fieldLinkGroup.deleteMany({ where: { productId: id, fieldKey } });
+        // Only audit a real change — clearing an already-unlinked field is a no-op.
+        if (prior) {
+          await auditLogService.write({
+            ip: request.ip,
+            entityType: "field_link",
+            entityId: `${id}:${fieldKey}`,
+            action: scope === "independent" ? "field_link.independent" : "field_link.unlinked",
+            before: { members: prior.members, translatePolicy: prior.translatePolicy },
+            after: null,
+            metadata: { productId: id, fieldKey, scope },
+          });
+        }
         return reply.send({ ok: true, scope, group: null });
       }
 
@@ -115,6 +131,24 @@ export async function fieldLinksRoutes(app: FastifyInstance) {
         : await prisma.fieldLinkGroup.create({
             data: { productId: id, fieldKey, ...data },
           });
+
+      await auditLogService.write({
+        ip: request.ip,
+        entityType: "field_link",
+        entityId: `${id}:${fieldKey}`,
+        action: existing ? "field_link.updated" : "field_link.linked",
+        before: existing
+          ? { members: existing.members, translatePolicy: existing.translatePolicy }
+          : null,
+        after: { members, translatePolicy: data.translatePolicy },
+        metadata: {
+          productId: id,
+          fieldKey,
+          scope: "linked",
+          memberCount: members.length,
+          marketplaces: members.map((m) => `${m.channel}:${m.marketplace}`),
+        },
+      });
 
       return reply.send({ ok: true, scope, group });
     } catch (err) {
