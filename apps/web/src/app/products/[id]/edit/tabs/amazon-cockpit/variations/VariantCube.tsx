@@ -15,6 +15,7 @@
 import { useState, type ReactNode } from 'react'
 import { cn } from '@/lib/utils'
 import { getBackendUrl } from '@/lib/backend-url'
+import { useTranslations } from '@/lib/i18n/use-translations'
 import { useVariantCube } from '../../../_shared/cockpit-shell'
 
 // CUBE.1 — single editable numeric cell. Click → input; Enter/blur saves
@@ -36,6 +37,7 @@ function EditableNumberCell({
   readOnly?: boolean
   readOnlyHint?: string
 }) {
+  const { t } = useTranslations()
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState('')
   const [state, setState] = useState<'idle' | 'saving' | 'error'>('idle')
@@ -68,10 +70,10 @@ function EditableNumberCell({
           'w-full rounded px-1 py-0.5 text-left tabular-nums hover:bg-slate-100 dark:hover:bg-slate-800',
           state === 'error' && 'text-rose-500',
         )}
-        title="Click to edit"
+        title={t('products.edit.cockpit.amazon.cube.clickToEdit')}
       >
         {display}
-        {state === 'error' && <span className="ml-1 text-[10px]">retry</span>}
+        {state === 'error' && <span className="ml-1 text-[10px]">{t('products.edit.cockpit.amazon.cube.retry')}</span>}
       </button>
     )
   }
@@ -195,6 +197,7 @@ export default function VariantCube({
   activeFulfillment,
   axisGrid,
 }: VariantCubeProps) {
+  const { t } = useTranslations()
   const [view, setView] = useState<CubeView>('axis')
   const { variants, marketCodes, loading, error } = useVariantCube(productId, channel)
 
@@ -216,15 +219,15 @@ export default function VariantCube({
   return (
     <div className="min-w-0">
       <div className="mb-1 flex items-center gap-1">
-        {tab('axis', 'Axis grid')}
-        {tab('variant', 'By variant')}
-        {tab('market', 'By market')}
+        {tab('axis', t('products.edit.cockpit.amazon.cube.viewAxis'))}
+        {tab('variant', t('products.edit.cockpit.amazon.cube.viewVariant'))}
+        {tab('market', t('products.edit.cockpit.amazon.cube.viewMarket'))}
         <span className="ml-2 text-xs text-slate-400">· {activeMarket}</span>
       </div>
       <div className="mb-2 text-[11px] text-slate-400">
-        {view === 'axis' && 'Colour × size grid — edit a cell, or use the ▾ on a header to fill a whole row/column.'}
-        {view === 'variant' && `Every variant on ${activeMarket} — edit inline, or tick rows to set many at once.`}
-        {view === 'market' && 'Compare and edit one field across all markets; ⇥ fills a variant across markets.'}
+        {view === 'axis' && t('products.edit.cockpit.amazon.cube.hintAxis')}
+        {view === 'variant' && t('products.edit.cockpit.amazon.cube.hintVariant', { market: activeMarket })}
+        {view === 'market' && t('products.edit.cockpit.amazon.cube.hintMarket')}
       </div>
 
       {view === 'axis' && axisGrid}
@@ -274,6 +277,7 @@ function ByMarketView({
   error: string | null
   activeCurrency: string
 }) {
+  const { t } = useTranslations()
   const [field, setField] = useState<MarketField>('price')
   // CUBE.3 — optimistic overlay keyed `${field}:${variantId}:${market}`.
   const [edits, setEdits] = useState<Record<string, number>>({})
@@ -325,11 +329,11 @@ function ByMarketView({
     }
   }
 
-  if (loading) return <div className="py-8 text-center text-sm text-slate-400">Loading variants…</div>
+  if (loading) return <div className="py-8 text-center text-sm text-slate-400">{t('products.edit.cockpit.amazon.cube.loading')}</div>
   if (error) return <div className="py-8 text-center text-sm text-rose-500">{error}</div>
-  if (variants.length === 0) return <div className="py-8 text-center text-sm text-slate-400">No variants.</div>
+  if (variants.length === 0) return <div className="py-8 text-center text-sm text-slate-400">{t('products.edit.cockpit.amazon.cube.noVariants')}</div>
   if (marketCodes.length === 0)
-    return <div className="py-8 text-center text-sm text-slate-400">No market data yet.</div>
+    return <div className="py-8 text-center text-sm text-slate-400">{t('products.edit.cockpit.amazon.cube.noMarketData')}</div>
 
   const fieldBtn = (f: MarketField, label: string) => (
     <button
@@ -349,18 +353,18 @@ function ByMarketView({
   return (
     <div>
       <div className="mb-1.5 flex items-center gap-1">
-        <span className="text-xs text-slate-400">Field:</span>
-        {fieldBtn('price', 'Price')}
-        {fieldBtn('listedQty', 'Listed qty')}
+        <span className="text-xs text-slate-400">{t('products.edit.cockpit.amazon.cube.fieldLabel')}</span>
+        {fieldBtn('price', t('products.edit.cockpit.amazon.cube.price'))}
+        {fieldBtn('listedQty', t('products.edit.cockpit.amazon.cube.listedQty'))}
         <span className="ml-2 text-[10.5px] text-slate-400">
-          click a cell to edit · ⇥ fills the row across markets
+          {t('products.edit.cockpit.amazon.cube.marketCellHint')}
         </span>
       </div>
       <div className="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800">
         <table className="w-full text-sm">
           <thead className="bg-slate-50 text-left text-xs text-slate-500 dark:bg-slate-900/40 dark:text-slate-400">
             <tr>
-              <th className="px-3 py-2 font-medium">Variant</th>
+              <th className="px-3 py-2 font-medium">{t('products.edit.cockpit.amazon.cube.variant')}</th>
               {marketCodes.map((mp) => (
                 <th key={mp} className="px-3 py-2 font-medium">{mp}</th>
               ))}
@@ -380,7 +384,7 @@ function ByMarketView({
                       prefix={field === 'price' ? activeCurrency : undefined}
                       decimals={field === 'price' ? 2 : 0}
                       readOnly={isCellFba(v, mp)}
-                      readOnlyHint={isCellFba(v, mp) ? 'Quantity is managed by Amazon for FBA offers' : undefined}
+                      readOnlyHint={isCellFba(v, mp) ? t('products.edit.cockpit.amazon.cube.fbaQtyManaged') : undefined}
                       onSave={(n) => saveCell(v, mp, n)}
                     />
                   </td>
@@ -389,10 +393,10 @@ function ByMarketView({
                   <button
                     type="button"
                     onClick={() => void fillRow(v)}
-                    title="Fill this variant's value across all markets"
+                    title={t('products.edit.cockpit.amazon.cube.fillRowTitle')}
                     className="rounded px-1.5 py-0.5 text-xs text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800"
                   >
-                    ⇥ fill
+                    ⇥ {t('products.edit.cockpit.amazon.cube.fill')}
                   </button>
                 </td>
               </tr>
@@ -419,14 +423,15 @@ function ByVariantView({
   activeCurrency: string
   activeFulfillment?: 'FBA' | 'FBM' | null
 }) {
+  const { t } = useTranslations()
   if (loading) {
-    return <div className="py-8 text-center text-sm text-slate-400">Loading variants…</div>
+    return <div className="py-8 text-center text-sm text-slate-400">{t('products.edit.cockpit.amazon.cube.loading')}</div>
   }
   if (error) {
     return <div className="py-8 text-center text-sm text-rose-500">{error}</div>
   }
   if (variants.length === 0) {
-    return <div className="py-8 text-center text-sm text-slate-400">No variants.</div>
+    return <div className="py-8 text-center text-sm text-slate-400">{t('products.edit.cockpit.amazon.cube.noVariants')}</div>
   }
 
   return (
@@ -452,6 +457,7 @@ function ByVariantTable({
   activeCurrency: string
   activeFulfillment?: 'FBA' | 'FBM' | null
 }) {
+  const { t } = useTranslations()
   const isFba = activeFulfillment === 'FBA'
   const [query, setQuery] = useState('')
   const [lowOnly, setLowOnly] = useState(false)
@@ -522,7 +528,11 @@ function ByVariantTable({
     const targets = bulkField === 'totalStock' ? selRows.filter((v) => !rowFbaFor(v)) : selRows
     const skipped = selRows.length - targets.length
     if (targets.length === 0) {
-      setBulkMsg(skipped > 0 ? `${skipped} FBA variant(s) — skipped` : 'Nothing to update')
+      setBulkMsg(
+        skipped > 0
+          ? t('products.edit.cockpit.amazon.cube.fbaSkipped', { count: skipped })
+          : t('products.edit.cockpit.amazon.cube.nothingToUpdate'),
+      )
       return
     }
     // Capture pre-values for Undo before writing.
@@ -546,7 +556,7 @@ function ByVariantTable({
     if (pct) {
       const changes = Object.entries(computed).map(([id, value]) => ({ id, field: bulkField, value }))
       if (changes.length === 0) {
-        setBulkMsg('No priced variants to adjust')
+        setBulkMsg(t('products.edit.cockpit.amazon.cube.noPricedVariants'))
         setBulkBusy(false)
         return
       }
@@ -575,11 +585,13 @@ function ByVariantTable({
         return next
       })
       setLastBulk({ field: bulkField, prev })
-      const verb = pct ? `Adjusted ${Object.keys(computed).length}` : `Updated ${targets.length}`
-      setBulkMsg(`${verb}${skipped ? ` · ${skipped} FBA skipped` : ''}`)
+      const verb = pct
+        ? t('products.edit.cockpit.amazon.cube.adjustedN', { count: Object.keys(computed).length })
+        : t('products.edit.cockpit.amazon.cube.updatedN', { count: targets.length })
+      setBulkMsg(`${verb}${skipped ? ` · ${t('products.edit.cockpit.amazon.cube.fbaSkippedSuffix', { count: skipped })}` : ''}`)
       setBulkValue('')
     } else {
-      setBulkMsg('Bulk update failed')
+      setBulkMsg(t('products.edit.cockpit.amazon.cube.bulkUpdateFailed'))
     }
     setBulkBusy(false)
   }
@@ -610,12 +622,12 @@ function ByVariantTable({
           for (const [id, v] of entries) next[id] = { ...next[id], [lastBulk.field]: v }
           return next
         })
-        setBulkMsg(`Reverted ${entries.length}`)
+        setBulkMsg(t('products.edit.cockpit.amazon.cube.revertedN', { count: entries.length }))
       } else {
-        setBulkMsg('Undo failed')
+        setBulkMsg(t('products.edit.cockpit.amazon.cube.undoFailed'))
       }
     } catch {
-      setBulkMsg('Undo failed')
+      setBulkMsg(t('products.edit.cockpit.amazon.cube.undoFailed'))
     }
     setLastBulk(null)
     setBulkBusy(false)
@@ -628,7 +640,7 @@ function ByVariantTable({
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search variants…"
+          placeholder={t('products.edit.cockpit.amazon.cube.searchPlaceholder')}
           className="h-7 w-48 rounded border border-slate-200 px-2 text-sm dark:border-slate-700 dark:bg-slate-900"
         />
         <button
@@ -641,7 +653,7 @@ function ByVariantTable({
               : 'border-slate-200 text-slate-500 hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800',
           )}
         >
-          Low stock only
+          {t('products.edit.cockpit.amazon.cube.lowStockOnly')}
         </button>
         <span className="text-xs text-slate-400">
           {rows.length} / {variants.length}
@@ -651,10 +663,10 @@ function ByVariantTable({
             type="button"
             onClick={() => void undoBulk()}
             disabled={bulkBusy}
-            title="Revert the last bulk change"
+            title={t('products.edit.cockpit.amazon.cube.undoBulkTitle')}
             className="ml-auto inline-flex items-center gap-1 h-7 rounded border border-slate-200 px-2 text-xs text-slate-600 hover:bg-slate-100 disabled:opacity-40 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
           >
-            ↩ Undo bulk
+            ↩ {t('products.edit.cockpit.amazon.cube.undoBulk')}
           </button>
         )}
       </div>
@@ -663,7 +675,7 @@ function ByVariantTable({
       {selected.size > 0 && (
         <div className="mb-1.5 flex flex-wrap items-center gap-2 rounded-md border border-blue-200 bg-blue-50 px-2 py-1.5 dark:border-blue-900 dark:bg-blue-950/40">
           <span className="text-xs font-medium text-blue-700 dark:text-blue-300">
-            {selected.size} selected
+            {t('products.edit.cockpit.amazon.cube.nSelected', { count: selected.size })}
           </span>
           <select
             value={bulkField}
@@ -674,18 +686,18 @@ function ByVariantTable({
             }}
             className="h-7 rounded border border-slate-200 px-1 text-xs dark:border-slate-700 dark:bg-slate-900"
           >
-            <option value="basePrice">Base price</option>
-            <option value="totalStock">Stock</option>
+            <option value="basePrice">{t('products.edit.cockpit.amazon.cube.basePrice')}</option>
+            <option value="totalStock">{t('products.edit.cockpit.amazon.cube.stock')}</option>
           </select>
           {bulkField === 'basePrice' && (
             <select
               value={bulkMode}
               onChange={(e) => setBulkMode(e.target.value as 'set' | 'pct')}
               className="h-7 rounded border border-slate-200 px-1 text-xs dark:border-slate-700 dark:bg-slate-900"
-              title="Set an absolute value, or adjust each variant's price by a percentage"
+              title={t('products.edit.cockpit.amazon.cube.bulkModeTitle')}
             >
-              <option value="set">set to</option>
-              <option value="pct">adjust %</option>
+              <option value="set">{t('products.edit.cockpit.amazon.cube.modeSet')}</option>
+              <option value="pct">{t('products.edit.cockpit.amazon.cube.modePct')}</option>
             </select>
           )}
           <input
@@ -695,7 +707,7 @@ function ByVariantTable({
             onKeyDown={(e) => {
               if (e.key === 'Enter') void applyBulk()
             }}
-            placeholder={bulkMode === 'pct' ? '± %' : 'value'}
+            placeholder={bulkMode === 'pct' ? '± %' : t('products.edit.cockpit.amazon.cube.valuePlaceholder')}
             className="h-7 w-24 rounded border border-slate-200 px-2 text-xs dark:border-slate-700 dark:bg-slate-900"
           />
           <button
@@ -704,7 +716,9 @@ function ByVariantTable({
             disabled={bulkBusy || bulkValue.trim() === ''}
             className="h-7 rounded bg-blue-600 px-2 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-40"
           >
-            {bulkBusy ? 'Applying…' : `Apply to ${selected.size}`}
+            {bulkBusy
+              ? t('products.edit.cockpit.amazon.cube.applying')
+              : t('products.edit.cockpit.amazon.cube.applyToN', { count: selected.size })}
           </button>
           <button
             type="button"
@@ -714,7 +728,7 @@ function ByVariantTable({
             }}
             className="h-7 rounded px-2 text-xs text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
           >
-            Clear
+            {t('products.edit.cockpit.amazon.cube.clear')}
           </button>
           {bulkMsg && <span className="text-xs text-slate-500">{bulkMsg}</span>}
         </div>
@@ -729,15 +743,15 @@ function ByVariantTable({
                 type="checkbox"
                 checked={allSelected}
                 onChange={toggleAll}
-                aria-label="Select all variants"
+                aria-label={t('products.edit.cockpit.amazon.cube.selectAll')}
                 className="rounded border-slate-300 dark:border-slate-600"
               />
             </th>
-            <th className="px-3 py-2 font-medium">Variant</th>
-            <th className="px-3 py-2 font-medium">Base price</th>
-            <th className="px-3 py-2 font-medium">Listed qty</th>
-            <th className="px-3 py-2 font-medium">Stock</th>
-            <th className="px-3 py-2 font-medium">Status</th>
+            <th className="px-3 py-2 font-medium">{t('products.edit.cockpit.amazon.cube.variant')}</th>
+            <th className="px-3 py-2 font-medium">{t('products.edit.cockpit.amazon.cube.basePrice')}</th>
+            <th className="px-3 py-2 font-medium">{t('products.edit.cockpit.amazon.cube.listedQty')}</th>
+            <th className="px-3 py-2 font-medium">{t('products.edit.cockpit.amazon.cube.stock')}</th>
+            <th className="px-3 py-2 font-medium">{t('products.edit.cockpit.amazon.cube.status')}</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -760,7 +774,7 @@ function ByVariantTable({
                     type="checkbox"
                     checked={selected.has(v.id)}
                     onChange={() => toggleRow(v.id)}
-                    aria-label={`Select ${v.sku}`}
+                    aria-label={t('products.edit.cockpit.amazon.cube.selectRow', { sku: v.sku })}
                     className="rounded border-slate-300 dark:border-slate-600"
                   />
                 </td>
@@ -784,7 +798,7 @@ function ByVariantTable({
                       decimals={0}
                       readOnly={rowFba}
                       readOnlyHint={
-                        rowFba ? 'Quantity is managed by Amazon for FBA offers' : undefined
+                        rowFba ? t('products.edit.cockpit.amazon.cube.fbaQtyManaged') : undefined
                       }
                       onSave={(n) => saveField(v.id, 'totalStock', n)}
                     />
