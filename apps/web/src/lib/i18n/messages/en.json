@@ -3691,6 +3691,7 @@
   "products.edit.cockpit.amazon.fulfillment.mixedWarning": "Mixed fulfilment across variants",
   "products.edit.cockpit.amazon.fulfillment.manageStock": "Manage stock in All fields",
   "products.edit.cockpit.amazon.fulfillment.loadError": "Couldn't load fulfilment data",
+  "products.edit.cockpit.amazon.fulfillment.retry": "Retry",
   "products.edit.cockpit.amazon.compliance.countryOfOrigin": "Country of origin",
   "products.edit.cockpit.amazon.compliance.gpsr": "GPSR responsible person (EU)",
   "products.edit.cockpit.amazon.compliance.manufacturer": "Manufacturer",

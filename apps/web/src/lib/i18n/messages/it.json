@@ -3695,6 +3695,7 @@
   "products.edit.cockpit.amazon.fulfillment.mixedWarning": "Evasione mista tra le varianti",
   "products.edit.cockpit.amazon.fulfillment.manageStock": "Gestisci le scorte in Tutti i campi",
   "products.edit.cockpit.amazon.fulfillment.loadError": "Impossibile caricare i dati di evasione",
+  "products.edit.cockpit.amazon.fulfillment.retry": "Riprova",
   "products.edit.cockpit.amazon.compliance.countryOfOrigin": "Paese di origine",
   "products.edit.cockpit.amazon.compliance.gpsr": "Responsabile GPSR (UE)",
   "products.edit.cockpit.amazon.compliance.manufacturer": "Produttore",

@@ -20,7 +20,7 @@
 // not inline — consistent with "FBA offers can't edit quantity here".
 
 import { useEffect, useState } from 'react'
-import { Truck, Warehouse, AlertTriangle, Loader2, ExternalLink } from 'lucide-react'
+import { Truck, Warehouse, AlertTriangle, Loader2, ExternalLink, RefreshCw } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
 import { cn } from '@/lib/utils'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -86,6 +86,7 @@ export default function FulfillmentCard({
   const [data, setData] = useState<InventoryResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [reloadKey, setReloadKey] = useState(0)
 
   useEffect(() => {
     let cancelled = false
@@ -108,7 +109,7 @@ export default function FulfillmentCard({
     return () => {
       cancelled = true
     }
-  }, [productId, t])
+  }, [productId, t, reloadKey])
 
   const productRow = data?.product.markets.find((m) => m.marketplace === marketplace) ?? null
   const method: Method =
@@ -133,18 +134,18 @@ export default function FulfillmentCard({
     method === 'FBA'
       ? {
           label: t('products.edit.cockpit.amazon.fulfillment.byAmazon'),
-          icon: <Truck className="w-3.5 h-3.5" />,
+          icon: <Truck aria-hidden className="w-3.5 h-3.5" />,
           cls: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-900',
         }
       : method === 'FBM'
         ? {
             label: t('products.edit.cockpit.amazon.fulfillment.merchant'),
-            icon: <Warehouse className="w-3.5 h-3.5" />,
+            icon: <Warehouse aria-hidden className="w-3.5 h-3.5" />,
             cls: 'bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-950/40 dark:text-sky-300 dark:border-sky-900',
           }
         : {
             label: t('products.edit.cockpit.amazon.fulfillment.notSet'),
-            icon: <Truck className="w-3.5 h-3.5" />,
+            icon: <Truck aria-hidden className="w-3.5 h-3.5" />,
             cls: 'bg-slate-100 text-slate-500 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700',
           }
 
@@ -154,16 +155,28 @@ export default function FulfillmentCard({
         data-jump-target="fulfillment"
         className="px-4 py-2.5 border-b border-slate-100 dark:border-slate-800 flex items-center gap-2"
       >
-        <Truck className="w-4 h-4 text-blue-500" />
+        <Truck aria-hidden className="w-4 h-4 text-blue-500" />
         <div className="text-md font-medium text-slate-900 dark:text-slate-100">
           {t('products.edit.cockpit.amazon.cards.fulfillment')}
         </div>
-        {loading && <Loader2 className="w-3.5 h-3.5 text-slate-400 animate-spin ml-auto" />}
+        {loading && (
+          <Loader2 aria-hidden className="w-3.5 h-3.5 text-slate-400 animate-spin ml-auto" />
+        )}
       </div>
 
       <div className="p-4 space-y-3">
         {error ? (
-          <div className="text-xs text-rose-600 dark:text-rose-400">{error}</div>
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-xs text-rose-600 dark:text-rose-400">{error}</span>
+            <button
+              type="button"
+              onClick={() => setReloadKey((k) => k + 1)}
+              className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-medium rounded border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
+            >
+              <RefreshCw aria-hidden className="w-3 h-3" />
+              {t('products.edit.cockpit.amazon.fulfillment.retry')}
+            </button>
+          </div>
         ) : (
           <>
             <div className="flex items-center justify-between gap-3">
@@ -215,7 +228,7 @@ export default function FulfillmentCard({
             {/* Mixed-fulfilment warning */}
             {isMixed && (
               <div className="flex items-start gap-2 rounded-md border border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/40 px-2.5 py-2">
-                <AlertTriangle className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
+                <AlertTriangle aria-hidden className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
                 <div className="text-[11px] text-amber-700 dark:text-amber-300">
                   <div className="font-medium">
                     {t('products.edit.cockpit.amazon.fulfillment.mixedWarning')}
@@ -236,7 +249,7 @@ export default function FulfillmentCard({
             className="inline-flex items-center gap-1 text-[11px] font-medium text-blue-600 dark:text-blue-400 hover:underline"
           >
             {t('products.edit.cockpit.amazon.fulfillment.manageStock')}
-            <ExternalLink className="w-3 h-3" />
+            <ExternalLink aria-hidden className="w-3 h-3" />
           </button>
         )}
       </div>

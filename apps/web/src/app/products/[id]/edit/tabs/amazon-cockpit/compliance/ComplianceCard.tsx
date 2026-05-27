@@ -91,7 +91,7 @@ export default function ComplianceCard({ attributes, onJumpToClassic }: Props) {
         data-jump-target="compliance"
         className="px-4 py-2.5 border-b border-slate-100 dark:border-slate-800 flex items-center gap-2"
       >
-        <ShieldCheck className="w-4 h-4 text-blue-500" />
+        <ShieldCheck aria-hidden className="w-4 h-4 text-blue-500" />
         <div className="text-md font-medium text-slate-900 dark:text-slate-100">
           {t('products.edit.cockpit.amazon.cards.compliance')}
         </div>
@@ -114,9 +114,9 @@ export default function ComplianceCard({ attributes, onJumpToClassic }: Props) {
             <div key={item.id} className="flex items-center justify-between gap-3 text-xs">
               <span className="inline-flex items-center gap-1.5 min-w-0">
                 {set ? (
-                  <Check className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                  <Check aria-hidden className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
                 ) : item.required ? (
-                  <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                  <AlertTriangle aria-hidden className="w-3.5 h-3.5 text-amber-500 shrink-0" />
                 ) : (
                   <span className="w-3.5 h-3.5 inline-flex items-center justify-center shrink-0">
                     <span className="w-1.5 h-1.5 rounded-full bg-slate-300 dark:bg-slate-600" />
@@ -155,7 +155,7 @@ export default function ComplianceCard({ attributes, onJumpToClassic }: Props) {
             {allRequiredSet
               ? t('products.edit.cockpit.amazon.compliance.review')
               : t('products.edit.cockpit.amazon.compliance.fixGaps')}
-            <ExternalLink className="w-3 h-3" />
+            <ExternalLink aria-hidden className="w-3 h-3" />
           </button>
         )}
       </div>
