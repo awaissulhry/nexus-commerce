@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync } from 'fastify'
 import { Prisma } from '@prisma/client'
 import prisma from '../db.js'
+import { sseResponseHeaders } from '../lib/sse.js'
 import { deriveFulfillmentMethod } from '../services/fulfillment-derivation.service.js'
 import {
   resolveWarehouseForOrder,
@@ -2069,12 +2070,7 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
   // keeps the connection alive past most proxy idle timeouts; client
   // EventSource auto-reconnects on transient drops.
   fastify.get('/fulfillment/outbound/events', async (request, reply) => {
-    reply.raw.writeHead(200, {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
-      'Connection': 'keep-alive',
-      'X-Accel-Buffering': 'no',
-    })
+    reply.raw.writeHead(200, sseResponseHeaders(request.headers.origin as string | undefined))
     reply.raw.write(
       `event: ping\ndata: ${JSON.stringify({ ts: Date.now(), connected: true })}\n\n`,
     )
@@ -4335,14 +4331,7 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
   // close idle connections. EventSource auto-reconnects on its own,
   // so a transient drop is invisible to the operator.
   fastify.get('/fulfillment/inbound/events', async (request, reply) => {
-    reply.raw.writeHead(200, {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
-      'Connection': 'keep-alive',
-      // Tell proxies not to buffer (Cloudflare honours this; Railway's
-      // Envoy passes it through).
-      'X-Accel-Buffering': 'no',
-    })
+    reply.raw.writeHead(200, sseResponseHeaders(request.headers.origin as string | undefined))
     // Initial hello so the client knows the stream is live.
     reply.raw.write(`event: ping\ndata: ${JSON.stringify({ ts: Date.now(), connected: true })}\n\n`)
 
@@ -7644,12 +7633,7 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
   // /api/fulfillment/purchase-orders/events; named events fire as
   // operators move POs through the lifecycle or receive against them.
   fastify.get('/fulfillment/purchase-orders/events', async (request, reply) => {
-    reply.raw.writeHead(200, {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
-      'Connection': 'keep-alive',
-      'X-Accel-Buffering': 'no',
-    })
+    reply.raw.writeHead(200, sseResponseHeaders(request.headers.origin as string | undefined))
     reply.raw.write(
       `event: ping\ndata: ${JSON.stringify({ ts: Date.now(), connected: true })}\n\n`,
     )

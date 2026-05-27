@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify'
 import prisma from '../db.js'
+import { sseResponseHeaders } from '../lib/sse.js'
 import { allowApiKeyScope } from '../lib/api-key-hook.js'
 import { computeHealth, aggregateIssuesByCategory } from '../services/listings/health.service.js'
 import { publishListingEvent, subscribeListingEvents } from '../services/listing-events.service.js'
@@ -2869,12 +2870,7 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
   // EventSource auto-reconnects on transient drops.
   // ─────────────────────────────────────────────────────────────────
   fastify.get('/listings/events', async (request, reply) => {
-    reply.raw.writeHead(200, {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
-      'Connection': 'keep-alive',
-      'X-Accel-Buffering': 'no',
-    })
+    reply.raw.writeHead(200, sseResponseHeaders(request.headers.origin as string | undefined))
     reply.raw.write(
       `event: ping\ndata: ${JSON.stringify({ ts: Date.now(), connected: true })}\n\n`,
     )

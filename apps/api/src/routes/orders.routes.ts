@@ -11,6 +11,7 @@
  */
 
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify'
+import { sseResponseHeaders } from '../lib/sse.js'
 import { logger } from '../utils/logger.js'
 import { ingestMockOrders, shipOrder } from '../services/order-ingestion.service.js'
 import prisma from '../db.js'
@@ -1670,12 +1671,7 @@ export async function ordersRoutes(app: FastifyInstance) {
   // memory (last 100 events, 5-min TTL); longer gaps fall through
   // to the existing re-fetch path automatically.
   app.get('/api/orders/events', async (request, reply) => {
-    reply.raw.writeHead(200, {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
-      Connection: 'keep-alive',
-      'X-Accel-Buffering': 'no',
-    })
+    reply.raw.writeHead(200, sseResponseHeaders(request.headers.origin as string | undefined))
     reply.raw.write(
       `event: ping\ndata: ${JSON.stringify({ ts: Date.now(), connected: true })}\n\n`,
     )

@@ -22,6 +22,7 @@
 
 import type { FastifyPluginAsync } from 'fastify'
 import prisma from '../db.js'
+import { sseResponseHeaders } from '../lib/sse.js'
 import { getAllAmazonCircuitStates, resetAllAmazonCircuits } from '../services/amazon-publish-gate.service.js'
 import { getAllEbayCircuitStates, resetAllEbayCircuits } from '../services/ebay-publish-gate.service.js'
 import { getAllShopifyCircuitStates, resetAllShopifyCircuits } from '../services/shopify-publish-gate.service.js'
@@ -2868,12 +2869,7 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
    * rather than apply deltas.
    */
   fastify.get('/dashboard/events', async (request, reply) => {
-    reply.raw.writeHead(200, {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
-      Connection: 'keep-alive',
-      'X-Accel-Buffering': 'no',
-    })
+    reply.raw.writeHead(200, sseResponseHeaders(request.headers.origin as string | undefined))
     reply.raw.write(
       `event: ping\ndata: ${JSON.stringify({ ts: Date.now(), connected: true })}\n\n`,
     )

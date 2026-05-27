@@ -10,6 +10,7 @@ void initOtel();
 import Fastify from "fastify";
 import { runWithRequestId } from "./utils/request-context.js";
 import cors from "@fastify/cors";
+import { ALLOWED_WEB_ORIGINS } from "./lib/cors-origins.js";
 import compress from "@fastify/compress";
 import multipart from "@fastify/multipart";
 import rateLimit from "@fastify/rate-limit";
@@ -434,11 +435,7 @@ if (process.env.NEXUS_DISABLE_RATE_LIMIT !== '1') {
 
 // Register CORS to allow cross-origin requests from frontend (Port 3000)
 app.register(cors, {
-  origin: [
-    'http://localhost:3000',
-    'https://nexus-commerce-three.vercel.app',
-    'https://nexus-commerce-web.vercel.app',
-  ],
+  origin: [...ALLOWED_WEB_ORIGINS],
   methods: ['GET', 'POST', 'PATCH', 'DELETE', 'PUT', 'OPTIONS'],
   credentials: true,
 });

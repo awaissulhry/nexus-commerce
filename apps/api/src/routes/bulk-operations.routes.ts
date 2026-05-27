@@ -8,6 +8,7 @@
  */
 
 import type { FastifyPluginAsync } from 'fastify'
+import { sseResponseHeaders } from '../lib/sse.js'
 import {
   BulkActionService,
   type BulkActionType,
@@ -576,12 +577,7 @@ const bulkOperationsRoutes: FastifyPluginAsync = async (fastify) => {
       if (!initial) {
         return reply.code(404).send({ success: false, error: `Job not found: ${id}` })
       }
-      reply.raw.writeHead(200, {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        Connection: 'keep-alive',
-        'X-Accel-Buffering': 'no',
-      })
+      reply.raw.writeHead(200, sseResponseHeaders(request.headers.origin as string | undefined))
       const send = (event: string, data: unknown) => {
         try {
           reply.raw.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`)

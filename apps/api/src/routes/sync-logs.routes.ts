@@ -27,6 +27,7 @@
 import type { FastifyPluginAsync } from 'fastify'
 import { Prisma } from '@prisma/client'
 import prisma from '../db.js'
+import { sseResponseHeaders } from '../lib/sse.js'
 import {
   subscribeSyncLogEvents,
   type SyncLogEvent,
@@ -740,12 +741,7 @@ const syncLogsRoutes: FastifyPluginAsync = async (fastify) => {
    * GET /api/sync-logs/events
    */
   fastify.get('/sync-logs/events', async (request, reply) => {
-    reply.raw.writeHead(200, {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache, no-transform',
-      Connection: 'keep-alive',
-      'X-Accel-Buffering': 'no',
-    })
+    reply.raw.writeHead(200, sseResponseHeaders(request.headers.origin as string | undefined, { 'Cache-Control': 'no-cache, no-transform' }))
 
     const send = (event: SyncLogEvent) => {
       try {
