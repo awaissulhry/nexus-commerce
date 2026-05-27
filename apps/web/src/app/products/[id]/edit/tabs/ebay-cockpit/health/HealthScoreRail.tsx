@@ -22,6 +22,7 @@
 import { useMemo } from 'react'
 import { CheckCircle2, AlertTriangle, XCircle, Ban, Lock } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useTranslations } from '@/lib/i18n/use-translations'
 import { useHealthScore, type Check, type CheckStatus } from './useHealthScore'
 
 interface Props {
@@ -45,12 +46,13 @@ interface Props {
   }
 }
 
-const GROUP_LABELS: Record<Check['group'], string> = {
-  content:  'Content',
-  images:   'Images',
-  aspects:  'Category & Aspects',
-  pricing:  'Pricing & Policies',
-  gates:    'Category gates',
+// Map each check group to its i18n key; resolved via t() at render time.
+const GROUP_LABEL_KEYS: Record<Check['group'], string> = {
+  content:  'products.edit.cockpit.ebay.health.groupContent',
+  images:   'products.edit.cockpit.ebay.health.groupImages',
+  aspects:  'products.edit.cockpit.ebay.health.groupAspects',
+  pricing:  'products.edit.cockpit.ebay.health.groupPricing',
+  gates:    'products.edit.cockpit.ebay.health.groupGates',
 }
 
 const STATUS_ICON: Record<CheckStatus, React.ComponentType<{ className?: string }>> = {
@@ -65,14 +67,16 @@ const STATUS_TONE: Record<CheckStatus, string> = {
   fail: 'text-rose-600 dark:text-rose-400',
 }
 
-function scoreTone(score: number): { ring: string; text: string; bg: string; label: string } {
-  if (score >= 85) return { ring: 'ring-emerald-300 dark:ring-emerald-700', text: 'text-emerald-700 dark:text-emerald-300', bg: 'bg-emerald-50 dark:bg-emerald-950/40', label: 'Excellent' }
-  if (score >= 70) return { ring: 'ring-blue-300 dark:ring-blue-700',       text: 'text-blue-700 dark:text-blue-300',       bg: 'bg-blue-50 dark:bg-blue-950/40',       label: 'Ready to publish' }
-  if (score >= 50) return { ring: 'ring-amber-300 dark:ring-amber-700',     text: 'text-amber-700 dark:text-amber-300',     bg: 'bg-amber-50 dark:bg-amber-950/40',     label: 'Needs polish' }
-  return                  { ring: 'ring-rose-300 dark:ring-rose-700',       text: 'text-rose-700 dark:text-rose-300',       bg: 'bg-rose-50 dark:bg-rose-950/40',       label: 'Major gaps' }
+// `labelKey` is an i18n key; resolved via t() at render time.
+function scoreTone(score: number): { ring: string; text: string; bg: string; labelKey: string } {
+  if (score >= 85) return { ring: 'ring-emerald-300 dark:ring-emerald-700', text: 'text-emerald-700 dark:text-emerald-300', bg: 'bg-emerald-50 dark:bg-emerald-950/40', labelKey: 'products.edit.cockpit.ebay.health.toneExcellent' }
+  if (score >= 70) return { ring: 'ring-blue-300 dark:ring-blue-700',       text: 'text-blue-700 dark:text-blue-300',       bg: 'bg-blue-50 dark:bg-blue-950/40',       labelKey: 'products.edit.cockpit.ebay.health.toneReady' }
+  if (score >= 50) return { ring: 'ring-amber-300 dark:ring-amber-700',     text: 'text-amber-700 dark:text-amber-300',     bg: 'bg-amber-50 dark:bg-amber-950/40',     labelKey: 'products.edit.cockpit.ebay.health.toneNeedsPolish' }
+  return                  { ring: 'ring-rose-300 dark:ring-rose-700',       text: 'text-rose-700 dark:text-rose-300',       bg: 'bg-rose-50 dark:bg-rose-950/40',       labelKey: 'products.edit.cockpit.ebay.health.toneMajorGaps' }
 }
 
 export default function HealthScoreRail(props: Props) {
+  const { t } = useTranslations()
   const result = useHealthScore(props)
   const tone = scoreTone(result.score)
 
@@ -90,10 +94,10 @@ export default function HealthScoreRail(props: Props) {
       <div className="flex items-start justify-between gap-3">
         <div>
           <div className="text-sm font-semibold text-slate-800 dark:text-slate-200">
-            Pre-publish health
+            {t('products.edit.cockpit.ebay.health.heading')}
           </div>
           <div className={cn('text-[10.5px] font-medium', tone.text)}>
-            {tone.label}
+            {t(tone.labelKey)}
           </div>
         </div>
         <div
@@ -114,21 +118,21 @@ export default function HealthScoreRail(props: Props) {
         <div className="px-2 py-1.5 rounded border border-rose-200 dark:border-rose-800 bg-rose-50/60 dark:bg-rose-950/30 text-[10.5px] text-rose-800 dark:text-rose-300 flex items-start gap-1.5">
           <Ban className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
           <div>
-            <div className="font-medium">Publish blocked</div>
-            <div>{result.hardFails.length} hard fail{result.hardFails.length === 1 ? '' : 's'} — fix below to enable Publish.</div>
+            <div className="font-medium">{t('products.edit.cockpit.ebay.health.publishBlocked')}</div>
+            <div>{result.hardFails.length} {result.hardFails.length === 1 ? t('products.edit.cockpit.ebay.health.hardFailSingular') : t('products.edit.cockpit.ebay.health.hardFailPlural')} — {t('products.edit.cockpit.ebay.health.fixToEnablePublish')}</div>
           </div>
         </div>
       )}
       {result.canPublish && result.score >= 70 && (
         <div className="px-2 py-1.5 rounded border border-emerald-200 dark:border-emerald-800 bg-emerald-50/60 dark:bg-emerald-950/30 text-[10.5px] text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5">
           <Lock className="w-3.5 h-3.5 flex-shrink-0" />
-          Ready to publish on eBay {props.marketplace}.
+          {t('products.edit.cockpit.ebay.health.readyToPublishOn')} eBay {props.marketplace}.
         </div>
       )}
 
       {/* ── Grouped checks ───────────────────────────────────────── */}
       <div className="space-y-2">
-        {(Object.keys(GROUP_LABELS) as Check['group'][]).map((g) => {
+        {(Object.keys(GROUP_LABEL_KEYS) as Check['group'][]).map((g) => {
           const list = grouped[g]
           if (!list || list.length === 0) return null
           const earned = list.reduce((acc, c) => acc + c.earned, 0)
@@ -136,7 +140,7 @@ export default function HealthScoreRail(props: Props) {
           return (
             <div key={g} className="space-y-1">
               <div className="flex items-baseline justify-between text-[10.5px]">
-                <span className="font-semibold text-slate-700 dark:text-slate-300">{GROUP_LABELS[g]}</span>
+                <span className="font-semibold text-slate-700 dark:text-slate-300">{t(GROUP_LABEL_KEYS[g])}</span>
                 <span className="text-slate-500 dark:text-slate-400 tabular-nums">{earned} / {total}</span>
               </div>
               <ul className="space-y-0.5">
@@ -151,7 +155,7 @@ export default function HealthScoreRail(props: Props) {
 
       {result.loading && (
         <div className="text-[10px] text-slate-400 italic">
-          Loading category schema — score may shift when complete.
+          {t('products.edit.cockpit.ebay.health.loadingSchema')}
         </div>
       )}
     </div>
@@ -159,6 +163,7 @@ export default function HealthScoreRail(props: Props) {
 }
 
 function CheckRow({ check }: { check: Check }) {
+  const { t } = useTranslations()
   const Icon = STATUS_ICON[check.status]
   return (
     <li
@@ -170,7 +175,7 @@ function CheckRow({ check }: { check: Check }) {
         {check.label}
         {check.hard && check.status === 'fail' && (
           <span className="ml-1 px-1 py-0 rounded bg-rose-100 dark:bg-rose-950/50 text-rose-700 dark:text-rose-300 text-[9px] uppercase tracking-wide">
-            hard fail
+            {t('products.edit.cockpit.ebay.health.hardFailBadge')}
           </span>
         )}
       </span>

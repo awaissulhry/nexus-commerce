@@ -22,6 +22,7 @@ import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { Image as ImageIcon, ExternalLink, AlertTriangle, Loader2 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
+import { useTranslations } from '@/lib/i18n/use-translations'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { cn } from '@/lib/utils'
@@ -66,6 +67,7 @@ interface Props {
 }
 
 export default function ImagesCard({ productId, marketplace, productUpdatedAt }: Props) {
+  const { t } = useTranslations()
   const [data, setData] = useState<Response | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -149,26 +151,26 @@ export default function ImagesCard({ productId, marketplace, productUpdatedAt }:
     <Card noPadding>
       <div className="px-4 py-2.5 border-b border-slate-100 dark:border-slate-800 flex items-center gap-2 flex-wrap">
         <ImageIcon className="w-4 h-4 text-blue-500" />
-        <div className="text-md font-medium text-slate-900 dark:text-slate-100">Images</div>
+        <div className="text-md font-medium text-slate-900 dark:text-slate-100">{t('products.edit.cockpit.ebay.images.title')}</div>
         <Badge variant="info">EC.7</Badge>
         {data && (
           <span className="text-xs text-slate-500 dark:text-slate-400">
-            {data.master.length} master · {colorSets.length} color set{colorSets.length === 1 ? '' : 's'} · {ebayOverrides.length} eBay overrides
+            {data.master.length} {t('products.edit.cockpit.ebay.images.masterLabel')} · {colorSets.length} {colorSets.length === 1 ? t('products.edit.cockpit.ebay.images.colorSet') : t('products.edit.cockpit.ebay.images.colorSets')} · {ebayOverrides.length} {t('products.edit.cockpit.ebay.images.ebayOverrides')}
           </span>
         )}
         <Link
           href={imagesTabHref}
           className="ml-auto inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
-          title="Open Images tab to upload, reorder, replace"
+          title={t('products.edit.cockpit.ebay.images.manageTitle')}
         >
-          Manage in Images tab <ExternalLink className="w-3 h-3" />
+          {t('products.edit.cockpit.ebay.images.manageInImagesTab')} <ExternalLink className="w-3 h-3" />
         </Link>
       </div>
 
       <div className="p-4 space-y-3">
         {loading && (
           <div className="text-xs text-slate-500 flex items-center gap-2">
-            <Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading images…
+            <Loader2 className="w-3.5 h-3.5 animate-spin" /> {t('products.edit.cockpit.ebay.images.loading')}
           </div>
         )}
         {error && (
@@ -183,8 +185,7 @@ export default function ImagesCard({ productId, marketplace, productUpdatedAt }:
               <div className="text-xs px-3 py-2 rounded border border-amber-200 dark:border-amber-800 bg-amber-50/60 dark:bg-amber-950/30 text-amber-800 dark:text-amber-300 flex items-center gap-2">
                 <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
                 <span>
-                  Master product changed after the last image was saved — eBay
-                  may show stale visuals until you re-publish from the Images tab.
+                  {t('products.edit.cockpit.ebay.images.staleWarning')}
                 </span>
               </div>
             )}
@@ -196,13 +197,13 @@ export default function ImagesCard({ productId, marketplace, productUpdatedAt }:
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={hero.url} alt={hero.alt ?? ''} className="w-full h-full object-contain" />
                 ) : (
-                  <div className="w-full h-full flex items-center justify-center text-[10.5px] text-slate-400">no hero</div>
+                  <div className="w-full h-full flex items-center justify-center text-[10.5px] text-slate-400">{t('products.edit.cockpit.ebay.images.noHero')}</div>
                 )}
               </div>
               <div className="flex-1 min-w-0">
-                <div className="text-xs font-medium text-slate-700 dark:text-slate-300">Master gallery</div>
+                <div className="text-xs font-medium text-slate-700 dark:text-slate-300">{t('products.edit.cockpit.ebay.images.masterGallery')}</div>
                 <div className="text-[10.5px] text-slate-500 dark:text-slate-400 mt-0.5">
-                  {data.master.length} images · primary shown left
+                  {data.master.length} {t('products.edit.cockpit.ebay.images.imagesPrimaryLeft')}
                 </div>
                 {masterSorted.length > 1 && (
                   <div className="mt-2 flex gap-1 flex-wrap">
@@ -231,7 +232,7 @@ export default function ImagesCard({ productId, marketplace, productUpdatedAt }:
             {colorSets.length > 0 && (
               <div className="space-y-2">
                 <div className="text-xs font-medium text-slate-700 dark:text-slate-300">
-                  Variation Picture Sets ({colorSets.length})
+                  {t('products.edit.cockpit.ebay.images.variationPictureSets')} ({colorSets.length})
                 </div>
                 <div className="space-y-1.5">
                   {colorSets.map((set) => (
@@ -273,9 +274,7 @@ export default function ImagesCard({ productId, marketplace, productUpdatedAt }:
 
             {colorSets.length === 0 && data.product.isParent && (
               <div className="text-xs text-slate-500 dark:text-slate-400 italic">
-                No per-color picture sets yet. Open the Images tab → eBay panel
-                to upload variation-specific sets (eBay shows these in the
-                variant picker on the listing page).
+                {t('products.edit.cockpit.ebay.images.noColorSetsEmpty')}
               </div>
             )}
           </>

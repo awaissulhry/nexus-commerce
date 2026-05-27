@@ -33,6 +33,7 @@ import { useRouter } from 'next/navigation'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { cn } from '@/lib/utils'
+import { useTranslations } from '@/lib/i18n/use-translations'
 
 const EBAY_VARIANT_CAP = 250
 
@@ -79,6 +80,7 @@ export default function VariationsMatrixCard({
   currency,
   isParentWithChildren,
 }: Props) {
+  const { t } = useTranslations()
   const router = useRouter()
   const [data, setData] = useState<MatrixData | null>(null)
   const [loading, setLoading] = useState(false)
@@ -270,14 +272,12 @@ export default function VariationsMatrixCard({
       <Card noPadding>
         <div className="px-4 py-2.5 border-b border-slate-100 dark:border-slate-800 flex items-center gap-2">
           <div className="text-md font-medium text-slate-900 dark:text-slate-100">
-            Variations
+            {t('products.edit.cockpit.ebay.variations.title')}
           </div>
           <Badge variant="info">EC.6</Badge>
         </div>
         <div className="p-4 text-xs text-slate-500 dark:text-slate-400 italic">
-          This product has no variants — single-listing flow.
-          eBay variation matrix kicks in only when the product has children
-          declared with variation axes (e.g. Color × Size).
+          {t('products.edit.cockpit.ebay.variations.noVariants')}
         </div>
       </Card>
     )
@@ -287,15 +287,15 @@ export default function VariationsMatrixCard({
     <Card noPadding>
       <div className="px-4 py-2.5 border-b border-slate-100 dark:border-slate-800 flex items-center gap-2 flex-wrap">
         <div className="text-md font-medium text-slate-900 dark:text-slate-100">
-          Variations Matrix
+          {t('products.edit.cockpit.ebay.variations.matrixTitle')}
         </div>
         <Badge variant="info">EC.6</Badge>
         <span className="text-xs text-slate-500 dark:text-slate-400">
-          {cellCount} {cellCount === 1 ? 'variant' : 'variants'} · cap {EBAY_VARIANT_CAP}
+          {cellCount} {cellCount === 1 ? t('products.edit.cockpit.ebay.variations.variantSingular') : t('products.edit.cockpit.ebay.variations.variantPlural')} · {t('products.edit.cockpit.ebay.variations.cap')} {EBAY_VARIANT_CAP}
         </span>
         {overCap && (
           <span className="inline-flex items-center gap-1 text-[10.5px] px-1.5 py-0.5 rounded bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300">
-            <AlertTriangle className="w-3 h-3" /> Exceeds eBay&apos;s cap — split into multiple listings
+            <AlertTriangle className="w-3 h-3" /> {t('products.edit.cockpit.ebay.variations.exceedsCap')}
           </span>
         )}
       </div>
@@ -303,7 +303,7 @@ export default function VariationsMatrixCard({
       <div className="p-4 space-y-4">
         {loading && (
           <div className="text-xs text-slate-500 flex items-center gap-2">
-            <Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading variants…
+            <Loader2 className="w-3.5 h-3.5 animate-spin" /> {t('products.edit.cockpit.ebay.variations.loadingVariants')}
           </div>
         )}
         {error && (
@@ -316,23 +316,22 @@ export default function VariationsMatrixCard({
           <>
             {/* ── Axis picker ─────────────────────────────────────── */}
             <div className="rounded-lg border border-slate-200 dark:border-slate-800 p-3 space-y-2">
-              <div className="text-xs font-medium text-slate-700 dark:text-slate-300">Axes</div>
+              <div className="text-xs font-medium text-slate-700 dark:text-slate-300">{t('products.edit.cockpit.ebay.variations.axes')}</div>
               <div className="flex items-center gap-3 flex-wrap text-xs">
                 <AxisSelector
-                  label="Rows"
+                  label={t('products.edit.cockpit.ebay.variations.rows')}
                   value={pickedAxesDraft[0] ?? null}
                   available={availableAxes}
                   onChange={(v) => handlePickAxis(0, v)}
                 />
                 <AxisSelector
-                  label="Columns"
+                  label={t('products.edit.cockpit.ebay.variations.columns')}
                   value={pickedAxesDraft[1] ?? null}
                   available={availableAxes.filter((a) => a !== pickedAxesDraft[0])}
                   onChange={(v) => handlePickAxis(1, v)}
                 />
                 <span className="text-[10.5px] text-slate-500 dark:text-slate-400">
-                  Pick 1 axis for a single column or 2 for a grid. eBay
-                  supports multi-axis listings but 2 is the practical UX limit.
+                  {t('products.edit.cockpit.ebay.variations.axisHint')}
                 </span>
               </div>
             </div>
@@ -371,16 +370,16 @@ export default function VariationsMatrixCard({
       {data && !loading && (
         <div className="px-4 py-2.5 border-t border-slate-100 dark:border-slate-800 flex items-center gap-2 flex-wrap">
           <span className="text-xs text-slate-500 dark:text-slate-400">
-            {dirtyCount === 0 && !pickedDirty && !sortDirty ? 'All saved' : 'Unsaved changes'}
+            {dirtyCount === 0 && !pickedDirty && !sortDirty ? t('products.edit.cockpit.ebay.variations.allSaved') : t('products.edit.cockpit.ebay.variations.unsavedChanges')}
           </span>
           <button
             type="button"
             onClick={() => setDirtyCells({})}
             disabled={dirtyCount === 0}
             className="text-xs text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 inline-flex items-center gap-1 disabled:opacity-40"
-            title="Discard unsaved per-cell edits (axis picks stay)"
+            title={t('products.edit.cockpit.ebay.variations.discardCellEditsTooltip')}
           >
-            <Eraser className="w-3 h-3" /> Discard cell edits
+            <Eraser className="w-3 h-3" /> {t('products.edit.cockpit.ebay.variations.discardCellEdits')}
           </button>
           <button
             type="button"
@@ -389,7 +388,7 @@ export default function VariationsMatrixCard({
             className="ml-auto px-3 py-1 text-xs font-medium rounded bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50 inline-flex items-center gap-1.5"
           >
             {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
-            {saving ? 'Saving…' : 'Save matrix'}
+            {saving ? t('products.edit.cockpit.ebay.variations.saving') : t('products.edit.cockpit.ebay.variations.saveMatrix')}
           </button>
         </div>
       )}
@@ -401,6 +400,7 @@ export default function VariationsMatrixCard({
 function AxisSelector({
   label, value, available, onChange,
 }: { label: string; value: string | null; available: string[]; onChange: (next: string | null) => void }) {
+  const { t } = useTranslations()
   return (
     <label className="inline-flex items-center gap-1.5 text-xs">
       <span className="text-slate-500 dark:text-slate-400">{label}:</span>
@@ -409,7 +409,7 @@ function AxisSelector({
         onChange={(e) => onChange(e.target.value || null)}
         className="text-sm border border-slate-200 dark:border-slate-700 rounded px-2 py-1 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
       >
-        <option value="">— none —</option>
+        <option value="">{t('products.edit.cockpit.ebay.variations.none')}</option>
         {available.map((a) => (
           <option key={a} value={a}>{a}</option>
         ))}
@@ -422,10 +422,11 @@ function AxisSelector({
 function AxisSortEditor({
   axis, values, onMove,
 }: { axis: string; values: string[]; onMove: (value: string, dir: -1 | 1) => void }) {
+  const { t } = useTranslations()
   return (
     <div className="rounded border border-slate-200 dark:border-slate-800 p-2 space-y-1">
       <div className="text-[11px] font-medium text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-        <Sparkles className="w-3 h-3 text-violet-500" /> {axis} order ({values.length})
+        <Sparkles className="w-3 h-3 text-violet-500" /> {axis} {t('products.edit.cockpit.ebay.variations.order')} ({values.length})
       </div>
       <div className="space-y-1">
         {values.map((v, i) => (
@@ -435,7 +436,7 @@ function AxisSortEditor({
               onClick={() => onMove(v, -1)}
               disabled={i === 0}
               className="p-0.5 text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 disabled:opacity-30"
-              aria-label={`Move ${v} up`}
+              aria-label={t('products.edit.cockpit.ebay.variations.moveUp', { value: v })}
             >
               <ChevronUp className="w-3 h-3" />
             </button>
@@ -444,7 +445,7 @@ function AxisSortEditor({
               onClick={() => onMove(v, +1)}
               disabled={i === values.length - 1}
               className="p-0.5 text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 disabled:opacity-30"
-              aria-label={`Move ${v} down`}
+              aria-label={t('products.edit.cockpit.ebay.variations.moveDown', { value: v })}
             >
               <ChevronDown className="w-3 h-3" />
             </button>
@@ -470,6 +471,7 @@ function MatrixGrid({
   onCellEdit: (childId: string, patch: DirtyCell) => void
   currency: string
 }) {
+  const { t } = useTranslations()
   const cols = colAxis ? colValues : [null]
   return (
     <div className="overflow-x-auto -mx-4 px-4">
@@ -477,7 +479,7 @@ function MatrixGrid({
         <thead>
           <tr>
             <th className="text-[10.5px] uppercase tracking-wide text-slate-400 font-medium px-2 py-1 text-left">
-              {rowAxis} \\ {colAxis ?? '(none)'}
+              {rowAxis} \\ {colAxis ?? t('products.edit.cockpit.ebay.variations.noneParen')}
             </th>
             {cols.map((cv, i) => (
               <th key={i} className="text-[11px] font-semibold text-slate-700 dark:text-slate-300 px-2 py-1 text-left whitespace-nowrap">
@@ -498,7 +500,7 @@ function MatrixGrid({
                   return (
                     <td key={i} className="align-top p-1">
                       <div className="w-32 h-16 rounded border border-dashed border-slate-200 dark:border-slate-800 flex items-center justify-center text-[10.5px] text-slate-300">
-                        no variant
+                        {t('products.edit.cockpit.ebay.variations.noVariant')}
                       </div>
                     </td>
                   )
@@ -531,6 +533,7 @@ function CellEditor({
   currency: string
   onChange: (patch: DirtyCell) => void
 }) {
+  const { t } = useTranslations()
   const priceVal = dirty?.priceOverride !== undefined
     ? dirty.priceOverride
     : cell.listing?.priceOverride ?? null
@@ -564,7 +567,7 @@ function CellEditor({
         onChange={(e) => onChange({ priceOverride: e.target.value === '' ? null : parseFloat(e.target.value) })}
         placeholder={`${currency} —`}
         className="w-full text-[11px] border border-slate-200 dark:border-slate-700 rounded px-1 py-0.5 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
-        title="Price override"
+        title={t('products.edit.cockpit.ebay.variations.priceOverride')}
       />
       <input
         type="number"
@@ -572,9 +575,9 @@ function CellEditor({
         min="0"
         value={qtyVal ?? ''}
         onChange={(e) => onChange({ quantity: e.target.value === '' ? null : parseInt(e.target.value, 10) })}
-        placeholder="qty"
+        placeholder={t('products.edit.cockpit.ebay.variations.qtyPlaceholder')}
         className="w-full text-[11px] border border-slate-200 dark:border-slate-700 rounded px-1 py-0.5 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
-        title="Quantity"
+        title={t('products.edit.cockpit.ebay.variations.quantity')}
       />
     </div>
   )

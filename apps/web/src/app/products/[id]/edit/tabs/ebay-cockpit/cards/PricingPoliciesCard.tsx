@@ -25,6 +25,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { DollarSign, ShieldCheck, Sparkles, Save, Loader2, ExternalLink } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
+import { useTranslations } from '@/lib/i18n/use-translations'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { cn } from '@/lib/utils'
@@ -67,6 +68,7 @@ interface Props {
 
 export default function PricingPoliciesCard(props: Props) {
   const router = useRouter()
+  const { t } = useTranslations()
   const { productId, marketplace, currency, initial, masterPrice } = props
 
   // ── Pricing local state ─────────────────────────────────────────
@@ -224,7 +226,7 @@ export default function PricingPoliciesCard(props: Props) {
       <div className="px-4 py-2.5 border-b border-slate-100 dark:border-slate-800 flex items-center gap-2">
         <DollarSign className="w-4 h-4 text-blue-500" />
         <div className="text-md font-medium text-slate-900 dark:text-slate-100">
-          Pricing · Best Offer · Policies
+          {t('products.edit.cockpit.ebay.pricingPolicies.cardTitle')}
         </div>
         <Badge variant="info">EC.8</Badge>
       </div>
@@ -232,11 +234,11 @@ export default function PricingPoliciesCard(props: Props) {
       <div className="p-4 space-y-5">
         {/* ── Section 1: Pricing ───────────────────────────────────── */}
         <section className="space-y-3">
-          <SectionHeader icon={<DollarSign className="w-3.5 h-3.5" />} title="Pricing" />
+          <SectionHeader icon={<DollarSign className="w-3.5 h-3.5" />} title={t('products.edit.cockpit.ebay.pricingPolicies.pricingSection')} />
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <FieldSourceRow
               fieldKey={`${marketplace}.price-override`}
-              label={`Price override (${currency})`}
+              label={`${t('products.edit.cockpit.ebay.pricingPolicies.priceOverride')} (${currency})`}
               initial={{
                 source: initial.priceOverride != null ? 'manual' : 'default',
                 value: initial.priceOverride != null ? String(initial.priceOverride) : '',
@@ -275,19 +277,19 @@ export default function PricingPoliciesCard(props: Props) {
             </FieldSourceRow>
 
             <div className="space-y-1.5">
-              <label className="text-[11px] font-medium text-slate-700 dark:text-slate-300">Pricing rule</label>
+              <label className="text-[11px] font-medium text-slate-700 dark:text-slate-300">{t('products.edit.cockpit.ebay.pricingPolicies.pricingRule')}</label>
               <select
                 value={rule}
                 onChange={(e) => setRule(e.target.value as PricingRule)}
                 className="w-full text-sm border border-slate-200 dark:border-slate-700 rounded px-2 py-1 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
               >
-                <option value="FIXED">Fixed price</option>
-                <option value="MATCH_AMAZON">Match Amazon</option>
-                <option value="PERCENT_OF_MASTER">% of master price</option>
+                <option value="FIXED">{t('products.edit.cockpit.ebay.pricingPolicies.ruleFixed')}</option>
+                <option value="MATCH_AMAZON">{t('products.edit.cockpit.ebay.pricingPolicies.ruleMatchAmazon')}</option>
+                <option value="PERCENT_OF_MASTER">{t('products.edit.cockpit.ebay.pricingPolicies.rulePercentOfMaster')}</option>
               </select>
               {rule === 'PERCENT_OF_MASTER' && (
                 <div className="pt-1">
-                  <label className="text-[11px] font-medium text-slate-700 dark:text-slate-300">Adjustment %</label>
+                  <label className="text-[11px] font-medium text-slate-700 dark:text-slate-300">{t('products.edit.cockpit.ebay.pricingPolicies.adjustmentPercent')}</label>
                   <input
                     type="number"
                     step="0.1"
@@ -296,7 +298,7 @@ export default function PricingPoliciesCard(props: Props) {
                     placeholder="0"
                     className="w-full text-sm border border-slate-200 dark:border-slate-700 rounded px-2 py-1 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 mt-1"
                   />
-                  <p className="text-[10.5px] text-slate-400 mt-0.5">e.g. 10 = master + 10%. Negative = discount.</p>
+                  <p className="text-[10.5px] text-slate-400 mt-0.5">{t('products.edit.cockpit.ebay.pricingPolicies.adjustmentHint')}</p>
                 </div>
               )}
             </div>
@@ -305,7 +307,7 @@ export default function PricingPoliciesCard(props: Props) {
 
         {/* ── Section 2: Best Offer ────────────────────────────────── */}
         <section className="space-y-3 border-t border-slate-100 dark:border-slate-800 pt-4">
-          <SectionHeader icon={<Sparkles className="w-3.5 h-3.5" />} title="Best Offer" />
+          <SectionHeader icon={<Sparkles className="w-3.5 h-3.5" />} title={t('products.edit.cockpit.ebay.pricingPolicies.bestOfferSection')} />
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
             <label className="inline-flex items-center gap-2 text-xs">
               <input
@@ -314,11 +316,11 @@ export default function PricingPoliciesCard(props: Props) {
                 onChange={(e) => setBoEnabled(e.target.checked)}
                 className="w-3.5 h-3.5"
               />
-              <span className="text-slate-700 dark:text-slate-300 font-medium">Enable Best Offer</span>
+              <span className="text-slate-700 dark:text-slate-300 font-medium">{t('products.edit.cockpit.ebay.pricingPolicies.enableBestOffer')}</span>
             </label>
             <div className={cn('space-y-1', !boEnabled && 'opacity-50')}>
               <label className="text-[11px] font-medium text-slate-700 dark:text-slate-300">
-                Auto-accept at ({currency})
+                {t('products.edit.cockpit.ebay.pricingPolicies.autoAcceptAt')} ({currency})
               </label>
               <input
                 type="number"
@@ -333,7 +335,7 @@ export default function PricingPoliciesCard(props: Props) {
             </div>
             <div className={cn('space-y-1', !boEnabled && 'opacity-50')}>
               <label className="text-[11px] font-medium text-slate-700 dark:text-slate-300">
-                Auto-decline below ({currency})
+                {t('products.edit.cockpit.ebay.pricingPolicies.autoDeclineBelow')} ({currency})
               </label>
               <input
                 type="number"
@@ -348,18 +350,16 @@ export default function PricingPoliciesCard(props: Props) {
             </div>
           </div>
           <p className="text-[10.5px] text-slate-400">
-            Buyers can submit offers below your listing price.
-            Auto-accept locks in fast deals; auto-decline filters lowballs
-            so you don&apos;t have to manually reject every one.
+            {t('products.edit.cockpit.ebay.pricingPolicies.bestOfferHint')}
           </p>
         </section>
 
         {/* ── Section 3: Policies ──────────────────────────────────── */}
         <section className="space-y-3 border-t border-slate-100 dark:border-slate-800 pt-4">
-          <SectionHeader icon={<ShieldCheck className="w-3.5 h-3.5" />} title="Policies" />
+          <SectionHeader icon={<ShieldCheck className="w-3.5 h-3.5" />} title={t('products.edit.cockpit.ebay.pricingPolicies.policiesSection')} />
           {policyLoading && (
             <div className="text-xs text-slate-500 flex items-center gap-2">
-              <Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading {marketplace} seller policies…
+              <Loader2 className="w-3.5 h-3.5 animate-spin" /> {t('products.edit.cockpit.ebay.pricingPolicies.loadingPolicies')} {marketplace}…
             </div>
           )}
           {policyError && (
@@ -369,37 +369,37 @@ export default function PricingPoliciesCard(props: Props) {
                 href="https://www.ebay.com/seller-policy" target="_blank" rel="noreferrer"
                 className="inline-flex items-center gap-0.5 text-rose-700 dark:text-rose-300 hover:underline"
               >
-                Set in eBay Seller Hub <ExternalLink className="w-3 h-3" />
+                {t('products.edit.cockpit.ebay.pricingPolicies.setInSellerHub')} <ExternalLink className="w-3 h-3" />
               </a>
             </div>
           )}
           {snapshot && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <PolicySelect
-                label="Fulfillment"
-                hint="Shipping carriers + handling time"
+                label={t('products.edit.cockpit.ebay.pricingPolicies.fulfillmentLabel')}
+                hint={t('products.edit.cockpit.ebay.pricingPolicies.fulfillmentHint')}
                 value={fulfillmentId}
                 options={snapshot.fulfillmentPolicies}
                 onChange={setFulfillmentId}
               />
               <PolicySelect
-                label="Payment"
-                hint="eBay managed payments handles most of this"
+                label={t('products.edit.cockpit.ebay.pricingPolicies.paymentLabel')}
+                hint={t('products.edit.cockpit.ebay.pricingPolicies.paymentHint')}
                 value={paymentId}
                 options={snapshot.paymentPolicies}
                 onChange={setPaymentId}
               />
               <PolicySelect
-                label="Return"
-                hint="Return window + responsibility"
+                label={t('products.edit.cockpit.ebay.pricingPolicies.returnLabel')}
+                hint={t('products.edit.cockpit.ebay.pricingPolicies.returnHint')}
                 value={returnId}
                 options={snapshot.returnPolicies}
                 onChange={setReturnId}
               />
               {(snapshot.inventoryLocations ?? []).length > 0 && (
                 <PolicySelect
-                  label="Inventory location"
-                  hint="Warehouse the listing ships from"
+                  label={t('products.edit.cockpit.ebay.pricingPolicies.inventoryLocationLabel')}
+                  hint={t('products.edit.cockpit.ebay.pricingPolicies.inventoryLocationHint')}
                   value={locationKey}
                   options={(snapshot.inventoryLocations ?? []).map((l) => ({ id: l.merchantLocationKey, name: l.name }))}
                   onChange={setLocationKey}
@@ -412,10 +412,10 @@ export default function PricingPoliciesCard(props: Props) {
 
       <div className="px-4 py-2.5 border-t border-slate-100 dark:border-slate-800 flex items-center gap-2">
         <span className="text-xs text-slate-500 dark:text-slate-400">
-          {isDirty ? 'Unsaved changes' : 'All saved'}
+          {isDirty ? t('products.edit.cockpit.ebay.pricingPolicies.unsavedChanges') : t('products.edit.cockpit.ebay.pricingPolicies.allSaved')}
         </span>
         {savedFlash && (
-          <span className="text-xs text-emerald-700 dark:text-emerald-300">Saved ✓</span>
+          <span className="text-xs text-emerald-700 dark:text-emerald-300">{t('products.edit.cockpit.ebay.pricingPolicies.savedFlash')} ✓</span>
         )}
         {error && (
           <span className="text-xs text-rose-700 dark:text-rose-300" title={error}>{error}</span>
@@ -427,7 +427,7 @@ export default function PricingPoliciesCard(props: Props) {
           className="ml-auto px-3 py-1 text-xs font-medium rounded bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50 inline-flex items-center gap-1.5"
         >
           {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
-          {saving ? 'Saving…' : 'Save pricing & policies'}
+          {saving ? t('products.edit.cockpit.ebay.pricingPolicies.saving') : t('products.edit.cockpit.ebay.pricingPolicies.saveButton')}
         </button>
       </div>
     </Card>
@@ -452,6 +452,7 @@ function PolicySelect({
   options: PolicySummary[]
   onChange: (next: string | null) => void
 }) {
+  const { t } = useTranslations()
   return (
     <div className="space-y-1">
       <label className="text-[11px] font-medium text-slate-700 dark:text-slate-300 flex items-center gap-2">
@@ -463,7 +464,7 @@ function PolicySelect({
         onChange={(e) => onChange(e.target.value || null)}
         className="w-full text-sm border border-slate-200 dark:border-slate-700 rounded px-2 py-1 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
       >
-        <option value="">— pick a policy —</option>
+        <option value="">{t('products.edit.cockpit.ebay.pricingPolicies.pickPolicy')}</option>
         {options.map((o) => (
           <option key={o.id} value={o.id}>{o.name}</option>
         ))}

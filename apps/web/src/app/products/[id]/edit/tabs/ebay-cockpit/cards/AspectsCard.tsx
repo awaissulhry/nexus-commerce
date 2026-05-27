@@ -26,6 +26,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Loader2, AlertCircle, Save, CheckCircle2, Sparkles } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useRouter } from 'next/navigation'
+import { useTranslations } from '@/lib/i18n/use-translations'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { cn } from '@/lib/utils'
@@ -105,6 +106,7 @@ export default function AspectsCard({
   siblings,
 }: Props) {
   const router = useRouter()
+  const { t } = useTranslations()
   const [schema, setSchema] = useState<SchemaResponse | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -225,22 +227,22 @@ export default function AspectsCard({
     <Card noPadding>
       <div className="px-4 py-2.5 border-b border-slate-100 dark:border-slate-800 flex items-center gap-2">
         <div className="text-md font-medium text-slate-900 dark:text-slate-100">
-          Aspects
+          {t('products.edit.cockpit.ebay.aspects.title')}
         </div>
         <Badge variant="info">EC.5</Badge>
         {schema && (
           <span className="text-xs text-slate-500 dark:text-slate-400">
-            {schema.aspects.length} for category {schema.categoryId}
+            {schema.aspects.length} {t('products.edit.cockpit.ebay.aspects.forCategory')} {schema.categoryId}
           </span>
         )}
         {requiredMissing > 0 && (
           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10.5px] font-medium bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 ml-auto">
-            <AlertCircle className="w-3 h-3" /> {requiredMissing} required missing
+            <AlertCircle className="w-3 h-3" /> {requiredMissing} {t('products.edit.cockpit.ebay.aspects.requiredMissing')}
           </span>
         )}
         {requiredMissing === 0 && schema && grouped.required.length > 0 && (
           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10.5px] font-medium bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 ml-auto">
-            <CheckCircle2 className="w-3 h-3" /> Required complete
+            <CheckCircle2 className="w-3 h-3" /> {t('products.edit.cockpit.ebay.aspects.requiredComplete')}
           </span>
         )}
         {schema && (
@@ -251,9 +253,9 @@ export default function AspectsCard({
               'inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded border border-amber-200 dark:border-amber-800 bg-amber-50/60 dark:bg-amber-950/30 text-amber-800 dark:text-amber-300 hover:bg-amber-100',
               !(requiredMissing > 0 || schema.aspects.length > Object.keys(initialFlat).length) && 'ml-auto',
             )}
-            title="AI-suggest values for empty aspects"
+            title={t('products.edit.cockpit.ebay.aspects.aiSuggestTooltip')}
           >
-            <Sparkles className="w-3 h-3" /> AI suggest
+            <Sparkles className="w-3 h-3" /> {t('products.edit.cockpit.ebay.aspects.aiSuggest')}
           </button>
         )}
       </div>
@@ -261,12 +263,12 @@ export default function AspectsCard({
       <div className="p-4 space-y-4">
         {!categoryId && (
           <div className="text-xs text-slate-500 dark:text-slate-400 italic">
-            Pick a category in the card above to see aspects.
+            {t('products.edit.cockpit.ebay.aspects.pickCategoryHint')}
           </div>
         )}
         {categoryId && loading && (
           <div className="text-xs text-slate-500 flex items-center gap-2">
-            <Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading schema for category {categoryId}…
+            <Loader2 className="w-3.5 h-3.5 animate-spin" /> {t('products.edit.cockpit.ebay.aspects.loadingSchema')} {categoryId}…
           </div>
         )}
         {categoryId && error && (
@@ -278,8 +280,8 @@ export default function AspectsCard({
           <>
             <AspectGroup
               kind="required"
-              title="Required"
-              hint="Must be filled before eBay accepts the listing."
+              title={t('products.edit.cockpit.ebay.aspects.groupRequiredTitle')}
+              hint={t('products.edit.cockpit.ebay.aspects.groupRequiredHint')}
               aspects={grouped.required}
               currentValue={(id) => dirtyValues[id] ?? initialFlat[id] ?? ''}
               initialValue={(id) => initialFlat[id] ?? ''}
@@ -290,8 +292,8 @@ export default function AspectsCard({
             />
             <AspectGroup
               kind="recommended"
-              title="Recommended"
-              hint="Boosts eBay search visibility — completionist listings outrank sparse ones."
+              title={t('products.edit.cockpit.ebay.aspects.groupRecommendedTitle')}
+              hint={t('products.edit.cockpit.ebay.aspects.groupRecommendedHint')}
               aspects={grouped.recommended}
               currentValue={(id) => dirtyValues[id] ?? initialFlat[id] ?? ''}
               initialValue={(id) => initialFlat[id] ?? ''}
@@ -302,8 +304,8 @@ export default function AspectsCard({
             />
             <AspectGroup
               kind="variation"
-              title="Variation-eligible"
-              hint="EC.6's Variation Matrix wires these per cell; this card edits the parent default."
+              title={t('products.edit.cockpit.ebay.aspects.groupVariationTitle')}
+              hint={t('products.edit.cockpit.ebay.aspects.groupVariationHint')}
               aspects={grouped.variation}
               currentValue={(id) => dirtyValues[id] ?? initialFlat[id] ?? ''}
               initialValue={(id) => initialFlat[id] ?? ''}
@@ -314,8 +316,8 @@ export default function AspectsCard({
             />
             <AspectGroup
               kind="optional"
-              title="Optional"
-              hint="Informational — fill when relevant for SEO or category-specific filters."
+              title={t('products.edit.cockpit.ebay.aspects.groupOptionalTitle')}
+              hint={t('products.edit.cockpit.ebay.aspects.groupOptionalHint')}
               aspects={grouped.optional}
               currentValue={(id) => dirtyValues[id] ?? initialFlat[id] ?? ''}
               initialValue={(id) => initialFlat[id] ?? ''}
@@ -332,12 +334,12 @@ export default function AspectsCard({
         <div className="px-4 py-2.5 border-t border-slate-100 dark:border-slate-800 flex items-center gap-2">
           <span className="text-xs text-slate-500 dark:text-slate-400">
             {dirtyCount === 0
-              ? 'All saved'
-              : `${dirtyCount} unsaved aspect${dirtyCount === 1 ? '' : 's'}`}
+              ? t('products.edit.cockpit.ebay.aspects.allSaved')
+              : `${dirtyCount} ${dirtyCount === 1 ? t('products.edit.cockpit.ebay.aspects.unsavedAspectOne') : t('products.edit.cockpit.ebay.aspects.unsavedAspectMany')}`}
           </span>
           {savedFlash && (
             <span className="text-xs text-emerald-700 dark:text-emerald-300 flex items-center gap-1">
-              <CheckCircle2 className="w-3.5 h-3.5" /> Saved
+              <CheckCircle2 className="w-3.5 h-3.5" /> {t('products.edit.cockpit.ebay.aspects.saved')}
             </span>
           )}
           <button
@@ -347,7 +349,7 @@ export default function AspectsCard({
             className="ml-auto px-3 py-1 text-xs font-medium rounded bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50 inline-flex items-center gap-1.5"
           >
             {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
-            {saving ? 'Saving…' : 'Save aspects'}
+            {saving ? t('products.edit.cockpit.ebay.aspects.saving') : t('products.edit.cockpit.ebay.aspects.saveAspects')}
           </button>
         </div>
       )}
@@ -503,6 +505,7 @@ function AspectFieldRow({
 function AspectInput({
   aspect, value, onChange,
 }: { aspect: SchemaAspect; value: string; onChange: (v: string) => void }) {
+  const { t } = useTranslations()
   if (aspect.kind === 'enum' && aspect.options && aspect.options.length > 0) {
     return (
       <select
@@ -510,7 +513,7 @@ function AspectInput({
         onChange={(e) => onChange(e.target.value)}
         className="w-full text-sm border border-slate-200 dark:border-slate-700 rounded px-2 py-1 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
       >
-        <option value="">— Pick —</option>
+        <option value="">{t('products.edit.cockpit.ebay.aspects.pickOption')}</option>
         {aspect.options.map((opt) => (
           <option key={opt} value={opt}>{opt}</option>
         ))}
@@ -532,7 +535,7 @@ function AspectInput({
       type="text"
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      placeholder={aspect.required ? 'Required' : ''}
+      placeholder={aspect.required ? t('products.edit.cockpit.ebay.aspects.requiredPlaceholder') : ''}
       className="w-full text-sm border border-slate-200 dark:border-slate-700 rounded px-2 py-1 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
     />
   )

@@ -16,6 +16,7 @@
 
 import { useState } from 'react'
 import { Sparkles } from 'lucide-react'
+import { useTranslations } from '@/lib/i18n/use-translations'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import FieldSourceRow from '../field-source/FieldSourceRow'
@@ -55,6 +56,7 @@ export default function ListingEssentialsCard({
   master,
   siblings,
 }: Props) {
+  const { t } = useTranslations()
   const fsCtx = useFieldSourceContext()
   const [aiOpen, setAiOpen] = useState(false)
   // Read current title/description from the field-source store so the
@@ -89,19 +91,19 @@ export default function ListingEssentialsCard({
       <div className="px-4 py-2.5 border-b border-slate-100 dark:border-slate-800 flex items-center gap-2">
         <Sparkles className="w-4 h-4 text-blue-500" />
         <div className="text-md font-medium text-slate-900 dark:text-slate-100">
-          Listing Essentials
+          {t('products.edit.cockpit.ebay.essentials.title')}
         </div>
         <Badge variant="info">EC.2</Badge>
         <span className="text-xs text-slate-500 dark:text-slate-400 ml-auto">
-          Per-field source · lock · undo · diff-then-apply
+          {t('products.edit.cockpit.ebay.essentials.subtitle')}
         </span>
         <button
           type="button"
           onClick={() => setAiOpen(true)}
           className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded border border-amber-200 dark:border-amber-800 bg-amber-50/60 dark:bg-amber-950/30 text-amber-800 dark:text-amber-300 hover:bg-amber-100"
-          title="AI-improve title + description for this marketplace"
+          title={t('products.edit.cockpit.ebay.essentials.aiImproveTooltip')}
         >
-          <Sparkles className="w-3 h-3" /> AI improve
+          <Sparkles className="w-3 h-3" /> {t('products.edit.cockpit.ebay.essentials.aiImprove')}
         </button>
       </div>
 
@@ -109,7 +111,7 @@ export default function ListingEssentialsCard({
         {/* ── Title ─────────────────────────────────────────────── */}
         <FieldSourceRow
           fieldKey={`${marketplace}.title`}
-          label="Title"
+          label={t('products.edit.cockpit.ebay.essentials.titleLabel')}
           initial={initial.title}
           availableSources={['manual', 'master', 'ai', 'sibling', 'default']}
           resolveValue={(src) => {
@@ -132,7 +134,7 @@ export default function ListingEssentialsCard({
               value={value}
               onChange={(e) => onChange(e.target.value)}
               maxLength={80}
-              placeholder="eBay title — max 80 chars"
+              placeholder={t('products.edit.cockpit.ebay.essentials.titlePlaceholder')}
               className="w-full text-sm border border-slate-200 dark:border-slate-700 rounded px-2.5 py-1.5 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
             />
           )}
@@ -141,7 +143,7 @@ export default function ListingEssentialsCard({
         {/* ── Description ───────────────────────────────────────── */}
         <FieldSourceRow
           fieldKey={`${marketplace}.description`}
-          label="Description"
+          label={t('products.edit.cockpit.ebay.essentials.descriptionLabel')}
           initial={initial.description}
           availableSources={['manual', 'master', 'ai', 'sibling', 'default']}
           resolveValue={(src) => {
@@ -163,7 +165,7 @@ export default function ListingEssentialsCard({
               value={value}
               onChange={(e) => onChange(e.target.value)}
               rows={4}
-              placeholder="Listing description"
+              placeholder={t('products.edit.cockpit.ebay.essentials.descriptionPlaceholder')}
               className="w-full text-sm border border-slate-200 dark:border-slate-700 rounded px-2.5 py-1.5 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
             />
           )}
@@ -172,7 +174,7 @@ export default function ListingEssentialsCard({
         {/* ── Price ─────────────────────────────────────────────── */}
         <FieldSourceRow
           fieldKey={`${marketplace}.price`}
-          label={`Price (${currency})`}
+          label={`${t('products.edit.cockpit.ebay.essentials.priceLabel')} (${currency})`}
           initial={initial.price}
           availableSources={['manual', 'master', 'sibling', 'default']}
           resolveValue={(src) => {

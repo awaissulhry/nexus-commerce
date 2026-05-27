@@ -30,6 +30,7 @@ import { getBackendUrl } from '@/lib/backend-url'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { cn } from '@/lib/utils'
+import { useTranslations } from '@/lib/i18n/use-translations'
 
 const FITMENT_CAP = 1000
 
@@ -67,6 +68,7 @@ function isMotorsRelevant(...candidates: Array<string | null>): boolean {
 
 export default function CompatibilityCard(props: Props) {
   const router = useRouter()
+  const { t } = useTranslations()
   const motors = isMotorsRelevant(
     props.categoryName,
     props.categoryPath,
@@ -128,13 +130,13 @@ export default function CompatibilityCard(props: Props) {
       }
     }
     if (parsed.length === 0) {
-      setError('No valid rows found. Format: "year,make,model" per line.')
+      setError(t('products.edit.cockpit.ebay.compat.bulkNoValidRows'))
       return
     }
     setFitments((prev) => [...prev, ...parsed].slice(0, FITMENT_CAP))
     setBulkOpen(false)
     setError(null)
-  }, [])
+  }, [t])
 
   const handleAiSuggest = useCallback(async () => {
     if (aiLoading) return
@@ -206,10 +208,10 @@ export default function CompatibilityCard(props: Props) {
       <Card noPadding>
         <div className="px-4 py-2.5 border-b border-slate-100 dark:border-slate-800 flex items-center gap-2">
           <Package className="w-4 h-4 text-slate-400" />
-          <div className="text-md font-medium text-slate-700 dark:text-slate-300">Compatibility</div>
+          <div className="text-md font-medium text-slate-700 dark:text-slate-300">{t('products.edit.cockpit.ebay.compat.title')}</div>
           <Badge variant="info">EC.13</Badge>
           <span className="text-xs text-slate-500 dark:text-slate-400 ml-auto">
-            Motors-only — not applicable to this category
+            {t('products.edit.cockpit.ebay.compat.notMotors')}
           </span>
         </div>
       </Card>
@@ -221,14 +223,14 @@ export default function CompatibilityCard(props: Props) {
       <div className="px-4 py-2.5 border-b border-slate-100 dark:border-slate-800 flex items-center gap-2 flex-wrap">
         <Package className="w-4 h-4 text-blue-500" />
         <div className="text-md font-medium text-slate-900 dark:text-slate-100">
-          Motors compatibility
+          {t('products.edit.cockpit.ebay.compat.motorsTitle')}
         </div>
         <Badge variant="info">EC.13</Badge>
         <span className="text-xs text-slate-500 dark:text-slate-400">
-          {universal ? 'Universal fit' : `${fitments.length} fitments`}
+          {universal ? t('products.edit.cockpit.ebay.compat.universalFit') : t('products.edit.cockpit.ebay.compat.fitmentsCount', { count: fitments.length })}
           {!universal && fitments.length >= FITMENT_CAP * 0.9 && (
             <span className="ml-1 text-amber-600 dark:text-amber-400">
-              · cap {FITMENT_CAP}
+              · {t('products.edit.cockpit.ebay.compat.capLabel', { cap: FITMENT_CAP })}
             </span>
           )}
         </span>
@@ -237,10 +239,10 @@ export default function CompatibilityCard(props: Props) {
           onClick={handleAiSuggest}
           disabled={aiLoading}
           className="ml-auto inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded border border-amber-200 dark:border-amber-800 bg-amber-50/60 dark:bg-amber-950/30 text-amber-800 dark:text-amber-300 hover:bg-amber-100 disabled:opacity-50"
-          title="AI-suggest universal fit or specific fitments from product description"
+          title={t('products.edit.cockpit.ebay.compat.aiSuggestTitle')}
         >
           {aiLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
-          AI suggest
+          {t('products.edit.cockpit.ebay.compat.aiSuggest')}
         </button>
       </div>
 
@@ -255,14 +257,14 @@ export default function CompatibilityCard(props: Props) {
               className="w-3.5 h-3.5"
             />
             <span className="font-medium text-slate-700 dark:text-slate-300">
-              Universal fit (works on all motorcycles)
+              {t('products.edit.cockpit.ebay.compat.universalToggleLabel')}
             </span>
           </label>
         </div>
         <div className="text-[10.5px] text-slate-500 dark:text-slate-400">
           {universal
-            ? 'eBay shows this in every motorcycle compatibility filter. Right call for most gear (helmets, jackets, boots, suits).'
-            : 'eBay shows this only when a buyer\'s saved vehicle matches one of the rows below. Use for items that ARE bike-specific (e.g. fairing kits, model-specific covers).'}
+            ? t('products.edit.cockpit.ebay.compat.universalHelp')
+            : t('products.edit.cockpit.ebay.compat.specificHelp')}
         </div>
 
         {/* Specific fitments editor */}
@@ -275,14 +277,14 @@ export default function CompatibilityCard(props: Props) {
                 disabled={fitments.length >= FITMENT_CAP}
                 className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50"
               >
-                <Plus className="w-3 h-3" /> Add fitment
+                <Plus className="w-3 h-3" /> {t('products.edit.cockpit.ebay.compat.addFitment')}
               </button>
               <button
                 type="button"
                 onClick={() => setBulkOpen(true)}
                 className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
               >
-                <FileText className="w-3 h-3" /> Bulk paste
+                <FileText className="w-3 h-3" /> {t('products.edit.cockpit.ebay.compat.bulkPaste')}
               </button>
               <span className="text-[10.5px] text-slate-400 ml-auto">
                 {fitments.length} / {FITMENT_CAP}
@@ -291,8 +293,7 @@ export default function CompatibilityCard(props: Props) {
 
             {fitments.length === 0 && (
               <div className="text-xs text-slate-400 italic py-2">
-                No fitments yet. Add rows manually, paste a CSV, or
-                click AI suggest in the header.
+                {t('products.edit.cockpit.ebay.compat.emptyFitments')}
               </div>
             )}
 
@@ -301,10 +302,10 @@ export default function CompatibilityCard(props: Props) {
                 <table className="w-full text-xs border-collapse">
                   <thead>
                     <tr className="text-[10.5px] uppercase tracking-wide text-slate-400">
-                      <th className="text-left py-1 px-1 font-medium">Year</th>
-                      <th className="text-left py-1 px-1 font-medium">Make</th>
-                      <th className="text-left py-1 px-1 font-medium">Model</th>
-                      <th className="text-left py-1 px-1 font-medium">Submodel</th>
+                      <th className="text-left py-1 px-1 font-medium">{t('products.edit.cockpit.ebay.compat.colYear')}</th>
+                      <th className="text-left py-1 px-1 font-medium">{t('products.edit.cockpit.ebay.compat.colMake')}</th>
+                      <th className="text-left py-1 px-1 font-medium">{t('products.edit.cockpit.ebay.compat.colModel')}</th>
+                      <th className="text-left py-1 px-1 font-medium">{t('products.edit.cockpit.ebay.compat.colSubmodel')}</th>
                       <th className="w-6"></th>
                     </tr>
                   </thead>
@@ -331,18 +332,16 @@ export default function CompatibilityCard(props: Props) {
         )}
 
         <div className="text-[10.5px] text-slate-400 italic pt-1 border-t border-slate-100 dark:border-slate-800">
-          Persists immediately to ChannelListing.platformAttributes.
-          Trading API ItemCompatibilityList sync (EC.13b) ships
-          separately — Inventory API doesn&apos;t carry compatibility.
+          {t('products.edit.cockpit.ebay.compat.persistenceNote')}
         </div>
       </div>
 
       <div className="px-4 py-2.5 border-t border-slate-100 dark:border-slate-800 flex items-center gap-2">
         <span className="text-xs text-slate-500 dark:text-slate-400">
-          {isDirty ? 'Unsaved changes' : 'All saved'}
+          {isDirty ? t('products.edit.cockpit.ebay.compat.unsavedChanges') : t('products.edit.cockpit.ebay.compat.allSaved')}
         </span>
         {savedFlash && (
-          <span className="text-xs text-emerald-700 dark:text-emerald-300">Saved ✓</span>
+          <span className="text-xs text-emerald-700 dark:text-emerald-300">{t('products.edit.cockpit.ebay.compat.savedFlash')}</span>
         )}
         <button
           type="button"
@@ -351,7 +350,7 @@ export default function CompatibilityCard(props: Props) {
           className="ml-auto px-3 py-1 text-xs font-medium rounded bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50 inline-flex items-center gap-1.5"
         >
           {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
-          {saving ? 'Saving…' : 'Save compatibility'}
+          {saving ? t('products.edit.cockpit.ebay.compat.saving') : t('products.edit.cockpit.ebay.compat.saveButton')}
         </button>
       </div>
 
@@ -372,6 +371,7 @@ function FitmentRow({
   onChange: (patch: Partial<Fitment>) => void
   onDelete: () => void
 }) {
+  const { t } = useTranslations()
   return (
     <tr className="border-t border-slate-100 dark:border-slate-800">
       <td className="py-1 px-1">
@@ -406,7 +406,7 @@ function FitmentRow({
           type="text"
           value={fitment.submodel ?? ''}
           onChange={(e) => onChange({ submodel: e.target.value })}
-          placeholder="optional"
+          placeholder={t('products.edit.cockpit.ebay.compat.submodelPlaceholder')}
           className="w-24 text-xs border border-slate-200 dark:border-slate-700 rounded px-1.5 py-0.5 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
         />
       </td>
@@ -415,7 +415,7 @@ function FitmentRow({
           type="button"
           onClick={onDelete}
           className="p-0.5 text-slate-400 hover:text-rose-600"
-          aria-label="Delete fitment"
+          aria-label={t('products.edit.cockpit.ebay.compat.deleteFitment')}
         >
           <Trash2 className="w-3 h-3" />
         </button>
@@ -427,6 +427,7 @@ function FitmentRow({
 function BulkPasteModal({
   onApply, onClose,
 }: { onApply: (csv: string) => void; onClose: () => void }) {
+  const { t } = useTranslations()
   const [text, setText] = useState('')
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm" onClick={onClose}>
@@ -437,9 +438,9 @@ function BulkPasteModal({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800">
-          <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">Bulk paste fitments</div>
+          <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">{t('products.edit.cockpit.ebay.compat.bulkModalTitle')}</div>
           <div className="text-xs text-slate-500 mt-0.5">
-            One row per line. Format: <span className="font-mono">year,make,model[,submodel]</span> or whitespace-separated.
+            {t('products.edit.cockpit.ebay.compat.bulkFormatPrefix')} <span className="font-mono">year,make,model[,submodel]</span> {t('products.edit.cockpit.ebay.compat.bulkFormatSuffix')}
           </div>
         </div>
         <div className="p-4 space-y-3">
@@ -452,12 +453,12 @@ function BulkPasteModal({
             className="w-full text-xs font-mono border border-slate-200 dark:border-slate-700 rounded p-2 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
           />
           <div className="text-[10.5px] text-slate-400 inline-flex items-center gap-1">
-            <ExternalLink className="w-3 h-3" /> Tip: export from your bike-spec spreadsheet, paste columns A:D directly.
+            <ExternalLink className="w-3 h-3" /> {t('products.edit.cockpit.ebay.compat.bulkTip')}
           </div>
         </div>
         <div className="px-4 py-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end gap-2">
           <button type="button" onClick={onClose} className="px-3 py-1.5 text-xs font-medium rounded border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800">
-            Cancel
+            {t('products.edit.cockpit.ebay.compat.cancel')}
           </button>
           <button
             type="button"
@@ -468,7 +469,7 @@ function BulkPasteModal({
               text.trim().length === 0 && 'opacity-50',
             )}
           >
-            Apply
+            {t('products.edit.cockpit.ebay.compat.apply')}
           </button>
         </div>
       </div>
