@@ -453,8 +453,15 @@ function SpreadsheetCell({ col, row, value, isActive, cellBg, width, cellHeight,
   const enumOptions = col.kind === 'boolean' ? ['', 'true', 'false'] : col.kind === 'enum' && col.options?.length ? col.options : null
   if (enumOptions) {
     const custom = renderCellContent?.(col, row, value, displayValue)
+    // FF-EN.5 — a strict (SELECTION_ONLY / category-condition) cell holding a
+    // value eBay doesn't list. Allowed (per the product owner) but flagged,
+    // since eBay rejects it at publish. Multi cells flag if ANY part is off-list.
+    const strictInvalid =
+      col.kind === 'enum' && col.enumMode === 'strict' && !!displayValue &&
+      displayValue.split(',').map((s) => s.trim()).filter(Boolean).some((v) => !enumOptions.includes(v))
     return (
       <td {...tdShared} className={baseCls} style={{ ...cellStyle, ...selStyle }}
+        title={strictInvalid ? `"${displayValue}" isn't in eBay's list for this field — eBay may reject it at publish` : undefined}
         onClick={() => { if (isActive) setDropdownOpen(true) }}
         onDoubleClick={(e) => {
           const charPos = getCharIndexFromPoint(e.clientX, e.clientY)
@@ -463,8 +470,11 @@ function SpreadsheetCell({ col, row, value, isActive, cellBg, width, cellHeight,
         }}>
         <div className="px-1.5 flex items-center justify-between gap-1 cursor-pointer group/cell" style={hStyle}>
           {custom != null ? custom : (
-            <span className={cn('text-xs truncate flex-1', isEmpty ? 'text-slate-300 dark:text-slate-600 italic' : 'text-slate-800 dark:text-slate-200')}>
-              {displayValue || (col.required ? '⚠ required' : enumOptions[1] ? `e.g. ${enumOptions[1]}` : '—')}
+            <span className={cn('text-xs truncate flex-1 flex items-center gap-1',
+              strictInvalid ? 'text-amber-600 dark:text-amber-400'
+              : isEmpty ? 'text-slate-300 dark:text-slate-600 italic' : 'text-slate-800 dark:text-slate-200')}>
+              {strictInvalid && <AlertCircle className="w-3 h-3 shrink-0" aria-hidden />}
+              <span className="truncate">{displayValue || (col.required ? '⚠ required' : enumOptions[1] ? `e.g. ${enumOptions[1]}` : '—')}</span>
             </span>
           )}
           <ChevronDown className="w-3 h-3 text-slate-400 flex-shrink-0 opacity-0 group-hover/cell:opacity-100 transition-opacity" />
