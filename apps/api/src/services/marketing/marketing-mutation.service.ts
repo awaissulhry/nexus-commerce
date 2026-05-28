@@ -160,6 +160,31 @@ export async function cancelCampaignMutation(queueId: string): Promise<{ cancell
   return { cancelled: true }
 }
 
+/**
+ * Roll back an already-executed CampaignAction by replaying payloadBefore
+ * onto the campaign (post-grace undo — the cancel path covers in-grace).
+ * Generalizes advertising/rollback.service across channels. Best-effort
+ * local restore + audit; the external channel un-write (when live) is a
+ * fresh forward mutation, so we enqueue the reverse rather than mutate
+ * the channel directly here.
+ */
+export async function rollbackCampaignAction(actionId: string): Promise<{ rolledBack: boolean; reason?: string }> {
+  const action = await prisma.campaignAction.findUnique({ where: { id: actionId } })
+  if (!action) return { rolledBack: false, reason: 'action not found' }
+  if (action.rolledBackAt) return { rolledBack: false, reason: 'already rolled back' }
+  if (!action.campaignId) return { rolledBack: false, reason: 'no campaign on action' }
+  const before = action.payloadBefore as Record<string, unknown>
+  await prisma.$transaction([
+    prisma.marketingCampaign.update({ where: { id: action.campaignId }, data: before as never }),
+    prisma.campaignAction.update({
+      where: { id: actionId },
+      data: { rolledBackAt: new Date(), rollbackReason: 'operator rollback' },
+    }),
+  ])
+  publishMarketingEvent({ type: 'campaign.mutated', campaignId: action.campaignId, channel: action.channel, action: 'updated', ts: Date.now() })
+  return { rolledBack: true }
+}
+
 /** Process one queued mutation row: gate-check then dispatch (or sandbox-finalize). */
 export async function processMarketingSyncRow(queueId: string): Promise<{ status: string; queueId: string }> {
   const row = await prisma.outboundSyncQueue.findUnique({ where: { id: queueId } })

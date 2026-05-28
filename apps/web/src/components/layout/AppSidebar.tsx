@@ -572,6 +572,12 @@ export default function AppSidebar() {
             active={pathname.startsWith('/marketing/calendar')}
           />
           <NavItem
+            href="/marketing/automation-os"
+            icon={Zap}
+            label="Automation"
+            active={pathname.startsWith('/marketing/automation-os')}
+          />
+          <NavItem
             href="/pricing/promotions"
             icon={Megaphone}
             label="Promotions"

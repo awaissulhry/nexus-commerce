@@ -1074,6 +1074,11 @@ async function start() {
       startAdvertisingRuleEvaluatorCron();
       startBudgetPoolRebalanceCron();
       initializeAdsSyncWorker();
+      // UM.6 — marketing-domain rule evaluator (cross-channel campaign
+      // automation). Side-effect import registers the mkt_* handlers.
+      await import('./services/marketing/marketing-action-handlers.js');
+      const { startMarketingRuleEvaluatorCron } = await import('./jobs/marketing-rule-evaluator.job.js');
+      startMarketingRuleEvaluatorCron();
     }
 
     // SR.1 — Sentient Review Loop. Default-OFF — opt in via

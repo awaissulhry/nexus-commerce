@@ -121,6 +121,116 @@ const marketingOsRoutes: FastifyPluginAsync = async (app) => {
     return c
   })
 
+  // ── Automation rules (P6, domain=marketing) ──────────────────────────
+  // CRUD + manual dry-run over the shared AutomationRule engine. Handlers
+  // (mkt_pause_campaign / mkt_resume_campaign / mkt_set_budget /
+  // mkt_adjust_budget) self-register via the side-effect import below.
+  app.get('/marketing/os/rules', async (_request, reply) => {
+    reply.header('Cache-Control', 'private, max-age=15')
+    const rules = await prisma.automationRule.findMany({
+      where: { domain: 'marketing' },
+      orderBy: { createdAt: 'desc' },
+      include: { _count: { select: { executions: true } } },
+    })
+    return { items: rules, count: rules.length }
+  })
+
+  app.post('/marketing/os/rules', async (request, reply) => {
+    const b = request.body as Record<string, unknown>
+    if (!b?.name || !b?.trigger) {
+      reply.status(400)
+      return { error: 'name and trigger are required' }
+    }
+    const rule = await prisma.automationRule.create({
+      data: {
+        domain: 'marketing',
+        name: b.name as string,
+        description: (b.description as string) ?? null,
+        trigger: b.trigger as string,
+        conditions: (b.conditions as object) ?? [],
+        actions: (b.actions as object) ?? [],
+        enabled: (b.enabled as boolean) ?? false,
+        dryRun: (b.dryRun as boolean) ?? true, // live-with-guardrails: graduate explicitly
+        maxExecutionsPerDay: (b.maxExecutionsPerDay as number) ?? 100,
+        maxValueCentsEur: (b.maxValueCentsEur as number) ?? null,
+        maxDailyAdSpendCentsEur: (b.maxDailyAdSpendCentsEur as number) ?? null,
+        scopeMarketplace: (b.scopeMarketplace as string) ?? null,
+        createdBy: (b.createdBy as string) ?? null,
+      },
+    })
+    return rule
+  })
+
+  app.patch('/marketing/os/rules/:id', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const b = request.body as Record<string, unknown>
+    const allowed = ['name', 'description', 'trigger', 'conditions', 'actions', 'enabled', 'dryRun', 'maxExecutionsPerDay', 'maxValueCentsEur', 'maxDailyAdSpendCentsEur', 'scopeMarketplace']
+    const data: Record<string, unknown> = {}
+    for (const k of allowed) if (b[k] !== undefined) data[k] = b[k]
+    try {
+      return await prisma.automationRule.update({ where: { id }, data: data as never })
+    } catch {
+      reply.status(404)
+      return { error: 'rule not found' }
+    }
+  })
+
+  app.delete('/marketing/os/rules/:id', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    try {
+      await prisma.automationRule.delete({ where: { id } })
+      return { ok: true }
+    } catch {
+      reply.status(404)
+      return { error: 'rule not found' }
+    }
+  })
+
+  // Manual run. Defaults to a forced dry-run preview (?mode=apply runs at
+  // the rule's own dryRun setting). Optional ?campaignId seeds the context.
+  app.post('/marketing/os/rules/:id/run', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const q = request.query as Record<string, string | undefined>
+    const forceDryRun = q.mode !== 'apply'
+    await import('../services/marketing/marketing-action-handlers.js') // register handlers
+    const { evaluateRule } = await import('../services/automation-rule.service.js')
+    const rule = await prisma.automationRule.findUnique({ where: { id } })
+    if (!rule || rule.domain !== 'marketing') {
+      reply.status(404)
+      return { error: 'marketing rule not found' }
+    }
+    let context: unknown = { marketplace: null, ts: Date.now() }
+    if (q.campaignId) {
+      const c = await prisma.marketingCampaign.findUnique({
+        where: { id: q.campaignId },
+        select: { id: true, name: true, channel: true, status: true, acos: true, roas: true, spendCents: true, salesCents: true, budgetCents: true, primaryMarketplace: true },
+      })
+      if (c) context = { marketplace: c.primaryMarketplace, campaignId: c.id, campaign: { ...c, acos: c.acos != null ? Number(c.acos) : null, roas: c.roas != null ? Number(c.roas) : null } }
+    }
+    const result = await evaluateRule({ ruleId: id, context, forceDryRun })
+    return { forceDryRun, result }
+  })
+
+  // Roll back an executed campaign action (post-grace undo).
+  app.post('/marketing/os/actions/:id/rollback', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const { rollbackCampaignAction } = await import('../services/marketing/marketing-mutation.service.js')
+    const r = await rollbackCampaignAction(id)
+    if (!r.rolledBack) reply.status(409)
+    return r
+  })
+
+  // Run the marketing rule evaluator once (manual tick for verification).
+  app.post('/marketing/os/rules/evaluate-now', async (_request, reply) => {
+    const { runMarketingRuleEvaluatorOnce } = await import('../jobs/marketing-rule-evaluator.job.js')
+    try {
+      return await runMarketingRuleEvaluatorOnce()
+    } catch (err) {
+      reply.status(500)
+      return { error: (err as Error)?.message ?? 'evaluate failed' }
+    }
+  })
+
   // ── Campaign mutations (P5, sandbox-gated) ────────────────────────────
   // Operator writes flow through the unified mutation path: optimistic
   // local update + CampaignAction audit + OutboundSyncQueue row with a
