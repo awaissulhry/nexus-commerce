@@ -1,7 +1,7 @@
 'use client'
 
 import {
-  useCallback, useEffect, useRef, useState, useMemo,
+  useCallback, useEffect, useId, useRef, useState, useMemo,
   type KeyboardEvent,
 } from 'react'
 import { useRouter } from 'next/navigation'
@@ -172,7 +172,13 @@ function EnumDropdown({ options, optionLabels, current, enumMode, multi, onSelec
   // Whether the typed query can be committed as a custom value
   const hasCustom = query.trim() !== '' && !options.includes(query.trim())
 
-  const totalItems = filtered.length + (hasCustom ? 1 : 0)
+  // FF-EN.6 — cap rendered rows for large value lists (e.g. Brand); the
+  // search box narrows further. Keyboard nav + commit operate on the cap.
+  const CAP = 200
+  const visible = filtered.length > CAP ? filtered.slice(0, CAP) : filtered
+  const overflow = filtered.length - visible.length
+  const totalItems = visible.length + (hasCustom ? 1 : 0)
+  const listId = useId()
 
   useEffect(() => { searchRef.current?.focus() }, [])
   useEffect(() => { setHi(0) }, [filtered])
@@ -193,8 +199,8 @@ function EnumDropdown({ options, optionLabels, current, enumMode, multi, onSelec
   }
 
   function commit(idx: number) {
-    if (idx === filtered.length && hasCustom) { choose(query.trim()); return }
-    if (filtered[idx] != null) choose(filtered[idx])
+    if (idx === visible.length && hasCustom) { choose(query.trim()); return }
+    if (visible[idx] != null) choose(visible[idx])
   }
 
   function handleKeyDown(e: React.KeyboardEvent) {
@@ -208,14 +214,18 @@ function EnumDropdown({ options, optionLabels, current, enumMode, multi, onSelec
   return (
     <div className="absolute left-0 top-full mt-0 z-50 w-56 min-w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md shadow-lg overflow-hidden" onKeyDown={handleKeyDown}>
       <div className="px-2 py-1.5 border-b border-slate-100 dark:border-slate-700">
-        <input ref={searchRef} type="text" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search or type a value…"
+        <input ref={searchRef} type="text" value={query} onChange={(e) => setQuery(e.target.value)}
+          placeholder={enumMode === 'strict' ? 'Search eBay’s values…' : multi ? 'Search or add values…' : 'Search or type your own…'}
+          role="combobox" aria-expanded={true} aria-autocomplete="list" aria-controls={listId}
+          aria-activedescendant={totalItems > 0 ? `${listId}-opt-${hi}` : undefined}
+          aria-label="Search or type a value"
           className="w-full text-xs px-1.5 py-1 border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500" />
       </div>
-      <div ref={listRef} className="max-h-52 overflow-y-auto">
-        {filtered.map((opt, i) => {
+      <div ref={listRef} id={listId} role="listbox" aria-multiselectable={multi || undefined} className="max-h-52 overflow-y-auto">
+        {visible.map((opt, i) => {
           const isOn = multi ? selected.has(opt) : opt === current
           return (
-          <div key={opt || '_empty'} role="option" aria-selected={isOn}
+          <div key={opt || '_empty'} id={`${listId}-opt-${i}`} role="option" aria-selected={isOn}
             onMouseDown={(e) => { e.preventDefault(); choose(opt) }}
             onMouseEnter={() => setHi(i)}
             className={cn('px-3 py-1.5 text-xs cursor-pointer flex items-center gap-1.5',
@@ -239,16 +249,16 @@ function EnumDropdown({ options, optionLabels, current, enumMode, multi, onSelec
           </div>
           )
         })}
-        {filtered.length === 0 && !hasCustom && (
+        {visible.length === 0 && !hasCustom && (
           <div className="px-3 py-2 text-xs text-slate-400 italic">No matches</div>
         )}
         {hasCustom && (
-          <div role="option"
+          <div id={`${listId}-opt-${visible.length}`} role="option" aria-selected={false}
             onMouseDown={(e) => { e.preventDefault(); choose(query.trim()) }}
-            onMouseEnter={() => setHi(filtered.length)}
+            onMouseEnter={() => setHi(visible.length)}
             className={cn('px-3 py-1.5 text-xs cursor-pointer border-t flex items-center gap-1.5',
               enumMode === 'strict' ? 'border-amber-200 dark:border-amber-800/60' : 'border-slate-100 dark:border-slate-700',
-              hi === filtered.length
+              hi === visible.length
                 ? (enumMode === 'strict' ? 'bg-amber-500 text-white' : 'bg-blue-500 text-white')
                 : (enumMode === 'strict'
                     ? 'text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30'
@@ -257,10 +267,15 @@ function EnumDropdown({ options, optionLabels, current, enumMode, multi, onSelec
             <span className="opacity-60">Use</span>
             <span className="font-mono font-medium truncate">&ldquo;{query.trim()}&rdquo;</span>
             {enumMode === 'strict' && (
-              <span className={cn('ml-auto text-[10px] shrink-0', hi === filtered.length ? 'text-amber-100' : 'text-amber-500/80')}>
+              <span className={cn('ml-auto text-[10px] shrink-0', hi === visible.length ? 'text-amber-100' : 'text-amber-500/80')}>
                 not in eBay&apos;s list
               </span>
             )}
+          </div>
+        )}
+        {overflow > 0 && (
+          <div className="px-3 py-1.5 text-[10px] text-slate-400 italic border-t border-slate-100 dark:border-slate-700">
+            +{overflow} more — keep typing to filter
           </div>
         )}
       </div>
