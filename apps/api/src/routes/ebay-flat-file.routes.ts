@@ -763,6 +763,9 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
             listingStatus: status ?? sharedPacked.listingStatus,
             offerActive: (status ?? sharedPacked.listingStatus) === 'ACTIVE',
             platformAttributes: sharedPacked.platformAttributes,
+            // FCF.4 — eBay is merchant-fulfilled: mark fulfillment on THIS
+            // listing (per channel×marketplace), not on the shared product.
+            fulfillmentMethod: 'FBM' as const,
             updatedAt: new Date(),
           };
 
@@ -896,7 +899,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
                 }),
                 prisma.product.update({
                   where: { id: productId },
-                  data: { totalStock: stockQty, fulfillmentMethod: 'FBM' },
+                  data: { totalStock: stockQty },
                 }),
               ]);
             }
@@ -927,16 +930,10 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
               }),
               prisma.product.update({
                 where: { id: productId },
-                data: { totalStock: stockQty, fulfillmentMethod: 'FBM' },
+                data: { totalStock: stockQty },
               }),
             ]);
           }
-        } else if (primaryLocation) {
-          // No qty in this row — still mark fulfillmentMethod as FBM
-          await prisma.product.update({
-            where: { id: productId },
-            data: { fulfillmentMethod: 'FBM' },
-          });
         }
 
         saved++;
