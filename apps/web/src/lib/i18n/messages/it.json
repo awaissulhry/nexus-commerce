@@ -3669,6 +3669,7 @@
   "products.edit.cockpit.ebay.variations.axisHint": "Scegli 1 asse per una singola colonna o 2 per una griglia. eBay supporta inserzioni multi-asse ma 2 è il limite pratico di usabilità.",
   "products.edit.cockpit.ebay.variations.cap": "limite",
   "products.edit.cockpit.ebay.variations.columns": "Colonne",
+  "products.edit.cockpit.ebay.variations.specificN": "Specifica {n}",
   "products.edit.cockpit.ebay.variations.discardCellEdits": "Annulla modifiche celle",
   "products.edit.cockpit.ebay.variations.discardCellEditsTooltip": "Annulla le modifiche per cella non salvate (le scelte degli assi restano)",
   "products.edit.cockpit.ebay.variations.exceedsCap": "Supera il limite di eBay — suddividi in più inserzioni",

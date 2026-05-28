@@ -156,8 +156,14 @@ export default function VariationsMatrixCard({
     return out
   }, [data, availableAxes, sortDraft])
 
-  const rowAxis = pickedAxesDraft[0] ?? availableAxes[0]
-  const colAxis = pickedAxesDraft[1] ?? (availableAxes[1] ?? null)
+  // EV.3 — effective variation specifics (picked, else auto-default to
+  // the available axes), capped at eBay's 5. A 2D grid can only show two
+  // dimensions, so 3–5 specifics fall back to a flat one-row-per-variant
+  // table.
+  const effectiveAxes = (pickedAxesDraft.length > 0 ? pickedAxesDraft : availableAxes).slice(0, 5)
+  const useFlatTable = effectiveAxes.length > 2
+  const rowAxis = effectiveAxes[0] ?? null
+  const colAxis = effectiveAxes[1] ?? null
   const rowValues = rowAxis ? axisValues[rowAxis] ?? [] : []
   const colValues = colAxis ? axisValues[colAxis] ?? [] : []
 
@@ -186,21 +192,22 @@ export default function VariationsMatrixCard({
     [],
   )
 
-  const handlePickAxis = useCallback((slot: 0 | 1, next: string | null) => {
+  // EV.3 — generalised to any slot (eBay allows up to 5 variation
+  // specifics). Picking an axis already in another slot moves it here
+  // (no duplicates); picking null clears the slot.
+  const handlePickAxis = useCallback((slot: number, next: string | null) => {
     setPickedAxesDraft((cur) => {
-      const out = [...cur]
+      let out = [...cur]
       if (next === null) {
         out.splice(slot, 1)
       } else {
+        out = out.filter((a, i) => a !== next || i === slot)
         out[slot] = next
-        // Prevent the same axis in both slots.
-        if (slot === 0 && out[1] === next) out.splice(1, 1)
-        if (slot === 1 && out[0] === next) out[0] = next === out[0] ? availableAxes.find((a) => a !== next) ?? '' : out[0]
       }
-      return out.filter(Boolean).slice(0, 2)
+      return out.filter(Boolean).slice(0, 5)
     })
     setPickedDirty(true)
-  }, [availableAxes])
+  }, [])
 
   const handleMoveAxisValue = useCallback(
     (axis: string, value: string, dir: -1 | 1) => {
@@ -318,18 +325,25 @@ export default function VariationsMatrixCard({
             <div className="rounded-lg border border-slate-200 dark:border-slate-800 p-3 space-y-2">
               <div className="text-xs font-medium text-slate-700 dark:text-slate-300">{t('products.edit.cockpit.ebay.variations.axes')}</div>
               <div className="flex items-center gap-3 flex-wrap text-xs">
-                <AxisSelector
-                  label={t('products.edit.cockpit.ebay.variations.rows')}
-                  value={pickedAxesDraft[0] ?? null}
-                  available={availableAxes}
-                  onChange={(v) => handlePickAxis(0, v)}
-                />
-                <AxisSelector
-                  label={t('products.edit.cockpit.ebay.variations.columns')}
-                  value={pickedAxesDraft[1] ?? null}
-                  available={availableAxes.filter((a) => a !== pickedAxesDraft[0])}
-                  onChange={(v) => handlePickAxis(1, v)}
-                />
+                {Array.from({ length: Math.min(5, availableAxes.length) }).map((_, i) => (
+                  <AxisSelector
+                    key={i}
+                    label={
+                      useFlatTable
+                        ? t('products.edit.cockpit.ebay.variations.specificN', { n: String(i + 1) })
+                        : i === 0
+                          ? t('products.edit.cockpit.ebay.variations.rows')
+                          : i === 1
+                            ? t('products.edit.cockpit.ebay.variations.columns')
+                            : t('products.edit.cockpit.ebay.variations.specificN', { n: String(i + 1) })
+                    }
+                    value={pickedAxesDraft[i] ?? null}
+                    available={availableAxes.filter(
+                      (a) => !pickedAxesDraft.some((p, j) => p === a && j !== i),
+                    )}
+                    onChange={(v) => handlePickAxis(i, v)}
+                  />
+                ))}
                 <span className="text-[10.5px] text-slate-500 dark:text-slate-400">
                   {t('products.edit.cockpit.ebay.variations.axisHint')}
                 </span>
@@ -350,18 +364,29 @@ export default function VariationsMatrixCard({
               </div>
             )}
 
-            {/* ── Grid ────────────────────────────────────────────── */}
-            {rowAxis && rowValues.length > 0 && (
-              <MatrixGrid
-                rowAxis={rowAxis}
-                colAxis={colAxis}
-                rowValues={rowValues}
-                colValues={colValues}
-                cellAt={cellAt}
+            {/* ── Grid (≤2 specifics) or flat table (3–5 specifics) ── */}
+            {useFlatTable ? (
+              <FlatVariationTable
+                axes={effectiveAxes}
+                cells={data.cells}
                 dirtyCells={dirtyCells}
                 onCellEdit={handleCellEdit}
                 currency={currency}
               />
+            ) : (
+              rowAxis &&
+              rowValues.length > 0 && (
+                <MatrixGrid
+                  rowAxis={rowAxis}
+                  colAxis={colAxis}
+                  rowValues={rowValues}
+                  colValues={colValues}
+                  cellAt={cellAt}
+                  dirtyCells={dirtyCells}
+                  onCellEdit={handleCellEdit}
+                  currency={currency}
+                />
+              )
             )}
           </>
         )}
@@ -579,6 +604,64 @@ function CellEditor({
         className="w-full text-[11px] border border-slate-200 dark:border-slate-700 rounded px-1 py-0.5 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
         title={t('products.edit.cockpit.ebay.variations.quantity')}
       />
+    </div>
+  )
+}
+
+// ── Flat variation table (EV.3) ─────────────────────────────────────────
+// A 2D grid can't show 3–5 variation specifics, so when more than two are
+// picked we render one row per variation: a column per specific + the
+// shared CellEditor (price / qty / status / SKU).
+function FlatVariationTable({
+  axes,
+  cells,
+  dirtyCells,
+  onCellEdit,
+  currency,
+}: {
+  axes: string[]
+  cells: Cell[]
+  dirtyCells: Record<string, DirtyCell>
+  onCellEdit: (childId: string, patch: DirtyCell) => void
+  currency: string
+}) {
+  const { t } = useTranslations()
+  return (
+    <div className="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800">
+      <table className="w-full text-xs">
+        <thead className="bg-slate-50 dark:bg-slate-900/40 text-left text-slate-500 dark:text-slate-400">
+          <tr>
+            {axes.map((a) => (
+              <th key={a} className="px-2 py-1.5 font-medium">
+                {a}
+              </th>
+            ))}
+            <th className="px-2 py-1.5 font-medium">
+              {t('products.edit.cockpit.ebay.variations.priceOverride')} /{' '}
+              {t('products.edit.cockpit.ebay.variations.quantity')}
+            </th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+          {cells.map((c) => (
+            <tr key={c.childProductId} className="align-top">
+              {axes.map((a) => (
+                <td key={a} className="px-2 py-1.5 text-slate-700 dark:text-slate-300">
+                  {c.variationAttributes?.[a] ?? '—'}
+                </td>
+              ))}
+              <td className="px-2 py-1.5">
+                <CellEditor
+                  cell={c}
+                  dirty={dirtyCells[c.childProductId]}
+                  currency={currency}
+                  onChange={(patch) => onCellEdit(c.childProductId, patch)}
+                />
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   )
 }

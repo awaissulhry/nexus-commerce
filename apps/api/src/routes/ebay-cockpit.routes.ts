@@ -560,7 +560,8 @@ export default async function ebayCockpitRoutes(fastify: FastifyInstance) {
       const prevPlatform = (parentListing?.platformAttributes ?? {}) as Record<string, unknown>
       const nextPlatform: Record<string, unknown> = { ...prevPlatform }
       if (pickedAxes !== undefined) {
-        nextPlatform._variationAxes = (pickedAxes ?? []).slice(0, 2)
+        // EV.3 — eBay supports up to 5 variation specifics.
+        nextPlatform._variationAxes = (pickedAxes ?? []).slice(0, 5)
       }
       if (axisSortOrder !== undefined) {
         nextPlatform._axisSortOrder = axisSortOrder
