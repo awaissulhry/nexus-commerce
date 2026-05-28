@@ -572,4 +572,98 @@ export default async function productChannelDataRoutes(fastify: FastifyInstance)
       return reply.send({ productId: id, locks })
     },
   )
+
+  // ── OL.C.1 — POST /api/products/listing-health/bulk ──────────────────────
+  // Marketplace-aware listing health for the /products grid, in bulk. For
+  // each product, scores its ChannelListings with the SAME "ready" rule the
+  // publish preflight (OL.B) uses, so the grid and the publish review agree:
+  // a coordinate is ready when it has a title + positive price (+ Amazon also
+  // needs a productType) and isn't in ERROR status. score = % of a product's
+  // coordinates that are ready. Returns ready/total/blocked + per-channel
+  // counts for the tooltip. Column-gated client fetch (mirrors
+  // family-completeness/bulk) so it never slows a default grid load.
+  fastify.post<{ Body: { productIds?: string[] } }>(
+    '/products/listing-health/bulk',
+    async (request, reply) => {
+      const ids = Array.isArray(request.body?.productIds)
+        ? request.body!.productIds.slice(0, 500)
+        : []
+      if (ids.length === 0) return reply.send({ results: {} })
+
+      const num = (v: unknown): number | null => {
+        if (v == null) return null
+        const n = typeof v === 'string' ? parseFloat(v) : Number(v)
+        return Number.isFinite(n) ? n : null
+      }
+
+      try {
+        const [products, listings] = await Promise.all([
+          prisma.product.findMany({
+            where: { id: { in: ids } },
+            select: { id: true, name: true, basePrice: true, productType: true },
+          }),
+          prisma.channelListing.findMany({
+            where: { productId: { in: ids } },
+            select: {
+              productId: true, channel: true, marketplace: true, listingStatus: true,
+              title: true, masterTitle: true, description: true, masterDescription: true,
+              price: true, priceOverride: true, masterPrice: true, platformAttributes: true,
+            },
+          }),
+        ])
+        const productById = new Map(products.map((p) => [p.id, p]))
+
+        type Counts = { ready: number; total: number }
+        const acc = new Map<
+          string,
+          { ready: number; total: number; blocked: number; byChannel: Record<string, Counts> }
+        >()
+        for (const id of ids) acc.set(id, { ready: 0, total: 0, blocked: 0, byChannel: {} })
+
+        for (const l of listings) {
+          const a = acc.get(l.productId)
+          if (!a) continue
+          const p = productById.get(l.productId)
+          const pa = (l.platformAttributes as Record<string, any> | null) ?? {}
+          const ch = l.channel.toUpperCase()
+
+          const title = l.title ?? l.masterTitle ?? p?.name ?? null
+          const price = num(l.priceOverride) ?? num(l.price) ?? num(l.masterPrice) ?? num(p?.basePrice)
+          const productType = pa.productType ?? p?.productType ?? null
+
+          const missingRequired =
+            !title || String(title).trim() === '' ||
+            price == null || price <= 0 ||
+            (ch === 'AMAZON' && (!productType || String(productType).trim() === ''))
+          const errored = l.listingStatus === 'ERROR'
+          const ready = !missingRequired && !errored
+
+          a.total++
+          if (ready) a.ready++
+          else a.blocked++
+          const bc = (a.byChannel[ch] ??= { ready: 0, total: 0 })
+          bc.total++
+          if (ready) bc.ready++
+        }
+
+        const results: Record<
+          string,
+          { score: number | null; ready: number; total: number; blocked: number; byChannel: Record<string, Counts> }
+        > = {}
+        for (const [id, a] of acc) {
+          results[id] = {
+            score: a.total > 0 ? Math.round((a.ready / a.total) * 100) : null,
+            ready: a.ready,
+            total: a.total,
+            blocked: a.blocked,
+            byChannel: a.byChannel,
+          }
+        }
+        return reply.send({ results })
+      } catch (error: any) {
+        request.log?.error({ err: error }, '[products/listing-health/bulk] failed')
+        return reply.code(500).send({ error: error?.message ?? String(error) })
+      }
+    },
+  )
 }

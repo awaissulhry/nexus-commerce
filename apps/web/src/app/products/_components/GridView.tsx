@@ -1647,6 +1647,48 @@ const ProductCell = memo(function ProductCell({
         </div>
       )
     }
+    case 'listingHealth': {
+      // OL.C — marketplace-aware readiness across this product's listings.
+      const lh = p.listingHealth
+      if (lh === undefined) {
+        return (
+          <span className="inline-block w-16 h-3 bg-slate-100 dark:bg-slate-800 rounded animate-pulse" />
+        )
+      }
+      if (lh.score === null || lh.total === 0) {
+        return (
+          <span className="text-xs italic text-slate-400 dark:text-slate-500">
+            {t('products.grid.notListed')}
+          </span>
+        )
+      }
+      const hScore = lh.score
+      const hTone = hScore >= 80 ? 'bg-emerald-500' : hScore >= 50 ? 'bg-amber-500' : 'bg-rose-500'
+      const hText =
+        hScore >= 80
+          ? 'text-emerald-700 dark:text-emerald-400'
+          : hScore >= 50
+            ? 'text-amber-700 dark:text-amber-400'
+            : 'text-rose-700 dark:text-rose-400'
+      const byCh = Object.entries(lh.byChannel)
+        .map(([c, v]) => `${c}: ${v.ready}/${v.total}`)
+        .join(' · ')
+      const hTitle =
+        `${lh.ready}/${lh.total} ready` +
+        (lh.blocked > 0 ? ` · ${lh.blocked} blocked` : '') +
+        (byCh ? `\n${byCh}` : '')
+      return (
+        <div className="flex items-center gap-2 w-full" title={hTitle}>
+          <span className={`text-sm tabular-nums font-semibold ${hText}`}>{hScore}%</span>
+          <div className="flex-1 h-1.5 bg-slate-100 dark:bg-slate-800 rounded overflow-hidden">
+            <div className={`h-full ${hTone}`} style={{ width: `${hScore}%` }} />
+          </div>
+          <span className="text-[11px] text-slate-400 dark:text-slate-500 tabular-nums">
+            {lh.ready}/{lh.total}
+          </span>
+        </div>
+      )
+    }
     case 'familyCompleteness': {
       // W5.1 — family-driven completeness (W2.14). Three states:
       //   undefined → loading (workspace hasn't fetched yet)

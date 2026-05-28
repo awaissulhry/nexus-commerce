@@ -59,6 +59,20 @@ export type ProductRow = {
     familyId: string | null
   }
   /**
+   * OL.C — marketplace-aware listing health: % of this product's
+   * channel×market listings that are publish-ready (title + positive
+   * price, + Amazon needs a productType, not in ERROR). Async-fetched
+   * via /products/listing-health/bulk only when the `listingHealth`
+   * column is enabled. undefined while loading; score=null = not listed.
+   */
+  listingHealth?: {
+    score: number | null
+    ready: number
+    total: number
+    blocked: number
+    byChannel: Record<string, { ready: number; total: number }>
+  }
+  /**
    * P.7 — Product.version for optimistic-concurrency check on inline
    * edits. Sent as If-Match on PATCH /api/products/:id; server
    * returns 409 if the row changed since this list was fetched.

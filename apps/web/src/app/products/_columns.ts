@@ -90,6 +90,9 @@ export const ALL_COLUMNS: ColumnDef[] = [
   { key: 'photos',       label: 'Photos',   labelKey: 'products.col.photos',       width: 70 },
   { key: 'variants',     label: 'Var.',     labelKey: 'products.col.variants',     width: 70 },
   { key: 'completeness', label: 'Complete', labelKey: 'products.col.completeness', width: 110 },
+  // OL.C — marketplace-aware listing readiness across channel×market
+  // (distinct from `completeness`, which scores master-data quality).
+  { key: 'listingHealth', label: 'Health', labelKey: 'products.col.listingHealth', width: 130 },
   { key: 'familyCompleteness', label: 'Family ✓', labelKey: 'products.col.familyCompleteness', width: 110 },
   // P-RT.5 — per-row outbound sync state chip. Hidden by default;
   // operators opt in via ColumnPickerMenu. Shows "Pushing to Amazon",

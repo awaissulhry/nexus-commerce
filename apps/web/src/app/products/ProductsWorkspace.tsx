@@ -623,6 +623,44 @@ export default function ProductsWorkspace() {
     // filter, or refresh.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [products.map((p) => p.id).join(','), visibleColumns.includes('familyCompleteness')])
+
+  // OL.C — marketplace-aware listing-health bulk fetch. Mirrors the
+  // family-completeness pattern: only fires when the `listingHealth`
+  // column is visible, so a default grid load never pays for it.
+  useEffect(() => {
+    if (!visibleColumns.includes('listingHealth')) return
+    if (products.length === 0) return
+    let cancelled = false
+    const ids = products.map((p) => p.id)
+    fetch(`${getBackendUrl()}/api/products/listing-health/bulk`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ productIds: ids }),
+    })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
+      .then((data: { results?: Record<string, unknown> }) => {
+        if (cancelled) return
+        const map = data.results ?? {}
+        setProducts((prev) =>
+          prev.map((p) => {
+            const r = map[p.id] as
+              | { score: number | null; ready: number; total: number; blocked: number; byChannel: Record<string, { ready: number; total: number }> }
+              | { error: string }
+              | undefined
+            if (!r || 'error' in r) return p
+            return { ...p, listingHealth: r }
+          }),
+        )
+      })
+      .catch(() => {
+        // Silent — the cell shows skeletons rather than a banner.
+      })
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [products.map((p) => p.id).join(','), visibleColumns.includes('listingHealth')])
+
   useEffect(() => { setLoading(productsLoading) }, [productsLoading])
   useEffect(() => { setError(productsError) }, [productsError])
 
