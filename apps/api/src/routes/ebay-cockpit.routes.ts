@@ -407,7 +407,7 @@ export default async function ebayCockpitRoutes(fastify: FastifyInstance) {
 
     const parent = await prisma.product.findUnique({
       where: { id: parentProductId },
-      select: { id: true, variationAxes: true },
+      select: { id: true, variationAxes: true, variationTheme: true },
     })
     if (!parent) {
       return reply.code(404).send({ error: 'Parent product not found' })
@@ -426,16 +426,16 @@ export default async function ebayCockpitRoutes(fastify: FastifyInstance) {
         ? (parentPlatform._axisSortOrder as Record<string, string[]>)
         : {}
 
-    // EC.6 hotfix — the JSON column is `variantAttributes` on Product
-    // (not `variationAttributes`, which lives on the deprecated
-    // ProductVariation table). Using Prisma's typed select also drops
-    // the $queryRaw dance that masked the column name typo in EC.6.
+    // EV.1 — axis values live in categoryAttributes.variations
+    // ({ Size, Color }); variantAttributes is the deprecated/empty field
+    // EC.6 wrongly read (which is why the matrix showed no variants).
     const children = await prisma.product.findMany({
       where: { parentId: parentProductId },
       select: {
         id: true,
         sku: true,
         variantAttributes: true,
+        categoryAttributes: true,
       },
     })
 
@@ -458,7 +458,13 @@ export default async function ebayCockpitRoutes(fastify: FastifyInstance) {
 
     const cells = children.map((c) => {
       const listing = listingByProductId.get(c.id)
-      const attrs = (c.variantAttributes ?? {}) as Record<string, string>
+      // EV.1 — prefer categoryAttributes.variations (the real axis map),
+      // fall back to the legacy variantAttributes.
+      const cat = (c.categoryAttributes ?? null) as { variations?: Record<string, string> } | null
+      const attrs =
+        (cat?.variations && typeof cat.variations === 'object'
+          ? cat.variations
+          : (c.variantAttributes as Record<string, string> | null)) ?? {}
       return {
         childProductId: c.id,
         sku: c.sku,
@@ -476,10 +482,33 @@ export default async function ebayCockpitRoutes(fastify: FastifyInstance) {
       }
     })
 
+    // EV.1 — declared axes: explicit variationAxes if set, else split the
+    // variationTheme ("Size / Color"), else the union of the children's
+    // variation keys (preserving first-seen order).
+    let declaredAxes: string[] =
+      Array.isArray(parent.variationAxes) && parent.variationAxes.length > 0
+        ? (parent.variationAxes as string[])
+        : []
+    if (declaredAxes.length === 0 && parent.variationTheme) {
+      declaredAxes = parent.variationTheme
+        .split(/[/,|]/)
+        .map((s) => s.trim())
+        .filter(Boolean)
+    }
+    if (declaredAxes.length === 0) {
+      const seen: string[] = []
+      for (const cell of cells) {
+        for (const k of Object.keys(cell.variationAttributes)) {
+          if (!seen.includes(k)) seen.push(k)
+        }
+      }
+      declaredAxes = seen
+    }
+
     return reply.send({
       parentProductId,
       marketplace,
-      declaredAxes: parent.variationAxes ?? [],
+      declaredAxes,
       pickedAxes,
       axisSortOrder,
       cells,
