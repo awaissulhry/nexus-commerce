@@ -77,6 +77,28 @@ FL scope changes are **audited**: `PUT /field-links/:fieldKey` writes
 after members + affected `channel:marketplace` coordinates. No-op clears
 aren't logged; writes are fail-open.
 
+## Tier 3 — per-variant linking + cross-channel matrix
+
+- **T3.1 — CHILD link groups.** `FieldLinkGroup` carries a nullable
+  `variantId`; identity is `(productId, fieldKey, variantId)`. A field can
+  hold one PARENT (product-level) group plus many CHILD groups (one per
+  variant) that pin a single variant's value across coordinates, fully
+  independent of each other. `PUT/GET /field-links` key by the triple; a
+  variant coordinate forces CHILD parentage; audit entityId is suffixed
+  with the variant. `useFieldLinks` is variant-aware (`scopeFor` /
+  `memberKeysFor` / `setScope` take an optional `variantId`), backward-
+  compatible — no variantId still means PARENT.
+- **T3.2 — per-variant price linking.** The cube's by-market view shows a
+  price-link button per variant row (price field only — quantity is
+  per-market) that opens the shared `FieldScopePopover` and links that
+  variant's `our_price` across markets via a CHILD group.
+- **T3.3a — cross-channel matrix (read-only).** `GET /products/:id/listings`
+  returns every channel × market with effective title/price/status; the
+  `CrossChannelMatrix` drawer (opened from the Amazon cockpit's
+  "Cross-channel" header button) shows them side by side. A *lens* over
+  the separate tabs, never a merge. Diff-then-apply cross-channel
+  propagation (T3.3b) is not yet wired.
+
 ## i18n
 
 UI chrome is keyed under `products.edit.cockpit.{amazon,ebay}.*` in the

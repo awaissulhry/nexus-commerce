@@ -106,4 +106,18 @@ test.describe('Listing cockpit — regression (GOV)', () => {
     expect(body).toMatch(/pre-publish health|salute pre-pubblicazione|category & aspects|caratteristiche/i)
     expect(sseCorsErrors(errors)).toHaveLength(0)
   })
+
+  // T3.3a — the cross-channel comparison matrix opens from the header
+  // and lists the product across both channels.
+  test('Cross-channel matrix drawer opens and lists both channels', async ({ page }) => {
+    await openCockpit(page, 'AMAZON')
+    const btn = page.getByRole('button', { name: /Cross-channel|Multi-canale/i }).first()
+    await expect(btn).toBeVisible()
+    await btn.click()
+    await page.waitForTimeout(2000)
+    const body = (await page.locator('body').innerText()).toLowerCase()
+    expect(body).toMatch(/cross-channel matrix|matrice multi-canale/i)
+    expect(body).toContain('amazon')
+    expect(body).toContain('ebay')
+  })
 })
