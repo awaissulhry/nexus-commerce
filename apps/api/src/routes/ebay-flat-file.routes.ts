@@ -388,7 +388,10 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
       const products = await prisma.product.findMany({
         where: {
           deletedAt: null,
-          ...(familyId ? { id: familyId } : {}),
+          // EV.5 — a family must load the parent AND its variant children
+          // so the bulk editor shows every variation (price/qty come from
+          // their eBay ChannelListings, which the cockpit matrix writes).
+          ...(familyId ? { OR: [{ id: familyId }, { parentId: familyId }] } : {}),
         },
         include: {
           channelListings: {
