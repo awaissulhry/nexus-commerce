@@ -265,6 +265,21 @@ interface Props {
   familyId?: string
 }
 
+// Parent/variant field split (grey-out, still editable). The parent row is
+// the listing container, not a sellable SKU; these per-variant / offer
+// fields don't apply to it. Per-market price/qty (it_price …) handled by
+// regex in getCellGuidance.
+const PARENT_NOT_NEEDED = new Set([
+  'price', 'quantity',
+  'best_offer_enabled', 'best_offer_floor', 'best_offer_ceiling',
+  'vat_rate', 'ean', 'mpn',
+  'package_weight', 'package_length', 'package_width', 'package_height',
+])
+// Listing-level fields defined once on the parent; not needed per variant.
+const VARIANT_NOT_NEEDED = new Set([
+  'variation_theme', 'category_id', 'subtitle', 'listing_format', 'listing_duration',
+])
+
 // ── Main component ─────────────────────────────────────────────────────────
 
 export default function EbayFlatFileClient({ initialRows, initialMarketplace, familyId }: Props) {
@@ -854,6 +869,24 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
 
   // ── Listing guidance ──────────────────────────────────────────────────
   const getCellGuidance = useCallback((col: FlatFileColumn, row: BaseRow): 'not-applicable' | 'optional' | null => {
+    const er = row as EbayRow
+    const isVariant = er._isParent === false
+    const isFamilyParent = er._isParent === true && familyParentIds.has(String(er.platformProductId ?? ''))
+
+    // Parent / variant field split — the parent is the listing container
+    // (not a sellable SKU), variants are the SKUs. Greyed cells stay fully
+    // editable; this only shades + tooltips the fields that row type doesn't
+    // drive on eBay.
+    if (isFamilyParent) {
+      // Per-variant / offer concepts the parent container doesn't carry.
+      if (PARENT_NOT_NEEDED.has(col.id) || /^(it|de|fr|es|uk)_(price|qty)$/.test(col.id)) {
+        return 'not-applicable'
+      }
+    } else if (isVariant) {
+      // Listing-level fields defined once on the parent.
+      if (VARIANT_NOT_NEEDED.has(col.id)) return 'not-applicable'
+    }
+
     // Best Offer floor/ceiling only meaningful when Best Offer is enabled
     if (col.id === 'best_offer_floor' || col.id === 'best_offer_ceiling') {
       const enabled = row.best_offer_enabled === true || row.best_offer_enabled === 'true'
@@ -862,7 +895,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
     // Item specifics: use guidance from eBay category API
     if (col.id.startsWith('aspect_') && col.guidance === 'OPTIONAL') return 'optional'
     return null
-  }, [])
+  }, [familyParentIds])
 
   // ── Slot: channel strip ────────────────────────────────────────────────
 
