@@ -17,7 +17,7 @@
 // the corresponding ChannelListingTab section.
 
 import { useEffect, useMemo, useState } from 'react'
-import { Send, ExternalLink, Settings2, History, Layers, ListTree } from 'lucide-react'
+import { Send, ExternalLink, Settings2, History, Layers, ListTree, Link2 } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { cn } from '@/lib/utils'
@@ -33,6 +33,8 @@ import {
   IdentifiersCard,
   FieldScopePopover,
   PropagationDiffModal,
+  CrossChannelMatrix,
+  LinkSuggestionsBanner,
   useFieldLinks,
   type ScopeMember,
   type PropagatePreview,
@@ -167,6 +169,8 @@ export default function EbayCockpit(props: Props) {
   // a link group can span Amazon + eBay.
   const fieldLinks = useFieldLinks(product.id)
   const [scopeFieldKey, setScopeFieldKey] = useState<string | null>(null)
+  // OL.A.5 — cross-channel matrix drawer (parity with the Amazon cockpit).
+  const [xChannelOpen, setXChannelOpen] = useState(false)
   const [propagateField, setPropagateField] = useState<LinkField | null>(null)
   const [propagateData, setPropagateData] = useState<PropagatePreview | null>(null)
   const [propagateBusy, setPropagateBusy] = useState(false)
@@ -388,6 +392,15 @@ export default function EbayCockpit(props: Props) {
             >
               {t('products.edit.cockpit.ebay.publish')}
             </Button>
+            {/* OL.A.5 — cross-channel propagation (parity with Amazon cockpit) */}
+            <button
+              type="button"
+              onClick={() => setXChannelOpen(true)}
+              className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
+              title={t('products.edit.cockpit.ebay.crossChannelTitle')}
+            >
+              <Link2 className="w-3 h-3" /> {t('products.edit.cockpit.ebay.crossChannel')}
+            </button>
             <button
               type="button"
               onClick={() => setSiblingsModalOpen(true)}
@@ -439,6 +452,13 @@ export default function EbayCockpit(props: Props) {
             </button>
           </>
         }
+      />
+
+      {/* OL.A.5 — smart link suggestions (parity with the Amazon cockpit). */}
+      <LinkSuggestionsBanner
+        suggestions={fieldLinks.suggestions}
+        onLink={(s) => void fieldLinks.linkSuggestion(s)}
+        onDismiss={fieldLinks.dismissSuggestion}
       />
 
       {/* EC.3 — Cross-tab change toast. Slim banner that surfaces
@@ -788,6 +808,13 @@ export default function EbayCockpit(props: Props) {
         marketplace={marketplace}
         open={siblingsModalOpen}
         onClose={() => setSiblingsModalOpen(false)}
+      />
+
+      {/* OL.A.5 — cross-channel comparison + propagation drawer (Amazon + eBay). */}
+      <CrossChannelMatrix
+        productId={product.id}
+        open={xChannelOpen}
+        onClose={() => setXChannelOpen(false)}
       />
 
       {/* FL — per-field scope control + propagation (generic). */}

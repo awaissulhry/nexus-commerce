@@ -1,24 +1,34 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import {
   AlertCircle,
   CheckCircle2,
+  ChevronRight,
   ChevronsDown,
   GitFork,
   Globe,
+  Link2,
   Loader2,
   RefreshCw,
   Sparkles,
+  Upload,
   X,
 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
-import { emitInvalidation } from '@/lib/sync/invalidation-channel'
+import { emitInvalidation, useInvalidationChannel } from '@/lib/sync/invalidation-channel'
 import {
   setDraftField,
   clearDraft,
 } from '../_shared/draft-bus/useProductDraftBus'
+// OL.A.4 — surface the cross-channel propagation drawer + link suggestions
+// (built for the Amazon cockpit) here in the channel-agnostic Listing Hub.
+import {
+  CrossChannelMatrix,
+  LinkSuggestionsBanner,
+  useFieldLinks,
+} from '../_shared/cockpit-shell'
 import { Card } from '@/components/ui/Card'
 import { Input } from '@/components/ui/Input'
 import { Button } from '@/components/ui/Button'
@@ -799,21 +809,128 @@ function SelectField({ label, value, onChange, options }: {
   )
 }
 
-// ── MA.1 Market Availability Card ─────────────────────────────────────────────
-type MarketRow = { channel: string; marketplace: string; offerActive: boolean; listingId: string | null }
+// ── MA.1 / OL.A.1 Listing Hub (Market Availability + per-coordinate state) ────
+type MarketRow = {
+  channel: string
+  marketplace: string
+  offerActive: boolean
+  listingId: string | null
+  status: string | null
+  title: string | null
+  hasDescription: boolean
+  price: number | null
+  lastSyncedAt: string | null
+}
 
 const CHANNEL_LABEL: Record<string, string> = { AMAZON: 'Amazon', EBAY: 'eBay', SHOPIFY: 'Shopify', WOOCOMMERCE: 'WooCommerce', ETSY: 'Etsy' }
+
+// OL.A.2 — channels that have a per-channel cockpit tab to drill into.
+// Tab keys equal the channel name (ProductEditClient TopTab). Single-store
+// channels carry no marketplace, so drill-in omits ?market=.
+const COCKPIT_CHANNELS = new Set(['AMAZON', 'EBAY', 'SHOPIFY'])
+const SINGLE_STORE_CHANNELS = new Set(['SHOPIFY', 'WOOCOMMERCE', 'ETSY'])
+
+// OL.A.1 — per-coordinate listing status → compact chip meta.
+const STATUS_META: Record<string, { label: string; cls: string }> = {
+  ACTIVE: { label: 'Live', cls: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300' },
+  DRAFT: { label: 'Draft', cls: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300' },
+  INACTIVE: { label: 'Paused', cls: 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400' },
+  ENDED: { label: 'Ended', cls: 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400' },
+  ERROR: { label: 'Error', cls: 'bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300' },
+}
+
+function currencyForMarket(mp: string): string {
+  const m = (mp ?? '').toUpperCase()
+  if (m === 'UK' || m === 'GB') return 'GBP'
+  if (m === 'US') return 'USD'
+  if (m === 'JP') return 'JPY'
+  return 'EUR'
+}
+
+function fmtPrice(v: number | null, mp: string): string | null {
+  if (v == null) return null
+  const c = currencyForMarket(mp)
+  const sym = c === 'EUR' ? '€' : c === 'GBP' ? '£' : c === 'USD' ? '$' : c === 'JPY' ? '¥' : `${c} `
+  return `${sym}${v.toFixed(2)}`
+}
+
+function toNum(v: unknown): number | null {
+  if (v == null) return null
+  const n = typeof v === 'string' ? parseFloat(v) : Number(v)
+  return Number.isFinite(n) ? n : null
+}
+
+// OL.A.1 — lightweight readiness from data already on the listing row
+// (title / description / price). Deep marketplace-aware health is Phase C;
+// this is a 3-point "is this coordinate fillable enough to publish?" dot.
+function readinessFor(r: MarketRow): { score: number; tone: 'ready' | 'partial' | 'empty'; missing: string[] } {
+  const checks: Array<[boolean, string]> = [
+    [Boolean(r.title && r.title.trim()), 'title'],
+    [r.hasDescription, 'description'],
+    [r.price != null, 'price'],
+  ]
+  const score = checks.filter(([ok]) => ok).length
+  const missing = checks.filter(([ok]) => !ok).map(([, k]) => k)
+  const tone = score === checks.length ? 'ready' : score === 0 ? 'empty' : 'partial'
+  return { score, tone, missing }
+}
+
+// Relative "synced" label without pulling a date lib.
+function relTime(iso: string | null): string | null {
+  if (!iso) return null
+  const then = new Date(iso).getTime()
+  if (!Number.isFinite(then)) return null
+  const diff = Date.now() - then
+  if (diff < 0) return 'just now'
+  const min = Math.floor(diff / 60000)
+  if (min < 1) return 'just now'
+  if (min < 60) return `${min}m ago`
+  const hr = Math.floor(min / 60)
+  if (hr < 24) return `${hr}h ago`
+  const d = Math.floor(hr / 24)
+  if (d < 30) return `${d}d ago`
+  const mo = Math.floor(d / 30)
+  return `${mo}mo ago`
+}
 
 function MarketAvailabilityCard({ productId }: { productId: string }) {
   const [rows, setRows] = useState<MarketRow[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState<Set<string>>(new Set())
+  // OL.A.3 — multi-select for bulk actions on a subset of coordinates.
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [publishing, setPublishing] = useState(false)
+  // OL.A.4 — cross-channel propagation drawer + smart link suggestions.
+  const [matrixOpen, setMatrixOpen] = useState(false)
+  const fieldLinks = useFieldLinks(productId)
   const { toast } = useToast()
+  const router = useRouter()
+  const searchParams = useSearchParams()
 
   const rowKey = (r: Pick<MarketRow, 'channel' | 'marketplace'>) => `${r.channel}:${r.marketplace}`
 
-  useEffect(() => {
-    setLoading(true)
+  // OL.A.2 — drill into a coordinate's cockpit. The editor treats ?tab= as
+  // the canonical tab cursor (ProductEditClient syncs state ← URL), and the
+  // cockpit adopts ?market= on mount — so a single router.replace lands the
+  // operator on the right channel tab + market. router.replace (not push)
+  // matches goToTab so Back doesn't step through every coordinate.
+  const openCoordinate = useCallback(
+    (channel: string, marketplace: string) => {
+      if (!COCKPIT_CHANNELS.has(channel)) return
+      const params = new URLSearchParams(searchParams?.toString() ?? '')
+      params.set('tab', channel)
+      if (SINGLE_STORE_CHANNELS.has(channel)) params.delete('market')
+      else params.set('market', marketplace)
+      router.replace(`?${params.toString()}`, { scroll: false })
+    },
+    [router, searchParams],
+  )
+
+  // OL.A.3 — load (extracted so bulk actions can refresh the grid).
+  // OL.A.6 — `background` skips the loading flash so live SSE refreshes
+  // don't unmount the card (it returns null while loading).
+  const reload = useCallback((opts?: { background?: boolean }) => {
+    if (!opts?.background) setLoading(true)
     fetch(`${getBackendUrl()}/api/products/${productId}/all-listings`, { cache: 'no-store' })
       .then((r) => r.ok ? r.json() : null)
       .then((grouped: Record<string, any[]> | null) => {
@@ -821,15 +938,123 @@ function MarketAvailabilityCard({ productId }: { productId: string }) {
         const next: MarketRow[] = []
         for (const [channel, listings] of Object.entries(grouped)) {
           for (const l of listings) {
-            next.push({ channel, marketplace: l.marketplace, offerActive: l.offerActive ?? true, listingId: l.id })
+            next.push({
+              channel,
+              marketplace: l.marketplace,
+              offerActive: l.offerActive ?? true,
+              listingId: l.id,
+              // OL.A.1 — /all-listings returns full ChannelListing rows, so
+              // status / title / price / description / sync time are already
+              // here; just surface them (no API change).
+              status: l.listingStatus ?? null,
+              title: l.title ?? l.masterTitle ?? null,
+              hasDescription: Boolean(l.description ?? l.masterDescription),
+              price: toNum(l.priceOverride) ?? toNum(l.price) ?? toNum(l.masterPrice),
+              lastSyncedAt: l.lastSyncedAt ?? null,
+            })
           }
         }
         next.sort((a, b) => a.channel.localeCompare(b.channel) || a.marketplace.localeCompare(b.marketplace))
         setRows(next)
       })
       .catch(() => {})
-      .finally(() => setLoading(false))
+      .finally(() => { if (!opts?.background) setLoading(false) })
   }, [productId])
+
+  // OL.A.3 — selection helpers.
+  const toggleRow = useCallback((key: string) => {
+    setSelected((prev) => {
+      const n = new Set(prev)
+      if (n.has(key)) n.delete(key)
+      else n.add(key)
+      return n
+    })
+  }, [])
+  const clearSelection = useCallback(() => setSelected(new Set()), [])
+
+  // OL.A.3 — bulk activate/pause scoped to the SELECTED coordinates,
+  // reusing the same /offer-availability PATCH the per-row toggle uses.
+  const setSelectedAvailability = useCallback(
+    async (offerActive: boolean) => {
+      const targets = rows.filter((r) => selected.has(rowKey(r)))
+      if (targets.length === 0) return
+      const keys = new Set(targets.map(rowKey))
+      const markets = targets.map(({ channel, marketplace }) => ({ channel, marketplace, offerActive }))
+      setSaving(keys)
+      setRows((prev) => prev.map((r) => (keys.has(rowKey(r)) ? { ...r, offerActive } : r)))
+      try {
+        const res = await fetch(`${getBackendUrl()}/api/products/${productId}/offer-availability`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ markets }),
+        })
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        toast({ tone: 'success', title: `${targets.length} listing${targets.length !== 1 ? 's' : ''} ${offerActive ? 'activated' : 'paused'}` })
+      } catch (e: any) {
+        setRows((prev) => prev.map((r) => (keys.has(rowKey(r)) ? { ...r, offerActive: !offerActive } : r)))
+        toast({ tone: 'error', title: 'Update failed', description: e?.message ?? String(e) })
+      } finally {
+        setSaving(new Set())
+      }
+    },
+    [rows, selected, productId, toast],
+  )
+
+  // OL.A.3 — publish the selected coordinates via the existing per-coordinate
+  // endpoint. That endpoint validates (422 on missing title/price/type) and
+  // honours AMAZON_PUBLISH_MODE gating (returns DRY_RUN until set to live),
+  // so this stays safe under the ship-live-not-dark gating model. A true
+  // one-action cross-PLATFORM publish with a combined diff is Phase B.
+  const publishSelected = useCallback(async () => {
+    const targets = rows.filter((r) => selected.has(rowKey(r)))
+    if (targets.length === 0) return
+    setPublishing(true)
+    let ok = 0
+    let dryRun = 0
+    let failed = 0
+    const failures: string[] = []
+    await Promise.all(
+      targets.map(async (r) => {
+        try {
+          const res = await fetch(
+            `${getBackendUrl()}/api/products/${productId}/listings/${r.channel}/${r.marketplace}/publish`,
+            { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' },
+          )
+          const body = await res.json().catch(() => null)
+          if (!res.ok || body?.ok === false) {
+            failed++
+            failures.push(`${CHANNEL_LABEL[r.channel] ?? r.channel} ${r.marketplace}: ${body?.message ?? `HTTP ${res.status}`}`)
+          } else if (body?.status === 'DRY_RUN') {
+            dryRun++
+          } else {
+            ok++
+          }
+        } catch (e: any) {
+          failed++
+          failures.push(`${CHANNEL_LABEL[r.channel] ?? r.channel} ${r.marketplace}: ${e?.message ?? String(e)}`)
+        }
+      }),
+    )
+    setPublishing(false)
+    const parts: string[] = []
+    if (ok) parts.push(`${ok} published`)
+    if (dryRun) parts.push(`${dryRun} dry-run`)
+    if (failed) parts.push(`${failed} failed`)
+    toast({
+      tone: failed > 0 ? 'error' : 'success',
+      title: parts.join(' · ') || 'Nothing to publish',
+      description: failures.length > 0 ? failures.slice(0, 4).join('\n') : undefined,
+    })
+    // Refresh to reflect new statuses/sync times + notify other tabs.
+    reload({ background: true })
+    emitInvalidation({ type: 'listing.updated', id: productId, meta: { source: 'listing-hub' } })
+  }, [rows, selected, productId, toast, reload])
+
+  useEffect(() => { reload() }, [reload])
+
+  // OL.A.6 — live refresh: when a listing/product changes (this tab's own
+  // publish, another tab, or an SSE push), silently re-pull coordinate state.
+  useInvalidationChannel(['listing.updated', 'product.updated'], () => reload({ background: true }))
 
   const toggle = useCallback(async (channel: string, marketplace: string, next: boolean) => {
     const key = `${channel}:${marketplace}`
@@ -902,24 +1127,54 @@ function MarketAvailabilityCard({ productId }: { productId: string }) {
   }, [rows, productId, toast])
 
   const activeCount = rows.filter((r) => r.offerActive).length
+  const readyCount = rows.filter((r) => readinessFor(r).tone === 'ready').length
+  const someSelected = selected.size > 0
+  const allSelected = rows.length > 0 && selected.size === rows.length
 
   if (loading) return null
   if (rows.length === 0) return null
 
   return (
-    <Card noPadding>
+    <>
+      {/* OL.A.4 — smart link suggestions (identical values across markets) */}
+      {fieldLinks.suggestions.length > 0 && (
+        <div className="mb-3">
+          <LinkSuggestionsBanner
+            suggestions={fieldLinks.suggestions}
+            onLink={(s) => void fieldLinks.linkSuggestion(s)}
+            onDismiss={fieldLinks.dismissSuggestion}
+          />
+        </div>
+      )}
+      <Card noPadding>
       {/* Header */}
       <div className="px-4 py-3 flex items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800">
         <div className="flex items-center gap-2 min-w-0">
+          {/* OL.A.3 — select-all */}
+          <input
+            type="checkbox"
+            aria-label={allSelected ? 'Clear selection' : 'Select all listings'}
+            checked={allSelected}
+            ref={(el) => { if (el) el.indeterminate = someSelected && !allSelected }}
+            onChange={() => setSelected(allSelected ? new Set() : new Set(rows.map(rowKey)))}
+            className="h-3.5 w-3.5 flex-shrink-0 rounded border-slate-300 dark:border-slate-600 text-blue-600 focus:ring-blue-500/40 cursor-pointer"
+          />
           <Globe className="w-4 h-4 text-slate-400 flex-shrink-0" />
           <div>
-            <div className="text-md font-semibold text-slate-900 dark:text-slate-100">Market Availability</div>
+            <div className="text-md font-semibold text-slate-900 dark:text-slate-100">Listing Hub</div>
             <div className="text-sm text-slate-500 dark:text-slate-400">
-              {activeCount} of {rows.length} market{rows.length !== 1 ? 's' : ''} active
+              {activeCount} of {rows.length} listing{rows.length !== 1 ? 's' : ''} active
+              {readyCount < rows.length && (
+                <span className="text-amber-600 dark:text-amber-400"> · {rows.length - readyCount} need attention</span>
+              )}
             </div>
           </div>
         </div>
         <div className="flex items-center gap-1.5 flex-shrink-0 flex-wrap">
+          {/* OL.A.4 — cross-channel field propagation (diff-then-apply) */}
+          <Button variant="secondary" size="sm" icon={<Link2 className="w-3.5 h-3.5" />} onClick={() => setMatrixOpen(true)}>
+            Cross-channel
+          </Button>
           {rows.some((r) => r.marketplace !== 'IT' && r.offerActive) && (
             <Button variant="secondary" size="sm" onClick={pauseNonIT} disabled={saving.size > 0}>
               Pause non-IT
@@ -934,14 +1189,98 @@ function MarketAvailabilityCard({ productId }: { productId: string }) {
         </div>
       </div>
 
+      {/* OL.A.3 — selection action bar */}
+      {someSelected && (
+        <div className="px-4 py-2 flex items-center justify-between gap-2 bg-blue-50/60 dark:bg-blue-950/20 border-b border-blue-100 dark:border-blue-900/40">
+          <div className="flex items-center gap-2 text-sm">
+            <span className="font-medium text-blue-700 dark:text-blue-300">{selected.size} selected</span>
+            <button
+              type="button"
+              onClick={clearSelection}
+              className="text-xs text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 underline-offset-2 hover:underline"
+            >
+              Clear
+            </button>
+          </div>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <Button variant="secondary" size="sm" onClick={() => void setSelectedAvailability(true)} disabled={saving.size > 0 || publishing}>
+              Activate
+            </Button>
+            <Button variant="secondary" size="sm" onClick={() => void setSelectedAvailability(false)} disabled={saving.size > 0 || publishing}>
+              Pause
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              loading={publishing}
+              icon={<Upload className="w-3.5 h-3.5" />}
+              onClick={() => void publishSelected()}
+              disabled={saving.size > 0}
+            >
+              Publish
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* Market rows */}
       <div className="divide-y divide-slate-100 dark:divide-slate-800">
         {rows.map((row) => {
           const key = rowKey(row)
           const busy = saving.has(key)
+          const isSelected = selected.has(key)
+          const readiness = readinessFor(row)
+          const statusMeta = row.status ? STATUS_META[row.status] : null
+          const priceLabel = fmtPrice(row.price, row.marketplace)
+          const synced = relTime(row.lastSyncedAt)
+          const drillable = COCKPIT_CHANNELS.has(row.channel)
           return (
-            <div key={key} className="px-4 py-2.5 flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2 min-w-0">
+            <div key={key} className={cn('px-4 py-2.5 flex items-center justify-between gap-3', isSelected && 'bg-blue-50/40 dark:bg-blue-950/10')}>
+              <div className="flex items-center gap-2 min-w-0 flex-1">
+              {/* OL.A.3 — row selection */}
+              <input
+                type="checkbox"
+                aria-label={`Select ${CHANNEL_LABEL[row.channel] ?? row.channel} ${row.marketplace}`}
+                checked={isSelected}
+                onChange={() => toggleRow(key)}
+                className="h-3.5 w-3.5 flex-shrink-0 rounded border-slate-300 dark:border-slate-600 text-blue-600 focus:ring-blue-500/40 cursor-pointer"
+              />
+              {/* OL.A.2 — left cluster drills into the coordinate's cockpit */}
+              <button
+                type="button"
+                onClick={drillable ? () => openCoordinate(row.channel, row.marketplace) : undefined}
+                disabled={!drillable}
+                aria-label={
+                  drillable
+                    ? `Open ${CHANNEL_LABEL[row.channel] ?? row.channel} ${row.marketplace} cockpit`
+                    : undefined
+                }
+                className={cn(
+                  'group flex items-center gap-2 min-w-0 -mx-1 px-1 py-0.5 rounded text-left',
+                  drillable
+                    ? 'cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/60 focus:outline-none focus:ring-2 focus:ring-blue-500/40'
+                    : 'cursor-default',
+                )}
+              >
+                {/* OL.A.1 — readiness dot (title + description + price present) */}
+                <span
+                  className={cn(
+                    'inline-block h-2 w-2 flex-shrink-0 rounded-full',
+                    readiness.tone === 'ready' && 'bg-emerald-500',
+                    readiness.tone === 'partial' && 'bg-amber-400',
+                    readiness.tone === 'empty' && 'bg-slate-300 dark:bg-slate-600',
+                  )}
+                  title={
+                    readiness.tone === 'ready'
+                      ? 'Ready — title, description & price set'
+                      : `Missing: ${readiness.missing.join(', ')}`
+                  }
+                  aria-label={
+                    readiness.tone === 'ready'
+                      ? 'Listing ready'
+                      : `Listing incomplete, missing ${readiness.missing.join(', ')}`
+                  }
+                />
                 <span className={cn(
                   'inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium',
                   row.channel === 'AMAZON'   && 'bg-orange-50 text-orange-700 dark:bg-orange-950/40 dark:text-orange-300',
@@ -952,8 +1291,30 @@ function MarketAvailabilityCard({ productId }: { productId: string }) {
                   {CHANNEL_LABEL[row.channel] ?? row.channel}
                 </span>
                 <span className="font-mono text-sm text-slate-700 dark:text-slate-300">{row.marketplace}</span>
+                {/* OL.A.1 — listing status chip */}
+                {statusMeta && (
+                  <span className={cn('hidden sm:inline-flex items-center px-1.5 py-0.5 rounded text-[10.5px] font-medium', statusMeta.cls)}>
+                    {statusMeta.label}
+                  </span>
+                )}
+                {drillable && (
+                  <ChevronRight
+                    aria-hidden
+                    className="h-3.5 w-3.5 flex-shrink-0 text-slate-300 dark:text-slate-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                  />
+                )}
+              </button>
               </div>
               <div className="flex items-center gap-2">
+                {/* OL.A.1 — price + last-synced (read-only context) */}
+                {priceLabel && (
+                  <span className="hidden md:inline text-xs tabular-nums text-slate-600 dark:text-slate-300">{priceLabel}</span>
+                )}
+                {synced && (
+                  <span className="hidden lg:inline text-[11px] text-slate-400 dark:text-slate-500" title={`Last synced ${synced}`}>
+                    {synced}
+                  </span>
+                )}
                 <span className={cn(
                   'text-sm',
                   row.offerActive ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400 dark:text-slate-500',
@@ -986,6 +1347,9 @@ function MarketAvailabilityCard({ productId }: { productId: string }) {
           )
         })}
       </div>
-    </Card>
+      </Card>
+      {/* OL.A.4 — cross-channel propagation drawer (diff-then-apply) */}
+      <CrossChannelMatrix productId={productId} open={matrixOpen} onClose={() => setMatrixOpen(false)} />
+    </>
   )
 }
