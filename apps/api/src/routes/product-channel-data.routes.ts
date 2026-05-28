@@ -310,6 +310,8 @@ export default async function productChannelDataRoutes(fastify: FastifyInstance)
           fulfillmentSource: source,
           availableToPublish: atp.available,
           pool: atp.pool,
+          // FCF.5 — merchant-channel listing backed by the FBA pool = MCF.
+          isMcf: MERCHANT_CHANNELS.has(cl.channel) && method === 'FBA',
           // Raw pools (pre-buffer) so the matrix can recompute ATP instantly
           // when the operator toggles the method, without a refetch.
           warehouseAvailable,

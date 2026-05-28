@@ -23,6 +23,7 @@ import { enqueueContentSyncIfEnabled } from '../services/content-auto-publish.se
 import { productEventService } from '../services/product-event.service.js';
 import { runFlatFileAiInstruction } from '../services/flat-file-ai.service.js';
 import { computeAvailableToPublish } from '../services/available-to-publish.service.js';
+import { MARKETPLACE_ID_TO_CODE } from '../utils/marketplace-code.js';
 import {
   buildInventoryNdjson,
   createInventoryTask,
@@ -1002,49 +1003,100 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
       });
     }
 
-    // ── FCF.3 — FBM oversell guard ──────────────────────────────────
-    // eBay is merchant-fulfilled, so its quantity is bound to the own-
-    // warehouse (FBM) pool. Never publish more than we hold — cap each SKU's
-    // quantity at availableToPublish. Per-variant (row._productId), since for
-    // variation families the stock lives on the children. Products with NO
-    // warehouse stock record are left uncapped but flagged (a data gap is not
-    // a real stockout — don't mass-delist on missing data).
+    // ── FCF.3 / FCF.5 — per-pool oversell guard ─────────────────────
+    // An eBay listing is bound to a stock pool by its
+    // ChannelListing.fulfillmentMethod:
+    //   • FBM (default) → own-warehouse pool (StockLevel.available). FBA stock
+    //     sits at Amazon and can't ship a merchant order.
+    //   • FBA (= MCF, FCF.5) → Amazon FBA SELLABLE pool — Amazon ships the eBay
+    //     order via Multi-Channel Fulfillment, so it's safe to publish FBA qty.
+    // Never publish more than the bound pool holds (less the listing buffer).
+    // Per-variant (row._productId); products/SKUs with NO stock record for the
+    // resolved pool are left uncapped but flagged (a data gap is not a real
+    // stockout — don't mass-delist on missing data).
     const pushProductIds = [
       ...new Set(rows.map((r) => r._productId as string | undefined).filter((x): x is string => !!x)),
     ];
+    const pushSkus = [...new Set(rows.map((r) => r.sku as string | undefined).filter((x): x is string => !!x))];
     const fbmByProduct = new Map<string, number>();
     const trackedProducts = new Set<string>();
-    // FCF.3b — per (product, market) eBay stock buffer, so the cap honours the
-    // operator's overselling margin (units hidden from the marketplace), not
-    // just raw warehouse availability. Keyed `${productId}::${MARKET}`.
+    // FCF.3b — per (product, market) eBay stock buffer. FCF.5 — per (product,
+    // market) resolved fulfillment method. Both keyed `${productId}::${MARKET}`.
     const bufferByListing = new Map<string, number>();
+    const methodByListing = new Map<string, 'FBA' | 'FBM'>();
+    // FCF.5 — FBA SELLABLE per `${sku}::${MARKET}` for MCF-backed listings.
+    const fbaBySkuMarket = new Map<string, number>();
     if (pushProductIds.length > 0) {
-      const [whRows, clRows] = await Promise.all([
+      const [whRows, clRows, fbaRows] = await Promise.all([
         prisma.stockLevel.findMany({
           where: { productId: { in: pushProductIds }, location: { type: 'WAREHOUSE' } },
           select: { productId: true, available: true },
         }),
         prisma.channelListing.findMany({
           where: { productId: { in: pushProductIds }, channel: 'EBAY' },
-          select: { productId: true, marketplace: true, stockBuffer: true },
+          select: { productId: true, marketplace: true, stockBuffer: true, fulfillmentMethod: true },
         }),
+        pushSkus.length > 0
+          ? prisma.fbaInventoryDetail.findMany({
+              where: { sku: { in: pushSkus }, condition: 'SELLABLE' },
+              select: { sku: true, quantity: true, marketplaceId: true },
+            })
+          : Promise.resolve([] as Array<{ sku: string; quantity: number; marketplaceId: string }>),
       ]);
       for (const r of whRows) {
         trackedProducts.add(r.productId);
         fbmByProduct.set(r.productId, (fbmByProduct.get(r.productId) ?? 0) + r.available);
       }
       for (const cl of clRows) {
-        bufferByListing.set(`${cl.productId}::${(cl.marketplace ?? '').toUpperCase()}`, cl.stockBuffer ?? 0);
+        const key = `${cl.productId}::${(cl.marketplace ?? '').toUpperCase()}`;
+        bufferByListing.set(key, cl.stockBuffer ?? 0);
+        if (cl.fulfillmentMethod === 'FBA' || cl.fulfillmentMethod === 'FBM') methodByListing.set(key, cl.fulfillmentMethod);
+      }
+      for (const r of fbaRows) {
+        const code = MARKETPLACE_ID_TO_CODE[r.marketplaceId] ?? r.marketplaceId;
+        const key = `${r.sku}::${code}`;
+        fbaBySkuMarket.set(key, (fbaBySkuMarket.get(key) ?? 0) + r.quantity);
       }
     }
     const oversellWarnings: Array<{ sku: string; requested: number; published: number; reason: string }> = [];
+    // Resolve the listing's pool, then cap the requested qty at what that pool
+    // can publish. Named capToFbm historically; now pool-aware (FCF.5).
     const capToFbm = (pid: string | undefined, sku: string, requested: number, market?: string): number => {
       const req = Number(requested) || 0;
+      const mkt = (market ?? '').toUpperCase();
+      const listingKey = pid ? `${pid}::${mkt}` : '';
+      const stockBuffer = listingKey ? bufferByListing.get(listingKey) ?? 0 : 0;
+      // Default merchant channel = FBM; FBA means MCF (Amazon ships).
+      const method = (listingKey ? methodByListing.get(listingKey) : undefined) ?? 'FBM';
+
+      if (method === 'FBA') {
+        // MCF: cap at the Amazon FBA SELLABLE pool for this sku + market.
+        const fbaKey = `${sku}::${mkt}`;
+        if (!fbaBySkuMarket.has(fbaKey)) {
+          if (req > 0) oversellWarnings.push({ sku, requested: req, published: req, reason: 'FBA stock not tracked (MCF) — not capped' });
+          return req;
+        }
+        const cap = computeAvailableToPublish({
+          fulfillmentMethod: 'FBA',
+          warehouseAvailable: 0,
+          fbaSellable: fbaBySkuMarket.get(fbaKey) ?? 0,
+          stockBuffer,
+        }).available;
+        if (req > cap) {
+          oversellWarnings.push({
+            sku, requested: req, published: cap,
+            reason: stockBuffer > 0 ? `capped to FBA-available, MCF (buffer ${stockBuffer})` : 'capped to FBA-available (MCF)',
+          });
+          return cap;
+        }
+        return req;
+      }
+
+      // FBM (default): own-warehouse pool.
       if (!pid || !trackedProducts.has(pid)) {
         if (req > 0) oversellWarnings.push({ sku, requested: req, published: req, reason: 'FBM stock not tracked — not capped' });
         return req;
       }
-      const stockBuffer = market ? bufferByListing.get(`${pid}::${market.toUpperCase()}`) ?? 0 : 0;
       const cap = computeAvailableToPublish({
         fulfillmentMethod: 'FBM',
         warehouseAvailable: fbmByProduct.get(pid) ?? 0,
@@ -1053,9 +1105,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
       }).available;
       if (req > cap) {
         oversellWarnings.push({
-          sku,
-          requested: req,
-          published: cap,
+          sku, requested: req, published: cap,
           reason: stockBuffer > 0 ? `capped to FBM-available (buffer ${stockBuffer})` : 'capped to FBM-available',
         });
         return cap;

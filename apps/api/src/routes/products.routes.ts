@@ -1435,6 +1435,10 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
           availableToPublish: atp.available,
           pool: atp.pool,
           poolQuantity: atp.poolQuantity,
+          // FCF.5 — a merchant-channel listing backed by the FBA pool is MCF
+          // (Amazon ships the order). FBM merchant listings ship from our
+          // warehouse; Amazon FBA listings are plain FBA, not MCF.
+          isMcf: MERCHANT_CHANNELS.has(cl.channel) && method === 'FBA',
         }
       })
 

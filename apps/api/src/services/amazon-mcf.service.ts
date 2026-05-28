@@ -29,12 +29,23 @@
 
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
+import { amazonSpApiClient } from '../clients/amazon-sp-api.client.js'
 import {
   reserveOpenOrder,
   consumeOpenOrder,
   releaseOpenOrder,
   resolveLocationByCode,
 } from './stock-level.service.js'
+
+// Minimal slice of the SP-API client the MCF adapter needs — keeps the adapter
+// decoupled from the full client surface and lets tests pass a stub.
+type SpApiRequester = {
+  request<T = unknown>(
+    method: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH',
+    path: string,
+    opts?: { query?: Record<string, string | number | undefined>; body?: unknown; sandbox?: boolean; label?: string },
+  ): Promise<T>
+}
 
 // MCF SP-API operation surface — minimal interface so tests can
 // pass a mock and the production adapter can wrap the real client.
@@ -449,4 +460,92 @@ export const unconfiguredAdapter: MCFAdapter = {
   async cancelFulfillmentOrder() {
     throw new Error('MCF: SP-API not configured')
   },
+}
+
+// FCF.5 — real SP-API adapter over the FBA Fulfillment Outbound API
+// (v2020-07-01). Maps the MCFAdapter surface onto the three operations the
+// service needs. Amazon's create returns no order id in the body — the
+// seller-provided sellerFulfillmentOrderId IS the lookup key for get/cancel,
+// so we echo it back as amazonFulfillmentOrderId (what the service stores +
+// later passes to get/cancel). Sandbox host is used when AMAZON_MCF_SANDBOX=1
+// so MCF can be exercised end-to-end without shipping real product.
+const FBA_OUTBOUND_BASE = '/fba/outbound/2020-07-01'
+
+export function createSpApiMcfAdapter(
+  client: SpApiRequester = amazonSpApiClient,
+  opts: { sandbox?: boolean } = {},
+): MCFAdapter {
+  const sandbox = opts.sandbox ?? process.env.AMAZON_MCF_SANDBOX === '1'
+  return {
+    async createFulfillmentOrder(args) {
+      const body = {
+        sellerFulfillmentOrderId: args.sellerFulfillmentOrderId,
+        displayableOrderId: args.displayableOrderId,
+        displayableOrderDate: args.displayableOrderDate.toISOString(),
+        displayableOrderComment: args.displayableOrderComment ?? args.displayableOrderId,
+        shippingSpeedCategory: args.shippingSpeedCategory,
+        marketplaceId: args.marketplaceId,
+        destinationAddress: {
+          name: args.destinationAddress.name,
+          addressLine1: args.destinationAddress.addressLine1,
+          ...(args.destinationAddress.addressLine2 ? { addressLine2: args.destinationAddress.addressLine2 } : {}),
+          city: args.destinationAddress.city,
+          ...(args.destinationAddress.stateOrRegion ? { stateOrRegion: args.destinationAddress.stateOrRegion } : {}),
+          postalCode: args.destinationAddress.postalCode,
+          countryCode: args.destinationAddress.countryCode,
+          ...(args.destinationAddress.phone ? { phone: args.destinationAddress.phone } : {}),
+        },
+        items: args.items.map((it) => ({
+          sellerSku: it.sellerSku,
+          sellerFulfillmentOrderItemId: it.sellerFulfillmentOrderItemId,
+          quantity: it.quantity,
+          ...(it.perUnitDeclaredValue ? { perUnitDeclaredValue: it.perUnitDeclaredValue } : {}),
+        })),
+      }
+      const raw = await client.request('POST', `${FBA_OUTBOUND_BASE}/fulfillmentOrders`, {
+        body, sandbox, label: 'mcf:createFulfillmentOrder',
+      })
+      return { amazonFulfillmentOrderId: args.sellerFulfillmentOrderId, raw }
+    },
+
+    async getFulfillmentOrder(id) {
+      const res = await client.request('GET', `${FBA_OUTBOUND_BASE}/fulfillmentOrders/${encodeURIComponent(id)}`, {
+        sandbox, label: 'mcf:getFulfillmentOrder',
+      })
+      const payload = ((res as Record<string, unknown> | null)?.payload ?? res) as Record<string, unknown>
+      const fo = (payload?.fulfillmentOrder ?? {}) as Record<string, unknown>
+      const shipments = (payload?.fulfillmentShipments ?? []) as Array<Record<string, unknown>>
+      return {
+        status: String(fo.fulfillmentOrderStatus ?? 'UNKNOWN'),
+        receivedDate: fo.receivedDate as string | undefined,
+        statusUpdatedDate: fo.statusUpdatedDate as string | undefined,
+        fulfillmentShipments: shipments.map((s) => {
+          const pkg = ((s.fulfillmentShipmentPackage as Array<Record<string, unknown>> | undefined)?.[0]) ?? {}
+          return {
+            shipmentStatus: s.fulfillmentShipmentStatus as string | undefined,
+            trackingNumber: pkg.trackingNumber as string | undefined,
+            carrier: pkg.carrierCode as string | undefined,
+            shippedDate: s.shippingDate as string | undefined,
+            deliveredDate: s.estimatedArrivalDate as string | undefined,
+          }
+        }),
+        raw: res,
+      }
+    },
+
+    async cancelFulfillmentOrder(id) {
+      const raw = await client.request('PUT', `${FBA_OUTBOUND_BASE}/fulfillmentOrders/${encodeURIComponent(id)}/cancel`, {
+        sandbox, label: 'mcf:cancelFulfillmentOrder',
+      })
+      return { raw }
+    },
+  }
+}
+
+// Centralised resolver — live SP-API adapter when AMAZON_MCF_LIVE=1, else the
+// stub that throws a clear "not configured" error. Single source of truth for
+// the route + the status-sync cron + the SQS poller.
+export function resolveMcfAdapter(): MCFAdapter {
+  if (process.env.AMAZON_MCF_LIVE === '1') return createSpApiMcfAdapter()
+  return unconfiguredAdapter
 }

@@ -52,7 +52,7 @@ import {
   syncMCFStatus,
   cancelMCFShipment,
   listMCFShipments,
-  unconfiguredAdapter as mcfUnconfiguredAdapter,
+  resolveMcfAdapter,
   type MCFAdapter,
 } from '../services/amazon-mcf.service.js'
 import {
@@ -61,15 +61,12 @@ import {
   getUnfulfillable,
 } from '../services/fba-pan-eu.service.js'
 
-// S.24 — production adapter resolves to either the wired SP-API
-// client (when AMAZON_MCF_LIVE=1) or the unconfigured stub.
+// S.24 / FCF.5 — production adapter resolves to the wired SP-API client
+// (when AMAZON_MCF_LIVE=1) or the unconfigured stub. Delegates to the
+// centralised resolver in amazon-mcf.service so the route, the status-sync
+// cron and the SQS poller all share one definition.
 function resolveMCFAdapter(): MCFAdapter {
-  if (process.env.AMAZON_MCF_LIVE === '1') {
-    // TODO: wire the real SP-API MCF adapter (pre-flight commit).
-    // Until then we return the stub so the route surfaces a clear
-    // 'not configured' error instead of crashing.
-  }
-  return mcfUnconfiguredAdapter
+  return resolveMcfAdapter()
 }
 
 // ─────────────────────────────────────────────────────────────────────

@@ -12,7 +12,7 @@
 import cron from 'node-cron'
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
-import { syncMCFStatus, unconfiguredAdapter, type MCFAdapter } from '../services/amazon-mcf.service.js'
+import { syncMCFStatus, unconfiguredAdapter, resolveMcfAdapter, type MCFAdapter } from '../services/amazon-mcf.service.js'
 import { recordCronRun } from '../utils/cron-observability.js'
 
 let scheduledTask: ReturnType<typeof cron.schedule> | null = null
@@ -22,17 +22,12 @@ let lastSummary: { checked: number; changed: number; failed: number } | null = n
 const TERMINAL_STATUSES = ['COMPLETE', 'COMPLETE_PARTIALLED', 'CANCELLED', 'UNFULFILLABLE', 'INVALID']
 
 /**
- * Resolve the production MCF adapter. Today this returns the
- * unconfiguredAdapter — the real SP-API wrapper plugs in when the
- * MCF integration goes live (S.24 ships the surface; the wired
- * adapter follows in a focused commit). Tests inject directly.
+ * Resolve the production MCF adapter. FCF.5 wired the real SP-API
+ * FBA Outbound adapter (returned when AMAZON_MCF_LIVE=1); otherwise
+ * the unconfiguredAdapter so the cron cleanly skips. Tests inject directly.
  */
 function resolveAdapter(): MCFAdapter {
-  if (process.env.AMAZON_MCF_LIVE === '1') {
-    // TODO: wire the real SP-API client. Same shape as
-    // amazon-inventory.service uses.
-  }
-  return unconfiguredAdapter
+  return resolveMcfAdapter()
 }
 
 export async function runMCFStatusSyncOnce(): Promise<void> {

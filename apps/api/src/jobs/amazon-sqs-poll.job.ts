@@ -321,17 +321,17 @@ async function runSqsPoll(): Promise<void> {
         // RT.6 — FBA Outbound (Multi-Channel Fulfillment) shipment
         // status path. Calls syncMCFStatus inline so MCF status updates
         // land in ~30s instead of waiting for the 15-min cron tick.
-        // Uses the same unconfiguredAdapter as the 15-min cron until
-        // AMAZON_MCF_LIVE is wired with a real SP-API adapter — at
-        // that point both code paths pick up the production client.
+        // FCF.5 — shares the centralised resolveMcfAdapter: the real
+        // SP-API adapter when AMAZON_MCF_LIVE=1, else the stub (which
+        // throws "not configured" and is acked below).
         if (msg.mcfNotification) {
           const { sellerFulfillmentOrderId, status } = msg.mcfNotification
           try {
             if (sellerFulfillmentOrderId) {
-              const { syncMCFStatus, unconfiguredAdapter } = await import(
+              const { syncMCFStatus, resolveMcfAdapter } = await import(
                 '../services/amazon-mcf.service.js'
               )
-              await syncMCFStatus(unconfiguredAdapter, sellerFulfillmentOrderId)
+              await syncMCFStatus(resolveMcfAdapter(), sellerFulfillmentOrderId)
             }
             await deleteSqsMessage(msg.receiptHandle)
             if (webhookEventId) {
