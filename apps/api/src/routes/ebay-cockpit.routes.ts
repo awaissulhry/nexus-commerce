@@ -92,6 +92,7 @@
 import type { FastifyInstance } from 'fastify'
 import { Prisma } from '@nexus/database'
 import prisma from '../db.js'
+import { csvDocument } from '../lib/csv.js'
 import { EbayCategoryService } from '../services/ebay-category.service.js'
 import { EbayPublishAdapter } from '../services/listing-wizard/ebay-publish.adapter.js'
 import { getProvider, isAiKillSwitchOn } from '../services/ai/providers/index.js'
@@ -658,6 +659,121 @@ export default async function ebayCockpitRoutes(fastify: FastifyInstance) {
       updatedCells: updates.length,
       cells: updates,
     })
+  })
+
+  // ── GET /api/ebay/cockpit/file-exchange-csv ─────────────────────────
+  // EV.6a — eBay File Exchange variation export for a family. One parent
+  // row + one "Relationship=Variation" row per child, with the variation
+  // specifics (Relationship details + per-axis columns) rendered through
+  // the eBay-only renames (_axisNameLabels / _axisValueLabels). Prices/qty
+  // come from each child's eBay ChannelListing (the matrix writes these).
+  fastify.get<{
+    Querystring: { parentProductId: string; marketplace: string }
+  }>('/ebay/cockpit/file-exchange-csv', async (request, reply) => {
+    const { parentProductId, marketplace } = request.query
+    if (!parentProductId || !marketplace) {
+      return reply.code(400).send({ error: 'parentProductId, marketplace are required' })
+    }
+
+    const parent = await prisma.product.findUnique({
+      where: { id: parentProductId },
+      select: { id: true, sku: true, variationAxes: true, variationTheme: true },
+    })
+    if (!parent) return reply.code(404).send({ error: 'Parent product not found' })
+
+    const parentListing = await prisma.channelListing.findFirst({
+      where: { productId: parentProductId, channel: 'EBAY', marketplace },
+      select: { title: true, platformAttributes: true },
+    })
+    const pp = (parentListing?.platformAttributes ?? {}) as Record<string, unknown>
+    const nameLabels = (pp._axisNameLabels ?? {}) as Record<string, string>
+    const valueLabels = (pp._axisValueLabels ?? {}) as Record<string, Record<string, string>>
+    const pickedAxes = Array.isArray(pp._variationAxes) ? (pp._variationAxes as string[]) : []
+    const categoryId = (pp.detectedCategoryId as string) || (pp.categoryId as string) || ''
+    const title = parentListing?.title ?? ''
+
+    const children = await prisma.product.findMany({
+      where: { parentId: parentProductId },
+      select: {
+        id: true,
+        sku: true,
+        categoryAttributes: true,
+        channelListings: {
+          where: { channel: 'EBAY', marketplace },
+          select: { price: true, priceOverride: true, masterPrice: true, quantity: true },
+        },
+      },
+      orderBy: { sku: 'asc' },
+    })
+
+    const variationsOf = (c: { categoryAttributes: unknown }): Record<string, string> =>
+      ((c.categoryAttributes as { variations?: Record<string, string> } | null)?.variations ?? {})
+
+    // Resolve axes: eBay-picked, else variationAxes, else theme, else union.
+    let axes: string[] = pickedAxes.length
+      ? pickedAxes
+      : Array.isArray(parent.variationAxes) && parent.variationAxes.length
+        ? (parent.variationAxes as string[])
+        : []
+    if (!axes.length && parent.variationTheme) {
+      axes = parent.variationTheme.split(/[/,|]/).map((s) => s.trim()).filter(Boolean)
+    }
+    if (!axes.length) {
+      const seen: string[] = []
+      for (const c of children)
+        for (const k of Object.keys(variationsOf(c))) if (!seen.includes(k)) seen.push(k)
+      axes = seen
+    }
+
+    const nm = (a: string) => nameLabels[a] || a
+    const vl = (a: string, v: string) => valueLabels[a]?.[v] || v
+    const num = (v: unknown): number | string => {
+      if (v == null) return ''
+      const n = typeof v === 'string' ? parseFloat(v) : Number(v)
+      return Number.isFinite(n) ? n : ''
+    }
+
+    const headers = [
+      'Action',
+      'CustomLabel',
+      'Category',
+      'Title',
+      'Relationship',
+      'RelationshipDetails',
+      'StartPrice',
+      'Quantity',
+      ...axes.map((a) => nm(a)),
+    ]
+    const rows: unknown[][] = []
+    // Parent (listing-level) row.
+    rows.push(['Add', parent.sku, categoryId, title, '', '', '', '', ...axes.map(() => '')])
+    // Variation child rows.
+    for (const c of children) {
+      const vs = variationsOf(c)
+      const detail = axes.map((a) => `${nm(a)}=${vl(a, vs[a] ?? '')}`).join('|')
+      const l = c.channelListings[0]
+      const price = num(l?.priceOverride) || num(l?.price) || num(l?.masterPrice) || ''
+      const qty = l?.quantity ?? ''
+      rows.push([
+        'Add',
+        c.sku,
+        '',
+        '',
+        'Variation',
+        detail,
+        price,
+        qty,
+        ...axes.map((a) => vl(a, vs[a] ?? '')),
+      ])
+    }
+
+    const csv = csvDocument(headers, rows)
+    reply.header('Content-Type', 'text/csv; charset=utf-8')
+    reply.header(
+      'Content-Disposition',
+      `attachment; filename="ebay-file-exchange-${parent.sku}-${marketplace}.csv"`,
+    )
+    return reply.send(csv)
   })
 
   // ── PATCH /api/ebay/cockpit/offer-policies ──────────────────────────

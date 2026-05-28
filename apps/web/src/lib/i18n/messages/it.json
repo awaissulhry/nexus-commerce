@@ -3670,6 +3670,8 @@
   "products.edit.cockpit.ebay.variations.cap": "limite",
   "products.edit.cockpit.ebay.variations.columns": "Colonne",
   "products.edit.cockpit.ebay.variations.specificN": "Specifica {n}",
+  "products.edit.cockpit.ebay.variations.downloadCsv": "CSV File Exchange",
+  "products.edit.cockpit.ebay.variations.downloadCsvTooltip": "Scarica un foglio variazioni eBay File Exchange (nomi rinominati + prezzo/quantità attuali)",
   "products.edit.cockpit.ebay.variations.renameAxisTitle": "Rinomina {axis} solo per eBay",
   "products.edit.cockpit.ebay.variations.renameValueTitle": "Rinomina \"{value}\" solo per eBay",
   "products.edit.cockpit.ebay.variations.discardCellEdits": "Annulla modifiche celle",

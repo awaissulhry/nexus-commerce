@@ -3666,6 +3666,8 @@
   "products.edit.cockpit.ebay.variations.cap": "cap",
   "products.edit.cockpit.ebay.variations.columns": "Columns",
   "products.edit.cockpit.ebay.variations.specificN": "Specific {n}",
+  "products.edit.cockpit.ebay.variations.downloadCsv": "File Exchange CSV",
+  "products.edit.cockpit.ebay.variations.downloadCsvTooltip": "Download an eBay File Exchange variation sheet (renamed specifics + current price/qty)",
   "products.edit.cockpit.ebay.variations.renameAxisTitle": "Rename {axis} for eBay only",
   "products.edit.cockpit.ebay.variations.renameValueTitle": "Rename \"{value}\" for eBay only",
   "products.edit.cockpit.ebay.variations.discardCellEdits": "Discard cell edits",

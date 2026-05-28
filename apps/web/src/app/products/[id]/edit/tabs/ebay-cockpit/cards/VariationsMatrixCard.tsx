@@ -27,7 +27,7 @@
 //   • Push-back toggle (also update master?)
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Loader2, Save, AlertTriangle, Eraser, ChevronUp, ChevronDown, Sparkles } from 'lucide-react'
+import { Loader2, Save, AlertTriangle, Eraser, ChevronUp, ChevronDown, Sparkles, Download } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useRouter } from 'next/navigation'
 import { Card } from '@/components/ui/Card'
@@ -456,6 +456,14 @@ export default function VariationsMatrixCard({
           >
             <Eraser className="w-3 h-3" /> {t('products.edit.cockpit.ebay.variations.discardCellEdits')}
           </button>
+          {/* EV.6a — File Exchange CSV (renamed specifics, current price/qty). */}
+          <a
+            href={`${getBackendUrl()}/api/ebay/cockpit/file-exchange-csv?parentProductId=${encodeURIComponent(productId)}&marketplace=${encodeURIComponent(marketplace)}`}
+            className="text-xs text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 inline-flex items-center gap-1"
+            title={t('products.edit.cockpit.ebay.variations.downloadCsvTooltip')}
+          >
+            <Download className="w-3 h-3" /> {t('products.edit.cockpit.ebay.variations.downloadCsv')}
+          </a>
           <button
             type="button"
             onClick={handleSaveAll}
