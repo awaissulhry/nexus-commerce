@@ -56,6 +56,9 @@ export const EBAY_CONDITION_OPTIONS = [
 
 export const EBAY_CONDITION_LABELS: Record<string, string> = {
   NEW:                      'New',
+  NEW_OTHER:                'New – Other',
+  NEW_WITH_DEFECTS:         'New – With Defects',
+  CERTIFIED_REFURBISHED:    'Certified Refurbished',
   LIKE_NEW:                 'Like New',
   EXCELLENT_REFURBISHED:    'Excellent – Refurbished',
   VERY_GOOD_REFURBISHED:    'Very Good – Refurbished',

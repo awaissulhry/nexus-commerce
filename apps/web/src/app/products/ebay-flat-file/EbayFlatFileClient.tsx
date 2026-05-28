@@ -18,6 +18,7 @@ import { FlatFileAiPanel } from '../_shared/FlatFileAiPanel'
 import type { AiPanelCtx } from '@/components/flat-file/FlatFileGrid.types'
 import {
   EBAY_FIXED_GROUPS, MARKET_COLUMN_GROUPS, buildCategoryColumns,
+  EBAY_CONDITION_LABELS,
   type CategoryAspect, type EbayColumnGroup,
 } from './ebay-columns'
 import { PullDiffModal, type PullDiffApplyResult } from '../amazon-flat-file/PullDiffModal'
@@ -408,7 +409,10 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
             ...col,
             kind: 'enum' as const,
             options: conditionOptions.map((c) => c.value),
-            optionLabels: Object.fromEntries(conditionOptions.map((c) => [c.value, c.label])),
+            // Prefer the English label (eBay localises condition descriptions
+            // to the marketplace even with Accept-Language: en-US, and
+            // operators read English); fall back to eBay's text otherwise.
+            optionLabels: Object.fromEntries(conditionOptions.map((c) => [c.value, EBAY_CONDITION_LABELS[c.value] ?? c.label])),
             enumMode: 'strict' as const,
           }),
         }
