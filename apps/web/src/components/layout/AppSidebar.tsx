@@ -559,6 +559,12 @@ export default function AppSidebar() {
 
         <NavGroup label="Marketing">
           <NavItem
+            href="/marketing/campaigns"
+            icon={LayoutGrid}
+            label="Campaigns"
+            active={pathname.startsWith('/marketing/campaigns')}
+          />
+          <NavItem
             href="/pricing/promotions"
             icon={Megaphone}
             label="Promotions"

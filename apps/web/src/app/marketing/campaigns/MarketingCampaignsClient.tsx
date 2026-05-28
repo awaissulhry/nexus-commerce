@@ -1,0 +1,312 @@
+'use client'
+
+/**
+ * UM-series (P3) — Unified Marketing OS · Campaign roster client.
+ *
+ * Dense cross-channel roster (Salesforce/Airtable density per the house
+ * style). Reuses grid-lens KpiStrip + LensTabs; channel is the lens
+ * dimension. Filters + sort re-fetch from /api/marketing/os/campaigns;
+ * useMarketingEvents live-refreshes on backfill / sync / rebalance /
+ * rule events. Read-only in P3 — inline actions land in P5.
+ */
+
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import {
+  Megaphone,
+  Wallet,
+  TrendingUp,
+  Activity,
+  Search,
+  RefreshCw,
+  Radio,
+} from 'lucide-react'
+import { KpiStrip, SharedLensTabs, type KpiTileSpec, type LensTab } from '@/app/_shared/grid-lens'
+import { getBackendUrl } from '@/lib/backend-url'
+import { useMarketingEvents } from '@/lib/sync/use-marketing-events'
+
+export interface RosterCampaign {
+  id: string
+  name: string
+  channel: string
+  surface: string
+  objective: string
+  status: string
+  marketplaces: string[]
+  primaryMarketplace: string | null
+  budgetScope: string
+  budgetCents: number | null
+  budgetKind: string | null
+  currency: string
+  spendCents: number
+  salesCents: number
+  acos: number | null
+  roas: number | null
+  deliveryStatus: string | null
+  deliveryReasons: string[]
+  startDate: string
+  endDate: string | null
+  lastSyncedAt: string | null
+  adProduct: string | null
+  linkCount: number
+  targetCount: number
+  markets: string[]
+}
+
+export interface RosterSummary {
+  total: number
+  byChannel: Record<string, number>
+  byStatus: Record<string, number>
+  spendCents: number
+  salesCents: number
+}
+
+type LensKey = 'ALL' | 'AMAZON' | 'EBAY' | 'SHOPIFY' | 'EXTERNAL' | 'INTERNAL'
+type SortKey = 'spendCents' | 'salesCents' | 'acos' | 'roas' | 'name' | 'status'
+
+const LENS_TABS: ReadonlyArray<LensTab<LensKey>> = [
+  { key: 'ALL', label: 'All channels' },
+  { key: 'AMAZON', label: 'Amazon' },
+  { key: 'EBAY', label: 'eBay' },
+  { key: 'SHOPIFY', label: 'Shopify' },
+  { key: 'EXTERNAL', label: 'External' },
+  { key: 'INTERNAL', label: 'Content & outreach' },
+]
+
+// External lens maps to the off-platform ad networks.
+const EXTERNAL_CHANNELS = new Set(['GOOGLE', 'META', 'TIKTOK'])
+
+const CHANNEL_CHIP: Record<string, string> = {
+  AMAZON: 'bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300',
+  EBAY: 'bg-blue-100 text-blue-800 dark:bg-blue-950/50 dark:text-blue-300',
+  SHOPIFY: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300',
+  GOOGLE: 'bg-sky-100 text-sky-800 dark:bg-sky-950/50 dark:text-sky-300',
+  META: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-950/50 dark:text-indigo-300',
+  TIKTOK: 'bg-fuchsia-100 text-fuchsia-800 dark:bg-fuchsia-950/50 dark:text-fuchsia-300',
+  INTERNAL: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300',
+}
+
+const STATUS_CHIP: Record<string, string> = {
+  ACTIVE: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300',
+  PAUSED: 'bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300',
+  DRAFT: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300',
+  SCHEDULED: 'bg-blue-100 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300',
+  ENDED: 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400',
+  SUSPENDED: 'bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300',
+  FAILED: 'bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300',
+}
+
+function eur(cents: number | null | undefined, currency = 'EUR'): string {
+  if (cents == null) return '—'
+  return new Intl.NumberFormat('en-IE', { style: 'currency', currency }).format(cents / 100)
+}
+function pct(v: number | null | undefined): string {
+  if (v == null) return '—'
+  return `${(v * 100).toFixed(1)}%`
+}
+
+export function MarketingCampaignsClient({
+  initialCampaigns,
+  initialSummary,
+  initialCapped,
+}: {
+  initialCampaigns: RosterCampaign[]
+  initialSummary: RosterSummary
+  initialCapped: boolean
+}) {
+  const [campaigns, setCampaigns] = useState(initialCampaigns)
+  const [summary, setSummary] = useState(initialSummary)
+  const [capped, setCapped] = useState(initialCapped)
+  const [lens, setLens] = useState<LensKey>('ALL')
+  const [search, setSearch] = useState('')
+  const [statusFilter, setStatusFilter] = useState('')
+  const [sortKey, setSortKey] = useState<SortKey>('spendCents')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
+  const [loading, setLoading] = useState(false)
+  const [live, setLive] = useState(false)
+
+  const refetch = useCallback(async () => {
+    setLoading(true)
+    try {
+      const params = new URLSearchParams()
+      if (lens !== 'ALL' && lens !== 'EXTERNAL') params.set('channel', lens)
+      if (statusFilter) params.set('status', statusFilter)
+      if (search.trim()) params.set('q', search.trim())
+      const [r, s] = await Promise.all([
+        fetch(`${getBackendUrl()}/api/marketing/os/campaigns?${params}`, { cache: 'no-store' }).then((x) => x.json()),
+        fetch(`${getBackendUrl()}/api/marketing/os/summary`, { cache: 'no-store' }).then((x) => x.json()),
+      ])
+      setCampaigns(r.items ?? [])
+      setCapped(!!r.capped)
+      setSummary(s)
+    } catch {
+      // keep last good state
+    } finally {
+      setLoading(false)
+    }
+  }, [lens, statusFilter, search])
+
+  // Re-fetch when server-side filters (lens/status) change. Search is
+  // debounced separately below.
+  useEffect(() => {
+    void refetch()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lens, statusFilter])
+
+  // Debounced search.
+  useEffect(() => {
+    const t = setTimeout(() => void refetch(), 300)
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search])
+
+  // Live refresh on marketing events.
+  useMarketingEvents(
+    useCallback(() => {
+      setLive(true)
+      void refetch()
+      const t = setTimeout(() => setLive(false), 1500)
+      return () => clearTimeout(t)
+    }, [refetch]),
+  )
+
+  // Client-side lens filter for the EXTERNAL pseudo-channel + sort.
+  const rows = useMemo(() => {
+    let r = campaigns
+    if (lens === 'EXTERNAL') r = r.filter((c) => EXTERNAL_CHANNELS.has(c.channel))
+    const dir = sortDir === 'asc' ? 1 : -1
+    return [...r].sort((a, b) => {
+      const av = a[sortKey]
+      const bv = b[sortKey]
+      if (av == null && bv == null) return 0
+      if (av == null) return 1
+      if (bv == null) return -1
+      if (typeof av === 'string' && typeof bv === 'string') return av.localeCompare(bv) * dir
+      return ((av as number) - (bv as number)) * dir
+    })
+  }, [campaigns, lens, sortKey, sortDir])
+
+  const tiles: KpiTileSpec[] = [
+    { icon: Megaphone, label: 'Campaigns', value: String(summary.total), tone: 'blue',
+      detail: Object.entries(summary.byChannel).map(([k, v]) => `${k} ${v}`).join(' · ') || undefined },
+    { icon: Activity, label: 'Active', value: String(summary.byStatus.ACTIVE ?? 0), tone: 'emerald',
+      detail: `${summary.byStatus.PAUSED ?? 0} paused · ${summary.byStatus.DRAFT ?? 0} draft` },
+    { icon: Wallet, label: 'Spend', value: eur(summary.spendCents), tone: 'amber', detail: 'across all channels' },
+    { icon: TrendingUp, label: 'Attributed sales', value: eur(summary.salesCents), tone: 'violet',
+      detail: summary.spendCents > 0 ? `ROAS ${(summary.salesCents / summary.spendCents).toFixed(2)} · channel-reported` : 'channel-reported' },
+  ]
+
+  const toggleSort = (k: SortKey) => {
+    if (sortKey === k) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
+    else { setSortKey(k); setSortDir(k === 'name' || k === 'status' ? 'asc' : 'desc') }
+  }
+  const arrow = (k: SortKey) => (sortKey === k ? (sortDir === 'asc' ? ' ▲' : ' ▼') : '')
+
+  return (
+    <div className="p-4 sm:p-6 max-w-[1600px] mx-auto">
+      <header className="mb-4">
+        <div className="flex items-center gap-2">
+          <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100">Campaigns</h1>
+          {live && (
+            <span className="inline-flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400">
+              <Radio size={12} className="animate-pulse" /> live
+            </span>
+          )}
+        </div>
+        <p className="text-sm text-slate-500 dark:text-slate-400">
+          Unified cross-channel campaigns across all markets. Read-only preview (shadow) — inline controls arrive with the mutation pipeline.
+        </p>
+      </header>
+
+      <KpiStrip tiles={tiles} className="mb-4" />
+
+      <div className="flex flex-wrap items-center gap-2 mb-3">
+        <SharedLensTabs tabs={LENS_TABS} current={lens} onChange={setLens} />
+        <div className="relative">
+          <Search size={14} className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search campaigns…"
+            className="pl-7 pr-2 py-1.5 text-sm rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 w-56"
+          />
+        </div>
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value)}
+          className="py-1.5 px-2 text-sm rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"
+        >
+          <option value="">All statuses</option>
+          {['ACTIVE', 'PAUSED', 'DRAFT', 'SCHEDULED', 'ENDED', 'SUSPENDED', 'FAILED'].map((s) => (
+            <option key={s} value={s}>{s}</option>
+          ))}
+        </select>
+        <button
+          onClick={() => void refetch()}
+          className="inline-flex items-center gap-1 py-1.5 px-2 text-sm rounded-md border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"
+        >
+          <RefreshCw size={14} className={loading ? 'animate-spin' : ''} /> Refresh
+        </button>
+        <span className="text-xs text-slate-400 ml-auto">{rows.length} shown{capped ? ' (capped at 500)' : ''}</span>
+      </div>
+
+      <div className="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800">
+        <table className="w-full text-sm">
+          <thead className="bg-slate-50 dark:bg-slate-900/60 text-slate-500 dark:text-slate-400 text-xs uppercase tracking-wide">
+            <tr>
+              <th className="text-left font-medium px-3 py-2 cursor-pointer" onClick={() => toggleSort('name')}>Campaign{arrow('name')}</th>
+              <th className="text-left font-medium px-3 py-2">Channel</th>
+              <th className="text-left font-medium px-3 py-2">Markets</th>
+              <th className="text-left font-medium px-3 py-2 cursor-pointer" onClick={() => toggleSort('status')}>Status{arrow('status')}</th>
+              <th className="text-right font-medium px-3 py-2">Budget</th>
+              <th className="text-right font-medium px-3 py-2 cursor-pointer" onClick={() => toggleSort('spendCents')}>Spend{arrow('spendCents')}</th>
+              <th className="text-right font-medium px-3 py-2 cursor-pointer" onClick={() => toggleSort('salesCents')}>Sales{arrow('salesCents')}</th>
+              <th className="text-right font-medium px-3 py-2 cursor-pointer" onClick={() => toggleSort('acos')}>ACOS{arrow('acos')}</th>
+              <th className="text-right font-medium px-3 py-2 cursor-pointer" onClick={() => toggleSort('roas')}>ROAS{arrow('roas')}</th>
+              <th className="text-left font-medium px-3 py-2">Delivery</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+            {rows.length === 0 && (
+              <tr>
+                <td colSpan={10} className="px-3 py-10 text-center text-slate-400">
+                  No campaigns yet. Amazon campaigns appear once the shadow backfill has run; other channels populate as their adapters ship.
+                </td>
+              </tr>
+            )}
+            {rows.map((c) => (
+              <tr key={c.id} className="hover:bg-slate-50 dark:hover:bg-slate-900/40">
+                <td className="px-3 py-2">
+                  <div className="font-medium text-slate-800 dark:text-slate-100 truncate max-w-[280px]">{c.name}</div>
+                  <div className="text-xs text-slate-400">{c.surface}{c.adProduct ? ` · ${c.adProduct}` : ''}{c.targetCount ? ` · ${c.targetCount} targets` : ''}</div>
+                </td>
+                <td className="px-3 py-2">
+                  <span className={`inline-block px-1.5 py-0.5 rounded text-xs font-medium ${CHANNEL_CHIP[c.channel] ?? CHANNEL_CHIP.INTERNAL}`}>{c.channel}</span>
+                </td>
+                <td className="px-3 py-2">
+                  <div className="flex flex-wrap gap-1">
+                    {(c.markets.length ? c.markets : c.marketplaces).slice(0, 4).map((m) => (
+                      <span key={m} className="px-1 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-xs text-slate-600 dark:text-slate-300">{m}</span>
+                    ))}
+                    {c.budgetScope === 'MULTI_MARKET' && <span className="text-xs text-violet-500">multi</span>}
+                  </div>
+                </td>
+                <td className="px-3 py-2">
+                  <span className={`inline-block px-1.5 py-0.5 rounded text-xs font-medium ${STATUS_CHIP[c.status] ?? STATUS_CHIP.DRAFT}`}>{c.status}</span>
+                </td>
+                <td className="px-3 py-2 text-right tabular-nums text-slate-600 dark:text-slate-300">{eur(c.budgetCents, c.currency)}{c.budgetKind === 'DAILY' ? '/d' : ''}</td>
+                <td className="px-3 py-2 text-right tabular-nums text-slate-700 dark:text-slate-200">{eur(c.spendCents, c.currency)}</td>
+                <td className="px-3 py-2 text-right tabular-nums text-slate-700 dark:text-slate-200">{eur(c.salesCents, c.currency)}</td>
+                <td className="px-3 py-2 text-right tabular-nums">{pct(c.acos)}</td>
+                <td className="px-3 py-2 text-right tabular-nums">{c.roas != null ? c.roas.toFixed(2) : '—'}</td>
+                <td className="px-3 py-2 text-xs text-slate-500">
+                  {c.deliveryStatus ?? '—'}
+                  {c.deliveryReasons?.length ? <span className="text-rose-400"> · {c.deliveryReasons[0]}</span> : null}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
