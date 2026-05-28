@@ -69,6 +69,15 @@ export interface PropagatePreview {
   entries: PropagationEntryDto[]
   translatable: boolean
   aiBudgetExceeded: boolean
+  sourceValue?: string
+}
+
+// T3.3b/B5 — apply outcome with per-coordinate results (for the matrix's
+// per-row applied/failed display + retry-failed).
+export interface ApplyResult {
+  ok: number
+  fail: number
+  results: Array<{ channel: string; marketplace: string; ok: boolean }>
 }
 
 export interface PropagationSource {
@@ -278,20 +287,21 @@ export function useFieldLinks(productId: string) {
     async (
       fieldKey: string,
       entries: PropagationEntryDto[],
-    ): Promise<{ ok: number; fail: number }> => {
+    ): Promise<ApplyResult> => {
       const actionable = entries.filter((e) => e.action !== 'skip' && e.proposedValue != null)
-      if (actionable.length === 0) return { ok: 0, fail: 0 }
+      if (actionable.length === 0) return { ok: 0, fail: 0, results: [] }
 
       // Price → one /channel-pricing call (per-(channel, marketplace) price).
       if (PRICE_FIELD_KEYS.has(fieldKey)) {
-        const updates = actionable
+        const priced = actionable
           .map((e) => ({
-            marketplace: e.marketplace,
             channel: e.channel,
+            marketplace: e.marketplace,
             price: parseFloat(e.proposedValue as string),
           }))
           .filter((u) => Number.isFinite(u.price))
-        if (updates.length === 0) return { ok: 0, fail: 0 }
+        if (priced.length === 0) return { ok: 0, fail: 0, results: [] }
+        let success = false
         try {
           const r = await fetch(
             `${getBackendUrl()}/api/products/${productId}/channel-pricing`,
@@ -299,19 +309,29 @@ export function useFieldLinks(productId: string) {
               method: 'PATCH',
               headers: { 'Content-Type': 'application/json' },
               credentials: 'include',
-              body: JSON.stringify({ updates }),
+              body: JSON.stringify({
+                updates: priced.map((u) => ({
+                  marketplace: u.marketplace,
+                  channel: u.channel,
+                  price: u.price,
+                })),
+              }),
             },
           )
-          return r.ok ? { ok: updates.length, fail: 0 } : { ok: 0, fail: updates.length }
+          success = r.ok
         } catch {
-          return { ok: 0, fail: updates.length }
+          success = false
         }
+        const results = priced.map((u) => ({ channel: u.channel, marketplace: u.marketplace, ok: success }))
+        return { ok: success ? priced.length : 0, fail: success ? 0 : priced.length, results }
       }
 
-      // Text / other → per-member listing-attributes PUT.
+      // Text / other → per-member listing-attributes PUT (per-entry result).
+      const results: ApplyResult['results'] = []
       let ok = 0
       let fail = 0
       for (const e of actionable) {
+        let success = false
         try {
           const r = await fetch(
             `${getBackendUrl()}/api/products/${productId}/listings/${e.channel}/${e.marketplace}`,
@@ -322,13 +342,42 @@ export function useFieldLinks(productId: string) {
               body: JSON.stringify({ attributes: { [fieldKey]: e.proposedValue } }),
             },
           )
-          if (r.ok) ok++
-          else fail++
+          success = r.ok
         } catch {
-          fail++
+          success = false
         }
+        if (success) ok++
+        else fail++
+        results.push({ channel: e.channel, marketplace: e.marketplace, ok: success })
       }
-      return { ok, fail }
+      return { ok, fail, results }
+    },
+    [productId],
+  )
+
+  // T3.3b/B5 — record an applied cross-channel propagation to the audit
+  // log (governance). Best-effort; never blocks the operator.
+  const recordPropagationApplied = useCallback(
+    async (
+      fieldKey: string,
+      source: { channel: string; marketplace: string },
+      results: ApplyResult['results'],
+    ): Promise<void> => {
+      try {
+        await fetch(`${getBackendUrl()}/api/products/${productId}/cross-channel/applied`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({
+            fieldKey,
+            sourceChannel: source.channel,
+            sourceMarketplace: source.marketplace,
+            results,
+          }),
+        })
+      } catch {
+        /* audit best-effort */
+      }
     },
     [productId],
   )
@@ -366,6 +415,7 @@ export function useFieldLinks(productId: string) {
     crossChannelPreview,
     backTranslate,
     applyPropagation,
+    recordPropagationApplied,
     suggestions: visibleSuggestions,
     linkSuggestion,
     dismissSuggestion,

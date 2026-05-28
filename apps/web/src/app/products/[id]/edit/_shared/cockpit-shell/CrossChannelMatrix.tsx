@@ -16,7 +16,12 @@
 import { useEffect, useState } from 'react'
 import { Loader2, ArrowRight, AlertTriangle, Languages, Check } from 'lucide-react'
 import CockpitDrawer from './CockpitDrawer'
-import { useFieldLinks, type PropagatePreview, type PropagationEntryDto } from './useFieldLinks'
+import {
+  useFieldLinks,
+  type PropagatePreview,
+  type PropagationEntryDto,
+  type ApplyResult,
+} from './useFieldLinks'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useTranslations } from '@/lib/i18n/use-translations'
 
@@ -72,7 +77,7 @@ export default function CrossChannelMatrix({ productId, open, onClose }: CrossCh
   const [preview, setPreview] = useState<PropagatePreview | null>(null)
   const [previewing, setPreviewing] = useState(false)
   const [applying, setApplying] = useState(false)
-  const [applyResult, setApplyResult] = useState<{ ok: number; fail: number } | null>(null)
+  const [applyResult, setApplyResult] = useState<ApplyResult | null>(null)
   const [backTr, setBackTr] = useState<Record<string, string>>({})
   const [backTrBusy, setBackTrBusy] = useState<Set<string>>(new Set())
 
@@ -126,11 +131,28 @@ export default function CrossChannelMatrix({ productId, open, onClose }: CrossCh
     setPreviewing(false)
   }
 
-  async function handleApply() {
+  async function handleApply(onlyFailed = false) {
     if (!preview) return
     setApplying(true)
-    const res = await fieldLinks.applyPropagation(FIELD_KEY[field], preview.entries)
-    setApplyResult(res)
+    const targetEntries =
+      onlyFailed && applyResult
+        ? preview.entries.filter((e) =>
+            applyResult.results.some(
+              (r) => r.channel === e.channel && r.marketplace === e.marketplace && !r.ok,
+            ),
+          )
+        : preview.entries
+    const res = await fieldLinks.applyPropagation(FIELD_KEY[field], targetEntries)
+    const [sc, sm] = source.split(':')
+    await fieldLinks.recordPropagationApplied(FIELD_KEY[field], { channel: sc, marketplace: sm }, res.results)
+    setApplyResult((prev) => {
+      if (!onlyFailed || !prev) return res
+      // Merge retry results over the prior run.
+      const merged = new Map(prev.results.map((r) => [coordKey(r.channel, r.marketplace), r]))
+      for (const r of res.results) merged.set(coordKey(r.channel, r.marketplace), r)
+      const all = Array.from(merged.values())
+      return { ok: all.filter((r) => r.ok).length, fail: all.filter((r) => !r.ok).length, results: all }
+    })
     setApplying(false)
   }
 
@@ -154,6 +176,9 @@ export default function CrossChannelMatrix({ productId, open, onClose }: CrossCh
     { v: 'brand', label: t('products.edit.cockpit.xchannel.fieldBrand') },
   ]
   const applicable = preview?.entries.filter((e) => e.action !== 'skip' && !e.unchanged) ?? []
+  const appliedMap = new Map(
+    (applyResult?.results ?? []).map((r) => [coordKey(r.channel, r.marketplace), r.ok]),
+  )
 
   return (
     <CockpitDrawer
@@ -237,13 +262,27 @@ export default function CrossChannelMatrix({ productId, open, onClose }: CrossCh
                     {t('products.edit.cockpit.xchannel.proposed')}
                   </span>
                   {applyResult ? (
-                    <span className="text-xs text-slate-500 dark:text-slate-400">
-                      ✓ {applyResult.ok} · {applyResult.fail > 0 ? `⚠ ${applyResult.fail}` : ''}
+                    <span className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                      <span>
+                        ✓ {applyResult.ok}
+                        {applyResult.fail > 0 ? ` · ⚠ ${applyResult.fail}` : ''}
+                      </span>
+                      {applyResult.fail > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => void handleApply(true)}
+                          disabled={applying}
+                          className="inline-flex items-center gap-1 rounded-md border border-amber-300 dark:border-amber-800 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-950/40 disabled:opacity-50"
+                        >
+                          {applying && <Loader2 aria-hidden className="h-3 w-3 animate-spin" />}
+                          {t('products.edit.cockpit.xchannel.retryFailed')}
+                        </button>
+                      )}
                     </span>
                   ) : (
                     <button
                       type="button"
-                      onClick={() => void handleApply()}
+                      onClick={() => void handleApply(false)}
                       disabled={applying || applicable.length === 0}
                       className="inline-flex items-center gap-1.5 rounded-md bg-emerald-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
                     >
@@ -284,6 +323,12 @@ export default function CrossChannelMatrix({ productId, open, onClose }: CrossCh
                                   {t('products.edit.cockpit.xchannel.unchanged')}
                                 </span>
                               )}
+                              {appliedMap.has(k) &&
+                                (appliedMap.get(k) ? (
+                                  <Check aria-hidden className="h-3.5 w-3.5 text-emerald-500" />
+                                ) : (
+                                  <AlertTriangle aria-hidden className="h-3.5 w-3.5 text-rose-500" />
+                                ))}
                             </span>
                           </div>
                           {!e.currencyMismatch && (

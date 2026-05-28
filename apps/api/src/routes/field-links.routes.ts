@@ -469,6 +469,44 @@ export async function fieldLinksRoutes(app: FastifyInstance) {
     },
   );
 
+  // T3.3b / B5 — record a cross-channel propagation to the audit log.
+  // The client fans the writes out through the existing per-coordinate
+  // endpoints (channel-pricing / listings PUT) then calls this once with
+  // the per-target results, so there's a single governance record of who
+  // pushed which field from where, and what landed vs failed. Fail-open.
+  app.post(
+    "/api/products/:id/cross-channel/applied",
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      const body = (request.body ?? {}) as {
+        fieldKey?: string;
+        sourceChannel?: string;
+        sourceMarketplace?: string;
+        results?: Array<{ channel: string; marketplace: string; ok: boolean }>;
+      };
+      const fieldKey = body.fieldKey ?? "";
+      const results = Array.isArray(body.results) ? body.results : [];
+      const applied = results.filter((r) => r.ok).map((r) => `${r.channel}:${r.marketplace}`);
+      const failed = results.filter((r) => !r.ok).map((r) => `${r.channel}:${r.marketplace}`);
+      await auditLogService.write({
+        ip: request.ip,
+        entityType: "cross_channel_propagation",
+        entityId: `${id}:${fieldKey}`,
+        action: "cross_channel.propagated",
+        before: null,
+        after: { applied, failed },
+        metadata: {
+          productId: id,
+          fieldKey,
+          source: `${body.sourceChannel ?? ""}:${body.sourceMarketplace ?? ""}`,
+          appliedCount: applied.length,
+          failedCount: failed.length,
+        },
+      });
+      return reply.send({ ok: true, appliedCount: applied.length, failedCount: failed.length });
+    },
+  );
+
   // FL.6.2 — Smart link suggestions. Scans the product's listings for
   // fields whose value is already identical across >=2 coordinates and
   // that aren't linked yet, so the operator can one-click "link all".
