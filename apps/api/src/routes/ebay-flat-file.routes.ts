@@ -22,6 +22,7 @@ import { syncActivatedListings } from '../services/listing-activation-sync.servi
 import { enqueueContentSyncIfEnabled } from '../services/content-auto-publish.service.js';
 import { productEventService } from '../services/product-event.service.js';
 import { runFlatFileAiInstruction } from '../services/flat-file-ai.service.js';
+import { computeAvailableToPublish } from '../services/available-to-publish.service.js';
 import {
   buildInventoryNdjson,
   createInventoryTask,
@@ -366,6 +367,8 @@ async function pushVariationGroup(
   token: string,
   apiBase: string,
   marketplaceId: string,
+  // FCF.3 — caps each variant's qty at its FBM-available pool.
+  capToFbm: (pid: string | undefined, sku: string, requested: number) => number,
 ): Promise<{ sku: string; market: string; status: 'PUSHED' | 'ERROR'; message: string; itemId?: string }[]> {
   const results: { sku: string; market: string; status: 'PUSHED' | 'ERROR'; message: string; itemId?: string }[] = []
   const headers = {
@@ -437,7 +440,8 @@ async function pushVariationGroup(
     if (row.mpn) aspects['MPN'] = [String(row.mpn)]
 
     const price = row[`${mp.toLowerCase()}_price`] ?? row.price ?? 0
-    const qty   = row[`${mp.toLowerCase()}_qty`]   ?? row.quantity ?? 0
+    // FCF.3 — cap each variant at its FBM-available pool (never oversell).
+    const qty   = capToFbm(row._productId as string | undefined, sku, Number(row[`${mp.toLowerCase()}_qty`] ?? row.quantity ?? 0))
 
     const pkgSize = buildPackageWeightAndSize(row)
     const itemBody = {
@@ -1001,6 +1005,48 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
       });
     }
 
+    // ── FCF.3 — FBM oversell guard ──────────────────────────────────
+    // eBay is merchant-fulfilled, so its quantity is bound to the own-
+    // warehouse (FBM) pool. Never publish more than we hold — cap each SKU's
+    // quantity at availableToPublish. Per-variant (row._productId), since for
+    // variation families the stock lives on the children. Products with NO
+    // warehouse stock record are left uncapped but flagged (a data gap is not
+    // a real stockout — don't mass-delist on missing data).
+    const pushProductIds = [
+      ...new Set(rows.map((r) => r._productId as string | undefined).filter((x): x is string => !!x)),
+    ];
+    const fbmByProduct = new Map<string, number>();
+    const trackedProducts = new Set<string>();
+    if (pushProductIds.length > 0) {
+      const whRows = await prisma.stockLevel.findMany({
+        where: { productId: { in: pushProductIds }, location: { type: 'WAREHOUSE' } },
+        select: { productId: true, available: true },
+      });
+      for (const r of whRows) {
+        trackedProducts.add(r.productId);
+        fbmByProduct.set(r.productId, (fbmByProduct.get(r.productId) ?? 0) + r.available);
+      }
+    }
+    const oversellWarnings: Array<{ sku: string; requested: number; published: number; reason: string }> = [];
+    const capToFbm = (pid: string | undefined, sku: string, requested: number): number => {
+      const req = Number(requested) || 0;
+      if (!pid || !trackedProducts.has(pid)) {
+        if (req > 0) oversellWarnings.push({ sku, requested: req, published: req, reason: 'FBM stock not tracked — not capped' });
+        return req;
+      }
+      const cap = computeAvailableToPublish({
+        fulfillmentMethod: 'FBM',
+        warehouseAvailable: fbmByProduct.get(pid) ?? 0,
+        fbaSellable: 0,
+        stockBuffer: 0,
+      }).available;
+      if (req > cap) {
+        oversellWarnings.push({ sku, requested: req, published: cap, reason: 'capped to FBM-available' });
+        return cap;
+      }
+      return req;
+    };
+
     // ── Feed mode ───────────────────────────────────────────────────
     const effectiveMode = mode === 'feed' || rows.length > 50 ? 'feed' : 'api';
 
@@ -1014,7 +1060,8 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
           return {
             ...r,
             price: r[`${prefix}_price`] ?? r.price ?? 0,
-            quantity: r[`${prefix}_qty`] ?? r.quantity ?? 0,
+            // FCF.3 — cap at FBM-available so the feed never lists more than we hold.
+            quantity: capToFbm(r._productId as string | undefined, r.sku as string, Number(r[`${prefix}_qty`] ?? r.quantity ?? 0)),
           } as unknown as EbayFlatRow;
         });
 
@@ -1026,6 +1073,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
           mode: 'feed',
           taskId,
           rowCount: rows.length,
+          warnings: oversellWarnings,
           message: `Feed task created. Poll /api/ebay/flat-file/feed/${taskId} for status.`,
         });
       } catch (err: unknown) {
@@ -1066,6 +1114,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
             token,
             EBAY_API_BASE,
             marketplaceId,
+            capToFbm,
           );
           perRowResults.push(...groupResults);
           continue;
@@ -1082,7 +1131,8 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
         const prefix = mp.toLowerCase() as Lowercase<Market>;
         const currency = mp === 'UK' ? 'GBP' : 'EUR';
         const price = Number(row[`${prefix}_price`] ?? row.price ?? 0);
-        const qty = Number(row[`${prefix}_qty`] ?? row.quantity ?? 0);
+        // FCF.3 — cap at FBM-available so eBay never lists more than we hold.
+        const qty = capToFbm(row._productId as string | undefined, sku, Number(row[`${prefix}_qty`] ?? row.quantity ?? 0));
 
         try {
           const encodedSku = encodeURIComponent(sku);
@@ -1274,7 +1324,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
     const pushed = perRowResults.filter((r) => r.status === 'PUSHED').length;
     const errors = perRowResults.filter((r) => r.status === 'ERROR').length;
 
-    return reply.send({ mode: 'api', pushed, errors, results: perRowResults });
+    return reply.send({ mode: 'api', pushed, errors, results: perRowResults, warnings: oversellWarnings });
   });
 
   // ── POST /api/ebay/flat-file/publish ────────────────────────────────
