@@ -59,7 +59,9 @@ Drift = `publishedQty (ChannelListing.quantity) − availableToPublish`. A posit
 drift = **oversold** (the listing publishes more than its pool can back). Surfaced
 as `drift` / `oversold` on the fulfillment reads, flagged in the Matrix Avail.
 column and the eBay Fulfillment card, and listed portfolio-wide by
-`GET /api/stock/pool-drift` (worst first). This is distinct from
+`GET /api/stock/pool-drift` (worst first) — surfaced as the
+**`/fulfillment/stock/pool-drift`** triage page (sibling to channel-drift in the
+Stock sub-nav; read + drill to the product editor). This is distinct from
 `ChannelStockEvent` drift (channel-reported qty vs our physical stock) — pool
 drift is computed from our own pools, so it warns *before* the marketplace
 reports back.
