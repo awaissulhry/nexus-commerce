@@ -62,6 +62,19 @@ it is gated:
 | `AMAZON_MCF_LIVE=1` | `resolveMcfAdapter()` returns the real SP-API FBA Outbound adapter (else a stub that throws "not configured"). |
 | `AMAZON_MCF_SANDBOX=1` | Adapter hits the SP-API **sandbox** host — exercise create/sync/cancel without shipping. |
 | `NEXUS_ENABLE_MCF_STATUS_CRON=0` | Disable the 15-min status-sync cron (default on). |
+| `NEXUS_EBAY_AUTO_MCF=1` | Auto-submit MCF for newly-ingested eBay orders whose listings are all MCF-backed (FCF.5b). Off by default; also requires `AMAZON_MCF_LIVE=1`. |
+
+### Setting a listing to MCF (FCF.5b)
+
+- **eBay** — the eBay cockpit's **Fulfillment** card (`cards/FulfillmentMethodCard.tsx`)
+  toggles FBM ↔ Amazon MCF, writing `ChannelListing.fulfillmentMethod` via the
+  shared `PATCH /products/:id/fulfillment` and showing the bound pool's
+  available-to-publish.
+- **Auto-submit** — with `NEXUS_EBAY_AUTO_MCF=1` (+ a live adapter), eBay order
+  ingestion fire-and-forgets `autoSubmitMcfForEbayOrder` after the OrderItems
+  are written. Conservative: it submits only when **every** order item maps to
+  an MCF-backed eBay listing, otherwise it skips and leaves the order for the
+  `/fulfillment/stock/mcf` dashboard. Idempotent (one active shipment per order).
 
 The adapter (`createSpApiMcfAdapter`, `services/amazon-mcf.service.ts`) maps the
 `MCFAdapter` surface onto FBA Outbound v2020-07-01:
@@ -110,3 +123,5 @@ share the one `resolveMcfAdapter()` definition.
   `channel-inventory` extension.
 - **FCF.5** — MCF: real SP-API FBA Outbound adapter (gated), eBay publish cap
   becomes pool-aware (FBA/MCF), `isMcf` read flag, this doc.
+- **FCF.5b** — eBay cockpit Fulfillment card (FBM ↔ MCF) + gated auto-MCF-submit
+  on eBay order ingestion (`NEXUS_EBAY_AUTO_MCF`).

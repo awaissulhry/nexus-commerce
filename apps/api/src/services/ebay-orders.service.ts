@@ -556,6 +556,28 @@ export class EbayOrdersService {
       }
     }
 
+    // FCF.5b — auto-submit Amazon MCF for newly-ingested eBay orders whose
+    // listings are MCF-backed (FBA). Runs only for brand-new orders, after
+    // OrderItems exist. Double-gated (NEXUS_EBAY_AUTO_MCF=1 here + AMAZON_MCF_LIVE
+    // in the service) and fire-and-forget so it never blocks or fails ingestion.
+    if (existing == null && process.env.NEXUS_EBAY_AUTO_MCF === '1') {
+      const newOrderId = dbOrder.id
+      void (async () => {
+        try {
+          const { autoSubmitMcfForEbayOrder } = await import('./ebay-auto-mcf.service.js')
+          const r = await autoSubmitMcfForEbayOrder(newOrderId)
+          if (r.submitted) {
+            logger.info('ebay-orders: auto-MCF submitted', { orderId: newOrderId, mcfShipmentId: r.mcfShipmentId })
+          }
+        } catch (err) {
+          logger.warn('ebay-orders: auto-MCF submit failed', {
+            orderId: newOrderId,
+            error: err instanceof Error ? err.message : String(err),
+          })
+        }
+      })()
+    }
+
     return dbOrder
   }
 

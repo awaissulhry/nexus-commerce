@@ -64,6 +64,7 @@ import AspectsCard from './cards/AspectsCard'
 import VariationsMatrixCard from './cards/VariationsMatrixCard'
 import ImagesCard from './cards/ImagesCard'
 import PricingPoliciesCard from './cards/PricingPoliciesCard'
+import FulfillmentMethodCard from './cards/FulfillmentMethodCard'
 import CompatibilityCard from './cards/CompatibilityCard'
 import ApplyToSiblingsModal from './templates/ApplyToSiblingsModal'
 import MasterDivergenceBanner from './backwrite/MasterDivergenceBanner'
@@ -654,6 +655,9 @@ export default function EbayCockpit(props: Props) {
           return Number.isFinite(n) ? n : null
         })()}
       />
+
+      {/* ── FCF.5b — Fulfillment method (FBM vs Amazon MCF) ─────────── */}
+      <FulfillmentMethodCard productId={product.id} marketplace={marketplace} />
 
       {/* ── EC.13 — Compatibility (motors) — replaces placeholder ───── */}
       <CompatibilityCard
