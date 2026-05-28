@@ -54,6 +54,8 @@ export interface EbayRow extends BaseRow {
   last_pushed_at?: string
   sync_status?: string
   platformProductId?: string
+  /** true on the family container (no parentId); false on variant children. */
+  _isParent?: boolean
   it_price?: number | null; it_qty?: number | null; it_item_id?: string | null
   it_status?: string | null; it_listing_id?: string | null
   de_price?: number | null; de_qty?: number | null; de_item_id?: string | null
@@ -723,8 +725,40 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
     UK: 'https://www.ebay.co.uk/itm/',
   }
 
+  // Parent ids that actually have variant rows loaded — so the SKU badge
+  // shows "Parent" only on a true variation parent, not a standalone product
+  // (which also has _isParent=true). Variants' platformProductId is the
+  // parent's id, so a parent's own id appearing here means it has children.
+  const familyParentIds = useMemo(
+    () => new Set(
+      initialRows
+        .filter((r) => r._isParent === false && r.platformProductId)
+        .map((r) => String(r.platformProductId)),
+    ),
+    [initialRows],
+  )
+
   // ── Cell content overrides ─────────────────────────────────────────────
   const renderCellContent = useCallback<RenderCellContent>((col, _row, value, displayVal) => {
+    // SKU — parent / variant cue (drives off the _isParent flag + family set)
+    if (col.id === 'sku') {
+      const er = _row as EbayRow
+      const isVariant = er._isParent === false
+      const isParent = er._isParent === true && familyParentIds.has(String(er.platformProductId ?? ''))
+      if (!isVariant && !isParent) return null // standalone — plain SKU
+      return (
+        <span className="flex items-center gap-1.5 min-w-0">
+          {isVariant && <span className="text-slate-300 dark:text-slate-600 shrink-0 font-mono" aria-hidden>└</span>}
+          <span className={cn('truncate', isParent && 'font-semibold text-slate-900 dark:text-slate-100')}>{displayVal}</span>
+          {isParent && (
+            <span className="shrink-0 rounded px-1 py-0.5 text-[9px] font-semibold uppercase tracking-wide bg-blue-100 text-blue-700 border border-blue-200 dark:bg-blue-900/40 dark:text-blue-300 dark:border-blue-800">Parent</span>
+          )}
+          {isVariant && (
+            <span className="shrink-0 rounded px-1 py-0.5 text-[9px] font-medium uppercase tracking-wide bg-slate-100 text-slate-500 border border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700">Variant</span>
+          )}
+        </span>
+      )
+    }
     // Market status badge
     if (col.id.endsWith('_status') && col.readOnly) {
       return displayVal
@@ -802,7 +836,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
     }
     return null
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [familyParentIds])
 
   // ── Edit intercept for modal-based editing ─────────────────────────────
   const onBeforeEditCell = useCallback((col: FlatFileColumn, row: BaseRow): boolean => {
