@@ -493,6 +493,16 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
     } catch { /* silently fail — optional */ }
   }, [marketplace, categoryColumnsCache, BACKEND])
 
+  // Auto-load the category schema on mount from the rows' own category, so
+  // the category-driven columns (Variation Theme axis names, item-specifics
+  // aspects, narrowed Condition) show their dropdowns immediately instead of
+  // only after the operator clicks into the Category cell.
+  useEffect(() => {
+    const cat = initialRows.find((r) => r.category_id)?.category_id
+    if (cat) void loadCategorySchema(String(cat))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   // ── API: reload ────────────────────────────────────────────────────────
 
   const onReload = useCallback(async (): Promise<BaseRow[]> => {
