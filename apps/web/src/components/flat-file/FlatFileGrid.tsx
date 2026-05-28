@@ -1880,12 +1880,12 @@ export default function FlatFileGrid({
                 const end   = virtualize ? Math.min(total, Math.ceil((scrollTop + viewportH) / rowHeight) + ROW_OVERSCAN) : total
                 const colSpanAll = allColumns.length + 2
                 const out: React.ReactNode[] = []
-                if (virtualize && start > 0) out.push(<tr key="vrow-top" aria-hidden><td colSpan={colSpanAll} style={{ height: start * rowHeight, padding: 0, border: 0 }} /></tr>)
+                if (virtualize && start > 0) out.push(<tr key="vrow-top" aria-hidden><td colSpan={colSpanAll} style={{ padding: 0, border: 0 }}><div style={{ height: start * rowHeight }} /></td></tr>)
                 for (let i = start; i < end; i++) {
                   const it = items[i]
                   out.push(it.kind === 'header' ? renderHeader(it) : renderRow(it))
                 }
-                if (virtualize && end < total) out.push(<tr key="vrow-bot" aria-hidden><td colSpan={colSpanAll} style={{ height: (total - end) * rowHeight, padding: 0, border: 0 }} /></tr>)
+                if (virtualize && end < total) out.push(<tr key="vrow-bot" aria-hidden><td colSpan={colSpanAll} style={{ padding: 0, border: 0 }}><div style={{ height: (total - end) * rowHeight }} /></td></tr>)
                 return out
               })()}
 
