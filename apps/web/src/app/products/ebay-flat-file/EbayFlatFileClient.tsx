@@ -18,9 +18,10 @@ import { FlatFileAiPanel } from '../_shared/FlatFileAiPanel'
 import type { AiPanelCtx } from '@/components/flat-file/FlatFileGrid.types'
 import {
   EBAY_FIXED_GROUPS, MARKET_COLUMN_GROUPS, buildCategoryColumns,
-  EBAY_CONDITION_LABELS,
+  EBAY_CONDITION_LABELS, EBAY_MARKETPLACES,
   type CategoryAspect, type EbayColumnGroup,
 } from './ebay-columns'
+import { FlatFileMarketStrip } from '@/components/flat-file/FlatFileMarketStrip'
 import { PullDiffModal, type PullDiffApplyResult } from '../amazon-flat-file/PullDiffModal'
 import { PullHistoryDrawer } from '../_shared/PullHistoryDrawer'
 import { PendingPullBanner } from '../_shared/PendingPullBanner'
@@ -284,7 +285,7 @@ const VARIANT_NOT_NEEDED = new Set([
 
 export default function EbayFlatFileClient({ initialRows, initialMarketplace, familyId }: Props) {
   const { toast } = useToast()
-  const [marketplace] = useState(initialMarketplace)
+  const [marketplace, setMarketplace] = useState(initialMarketplace.toUpperCase())
   const BACKEND = getBackendUrl()
 
   // ── eBay-specific UI state ─────────────────────────────────────────────
@@ -455,13 +456,18 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
         }
       })
     const patch = (groups: EbayColumnGroup[]) => patchListing(patchPolicies(groups))
-    const base = patch([...EBAY_FIXED_GROUPS, ...MARKET_COLUMN_GROUPS])
+    // MS-E — one market at a time: show only the active market's column group
+    // (the other markets' data is still loaded, just hidden). Falls back to
+    // all markets if the active one has no group (shouldn't happen).
+    const activeMarketGroups = MARKET_COLUMN_GROUPS.filter((g) => g.id === `market-${marketplace}`)
+    const marketGroups = activeMarketGroups.length ? activeMarketGroups : MARKET_COLUMN_GROUPS
+    const base = patch([...EBAY_FIXED_GROUPS, ...marketGroups])
     return categoryColumns ? [
       ...patch(EBAY_FIXED_GROUPS),
       categoryColumns,
-      ...patch(MARKET_COLUMN_GROUPS),
+      ...patch(marketGroups),
     ] : base
-  }, [categoryColumns, policyOptions, conditionOptions, variantAxisNames])
+  }, [categoryColumns, policyOptions, conditionOptions, variantAxisNames, marketplace])
 
   // ── Category schema loading ────────────────────────────────────────────
 
@@ -907,11 +913,22 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
     return null
   }, [familyParentIds])
 
+  // ── Market switch (MS-E) — one market at a time ────────────────────────
+  // Instant client-side re-scope: every market's data is already loaded, so
+  // switching just changes which market's columns are shown. No reload, no
+  // lost edits.
+  const handleMarketSwitch = useCallback((m: string) => {
+    setMarketplace(m.toUpperCase())
+  }, [])
+
   // ── Slot: channel strip ────────────────────────────────────────────────
 
   const renderChannelStrip = useCallback(() => (
-    <ChannelStrip channel="ebay" marketplace={marketplace} familyId={familyId} />
-  ), [marketplace, familyId])
+    <div className="flex items-center gap-4 flex-wrap">
+      <ChannelStrip channel="ebay" marketplace={marketplace} familyId={familyId} />
+      <FlatFileMarketStrip markets={EBAY_MARKETPLACES} active={marketplace} onSelect={handleMarketSwitch} />
+    </div>
+  ), [marketplace, familyId, handleMarketSwitch])
 
   // ── Slot: push extras (after Save button) ─────────────────────────────
 
