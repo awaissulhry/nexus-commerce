@@ -41,6 +41,37 @@ function currentValueFor(
 // runaway group can't burn AI budget.
 const MAX_TRANSLATE_LANGS = 12;
 
+// T3.3b / B2 — price fields, and the per-market currency they're in.
+// Copying a raw price number across currencies (€50 → £50) is wrong, so
+// cross-currency targets are flagged and skipped rather than propagated.
+const PRICE_FIELD_KEYS = new Set(["our_price", "price", "purchasable_offer.our_price"]);
+
+function currencyForMarket(mp: string): string {
+  const m = (mp ?? "").toUpperCase();
+  if (m === "UK" || m === "GB") return "GBP";
+  if (m === "US") return "USD";
+  if (m === "JP") return "JPY";
+  return "EUR";
+}
+
+// For a price field, mark any target whose currency differs from the
+// source as a skipped "currency mismatch" so the operator sets it
+// manually (or via FX) instead of copying the wrong number. No-op for
+// non-price fields and same-currency targets.
+function guardCurrency<T extends { marketplace: string; action: string }>(
+  entries: T[],
+  fieldKey: string,
+  sourceMarketplace: string,
+): Array<T & { currencyMismatch?: boolean }> {
+  if (!PRICE_FIELD_KEYS.has(fieldKey)) return entries;
+  const srcCurrency = currencyForMarket(sourceMarketplace);
+  return entries.map((e) =>
+    currencyForMarket(e.marketplace) !== srcCurrency
+      ? { ...e, action: "skip", currencyMismatch: true }
+      : e,
+  );
+}
+
 // Shared translate-fill for propagation previews (group-based + the
 // T3.3b ad-hoc cross-channel preview). Mutates each "translate" entry's
 // proposedValue in place via translateProductCopy, one call per distinct
@@ -282,7 +313,7 @@ export async function fieldLinksRoutes(app: FastifyInstance) {
         });
 
         return reply.send({
-          entries,
+          entries: guardCurrency(entries, fieldKey, body.sourceMarketplace ?? ""),
           translatable: !!translatableField(fieldKey),
           aiBudgetExceeded,
         });
@@ -357,7 +388,7 @@ export async function fieldLinksRoutes(app: FastifyInstance) {
         });
 
         return reply.send({
-          entries,
+          entries: guardCurrency(entries, fieldKey, body.sourceMarketplace ?? ""),
           translatable: !!translatableField(fieldKey),
           aiBudgetExceeded,
           sourceValue: editedValue,

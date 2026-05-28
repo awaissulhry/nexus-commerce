@@ -55,6 +55,10 @@ export interface PropagationEntryDto {
   action: 'verbatim' | 'translate' | 'skip'
   language: string | null
   unchanged: boolean
+  // T3.3b/B2 — price target whose currency differs from the source's;
+  // skipped so the operator sets it manually instead of copying a raw
+  // number across currencies.
+  currencyMismatch?: boolean
 }
 
 export interface PropagatePreview {
