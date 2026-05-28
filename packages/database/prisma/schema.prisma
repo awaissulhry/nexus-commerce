@@ -1649,6 +1649,12 @@ model FieldLinkGroup {
   // Routing — derived from the manifest applicableParentage.
   parentage FieldParentage @default(PARENT)
 
+  // T3.1 / FL.5b — CHILD groups pin one variant's field across
+  // coordinates; PARENT (product-level) groups leave this NULL. A
+  // fieldKey can have one PARENT group + many CHILD groups (one per
+  // variant), so identity is (productId, fieldKey, variantId).
+  variantId String?
+
   // How a linked value crosses members in different languages.
   translatePolicy FieldTranslatePolicy @default(TRANSLATE)
 
@@ -1663,6 +1669,7 @@ model FieldLinkGroup {
 
   @@index([productId])
   @@index([productId, fieldKey])
+  @@index([productId, fieldKey, variantId])
 }
 
 enum FieldParentage {

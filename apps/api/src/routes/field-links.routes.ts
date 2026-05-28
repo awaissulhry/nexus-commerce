@@ -88,43 +88,53 @@ export async function fieldLinksRoutes(app: FastifyInstance) {
       translatePolicy?: "TRANSLATE" | "VERBATIM" | "NONE";
       parentage?: "PARENT" | "CHILD";
       sourceLanguage?: string | null;
+      variantId?: string | null;
     };
     const scope = body.scope ?? "master";
+    // T3.1 — null variantId = PARENT (product-level) group; a set
+    // variantId = CHILD group pinning that one variant. Identity is
+    // (productId, fieldKey, variantId), so every query scopes by it and
+    // a CHILD change never touches the PARENT group (or vice versa).
+    const variantId = body.variantId ?? null;
+    const coordKey = variantId ? `${id}:${fieldKey}:${variantId}` : `${id}:${fieldKey}`;
 
     try {
-      // Non-linked scopes share no canonical value → clear any group.
+      // Non-linked scopes share no canonical value → clear this coordinate's group.
       if (scope !== "linked") {
         const prior = await prisma.fieldLinkGroup.findFirst({
-          where: { productId: id, fieldKey },
+          where: { productId: id, fieldKey, variantId },
         });
-        await prisma.fieldLinkGroup.deleteMany({ where: { productId: id, fieldKey } });
+        await prisma.fieldLinkGroup.deleteMany({ where: { productId: id, fieldKey, variantId } });
         // Only audit a real change — clearing an already-unlinked field is a no-op.
         if (prior) {
           await auditLogService.write({
             ip: request.ip,
             entityType: "field_link",
-            entityId: `${id}:${fieldKey}`,
+            entityId: coordKey,
             action: scope === "independent" ? "field_link.independent" : "field_link.unlinked",
             before: { members: prior.members, translatePolicy: prior.translatePolicy },
             after: null,
-            metadata: { productId: id, fieldKey, scope },
+            metadata: { productId: id, fieldKey, variantId, scope },
           });
         }
-        return reply.send({ ok: true, scope, group: null });
+        return reply.send({ ok: true, scope, variantId, group: null });
       }
 
       const members = Array.isArray(body.members) ? body.members : [];
       const data = {
         members: members as unknown as object,
         translatePolicy: body.translatePolicy ?? "TRANSLATE",
-        parentage: body.parentage ?? "PARENT",
+        // A variant coordinate forces CHILD parentage regardless of the
+        // client hint; product-level links stay PARENT.
+        parentage: variantId ? ("CHILD" as const) : (body.parentage ?? "PARENT"),
+        variantId,
         sourceLanguage: body.sourceLanguage ?? null,
       };
 
-      // Upsert by (productId, fieldKey) — the PARENT case. There is no DB
-      // unique on that pair (CHILD can have several), so look up first.
+      // Upsert by (productId, fieldKey, variantId). No DB unique on the
+      // triple (kept flexible), so look up first.
       const existing = await prisma.fieldLinkGroup.findFirst({
-        where: { productId: id, fieldKey },
+        where: { productId: id, fieldKey, variantId },
       });
       const group = existing
         ? await prisma.fieldLinkGroup.update({ where: { id: existing.id }, data })
@@ -135,7 +145,7 @@ export async function fieldLinksRoutes(app: FastifyInstance) {
       await auditLogService.write({
         ip: request.ip,
         entityType: "field_link",
-        entityId: `${id}:${fieldKey}`,
+        entityId: coordKey,
         action: existing ? "field_link.updated" : "field_link.linked",
         before: existing
           ? { members: existing.members, translatePolicy: existing.translatePolicy }
@@ -144,13 +154,15 @@ export async function fieldLinksRoutes(app: FastifyInstance) {
         metadata: {
           productId: id,
           fieldKey,
+          variantId,
+          parentage: data.parentage,
           scope: "linked",
           memberCount: members.length,
           marketplaces: members.map((m) => `${m.channel}:${m.marketplace}`),
         },
       });
 
-      return reply.send({ ok: true, scope, group });
+      return reply.send({ ok: true, scope, variantId, group });
     } catch (err) {
       request.log?.error({ err }, "field-links upsert failed");
       return reply
