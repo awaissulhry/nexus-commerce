@@ -2500,7 +2500,7 @@ export default function AmazonFlatFileClient({
   const rowWinEnd = rowVirtualize ? Math.min(displayRows.length, Math.ceil((scrollTop + viewportH) / rowHeight) + ROW_OVERSCAN) : displayRows.length
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col">
+    <div className="h-screen bg-slate-50 dark:bg-slate-950 flex flex-col">
 
       {/* IN.2 — Cascade modal */}
       {cascadeRow && cascadeRow._productId && (

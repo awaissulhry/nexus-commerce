@@ -1390,7 +1390,7 @@ export default function FlatFileGrid({
   // ── Render ─────────────────────────────────────────────────────────────
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col">
+    <div className="h-screen bg-slate-50 dark:bg-slate-950 flex flex-col">
 
       {/* ── Sticky header ────────────────────────────── */}
       <header className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 sticky top-0 z-30">
