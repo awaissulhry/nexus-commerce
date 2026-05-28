@@ -166,6 +166,18 @@ function buildFlatRow(
     best_offer_ceiling: (firstAttrs.bestOfferCeiling as number | undefined) ?? 0,
     quantity: first?.quantity ?? 0,
     handling_time: (firstAttrs.handlingTime as number | undefined) ?? 1,
+    // FF-EN.4 — full-parity fields (round-trip via platformAttributes)
+    vat_rate: (firstAttrs.vatRate as string | undefined) ?? '',
+    listing_format: (firstAttrs.listingFormat as string | undefined) ?? 'FIXED_PRICE',
+    listing_duration: (firstAttrs.listingDuration as string | undefined) ?? 'GTC',
+    item_location_country: (firstAttrs.itemLocationCountry as string | undefined) ?? '',
+    package_type: (firstAttrs.packageType as string | undefined) ?? '',
+    package_weight: (firstAttrs.packageWeight as number | undefined) ?? 0,
+    weight_unit: (firstAttrs.weightUnit as string | undefined) ?? 'KILOGRAM',
+    package_length: (firstAttrs.packageLength as number | undefined) ?? 0,
+    package_width: (firstAttrs.packageWidth as number | undefined) ?? 0,
+    package_height: (firstAttrs.packageHeight as number | undefined) ?? 0,
+    dimension_unit: (firstAttrs.dimensionUnit as string | undefined) ?? 'CENTIMETER',
     image_1: firstImageUrls[0] ?? '',
     image_2: firstImageUrls[1] ?? '',
     image_3: firstImageUrls[2] ?? '',
@@ -304,11 +316,48 @@ function packSharedFields(row: Record<string, unknown>): {
       fulfillmentPolicyId: (row.fulfillment_policy_id as string) ?? '',
       paymentPolicyId: (row.payment_policy_id as string) ?? '',
       returnPolicyId: (row.return_policy_id as string) ?? '',
+      // FF-EN.4 — full-parity fields
+      vatRate: (row.vat_rate as string) ?? '',
+      listingFormat: (row.listing_format as string) ?? 'FIXED_PRICE',
+      listingDuration: (row.listing_duration as string) ?? 'GTC',
+      itemLocationCountry: (row.item_location_country as string) ?? '',
+      packageType: (row.package_type as string) ?? '',
+      packageWeight: Number(row.package_weight ?? 0),
+      weightUnit: (row.weight_unit as string) ?? 'KILOGRAM',
+      packageLength: Number(row.package_length ?? 0),
+      packageWidth: Number(row.package_width ?? 0),
+      packageHeight: Number(row.package_height ?? 0),
+      dimensionUnit: (row.dimension_unit as string) ?? 'CENTIMETER',
     } as Prisma.InputJsonValue,
   };
 }
 
 // ── Variation group push helper ────────────────────────────────────────
+
+// FF-EN.4 — build the Inventory API packageWeightAndSize from the flat
+// row's package fields. Returns undefined when nothing usable is set, so
+// the publish body is unchanged for rows without shipping dimensions.
+function buildPackageWeightAndSize(
+  row: Record<string, unknown>,
+): Record<string, unknown> | undefined {
+  const w = Number(row.package_weight ?? 0);
+  const l = Number(row.package_length ?? 0);
+  const wd = Number(row.package_width ?? 0);
+  const h = Number(row.package_height ?? 0);
+  const pkgType = (row.package_type as string) || '';
+  const out: Record<string, unknown> = {};
+  if (w > 0) out.weight = { value: w, unit: (row.weight_unit as string) || 'KILOGRAM' };
+  if (l > 0 && wd > 0 && h > 0) {
+    out.dimensions = {
+      length: l,
+      width: wd,
+      height: h,
+      unit: (row.dimension_unit as string) || 'CENTIMETER',
+    };
+  }
+  if (pkgType) out.packageType = pkgType;
+  return Object.keys(out).length ? out : undefined;
+}
 
 async function pushVariationGroup(
   groupKey: string,
@@ -390,6 +439,7 @@ async function pushVariationGroup(
     const price = row[`${mp.toLowerCase()}_price`] ?? row.price ?? 0
     const qty   = row[`${mp.toLowerCase()}_qty`]   ?? row.quantity ?? 0
 
+    const pkgSize = buildPackageWeightAndSize(row)
     const itemBody = {
       product: {
         title: row.title,
@@ -399,6 +449,7 @@ async function pushVariationGroup(
       },
       condition: row.condition ?? 'NEW',
       shipToLocationAvailability: { quantity: Number(qty) },
+      ...(pkgSize ? { packageWeightAndSize: pkgSize } : {}),
     }
 
     const itemRes = await fetch(`${apiBase}/sell/inventory/v1/inventory_item/${encodeURIComponent(sku)}`, {
@@ -1067,6 +1118,9 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
             availability: {
               shipToLocationAvailability: { quantity: qty },
             },
+            ...(buildPackageWeightAndSize(row)
+              ? { packageWeightAndSize: buildPackageWeightAndSize(row) }
+              : {}),
           };
 
           const invRes = await fetch(invUrl, {

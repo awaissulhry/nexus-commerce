@@ -75,6 +75,39 @@ export const EBAY_CONDITION_LABELS: Record<string, string> = {
 
 export type EbayCondition = (typeof EBAY_CONDITION_OPTIONS)[number]
 
+// ── FF-EN.4 — full-parity enumerable option sets ───────────────────────
+// eBay Inventory API measurement + listing enums, plus curated country /
+// VAT lists. All surface as pick-or-type comboboxes (strict where eBay
+// only accepts listed values; open where a custom entry is reasonable).
+
+/** WeightUnitOfMeasureEnum (Inventory API packageWeightAndSize.weight.unit). */
+export const EBAY_WEIGHT_UNITS = ['KILOGRAM', 'GRAM', 'POUND', 'OUNCE'] as const
+export const EBAY_WEIGHT_UNIT_LABELS: Record<string, string> = {
+  KILOGRAM: 'kg', GRAM: 'g', POUND: 'lb', OUNCE: 'oz',
+}
+/** LengthUnitOfMeasureEnum (packageWeightAndSize.dimensions.unit). */
+export const EBAY_DIMENSION_UNITS = ['CENTIMETER', 'INCH', 'METER', 'FEET'] as const
+export const EBAY_DIMENSION_UNIT_LABELS: Record<string, string> = {
+  CENTIMETER: 'cm', INCH: 'in', METER: 'm', FEET: 'ft',
+}
+/** PackageTypeEnum subset relevant to apparel / gear (open — type any other). */
+export const EBAY_PACKAGE_TYPES = [
+  'PACKAGE_THICK_ENVELOPE', 'MAILING_BOX', 'PARCEL_OR_PADDED_ENVELOPE',
+  'PADDED_BAGS', 'LARGE_ENVELOPE', 'LETTER', 'MAILING_LETTER',
+] as const
+/** Listing format. The Inventory API publishes FIXED_PRICE only; AUCTION is
+ *  surfaced for completeness and flagged at validation. */
+export const EBAY_LISTING_FORMATS = ['FIXED_PRICE', 'AUCTION'] as const
+/** ListingDuration. Fixed-price listings are GTC; auction durations listed
+ *  for completeness. */
+export const EBAY_LISTING_DURATIONS = ['GTC', 'DAYS_1', 'DAYS_3', 'DAYS_5', 'DAYS_7', 'DAYS_10', 'DAYS_30'] as const
+/** Common EU VAT rates (%). Open — type any rate. */
+export const EBAY_VAT_RATES = ['0', '4', '5', '10', '22'] as const
+/** Item-location country (ISO 3166-1 alpha-2) — EU-centric subset. Open. */
+export const EBAY_ITEM_LOCATION_COUNTRIES = [
+  'IT', 'DE', 'FR', 'ES', 'GB', 'AT', 'BE', 'NL', 'PT', 'IE', 'PL', 'SE', 'DK', 'FI', 'CZ', 'GR', 'CH', 'US',
+] as const
+
 // ── Marketplace IDs ────────────────────────────────────────────────────
 
 export const MARKETPLACE_IDS: Record<string, string> = {
@@ -177,6 +210,27 @@ export const EBAY_FIXED_GROUPS: EbayColumnGroup[] = [
         maxLength: 55,
         width: 200,
       },
+      {
+        id: 'listing_format',
+        label: 'Format',
+        description: 'Listing format. The Inventory API publishes Fixed Price; Auction is flagged at validation.',
+        required: false,
+        kind: 'enum',
+        options: [...EBAY_LISTING_FORMATS],
+        optionLabels: { FIXED_PRICE: 'Fixed Price', AUCTION: 'Auction' },
+        enumMode: 'strict',
+        width: 130,
+      },
+      {
+        id: 'listing_duration',
+        label: 'Duration',
+        description: 'Listing duration. Fixed-price listings are GTC (Good ’Til Cancelled).',
+        required: false,
+        kind: 'enum',
+        options: [...EBAY_LISTING_DURATIONS],
+        enumMode: 'strict',
+        width: 110,
+      },
     ],
   },
   {
@@ -232,6 +286,16 @@ export const EBAY_FIXED_GROUPS: EbayColumnGroup[] = [
         kind: 'number',
         width: 120,
       },
+      {
+        id: 'vat_rate',
+        label: 'VAT %',
+        description: 'VAT percentage applied to the listing (offer tax). Pick a common rate or type your own.',
+        required: false,
+        kind: 'enum',
+        options: [...EBAY_VAT_RATES],
+        enumMode: 'open',
+        width: 90,
+      },
     ],
   },
   {
@@ -253,6 +317,87 @@ export const EBAY_FIXED_GROUPS: EbayColumnGroup[] = [
         description: 'Business days to ship after payment',
         required: false,
         kind: 'number',
+        width: 100,
+      },
+    ],
+  },
+  {
+    id: 'package',
+    label: 'Package & Shipping',
+    color: 'cyan',
+    columns: [
+      {
+        id: 'item_location_country',
+        label: 'Location',
+        description: 'Country the item ships from (ISO code). Pick or type any.',
+        required: false,
+        kind: 'enum',
+        options: [...EBAY_ITEM_LOCATION_COUNTRIES],
+        enumMode: 'open',
+        width: 110,
+      },
+      {
+        id: 'package_type',
+        label: 'Package Type',
+        description: 'eBay package type (drives calculated shipping). Pick or type any.',
+        required: false,
+        kind: 'enum',
+        options: [...EBAY_PACKAGE_TYPES],
+        enumMode: 'open',
+        width: 200,
+      },
+      {
+        id: 'package_weight',
+        label: 'Weight',
+        description: 'Package weight (value). Used for calculated shipping.',
+        required: false,
+        kind: 'number',
+        width: 90,
+      },
+      {
+        id: 'weight_unit',
+        label: 'Wt Unit',
+        description: 'Weight unit of measure',
+        required: false,
+        kind: 'enum',
+        options: [...EBAY_WEIGHT_UNITS],
+        optionLabels: EBAY_WEIGHT_UNIT_LABELS,
+        enumMode: 'strict',
+        width: 100,
+      },
+      {
+        id: 'package_length',
+        label: 'Length',
+        description: 'Package length',
+        required: false,
+        kind: 'number',
+        width: 90,
+      },
+      {
+        id: 'package_width',
+        label: 'Width',
+        description: 'Package width',
+        required: false,
+        kind: 'number',
+        width: 90,
+      },
+      {
+        id: 'package_height',
+        label: 'Height',
+        description: 'Package height',
+        required: false,
+        kind: 'number',
+        width: 90,
+      },
+      {
+        id: 'dimension_unit',
+        label: 'Dim Unit',
+        description: 'Dimension unit of measure',
+        required: false,
+        kind: 'enum',
+        options: [...EBAY_DIMENSION_UNITS],
+        optionLabels: EBAY_DIMENSION_UNIT_LABELS,
+        enumMode: 'strict',
         width: 100,
       },
     ],
