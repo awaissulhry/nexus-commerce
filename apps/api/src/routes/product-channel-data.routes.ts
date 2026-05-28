@@ -282,6 +282,52 @@ export default async function productChannelDataRoutes(fastify: FastifyInstance)
     },
   )
 
+  // ── GET /api/products/:id/listings ──────────────────────────────────────
+  // T3.3 — all of a product's channel listings (every channel × market)
+  // with their effective key field values, for the cross-channel matrix.
+  // Effective value = override ?? own ?? inherited-master, so the matrix
+  // shows what's actually live per coordinate.
+  fastify.get<{ Params: { id: string } }>(
+    '/products/:id/listings',
+    async (request, reply) => {
+      const { id } = request.params
+      const listings = await prisma.channelListing.findMany({
+        where: { productId: id },
+        select: {
+          channel: true,
+          marketplace: true,
+          listingStatus: true,
+          title: true,
+          masterTitle: true,
+          description: true,
+          masterDescription: true,
+          price: true,
+          priceOverride: true,
+          masterPrice: true,
+          lastSyncedAt: true,
+        },
+        orderBy: [{ channel: 'asc' }, { marketplace: 'asc' }],
+      })
+      const num = (v: unknown): number | null => {
+        if (v == null) return null
+        const n = typeof v === 'string' ? parseFloat(v) : Number(v)
+        return Number.isFinite(n) ? n : null
+      }
+      return reply.send({
+        productId: id,
+        listings: listings.map((l) => ({
+          channel: l.channel,
+          marketplace: l.marketplace,
+          status: l.listingStatus,
+          title: l.title ?? l.masterTitle ?? null,
+          hasDescription: Boolean(l.description ?? l.masterDescription),
+          price: num(l.priceOverride) ?? num(l.price) ?? num(l.masterPrice),
+          lastSyncedAt: l.lastSyncedAt?.toISOString() ?? null,
+        })),
+      })
+    },
+  )
+
   // ── GET /api/products/:id/amazon-sync-data ──────────────────────────────
   // Reads ChannelListing.platformAttributes for the given marketplace and
   // returns structured master-data fields the edit page can pre-fill.

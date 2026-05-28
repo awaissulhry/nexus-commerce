@@ -29,6 +29,7 @@ import {
   Settings2,
   Truck,
   ListTree,
+  Columns,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
@@ -69,6 +70,7 @@ import {
   CockpitCardGrid,
   CockpitClassicPassthrough,
   CockpitDrawer,
+  CrossChannelMatrix,
   IdentifiersCard,
   ImagesSummaryCard,
   useCockpitFlag,
@@ -204,6 +206,7 @@ export default function AmazonCockpit(props: Props) {
   // the editor's dirty/save lifecycle identical to today.
   const useDrawer = useCockpitFlag('all-fields-drawer', true)
   const [allFieldsOpen, setAllFieldsOpen] = useState(false)
+  const [xChannelOpen, setXChannelOpen] = useState(false)
   // FL.3 / FL.3b / FL — per-field scope control across ALL linkable
   // fields (not just a demo). One popover + one diff-modal serve every
   // field, keyed by the open field. Persisted via FieldLinkGroup;
@@ -521,6 +524,15 @@ export default function AmazonCockpit(props: Props) {
                 <ListTree className="w-3 h-3" /> {t('products.edit.cockpit.amazon.allFields')}
               </button>
             )}
+            {/* T3.3 — cross-channel comparison matrix (Amazon + eBay). */}
+            <button
+              type="button"
+              onClick={() => setXChannelOpen(true)}
+              className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
+              title={t('products.edit.cockpit.amazon.xchannelTitle')}
+            >
+              <Columns className="w-3 h-3" /> {t('products.edit.cockpit.amazon.xchannel')}
+            </button>
             {/* SY.1 — outbound handoff to the bulk flat-file editor,
                 pre-filtered to this product family (new tab). */}
             <a
@@ -809,6 +821,13 @@ export default function AmazonCockpit(props: Props) {
           {classicEditor}
         </CockpitClassicPassthrough>
       )}
+
+      {/* T3.3 — cross-channel comparison matrix drawer (Amazon + eBay). */}
+      <CrossChannelMatrix
+        productId={product.id}
+        open={xChannelOpen}
+        onClose={() => setXChannelOpen(false)}
+      />
 
       {/* FL — per-field scope control, generic across all linkable fields. */}
       <FieldScopePopover

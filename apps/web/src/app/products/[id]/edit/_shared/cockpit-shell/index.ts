@@ -21,6 +21,10 @@ export type { CockpitClassicPassthroughProps } from './CockpitClassicPassthrough
 export { default as CockpitDrawer } from './CockpitDrawer'
 export type { CockpitDrawerProps } from './CockpitDrawer'
 
+// T3.3 — cross-channel comparison matrix
+export { default as CrossChannelMatrix } from './CrossChannelMatrix'
+export type { CrossChannelMatrixProps } from './CrossChannelMatrix'
+
 // UC.2 — contracts + shared cards
 export * from './contracts'
 // FL.2 — provenance badge
