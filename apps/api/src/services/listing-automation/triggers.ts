@@ -60,6 +60,7 @@ export interface ListingRuleContext {
   price?: { min: number; max: number; spreadPct: number; currency: string }
   inventory?: { available: number }
   health?: { score: number; ready: number; total: number; blocked: number }
+  content?: { staleCount: number; masterName: string | null }
 }
 
 // Per-market currency (mirrors the cross-channel matrix + preflight).
@@ -69,4 +70,14 @@ export function currencyForMarket(mp: string): string {
   if (m === 'US') return 'USD'
   if (m === 'JP') return 'JPY'
   return 'EUR'
+}
+
+// Per-market language (ISO 639-1) — mirrors field-links MARKET_LANG so
+// the cascade translates to the same target languages as manual linking.
+const MARKET_LANG: Record<string, string> = {
+  IT: 'it', DE: 'de', FR: 'fr', ES: 'es', UK: 'en', GB: 'en', US: 'en',
+  NL: 'nl', SE: 'sv', PL: 'pl', BE: 'nl', IE: 'en', AT: 'de', CH: 'de', PT: 'pt', JP: 'ja',
+}
+export function marketLanguage(mp: string): string {
+  return MARKET_LANG[(mp ?? '').toUpperCase()] ?? 'en'
 }

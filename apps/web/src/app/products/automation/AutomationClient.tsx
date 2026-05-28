@@ -30,6 +30,7 @@ const TRIGGERS = [
 const ACTION_TYPES = [
   { id: 'sync_price_to_marketplaces', label: 'Sync price to marketplaces', help: 'Enqueue a price push to eligible listings (currency-guarded, 5-min grace).' },
   { id: 'sync_inventory_to_marketplaces', label: 'Sync inventory to marketplaces', help: 'Enqueue a quantity push to eligible listings.' },
+  { id: 'cascade_translate_content', label: 'Cascade & translate content', help: 'Translate master title/description into each target market’s language (glossary-aware) and enqueue behind the 5-min grace window.' },
   { id: 'notify', label: 'Notify operator', help: 'Log + (future) in-app notification — no marketplace writes.' },
   { id: 'log_only', label: 'Log only', help: 'Audit-only — record an execution row but take no action.' },
 ] as const
@@ -37,7 +38,7 @@ const ACTION_TYPES = [
 const OPS = ['eq', 'ne', 'lt', 'lte', 'gt', 'gte', 'contains', 'exists'] as const
 
 interface Cond { field: string; op: string; value?: string }
-interface Act { type: string; referencePrice?: string; onlySameCurrency?: boolean; quantity?: string; channels?: string; marketplaces?: string; message?: string }
+interface Act { type: string; referencePrice?: string; onlySameCurrency?: boolean; quantity?: string; channels?: string; marketplaces?: string; message?: string; sourceLanguage?: string }
 interface Rule {
   id: string; name: string; description: string | null; domain: string; trigger: string
   conditions: unknown; actions: unknown[]; enabled: boolean; dryRun: boolean
@@ -95,6 +96,9 @@ function toBody(d: Draft) {
       base.channels = csv(a.channels); base.marketplaces = csv(a.marketplaces)
     } else if (a.type === 'sync_inventory_to_marketplaces') {
       if (a.quantity && a.quantity.trim()) base.quantity = Number(a.quantity)
+      base.channels = csv(a.channels); base.marketplaces = csv(a.marketplaces)
+    } else if (a.type === 'cascade_translate_content') {
+      if (a.sourceLanguage && a.sourceLanguage.trim()) base.sourceLanguage = a.sourceLanguage.trim()
       base.channels = csv(a.channels); base.marketplaces = csv(a.marketplaces)
     } else if (a.type === 'notify') {
       base.message = a.message ?? ''
@@ -332,6 +336,14 @@ export default function AutomationClient() {
                       {a.type === 'sync_inventory_to_marketplaces' && (
                         <div className="grid grid-cols-2 gap-1.5 text-xs">
                           <input value={a.quantity ?? ''} onChange={(e) => set({ quantity: e.target.value })} placeholder="quantity (blank = from context)" className="rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1" />
+                          <span />
+                          <input value={a.channels ?? ''} onChange={(e) => set({ channels: e.target.value })} placeholder="channels (AMAZON,EBAY)" className="rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1" />
+                          <input value={a.marketplaces ?? ''} onChange={(e) => set({ marketplaces: e.target.value })} placeholder="markets (DE,FR)" className="rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1" />
+                        </div>
+                      )}
+                      {a.type === 'cascade_translate_content' && (
+                        <div className="grid grid-cols-2 gap-1.5 text-xs">
+                          <input value={a.sourceLanguage ?? ''} onChange={(e) => set({ sourceLanguage: e.target.value })} placeholder="source lang (en)" className="rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1" />
                           <span />
                           <input value={a.channels ?? ''} onChange={(e) => set({ channels: e.target.value })} placeholder="channels (AMAZON,EBAY)" className="rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1" />
                           <input value={a.marketplaces ?? ''} onChange={(e) => set({ marketplaces: e.target.value })} placeholder="markets (DE,FR)" className="rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1" />

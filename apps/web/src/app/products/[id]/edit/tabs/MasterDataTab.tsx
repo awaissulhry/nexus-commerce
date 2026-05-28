@@ -1135,6 +1135,14 @@ function MarketAvailabilityCard({ productId }: { productId: string }) {
         </div>
         <div className="flex items-center gap-1.5 flex-shrink-0 flex-wrap">
           {/* OL.A.4 — cross-channel field propagation (diff-then-apply) */}
+          {/* OL.D.7 — jump to catalog-wide listing automation rules */}
+          <a
+            href="/products/automation"
+            className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
+            title="Manage cross-market price / inventory / content automation rules"
+          >
+            <Sparkles className="w-3.5 h-3.5" /> Automation
+          </a>
           <Button variant="secondary" size="sm" icon={<Link2 className="w-3.5 h-3.5" />} onClick={() => setMatrixOpen(true)}>
             Cross-channel
           </Button>

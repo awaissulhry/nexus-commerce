@@ -39,6 +39,7 @@ interface ProductWithListings {
   name: string | null
   basePrice: unknown
   productType: string | null
+  updatedAt: Date
   channelListings: Array<{
     channel: string
     marketplace: string
@@ -52,6 +53,8 @@ interface ProductWithListings {
     description: string | null
     masterDescription: string | null
     platformAttributes: unknown
+    lastSyncedAt: Date | null
+    followMasterTitle: boolean | null
   }>
 }
 
@@ -109,18 +112,20 @@ export async function runListingAutomationOnce(opts?: { forceDryRun?: boolean })
   const wantPrice = await hasEnabledRules('price_diverged')
   const wantInv = await hasEnabledRules('inventory_low')
   const wantHealth = await hasEnabledRules('listing_health_low')
-  if (!wantPrice && !wantInv && !wantHealth) return result // nothing to do — cheap exit
+  const wantContent = await hasEnabledRules('master_content_changed')
+  if (!wantPrice && !wantInv && !wantHealth && !wantContent) return result // nothing to do — cheap exit
 
   const products = (await prisma.product.findMany({
     where: { channelListings: { some: { isPublished: true, offerActive: true } } },
     select: {
-      id: true, sku: true, name: true, basePrice: true, productType: true,
+      id: true, sku: true, name: true, basePrice: true, productType: true, updatedAt: true,
       channelListings: {
         where: { isPublished: true, offerActive: true },
         select: {
           channel: true, marketplace: true, price: true, quantity: true, listingStatus: true,
           isPublished: true, offerActive: true,
           title: true, masterTitle: true, description: true, masterDescription: true, platformAttributes: true,
+          lastSyncedAt: true, followMasterTitle: true,
         },
       },
     },
@@ -130,6 +135,7 @@ export async function runListingAutomationOnce(opts?: { forceDryRun?: boolean })
   if (wantPrice) result.byTrigger.price_diverged = { productsScanned: 0, matched: 0 }
   if (wantInv) result.byTrigger.inventory_low = { productsScanned: 0, matched: 0 }
   if (wantHealth) result.byTrigger.listing_health_low = { productsScanned: 0, matched: 0 }
+  if (wantContent) result.byTrigger.master_content_changed = { productsScanned: 0, matched: 0 }
 
   for (const p of products) {
     const coords = buildCoords(p)
@@ -179,6 +185,25 @@ export async function runListingAutomationOnce(opts?: { forceDryRun?: boolean })
         const stat = result.byTrigger.listing_health_low
         stat.productsScanned++
         const res = await evaluateAllRulesForTrigger({ domain: 'listings', trigger: 'listing_health_low', context: ctx, forceDryRun })
+        stat.matched += res.filter((r) => r.matched).length
+      }
+    }
+
+    // master_content_changed — master edited since a master-following
+    // listing last synced (stale content the operator may want cascaded).
+    if (wantContent) {
+      const stale = p.channelListings.filter(
+        (l) => l.followMasterTitle !== false && (l.lastSyncedAt == null || l.lastSyncedAt < p.updatedAt),
+      )
+      if (stale.length > 0) {
+        const ctx: ListingRuleContext = {
+          ...base,
+          trigger: 'master_content_changed',
+          content: { staleCount: stale.length, masterName: p.name },
+        }
+        const stat = result.byTrigger.master_content_changed
+        stat.productsScanned++
+        const res = await evaluateAllRulesForTrigger({ domain: 'listings', trigger: 'master_content_changed', context: ctx, forceDryRun })
         stat.matched += res.filter((r) => r.matched).length
       }
     }

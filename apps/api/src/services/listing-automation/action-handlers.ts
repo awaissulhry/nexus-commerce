@@ -22,7 +22,8 @@
 import { ACTION_HANDLERS, getFieldPath, type ActionResult } from '../automation-rule.service.js'
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
-import { currencyForMarket } from './triggers.js'
+import { currencyForMarket, marketLanguage } from './triggers.js'
+import { translateProductCopy } from '../ai/translate.service.js'
 
 const GRACE_MS = 5 * 60 * 1000 // 5-minute undo window before the worker pushes
 
@@ -164,6 +165,122 @@ ACTION_HANDLERS.sync_inventory_to_marketplaces = async (action, context, meta): 
   })
   logger.info('[listing-automation] sync_inventory enqueued', { ruleId: meta.ruleId, productId, count: listings.length, quantity })
   return { type: action.type, ok: true, output: { enqueued: listings.length, quantity, coordinates } }
+}
+
+// Cap distinct target languages per cascade so a runaway rule can't burn
+// AI budget (mirrors the field-links MAX_TRANSLATE_LANGS guard).
+const MAX_CASCADE_LANGS = 8
+
+/**
+ * cascade_translate_content — translate the master title/description into
+ * each target listing's market language and enqueue a FULL_SYNC behind
+ * the grace window (the operator's undo/approval window). Same-language
+ * targets get the master copy verbatim. Honours the house glossary
+ * (TerminologyPreference, brand-scoped + global) so machine translation
+ * keeps motorcycle-gear terms right. Dry-run reports the plan WITHOUT
+ * calling AI or writing anything. sourceLanguage defaults to 'en'
+ * (operator-facing master copy); set action.sourceLanguage to override.
+ */
+ACTION_HANDLERS.cascade_translate_content = async (action, context, meta): Promise<ActionResult> => {
+  const productId = productIdFrom(action as Record<string, unknown>, context)
+  if (!productId) return { type: action.type, ok: false, error: 'No product.id in context' }
+
+  const product = await prisma.product.findUnique({
+    where: { id: productId },
+    select: { name: true, description: true, brand: true },
+  })
+  const sourceName = product?.name ?? (getFieldPath(context, 'product.name') as string | null)
+  const sourceDescription = product?.description ?? null
+  if (!sourceName && !sourceDescription) {
+    return { type: action.type, ok: false, error: 'Master has no name/description to cascade' }
+  }
+  const sourceLang = ((action.sourceLanguage as string | undefined) ?? 'en').toLowerCase()
+
+  const listings = await eligibleListings(productId, action as Record<string, unknown>)
+  if (listings.length === 0) {
+    return { type: action.type, ok: true, output: { enqueued: 0, note: 'no eligible coordinates' } }
+  }
+
+  // Group targets by language (one translate call per distinct language).
+  const byLang = new Map<string, EligibleListing[]>()
+  for (const l of listings) {
+    const lang = marketLanguage(l.marketplace)
+    const arr = byLang.get(lang) ?? []
+    arr.push(l)
+    byLang.set(lang, arr)
+  }
+
+  const plan = Array.from(byLang.keys()).map((lang) => ({ lang, verbatim: lang === sourceLang }))
+  if (meta.dryRun) {
+    return {
+      type: action.type, ok: true,
+      output: { dryRun: true, wouldEnqueue: listings.length, languages: plan, coordinates: listings.map((l) => `${l.channel}:${l.marketplace}`) },
+    }
+  }
+
+  // Resolve translations per language (capped), with glossary.
+  const translated = new Map<string, { title: string | null; description: string | null }>()
+  let langCalls = 0
+  let budgetHit = false
+  for (const [lang, group] of byLang) {
+    void group
+    if (lang === sourceLang) {
+      translated.set(lang, { title: sourceName ?? null, description: sourceDescription })
+      continue
+    }
+    if (langCalls >= MAX_CASCADE_LANGS) { budgetHit = true; continue }
+    langCalls++
+    let glossary: Array<{ preferred: string; avoid?: string[]; context?: string | null }> = []
+    try {
+      const terms = await prisma.terminologyPreference.findMany({
+        where: { language: lang, OR: [{ brand: product?.brand ?? null }, { brand: null }] },
+        select: { preferred: true, avoid: true, context: true },
+      })
+      glossary = terms.map((t) => ({ preferred: t.preferred, avoid: t.avoid, context: t.context }))
+    } catch {
+      /* glossary best-effort */
+    }
+    try {
+      const res = await translateProductCopy({
+        source: { name: sourceName, description: sourceDescription },
+        targetLanguage: lang,
+        fields: ['name', 'description'],
+        productId,
+        feature: 'listing-automation-cascade',
+        brand: product?.brand ?? undefined,
+        glossary: glossary.length > 0 ? glossary : undefined,
+      })
+      translated.set(lang, { title: res.name ?? null, description: res.description ?? null })
+    } catch (err) {
+      logger.warn('[listing-automation] cascade translate failed', { lang, err: err instanceof Error ? err.message : String(err) })
+    }
+  }
+
+  const rows = listings
+    .map((l) => {
+      const t = translated.get(marketLanguage(l.marketplace))
+      if (!t || (t.title == null && t.description == null)) return null
+      return {
+        productId: l.productId ?? productId,
+        channelListingId: l.id,
+        targetChannel: l.channel as never,
+        targetRegion: l.region ?? l.marketplace ?? undefined,
+        syncType: 'FULL_SYNC' as const,
+        syncStatus: 'PENDING' as const,
+        payload: { title: t.title, description: t.description, source: `AUTOMATION:${meta.ruleId}` } as never,
+        externalListingId: l.externalListingId ?? undefined,
+        retryCount: 0,
+        maxRetries: 3,
+        holdUntil: new Date(Date.now() + GRACE_MS),
+      }
+    })
+    .filter((r): r is NonNullable<typeof r> => r != null)
+
+  if (rows.length > 0) {
+    await prisma.outboundSyncQueue.createMany({ data: rows as never, skipDuplicates: true })
+  }
+  logger.info('[listing-automation] cascade_translate enqueued', { ruleId: meta.ruleId, productId, count: rows.length, langCalls })
+  return { type: action.type, ok: true, output: { enqueued: rows.length, languages: plan, budgetHit } }
 }
 
 export const LISTING_HANDLERS_REGISTERED = true
