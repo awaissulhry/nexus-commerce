@@ -15,7 +15,6 @@
 
 import { useEffect, useState } from 'react'
 import { Loader2, ArrowRight, AlertTriangle, Languages, Check } from 'lucide-react'
-import { cn } from '@/lib/utils'
 import CockpitDrawer from './CockpitDrawer'
 import {
   useFieldLinks,
@@ -212,62 +211,46 @@ export default function CrossChannelMatrix({ productId, open, onClose }: CrossCh
 
         {rows && rows.length > 0 && (
           <>
-            {/* Propagation bar — segmented buttons (no native <select>, which
-                glitched inside the re-rendering drawer). */}
-            <div className="space-y-2 rounded-lg border border-slate-200 dark:border-slate-800 p-3">
-              <div className="flex flex-wrap items-center gap-1.5">
-                <span className="w-12 shrink-0 text-xs text-slate-500 dark:text-slate-400">
-                  {t('products.edit.cockpit.xchannel.fieldLabel')}
-                </span>
-                {fieldOptions.map((o) => (
-                  <button
-                    key={o.v}
-                    type="button"
-                    onClick={() => {
-                      setField(o.v)
-                      setPreview(null)
-                      setApplyResult(null)
-                    }}
-                    aria-pressed={field === o.v}
-                    className={cn(
-                      'rounded px-2.5 py-1 text-xs font-medium',
-                      field === o.v
-                        ? 'bg-blue-600 text-white'
-                        : 'border border-slate-200 text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800',
-                    )}
-                  >
-                    {o.label}
-                  </button>
-                ))}
-              </div>
-              <div className="flex flex-wrap items-center gap-1.5">
-                <span className="w-12 shrink-0 text-xs text-slate-500 dark:text-slate-400">
-                  {t('products.edit.cockpit.xchannel.sourceLabel')}
-                </span>
-                {rows.map((r) => {
-                  const ck = coordKey(r.channel, r.marketplace)
-                  return (
-                    <button
-                      key={ck}
-                      type="button"
-                      onClick={() => {
-                        setSource(ck)
-                        setPreview(null)
-                        setApplyResult(null)
-                      }}
-                      aria-pressed={source === ck}
-                      className={cn(
-                        'rounded px-2 py-1 text-xs font-medium',
-                        source === ck
-                          ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900'
-                          : 'border border-slate-200 text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800',
-                      )}
-                    >
+            {/* Propagation bar. Native selects (matches the rest of the UI);
+                they work now that the drawer no longer thrashes focus on
+                every re-render. */}
+            <div className="flex flex-wrap items-end gap-2 rounded-lg border border-slate-200 dark:border-slate-800 p-3">
+              <label className="text-xs text-slate-500 dark:text-slate-400">
+                {t('products.edit.cockpit.xchannel.fieldLabel')}
+                <select
+                  value={field}
+                  onChange={(e) => {
+                    setField(e.target.value as FieldChoice)
+                    setPreview(null)
+                    setApplyResult(null)
+                  }}
+                  className="mt-1 block rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-sm text-slate-900 dark:text-slate-100"
+                >
+                  {fieldOptions.map((o) => (
+                    <option key={o.v} value={o.v}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="text-xs text-slate-500 dark:text-slate-400">
+                {t('products.edit.cockpit.xchannel.sourceLabel')}
+                <select
+                  value={source}
+                  onChange={(e) => {
+                    setSource(e.target.value)
+                    setPreview(null)
+                    setApplyResult(null)
+                  }}
+                  className="mt-1 block rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-sm text-slate-900 dark:text-slate-100"
+                >
+                  {rows.map((r) => (
+                    <option key={coordKey(r.channel, r.marketplace)} value={coordKey(r.channel, r.marketplace)}>
                       {r.channel} {r.marketplace}
-                    </button>
-                  )
-                })}
-              </div>
+                    </option>
+                  ))}
+                </select>
+              </label>
               <button
                 type="button"
                 onClick={() => void handlePropagate()}
