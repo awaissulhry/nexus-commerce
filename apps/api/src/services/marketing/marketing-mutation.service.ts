@@ -21,8 +21,9 @@ import { logger } from '../../utils/logger.js'
 import { publishMarketingEvent } from '../marketing-events.service.js'
 import { checkMarketingWriteGate } from './marketing-write-gate.js'
 import { adapterFor } from './adapters/types.js'
-// Ensure the Amazon adapter self-registers.
+// Ensure the channel adapters self-register.
 import './adapters/amazon.adapter.js'
+import './adapters/internal.adapter.js'
 
 const GRACE_PERIOD_MS = Number(process.env.NEXUS_MARKETING_GRACE_MS ?? 5 * 60 * 1000)
 
@@ -30,6 +31,7 @@ export type MktSyncType =
   | 'MKT_BUDGET_UPDATE'
   | 'MKT_STATE_UPDATE' // pause / resume
   | 'MKT_BID_UPDATE'
+  | 'MKT_LAUNCH' // INTERNAL content push / outreach kick
 
 export interface EnqueueArgs {
   campaignId: string
@@ -241,7 +243,7 @@ export async function processMarketingSyncRow(queueId: string): Promise<{ status
 export async function drainMarketingSyncOnce(limit = 50): Promise<{ processed: number; results: Array<{ status: string; queueId: string }> }> {
   const candidates = await prisma.outboundSyncQueue.findMany({
     where: {
-      syncType: { in: ['MKT_BUDGET_UPDATE', 'MKT_STATE_UPDATE', 'MKT_BID_UPDATE'] },
+      syncType: { in: ['MKT_BUDGET_UPDATE', 'MKT_STATE_UPDATE', 'MKT_BID_UPDATE', 'MKT_LAUNCH'] },
       syncStatus: 'PENDING',
       OR: [{ holdUntil: null }, { holdUntil: { lte: new Date() } }],
     },

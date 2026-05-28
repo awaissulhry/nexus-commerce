@@ -358,6 +358,59 @@ const marketingOsRoutes: FastifyPluginAsync = async (app) => {
     }
   })
 
+  // ── Create campaign (P10, any channel incl. INTERNAL) ─────────────────
+  // Operator-authored campaigns: paid (Amazon/eBay/etc.), promotions, or
+  // INTERNAL content-push / outreach. Creates the core row + the matching
+  // 1:1 detail. Scheduling onto the calendar / launching content happens
+  // via the calendar + /launch endpoints.
+  app.post('/marketing/os/campaigns', async (request, reply) => {
+    const b = request.body as Record<string, unknown>
+    if (!b?.name || !b?.channel || !b?.surface) {
+      reply.status(400)
+      return { error: 'name, channel, surface are required' }
+    }
+    const marketplaces = (b.marketplaces as string[]) ?? []
+    const data: Record<string, unknown> = {
+      channel: b.channel,
+      surface: b.surface,
+      objective: (b.objective as string) ?? 'SALES',
+      name: b.name,
+      status: (b.status as string) ?? 'DRAFT',
+      startDate: b.startDate ? new Date(b.startDate as string) : new Date(),
+      endDate: b.endDate ? new Date(b.endDate as string) : null,
+      marketplaces,
+      primaryMarketplace: (b.primaryMarketplace as string) ?? marketplaces[0] ?? null,
+      budgetCents: (b.budgetCents as number) ?? null,
+      budgetKind: (b.budgetKind as string) ?? null,
+      currency: (b.currency as string) ?? 'EUR',
+      createdBy: (b.createdBy as string) ?? null,
+    }
+    // Nested 1:1 detail by surface family.
+    if (b.surface === 'CONTENT_PUSH') {
+      data.contentPush = { create: { contentType: (b.contentType as string) ?? 'LISTING_COPY', aPlusContentId: (b.aPlusContentId as string) ?? null, brandStoryId: (b.brandStoryId as string) ?? null, targetRefs: (b.targetRefs as string[]) ?? [] } }
+    } else if (b.surface === 'EMAIL_OUTREACH' || b.surface === 'REVIEW_OUTREACH') {
+      data.outreach = { create: { mode: b.surface === 'REVIEW_OUTREACH' ? 'REVIEW' : 'EMAIL', segmentId: (b.segmentId as string) ?? null, templateId: (b.templateId as string) ?? null } }
+    } else if (b.surface === 'DISCOUNT' || b.surface === 'MARKDOWN' || b.surface === 'DEAL') {
+      data.discount = { create: { discountType: (b.discountType as string) ?? 'PERCENTAGE', discountPercent: (b.discountPercent as number) ?? null, discountValueCents: (b.discountValueCents as number) ?? null, appliesTo: (b.appliesTo as string) ?? 'ALL' } }
+    }
+    const created = await prisma.marketingCampaign.create({ data: data as never })
+    publishMarketingEvent({ type: 'campaign.mutated', campaignId: created.id, channel: created.channel, action: 'created', ts: Date.now() })
+    return created
+  })
+
+  // Launch an INTERNAL content-push / outreach campaign (sandbox-gated).
+  app.post('/marketing/os/campaigns/:id/launch', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const { enqueueCampaignMutation } = await import('../services/marketing/marketing-mutation.service.js')
+    try {
+      const r = await enqueueCampaignMutation({ campaignId: id, syncType: 'MKT_LAUNCH', payload: {}, applyImmediately: true })
+      return r
+    } catch (err) {
+      reply.status(500)
+      return { error: (err as Error)?.message ?? 'launch failed' }
+    }
+  })
+
   // ── Campaign mutations (P5, sandbox-gated) ────────────────────────────
   // Operator writes flow through the unified mutation path: optimistic
   // local update + CampaignAction audit + OutboundSyncQueue row with a

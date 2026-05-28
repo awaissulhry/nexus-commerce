@@ -22,6 +22,9 @@ import {
   Play,
   Pause,
   Check,
+  Plus,
+  Rocket,
+  X,
 } from 'lucide-react'
 import { KpiStrip, SharedLensTabs, type KpiTileSpec, type LensTab } from '@/app/_shared/grid-lens'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -128,6 +131,8 @@ export function MarketingCampaignsClient({
   const [live, setLive] = useState(false)
   const [busy, setBusy] = useState<Record<string, boolean>>({})
   const [editBudget, setEditBudget] = useState<{ id: string; value: string } | null>(null)
+  const [showCreate, setShowCreate] = useState(false)
+  const [createForm, setCreateForm] = useState({ name: '', channel: 'INTERNAL', surface: 'CONTENT_PUSH', marketplaces: 'IT', contentType: 'LISTING_COPY', targetRefs: '', segmentId: '', budgetEur: '' })
 
   // Sandbox-gated mutation: optimistic local update from the server's
   // echoed campaign; Amazon stays sandbox (no live write) until P8.
@@ -195,6 +200,26 @@ export function MarketingCampaignsClient({
     }, [refetch]),
   )
 
+  const createCampaign = async () => {
+    const f = createForm
+    const body: Record<string, unknown> = {
+      name: f.name, channel: f.channel, surface: f.surface,
+      marketplaces: f.marketplaces.split(',').map((s) => s.trim()).filter(Boolean),
+      status: 'DRAFT',
+    }
+    if (f.surface === 'CONTENT_PUSH') { body.contentType = f.contentType; body.targetRefs = f.targetRefs.split(',').map((s) => s.trim()).filter(Boolean) }
+    if (f.surface === 'EMAIL_OUTREACH' || f.surface === 'REVIEW_OUTREACH') body.segmentId = f.segmentId || null
+    if (f.budgetEur) { body.budgetCents = Math.round(parseFloat(f.budgetEur) * 100); body.budgetKind = 'DAILY' }
+    await fetch(`${getBackendUrl()}/api/marketing/os/campaigns`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+    setShowCreate(false)
+    setCreateForm({ name: '', channel: 'INTERNAL', surface: 'CONTENT_PUSH', marketplaces: 'IT', contentType: 'LISTING_COPY', targetRefs: '', segmentId: '', budgetEur: '' })
+    void refetch()
+  }
+  const launch = useCallback(async (id: string) => {
+    setBusy((b) => ({ ...b, [id]: true }))
+    try { await fetch(`${getBackendUrl()}/api/marketing/os/campaigns/${id}/launch`, { method: 'POST' }) } finally { setBusy((b) => ({ ...b, [id]: false })); void refetch() }
+  }, [refetch])
+
   // Client-side lens filter for the EXTERNAL pseudo-channel + sort.
   const rows = useMemo(() => {
     let r = campaigns
@@ -237,6 +262,9 @@ export function MarketingCampaignsClient({
               <Radio size={12} className="animate-pulse" /> live
             </span>
           )}
+          <button onClick={() => setShowCreate(true)} className="ml-auto inline-flex items-center gap-1 px-3 py-1.5 text-sm rounded-md bg-blue-600 text-white hover:bg-blue-700">
+            <Plus size={14} /> New campaign
+          </button>
         </div>
         <p className="text-sm text-slate-500 dark:text-slate-400">
           Unified cross-channel campaigns across all markets. Pause/resume + budget edits run through the guarded mutation path (Amazon in sandbox until cutover — no live write fires).
@@ -356,12 +384,65 @@ export function MarketingCampaignsClient({
                       {c.status === 'ACTIVE' ? <Pause size={14} className="text-amber-600" /> : <Play size={14} className="text-emerald-600" />}
                     </button>
                   )}
+                  {c.channel === 'INTERNAL' && (
+                    <button
+                      disabled={busy[c.id]}
+                      onClick={() => void launch(c.id)}
+                      title="Launch content / outreach (sandbox)"
+                      className="inline-flex items-center justify-center w-7 h-7 rounded hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-40"
+                    >
+                      <Rocket size={14} className="text-violet-600" />
+                    </button>
+                  )}
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+
+      {showCreate && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setShowCreate(false)}>
+          <div className="bg-white dark:bg-slate-900 rounded-lg shadow-xl w-full max-w-md p-4" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="font-semibold text-slate-900 dark:text-slate-100">New campaign</h2>
+              <button onClick={() => setShowCreate(false)}><X size={16} /></button>
+            </div>
+            <div className="space-y-3">
+              <input autoFocus placeholder="Campaign name" value={createForm.name} onChange={(e) => setCreateForm({ ...createForm, name: e.target.value })} className="w-full px-2 py-1.5 text-sm rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950" />
+              <div className="flex gap-2">
+                <label className="flex-1 text-xs text-slate-500">Channel
+                  <select value={createForm.channel} onChange={(e) => setCreateForm({ ...createForm, channel: e.target.value })} className="w-full mt-0.5 px-2 py-1.5 text-sm rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950">
+                    {['INTERNAL', 'AMAZON', 'EBAY', 'SHOPIFY', 'GOOGLE', 'META', 'TIKTOK'].map((c) => <option key={c}>{c}</option>)}
+                  </select>
+                </label>
+                <label className="flex-1 text-xs text-slate-500">Surface
+                  <select value={createForm.surface} onChange={(e) => setCreateForm({ ...createForm, surface: e.target.value })} className="w-full mt-0.5 px-2 py-1.5 text-sm rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950">
+                    {['CONTENT_PUSH', 'EMAIL_OUTREACH', 'REVIEW_OUTREACH', 'SP', 'SB', 'SD', 'PROMOTED_LISTINGS', 'DISCOUNT', 'MARKDOWN', 'DEAL', 'SHOPPING_FEED'].map((s) => <option key={s}>{s}</option>)}
+                  </select>
+                </label>
+              </div>
+              <input placeholder="Markets (comma-sep, e.g. IT,DE)" value={createForm.marketplaces} onChange={(e) => setCreateForm({ ...createForm, marketplaces: e.target.value })} className="w-full px-2 py-1.5 text-sm rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950" />
+              {createForm.surface === 'CONTENT_PUSH' && (
+                <div className="flex gap-2">
+                  <select value={createForm.contentType} onChange={(e) => setCreateForm({ ...createForm, contentType: e.target.value })} className="px-2 py-1.5 text-sm rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950">{['LISTING_COPY', 'APLUS', 'BRAND_STORY'].map((t) => <option key={t}>{t}</option>)}</select>
+                  <input placeholder="Target ASINs/SKUs (comma-sep)" value={createForm.targetRefs} onChange={(e) => setCreateForm({ ...createForm, targetRefs: e.target.value })} className="flex-1 px-2 py-1.5 text-sm rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950" />
+                </div>
+              )}
+              {(createForm.surface === 'EMAIL_OUTREACH' || createForm.surface === 'REVIEW_OUTREACH') && (
+                <input placeholder="CustomerSegment id (optional)" value={createForm.segmentId} onChange={(e) => setCreateForm({ ...createForm, segmentId: e.target.value })} className="w-full px-2 py-1.5 text-sm rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950" />
+              )}
+              {['SP', 'SB', 'SD', 'PROMOTED_LISTINGS', 'SHOPPING_FEED'].includes(createForm.surface) && (
+                <input placeholder="Daily budget € (optional)" value={createForm.budgetEur} onChange={(e) => setCreateForm({ ...createForm, budgetEur: e.target.value })} className="w-full px-2 py-1.5 text-sm rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950" />
+              )}
+            </div>
+            <div className="flex justify-end gap-2 mt-4">
+              <button onClick={() => setShowCreate(false)} className="px-3 py-1.5 text-sm rounded border border-slate-200 dark:border-slate-700">Cancel</button>
+              <button onClick={createCampaign} disabled={!createForm.name} className="px-3 py-1.5 text-sm rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50">Create draft</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
