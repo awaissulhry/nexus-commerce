@@ -720,45 +720,6 @@ export default function FlatFileGrid({
   })
   const resizeDragRef = useRef<{ type: 'col' | 'row'; colId?: string; startX: number; startY: number; startVal: number } | null>(null)
 
-  // VG.1 — row virtualization scroll tracking. Below the threshold every row
-  // renders (zero behavior change for small grids); above it, only the rows
-  // in the viewport (+ overscan) are built, with spacer rows preserving the
-  // scroll height. Uniform rowHeight keeps the offset math simple.
-  const VIRTUALIZE_THRESHOLD = 80
-  const ROW_OVERSCAN = 10
-  const scrollContainerRef = useRef<HTMLDivElement>(null)
-  const [scrollTop, setScrollTop] = useState(0)
-  // Default high enough to window on the very first paint (corrected on mount).
-  // Constant to avoid SSR/hydration mismatch — no window access in initializer.
-  const [viewportH, setViewportH] = useState(900)
-  const scrollRafRef = useRef<number | undefined>(undefined)
-  // The grid root is min-h-screen, so the page scrolls (document scroll) and
-  // the inner overflow-auto container grows to content height. Window against
-  // whichever actually scrolls: container.scrollTop when it scrolls internally,
-  // else how far the container's top has scrolled above the viewport. Clamp the
-  // viewport to innerHeight so an unbounded container doesn't span every row.
-  const recomputeWindow = useCallback(() => {
-    const el = scrollContainerRef.current
-    if (!el) return
-    const rect = el.getBoundingClientRect()
-    const innerH = typeof window !== 'undefined' ? window.innerHeight : 900
-    setScrollTop(el.scrollTop > 0 ? el.scrollTop : Math.max(0, -rect.top))
-    setViewportH(Math.min(el.clientHeight || innerH, innerH))
-  }, [])
-  const onGridScroll = useCallback(() => {
-    if (scrollRafRef.current) cancelAnimationFrame(scrollRafRef.current)
-    scrollRafRef.current = requestAnimationFrame(recomputeWindow)
-  }, [recomputeWindow])
-  useEffect(() => {
-    recomputeWindow()
-    window.addEventListener('scroll', onGridScroll, { passive: true })
-    window.addEventListener('resize', onGridScroll)
-    return () => {
-      window.removeEventListener('scroll', onGridScroll)
-      window.removeEventListener('resize', onGridScroll)
-    }
-  }, [recomputeWindow, onGridScroll])
-
   useEffect(() => { try { localStorage.setItem(`${storageKey}-col-widths`, JSON.stringify(colWidths)) } catch {} }, [colWidths, storageKey])
   useEffect(() => { try { localStorage.setItem(`${storageKey}-row-height`, String(rowHeight)) } catch {} }, [rowHeight, storageKey])
   useEffect(() => { try { localStorage.setItem(`${storageKey}-frozen-cols`, String(frozenColCount)) } catch {} }, [frozenColCount, storageKey])
@@ -1390,7 +1351,7 @@ export default function FlatFileGrid({
   // ── Render ─────────────────────────────────────────────────────────────
 
   return (
-    <div className="h-screen bg-slate-50 dark:bg-slate-950 flex flex-col">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col">
 
       {/* ── Sticky header ────────────────────────────── */}
       <header className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 sticky top-0 z-30">
@@ -1627,9 +1588,9 @@ export default function FlatFileGrid({
       {renderModals?.(modalsCtx)}
 
       {/* ── Main grid + optional AI panel ─────────────── */}
-      <div className="flex-1 min-h-0 flex overflow-hidden">
-      <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
-      <div className="flex-1 min-h-0 overflow-auto" ref={scrollContainerRef} onScroll={onGridScroll}
+      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 overflow-auto"
         onPointerMove={(e) => {
           if (e.buttons !== 1) return
           const el = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null
@@ -1727,38 +1688,27 @@ export default function FlatFileGrid({
 
             <tbody>
               {(() => {
+                const rendered: React.ReactNode[] = []
                 const GROUP_BAND_COLORS = ['bg-blue-50/30 dark:bg-blue-950/10', 'bg-violet-50/30 dark:bg-violet-950/10', 'bg-emerald-50/30 dark:bg-emerald-950/10', 'bg-amber-50/30 dark:bg-amber-950/10', 'bg-rose-50/30 dark:bg-rose-950/10', 'bg-cyan-50/30 dark:bg-cyan-950/10']
-
-                // VG.1 Pass 1 — cheap descriptors (no JSX), assigning the flat
-                // display index ri exactly as the inline version did.
-                type RItem =
-                  | { kind: 'header'; groupKey: string; groupRows: BaseRow[]; bandClass: string }
-                  | { kind: 'row'; row: BaseRow; ri: number; bandClass: string; isMulti: boolean }
-                const items: RItem[] = []
-                const filteredIds = new Set(filteredRows.map((r) => r._rowId))
                 let bandIdx = 0; let displayIdx = 0
+
                 rowGroups.forEach((groupRows, groupKey) => {
                   const bandClass = GROUP_BAND_COLORS[bandIdx++ % GROUP_BAND_COLORS.length]
                   const isCollapsed = collapsedRowGroups.has(groupKey)
-                  if (groupRows.length > 1) items.push({ kind: 'header', groupKey, groupRows, bandClass })
-                  if (isCollapsed) return
-                  for (const gr of groupRows) {
-                    if (!filteredIds.has(gr._rowId)) continue
-                    items.push({ kind: 'row', row: gr, ri: displayIdx++, bandClass, isMulti: groupRows.length > 1 })
+
+                  if (groupRows.length > 1) {
+                    rendered.push(
+                      <GroupHeader key={`hdr-${groupKey}`} row={groupRows[0]} bandClass={bandClass}
+                        isExpanded={!isCollapsed} showImage={showRowImages} imageSize={imageSize}
+                        colSpan={allColumns.length + 2}
+                        onToggle={() => setCollapsedRowGroups((prev) => { const n = new Set(prev); n.has(groupKey) ? n.delete(groupKey) : n.add(groupKey); return n })} />
+                    )
                   }
-                })
 
-                const renderHeader = (it: Extract<RItem, { kind: 'header' }>) => (
-                  <GroupHeader key={`hdr-${it.groupKey}`} row={it.groupRows[0]} bandClass={it.bandClass}
-                    isExpanded={!collapsedRowGroups.has(it.groupKey)} showImage={showRowImages} imageSize={imageSize}
-                    colSpan={allColumns.length + 2}
-                    onToggle={() => setCollapsedRowGroups((prev) => { const n = new Set(prev); n.has(it.groupKey) ? n.delete(it.groupKey) : n.add(it.groupKey); return n })} />
-                )
+                  if (isCollapsed) return
 
-                const renderRow = (it: Extract<RItem, { kind: 'row' }>) => {
-                    const row        = it.row
-                    const ri         = it.ri
-                    const bandClass  = it.bandClass
+                  groupRows.filter((r) => filteredRows.some((fr) => fr._rowId === r._rowId)).forEach((row) => {
+                    const ri         = displayIdx++
                     const isRowSel   = selectedRows.has(row._rowId)
                     const isDragging = draggingRowId === row._rowId
                     const dropInd    = dropTarget?.rowId === row._rowId ? dropTarget.half : null
@@ -1769,7 +1719,7 @@ export default function FlatFileGrid({
                       : row._status === 'pending' ? 'bg-amber-50/70 dark:bg-amber-950/20'
                       : row._isNew  ? 'bg-sky-50/40 dark:bg-sky-950/10'
                       : row._dirty  ? 'bg-yellow-50/40 dark:bg-yellow-950/10'
-                      : it.isMulti ? bandClass : ''
+                      : groupRows.length > 1 ? bandClass : ''
 
                     const frozenBg = row._status === 'pushed'  ? 'bg-emerald-50 dark:bg-emerald-950/60'
                       : row._status === 'error'   ? 'bg-red-50 dark:bg-red-950/60'
@@ -1778,7 +1728,7 @@ export default function FlatFileGrid({
                       : row._dirty  ? 'bg-yellow-50 dark:bg-yellow-950/40'
                       : 'bg-white dark:bg-slate-900'
 
-                    return (
+                    rendered.push(
                       <tr key={row._rowId} draggable
                         onDragStart={(e) => { if (!canDragRef.current) { e.preventDefault(); return } e.dataTransfer.effectAllowed = 'move'; setDraggingRowId(row._rowId) }}
                         onDragEnd={() => { canDragRef.current = false; setDraggingRowId(null); setDropTarget(null) }}
@@ -1870,23 +1820,9 @@ export default function FlatFileGrid({
                         })}
                       </tr>
                     )
-                }
-
-                // VG.1 Pass 2 — window above the threshold; build JSX for the
-                // visible rows only, with spacer rows preserving scroll height.
-                const total = items.length
-                const virtualize = total > VIRTUALIZE_THRESHOLD && viewportH > 0
-                const start = virtualize ? Math.max(0, Math.floor(scrollTop / rowHeight) - ROW_OVERSCAN) : 0
-                const end   = virtualize ? Math.min(total, Math.ceil((scrollTop + viewportH) / rowHeight) + ROW_OVERSCAN) : total
-                const colSpanAll = allColumns.length + 2
-                const out: React.ReactNode[] = []
-                if (virtualize && start > 0) out.push(<tr key="vrow-top" aria-hidden><td colSpan={colSpanAll} style={{ padding: 0, border: 0 }}><div style={{ height: start * rowHeight }} /></td></tr>)
-                for (let i = start; i < end; i++) {
-                  const it = items[i]
-                  out.push(it.kind === 'header' ? renderHeader(it) : renderRow(it))
-                }
-                if (virtualize && end < total) out.push(<tr key="vrow-bot" aria-hidden><td colSpan={colSpanAll} style={{ padding: 0, border: 0 }}><div style={{ height: (total - end) * rowHeight }} /></td></tr>)
-                return out
+                  })
+                })
+                return rendered
               })()}
 
               {filteredRows.length === 0 && !loading && (
