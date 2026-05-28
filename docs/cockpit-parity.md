@@ -145,6 +145,16 @@ variation-cells` + `variation-matrix`) and its publish/export paths:
   editor shows the variations; price/qty come from the eBay
   `ChannelListing` rows the matrix writes (shared data, no other flat-file
   change). *Approved exception to the untouchable flat-file.*
+- **EV.5b — flat-file family *grouping*.** EV.5 made the rows *load*, but
+  `buildFlatRow` keyed every row on its own id and never set
+  `variation_theme`, so the family never grouped (a push would publish N
+  singles). Now `platformProductId = parentId ?? id` (one shared group
+  key), `variation_theme` is populated from the theme (normalised to the
+  comma form `variesBy` reads), each variant row carries its axis values
+  as `aspect_<Axis>` (case-preserved **and** lowercased), and `_isParent`
+  is a metadata flag. Verified on prod: 19 rows → 1 group key, 1 parent /
+  18 variants, theme `"Size,Color"`, aspects present. *Approved flat-file
+  edit; `buildFlatRow` row-shaping only, no new query.*
 - **EV.6a — File Exchange CSV.** `GET /ebay/cockpit/file-exchange-csv`
   emits a parent row + `Relationship=Variation` child rows (Relationship
   details + per-axis columns), rendered through the renames. Net-new.
