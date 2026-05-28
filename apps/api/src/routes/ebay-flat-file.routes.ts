@@ -276,6 +276,37 @@ async function pushVariationGroup(
     Accept: 'application/json',
   }
 
+  // EV.6b — eBay-only renames from the parent listing, applied to the
+  // variation specifics so the Inventory API publishes the same labels
+  // the cockpit shows (Color→Colour, Giallo→Yellow). With no renames set
+  // the helpers are identity, so the publish is unchanged.
+  const variationTheme = (rows[0].variation_theme as string | undefined) ?? ''
+  const varAspectNames = variationTheme.split(',').map((s: string) => s.trim()).filter(Boolean)
+  let nameLabels: Record<string, string> = {}
+  let valueLabels: Record<string, Record<string, string>> = {}
+  try {
+    const ids = rows.map((r) => r._productId as string).filter(Boolean)
+    const prods = await prisma.product.findMany({
+      where: { id: { in: ids } },
+      select: { id: true, parentId: true },
+    })
+    const parentId = prods.find((p) => !p.parentId)?.id ?? prods[0]?.parentId ?? ids[0]
+    if (parentId) {
+      const pl = await prisma.channelListing.findFirst({
+        where: { productId: parentId, channel: 'EBAY', marketplace: mp },
+        select: { platformAttributes: true },
+      })
+      const pa = (pl?.platformAttributes ?? {}) as Record<string, unknown>
+      nameLabels = (pa._axisNameLabels ?? {}) as Record<string, string>
+      valueLabels = (pa._axisValueLabels ?? {}) as Record<string, Record<string, string>>
+    }
+  } catch {
+    /* renames best-effort — publish proceeds with canonical values */
+  }
+  const nmLabel = (a: string) => nameLabels[a] || a
+  const vlLabel = (a: string, v: string) => valueLabels[a]?.[v] || v
+  const isVarAxis = (name: string) => varAspectNames.includes(name)
+
   // Step 1: Create/update each individual inventory item (same as single-row flow)
   for (const row of rows) {
     const sku = row.sku as string
@@ -284,7 +315,11 @@ async function pushVariationGroup(
       if (k.startsWith('aspect_') && v) {
         const aspectName = k.replace('aspect_', '').replace(/_/g, ' ')
           .replace(/\b\w/g, (c: string) => c.toUpperCase())
-        aspects[aspectName] = [String(v)]
+        if (isVarAxis(aspectName)) {
+          aspects[nmLabel(aspectName)] = [vlLabel(aspectName, String(v))]
+        } else {
+          aspects[aspectName] = [String(v)]
+        }
       }
     }
     if (row.ean) aspects['EAN'] = [String(row.ean)]
@@ -315,11 +350,8 @@ async function pushVariationGroup(
     results.push({ sku, market: mp, status: 'PUSHED', message: 'inventory_item updated' })
   }
 
-  // Step 2: Build variesBy from variation_theme on the first row
-  const variationTheme = (rows[0].variation_theme as string | undefined) ?? ''
-  const varAspectNames = variationTheme.split(',').map((s: string) => s.trim()).filter(Boolean)
-
-  // Collect all values per variation aspect across all rows
+  // Step 2: Build variesBy (variationTheme + varAspectNames computed above).
+  // Collect all values per variation aspect across all rows.
   const specMap = new Map<string, Set<string>>()
   for (const name of varAspectNames) {
     specMap.set(name, new Set())
@@ -331,7 +363,12 @@ async function pushVariationGroup(
       if (val) specMap.get(name)?.add(val)
     }
   }
-  const specifications = [...specMap.entries()].map(([name, vals]) => ({ name, values: [...vals] }))
+  // EV.6b — render names + values through the eBay renames, consistent
+  // with the per-item aspects set in Step 1.
+  const specifications = [...specMap.entries()].map(([name, vals]) => ({
+    name: nmLabel(name),
+    values: [...vals].map((v) => vlLabel(name, v)),
+  }))
 
   // Step 3: Create/update the inventory item group
   const groupBody = {
@@ -340,7 +377,7 @@ async function pushVariationGroup(
     description: rows[0].description ?? '',
     imageUrls: [rows[0].image_1, rows[0].image_2, rows[0].image_3].filter(Boolean),
     variesBy: {
-      aspectsImageVariesBy: varAspectNames.slice(0, 1), // first aspect drives image variation
+      aspectsImageVariesBy: varAspectNames.slice(0, 1).map(nmLabel), // first aspect drives image variation (renamed)
       specifications: specifications.length ? specifications : [{ name: 'Model', values: rows.map(r => r.sku as string) }],
     },
     inventoryItems: rows.map(r => ({ sku: r.sku as string })),
