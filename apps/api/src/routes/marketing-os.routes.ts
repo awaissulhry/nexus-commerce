@@ -451,6 +451,20 @@ const marketingOsRoutes: FastifyPluginAsync = async (app) => {
     return created
   })
 
+  // Delete a campaign (cascades links/detail/targets/metrics via FK). For
+  // operator-authored drafts + verification cleanup.
+  app.delete('/marketing/os/campaigns/:id', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    try {
+      const c = await prisma.marketingCampaign.delete({ where: { id }, select: { id: true, channel: true } })
+      publishMarketingEvent({ type: 'campaign.mutated', campaignId: id, channel: c.channel, action: 'deleted', ts: Date.now() })
+      return { ok: true }
+    } catch {
+      reply.status(404)
+      return { error: 'campaign not found' }
+    }
+  })
+
   // Launch an INTERNAL content-push / outreach campaign (sandbox-gated).
   app.post('/marketing/os/campaigns/:id/launch', async (request, reply) => {
     const { id } = request.params as { id: string }
