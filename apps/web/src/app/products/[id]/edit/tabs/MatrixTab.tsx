@@ -1012,12 +1012,34 @@ export default function MatrixTab({ product, discardSignal = 0 }: Props) {
                     saving={cellState[`${child.id}:fulfil:${selectedMarket}`]}
                     onSet={(m) => patchFulfillment(child.id, selectedMarket, m)}
                   />
-                  <td className="px-2 py-1.5 text-right tabular-nums text-sm text-slate-600 dark:text-slate-300">
-                    {(() => {
-                      const f = getFulfillment(child.id, selectedMarket)
-                      return f.method == null ? <span className="text-slate-300">—</span> : f.atp.toLocaleString()
-                    })()}
-                  </td>
+                  {(() => {
+                    const f = getFulfillment(child.id, selectedMarket)
+                    if (f.method == null) {
+                      return <td className="px-2 py-1.5 text-right text-sm text-slate-300">—</td>
+                    }
+                    // FCF.6 — flag oversell: listing publishes more than the
+                    // pool can back (after reservations + buffer).
+                    const listed = getListedQty(child.id, selectedMarket)
+                    const oversold = listed > f.atp
+                    return (
+                      <td
+                        className={cn(
+                          'px-2 py-1.5 text-right tabular-nums text-sm',
+                          oversold
+                            ? 'text-rose-600 dark:text-rose-400 font-semibold'
+                            : 'text-slate-600 dark:text-slate-300',
+                        )}
+                        title={
+                          oversold
+                            ? `Oversold: listing ${listed}, pool can back ${f.atp} (drift +${listed - f.atp})`
+                            : undefined
+                        }
+                      >
+                        {oversold && <AlertCircle className="w-3 h-3 inline mr-0.5 -mt-0.5" />}
+                        {f.atp.toLocaleString()}
+                      </td>
+                    )
+                  })()}
                   <EditCell
                     addr={{ kind: 'master', childId: child.id, field: 'totalStock' }}
                     value={getPhysicalStock(child.id)} readOnly

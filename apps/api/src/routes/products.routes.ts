@@ -28,6 +28,7 @@ import {
 import { deriveFulfillmentMethod } from '../services/fulfillment-derivation.service.js'
 import { computeAvailableToPublish } from '../services/available-to-publish.service.js'
 import { MARKETPLACE_ID_TO_CODE } from '../utils/marketplace-code.js'
+import { getPendingMcfReservedByProduct } from '../services/amazon-mcf.service.js'
 import {
   shadowCompareProductRead,
   isShadowEnabled,
@@ -1378,6 +1379,7 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
               fulfillmentMethod: true,
               listingStatus: true,
               stockBuffer: true,
+              quantity: true,
             },
             orderBy: [{ channel: 'asc' }, { marketplace: 'asc' }],
           },
@@ -1390,7 +1392,7 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
       // FCF.2 — gather the stock pools once, then compute availableToPublish
       // per listing. FBM = own-warehouse StockLevel.available; FBA = SELLABLE
       // FbaInventoryDetail for this sku, scoped to the listing's marketplace.
-      const [whRows, fbaRows] = await Promise.all([
+      const [whRows, fbaRows, pendingMcfByProduct] = await Promise.all([
         prisma.stockLevel.findMany({
           where: { productId: id, location: { type: 'WAREHOUSE' } },
           select: { available: true },
@@ -1401,6 +1403,8 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
               select: { quantity: true, marketplaceId: true },
             })
           : Promise.resolve([] as Array<{ quantity: number; marketplaceId: string }>),
+        // FCF.6 — in-flight MCF reservations against the FBA pool for this product.
+        getPendingMcfReservedByProduct([id]),
       ])
       const warehouseAvailable = whRows.reduce((s, r) => s + r.available, 0)
       const fbaByMarket = new Map<string, number>()
@@ -1408,6 +1412,7 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
         const code = MARKETPLACE_ID_TO_CODE[r.marketplaceId] ?? r.marketplaceId
         fbaByMarket.set(code, (fbaByMarket.get(code) ?? 0) + r.quantity)
       }
+      const pendingMcf = pendingMcfByProduct.get(id) ?? 0
 
       const listings = product.channelListings.map((cl) => {
         let method = cl.fulfillmentMethod as 'FBA' | 'FBM' | null
@@ -1423,7 +1428,13 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
           warehouseAvailable,
           fbaSellable: fbaByMarket.get(cl.marketplace) ?? 0,
           stockBuffer: cl.stockBuffer,
+          // FBM warehouse is already reservation-netted; only FBA needs the
+          // pending-MCF subtraction (FCF.6).
+          pendingReserved: method === 'FBA' ? pendingMcf : 0,
         })
+        // FCF.6 — drift between what's published and what the pool can back.
+        const publishedQty = cl.quantity ?? null
+        const drift = publishedQty == null ? null : publishedQty - atp.available
         return {
           channel: cl.channel,
           marketplace: cl.marketplace,
@@ -1435,10 +1446,16 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
           availableToPublish: atp.available,
           pool: atp.pool,
           poolQuantity: atp.poolQuantity,
+          reservedApplied: atp.reservedApplied,
           // FCF.5 — a merchant-channel listing backed by the FBA pool is MCF
           // (Amazon ships the order). FBM merchant listings ship from our
           // warehouse; Amazon FBA listings are plain FBA, not MCF.
           isMcf: MERCHANT_CHANNELS.has(cl.channel) && method === 'FBA',
+          // FCF.6 — published-vs-pool drift; oversold = publishing more than
+          // the pool can actually back (after reservations + buffer).
+          publishedQty,
+          drift,
+          oversold: drift != null && drift > 0,
         }
       })
 

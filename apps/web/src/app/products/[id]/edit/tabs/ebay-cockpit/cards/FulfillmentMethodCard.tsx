@@ -34,6 +34,7 @@ export default function FulfillmentMethodCard({ productId, marketplace }: Props)
   const [method, setMethod] = useState<Method | null>(null)
   const [available, setAvailable] = useState<number | null>(null)
   const [pool, setPool] = useState<'FBA' | 'FBM_WAREHOUSE' | null>(null)
+  const [listedQty, setListedQty] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
@@ -52,6 +53,7 @@ export default function FulfillmentMethodCard({ productId, marketplace }: Props)
       setMethod(row?.fulfillmentMethod === 'FBA' ? 'MCF' : 'FBM')
       setAvailable(typeof row?.availableToPublish === 'number' ? (row.availableToPublish as number) : null)
       setPool((row?.pool as 'FBA' | 'FBM_WAREHOUSE' | undefined) ?? null)
+      setListedQty(typeof row?.listedQty === 'number' ? (row.listedQty as number) : null)
     } catch {
       setError(t('products.edit.cockpit.ebay.fulfillment.loadError'))
     } finally {
@@ -194,6 +196,18 @@ export default function FulfillmentMethodCard({ productId, marketplace }: Props)
                 </span>
               )}
             </div>
+
+            {/* FCF.6 — oversell warning: published more than the pool can back */}
+            {available != null && listedQty != null && listedQty > available && (
+              <div className="flex items-start gap-2 rounded-md border border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/40 px-2.5 py-2">
+                <AlertTriangle aria-hidden className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
+                <div className="text-[11px] text-amber-700 dark:text-amber-300">
+                  {t('products.edit.cockpit.ebay.fulfillment.oversold')
+                    .replace('{listed}', String(listedQty))
+                    .replace('{available}', String(available))}
+                </div>
+              </div>
+            )}
           </>
         )}
       </div>

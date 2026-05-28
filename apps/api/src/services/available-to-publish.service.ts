@@ -18,12 +18,19 @@
 
 export type AvailableToPublishInput = {
   fulfillmentMethod: 'FBA' | 'FBM'
-  /** Sum of own-warehouse StockLevel.available (= quantity − reserved). */
+  /** Sum of own-warehouse StockLevel.available (= quantity − reserved). Already
+   *  nets HARD reservations, so FBM callers pass pendingReserved = 0. */
   warehouseAvailable: number
-  /** Sum of FBA SELLABLE quantity for this sku + marketplace. */
+  /** Sum of FBA SELLABLE quantity for this sku + marketplace. This is Amazon's
+   *  number and does NOT net our in-flight MCF reservations — pass those via
+   *  pendingReserved (FCF.6). */
   fbaSellable: number
   /** ChannelListing.stockBuffer — units hidden from the marketplace. */
   stockBuffer: number
+  /** FCF.6 — units already committed against the chosen pool but still counted
+   *  in its quantity (e.g. pending MCF reservations still in FBA SELLABLE).
+   *  Subtracted before the buffer. Defaults to 0. */
+  pendingReserved?: number
 }
 
 export type AvailableToPublishResult = {
@@ -31,8 +38,10 @@ export type AvailableToPublishResult = {
   available: number
   /** Which pool fed it. */
   pool: 'FBA' | 'FBM_WAREHOUSE'
-  /** Raw pool quantity before the buffer. */
+  /** Raw pool quantity before reservations + buffer. */
   poolQuantity: number
+  /** Pending reservations actually applied (clamped to >= 0). */
+  reservedApplied: number
   /** Buffer actually applied (clamped to >= 0). */
   bufferApplied: number
 }
@@ -41,7 +50,8 @@ export function computeAvailableToPublish(input: AvailableToPublishInput): Avail
   const pool: 'FBA' | 'FBM_WAREHOUSE' =
     input.fulfillmentMethod === 'FBA' ? 'FBA' : 'FBM_WAREHOUSE'
   const poolQuantity = pool === 'FBA' ? input.fbaSellable : input.warehouseAvailable
+  const reservedApplied = Math.max(0, input.pendingReserved ?? 0)
   const bufferApplied = Math.max(0, input.stockBuffer)
-  const available = Math.max(0, poolQuantity - bufferApplied)
-  return { available, pool, poolQuantity, bufferApplied }
+  const available = Math.max(0, poolQuantity - reservedApplied - bufferApplied)
+  return { available, pool, poolQuantity, reservedApplied, bufferApplied }
 }

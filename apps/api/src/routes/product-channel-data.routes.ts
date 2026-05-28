@@ -12,6 +12,7 @@ import type { FastifyInstance } from 'fastify'
 import prisma from '../db.js'
 import { computeAvailableToPublish } from '../services/available-to-publish.service.js'
 import { MARKETPLACE_ID_TO_CODE } from '../utils/marketplace-code.js'
+import { getPendingMcfReservedByProduct } from '../services/amazon-mcf.service.js'
 
 // Normalize Amazon's fulfilment value (stored on
 // ChannelListing.platformAttributes.fulfillmentChannel) to FBA/FBM. AFN =
@@ -250,7 +251,7 @@ export default async function productChannelDataRoutes(fastify: FastifyInstance)
       // FCF.1 GET /products/:id/fulfillment endpoint, batched for the matrix.
       const allProductIds = [id, ...children.map((c) => c.id)]
       const allSkus = [product.sku, ...children.map((c) => c.sku)].filter((s): s is string => !!s)
-      const [whRows, fbaRows] = await Promise.all([
+      const [whRows, fbaRows, pendingMcfByProduct] = await Promise.all([
         prisma.stockLevel.findMany({
           where: { productId: { in: allProductIds }, location: { type: 'WAREHOUSE' } },
           select: { productId: true, available: true },
@@ -261,6 +262,8 @@ export default async function productChannelDataRoutes(fastify: FastifyInstance)
               select: { sku: true, quantity: true, marketplaceId: true },
             })
           : Promise.resolve([] as Array<{ sku: string; quantity: number; marketplaceId: string }>),
+        // FCF.6 — in-flight MCF reservations against the FBA pool per product.
+        getPendingMcfReservedByProduct(allProductIds),
       ])
       const warehouseByProduct = new Map<string, number>()
       for (const r of whRows) warehouseByProduct.set(r.productId, (warehouseByProduct.get(r.productId) ?? 0) + r.available)
@@ -291,16 +294,22 @@ export default async function productChannelDataRoutes(fastify: FastifyInstance)
         const code = cl.marketplace?.toUpperCase() ?? cl.marketplace
         const warehouseAvailable = warehouseByProduct.get(productId) ?? 0
         const fbaSellable = sku ? fbaBySkuMarket.get(`${sku}::${code}`) ?? 0 : 0
+        const pendingMcf = pendingMcfByProduct.get(productId) ?? 0
         const atp = computeAvailableToPublish({
           fulfillmentMethod: method,
           warehouseAvailable,
           fbaSellable,
           stockBuffer: cl.stockBuffer ?? 0,
+          // FCF.6 — only FBA needs the pending-MCF subtraction; warehouse is
+          // already reservation-netted.
+          pendingReserved: method === 'FBA' ? pendingMcf : 0,
         })
+        const listedQty = cl.quantity ?? null
+        const drift = listedQty == null ? null : listedQty - atp.available
         return {
           marketplace: cl.marketplace,
           channel: cl.channel,
-          listedQty: cl.quantity ?? null,
+          listedQty,
           buffer: cl.stockBuffer ?? 0,
           listingStatus: cl.listingStatus,
           lastSyncedAt: cl.lastSyncedAt?.toISOString() ?? null,
@@ -312,10 +321,16 @@ export default async function productChannelDataRoutes(fastify: FastifyInstance)
           pool: atp.pool,
           // FCF.5 — merchant-channel listing backed by the FBA pool = MCF.
           isMcf: MERCHANT_CHANNELS.has(cl.channel) && method === 'FBA',
+          // FCF.6 — published-vs-pool drift; oversold = listing more than the
+          // pool can back (after reservations + buffer).
+          reservedApplied: atp.reservedApplied,
+          drift,
+          oversold: drift != null && drift > 0,
           // Raw pools (pre-buffer) so the matrix can recompute ATP instantly
           // when the operator toggles the method, without a refetch.
           warehouseAvailable,
           fbaSellable,
+          pendingReserved: method === 'FBA' ? pendingMcf : 0,
         }
       }
 

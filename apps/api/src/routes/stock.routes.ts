@@ -3043,6 +3043,28 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // ── FCF.6: per-pool fulfillment drift triage ─────────────────────
+  //
+  // GET /api/stock/pool-drift — active listings whose published quantity
+  // exceeds what their bound pool can back (FBM warehouse, or FBA SELLABLE
+  // minus in-flight MCF). Worst drift first. ?productId= scopes to one
+  // product; ?includeHealthy=1 returns non-oversold rows too; ?limit=.
+  fastify.get('/stock/pool-drift', async (request, reply) => {
+    try {
+      const q = request.query as { productId?: string; limit?: string; includeHealthy?: string }
+      const { computePoolDrift } = await import('../services/fulfillment-pool-drift.service.js')
+      const result = await computePoolDrift({
+        productId: q.productId,
+        limit: q.limit ? Number.parseInt(q.limit, 10) : undefined,
+        includeHealthy: q.includeHealthy === '1' || q.includeHealthy === 'true',
+      })
+      return result
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[stock/pool-drift GET] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
   // ── CS.1: Channel-stock-event triage REST ────────────────────────
   //
   // GET    /api/stock/channel-events            list (default OPEN)

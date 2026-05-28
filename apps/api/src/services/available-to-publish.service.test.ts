@@ -14,13 +14,13 @@ function eq(a: unknown, b: unknown, msg = '') {
 // FBM draws from the own-warehouse pool and ignores FBA stock.
 test('FBM uses warehouseAvailable, ignores fbaSellable', () => {
   const r = computeAvailableToPublish({ fulfillmentMethod: 'FBM', warehouseAvailable: 12, fbaSellable: 999, stockBuffer: 0 })
-  eq(r, { available: 12, pool: 'FBM_WAREHOUSE', poolQuantity: 12, bufferApplied: 0 })
+  eq(r, { available: 12, pool: 'FBM_WAREHOUSE', poolQuantity: 12, reservedApplied: 0, bufferApplied: 0 })
 })
 
 // FBA draws from FBA SELLABLE and ignores the warehouse pool.
 test('FBA uses fbaSellable, ignores warehouseAvailable', () => {
   const r = computeAvailableToPublish({ fulfillmentMethod: 'FBA', warehouseAvailable: 999, fbaSellable: 7, stockBuffer: 0 })
-  eq(r, { available: 7, pool: 'FBA', poolQuantity: 7, bufferApplied: 0 })
+  eq(r, { available: 7, pool: 'FBA', poolQuantity: 7, reservedApplied: 0, bufferApplied: 0 })
 })
 
 // Buffer is subtracted from whichever pool feeds the listing.
@@ -45,6 +45,12 @@ test('FBM listing with empty warehouse but full FBA → 0 (no oversell)', () => 
 test('negative buffer treated as 0', () => {
   const r = computeAvailableToPublish({ fulfillmentMethod: 'FBA', warehouseAvailable: 0, fbaSellable: 9, stockBuffer: -4 })
   eq(r.available, 9); eq(r.bufferApplied, 0)
+})
+
+// FCF.6 — pending MCF reservations are subtracted from the FBA pool.
+test('FBA subtracts pending MCF reservations', () => {
+  const r = computeAvailableToPublish({ fulfillmentMethod: 'FBA', warehouseAvailable: 0, fbaSellable: 10, stockBuffer: 1, pendingReserved: 4 })
+  eq(r.available, 5); eq(r.reservedApplied, 4); eq(r.bufferApplied, 1)
 })
 
 let passed = 0

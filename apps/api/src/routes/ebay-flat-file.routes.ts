@@ -24,6 +24,7 @@ import { productEventService } from '../services/product-event.service.js';
 import { runFlatFileAiInstruction } from '../services/flat-file-ai.service.js';
 import { computeAvailableToPublish } from '../services/available-to-publish.service.js';
 import { MARKETPLACE_ID_TO_CODE } from '../utils/marketplace-code.js';
+import { getPendingMcfReservedByProduct } from '../services/amazon-mcf.service.js';
 import {
   buildInventoryNdjson,
   createInventoryTask,
@@ -1026,8 +1027,10 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
     const methodByListing = new Map<string, 'FBA' | 'FBM'>();
     // FCF.5 — FBA SELLABLE per `${sku}::${MARKET}` for MCF-backed listings.
     const fbaBySkuMarket = new Map<string, number>();
+    // FCF.6 — in-flight MCF reservations against the FBA pool, per product.
+    let pendingMcfByProduct = new Map<string, number>();
     if (pushProductIds.length > 0) {
-      const [whRows, clRows, fbaRows] = await Promise.all([
+      const [whRows, clRows, fbaRows, pendingMcf] = await Promise.all([
         prisma.stockLevel.findMany({
           where: { productId: { in: pushProductIds }, location: { type: 'WAREHOUSE' } },
           select: { productId: true, available: true },
@@ -1042,7 +1045,9 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
               select: { sku: true, quantity: true, marketplaceId: true },
             })
           : Promise.resolve([] as Array<{ sku: string; quantity: number; marketplaceId: string }>),
+        getPendingMcfReservedByProduct(pushProductIds),
       ]);
+      pendingMcfByProduct = pendingMcf;
       for (const r of whRows) {
         trackedProducts.add(r.productId);
         fbmByProduct.set(r.productId, (fbmByProduct.get(r.productId) ?? 0) + r.available);
@@ -1081,6 +1086,8 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
           warehouseAvailable: 0,
           fbaSellable: fbaBySkuMarket.get(fbaKey) ?? 0,
           stockBuffer,
+          // FCF.6 — don't republish FBA units already committed to in-flight MCF.
+          pendingReserved: pid ? pendingMcfByProduct.get(pid) ?? 0 : 0,
         }).available;
         if (req > cap) {
           oversellWarnings.push({

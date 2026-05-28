@@ -549,3 +549,32 @@ export function resolveMcfAdapter(): MCFAdapter {
   if (process.env.AMAZON_MCF_LIVE === '1') return createSpApiMcfAdapter()
   return unconfiguredAdapter
 }
+
+/**
+ * FCF.6 — pending (in-flight) MCF units per product: the sum of active
+ * reservations at any AMAZON_FBA-type location for orders that haven't shipped
+ * or cancelled yet. These units are still counted in Amazon's FBA SELLABLE
+ * number, so available-to-publish for an FBA/MCF listing must subtract them or
+ * we'd oversell the FBA pool against our own in-flight MCF orders.
+ *
+ * Returns a Map<productId, pendingUnits>; products with none are absent.
+ */
+export async function getPendingMcfReservedByProduct(
+  productIds: string[],
+): Promise<Map<string, number>> {
+  const out = new Map<string, number>()
+  if (productIds.length === 0) return out
+  const rows = await prisma.stockReservation.findMany({
+    where: {
+      consumedAt: null,
+      releasedAt: null,
+      stockLevel: { productId: { in: productIds }, location: { type: 'AMAZON_FBA' } },
+    },
+    select: { quantity: true, stockLevel: { select: { productId: true } } },
+  })
+  for (const r of rows) {
+    const pid = r.stockLevel.productId
+    out.set(pid, (out.get(pid) ?? 0) + r.quantity)
+  }
+  return out
+}

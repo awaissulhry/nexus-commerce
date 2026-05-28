@@ -35,9 +35,34 @@ a listing's publishable quantity to exactly one physically-distinct pool:
 | `FBM` | own warehouse | `StockLevel.available` across `WAREHOUSE` locations |
 | `FBA` | Amazon FBA | `FbaInventoryDetail` `condition='SELLABLE'`, scoped to the sku + marketplace |
 
-`available = max(0, poolQuantity − max(0, stockBuffer))`. FBA stock sits at
-Amazon and **cannot** ship an FBM order; warehouse stock cannot back a plain FBA
-listing. Crossing the two is only possible via **MCF** (below).
+`available = max(0, poolQuantity − pendingReserved − max(0, stockBuffer))`. FBA
+stock sits at Amazon and **cannot** ship an FBM order; warehouse stock cannot
+back a plain FBA listing. Crossing the two is only possible via **MCF** (below).
+
+### Reservations per pool (FCF.6)
+
+- **FBM** — `StockLevel.available` is already `quantity − reserved` (HARD
+  reservations from open orders), so the warehouse pool is reservation-netted at
+  source.
+- **FBA** — `FbaInventoryDetail` SELLABLE is Amazon's number and still counts
+  units we've committed to **in-flight MCF orders** (reserved at `AMAZON-EU-FBA`,
+  not yet shipped). `computeAvailableToPublish` subtracts those via
+  `pendingReserved` (from `getPendingMcfReservedByProduct`) so an eBay/MCF
+  listing can't oversell the FBA pool against our own pending MCF orders.
+  > Conservative for multi-market FBA: the full pending-MCF count is subtracted
+  > from each market's FBA pool. Exact for single-FBA-market sellers; errs
+  > toward not overselling otherwise.
+
+### Drift (FCF.6)
+
+Drift = `publishedQty (ChannelListing.quantity) − availableToPublish`. A positive
+drift = **oversold** (the listing publishes more than its pool can back). Surfaced
+as `drift` / `oversold` on the fulfillment reads, flagged in the Matrix Avail.
+column and the eBay Fulfillment card, and listed portfolio-wide by
+`GET /api/stock/pool-drift` (worst first). This is distinct from
+`ChannelStockEvent` drift (channel-reported qty vs our physical stock) — pool
+drift is computed from our own pools, so it warns *before* the marketplace
+reports back.
 
 ## MCF — selling FBA stock on eBay (FCF.5)
 
@@ -111,6 +136,7 @@ share the one `resolveMcfAdapter()` definition.
 | GET | `/api/products/:id/fulfillment` | Per channel×marketplace method, source, pool, availableToPublish, `isMcf` (FCF.1/.2/.5). |
 | GET | `/api/products/:id/channel-inventory` | Matrix data: adds `fulfillmentMethod`, `fulfillmentSource`, `availableToPublish`, raw pools, `isMcf` per (variant, market). |
 | PATCH | `/api/products/:id/fulfillment` | Set `ChannelListing.fulfillmentMethod` per variant×market; `null` clears to derived (FCF.4b). |
+| GET | `/api/stock/pool-drift` | Portfolio oversell triage: active listings where publishedQty > pool available (FCF.6). `?productId=` `?includeHealthy=1` `?limit=`. |
 | POST/POST/PUT | `/api/stock/mcf/*` | Create / sync / cancel MCF shipments (S.24). |
 
 ## Phase log
@@ -125,3 +151,6 @@ share the one `resolveMcfAdapter()` definition.
   becomes pool-aware (FBA/MCF), `isMcf` read flag, this doc.
 - **FCF.5b** — eBay cockpit Fulfillment card (FBM ↔ MCF) + gated auto-MCF-submit
   on eBay order ingestion (`NEXUS_EBAY_AUTO_MCF`).
+- **FCF.6** — reservation-aware available-to-publish (subtract in-flight MCF from
+  the FBA pool) + published-vs-pool drift surfacing (reads, Matrix, eBay card,
+  `GET /api/stock/pool-drift`).
