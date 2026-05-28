@@ -310,7 +310,18 @@ async function pushVariationGroup(
   // variation specifics so the Inventory API publishes the same labels
   // the cockpit shows (Color→Colour, Giallo→Yellow). With no renames set
   // the helpers are identity, so the publish is unchanged.
-  const variationTheme = (rows[0].variation_theme as string | undefined) ?? ''
+  // EV.5b — the family load (EV.5) includes the parent *container* row
+  // (_isParent). The parent is not a sellable variant: it must not get
+  // its own inventory_item nor be a group member, because eBay rejects a
+  // member that lacks values for the variesBy specifications. It IS the
+  // right source for the group-level title/description/images. Falls back
+  // gracefully when no _isParent flag is present (older data / a single
+  // product pushed as a "family").
+  const parentRow = rows.find((r) => r._isParent) ?? rows[0]
+  const variantRowsAll = rows.filter((r) => !r._isParent)
+  const variantRows = variantRowsAll.length > 0 ? variantRowsAll : rows
+
+  const variationTheme = (parentRow.variation_theme as string | undefined) ?? ''
   const varAspectNames = variationTheme.split(',').map((s: string) => s.trim()).filter(Boolean)
   let nameLabels: Record<string, string> = {}
   let valueLabels: Record<string, Record<string, string>> = {}
@@ -337,8 +348,9 @@ async function pushVariationGroup(
   const vlLabel = (a: string, v: string) => valueLabels[a]?.[v] || v
   const isVarAxis = (name: string) => varAspectNames.includes(name)
 
-  // Step 1: Create/update each individual inventory item (same as single-row flow)
-  for (const row of rows) {
+  // Step 1: Create/update each individual inventory item (same as single-row flow).
+  // Variants only — never the parent container row.
+  for (const row of variantRows) {
     const sku = row.sku as string
     const aspects: Record<string, string[]> = {}
     for (const [k, v] of Object.entries(row)) {
@@ -386,7 +398,7 @@ async function pushVariationGroup(
   for (const name of varAspectNames) {
     specMap.set(name, new Set())
   }
-  for (const row of rows) {
+  for (const row of variantRows) {
     for (const name of varAspectNames) {
       const key = `aspect_${name.toLowerCase().replace(/\s+/g, '_')}`
       const val = row[key] as string | undefined
@@ -403,14 +415,16 @@ async function pushVariationGroup(
   // Step 3: Create/update the inventory item group
   const groupBody = {
     inventoryItemGroupKey: groupKey,
-    title: rows[0].title ?? '',
-    description: rows[0].description ?? '',
-    imageUrls: [rows[0].image_1, rows[0].image_2, rows[0].image_3].filter(Boolean),
+    // Group-level content comes from the parent container row.
+    title: parentRow.title ?? '',
+    description: parentRow.description ?? '',
+    imageUrls: [parentRow.image_1, parentRow.image_2, parentRow.image_3].filter(Boolean),
     variesBy: {
       aspectsImageVariesBy: varAspectNames.slice(0, 1).map(nmLabel), // first aspect drives image variation (renamed)
-      specifications: specifications.length ? specifications : [{ name: 'Model', values: rows.map(r => r.sku as string) }],
+      specifications: specifications.length ? specifications : [{ name: 'Model', values: variantRows.map(r => r.sku as string) }],
     },
-    inventoryItems: rows.map(r => ({ sku: r.sku as string })),
+    // Members are the sellable variants only — never the parent.
+    inventoryItems: variantRows.map(r => ({ sku: r.sku as string })),
   }
 
   const groupRes = await fetch(`${apiBase}/sell/inventory/v1/inventory_item_group/${encodeURIComponent(groupKey)}`, {
