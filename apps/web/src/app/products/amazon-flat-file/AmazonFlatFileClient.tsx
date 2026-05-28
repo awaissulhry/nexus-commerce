@@ -3171,10 +3171,10 @@ export default function AmazonFlatFileClient({
 
       {/* ── Spreadsheet + AI panel ────────────────────────────── */}
       {manifest && !loading && (
-        <div className="flex-1 flex overflow-hidden">
+        <div className="flex-1 min-h-0 flex overflow-hidden">
         <div
           ref={scrollContainerRef} onScroll={onGridScroll}
-          className="flex-1 overflow-auto"
+          className="flex-1 min-h-0 overflow-auto"
           onContextMenu={(e) => {
             e.preventDefault()
             const el = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null

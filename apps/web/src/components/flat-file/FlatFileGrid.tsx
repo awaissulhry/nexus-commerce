@@ -1627,9 +1627,9 @@ export default function FlatFileGrid({
       {renderModals?.(modalsCtx)}
 
       {/* ── Main grid + optional AI panel ─────────────── */}
-      <div className="flex-1 flex overflow-hidden">
-      <div className="flex-1 flex flex-col overflow-hidden">
-      <div className="flex-1 overflow-auto" ref={scrollContainerRef} onScroll={onGridScroll}
+      <div className="flex-1 min-h-0 flex overflow-hidden">
+      <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+      <div className="flex-1 min-h-0 overflow-auto" ref={scrollContainerRef} onScroll={onGridScroll}
         onPointerMove={(e) => {
           if (e.buttons !== 1) return
           const el = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null
