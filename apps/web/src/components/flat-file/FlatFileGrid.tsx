@@ -728,24 +728,36 @@ export default function FlatFileGrid({
   const ROW_OVERSCAN = 10
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const [scrollTop, setScrollTop] = useState(0)
-  // Default high enough to window on the very first paint (corrected to the
-  // real container height in the mount effect). Constant to avoid SSR/hydration
-  // mismatch — no window access in the initializer.
+  // Default high enough to window on the very first paint (corrected on mount).
+  // Constant to avoid SSR/hydration mismatch — no window access in initializer.
   const [viewportH, setViewportH] = useState(900)
   const scrollRafRef = useRef<number | undefined>(undefined)
-  const onGridScroll = useCallback(() => {
+  // The grid root is min-h-screen, so the page scrolls (document scroll) and
+  // the inner overflow-auto container grows to content height. Window against
+  // whichever actually scrolls: container.scrollTop when it scrolls internally,
+  // else how far the container's top has scrolled above the viewport. Clamp the
+  // viewport to innerHeight so an unbounded container doesn't span every row.
+  const recomputeWindow = useCallback(() => {
     const el = scrollContainerRef.current
     if (!el) return
+    const rect = el.getBoundingClientRect()
+    const innerH = typeof window !== 'undefined' ? window.innerHeight : 900
+    setScrollTop(el.scrollTop > 0 ? el.scrollTop : Math.max(0, -rect.top))
+    setViewportH(Math.min(el.clientHeight || innerH, innerH))
+  }, [])
+  const onGridScroll = useCallback(() => {
     if (scrollRafRef.current) cancelAnimationFrame(scrollRafRef.current)
-    scrollRafRef.current = requestAnimationFrame(() => {
-      setScrollTop(el.scrollTop)
-      setViewportH(el.clientHeight)
-    })
-  }, [])
+    scrollRafRef.current = requestAnimationFrame(recomputeWindow)
+  }, [recomputeWindow])
   useEffect(() => {
-    const el = scrollContainerRef.current
-    if (el) setViewportH(el.clientHeight)
-  }, [])
+    recomputeWindow()
+    window.addEventListener('scroll', onGridScroll, { passive: true })
+    window.addEventListener('resize', onGridScroll)
+    return () => {
+      window.removeEventListener('scroll', onGridScroll)
+      window.removeEventListener('resize', onGridScroll)
+    }
+  }, [recomputeWindow, onGridScroll])
 
   useEffect(() => { try { localStorage.setItem(`${storageKey}-col-widths`, JSON.stringify(colWidths)) } catch {} }, [colWidths, storageKey])
   useEffect(() => { try { localStorage.setItem(`${storageKey}-row-height`, String(rowHeight)) } catch {} }, [rowHeight, storageKey])
