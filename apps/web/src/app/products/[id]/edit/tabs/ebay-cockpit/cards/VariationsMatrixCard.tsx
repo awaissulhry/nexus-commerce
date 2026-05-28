@@ -222,6 +222,26 @@ export default function VariationsMatrixCard({
   const cellCount = data?.cells.length ?? 0
   const overCap = cellCount > EBAY_VARIANT_CAP
 
+  // EV.7 — advisory validation against eBay's variation rules. Counts
+  // (not blocking — eBay rejects at publish): variations missing a price,
+  // a quantity, or any chosen-axis value.
+  const validation = useMemo(() => {
+    let missingPrice = 0
+    let missingQty = 0
+    let missingValue = 0
+    for (const c of data?.cells ?? []) {
+      const d = dirtyCells[c.childProductId]
+      const price = d?.priceOverride !== undefined ? d.priceOverride : (c.listing?.priceOverride ?? c.listing?.price ?? null)
+      const qty = d?.quantity !== undefined ? d.quantity : (c.listing?.quantity ?? null)
+      if (price == null || price <= 0) missingPrice++
+      if (qty == null) missingQty++
+      if (effectiveAxes.some((a) => !c.variationAttributes?.[a])) missingValue++
+    }
+    return { missingPrice, missingQty, missingValue }
+  }, [data, dirtyCells, effectiveAxes])
+  const hasWarnings =
+    overCap || validation.missingPrice > 0 || validation.missingQty > 0 || validation.missingValue > 0
+
   const handleCellEdit = useCallback(
     (childId: string, patch: DirtyCell) => {
       setDirtyCells((d) => ({ ...d, [childId]: { ...d[childId], ...patch } }))
@@ -407,6 +427,26 @@ export default function VariationsMatrixCard({
                     onRenameValue={(v, label) => handleRenameValue(axis, v, label)}
                   />
                 ))}
+              </div>
+            )}
+
+            {/* ── EV.7 — advisory validation warnings ─────────────── */}
+            {hasWarnings && (
+              <div className="rounded-md border border-amber-200 dark:border-amber-900 bg-amber-50/60 dark:bg-amber-950/30 px-3 py-2 text-[11px] text-amber-800 dark:text-amber-300 flex flex-wrap items-center gap-x-3 gap-y-1">
+                <AlertTriangle aria-hidden className="w-3.5 h-3.5 shrink-0" />
+                {overCap && (
+                  <span>{t('products.edit.cockpit.ebay.variations.exceedsCap')}</span>
+                )}
+                {validation.missingPrice > 0 && (
+                  <span>{validation.missingPrice} {t('products.edit.cockpit.ebay.variations.missingPrice')}</span>
+                )}
+                {validation.missingQty > 0 && (
+                  <span>{validation.missingQty} {t('products.edit.cockpit.ebay.variations.missingQty')}</span>
+                )}
+                {validation.missingValue > 0 && (
+                  <span>{validation.missingValue} {t('products.edit.cockpit.ebay.variations.missingValue')}</span>
+                )}
+                <span className="text-[10px] opacity-80">{t('products.edit.cockpit.ebay.variations.validationNote')}</span>
               </div>
             )}
 
