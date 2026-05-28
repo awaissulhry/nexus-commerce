@@ -29,6 +29,7 @@ import {
   LinkSuggestionsBanner,
   useFieldLinks,
 } from '../_shared/cockpit-shell'
+import PublishReviewModal from './PublishReviewModal'
 import { Card } from '@/components/ui/Card'
 import { Input } from '@/components/ui/Input'
 import { Button } from '@/components/ui/Button'
@@ -899,7 +900,8 @@ function MarketAvailabilityCard({ productId }: { productId: string }) {
   const [saving, setSaving] = useState<Set<string>>(new Set())
   // OL.A.3 — multi-select for bulk actions on a subset of coordinates.
   const [selected, setSelected] = useState<Set<string>>(new Set())
-  const [publishing, setPublishing] = useState(false)
+  // OL.B — publish review modal (replaces A.3's blind publish fire).
+  const [reviewOpen, setReviewOpen] = useState(false)
   // OL.A.4 — cross-channel propagation drawer + smart link suggestions.
   const [matrixOpen, setMatrixOpen] = useState(false)
   const fieldLinks = useFieldLinks(productId)
@@ -1000,55 +1002,16 @@ function MarketAvailabilityCard({ productId }: { productId: string }) {
     [rows, selected, productId, toast],
   )
 
-  // OL.A.3 — publish the selected coordinates via the existing per-coordinate
-  // endpoint. That endpoint validates (422 on missing title/price/type) and
-  // honours AMAZON_PUBLISH_MODE gating (returns DRY_RUN until set to live),
-  // so this stays safe under the ship-live-not-dark gating model. A true
-  // one-action cross-PLATFORM publish with a combined diff is Phase B.
-  const publishSelected = useCallback(async () => {
-    const targets = rows.filter((r) => selected.has(rowKey(r)))
-    if (targets.length === 0) return
-    setPublishing(true)
-    let ok = 0
-    let dryRun = 0
-    let failed = 0
-    const failures: string[] = []
-    await Promise.all(
-      targets.map(async (r) => {
-        try {
-          const res = await fetch(
-            `${getBackendUrl()}/api/products/${productId}/listings/${r.channel}/${r.marketplace}/publish`,
-            { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' },
-          )
-          const body = await res.json().catch(() => null)
-          if (!res.ok || body?.ok === false) {
-            failed++
-            failures.push(`${CHANNEL_LABEL[r.channel] ?? r.channel} ${r.marketplace}: ${body?.message ?? `HTTP ${res.status}`}`)
-          } else if (body?.status === 'DRY_RUN') {
-            dryRun++
-          } else {
-            ok++
-          }
-        } catch (e: any) {
-          failed++
-          failures.push(`${CHANNEL_LABEL[r.channel] ?? r.channel} ${r.marketplace}: ${e?.message ?? String(e)}`)
-        }
-      }),
-    )
-    setPublishing(false)
-    const parts: string[] = []
-    if (ok) parts.push(`${ok} published`)
-    if (dryRun) parts.push(`${dryRun} dry-run`)
-    if (failed) parts.push(`${failed} failed`)
-    toast({
-      tone: failed > 0 ? 'error' : 'success',
-      title: parts.join(' · ') || 'Nothing to publish',
-      description: failures.length > 0 ? failures.slice(0, 4).join('\n') : undefined,
-    })
-    // Refresh to reflect new statuses/sync times + notify other tabs.
+  // OL.B — coordinates handed to the Publish Review modal (the selection).
+  const reviewCoords = rows
+    .filter((r) => selected.has(rowKey(r)))
+    .map((r) => ({ channel: r.channel, marketplace: r.marketplace }))
+
+  // OL.B — after the modal finishes a publish run, refresh + notify tabs.
+  const onPublished = useCallback(() => {
     reload({ background: true })
     emitInvalidation({ type: 'listing.updated', id: productId, meta: { source: 'listing-hub' } })
-  }, [rows, selected, productId, toast, reload])
+  }, [reload, productId])
 
   useEffect(() => { reload() }, [reload])
 
@@ -1203,18 +1166,17 @@ function MarketAvailabilityCard({ productId }: { productId: string }) {
             </button>
           </div>
           <div className="flex items-center gap-1.5 flex-wrap">
-            <Button variant="secondary" size="sm" onClick={() => void setSelectedAvailability(true)} disabled={saving.size > 0 || publishing}>
+            <Button variant="secondary" size="sm" onClick={() => void setSelectedAvailability(true)} disabled={saving.size > 0}>
               Activate
             </Button>
-            <Button variant="secondary" size="sm" onClick={() => void setSelectedAvailability(false)} disabled={saving.size > 0 || publishing}>
+            <Button variant="secondary" size="sm" onClick={() => void setSelectedAvailability(false)} disabled={saving.size > 0}>
               Pause
             </Button>
             <Button
               variant="primary"
               size="sm"
-              loading={publishing}
               icon={<Upload className="w-3.5 h-3.5" />}
-              onClick={() => void publishSelected()}
+              onClick={() => setReviewOpen(true)}
               disabled={saving.size > 0}
             >
               Publish
@@ -1350,6 +1312,14 @@ function MarketAvailabilityCard({ productId }: { productId: string }) {
       </Card>
       {/* OL.A.4 — cross-channel propagation drawer (diff-then-apply) */}
       <CrossChannelMatrix productId={productId} open={matrixOpen} onClose={() => setMatrixOpen(false)} />
+      {/* OL.B — publish review (preflight + per-coordinate progress) */}
+      <PublishReviewModal
+        productId={productId}
+        coordinates={reviewCoords}
+        open={reviewOpen}
+        onClose={() => setReviewOpen(false)}
+        onPublished={onPublished}
+      />
     </>
   )
 }

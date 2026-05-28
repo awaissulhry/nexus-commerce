@@ -1124,6 +1124,108 @@ const marketplacesRoutes: FastifyPluginAsync = async (fastify) => {
       }
     }
   )
+
+  // OL.B.1 — POST /api/products/:id/publish-preflight
+  // Read-only "what would happen if I publish these coordinates now".
+  // Mirrors the resolve + validate logic of the publish route above (no
+  // writes, no SP-API call) so the Listing Hub can show a combined review
+  // before a one-action multi-channel publish.
+  //   Body: { coordinates: Array<{ channel: string; marketplace: string }> }
+  // Per coordinate returns: status ('ready'|'blocked'), issues[], the
+  // resolved title/price/productType that would be sent, and the effective
+  // `action`: AMAZON goes through SP-API (live or dry-run per env);
+  // eBay/Shopify are marked active + queue an inventory sync (NOT a content
+  // push — that's the cockpit/flat-file job), surfaced honestly here.
+  fastify.post<{
+    Params: { id: string }
+    Body: { coordinates?: Array<{ channel: string; marketplace: string }> }
+  }>(
+    '/products/:id/publish-preflight',
+    async (request, reply) => {
+      const { id } = request.params
+      const coordinates = Array.isArray(request.body?.coordinates) ? request.body!.coordinates : []
+      if (coordinates.length === 0) {
+        return reply.code(400).send({ error: 'coordinates array is required' })
+      }
+      try {
+        const product = await prisma.product.findUnique({ where: { id } })
+        if (!product) return reply.code(404).send({ error: `Product ${id} not found` })
+
+        const listings = await prisma.channelListing.findMany({
+          where: { productId: id },
+          select: {
+            channel: true, marketplace: true, title: true, price: true,
+            description: true, quantity: true, platformAttributes: true,
+          },
+        })
+        const byCoord = new Map(listings.map((l) => [`${l.channel}:${l.marketplace}`, l]))
+        const amazonConfigured = amazonService.isConfigured()
+        // Amazon dry-run is env-gated (AMAZON_PUBLISH_MODE). Anything other
+        // than an explicit 'live' is a dry-run — same default the SP-API
+        // client applies — so the review can label it without guessing.
+        const amazonDryRun = (process.env.AMAZON_PUBLISH_MODE ?? '').toLowerCase() !== 'live'
+
+        const results = coordinates.map(({ channel, marketplace }) => {
+          const listing = byCoord.get(`${channel}:${marketplace}`)
+          const pa = (listing?.platformAttributes as Record<string, any> | null) ?? {}
+          const resolvedTitle = listing?.title ?? product.name
+          const resolvedPrice = listing?.price ?? (product as any).basePrice ?? null
+          const resolvedProductType = pa.productType ?? (product as any).productType ?? ''
+
+          const issues: { message: string; severity: 'ERROR' | 'WARNING' }[] = []
+          if (!resolvedTitle || String(resolvedTitle).trim().length === 0) {
+            issues.push({ message: 'Title is required', severity: 'ERROR' })
+          }
+          if (resolvedPrice == null || Number(resolvedPrice) <= 0) {
+            issues.push({ message: 'Price is required and must be positive', severity: 'ERROR' })
+          }
+          if (channel.toUpperCase() === 'AMAZON' && (!resolvedProductType || String(resolvedProductType).trim().length === 0)) {
+            issues.push({ message: 'Product type is required', severity: 'ERROR' })
+          }
+
+          const isAmazon = channel.toUpperCase() === 'AMAZON'
+          const hasMpId = MARKETPLACES.some((m) => m.channel === channel && m.code === marketplace && (m as any).marketplaceId)
+          if (isAmazon && !hasMpId) {
+            issues.push({ message: `No marketplace mapping for ${channel}/${marketplace}`, severity: 'ERROR' })
+          }
+          if (isAmazon && !product.sku) {
+            issues.push({ message: 'Product has no SKU — cannot publish to Amazon', severity: 'ERROR' })
+          }
+
+          const blocked = issues.some((i) => i.severity === 'ERROR')
+          const action = isAmazon
+            ? (amazonConfigured ? (amazonDryRun ? 'amazon-dry-run' : 'amazon-live') : 'amazon-unconfigured')
+            : 'mark-active'
+
+          return {
+            channel,
+            marketplace,
+            status: blocked ? 'blocked' : 'ready',
+            action,
+            issues,
+            resolved: {
+              title: resolvedTitle ?? null,
+              price: resolvedPrice == null ? null : Number(resolvedPrice),
+              productType: resolvedProductType || null,
+              hasDescription: Boolean(listing?.description),
+              quantity: listing?.quantity ?? null,
+            },
+            listed: Boolean(listing),
+          }
+        })
+
+        return reply.send({
+          productId: id,
+          amazonConfigured,
+          amazonDryRun,
+          coordinates: results,
+        })
+      } catch (error: any) {
+        fastify.log.error({ err: error }, '[products/publish-preflight] failed')
+        return reply.code(500).send({ error: error?.message ?? String(error) })
+      }
+    }
+  )
 }
 
 export default marketplacesRoutes
