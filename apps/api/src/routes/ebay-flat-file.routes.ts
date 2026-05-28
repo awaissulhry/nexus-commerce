@@ -79,6 +79,11 @@ function buildFlatRow(
     sku: string;
     name: string;
     ean: string | null;
+    // EV.5b — family linkage + variation data (present at runtime; /rows
+    // selects all Product scalars).
+    parentId?: string | null;
+    variationTheme?: string | null;
+    categoryAttributes?: unknown;
     channelListings: Array<{
       id: string;
       region: string;
@@ -110,6 +115,16 @@ function buildFlatRow(
   const first = listings[0];
   const firstAttrs = first ? ((first.platformAttributes ?? {}) as Record<string, unknown>) : {};
   const firstImageUrls = (firstAttrs.imageUrls as string[] | undefined) ?? [];
+
+  // EV.5b — variation linkage. Axis names normalised to comma-separated
+  // (what the variation publish's split(',') expects); axis values from
+  // the canonical categoryAttributes.variations.
+  const variationAxisNames = (product.variationTheme ?? '')
+    .split(/[/,|]/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const variationValues =
+    ((product.categoryAttributes as { variations?: Record<string, string> } | null)?.variations) ?? {};
 
   const row: Record<string, unknown> = {
     _rowId: product.id,
@@ -145,7 +160,13 @@ function buildFlatRow(
     last_pushed_at: first?.updatedAt.toISOString() ?? '',
     sync_status: first?.syncStatus ?? 'pending',
     ebay_item_id: first?.externalListingId ?? '',
-    platformProductId: product.id,
+    // EV.5b — family group key: children share the parent's id, the parent
+    // uses its own. So a family groups (push + UI) instead of every row
+    // being its own one-row "family".
+    platformProductId: product.parentId ?? product.id,
+    variation_theme: variationAxisNames.join(','),
+    // metadata flag (underscore-prefixed, not a display column).
+    _isParent: !product.parentId,
   };
 
   // Dynamic item specifics from first listing
@@ -153,6 +174,15 @@ function buildFlatRow(
   for (const [key, val] of Object.entries(itemSpecifics)) {
     const colId = `aspect_${key.replace(/\s+/g, '_')}`;
     row[colId] = val;
+  }
+
+  // EV.5b — variation axis values from categoryAttributes.variations,
+  // under both the case-preserved key (the dynamic UI columns) and the
+  // lowercased key the variation publish's variesBy build reads.
+  for (const [axis, val] of Object.entries(variationValues)) {
+    if (!val) continue;
+    row[`aspect_${axis.replace(/\s+/g, '_')}`] = val;
+    row[`aspect_${axis.toLowerCase().replace(/\s+/g, '_')}`] = val;
   }
 
   // Per-market flat fields
