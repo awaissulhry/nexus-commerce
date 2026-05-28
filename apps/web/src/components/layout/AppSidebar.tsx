@@ -585,6 +585,12 @@ export default function AppSidebar() {
             active={pathname.startsWith('/marketing/budgets')}
           />
           <NavItem
+            href="/marketing/analytics"
+            icon={BarChart3}
+            label="Analytics"
+            active={pathname.startsWith('/marketing/analytics')}
+          />
+          <NavItem
             href="/pricing/promotions"
             icon={Megaphone}
             label="Promotions"

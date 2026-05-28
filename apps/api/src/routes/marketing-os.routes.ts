@@ -121,6 +121,59 @@ const marketingOsRoutes: FastifyPluginAsync = async (app) => {
     return c
   })
 
+  // ── Unified analytics (P14) ───────────────────────────────────────────
+  // Cross-channel rollups from CampaignMetric. Sums EUR-normalized
+  // costEurCents so Amazon + eBay + Shopify + external compare in one
+  // currency. CAMPAIGN-grain only (the canonical spend grain — avoids
+  // double-counting target/ad-group rows). Cross-channel ROAS is labeled
+  // "channel-reported" because attribution models differ per channel.
+  app.get('/marketing/os/analytics', async (request, reply) => {
+    reply.header('Cache-Control', 'private, max-age=30')
+    const q = request.query as Record<string, string | undefined>
+    const from = q.from ? new Date(q.from) : new Date(Date.now() - 30 * 86400_000)
+    const to = q.to ? new Date(q.to) : new Date()
+    const baseWhere = { entityType: 'CAMPAIGN', date: { gte: from, lte: to } }
+
+    const [byChannel, byMarketplace, daily, totals] = await Promise.all([
+      prisma.campaignMetric.groupBy({ by: ['channel'], where: baseWhere, _sum: { costEurCents: true, sales7dCents: true, impressions: true, clicks: true, orders7d: true } }),
+      prisma.campaignMetric.groupBy({ by: ['marketplace'], where: baseWhere, _sum: { costEurCents: true, sales7dCents: true }, orderBy: { _sum: { costEurCents: 'desc' } }, take: 20 }),
+      prisma.campaignMetric.groupBy({ by: ['date'], where: baseWhere, _sum: { costEurCents: true, sales7dCents: true }, orderBy: { date: 'asc' } }),
+      prisma.campaignMetric.aggregate({ where: baseWhere, _sum: { costEurCents: true, sales7dCents: true, impressions: true, clicks: true, orders7d: true } }),
+    ])
+
+    const fmt = (rows: Array<{ _sum: { costEurCents: bigint | null; sales7dCents: number | null; impressions?: number | null; clicks?: number | null; orders7d?: number | null } }>, key: string, rowsRaw: Array<Record<string, unknown>>) =>
+      rowsRaw.map((r, i) => {
+        const spend = Number(rows[i]!._sum.costEurCents ?? 0n)
+        const sales = rows[i]!._sum.sales7dCents ?? 0
+        return {
+          key: r[key],
+          spendEurCents: spend,
+          salesCents: sales,
+          impressions: rows[i]!._sum.impressions ?? undefined,
+          clicks: rows[i]!._sum.clicks ?? undefined,
+          orders7d: rows[i]!._sum.orders7d ?? undefined,
+          roas: spend > 0 ? sales / spend : null,
+          acos: sales > 0 ? spend / sales : null,
+        }
+      })
+
+    return {
+      from: from.toISOString().slice(0, 10),
+      to: to.toISOString().slice(0, 10),
+      attributionNote: 'Cross-channel ROAS/ACOS are channel-reported (attribution models differ per channel); spend is EUR-normalized via frozen FX at ingest.',
+      totals: {
+        spendEurCents: Number(totals._sum.costEurCents ?? 0n),
+        salesCents: totals._sum.sales7dCents ?? 0,
+        impressions: totals._sum.impressions ?? 0,
+        clicks: totals._sum.clicks ?? 0,
+        orders7d: totals._sum.orders7d ?? 0,
+      },
+      byChannel: fmt(byChannel, 'channel', byChannel as never),
+      byMarketplace: fmt(byMarketplace, 'marketplace', byMarketplace as never),
+      daily: daily.map((d) => ({ date: d.date.toISOString().slice(0, 10), spendEurCents: Number(d._sum.costEurCents ?? 0n), salesCents: d._sum.sales7dCents ?? 0 })),
+    }
+  })
+
   // ── Budget command center (P7) ────────────────────────────────────────
   app.get('/marketing/os/budgets', async (_request, reply) => {
     reply.header('Cache-Control', 'private, max-age=15')
