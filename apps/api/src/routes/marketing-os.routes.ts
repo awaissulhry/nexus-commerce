@@ -120,6 +120,35 @@ const marketingOsRoutes: FastifyPluginAsync = async (app) => {
     return c
   })
 
+  // ── Diagnostics (P3.2) ────────────────────────────────────────────────
+  // Surfaces the CampaignMetric grain breakdown so we can see how spend is
+  // distributed (CAMPAIGN vs TARGET vs AD_GROUP vs …) and how many rows
+  // linked back to a campaign. Used to validate the spend rollup.
+  app.get('/marketing/os/diagnostics/metrics', async (_request, reply) => {
+    reply.header('Cache-Control', 'private, max-age=15')
+    const byType = await prisma.campaignMetric.groupBy({
+      by: ['entityType'],
+      where: { channel: 'AMAZON' },
+      _count: { _all: true },
+      _sum: { costMicros: true, costEurCents: true, sales7dCents: true },
+    })
+    const linked = await prisma.campaignMetric.count({ where: { channel: 'AMAZON', campaignId: { not: null } } })
+    const unlinked = await prisma.campaignMetric.count({ where: { channel: 'AMAZON', campaignId: null } })
+    const campaignsWithSpend = await prisma.marketingCampaign.count({ where: { channel: 'AMAZON', spendCents: { gt: 0 } } })
+    return {
+      byEntityType: byType.map((r) => ({
+        entityType: r.entityType,
+        rows: r._count._all,
+        costMicros: r._sum.costMicros?.toString() ?? '0',
+        costEurCents: r._sum.costEurCents?.toString() ?? '0',
+        sales7dCents: r._sum.sales7dCents ?? 0,
+      })),
+      linkedToCampaign: linked,
+      unlinkedMetrics: unlinked,
+      campaignsWithSpend,
+    }
+  })
+
   // ── Amazon shadow backfill trigger (P3.1) ────────────────────────────
   // Runs in-process so it can use the server's prod DB credentials (the
   // standalone script can't reach prod from a dev box). Defaults to a
