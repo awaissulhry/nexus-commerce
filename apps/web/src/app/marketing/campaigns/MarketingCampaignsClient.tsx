@@ -19,6 +19,9 @@ import {
   Search,
   RefreshCw,
   Radio,
+  Play,
+  Pause,
+  Check,
 } from 'lucide-react'
 import { KpiStrip, SharedLensTabs, type KpiTileSpec, type LensTab } from '@/app/_shared/grid-lens'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -123,6 +126,29 @@ export function MarketingCampaignsClient({
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
   const [loading, setLoading] = useState(false)
   const [live, setLive] = useState(false)
+  const [busy, setBusy] = useState<Record<string, boolean>>({})
+  const [editBudget, setEditBudget] = useState<{ id: string; value: string } | null>(null)
+
+  // Sandbox-gated mutation: optimistic local update from the server's
+  // echoed campaign; Amazon stays sandbox (no live write) until P8.
+  const mutate = useCallback(async (id: string, body: Record<string, unknown>) => {
+    setBusy((b) => ({ ...b, [id]: true }))
+    try {
+      const res = await fetch(`${getBackendUrl()}/api/marketing/os/campaigns/${id}/mutate`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      if (res.ok) {
+        const r = await res.json()
+        setCampaigns((cs) => cs.map((c) => (c.id === id ? { ...c, status: r.campaign?.status ?? c.status, budgetCents: r.campaign?.budgetCents ?? c.budgetCents } : c)))
+      }
+    } catch {
+      // ignore; next refetch reconciles
+    } finally {
+      setBusy((b) => ({ ...b, [id]: false }))
+    }
+  }, [])
 
   const refetch = useCallback(async () => {
     setLoading(true)
@@ -213,7 +239,7 @@ export function MarketingCampaignsClient({
           )}
         </div>
         <p className="text-sm text-slate-500 dark:text-slate-400">
-          Unified cross-channel campaigns across all markets. Read-only preview (shadow) — inline controls arrive with the mutation pipeline.
+          Unified cross-channel campaigns across all markets. Pause/resume + budget edits run through the guarded mutation path (Amazon in sandbox until cutover — no live write fires).
         </p>
       </header>
 
@@ -263,12 +289,13 @@ export function MarketingCampaignsClient({
               <th className="text-right font-medium px-3 py-2 cursor-pointer" onClick={() => toggleSort('acos')}>ACOS{arrow('acos')}</th>
               <th className="text-right font-medium px-3 py-2 cursor-pointer" onClick={() => toggleSort('roas')}>ROAS{arrow('roas')}</th>
               <th className="text-left font-medium px-3 py-2">Delivery</th>
+              <th className="text-center font-medium px-3 py-2">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
             {rows.length === 0 && (
               <tr>
-                <td colSpan={10} className="px-3 py-10 text-center text-slate-400">
+                <td colSpan={11} className="px-3 py-10 text-center text-slate-400">
                   No campaigns yet. Amazon campaigns appear once the shadow backfill has run; other channels populate as their adapters ship.
                 </td>
               </tr>
@@ -293,7 +320,23 @@ export function MarketingCampaignsClient({
                 <td className="px-3 py-2">
                   <span className={`inline-block px-1.5 py-0.5 rounded text-xs font-medium ${STATUS_CHIP[c.status] ?? STATUS_CHIP.DRAFT}`}>{c.status}</span>
                 </td>
-                <td className="px-3 py-2 text-right tabular-nums text-slate-600 dark:text-slate-300">{eur(c.budgetCents, c.currency)}{c.budgetKind === 'DAILY' ? '/d' : ''}</td>
+                <td className="px-3 py-2 text-right tabular-nums text-slate-600 dark:text-slate-300">
+                  {editBudget?.id === c.id ? (
+                    <span className="inline-flex items-center gap-1">
+                      <input
+                        autoFocus type="number" step="0.01" value={editBudget.value}
+                        onChange={(e) => setEditBudget({ id: c.id, value: e.target.value })}
+                        onKeyDown={(e) => { if (e.key === 'Escape') setEditBudget(null); if (e.key === 'Enter') { void mutate(c.id, { budgetCents: Math.round(parseFloat(editBudget.value || '0') * 100) }); setEditBudget(null) } }}
+                        className="w-20 px-1 py-0.5 text-right text-xs rounded border border-blue-400 bg-white dark:bg-slate-900"
+                      />
+                      <button onClick={() => { void mutate(c.id, { budgetCents: Math.round(parseFloat(editBudget.value || '0') * 100) }); setEditBudget(null) }} className="text-blue-600"><Check size={13} /></button>
+                    </span>
+                  ) : (
+                    <button onClick={() => setEditBudget({ id: c.id, value: c.budgetCents != null ? (c.budgetCents / 100).toFixed(2) : '0' })} className="hover:underline decoration-dotted" title="Edit budget (sandbox)">
+                      {eur(c.budgetCents, c.currency)}{c.budgetKind === 'DAILY' ? '/d' : ''}
+                    </button>
+                  )}
+                </td>
                 <td className="px-3 py-2 text-right tabular-nums text-slate-700 dark:text-slate-200">{eur(c.spendCents, c.currency)}</td>
                 <td className="px-3 py-2 text-right tabular-nums text-slate-700 dark:text-slate-200">{eur(c.salesCents, c.currency)}</td>
                 <td className="px-3 py-2 text-right tabular-nums">{pct(c.acos)}</td>
@@ -301,6 +344,18 @@ export function MarketingCampaignsClient({
                 <td className="px-3 py-2 text-xs text-slate-500">
                   {c.deliveryStatus ?? '—'}
                   {c.deliveryReasons?.length ? <span className="text-rose-400"> · {c.deliveryReasons[0]}</span> : null}
+                </td>
+                <td className="px-3 py-2 text-center">
+                  {(c.status === 'ACTIVE' || c.status === 'PAUSED') && (
+                    <button
+                      disabled={busy[c.id]}
+                      onClick={() => void mutate(c.id, { status: c.status === 'ACTIVE' ? 'PAUSED' : 'ACTIVE' })}
+                      title={c.status === 'ACTIVE' ? 'Pause (sandbox)' : 'Resume (sandbox)'}
+                      className="inline-flex items-center justify-center w-7 h-7 rounded hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-40"
+                    >
+                      {c.status === 'ACTIVE' ? <Pause size={14} className="text-amber-600" /> : <Play size={14} className="text-emerald-600" />}
+                    </button>
+                  )}
                 </td>
               </tr>
             ))}

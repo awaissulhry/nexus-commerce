@@ -121,6 +121,62 @@ const marketingOsRoutes: FastifyPluginAsync = async (app) => {
     return c
   })
 
+  // ── Campaign mutations (P5, sandbox-gated) ────────────────────────────
+  // Operator writes flow through the unified mutation path: optimistic
+  // local update + CampaignAction audit + OutboundSyncQueue row with a
+  // 5-min grace window. Amazon stays SANDBOX via the write gate until the
+  // P8 cutover (no live external write fires).
+  app.patch('/marketing/os/campaigns/:id/mutate', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const b = request.body as Record<string, unknown>
+    const { enqueueCampaignMutation } = await import('../services/marketing/marketing-mutation.service.js')
+    try {
+      if (b.status !== undefined) {
+        const status = b.status as string
+        if (!['ACTIVE', 'PAUSED'].includes(status)) {
+          reply.status(400)
+          return { error: 'status must be ACTIVE or PAUSED' }
+        }
+        const r = await enqueueCampaignMutation({ campaignId: id, syncType: 'MKT_STATE_UPDATE', payload: { status }, userId: (b.userId as string) ?? null })
+        return r
+      }
+      if (b.budgetCents !== undefined) {
+        const budgetCents = Number(b.budgetCents)
+        if (!Number.isFinite(budgetCents) || budgetCents < 0) {
+          reply.status(400)
+          return { error: 'budgetCents must be a non-negative number' }
+        }
+        const r = await enqueueCampaignMutation({ campaignId: id, syncType: 'MKT_BUDGET_UPDATE', payload: { budgetCents }, userId: (b.userId as string) ?? null })
+        return r
+      }
+      reply.status(400)
+      return { error: 'provide status or budgetCents' }
+    } catch (err) {
+      reply.status(500)
+      return { error: (err as Error)?.message ?? 'mutation failed' }
+    }
+  })
+
+  app.post('/marketing/os/mutations/:queueId/cancel', async (request, reply) => {
+    const { queueId } = request.params as { queueId: string }
+    const { cancelCampaignMutation } = await import('../services/marketing/marketing-mutation.service.js')
+    const r = await cancelCampaignMutation(queueId)
+    if (!r.cancelled) reply.status(409)
+    return r
+  })
+
+  // Manual drain (sandbox verification + cron-friendly). Processes ready
+  // MKT_* rows: gate-check then sandbox-finalize or live-dispatch.
+  app.post('/marketing/os/sync/drain', async (_request, reply) => {
+    const { drainMarketingSyncOnce } = await import('../services/marketing/marketing-mutation.service.js')
+    try {
+      return await drainMarketingSyncOnce()
+    } catch (err) {
+      reply.status(500)
+      return { error: (err as Error)?.message ?? 'drain failed' }
+    }
+  })
+
   // ── Marketing calendar (P4) ───────────────────────────────────────────
   // The shared calendar view-model: operator-authored CalendarEntry rows +
   // scheduled campaigns + RetailEvent background bands (demand anchors with
