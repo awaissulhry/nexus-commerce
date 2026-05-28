@@ -121,6 +121,133 @@ const marketingOsRoutes: FastifyPluginAsync = async (app) => {
     return c
   })
 
+  // ── Budget command center (P7) ────────────────────────────────────────
+  app.get('/marketing/os/budgets', async (_request, reply) => {
+    reply.header('Cache-Control', 'private, max-age=15')
+    const budgets = await prisma.campaignBudget.findMany({
+      orderBy: { createdAt: 'desc' },
+      include: {
+        allocations: { include: { campaign: { select: { id: true, name: true, channel: true, budgetCents: true, currency: true } } } },
+        _count: { select: { rebalances: true } },
+      },
+    })
+    return { items: budgets, count: budgets.length }
+  })
+
+  app.post('/marketing/os/budgets', async (request, reply) => {
+    const b = request.body as Record<string, unknown>
+    if (!b?.name || b?.totalDailyCents == null) {
+      reply.status(400)
+      return { error: 'name and totalDailyCents are required' }
+    }
+    return prisma.campaignBudget.create({
+      data: {
+        name: b.name as string,
+        description: (b.description as string) ?? null,
+        scope: (b.scope as string) ?? 'POOL',
+        currency: (b.currency as string) ?? 'EUR',
+        totalDailyCents: Number(b.totalDailyCents),
+        strategy: (b.strategy as string) ?? 'STATIC',
+        coolDownMinutes: (b.coolDownMinutes as number) ?? 60,
+        maxShiftPerRebalancePct: (b.maxShiftPerRebalancePct as number) ?? 20,
+        enabled: (b.enabled as boolean) ?? false,
+        dryRun: (b.dryRun as boolean) ?? true,
+        createdBy: (b.createdBy as string) ?? null,
+      },
+    })
+  })
+
+  app.patch('/marketing/os/budgets/:id', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const b = request.body as Record<string, unknown>
+    const allowed = ['name', 'description', 'totalDailyCents', 'strategy', 'coolDownMinutes', 'maxShiftPerRebalancePct', 'enabled', 'dryRun']
+    const data: Record<string, unknown> = {}
+    for (const k of allowed) if (b[k] !== undefined) data[k] = b[k]
+    try {
+      return await prisma.campaignBudget.update({ where: { id }, data: data as never })
+    } catch {
+      reply.status(404)
+      return { error: 'budget not found' }
+    }
+  })
+
+  app.delete('/marketing/os/budgets/:id', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    try {
+      await prisma.campaignBudget.delete({ where: { id } })
+      return { ok: true }
+    } catch {
+      reply.status(404)
+      return { error: 'budget not found' }
+    }
+  })
+
+  // Add a campaign to a pool. campaignId is globally unique across pools.
+  app.post('/marketing/os/budgets/:id/allocations', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const b = request.body as Record<string, unknown>
+    if (!b?.campaignId) {
+      reply.status(400)
+      return { error: 'campaignId required' }
+    }
+    const c = await prisma.marketingCampaign.findUnique({ where: { id: b.campaignId as string }, select: { channel: true, primaryMarketplace: true } })
+    if (!c) {
+      reply.status(404)
+      return { error: 'campaign not found' }
+    }
+    try {
+      return await prisma.campaignBudgetAllocation.create({
+        data: {
+          budgetId: id,
+          campaignId: b.campaignId as string,
+          channel: c.channel,
+          marketplace: c.primaryMarketplace,
+          targetSharePct: (b.targetSharePct as number) ?? 0,
+          minDailyBudgetCents: (b.minDailyBudgetCents as number) ?? 100,
+          maxDailyBudgetCents: (b.maxDailyBudgetCents as number) ?? null,
+        },
+      })
+    } catch {
+      reply.status(409)
+      return { error: 'campaign already allocated to a pool' }
+    }
+  })
+
+  app.delete('/marketing/os/allocations/:allocId', async (request, reply) => {
+    const { allocId } = request.params as { allocId: string }
+    try {
+      await prisma.campaignBudgetAllocation.delete({ where: { id: allocId } })
+      return { ok: true }
+    } catch {
+      reply.status(404)
+      return { error: 'allocation not found' }
+    }
+  })
+
+  // Rebalance preview (dry diff) + apply.
+  app.get('/marketing/os/budgets/:id/rebalance/preview', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const { computeRebalance } = await import('../services/marketing/marketing-budget.service.js')
+    try {
+      return await computeRebalance(id)
+    } catch (err) {
+      reply.status(500)
+      return { error: (err as Error)?.message ?? 'preview failed' }
+    }
+  })
+
+  app.post('/marketing/os/budgets/:id/rebalance/apply', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const q = request.query as Record<string, string | undefined>
+    const { applyRebalance } = await import('../services/marketing/marketing-budget.service.js')
+    try {
+      return await applyRebalance({ budgetId: id, triggeredBy: 'user:cockpit', force: q.force === '1' })
+    } catch (err) {
+      reply.status(500)
+      return { error: (err as Error)?.message ?? 'apply failed' }
+    }
+  })
+
   // ── Automation rules (P6, domain=marketing) ──────────────────────────
   // CRUD + manual dry-run over the shared AutomationRule engine. Handlers
   // (mkt_pause_campaign / mkt_resume_campaign / mkt_set_budget /

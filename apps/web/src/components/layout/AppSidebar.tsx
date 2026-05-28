@@ -37,6 +37,7 @@ import {
   FileEdit,
   LayoutGrid,
   CalendarDays,
+  Wallet,
   BadgeCheck,
   BookOpen,
   Palette,
@@ -576,6 +577,12 @@ export default function AppSidebar() {
             icon={Zap}
             label="Automation"
             active={pathname.startsWith('/marketing/automation-os')}
+          />
+          <NavItem
+            href="/marketing/budgets"
+            icon={Wallet}
+            label="Budgets"
+            active={pathname.startsWith('/marketing/budgets')}
           />
           <NavItem
             href="/pricing/promotions"
