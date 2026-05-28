@@ -26,6 +26,8 @@ import {
   FACE_IMAGE_SELECT,
 } from '../services/product-read-cache.service.js'
 import { deriveFulfillmentMethod } from '../services/fulfillment-derivation.service.js'
+import { computeAvailableToPublish } from '../services/available-to-publish.service.js'
+import { MARKETPLACE_ID_TO_CODE } from '../utils/marketplace-code.js'
 import {
   shadowCompareProductRead,
   isShadowEnabled,
@@ -1366,6 +1368,7 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
         where: { id },
         select: {
           id: true,
+          sku: true,
           fulfillmentMethod: true,
           channelListings: {
             select: {
@@ -1374,6 +1377,7 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
               region: true,
               fulfillmentMethod: true,
               listingStatus: true,
+              stockBuffer: true,
             },
             orderBy: [{ channel: 'asc' }, { marketplace: 'asc' }],
           },
@@ -1381,6 +1385,28 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
       })
       if (!product) {
         return reply.code(404).send({ success: false, error: 'Product not found' })
+      }
+
+      // FCF.2 — gather the stock pools once, then compute availableToPublish
+      // per listing. FBM = own-warehouse StockLevel.available; FBA = SELLABLE
+      // FbaInventoryDetail for this sku, scoped to the listing's marketplace.
+      const [whRows, fbaRows] = await Promise.all([
+        prisma.stockLevel.findMany({
+          where: { productId: id, location: { type: 'WAREHOUSE' } },
+          select: { available: true },
+        }),
+        product.sku
+          ? prisma.fbaInventoryDetail.findMany({
+              where: { sku: product.sku, condition: 'SELLABLE' },
+              select: { quantity: true, marketplaceId: true },
+            })
+          : Promise.resolve([] as Array<{ quantity: number; marketplaceId: string }>),
+      ])
+      const warehouseAvailable = whRows.reduce((s, r) => s + r.available, 0)
+      const fbaByMarket = new Map<string, number>()
+      for (const r of fbaRows) {
+        const code = MARKETPLACE_ID_TO_CODE[r.marketplaceId] ?? r.marketplaceId
+        fbaByMarket.set(code, (fbaByMarket.get(code) ?? 0) + r.quantity)
       }
 
       const listings = product.channelListings.map((cl) => {
@@ -1392,6 +1418,12 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
             ? 'FBM'
             : ((product.fulfillmentMethod as 'FBA' | 'FBM' | null) ?? 'FBM')
         }
+        const atp = computeAvailableToPublish({
+          fulfillmentMethod: method,
+          warehouseAvailable,
+          fbaSellable: fbaByMarket.get(cl.marketplace) ?? 0,
+          stockBuffer: cl.stockBuffer,
+        })
         return {
           channel: cl.channel,
           marketplace: cl.marketplace,
@@ -1399,6 +1431,10 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
           fulfillmentMethod: method,
           source,
           listingStatus: cl.listingStatus,
+          stockBuffer: cl.stockBuffer,
+          availableToPublish: atp.available,
+          pool: atp.pool,
+          poolQuantity: atp.poolQuantity,
         }
       })
 
