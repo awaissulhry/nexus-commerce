@@ -22,6 +22,12 @@ export interface FlatFileColumn {
    */
   enumMode?: 'open' | 'strict'
   /**
+   * Enum cell holds a comma-separated LIST of values (e.g. a variation
+   * theme, or a MULTI-cardinality aspect). The dropdown toggles options
+   * in/out of the list and stays open. Undefined = single-value (legacy).
+   */
+  multiValue?: boolean
+  /**
    * Which Amazon parentage levels this field applies to (undefined = all).
    * Drives the listing guidance highlight in the grid.
    */

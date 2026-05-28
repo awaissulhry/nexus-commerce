@@ -19,6 +19,8 @@ export interface EbayColumn {
   /** Enum strictness: 'open' = suggest + type freely (eBay FREE_TEXT);
    *  'strict' = eBay only accepts listed values (SELECTION_ONLY). */
   enumMode?: 'open' | 'strict'
+  /** Enum cell holds a comma-separated list (toggle picker). */
+  multiValue?: boolean
   /** Usage level from eBay API (REQUIRED / RECOMMENDED / OPTIONAL) */
   guidance?: string
   maxLength?: number

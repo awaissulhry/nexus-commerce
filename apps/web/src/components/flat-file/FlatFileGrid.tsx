@@ -6,7 +6,7 @@ import {
 } from 'react'
 import { useRouter } from 'next/navigation'
 import {
-  AlertCircle, AlertTriangle, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight,
+  AlertCircle, AlertTriangle, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight,
   Image as ImageIcon, Keyboard, Loader2, Pin, Plus,
   Search, Trash2, Undo2, Redo2, X,
 } from 'lucide-react'
@@ -138,12 +138,16 @@ function wordBoundsAt(text: string, pos: number): [number, number] {
 
 // ── EnumDropdown ───────────────────────────────────────────────────────────
 
-function EnumDropdown({ options, optionLabels, current, enumMode, onSelect, onClose }: {
+function EnumDropdown({ options, optionLabels, current, enumMode, multi, onSelect, onClose }: {
   options: string[]; optionLabels?: Record<string, string>
   current: string
   /** 'strict' = eBay only accepts listed values; a typed custom value is
    *  still allowed but flagged. 'open'/undefined = free text, no flag. */
   enumMode?: 'open' | 'strict'
+  /** Multi-value: the cell holds a comma list; selecting toggles membership
+   *  and the dropdown stays open. onSelect receives the full comma-joined
+   *  string. Single (default) replaces the value and closes. */
+  multi?: boolean
   onSelect: (v: string) => void; onClose: () => void
 }) {
   const [query, setQuery] = useState('')
@@ -152,6 +156,12 @@ function EnumDropdown({ options, optionLabels, current, enumMode, onSelect, onCl
   const searchRef = useRef<HTMLInputElement>(null)
 
   const label = (opt: string) => optionLabels?.[opt] ?? opt
+
+  // Multi-value: parse the current comma list into a membership set.
+  const selected = useMemo(
+    () => multi ? new Set(current.split(',').map((s) => s.trim()).filter(Boolean)) : new Set<string>(),
+    [multi, current],
+  )
 
   const filtered = useMemo(() => {
     const q = query.toLowerCase()
@@ -173,9 +183,18 @@ function EnumDropdown({ options, optionLabels, current, enumMode, onSelect, onCl
     return () => document.removeEventListener('mousedown', h, true)
   }, [onClose])
 
+  // Single: replace + (caller) close. Multi: toggle membership, stay open.
+  function choose(v: string) {
+    if (!multi) { onSelect(v); return }
+    const next = new Set(selected)
+    if (next.has(v)) next.delete(v); else next.add(v)
+    onSelect([...next].join(','))
+    setQuery('')
+  }
+
   function commit(idx: number) {
-    if (idx === filtered.length && hasCustom) { onSelect(query.trim()); return }
-    if (filtered[idx] != null) onSelect(filtered[idx])
+    if (idx === filtered.length && hasCustom) { choose(query.trim()); return }
+    if (filtered[idx] != null) choose(filtered[idx])
   }
 
   function handleKeyDown(e: React.KeyboardEvent) {
@@ -193,14 +212,22 @@ function EnumDropdown({ options, optionLabels, current, enumMode, onSelect, onCl
           className="w-full text-xs px-1.5 py-1 border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500" />
       </div>
       <div ref={listRef} className="max-h-52 overflow-y-auto">
-        {filtered.map((opt, i) => (
-          <div key={opt || '_empty'} role="option" aria-selected={opt === current}
-            onMouseDown={(e) => { e.preventDefault(); onSelect(opt) }}
+        {filtered.map((opt, i) => {
+          const isOn = multi ? selected.has(opt) : opt === current
+          return (
+          <div key={opt || '_empty'} role="option" aria-selected={isOn}
+            onMouseDown={(e) => { e.preventDefault(); choose(opt) }}
             onMouseEnter={() => setHi(i)}
-            className={cn('px-3 py-1.5 text-xs cursor-pointer',
+            className={cn('px-3 py-1.5 text-xs cursor-pointer flex items-center gap-1.5',
               i === hi ? 'bg-blue-500 text-white'
-              : opt === current ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 font-medium'
+              : isOn ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 font-medium'
               : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/50')}>
+            {multi && (
+              <span className={cn('shrink-0 w-3.5 h-3.5 rounded-sm border flex items-center justify-center',
+                isOn ? (i === hi ? 'bg-white/20 border-white' : 'bg-blue-500 border-blue-500') : 'border-slate-300 dark:border-slate-600')}>
+                {isOn && <Check className={cn('w-2.5 h-2.5', i === hi ? 'text-white' : 'text-white')} />}
+              </span>
+            )}
             {opt === '' ? <span className="italic opacity-60">— empty —</span> : (
               optionLabels?.[opt]
                 ? <span className="flex items-baseline gap-1.5 min-w-0">
@@ -210,13 +237,14 @@ function EnumDropdown({ options, optionLabels, current, enumMode, onSelect, onCl
                 : opt
             )}
           </div>
-        ))}
+          )
+        })}
         {filtered.length === 0 && !hasCustom && (
           <div className="px-3 py-2 text-xs text-slate-400 italic">No matches</div>
         )}
         {hasCustom && (
           <div role="option"
-            onMouseDown={(e) => { e.preventDefault(); onSelect(query.trim()) }}
+            onMouseDown={(e) => { e.preventDefault(); choose(query.trim()) }}
             onMouseEnter={() => setHi(filtered.length)}
             className={cn('px-3 py-1.5 text-xs cursor-pointer border-t flex items-center gap-1.5',
               enumMode === 'strict' ? 'border-amber-200 dark:border-amber-800/60' : 'border-slate-100 dark:border-slate-700',
@@ -236,6 +264,13 @@ function EnumDropdown({ options, optionLabels, current, enumMode, onSelect, onCl
           </div>
         )}
       </div>
+      {multi && (
+        <div className="px-2 py-1 border-t border-slate-100 dark:border-slate-700 flex items-center justify-between">
+          <span className="text-[10px] text-slate-400">{selected.size} selected</span>
+          <button type="button" onMouseDown={(e) => { e.preventDefault(); onClose() }}
+            className="text-[11px] font-medium text-blue-600 dark:text-blue-400 hover:underline px-1">Done</button>
+        </div>
+      )}
     </div>
   )
 }
@@ -438,7 +473,13 @@ function SpreadsheetCell({ col, row, value, isActive, cellBg, width, cellHeight,
         {isActive && dropdownOpen && (
           <EnumDropdown options={enumOptions} optionLabels={col.optionLabels} current={displayValue}
             enumMode={col.kind === 'enum' ? col.enumMode : undefined}
-            onSelect={(v) => { onChange(v); setDropdownOpen(false); onNavigate('right') }}
+            multi={col.kind === 'enum' ? col.multiValue : undefined}
+            onSelect={(v) => {
+              onChange(v)
+              // Multi keeps the dropdown open for more toggles; single
+              // replaces the value and advances.
+              if (!(col.kind === 'enum' && col.multiValue)) { setDropdownOpen(false); onNavigate('right') }
+            }}
             onClose={() => { setDropdownOpen(false); onDeactivate() }} />
         )}
       </td>

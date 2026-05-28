@@ -358,6 +358,11 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
   // FF-EN.2 — the loaded category's allowed conditions (Inventory enum + label)
   const [conditionOptions, setConditionOptions] = useState<Array<{ value: string; label: string }>>([])
   const conditionsCacheRef = useRef<Map<string, Array<{ value: string; label: string }>>>(new Map())
+  // FF-EN.3 — the loaded category's variant-eligible axis names (for the
+  // Variation Theme multi-picker). English name preferred to match the
+  // canonical "Size,Color" theme convention.
+  const [variantAxisNames, setVariantAxisNames] = useState<string[]>([])
+  const variantAxisCacheRef = useRef<Map<string, string[]>>(new Map())
 
   // ── Business policies (fulfillment / payment / return) ─────────────────
   const [policyOptions, setPolicyOptions] = useState<{
@@ -397,42 +402,58 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
           }),
         }
       })
-    // FF-EN.2 — when a category is loaded, the Condition column becomes the
-    // category's allowed conditions, strict-but-overridable. With none
-    // loaded the static full list (open) is kept.
-    const patchCondition = (groups: EbayColumnGroup[]): EbayColumnGroup[] =>
-      conditionOptions.length === 0 ? groups : groups.map((g) => {
+    // FF-EN.2/.3 — when a category is loaded, narrow the Listing group:
+    //  - Condition → the category's allowed conditions (strict-overridable),
+    //  - Variation Theme → a multi-pick of variant-eligible axis names (open).
+    // With nothing loaded the static columns (open) are kept.
+    const patchListing = (groups: EbayColumnGroup[]): EbayColumnGroup[] =>
+      (conditionOptions.length === 0 && variantAxisNames.length === 0) ? groups : groups.map((g) => {
         if (g.id !== 'listing') return g
         return {
           ...g,
-          columns: g.columns.map((col) => col.id !== 'condition' ? col : {
-            ...col,
-            kind: 'enum' as const,
-            options: conditionOptions.map((c) => c.value),
-            // Prefer the English label (eBay localises condition descriptions
-            // to the marketplace even with Accept-Language: en-US, and
-            // operators read English); fall back to eBay's text otherwise.
-            optionLabels: Object.fromEntries(conditionOptions.map((c) => [c.value, EBAY_CONDITION_LABELS[c.value] ?? c.label])),
-            enumMode: 'strict' as const,
+          columns: g.columns.map((col) => {
+            if (col.id === 'condition' && conditionOptions.length) {
+              return {
+                ...col,
+                kind: 'enum' as const,
+                options: conditionOptions.map((c) => c.value),
+                // Prefer the English label (eBay localises condition descriptions
+                // to the marketplace even with Accept-Language: en-US, and
+                // operators read English); fall back to eBay's text otherwise.
+                optionLabels: Object.fromEntries(conditionOptions.map((c) => [c.value, EBAY_CONDITION_LABELS[c.value] ?? c.label])),
+                enumMode: 'strict' as const,
+              }
+            }
+            if (col.id === 'variation_theme' && variantAxisNames.length) {
+              return {
+                ...col,
+                kind: 'enum' as const,
+                options: variantAxisNames,
+                enumMode: 'open' as const,
+                multiValue: true,
+              }
+            }
+            return col
           }),
         }
       })
-    const patch = (groups: EbayColumnGroup[]) => patchCondition(patchPolicies(groups))
+    const patch = (groups: EbayColumnGroup[]) => patchListing(patchPolicies(groups))
     const base = patch([...EBAY_FIXED_GROUPS, ...MARKET_COLUMN_GROUPS])
     return categoryColumns ? [
       ...patch(EBAY_FIXED_GROUPS),
       categoryColumns,
       ...patch(MARKET_COLUMN_GROUPS),
     ] : base
-  }, [categoryColumns, policyOptions, conditionOptions])
+  }, [categoryColumns, policyOptions, conditionOptions, variantAxisNames])
 
   // ── Category schema loading ────────────────────────────────────────────
 
   const loadCategorySchema = useCallback(async (categoryId: string) => {
-    if (!categoryId) { setCategoryColumns(null); setConditionOptions([]); return }
+    if (!categoryId) { setCategoryColumns(null); setConditionOptions([]); setVariantAxisNames([]); return }
     if (categoryColumnsCache.has(categoryId)) {
       setCategoryColumns(categoryColumnsCache.get(categoryId)!)
       setConditionOptions(conditionsCacheRef.current.get(categoryId) ?? [])
+      setVariantAxisNames(variantAxisCacheRef.current.get(categoryId) ?? [])
       return
     }
     try {
@@ -442,10 +463,16 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       const json  = await res.json() as { aspects: CategoryAspect[]; conditions?: Array<{ value: string; label: string }> }
       const group = buildCategoryColumns(json.aspects)
       const conds = json.conditions ?? []
+      // Variant-eligible axis names — prefer the English name in "Name (English)".
+      const axisNames = json.aspects
+        .filter((a) => a.variantEligible)
+        .map((a) => a.label.match(/\(([^)]+)\)\s*$/)?.[1] ?? a.label)
       setCategoryColumnsCache((prev) => new Map(prev).set(categoryId, group))
       conditionsCacheRef.current.set(categoryId, conds)
+      variantAxisCacheRef.current.set(categoryId, axisNames)
       setCategoryColumns(group)
       setConditionOptions(conds)
+      setVariantAxisNames(axisNames)
     } catch { /* silently fail — optional */ }
   }, [marketplace, categoryColumnsCache, BACKEND])
 
