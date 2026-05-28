@@ -3670,6 +3670,8 @@
   "products.edit.cockpit.ebay.variations.cap": "limite",
   "products.edit.cockpit.ebay.variations.columns": "Colonne",
   "products.edit.cockpit.ebay.variations.specificN": "Specifica {n}",
+  "products.edit.cockpit.ebay.variations.renameAxisTitle": "Rinomina {axis} solo per eBay",
+  "products.edit.cockpit.ebay.variations.renameValueTitle": "Rinomina \"{value}\" solo per eBay",
   "products.edit.cockpit.ebay.variations.discardCellEdits": "Annulla modifiche celle",
   "products.edit.cockpit.ebay.variations.discardCellEditsTooltip": "Annulla le modifiche per cella non salvate (le scelte degli assi restano)",
   "products.edit.cockpit.ebay.variations.exceedsCap": "Supera il limite di eBay — suddividi in più inserzioni",

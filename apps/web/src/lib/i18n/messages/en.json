@@ -3666,6 +3666,8 @@
   "products.edit.cockpit.ebay.variations.cap": "cap",
   "products.edit.cockpit.ebay.variations.columns": "Columns",
   "products.edit.cockpit.ebay.variations.specificN": "Specific {n}",
+  "products.edit.cockpit.ebay.variations.renameAxisTitle": "Rename {axis} for eBay only",
+  "products.edit.cockpit.ebay.variations.renameValueTitle": "Rename \"{value}\" for eBay only",
   "products.edit.cockpit.ebay.variations.discardCellEdits": "Discard cell edits",
   "products.edit.cockpit.ebay.variations.discardCellEditsTooltip": "Discard unsaved per-cell edits (axis picks stay)",
   "products.edit.cockpit.ebay.variations.exceedsCap": "Exceeds eBay's cap — split into multiple listings",

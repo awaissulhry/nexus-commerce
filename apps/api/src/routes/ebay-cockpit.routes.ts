@@ -425,6 +425,17 @@ export default async function ebayCockpitRoutes(fastify: FastifyInstance) {
       typeof parentPlatform._axisSortOrder === 'object' && parentPlatform._axisSortOrder !== null
         ? (parentPlatform._axisSortOrder as Record<string, string[]>)
         : {}
+    // EV.4 — eBay-only renames. Names: { Color: "Colour" }. Values:
+    // { Color: { Giallo: "Yellow" } }. Display + publish overrides only;
+    // the canonical variant data is never mutated.
+    const axisNameLabels =
+      typeof parentPlatform._axisNameLabels === 'object' && parentPlatform._axisNameLabels !== null
+        ? (parentPlatform._axisNameLabels as Record<string, string>)
+        : {}
+    const axisValueLabels =
+      typeof parentPlatform._axisValueLabels === 'object' && parentPlatform._axisValueLabels !== null
+        ? (parentPlatform._axisValueLabels as Record<string, Record<string, string>>)
+        : {}
 
     // EV.1 — axis values live in categoryAttributes.variations
     // ({ Size, Color }); variantAttributes is the deprecated/empty field
@@ -511,6 +522,8 @@ export default async function ebayCockpitRoutes(fastify: FastifyInstance) {
       declaredAxes,
       pickedAxes,
       axisSortOrder,
+      axisNameLabels,
+      axisValueLabels,
       cells,
       childCount: cells.length,
     })
@@ -535,6 +548,8 @@ export default async function ebayCockpitRoutes(fastify: FastifyInstance) {
       marketplace: string
       pickedAxes?: string[]
       axisSortOrder?: Record<string, string[]>
+      axisNameLabels?: Record<string, string>
+      axisValueLabels?: Record<string, Record<string, string>>
       cells?: Array<{
         childProductId: string
         priceOverride?: number | null
@@ -546,14 +561,19 @@ export default async function ebayCockpitRoutes(fastify: FastifyInstance) {
     if (!body || typeof body !== 'object') {
       return reply.code(400).send({ error: 'Body is required' })
     }
-    const { parentProductId, marketplace, pickedAxes, axisSortOrder, cells } = body
+    const { parentProductId, marketplace, pickedAxes, axisSortOrder, axisNameLabels, axisValueLabels, cells } = body
 
     if (!parentProductId || !marketplace) {
       return reply.code(400).send({ error: 'parentProductId, marketplace are required' })
     }
 
-    // ── Parent: axes + sort order on platformAttributes ────────────
-    if (pickedAxes !== undefined || axisSortOrder !== undefined) {
+    // ── Parent: axes + sort order + eBay renames on platformAttributes ──
+    if (
+      pickedAxes !== undefined ||
+      axisSortOrder !== undefined ||
+      axisNameLabels !== undefined ||
+      axisValueLabels !== undefined
+    ) {
       const parentListing = await prisma.channelListing.findFirst({
         where: { productId: parentProductId, channel: 'EBAY', marketplace },
       })
@@ -565,6 +585,13 @@ export default async function ebayCockpitRoutes(fastify: FastifyInstance) {
       }
       if (axisSortOrder !== undefined) {
         nextPlatform._axisSortOrder = axisSortOrder
+      }
+      // EV.4 — eBay-only display/publish renames.
+      if (axisNameLabels !== undefined) {
+        nextPlatform._axisNameLabels = axisNameLabels
+      }
+      if (axisValueLabels !== undefined) {
+        nextPlatform._axisValueLabels = axisValueLabels
       }
 
       if (parentListing) {
