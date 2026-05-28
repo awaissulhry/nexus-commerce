@@ -119,7 +119,9 @@ async function main() {
       ),
     ]
     const primary = c.marketplace ? normMarket(c.marketplace, marketCodes) : marketplaces[0] ?? 'IT'
-    const externalId = c.externalCampaignId ?? `legacy:${c.id}`
+    // Treat null/undefined/"" externalCampaignId as missing (?? misses "").
+    const externalId =
+      c.externalCampaignId && c.externalCampaignId.trim() ? c.externalCampaignId : `legacy:${c.id}`
     const budgetScope = c.budgetScope === 'MULTI_MARKETPLACE' ? 'MULTI_MARKET' : 'SINGLE_MARKET'
 
     // Drop links whose (externalId, marketplace) key was already used.

@@ -119,7 +119,13 @@ export async function backfillAmazonShadow(opts: { apply: boolean }): Promise<Ba
     // Map to codes then dedupe within the campaign (two raw ids → one code).
     const marketplaces = [...new Set(rawMarkets.map((m) => normMarket(m, marketCodes)))]
     const primary = c.marketplace ? normMarket(c.marketplace, marketCodes) : marketplaces[0] ?? 'IT'
-    const externalId = c.externalCampaignId ?? `legacy:${c.id}`
+    // Treat null/undefined/"" externalCampaignId as missing → unique
+    // legacy:<id> key. (?? misses ""; many locally-authored/unsynced legacy
+    // campaigns carry an empty string, which would collapse every link to
+    // "|<market>" and the global dedup would keep only the first — leaving
+    // most campaigns with zero links.)
+    const externalId =
+      c.externalCampaignId && c.externalCampaignId.trim() ? c.externalCampaignId : `legacy:${c.id}`
     const budgetScope = c.budgetScope === 'MULTI_MARKETPLACE' ? 'MULTI_MARKET' : 'SINGLE_MARKET'
 
     const eligibleMarkets = marketplaces.filter((mkt) => {
