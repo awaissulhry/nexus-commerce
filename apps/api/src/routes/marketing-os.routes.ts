@@ -120,6 +120,27 @@ const marketingOsRoutes: FastifyPluginAsync = async (app) => {
     return c
   })
 
+  // ── Amazon shadow backfill trigger (P3.1) ────────────────────────────
+  // Runs in-process so it can use the server's prod DB credentials (the
+  // standalone script can't reach prod from a dev box). Defaults to a
+  // dry-run PLAN; requires ?mode=apply to write. Idempotent (delete-then-
+  // insert scoped channel=AMAZON) and reversible — only touches the new
+  // shadow tables, never anything the live Trading Desk reads.
+  app.post('/marketing/os/backfill/amazon', async (request, reply) => {
+    const mode = (request.query as Record<string, string | undefined>)?.mode
+    const apply = mode === 'apply'
+    const { backfillAmazonShadow } = await import('../services/marketing/amazon-backfill.service.js')
+    try {
+      const report = await backfillAmazonShadow({ apply })
+      if (apply && report.parity && !report.parity.ok) reply.status(207) // multi-status: ran but parity off
+      return report
+    } catch (err) {
+      logger.error('[UM] amazon backfill failed', { error: (err as Error)?.message })
+      reply.status(500)
+      return { error: (err as Error)?.message ?? 'backfill failed' }
+    }
+  })
+
   // ── SSE stream ────────────────────────────────────────────────────────
   // Mirrors /api/orders/events: ping on connect, ?since=<ms> replay,
   // 25s heartbeat, cleanup on close.
