@@ -3469,6 +3469,7 @@
   "products.edit.cockpit.amazon.cube.fbaSkippedSuffix": "{count} FBA skipped",
   "products.edit.cockpit.amazon.cube.fieldLabel": "Field:",
   "products.edit.cockpit.amazon.cube.fill": "fill",
+  "products.edit.cockpit.amazon.cube.linkPriceTitle": "Link this variant's price across markets",
   "products.edit.cockpit.amazon.cube.fillRowTitle": "Fill this variant's value across all markets",
   "products.edit.cockpit.amazon.cube.hintAxis": "Colour × size grid — edit a cell, or use the ▾ on a header to fill a whole row/column.",
   "products.edit.cockpit.amazon.cube.hintMarket": "Compare and edit one field across all markets; ⇥ fills a variant across markets.",

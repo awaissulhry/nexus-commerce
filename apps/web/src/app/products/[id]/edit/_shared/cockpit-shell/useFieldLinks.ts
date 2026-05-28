@@ -25,6 +25,9 @@ export interface FieldLinkGroupDto {
   productId: string
   fieldKey: string
   parentage: 'PARENT' | 'CHILD'
+  // T3.1 — null for a PARENT (product-level) group; the variant id for
+  // a CHILD group that pins one variant's field across coordinates.
+  variantId: string | null
   translatePolicy: 'TRANSLATE' | 'VERBATIM' | 'NONE'
   members: FieldLinkMember[]
   sourceLanguage: string | null
@@ -33,6 +36,14 @@ export interface FieldLinkGroupDto {
 export interface SetScopeOptions {
   parentage?: 'PARENT' | 'CHILD'
   sourceLanguage?: string | null
+  // T3.2 — set to scope the link to a single variant (CHILD group).
+  variantId?: string | null
+}
+
+// Composite map key so a field's PARENT group and its per-variant CHILD
+// groups coexist without collision.
+function groupKey(fieldKey: string, variantId?: string | null): string {
+  return variantId ? `${fieldKey}::${variantId}` : fieldKey
 }
 
 export interface PropagationEntryDto {
@@ -84,7 +95,7 @@ export function useFieldLinks(productId: string) {
         return
       }
       const map: Record<string, FieldLinkGroupDto> = {}
-      for (const g of j.groups ?? []) map[g.fieldKey] = g
+      for (const g of j.groups ?? []) map[groupKey(g.fieldKey, g.variantId)] = g
       setGroups(map)
     } catch {
       // tolerate — linking just stays inert
@@ -112,9 +123,10 @@ export function useFieldLinks(productId: string) {
 
   const setScope = useCallback(
     async (fieldKey: string, result: FieldScopeResult, opts?: SetScopeOptions): Promise<boolean> => {
+      const variantId = opts?.variantId ?? null
       const members: FieldLinkMember[] = result.memberKeys.map((k) => {
         const [channel, marketplace] = k.split(':')
-        return { channel, marketplace }
+        return variantId ? { channel, marketplace, variantId } : { channel, marketplace }
       })
       try {
         const r = await fetch(
@@ -127,8 +139,10 @@ export function useFieldLinks(productId: string) {
               scope: result.scope,
               members,
               translatePolicy: result.translate ? 'TRANSLATE' : 'VERBATIM',
-              parentage: opts?.parentage ?? 'PARENT',
+              // A variant coordinate forces CHILD parentage server-side too.
+              parentage: variantId ? 'CHILD' : (opts?.parentage ?? 'PARENT'),
               sourceLanguage: opts?.sourceLanguage ?? null,
+              variantId,
             }),
           },
         )
@@ -142,16 +156,20 @@ export function useFieldLinks(productId: string) {
     [productId, reload],
   )
 
-  /** Stored scope for a field: 'linked' when a group exists, else
-   *  'master' (independent isn't persisted as a group in FL.3b). */
+  /** Stored scope for a field (optionally scoped to one variant):
+   *  'linked' when a group exists, else 'master' (independent isn't
+   *  persisted as a group in FL.3b). */
   const scopeFor = useCallback(
-    (fieldKey: string): FieldScope => (groups[fieldKey] ? 'linked' : 'master'),
+    (fieldKey: string, variantId?: string | null): FieldScope =>
+      groups[groupKey(fieldKey, variantId)] ? 'linked' : 'master',
     [groups],
   )
 
   const memberKeysFor = useCallback(
-    (fieldKey: string): string[] =>
-      (groups[fieldKey]?.members ?? []).map((m) => `${m.channel}:${m.marketplace}`),
+    (fieldKey: string, variantId?: string | null): string[] =>
+      (groups[groupKey(fieldKey, variantId)]?.members ?? []).map(
+        (m) => `${m.channel}:${m.marketplace}`,
+      ),
     [groups],
   )
 

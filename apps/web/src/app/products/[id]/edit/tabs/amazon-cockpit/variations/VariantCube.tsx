@@ -13,10 +13,15 @@
 // unchanged; the new pivots are opt-in tabs.
 
 import { useState, type ReactNode } from 'react'
+import { Link2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useTranslations } from '@/lib/i18n/use-translations'
-import { useVariantCube } from '../../../_shared/cockpit-shell'
+import {
+  useVariantCube,
+  useFieldLinks,
+  FieldScopePopover,
+} from '../../../_shared/cockpit-shell'
 
 // CUBE.1 — single editable numeric cell. Click → input; Enter/blur saves
 // via the provided onSave; Esc cancels. Shows a saving/error state. Used
@@ -278,11 +283,14 @@ function ByMarketView({
   activeCurrency: string
 }) {
   const { t } = useTranslations()
+  const fieldLinks = useFieldLinks(productId)
   const [field, setField] = useState<MarketField>('price')
   // CUBE.3 — optimistic overlay keyed `${field}:${variantId}:${market}`.
   const [edits, setEdits] = useState<Record<string, number>>({})
 
   type Variant = ReturnType<typeof useVariantCube>['variants'][number]
+  // T3.2 — per-variant price-link popover target (CHILD field-link).
+  const [scopeVariant, setScopeVariant] = useState<Variant | null>(null)
   const key = (v: Variant, mp: string) => `${field}:${v.id}:${mp}`
   const rawCell = (v: Variant, mp: string): number | null => {
     const cell = v.marketsByCode[mp]
@@ -376,6 +384,22 @@ function ByMarketView({
               <tr key={v.id} className="text-slate-700 dark:text-slate-300">
                 <td className="px-3 py-1">
                   <span className="font-medium">{variantLabel(v.axes, v.sku)}</span>
+                  {field === 'price' && (
+                    <button
+                      type="button"
+                      onClick={() => setScopeVariant(v)}
+                      title={t('products.edit.cockpit.amazon.cube.linkPriceTitle')}
+                      aria-label={t('products.edit.cockpit.amazon.cube.linkPriceTitle')}
+                      className={cn(
+                        'ml-1.5 inline-flex items-center rounded p-0.5 align-middle',
+                        fieldLinks.scopeFor('our_price', v.id) === 'linked'
+                          ? 'text-blue-600 dark:text-blue-400'
+                          : 'text-slate-300 hover:text-slate-500 dark:text-slate-600 dark:hover:text-slate-400',
+                      )}
+                    >
+                      <Link2 aria-hidden className="h-3 w-3" />
+                    </button>
+                  )}
                 </td>
                 {marketCodes.map((mp) => (
                   <td key={mp} className="px-3 py-1 tabular-nums">
@@ -404,6 +428,30 @@ function ByMarketView({
           </tbody>
         </table>
       </div>
+      {scopeVariant && (
+        <FieldScopePopover
+          open
+          onClose={() => setScopeVariant(null)}
+          fieldLabel={t('products.edit.cockpit.amazon.cube.price')}
+          marketLabel={variantLabel(scopeVariant.axes, scopeVariant.sku)}
+          scope={fieldLinks.scopeFor('our_price', scopeVariant.id)}
+          members={marketCodes.map((mp) => ({
+            key: `${channel}:${mp}`,
+            channel,
+            marketplace: mp,
+            label: mp,
+          }))}
+          selectedMembers={
+            fieldLinks.memberKeysFor('our_price', scopeVariant.id).length > 0
+              ? fieldLinks.memberKeysFor('our_price', scopeVariant.id)
+              : marketCodes.map((mp) => `${channel}:${mp}`)
+          }
+          canTranslate={false}
+          onApply={(result) => {
+            void fieldLinks.setScope('our_price', result, { variantId: scopeVariant.id })
+          }}
+        />
+      )}
     </div>
   )
 }

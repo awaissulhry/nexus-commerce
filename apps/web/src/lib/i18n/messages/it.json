@@ -3473,6 +3473,7 @@
   "products.edit.cockpit.amazon.cube.fbaSkippedSuffix": "{count} FBA ignorate",
   "products.edit.cockpit.amazon.cube.fieldLabel": "Campo:",
   "products.edit.cockpit.amazon.cube.fill": "riempi",
+  "products.edit.cockpit.amazon.cube.linkPriceTitle": "Collega il prezzo di questa variante tra i mercati",
   "products.edit.cockpit.amazon.cube.fillRowTitle": "Riempi il valore di questa variante su tutti i mercati",
   "products.edit.cockpit.amazon.cube.hintAxis": "Griglia colore × taglia — modifica una cella oppure usa il ▾ su un'intestazione per riempire un'intera riga/colonna.",
   "products.edit.cockpit.amazon.cube.hintMarket": "Confronta e modifica un campo su tutti i mercati; ⇥ riempie una variante su tutti i mercati.",
