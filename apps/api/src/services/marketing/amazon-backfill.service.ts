@@ -53,6 +53,25 @@ function costEurCents(costMicros: bigint, currency: string, fx: Map<string, numb
   return BigInt(Math.round(curCents / rate))
 }
 
+/**
+ * Some legacy Campaign rows store the raw SP-API marketplaceId
+ * (e.g. 'A1PA6795UKMFR9') in .marketplace instead of the short code
+ * ('DE'). Build an id→code map from the Marketplace reference table so
+ * the cockpit shows friendly market labels. Rows already holding a short
+ * code pass through unchanged.
+ */
+async function buildMarketCodeMap(): Promise<Map<string, string>> {
+  const rows = await prisma.marketplace.findMany({
+    where: { channel: 'AMAZON', marketplaceId: { not: null } },
+    select: { code: true, marketplaceId: true },
+  })
+  const map = new Map<string, string>()
+  for (const r of rows) if (r.marketplaceId) map.set(r.marketplaceId, r.code)
+  return map
+}
+
+const normMarket = (m: string, map: Map<string, string>): string => map.get(m) ?? m
+
 export interface BackfillReport {
   apply: boolean
   source: { campaigns: number; metrics: number; fxPairs: number }
@@ -70,6 +89,7 @@ export async function backfillAmazonShadow(opts: { apply: boolean }): Promise<Ba
   const campaigns = await prisma.campaign.findMany({ orderBy: { createdAt: 'asc' } })
   const perf = await prisma.amazonAdsDailyPerformance.findMany()
   const fx = await buildFx()
+  const marketCodes = await buildMarketCodeMap()
   logger.info(
     `[UM][backfill] apply=${apply} source: ${campaigns.length} campaigns, ${perf.length} perf, ${fx.size} fx`,
   )
@@ -85,11 +105,12 @@ export async function backfillAmazonShadow(opts: { apply: boolean }): Promise<Ba
 
   for (const c of campaigns) {
     const surface = SURFACE_BY_TYPE[c.type] ?? 'SD'
-    const marketplaces = [
+    const rawMarkets = [
       ...(c.marketplace ? [c.marketplace] : []),
       ...c.linkedMarketplaces.filter((m) => m !== c.marketplace),
     ]
-    const primary = c.marketplace ?? marketplaces[0] ?? 'IT'
+    const marketplaces = rawMarkets.map((m) => normMarket(m, marketCodes))
+    const primary = c.marketplace ? normMarket(c.marketplace, marketCodes) : marketplaces[0] ?? 'IT'
     const externalId = c.externalCampaignId ?? `legacy:${c.id}`
     const budgetScope = c.budgetScope === 'MULTI_MARKETPLACE' ? 'MULTI_MARKET' : 'SINGLE_MARKET'
 
@@ -194,6 +215,29 @@ export async function backfillAmazonShadow(opts: { apply: boolean }): Promise<Ba
     })
     const res = await prisma.campaignMetric.createMany({ data: batch, skipDuplicates: true })
     writtenMetrics = res.count
+
+    // Roll up real spend/sales onto the denormalized campaign columns from
+    // the CAMPAIGN-grain metrics (the legacy Campaign.spend/sales aggregates
+    // are often 0; the truth lives in the daily performance rows). spend =
+    // sum(costEurCents) — EUR-normalized; sales = sum(sales7dCents). The
+    // roster + summary read these columns, so this is what makes the cockpit
+    // show accurate numbers.
+    const rollups = await prisma.campaignMetric.groupBy({
+      by: ['campaignId'],
+      where: { channel: 'AMAZON', entityType: 'CAMPAIGN', campaignId: { not: null } },
+      _sum: { costEurCents: true, sales7dCents: true },
+    })
+    await Promise.all(
+      rollups.map((r) =>
+        prisma.marketingCampaign.update({
+          where: { id: r.campaignId! },
+          data: {
+            spendCents: Number(r._sum.costEurCents ?? 0n),
+            salesCents: r._sum.sales7dCents ?? 0,
+          },
+        }),
+      ),
+    )
   } else {
     writtenMetrics = perf.length
   }

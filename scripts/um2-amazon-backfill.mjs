@@ -65,6 +65,20 @@ function costEurCents(costMicros, currency, fx) {
   return BigInt(Math.round(curCents / rate))
 }
 
+// Map raw SP-API marketplaceId → short code ('A1PA6795UKMFR9' → 'DE') so
+// the cockpit shows friendly market labels. Rows already holding a code
+// pass through. Mirrors amazon-backfill.service.ts.
+async function buildMarketCodeMap() {
+  const rows = await prisma.marketplace.findMany({
+    where: { channel: 'AMAZON', marketplaceId: { not: null } },
+    select: { code: true, marketplaceId: true },
+  })
+  const map = new Map()
+  for (const r of rows) if (r.marketplaceId) map.set(r.marketplaceId, r.code)
+  return map
+}
+const normMarket = (m, map) => map.get(m) ?? m
+
 async function main() {
   console.log(`[um2] mode=${apply ? 'APPLY' : 'DRY-RUN'}${limit ? ` limit=${limit}` : ''}`)
 
@@ -74,6 +88,7 @@ async function main() {
   })
   const perf = await prisma.amazonAdsDailyPerformance.findMany()
   const fx = await buildFx()
+  const marketCodes = await buildMarketCodeMap()
   console.log(`[um2] source: ${campaigns.length} Campaign, ${perf.length} AmazonAdsDailyPerformance, ${fx.size} FX pairs`)
 
   // Reset shadow (FK-safe: metrics carry SetNull, but clear explicitly).
@@ -93,8 +108,8 @@ async function main() {
     const marketplaces = [
       ...(c.marketplace ? [c.marketplace] : []),
       ...c.linkedMarketplaces.filter((m) => m !== c.marketplace),
-    ]
-    const primary = c.marketplace ?? marketplaces[0] ?? 'IT'
+    ].map((m) => normMarket(m, marketCodes))
+    const primary = c.marketplace ? normMarket(c.marketplace, marketCodes) : marketplaces[0] ?? 'IT'
     const externalId = c.externalCampaignId ?? `legacy:${c.id}`
     const budgetScope = c.budgetScope === 'MULTI_MARKETPLACE' ? 'MULTI_MARKET' : 'SINGLE_MARKET'
 
@@ -204,6 +219,20 @@ async function main() {
     // guarantees a clean slate so all insert.
     const res = await prisma.campaignMetric.createMany({ data: batch, skipDuplicates: true })
     createdMetrics = res.count
+
+    // Roll up real spend/sales onto MarketingCampaign from CAMPAIGN-grain
+    // metrics (legacy Campaign.spend/sales aggregates are often 0).
+    const rollups = await prisma.campaignMetric.groupBy({
+      by: ['campaignId'],
+      where: { channel: 'AMAZON', entityType: 'CAMPAIGN', campaignId: { not: null } },
+      _sum: { costEurCents: true, sales7dCents: true },
+    })
+    for (const r of rollups) {
+      await prisma.marketingCampaign.update({
+        where: { id: r.campaignId },
+        data: { spendCents: Number(r._sum.costEurCents ?? 0n), salesCents: r._sum.sales7dCents ?? 0 },
+      })
+    }
   } else {
     createdMetrics = perf.length
   }
