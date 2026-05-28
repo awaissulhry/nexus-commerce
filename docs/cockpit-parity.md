@@ -124,6 +124,42 @@ aren't logged; writes are fail-open.
   > off they degrade safely — cross-language text gets a null proposal and
   > is skipped on Apply; price + same-language propagation work unaided.
 
+## eBay variations (EV-series)
+
+The eBay Variations Matrix (`VariationsMatrixCard`, `/ebay/cockpit/
+variation-cells` + `variation-matrix`) and its publish/export paths:
+
+- **EV.1 — data source.** Axis values come from
+  `categoryAttributes.variations` ({Size, Color}); declared axes from
+  `variationTheme`, else the children's variation keys. (EC.6 read the
+  empty `variantAttributes`/`variationAxes`, so the matrix was blank.)
+- **EV.3 — up to 5 specifics.** Picker selects ≤5 axes (eBay's limit),
+  stored eBay-only on the parent listing's `_variationAxes`. ≤2 → the
+  Size×Color grid; 3–5 → a flat one-row-per-variant table.
+- **EV.4 — eBay-only rename.** `_axisNameLabels` (Color→Colour) +
+  `_axisValueLabels` (Giallo→Yellow) on the parent listing; applied to
+  the grid/flat-table/sort-editor display and to publish. Never mutates
+  the canonical `categoryAttributes.variations`.
+- **EV.5 — flat-file family load.** `/ebay/flat-file/rows?familyId` now
+  loads parent **+** variant children (`OR id/parentId`) so the bulk
+  editor shows the variations; price/qty come from the eBay
+  `ChannelListing` rows the matrix writes (shared data, no other flat-file
+  change). *Approved exception to the untouchable flat-file.*
+- **EV.6a — File Exchange CSV.** `GET /ebay/cockpit/file-exchange-csv`
+  emits a parent row + `Relationship=Variation` child rows (Relationship
+  details + per-axis columns), rendered through the renames. Net-new.
+- **EV.6b — Inventory API publish renames.** The flat-file `/push`
+  variation publish applies the renames to the per-item aspects, the
+  `inventory_item_group` `variesBy.specifications`, and
+  `aspectsImageVariesBy` — consistently. Identity when no renames are set
+  (so a no-rename publish is unchanged). *Approved flat-file edit;
+  code-verified — a real eBay publish isn't exercised in tests.*
+- **EV.7 — validation.** Advisory counts in the matrix (missing price /
+  quantity / axis value, ≤250 cap). eBay still rejects at publish.
+
+> Image varies by one specific (the first axis), per eBay's
+> `aspectsImageVariesBy` — ties into the IM.5/EC.7 colour image sets.
+
 ## i18n
 
 UI chrome is keyed under `products.edit.cockpit.{amazon,ebay}.*` in the

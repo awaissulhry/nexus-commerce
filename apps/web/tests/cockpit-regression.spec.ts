@@ -139,4 +139,16 @@ test.describe('Listing cockpit — regression (GOV)', () => {
       /proposed changes|modifiche proposte|nothing to propagate|niente da propagare/i,
     )
   })
+
+  // EV.1 — the eBay Variations Matrix renders its variants (it read the
+  // wrong empty fields before, so guard against that regression).
+  test('eBay Variations Matrix renders variants with axes', async ({ page }) => {
+    await openCockpit(page, 'EBAY')
+    const body = (await page.locator('body').innerText()).toLowerCase()
+    expect(body).not.toContain('application error')
+    expect(body).toMatch(/variations matrix|matrice|variazioni/i)
+    // Size × Color axes present (the data the matrix derives from).
+    expect(body).toMatch(/size|taglia/i)
+    expect(body).toMatch(/colou?r|colore/i)
+  })
 })
