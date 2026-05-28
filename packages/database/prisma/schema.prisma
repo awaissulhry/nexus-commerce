@@ -11342,3 +11342,523 @@ model FbaInventoryAdjustment {
   @@index([sku])
   @@index([transactionType])
 }
+
+// ════════════════════════════════════════════════════════════════════
+// UNIFIED MARKETING OS (UM-series, P1)
+//
+// Channel-agnostic Campaign abstraction spanning paid ads + promotions/
+// deals + content pushes + review/email outreach, across Amazon, eBay,
+// Shopify, and external networks (Google/Meta/TikTok), over all EU
+// markets. Polymorphism strategy: CORE + thin per-channel DETAIL tables.
+// The core row (MarketingCampaign) carries the typed columns the cockpit
+// grid / calendar / automation / budgeting all read; channel-specific
+// shape lives in 1:1 detail tables; vendor blobs stay as Json quarantined
+// on the detail row (never on the hot core row).
+//
+// These tables are ADDITIVE — legacy Campaign / EbayCampaign / RetailEvent
+// / BudgetPool keep running untouched during the parallel-run migration.
+// Legacy stays authoritative for Amazon writes until the P8 cutover.
+// ════════════════════════════════════════════════════════════════════
+
+// Where a campaign runs. INTERNAL = content push / outreach (no external
+// ad platform — delegates to the MC publish path or RV outreach pipeline).
+enum MktChannel {
+  AMAZON
+  EBAY
+  SHOPIFY
+  GOOGLE
+  META
+  TIKTOK
+  INTERNAL
+}
+
+// The concrete campaign surface within a channel. One MarketingCampaign
+// is exactly one surface; the cockpit renders capability-driven tabs from
+// the channel+surface pair.
+enum MktSurface {
+  SP // Amazon Sponsored Products
+  SB // Amazon Sponsored Brands
+  SD // Amazon Sponsored Display
+  PROMOTED_LISTINGS // eBay Promoted Listings (STANDARD % or ADVANCED CPC)
+  DISCOUNT // Shopify / generic discount code or automatic discount
+  MARKDOWN // eBay markdown / price reduction promotion
+  DEAL // Amazon deal / RetailEvent-anchored price action
+  SHOPPING_FEED // Google Shopping / Meta catalog feed campaign
+  CONTENT_PUSH // A+ Content / Brand Story / listing-copy publish
+  EMAIL_OUTREACH // marketing email blast to a CustomerSegment
+  REVIEW_OUTREACH // review-request campaign (RV pipeline)
+}
+
+// Why the campaign exists. Drives default bid strategy + which budget
+// rebalance weighting makes sense (e.g. LIQUIDATION → URGENCY_WEIGHTED).
+enum MktObjective {
+  SALES
+  AWARENESS
+  LIQUIDATION
+  NTB // new-to-brand acquisition
+  TRAFFIC
+  RETENTION
+}
+
+// Channel-agnostic lifecycle. Per-market delivery can still diverge —
+// MarketingCampaignLink carries the per-market status/deliveryStatus.
+enum MktStatus {
+  DRAFT
+  SCHEDULED
+  ACTIVE
+  PAUSED
+  ENDED
+  SUSPENDED
+  FAILED
+}
+
+// Core channel-agnostic campaign. Subsumes legacy Campaign (Amazon),
+// EbayCampaign, EbayMarkdown, and RetailEvent price actions. Denormalized
+// budget/spend columns exist for the 10k-row grid; authoritative budget
+// pooling lives in CampaignBudget, authoritative metrics in CampaignMetric.
+model MarketingCampaign {
+  id        String       @id @default(cuid())
+  channel   MktChannel
+  surface   MktSurface
+  // Null until the operator picks one (drafts). Informs default strategy.
+  objective MktObjective @default(SALES)
+
+  // ── Multi-market ───────────────────────────────────────────────────
+  // The markets this one logical campaign serves. A single "Black Friday
+  // Helmets" campaign over IT+DE+FR is ONE row here with three
+  // MarketingCampaignLink children (one external object per market).
+  marketplaces       String[] @default([]) // e.g. ['IT','DE','FR'] or ['EBAY_IT']
+  // Tie-breaker for currency + single-market surfaces.
+  primaryMarketplace String?
+  // SINGLE_MARKET = one external object; MULTI_MARKET = native multi-market
+  // budget (Amazon v1) collapsed to one link with many marketplaces.
+  budgetScope        String   @default("SINGLE_MARKET")
+
+  // ── Identity / lifecycle ───────────────────────────────────────────
+  name      String
+  status    MktStatus @default(DRAFT)
+  startDate DateTime
+  endDate   DateTime?
+
+  // ── Scope binding ──────────────────────────────────────────────────
+  // ChannelConnection / AmazonAdsConnection scope. Null for multi-market
+  // (per-market connections live on the links) and for INTERNAL.
+  connectionId String?
+
+  // ── Money (denormalized for grid; authoritative rows in CampaignBudget) ─
+  budgetCents Int?
+  // DAILY | LIFETIME | BID_PCT (eBay STANDARD) | NONE (content / outreach)
+  budgetKind  String?
+  currency    String   @default("EUR")
+  // Aggregated spend/sales for the grid (rolled up from CampaignMetric).
+  spendCents  Int      @default(0)
+  salesCents  Int      @default(0)
+  acos        Decimal? @db.Decimal(8, 4)
+  roas        Decimal? @db.Decimal(8, 4)
+
+  // ── Delivery (mirrors legacy Campaign.deliveryStatus) ───────────────
+  deliveryStatus  String? // DELIVERING | NOT_DELIVERING
+  deliveryReasons String[] @default([])
+
+  // ── Sync bookkeeping ───────────────────────────────────────────────
+  lastSyncedAt   DateTime?
+  lastSyncStatus String? // PENDING | IN_PROGRESS | SUCCESS | FAILED | SKIPPED
+  lastSyncError  String?
+
+  // Free-form cockpit annotations (NOT channel payloads — those live on
+  // the detail tables). Kept off the hot path by being last + nullable.
+  metadata Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  createdBy String?
+
+  // ── Relations ──────────────────────────────────────────────────────
+  links           MarketingCampaignLink[]
+  targets         CampaignTarget[]
+  metrics         CampaignMetric[]
+  actions         CampaignAction[]
+  allocations     CampaignBudgetAllocation[]
+  calendarEntries CalendarEntry[]
+
+  // 1:1 per-channel detail (exactly one populated per row).
+  amazonAds    AmazonAdsCampaignDetail?
+  ebayPromoted EbayPromotedDetail?
+  discount     DiscountDetail?
+  externalAds  ExternalAdsDetail?
+  contentPush  ContentPushDetail?
+  outreach     OutreachDetail?
+
+  @@index([channel, status])
+  @@index([surface, status])
+  @@index([primaryMarketplace, status])
+  @@index([startDate, endDate])
+  @@index([lastSyncStatus])
+}
+
+// Per-market external binding — the multi-market keystone. One logical
+// MarketingCampaign fans out to N links; the adapter writes one external
+// object per link. Per-market status/delivery/currency can diverge.
+model MarketingCampaignLink {
+  id         String            @id @default(cuid())
+  campaignId String
+  campaign   MarketingCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  marketplace      String // 'IT' | 'DE' | 'EBAY_IT' | 'GB' ...
+  // Which ChannelConnection / AmazonAdsConnection / ad-account / profile.
+  connectionId     String
+  // Amazon campaignId / eBay campaign id / Shopify priceRuleId / Google
+  // campaign id. Null until the create mutation succeeds.
+  externalId       String?
+  // Amazon portfolioId / Google campaign-group / Meta ad-set parent.
+  externalParentId String?
+
+  status         String    @default("DRAFT")
+  currency       String    @default("EUR")
+  deliveryStatus String?
+  lastSyncedAt   DateTime?
+  lastSyncStatus String?
+  lastSyncError  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([campaignId, marketplace])
+  @@unique([externalId, marketplace])
+  @@index([marketplace, status])
+}
+
+// ── Per-channel 1:1 detail tables ─────────────────────────────────────
+
+// Amazon SP/SB/SD specifics. Migration target for everything on legacy
+// Campaign that isn't core. Legacy AdGroup/AdTarget/AdProductAd remain the
+// Amazon-only sub-tree (no cross-channel analog) and re-parent here in P2.
+model AmazonAdsCampaignDetail {
+  id         String            @id @default(cuid())
+  campaignId String            @unique
+  campaign   MarketingCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  // SPONSORED_PRODUCTS | SPONSORED_BRANDS | SPONSORED_DISPLAY | SPONSORED_TELEVISION
+  adProduct             String
+  profileId             String?
+  portfolioId           String?
+  bidStrategyJson       Json? // SP: { strategy, adjustments[] }
+  dynamicBidding        Json? // SP placement bid adjustments
+  tactic                String? // SD: T00020 (product) | T00030 (audience)
+  costType              String? // SD: cpc | vcpm
+  deliveryProfileNative String? // SD pacing profile
+  creativeAssetJson     Json? // SB creative envelope
+  brandEntityId         String? // SB brand registry binding
+
+  @@index([adProduct])
+  @@index([profileId])
+}
+
+// eBay Promoted Listings specifics. Migration target for EbayCampaign.
+model EbayPromotedDetail {
+  id         String            @id @default(cuid())
+  campaignId String            @unique
+  campaign   MarketingCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  // STANDARD = bid % of sale; ADVANCED = daily CPC budget.
+  fundingStrategy     String   @default("STANDARD")
+  bidPercentage       Decimal? @db.Decimal(5, 2)
+  channelConnectionId String?
+
+  @@index([fundingStrategy])
+}
+
+// Discount / deal / markdown specifics — serves Shopify discounts, eBay
+// markdowns, and Amazon DEAL price actions. Migration target for
+// EbayMarkdown + RetailEventPriceAction.
+model DiscountDetail {
+  id         String            @id @default(cuid())
+  campaignId String            @unique
+  campaign   MarketingCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  discountType       String // PERCENTAGE | FIXED | BXGY | SHIPPING
+  discountValueCents Int?
+  discountPercent    Decimal? @db.Decimal(5, 2)
+  // ALL | COLLECTION | PRODUCT | LISTING
+  appliesTo          String   @default("ALL")
+  appliesToRefs      String[] @default([]) // collection/product/listing ids
+  combinesWith       String[] @default([]) // Shopify combine rules
+  usageLimit         Int?
+  // External binding for the platform-native object (Shopify priceRuleId,
+  // discountCodeId; eBay externalPromotionId).
+  priceRuleId        String?
+  discountCodeId     String?
+
+  @@index([discountType])
+}
+
+// External ad-network specifics (Google Ads / Meta / TikTok). Creative
+// refs point at DAM assets (APlusContent / BrandStory / ProductImage).
+model ExternalAdsDetail {
+  id         String            @id @default(cuid())
+  campaignId String            @unique
+  campaign   MarketingCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  platform           String // GOOGLE | META | TIKTOK
+  accountId          String?
+  objectiveNative    String? // platform-native objective string
+  optimizationGoal   String?
+  creativeRefs       String[] @default([])
+  platformConfigJson Json? // raw platform request/response envelope
+
+  @@index([platform])
+}
+
+// Content-push specifics — A+ Content / Brand Story / listing-copy publish.
+// Delegates to the MC publish path at apply time (InternalAdapter, P10).
+model ContentPushDetail {
+  id         String            @id @default(cuid())
+  campaignId String            @unique
+  campaign   MarketingCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  contentType    String // APLUS | BRAND_STORY | LISTING_COPY
+  aPlusContentId String?
+  brandStoryId   String?
+  // Target ASIN / listing set this push applies to.
+  targetRefs     String[] @default([])
+
+  @@index([contentType])
+}
+
+// Outreach specifics — marketing email / review-request blast to a
+// CustomerSegment audience. Honors EmailSuppression at send time (P10).
+model OutreachDetail {
+  id         String            @id @default(cuid())
+  campaignId String            @unique
+  campaign   MarketingCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  mode       String // EMAIL | REVIEW
+  segmentId  String? // → CustomerSegment
+  templateId String?
+
+  @@index([mode])
+}
+
+// Channel-agnostic targeting/audience row. Generalizes legacy AdTarget +
+// CustomerSegment audience binding. Amazon ad-groups/product-ads stay as
+// an Amazon-only sub-tree (legacy AdGroup/AdProductAd), NOT here.
+model CampaignTarget {
+  id         String            @id @default(cuid())
+  campaignId String
+  campaign   MarketingCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  // KEYWORD | PRODUCT | CATEGORY | AUDIENCE | SEGMENT | COLLECTION | ASIN_SET | LOOKALIKE
+  kind             String
+  expressionType   String? // EXACT | PHRASE | BROAD | ASIN | CATEGORY_REFINEMENT | native
+  expressionValue  String
+  isNegative       Boolean @default(false)
+  negativeLevel    String? // CAMPAIGN | AD_GROUP
+  // → CustomerSegment for outreach / Meta custom-audience targets.
+  segmentId        String?
+  bidCents         Int?
+  marketplace      String? // a target can be market-scoped
+  externalTargetId String?
+
+  // Metrics roll up here for the per-target grid (Amazon reports at this grain).
+  impressions Int @default(0)
+  clicks      Int @default(0)
+  spendCents  Int @default(0)
+  salesCents  Int @default(0)
+  ordersCount Int @default(0)
+
+  status    String   @default("ENABLED")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([campaignId, kind])
+  @@index([campaignId, isNegative])
+  @@index([externalTargetId])
+}
+
+// Cross-channel budget pool. Generalizes legacy BudgetPool (which was
+// intra-Amazon only) so a pool can span Amazon SP + eBay Promoted +
+// Google. Guardrails (cooldown, max-shift %, dry-run) lifted verbatim.
+model CampaignBudget {
+  id              String  @id @default(cuid())
+  name            String
+  description     String?
+  // CAMPAIGN = a single campaign's budget; POOL = shared across many.
+  scope           String  @default("POOL")
+  currency        String  @default("EUR")
+  totalDailyCents Int
+  // STATIC | PROFIT_WEIGHTED | URGENCY_WEIGHTED | ROAS_WEIGHTED
+  strategy        String  @default("STATIC")
+
+  // Guardrails (proven model from BudgetPool).
+  coolDownMinutes         Int       @default(60)
+  maxShiftPerRebalancePct Int       @default(20)
+  enabled                 Boolean   @default(false)
+  dryRun                  Boolean   @default(true)
+  lastRebalancedAt        DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  createdBy String?
+
+  allocations CampaignBudgetAllocation[]
+  rebalances  CampaignBudgetRebalance[]
+
+  @@index([enabled, lastRebalancedAt])
+}
+
+// One campaign membership in a cross-channel budget pool. campaignId is
+// DB-unique across ALL allocations so two pools can't fight over the same
+// campaign's budget.
+model CampaignBudgetAllocation {
+  id          String            @id @default(cuid())
+  budgetId    String
+  budget      CampaignBudget    @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+  campaignId  String
+  campaign    MarketingCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  // Channel + marketplace denormalized from the linked campaign for query speed.
+  channel     MktChannel
+  marketplace String?
+
+  targetSharePct      Decimal @default(0) @db.Decimal(5, 2)
+  minDailyBudgetCents Int     @default(100)
+  maxDailyBudgetCents Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([campaignId])
+  @@index([budgetId])
+  @@index([channel, marketplace])
+}
+
+// Append-only rebalance audit. Mirrors BudgetPoolRebalance.
+model CampaignBudgetRebalance {
+  id              String         @id @default(cuid())
+  budgetId        String
+  budget          CampaignBudget @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+  triggeredBy     String // 'cron' | 'rule:<id>' | 'user:<id>'
+  inputs          Json
+  outputs         Json
+  dryRun          Boolean
+  appliedAt       DateTime?
+  totalShiftCents Int            @default(0)
+  createdAt       DateTime       @default(now())
+
+  @@index([budgetId, createdAt(sort: Desc)])
+}
+
+// Unified daily performance time-series across ALL channels. Modeled on
+// AmazonAdsDailyPerformance (costMicros BigInt + currencyCode + windowed
+// sales) PLUS costEurCents — an FX-normalized (frozen-rate-at-ingest)
+// column so cross-channel rollups sum a single currency. Cross-channel
+// ROAS is labeled "channel-reported" in the UI — attribution differs.
+model CampaignMetric {
+  id         String             @id @default(cuid())
+  // Null when only the external entity is known (pre-link metrics).
+  campaignId String?
+  campaign   MarketingCampaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  linkId     String? // → MarketingCampaignLink (per-market grain)
+
+  channel       MktChannel
+  marketplace   String
+  date          DateTime   @db.Date
+  // CAMPAIGN | TARGET | AD_GROUP | PRODUCT | SEARCH_TERM | DISCOUNT_CODE | EMAIL_SEND
+  entityType    String
+  entityId      String // external id
+  localEntityId String?
+
+  // Universal
+  impressions  Int     @default(0)
+  clicks       Int     @default(0)
+  costMicros   BigInt  @default(0)
+  currencyCode String
+  // FX-normalized cost (frozen FxRate at ingest) — the column cross-channel
+  // analytics sums. Native costMicros+currencyCode stays audit-faithful.
+  costEurCents BigInt?
+
+  // Conversion (windowed where the channel supports it; single-value otherwise)
+  sales7dCents        Int?  @default(0)
+  sales14dCents       Int?  @default(0)
+  sales30dCents       Int?  @default(0)
+  orders7d            Int?  @default(0)
+  units7d             Int?  @default(0)
+  // Channel extras (SB/SD new-to-brand, viewability, content/outreach opens).
+  ntbOrders14d        Int?
+  viewableImpressions Int?
+  detailPageViews7d   Int?
+  extra               Json?
+
+  // How sales are attributed for this channel — labels cross-channel ROAS.
+  attributionModel String?
+  acos7d           Decimal? @db.Decimal(8, 4)
+  roas7d           Decimal? @db.Decimal(8, 4)
+
+  reportRunId String?
+  reportedAt  DateTime
+  createdAt   DateTime @default(now())
+
+  @@unique([channel, entityType, entityId, date])
+  @@index([campaignId, date])
+  @@index([marketplace, date, channel])
+  @@index([linkId, date])
+}
+
+// Unified write audit + rollback log. Generalizes AdvertisingActionLog
+// across channels. Append-only. executionId links to an automation rule
+// run; outboundQueueId links to the OutboundSyncQueue row the action
+// enqueued. rollback.service reverses by replaying payloadBefore.
+model CampaignAction {
+  id                    String             @id @default(cuid())
+  campaignId            String?
+  campaign              MarketingCampaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  // Set when triggered by an automation rule (SetNull on rule delete).
+  executionId           String?
+  userId                String? // operator id when human-triggered
+  channel               MktChannel
+  actionType            String // set_campaign_budget | pause_campaign | create_deal | launch_content_push | ...
+  // CAMPAIGN | TARGET | BUDGET | DISCOUNT | EXTERNAL_AD | CONTENT | OUTREACH
+  entityType            String
+  entityId              String
+  payloadBefore         Json
+  payloadAfter          Json
+  outboundQueueId       String?
+  channelResponseId     String?
+  channelResponseStatus String? // SUCCESS | FAILED | PENDING
+  rolledBackAt          DateTime?
+  rollbackReason        String?
+  createdAt             DateTime           @default(now())
+
+  @@index([executionId, createdAt(sort: Desc)])
+  @@index([entityType, entityId, createdAt(sort: Desc)])
+  @@index([campaignId, createdAt(sort: Desc)])
+  @@index([createdAt(sort: Desc)])
+}
+
+// Shared marketing calendar view-model. Scheduling a campaign auto-creates
+// an entry; operators can also drop free-floating notes/milestones.
+// retailEventId anchors an entry to a known RetailEvent (Black Friday),
+// which renders as a background band with its expectedLift nudge.
+model CalendarEntry {
+  id            String             @id @default(cuid())
+  campaignId    String?
+  campaign      MarketingCampaign? @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  retailEventId String?
+
+  kind         String // CAMPAIGN | DEAL | CONTENT_DROP | OUTREACH | MILESTONE | NOTE
+  title        String
+  channel      MktChannel?
+  marketplaces String[]    @default([])
+  startsAt     DateTime
+  endsAt       DateTime?
+  status       String      @default("PLANNED")
+  color        String? // operator-set band color (AG-series palette convention)
+  notes        String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  createdBy String?
+
+  @@index([startsAt, endsAt])
+  @@index([campaignId])
+  @@index([retailEventId])
+}
