@@ -91,6 +91,8 @@ import {
 } from './review-pipeline.job.js'
 // SR.3 — review-domain AutomationRule evaluator.
 import { runReviewRuleEvaluatorCron } from './review-rule-evaluator.job.js'
+// OL.D.2 — listings-domain AutomationRule evaluator (price/inventory sweep).
+import { runListingAutomationCron } from './listing-automation-evaluator.job.js'
 // SR.4 — post-purchase review request mailer.
 import { runReviewMailerCron } from './review-request-mailer.job.js'
 // RV.7 — orders-delivered backfill via SP-API GET_FLAT_FILE_ALL_ORDERS_DATA_BY_LAST_UPDATE_GENERAL.
@@ -200,6 +202,8 @@ export const CRON_REGISTRY: Record<string, () => Promise<unknown>> = {
   'review-spike-detector': () => runReviewSpikeDetectorCron(),
   // SR.3 — review-domain AutomationRule evaluator (same gate).
   'review-rule-evaluator': () => runReviewRuleEvaluatorCron(),
+  // OL.D.2 — listings-domain AutomationRule evaluator (price/inventory).
+  'listing-automation-evaluator': () => runListingAutomationCron(),
   // SR.4 — post-purchase review request mailer (same gate).
   'review-request-mailer': () => runReviewMailerCron(),
   // RV.7 — orders-delivered backfill (real Amazon report → deliveredAt).
