@@ -354,6 +354,9 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
   // ── Category schema state (drives columnGroups) ────────────────────────
   const [categoryColumnsCache, setCategoryColumnsCache] = useState<Map<string, EbayColumnGroup>>(new Map())
   const [categoryColumns, setCategoryColumns] = useState<EbayColumnGroup | null>(null)
+  // FF-EN.2 — the loaded category's allowed conditions (Inventory enum + label)
+  const [conditionOptions, setConditionOptions] = useState<Array<{ value: string; label: string }>>([])
+  const conditionsCacheRef = useRef<Map<string, Array<{ value: string; label: string }>>>(new Map())
 
   // ── Business policies (fulfillment / payment / return) ─────────────────
   const [policyOptions, setPolicyOptions] = useState<{
@@ -371,7 +374,8 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [marketplace])
 
-  // Inject policy IDs as enum options into the Policies column group
+  // Inject policy IDs as enum options into the Policies column group,
+  // and (FF-EN.2) narrow the Condition column to the category's allowed set.
   const columnGroups = useMemo(() => {
     const patchPolicies = (groups: EbayColumnGroup[]): EbayColumnGroup[] =>
       groups.map((g) => {
@@ -392,30 +396,52 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
           }),
         }
       })
-    const base = patchPolicies([...EBAY_FIXED_GROUPS, ...MARKET_COLUMN_GROUPS])
+    // FF-EN.2 — when a category is loaded, the Condition column becomes the
+    // category's allowed conditions, strict-but-overridable. With none
+    // loaded the static full list (open) is kept.
+    const patchCondition = (groups: EbayColumnGroup[]): EbayColumnGroup[] =>
+      conditionOptions.length === 0 ? groups : groups.map((g) => {
+        if (g.id !== 'listing') return g
+        return {
+          ...g,
+          columns: g.columns.map((col) => col.id !== 'condition' ? col : {
+            ...col,
+            kind: 'enum' as const,
+            options: conditionOptions.map((c) => c.value),
+            optionLabels: Object.fromEntries(conditionOptions.map((c) => [c.value, c.label])),
+            enumMode: 'strict' as const,
+          }),
+        }
+      })
+    const patch = (groups: EbayColumnGroup[]) => patchCondition(patchPolicies(groups))
+    const base = patch([...EBAY_FIXED_GROUPS, ...MARKET_COLUMN_GROUPS])
     return categoryColumns ? [
-      ...patchPolicies(EBAY_FIXED_GROUPS),
+      ...patch(EBAY_FIXED_GROUPS),
       categoryColumns,
-      ...patchPolicies(MARKET_COLUMN_GROUPS),
+      ...patch(MARKET_COLUMN_GROUPS),
     ] : base
-  }, [categoryColumns, policyOptions])
+  }, [categoryColumns, policyOptions, conditionOptions])
 
   // ── Category schema loading ────────────────────────────────────────────
 
   const loadCategorySchema = useCallback(async (categoryId: string) => {
-    if (!categoryId) { setCategoryColumns(null); return }
+    if (!categoryId) { setCategoryColumns(null); setConditionOptions([]); return }
     if (categoryColumnsCache.has(categoryId)) {
       setCategoryColumns(categoryColumnsCache.get(categoryId)!)
+      setConditionOptions(conditionsCacheRef.current.get(categoryId) ?? [])
       return
     }
     try {
       const mpId = marketplace.startsWith('EBAY_') ? marketplace : `EBAY_${marketplace}`
       const res  = await fetch(`${BACKEND}/api/ebay/flat-file/category-schema?categoryId=${encodeURIComponent(categoryId)}&marketplace=${mpId}`)
       if (!res.ok) return
-      const json  = await res.json() as { aspects: CategoryAspect[] }
+      const json  = await res.json() as { aspects: CategoryAspect[]; conditions?: Array<{ value: string; label: string }> }
       const group = buildCategoryColumns(json.aspects)
+      const conds = json.conditions ?? []
       setCategoryColumnsCache((prev) => new Map(prev).set(categoryId, group))
+      conditionsCacheRef.current.set(categoryId, conds)
       setCategoryColumns(group)
+      setConditionOptions(conds)
     } catch { /* silently fail — optional */ }
   }, [marketplace, categoryColumnsCache, BACKEND])
 

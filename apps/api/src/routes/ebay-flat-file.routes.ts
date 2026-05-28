@@ -36,6 +36,26 @@ import {
 
 const EBAY_API_BASE = process.env.EBAY_API_BASE ?? 'https://api.ebay.com';
 
+// FF-EN.2 — eBay numeric conditionId → Inventory API ConditionEnum string.
+// get_item_condition_policies returns numeric ids; the flat-file/Inventory
+// push uses the enum string, so we translate before exposing as options.
+const CONDITION_ID_TO_ENUM: Record<string, string> = {
+  '1000': 'NEW',
+  '1500': 'NEW_OTHER',
+  '1750': 'NEW_WITH_DEFECTS',
+  '2000': 'CERTIFIED_REFURBISHED',
+  '2010': 'EXCELLENT_REFURBISHED',
+  '2020': 'VERY_GOOD_REFURBISHED',
+  '2030': 'GOOD_REFURBISHED',
+  '2500': 'SELLER_REFURBISHED',
+  '2750': 'LIKE_NEW',
+  '3000': 'USED_EXCELLENT',
+  '4000': 'USED_VERY_GOOD',
+  '5000': 'USED_GOOD',
+  '6000': 'USED_ACCEPTABLE',
+  '7000': 'FOR_PARTS_OR_NOT_WORKING',
+};
+
 // Singleton category service (holds in-memory cache)
 const ebayCategoryService = new EbayCategoryService();
 
@@ -514,11 +534,15 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
     }
 
     try {
-      const richAspects = await ebayCategoryService.getCategoryAspectsRich(
-        categoryId,
-        marketplace,
-        { throwOnError: false },
-      );
+      // FF-EN.2 — fetch aspects + the category's allowed conditions together.
+      const [richAspects, condPolicies] = await Promise.all([
+        ebayCategoryService.getCategoryAspectsRich(categoryId, marketplace, {
+          throwOnError: false,
+        }),
+        ebayCategoryService
+          .getItemConditionPolicies(categoryId, marketplace)
+          .catch(() => []),
+      ]);
 
       // Map EbayAspectRich to column definitions the frontend can consume.
       // FF-EN.0 — any aspect eBay gives values for becomes a pick-or-type
@@ -552,7 +576,18 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
         };
       });
 
-      const result = { categoryId, marketplace, aspects };
+      // FF-EN.2 — translate numeric conditionIds → Inventory enum strings so
+      // the Condition column can narrow to this category's allowed set
+      // (strict, but still overridable). Falls back to the static full list
+      // on the client when empty.
+      const conditions = condPolicies
+        .map((c) => ({
+          value: CONDITION_ID_TO_ENUM[c.conditionId] ?? '',
+          label: c.conditionDescription || c.conditionId,
+        }))
+        .filter((c) => c.value);
+
+      const result = { categoryId, marketplace, aspects, conditions };
       schemaCache.set(cacheKey, { data: result, ts: Date.now() });
 
       return reply.send(result);
