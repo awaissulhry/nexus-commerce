@@ -138,9 +138,13 @@ function wordBoundsAt(text: string, pos: number): [number, number] {
 
 // ── EnumDropdown ───────────────────────────────────────────────────────────
 
-function EnumDropdown({ options, optionLabels, current, onSelect, onClose }: {
+function EnumDropdown({ options, optionLabels, current, enumMode, onSelect, onClose }: {
   options: string[]; optionLabels?: Record<string, string>
-  current: string; onSelect: (v: string) => void; onClose: () => void
+  current: string
+  /** 'strict' = eBay only accepts listed values; a typed custom value is
+   *  still allowed but flagged. 'open'/undefined = free text, no flag. */
+  enumMode?: 'open' | 'strict'
+  onSelect: (v: string) => void; onClose: () => void
 }) {
   const [query, setQuery] = useState('')
   const [hi, setHi] = useState(0)
@@ -214,10 +218,21 @@ function EnumDropdown({ options, optionLabels, current, onSelect, onClose }: {
           <div role="option"
             onMouseDown={(e) => { e.preventDefault(); onSelect(query.trim()) }}
             onMouseEnter={() => setHi(filtered.length)}
-            className={cn('px-3 py-1.5 text-xs cursor-pointer border-t border-slate-100 dark:border-slate-700 flex items-center gap-1.5',
-              hi === filtered.length ? 'bg-blue-500 text-white' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700/50')}>
+            className={cn('px-3 py-1.5 text-xs cursor-pointer border-t flex items-center gap-1.5',
+              enumMode === 'strict' ? 'border-amber-200 dark:border-amber-800/60' : 'border-slate-100 dark:border-slate-700',
+              hi === filtered.length
+                ? (enumMode === 'strict' ? 'bg-amber-500 text-white' : 'bg-blue-500 text-white')
+                : (enumMode === 'strict'
+                    ? 'text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30'
+                    : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700/50'))}>
+            {enumMode === 'strict' && <AlertCircle className="w-3 h-3 shrink-0" />}
             <span className="opacity-60">Use</span>
             <span className="font-mono font-medium truncate">&ldquo;{query.trim()}&rdquo;</span>
+            {enumMode === 'strict' && (
+              <span className={cn('ml-auto text-[10px] shrink-0', hi === filtered.length ? 'text-amber-100' : 'text-amber-500/80')}>
+                not in eBay&apos;s list
+              </span>
+            )}
           </div>
         )}
       </div>
@@ -422,6 +437,7 @@ function SpreadsheetCell({ col, row, value, isActive, cellBg, width, cellHeight,
         {fillHandle}
         {isActive && dropdownOpen && (
           <EnumDropdown options={enumOptions} optionLabels={col.optionLabels} current={displayValue}
+            enumMode={col.kind === 'enum' ? col.enumMode : undefined}
             onSelect={(v) => { onChange(v); setDropdownOpen(false); onNavigate('right') }}
             onClose={() => { setDropdownOpen(false); onDeactivate() }} />
         )}
