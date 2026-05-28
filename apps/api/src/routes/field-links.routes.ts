@@ -41,6 +41,55 @@ function currentValueFor(
 // runaway group can't burn AI budget.
 const MAX_TRANSLATE_LANGS = 12;
 
+// Shared translate-fill for propagation previews (group-based + the
+// T3.3b ad-hoc cross-channel preview). Mutates each "translate" entry's
+// proposedValue in place via translateProductCopy, one call per distinct
+// target language, capped. Returns whether the budget was hit. The
+// translate service already keeps motorcycle-gear terminology verbatim;
+// B3 layers the glossary + back-translation on here so BOTH callers
+// benefit. Never throws — a translate blip leaves the verbatim plan.
+async function fillTranslations(args: {
+  entries: ReturnType<typeof planPropagation>;
+  fieldKey: string;
+  editedValue: string;
+  translatePolicy: "TRANSLATE" | "VERBATIM" | "NONE";
+  productId: string;
+  log?: { warn?: (...a: unknown[]) => void };
+}): Promise<boolean> {
+  const tf = translatableField(args.fieldKey);
+  if (!tf || args.translatePolicy !== "TRANSLATE") return false;
+  const byLang = new Map<string, typeof args.entries>();
+  for (const e of args.entries) {
+    if (e.action !== "translate" || !e.language) continue;
+    const list = byLang.get(e.language) ?? [];
+    list.push(e);
+    byLang.set(e.language, list);
+  }
+  let calls = 0;
+  let budgetExceeded = false;
+  for (const [lang, langEntries] of byLang) {
+    if (calls >= MAX_TRANSLATE_LANGS) {
+      budgetExceeded = true;
+      break;
+    }
+    calls++;
+    try {
+      const res = await translateProductCopy({
+        source: { [tf]: args.editedValue } as { name?: string; description?: string },
+        targetLanguage: lang,
+        fields: [tf],
+        productId: args.productId,
+        feature: "cockpit-propagate",
+      });
+      const translated = tf === "name" ? res.name : res.description;
+      for (const e of langEntries) e.proposedValue = translated ?? null;
+    } catch (err) {
+      args.log?.warn?.({ err, lang }, "propagate translate failed");
+    }
+  }
+  return budgetExceeded;
+}
+
 // FL.3b — FieldLinkGroup persistence.
 //
 //   GET  /api/products/:id/field-links            → groups for a product
@@ -223,43 +272,99 @@ export async function fieldLinksRoutes(app: FastifyInstance) {
         });
 
         // Fill cross-language entries via AI (budget-capped per language).
-        const tf = translatableField(fieldKey);
-        let aiBudgetExceeded = false;
-        if (tf && group.translatePolicy === "TRANSLATE") {
-          const byLang = new Map<string, typeof entries>();
-          for (const e of entries) {
-            if (e.action !== "translate" || !e.language) continue;
-            const list = byLang.get(e.language) ?? [];
-            list.push(e);
-            byLang.set(e.language, list);
-          }
-          let calls = 0;
-          for (const [lang, langEntries] of byLang) {
-            if (calls >= MAX_TRANSLATE_LANGS) {
-              aiBudgetExceeded = true;
-              break;
-            }
-            calls++;
-            try {
-              const res = await translateProductCopy({
-                source: { [tf]: editedValue } as { name?: string; description?: string },
-                targetLanguage: lang,
-                fields: [tf],
-                productId: id,
-                feature: "cockpit-propagate",
-              });
-              const translated = tf === "name" ? res.name : res.description;
-              for (const e of langEntries) e.proposedValue = translated ?? null;
-            } catch (err) {
-              request.log?.warn({ err, lang }, "propagate translate failed");
-            }
-          }
-        }
+        const aiBudgetExceeded = await fillTranslations({
+          entries,
+          fieldKey,
+          editedValue,
+          translatePolicy: group.translatePolicy,
+          productId: id,
+          log: request.log,
+        });
 
-        return reply.send({ entries, translatable: !!tf, aiBudgetExceeded });
+        return reply.send({
+          entries,
+          translatable: !!translatableField(fieldKey),
+          aiBudgetExceeded,
+        });
       } catch (err) {
         request.log?.error({ err }, "propagate-preview failed");
         return reply.status(503).send({ entries: [], error: "Propagation preview unavailable." });
+      }
+    },
+  );
+
+  // T3.3b / B1 — ad-hoc CROSS-CHANNEL propagate-preview. Same plan + AI
+  // machinery as the group-based preview above, but with EXPLICIT targets
+  // (no pre-existing FieldLinkGroup), so the cross-channel matrix can
+  // preview pushing one field's value across arbitrary channel × market
+  // (× variant) coordinates. Read + AI only — no writes. The source value
+  // is the supplied editedValue, or the source coordinate's current value.
+  app.post(
+    "/api/products/:id/cross-channel/propagate-preview",
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      const body = (request.body ?? {}) as {
+        fieldKey?: string;
+        editedValue?: string;
+        sourceChannel?: string;
+        sourceMarketplace?: string;
+        sourceLanguage?: string | null;
+        targets?: Array<{ channel: string; marketplace: string; variantId?: string }>;
+        translatePolicy?: "TRANSLATE" | "VERBATIM" | "NONE";
+      };
+      const fieldKey = body.fieldKey ?? "";
+      const targets = Array.isArray(body.targets) ? body.targets : [];
+      const translatePolicy = body.translatePolicy ?? "TRANSLATE";
+      if (!fieldKey || targets.length === 0) {
+        return reply.send({ entries: [], translatable: false, aiBudgetExceeded: false });
+      }
+      try {
+        const listings = await prisma.channelListing.findMany({
+          where: { productId: id },
+          select: { channel: true, marketplace: true, title: true, description: true, platformAttributes: true },
+        });
+        const byCoord = new Map(listings.map((l) => [`${l.channel}:${l.marketplace}`, l]));
+
+        const editedValue =
+          body.editedValue ??
+          currentValueFor(byCoord.get(`${body.sourceChannel}:${body.sourceMarketplace}`), fieldKey) ??
+          "";
+
+        const planMembers: PropagationMember[] = targets.map((m) => ({
+          channel: m.channel,
+          marketplace: m.marketplace,
+          variantId: m.variantId,
+          currentValue: currentValueFor(byCoord.get(`${m.channel}:${m.marketplace}`), fieldKey),
+          language: MARKET_LANG[m.marketplace?.toUpperCase()] ?? null,
+        }));
+
+        const entries = planPropagation({
+          editedValue,
+          sourceChannel: body.sourceChannel ?? "",
+          sourceMarketplace: body.sourceMarketplace ?? "",
+          sourceLanguage: body.sourceLanguage ?? null,
+          translatePolicy,
+          members: planMembers,
+        });
+
+        const aiBudgetExceeded = await fillTranslations({
+          entries,
+          fieldKey,
+          editedValue,
+          translatePolicy,
+          productId: id,
+          log: request.log,
+        });
+
+        return reply.send({
+          entries,
+          translatable: !!translatableField(fieldKey),
+          aiBudgetExceeded,
+          sourceValue: editedValue,
+        });
+      } catch (err) {
+        request.log?.error({ err }, "cross-channel propagate-preview failed");
+        return reply.status(503).send({ entries: [], error: "Cross-channel preview unavailable." });
       }
     },
   );
