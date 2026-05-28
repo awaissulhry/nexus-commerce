@@ -36,6 +36,7 @@ import {
   Star,
   FileEdit,
   LayoutGrid,
+  CalendarDays,
   BadgeCheck,
   BookOpen,
   Palette,
@@ -563,6 +564,12 @@ export default function AppSidebar() {
             icon={LayoutGrid}
             label="Campaigns"
             active={pathname.startsWith('/marketing/campaigns')}
+          />
+          <NavItem
+            href="/marketing/calendar"
+            icon={CalendarDays}
+            label="Calendar"
+            active={pathname.startsWith('/marketing/calendar')}
           />
           <NavItem
             href="/pricing/promotions"

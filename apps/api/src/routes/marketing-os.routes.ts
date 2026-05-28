@@ -17,6 +17,7 @@ import type { Prisma } from '@prisma/client'
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
 import { sseResponseHeaders } from '../lib/sse.js'
+import { publishMarketingEvent } from '../services/marketing-events.service.js'
 
 const ROSTER_MAX = 500
 
@@ -118,6 +119,111 @@ const marketingOsRoutes: FastifyPluginAsync = async (app) => {
       return { error: 'Campaign not found' }
     }
     return c
+  })
+
+  // ── Marketing calendar (P4) ───────────────────────────────────────────
+  // The shared calendar view-model: operator-authored CalendarEntry rows +
+  // scheduled campaigns + RetailEvent background bands (demand anchors with
+  // expectedLift) for a date window. Read + entry CRUD; scheduling a real
+  // campaign onto the calendar via mutation lands in P5.
+  app.get('/marketing/os/calendar', async (request, reply) => {
+    reply.header('Cache-Control', 'private, max-age=15')
+    const q = request.query as Record<string, string | undefined>
+    // Default window: the current ±45-day span if not supplied.
+    const from = q.from ? new Date(q.from) : new Date(Date.now() - 45 * 86400_000)
+    const to = q.to ? new Date(q.to) : new Date(Date.now() + 45 * 86400_000)
+
+    const [entries, retailEvents, campaigns] = await Promise.all([
+      prisma.calendarEntry.findMany({
+        where: { startsAt: { lte: to }, OR: [{ endsAt: null }, { endsAt: { gte: from } }] },
+        orderBy: { startsAt: 'asc' },
+      }),
+      prisma.retailEvent.findMany({
+        where: { isActive: true, startDate: { lte: to }, endDate: { gte: from } },
+        orderBy: { startDate: 'asc' },
+      }),
+      prisma.marketingCampaign.findMany({
+        where: { startDate: { lte: to }, OR: [{ endDate: null }, { endDate: { gte: from } }] },
+        select: {
+          id: true, name: true, channel: true, surface: true, status: true,
+          startDate: true, endDate: true, marketplaces: true, budgetScope: true,
+        },
+        orderBy: { startDate: 'asc' },
+        take: 500,
+      }),
+    ])
+    return {
+      from: from.toISOString(),
+      to: to.toISOString(),
+      entries,
+      retailEvents: retailEvents.map((e) => ({
+        id: e.id, name: e.name, startDate: e.startDate, endDate: e.endDate,
+        channel: e.channel, marketplace: e.marketplace, expectedLift: Number(e.expectedLift),
+        prepLeadTimeDays: e.prepLeadTimeDays, source: e.source,
+      })),
+      campaigns,
+    }
+  })
+
+  app.post('/marketing/os/calendar', async (request, reply) => {
+    const b = request.body as Record<string, unknown>
+    if (!b?.title || !b?.startsAt) {
+      reply.status(400)
+      return { error: 'title and startsAt are required' }
+    }
+    const entry = await prisma.calendarEntry.create({
+      data: {
+        kind: (b.kind as string) ?? 'NOTE',
+        title: b.title as string,
+        channel: (b.channel as never) ?? null,
+        marketplaces: (b.marketplaces as string[]) ?? [],
+        startsAt: new Date(b.startsAt as string),
+        endsAt: b.endsAt ? new Date(b.endsAt as string) : null,
+        status: (b.status as string) ?? 'PLANNED',
+        color: (b.color as string) ?? null,
+        notes: (b.notes as string) ?? null,
+        campaignId: (b.campaignId as string) ?? null,
+        retailEventId: (b.retailEventId as string) ?? null,
+        createdBy: (b.createdBy as string) ?? null,
+      },
+    })
+    publishMarketingEvent({ type: 'campaign.mutated', campaignId: entry.campaignId ?? 'calendar', channel: entry.channel ?? 'INTERNAL', action: 'created', ts: Date.now() })
+    return entry
+  })
+
+  app.patch('/marketing/os/calendar/:id', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const b = request.body as Record<string, unknown>
+    try {
+      const entry = await prisma.calendarEntry.update({
+        where: { id },
+        data: {
+          ...(b.title !== undefined ? { title: b.title as string } : {}),
+          ...(b.startsAt !== undefined ? { startsAt: new Date(b.startsAt as string) } : {}),
+          ...(b.endsAt !== undefined ? { endsAt: b.endsAt ? new Date(b.endsAt as string) : null } : {}),
+          ...(b.status !== undefined ? { status: b.status as string } : {}),
+          ...(b.color !== undefined ? { color: b.color as string } : {}),
+          ...(b.notes !== undefined ? { notes: b.notes as string } : {}),
+          ...(b.kind !== undefined ? { kind: b.kind as string } : {}),
+        },
+      })
+      publishMarketingEvent({ type: 'campaign.mutated', campaignId: entry.campaignId ?? 'calendar', channel: entry.channel ?? 'INTERNAL', action: 'updated', ts: Date.now() })
+      return entry
+    } catch {
+      reply.status(404)
+      return { error: 'Calendar entry not found' }
+    }
+  })
+
+  app.delete('/marketing/os/calendar/:id', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    try {
+      await prisma.calendarEntry.delete({ where: { id } })
+      return { ok: true }
+    } catch {
+      reply.status(404)
+      return { error: 'Calendar entry not found' }
+    }
   })
 
   // ── Diagnostics (P3.2) ────────────────────────────────────────────────
