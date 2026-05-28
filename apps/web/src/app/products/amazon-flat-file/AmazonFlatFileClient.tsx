@@ -559,6 +559,38 @@ export default function AmazonFlatFileClient({
   const [rowHeight, setRowHeight] = useState<number>(() => {
     try { return Math.max(24, parseInt(localStorage.getItem('ff-row-height') ?? '28', 10) || 28) } catch { return 28 }
   })
+  // VG.2 — row virtualization. Mirrors the shared grid: window against
+  // whichever scrolls (document scroll, since the root is min-h-screen),
+  // clamp the viewport to innerHeight, gate above 80 rows so small views are
+  // unchanged. displayRows is a flat list (collapse already applied), so the
+  // window is a simple slice with rowIdx preserved.
+  const VIRTUALIZE_THRESHOLD = 80
+  const ROW_OVERSCAN = 10
+  const scrollContainerRef = useRef<HTMLDivElement>(null)
+  const [scrollTop, setScrollTop] = useState(0)
+  const [viewportH, setViewportH] = useState(900)
+  const scrollRafRef = useRef<number | undefined>(undefined)
+  const recomputeWindow = useCallback(() => {
+    const el = scrollContainerRef.current
+    if (!el) return
+    const rect = el.getBoundingClientRect()
+    const innerH = typeof window !== 'undefined' ? window.innerHeight : 900
+    setScrollTop(el.scrollTop > 0 ? el.scrollTop : Math.max(0, -rect.top))
+    setViewportH(Math.min(el.clientHeight || innerH, innerH))
+  }, [])
+  const onGridScroll = useCallback(() => {
+    if (scrollRafRef.current) cancelAnimationFrame(scrollRafRef.current)
+    scrollRafRef.current = requestAnimationFrame(recomputeWindow)
+  }, [recomputeWindow])
+  useEffect(() => {
+    recomputeWindow()
+    window.addEventListener('scroll', onGridScroll, { passive: true })
+    window.addEventListener('resize', onGridScroll)
+    return () => {
+      window.removeEventListener('scroll', onGridScroll)
+      window.removeEventListener('resize', onGridScroll)
+    }
+  }, [recomputeWindow, onGridScroll])
   const [resizingType, setResizingType] = useState<'col' | 'row' | null>(null)
   const resizeDragRef = useRef<{
     type: 'col' | 'row'; colId?: string
@@ -2462,6 +2494,11 @@ export default function AmazonFlatFileClient({
     { key: 'quantity', label: 'Quantity', value: cascadeRow.fulfillment_availability__quantity },
   ] : []
 
+  // VG.2 — windowed row range over the flat displayRows list.
+  const rowVirtualize = displayRows.length > VIRTUALIZE_THRESHOLD && viewportH > 0
+  const rowWinStart = rowVirtualize ? Math.max(0, Math.floor(scrollTop / rowHeight) - ROW_OVERSCAN) : 0
+  const rowWinEnd = rowVirtualize ? Math.min(displayRows.length, Math.ceil((scrollTop + viewportH) / rowHeight) + ROW_OVERSCAN) : displayRows.length
+
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col">
 
@@ -3136,6 +3173,7 @@ export default function AmazonFlatFileClient({
       {manifest && !loading && (
         <div className="flex-1 flex overflow-hidden">
         <div
+          ref={scrollContainerRef} onScroll={onGridScroll}
           className="flex-1 overflow-auto"
           onContextMenu={(e) => {
             e.preventDefault()
@@ -3338,7 +3376,12 @@ export default function AmazonFlatFileClient({
             </thead>
 
             <tbody>
-              {displayRows.map((row, rowIdx) => (
+              {rowVirtualize && rowWinStart > 0 && (
+                <tr aria-hidden><td colSpan={allColumns.length + 2} style={{ padding: 0, border: 0 }}><div style={{ height: rowWinStart * rowHeight }} /></td></tr>
+              )}
+              {(rowVirtualize ? displayRows.slice(rowWinStart, rowWinEnd) : displayRows).map((row, _wi) => {
+                const rowIdx = rowWinStart + _wi
+                return (
                 <SpreadsheetRow
                   key={row._rowId as string}
                   row={row}
@@ -3404,7 +3447,11 @@ export default function AmazonFlatFileClient({
                   showCascadeButtons={showCascadeButtons}
                   onCascadeRow={(r) => setCascadeRow(r)}
                 />
-              ))}
+                )
+              })}
+              {rowVirtualize && rowWinEnd < displayRows.length && (
+                <tr aria-hidden><td colSpan={allColumns.length + 2} style={{ padding: 0, border: 0 }}><div style={{ height: (displayRows.length - rowWinEnd) * rowHeight }} /></td></tr>
+              )}
 
               {/* Empty search result */}
               {searchQuery && searchMode === 'rows' && displayRows.length === 0 && (
