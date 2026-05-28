@@ -3451,6 +3451,7 @@
   "products.edit.cockpit.xchannel.proposed": "Proposed changes",
   "products.edit.cockpit.xchannel.apply": "Apply",
   "products.edit.cockpit.xchannel.retryFailed": "Retry failed",
+  "products.edit.cockpit.xchannel.pendingPublish": "{n} listing(s) updated — publish each channel to push the changes live.",
   "products.edit.cockpit.xchannel.noChanges": "Nothing to propagate — values already match.",
   "products.edit.cockpit.xchannel.currencyMismatch": "Different currency — set manually",
   "products.edit.cockpit.xchannel.needsReview": "Machine-translated — review",

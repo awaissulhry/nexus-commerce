@@ -120,4 +120,23 @@ test.describe('Listing cockpit — regression (GOV)', () => {
     expect(body).toContain('amazon')
     expect(body).toContain('ebay')
   })
+
+  // T3.3b — the matrix can PREVIEW a cross-channel propagation (we stop at
+  // the diff; we don't Apply, to avoid writing to real listings).
+  test('Cross-channel matrix previews a propagation diff', async ({ page }) => {
+    await openCockpit(page, 'AMAZON')
+    await page.getByRole('button', { name: /Cross-channel|Multi-canale/i }).first().click()
+    await page.waitForTimeout(1500)
+    const propagate = page.getByRole('button', {
+      name: /Propagate across channels|Propaga tra i canali/i,
+    }).first()
+    await expect(propagate).toBeVisible()
+    await propagate.click()
+    await page.waitForTimeout(3500)
+    const body = (await page.locator('body').innerText()).toLowerCase()
+    // Either proposed changes render or everything already matches.
+    expect(body).toMatch(
+      /proposed changes|modifiche proposte|nothing to propagate|niente da propagare/i,
+    )
+  })
 })

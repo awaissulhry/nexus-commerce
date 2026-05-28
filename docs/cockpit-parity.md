@@ -96,8 +96,33 @@ aren't logged; writes are fail-open.
   returns every channel × market with effective title/price/status; the
   `CrossChannelMatrix` drawer (opened from the Amazon cockpit's
   "Cross-channel" header button) shows them side by side. A *lens* over
-  the separate tabs, never a merge. Diff-then-apply cross-channel
-  propagation (T3.3b) is not yet wired.
+  the separate tabs, never a merge.
+- **T3.3b — cross-channel propagation (diff-then-apply).** From the matrix,
+  pick a field (title/description/price/brand) + a source coordinate →
+  `POST /cross-channel/propagate-preview` (group-less, explicit targets) →
+  in-drawer diff → Apply (`applyPropagation` fans out to the existing
+  `/channel-pricing` + listings PUT endpoints). Guardrails, because
+  operators can't read the target languages:
+  - **Currency (B2):** price targets in a different currency than the
+    source are flagged `currencyMismatch` + skipped (no raw €→£ copy).
+  - **Glossary + review (B3):** `TerminologyPreference` (brand-scoped +
+    global, per language) is injected into the translate prompt; machine-
+    translated entries are flagged `needsReview` and can be **back-
+    translated to English on demand** (`POST /cross-channel/back-translate`)
+    to verify meaning.
+  - **`sourceLanguage`** is defaulted from the source market so cross-
+    language targets plan as `translate` (a German listing is never handed
+    Italian text verbatim).
+  - **Apply audit + partial-failure (B5):** per-coordinate ✓/⚠ results,
+    "Retry failed", and one `cross_channel_propagation` Audit Log row per
+    apply (`POST /cross-channel/applied`).
+  - **Pending publish (B6):** applied changes update the ChannelListing
+    but don't republish — the matrix flags "N updated — publish to push
+    live."
+  > **Prod note:** the translate + back-translate paths need an AI
+  > provider (`GEMINI_API_KEY`/`ANTHROPIC_API_KEY`) on the API. With AI
+  > off they degrade safely — cross-language text gets a null proposal and
+  > is skipped on Apply; price + same-language propagation work unaided.
 
 ## i18n
 

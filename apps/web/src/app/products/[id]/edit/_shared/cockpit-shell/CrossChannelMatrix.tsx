@@ -367,6 +367,11 @@ export default function CrossChannelMatrix({ productId, open, onClose }: CrossCh
                     })}
                   </ul>
                 )}
+                {applyResult && applyResult.ok > 0 && (
+                  <div className="border-t border-slate-100 dark:border-slate-800 px-3 py-2 text-[11px] text-amber-700 dark:text-amber-300">
+                    {t('products.edit.cockpit.xchannel.pendingPublish', { n: String(applyResult.ok) })}
+                  </div>
+                )}
               </div>
             )}
 
