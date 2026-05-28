@@ -368,7 +368,7 @@ async function pushVariationGroup(
   apiBase: string,
   marketplaceId: string,
   // FCF.3 — caps each variant's qty at its FBM-available pool.
-  capToFbm: (pid: string | undefined, sku: string, requested: number) => number,
+  capToFbm: (pid: string | undefined, sku: string, requested: number, market?: string) => number,
 ): Promise<{ sku: string; market: string; status: 'PUSHED' | 'ERROR'; message: string; itemId?: string }[]> {
   const results: { sku: string; market: string; status: 'PUSHED' | 'ERROR'; message: string; itemId?: string }[] = []
   const headers = {
@@ -441,7 +441,7 @@ async function pushVariationGroup(
 
     const price = row[`${mp.toLowerCase()}_price`] ?? row.price ?? 0
     // FCF.3 — cap each variant at its FBM-available pool (never oversell).
-    const qty   = capToFbm(row._productId as string | undefined, sku, Number(row[`${mp.toLowerCase()}_qty`] ?? row.quantity ?? 0))
+    const qty   = capToFbm(row._productId as string | undefined, sku, Number(row[`${mp.toLowerCase()}_qty`] ?? row.quantity ?? 0), mp)
 
     const pkgSize = buildPackageWeightAndSize(row)
     const itemBody = {
@@ -1014,31 +1014,50 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
     ];
     const fbmByProduct = new Map<string, number>();
     const trackedProducts = new Set<string>();
+    // FCF.3b — per (product, market) eBay stock buffer, so the cap honours the
+    // operator's overselling margin (units hidden from the marketplace), not
+    // just raw warehouse availability. Keyed `${productId}::${MARKET}`.
+    const bufferByListing = new Map<string, number>();
     if (pushProductIds.length > 0) {
-      const whRows = await prisma.stockLevel.findMany({
-        where: { productId: { in: pushProductIds }, location: { type: 'WAREHOUSE' } },
-        select: { productId: true, available: true },
-      });
+      const [whRows, clRows] = await Promise.all([
+        prisma.stockLevel.findMany({
+          where: { productId: { in: pushProductIds }, location: { type: 'WAREHOUSE' } },
+          select: { productId: true, available: true },
+        }),
+        prisma.channelListing.findMany({
+          where: { productId: { in: pushProductIds }, channel: 'EBAY' },
+          select: { productId: true, marketplace: true, stockBuffer: true },
+        }),
+      ]);
       for (const r of whRows) {
         trackedProducts.add(r.productId);
         fbmByProduct.set(r.productId, (fbmByProduct.get(r.productId) ?? 0) + r.available);
       }
+      for (const cl of clRows) {
+        bufferByListing.set(`${cl.productId}::${(cl.marketplace ?? '').toUpperCase()}`, cl.stockBuffer ?? 0);
+      }
     }
     const oversellWarnings: Array<{ sku: string; requested: number; published: number; reason: string }> = [];
-    const capToFbm = (pid: string | undefined, sku: string, requested: number): number => {
+    const capToFbm = (pid: string | undefined, sku: string, requested: number, market?: string): number => {
       const req = Number(requested) || 0;
       if (!pid || !trackedProducts.has(pid)) {
         if (req > 0) oversellWarnings.push({ sku, requested: req, published: req, reason: 'FBM stock not tracked — not capped' });
         return req;
       }
+      const stockBuffer = market ? bufferByListing.get(`${pid}::${market.toUpperCase()}`) ?? 0 : 0;
       const cap = computeAvailableToPublish({
         fulfillmentMethod: 'FBM',
         warehouseAvailable: fbmByProduct.get(pid) ?? 0,
         fbaSellable: 0,
-        stockBuffer: 0,
+        stockBuffer,
       }).available;
       if (req > cap) {
-        oversellWarnings.push({ sku, requested: req, published: cap, reason: 'capped to FBM-available' });
+        oversellWarnings.push({
+          sku,
+          requested: req,
+          published: cap,
+          reason: stockBuffer > 0 ? `capped to FBM-available (buffer ${stockBuffer})` : 'capped to FBM-available',
+        });
         return cap;
       }
       return req;
@@ -1058,7 +1077,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
             ...r,
             price: r[`${prefix}_price`] ?? r.price ?? 0,
             // FCF.3 — cap at FBM-available so the feed never lists more than we hold.
-            quantity: capToFbm(r._productId as string | undefined, r.sku as string, Number(r[`${prefix}_qty`] ?? r.quantity ?? 0)),
+            quantity: capToFbm(r._productId as string | undefined, r.sku as string, Number(r[`${prefix}_qty`] ?? r.quantity ?? 0), mp),
           } as unknown as EbayFlatRow;
         });
 
@@ -1129,7 +1148,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
         const currency = mp === 'UK' ? 'GBP' : 'EUR';
         const price = Number(row[`${prefix}_price`] ?? row.price ?? 0);
         // FCF.3 — cap at FBM-available so eBay never lists more than we hold.
-        const qty = capToFbm(row._productId as string | undefined, sku, Number(row[`${prefix}_qty`] ?? row.quantity ?? 0));
+        const qty = capToFbm(row._productId as string | undefined, sku, Number(row[`${prefix}_qty`] ?? row.quantity ?? 0), mp);
 
         try {
           const encodedSku = encodeURIComponent(sku);
