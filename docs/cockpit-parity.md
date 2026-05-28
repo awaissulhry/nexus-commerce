@@ -155,6 +155,16 @@ variation-cells` + `variation-matrix`) and its publish/export paths:
   is a metadata flag. Verified on prod: 19 rows → 1 group key, 1 parent /
   18 variants, theme `"Size,Color"`, aspects present. *Approved flat-file
   edit; `buildFlatRow` row-shaping only, no new query.*
+  - **Push consequence.** Because the family now groups,
+    `pushVariationGroup` must exclude the parent container: the parent SKU
+    carries no axis values, and eBay rejects a group member without
+    values for every `variesBy` specification. The push splits
+    `parentRow` (group title/description/images) from `variantRows`
+    (Step-1 `inventory_item` PUTs + `inventoryItems` members + the
+    `variesBy` value collection). Verified up to the eBay boundary: a
+    family reconstructs to 18 valid members (parent excluded), Size×Color
+    specs, `aspectsImageVariesBy=[Size]`. A live publish to `api.ebay.com`
+    is held pending operator sign-off.
 - **EV.6a — File Exchange CSV.** `GET /ebay/cockpit/file-exchange-csv`
   emits a parent row + `Relationship=Variation` child rows (Relationship
   details + per-axis columns), rendered through the renames. Net-new.
