@@ -402,11 +402,20 @@ export async function fieldLinksRoutes(app: FastifyInstance) {
           language: MARKET_LANG[m.marketplace?.toUpperCase()] ?? null,
         }));
 
+        // Default the source language from its marketplace so the planner
+        // correctly marks cross-language targets as "translate" (not
+        // verbatim). Without this, a German target would be handed the
+        // Italian source text verbatim — wrong copy on the listing.
+        const sourceLanguage =
+          body.sourceLanguage ??
+          MARKET_LANG[(body.sourceMarketplace ?? "").toUpperCase()] ??
+          null;
+
         const entries = planPropagation({
           editedValue,
           sourceChannel: body.sourceChannel ?? "",
           sourceMarketplace: body.sourceMarketplace ?? "",
-          sourceLanguage: body.sourceLanguage ?? null,
+          sourceLanguage,
           translatePolicy,
           members: planMembers,
         });

@@ -213,6 +213,64 @@ export function useFieldLinks(productId: string) {
     [productId],
   )
 
+  // T3.3b/B1 — ad-hoc cross-channel preview: plan a field's propagation
+  // from a source coordinate to explicit targets (no link group needed).
+  const crossChannelPreview = useCallback(
+    async (
+      fieldKey: string,
+      source: { channel: string; marketplace: string; language?: string | null },
+      targets: Array<{ channel: string; marketplace: string; variantId?: string }>,
+      translatePolicy: 'TRANSLATE' | 'VERBATIM' | 'NONE' = 'TRANSLATE',
+    ): Promise<PropagatePreview | null> => {
+      try {
+        const r = await fetch(
+          `${getBackendUrl()}/api/products/${productId}/cross-channel/propagate-preview`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({
+              fieldKey,
+              sourceChannel: source.channel,
+              sourceMarketplace: source.marketplace,
+              sourceLanguage: source.language ?? null,
+              targets,
+              translatePolicy,
+            }),
+          },
+        )
+        if (!r.ok) return null
+        return (await r.json()) as PropagatePreview
+      } catch {
+        return null
+      }
+    },
+    [productId],
+  )
+
+  // T3.3b/B3 — on-demand back-translation of one value back to English.
+  const backTranslate = useCallback(
+    async (value: string, language: string): Promise<string | null> => {
+      try {
+        const r = await fetch(
+          `${getBackendUrl()}/api/products/${productId}/cross-channel/back-translate`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ value, language }),
+          },
+        )
+        if (!r.ok) return null
+        const j = (await r.json()) as { english?: string }
+        return j.english ?? null
+      } catch {
+        return null
+      }
+    },
+    [productId],
+  )
+
   // FL.4 — apply confirmed entries. Price routes through /channel-pricing
   // (writes the real price column); everything else writes through the
   // editor's own listing-attributes PUT (item_name→title, etc.).
@@ -305,6 +363,8 @@ export function useFieldLinks(productId: string) {
     scopeFor,
     memberKeysFor,
     propagatePreview,
+    crossChannelPreview,
+    backTranslate,
     applyPropagation,
     suggestions: visibleSuggestions,
     linkSuggestion,
