@@ -38,6 +38,7 @@ interface ProductWithListings {
   sku: string | null
   name: string | null
   basePrice: unknown
+  productType: string | null
   channelListings: Array<{
     channel: string
     marketplace: string
@@ -46,7 +47,35 @@ interface ProductWithListings {
     listingStatus: string | null
     isPublished: boolean
     offerActive: boolean
+    title: string | null
+    masterTitle: string | null
+    description: string | null
+    masterDescription: string | null
+    platformAttributes: unknown
   }>
+}
+
+// OL.D.5 — per-product health, identical "ready" rule to OL.C
+// (title + positive price; Amazon also needs a productType; ERROR =
+// unhealthy) so the grid health column and health-nudge rules agree.
+function computeHealth(p: ProductWithListings): { score: number; ready: number; total: number; blocked: number } | null {
+  const ls = p.channelListings
+  if (ls.length === 0) return null
+  let ready = 0
+  for (const l of ls) {
+    const pa = (l.platformAttributes as Record<string, unknown> | null) ?? {}
+    const title = l.title ?? l.masterTitle ?? p.name ?? null
+    const price = toNum(l.price) ?? toNum(p.basePrice)
+    const productType = (pa.productType as string | undefined) ?? p.productType ?? null
+    const ch = l.channel.toUpperCase()
+    const missing =
+      !title || String(title).trim() === '' ||
+      price == null || price <= 0 ||
+      (ch === 'AMAZON' && (!productType || String(productType).trim() === ''))
+    if (!missing && l.listingStatus !== 'ERROR') ready++
+  }
+  const total = ls.length
+  return { score: Math.round((ready / total) * 100), ready, total, blocked: total - ready }
 }
 
 function toNum(v: unknown): number | null {
@@ -79,15 +108,20 @@ export async function runListingAutomationOnce(opts?: { forceDryRun?: boolean })
 
   const wantPrice = await hasEnabledRules('price_diverged')
   const wantInv = await hasEnabledRules('inventory_low')
-  if (!wantPrice && !wantInv) return result // nothing to do — cheap exit
+  const wantHealth = await hasEnabledRules('listing_health_low')
+  if (!wantPrice && !wantInv && !wantHealth) return result // nothing to do — cheap exit
 
   const products = (await prisma.product.findMany({
     where: { channelListings: { some: { isPublished: true, offerActive: true } } },
     select: {
-      id: true, sku: true, name: true, basePrice: true,
+      id: true, sku: true, name: true, basePrice: true, productType: true,
       channelListings: {
         where: { isPublished: true, offerActive: true },
-        select: { channel: true, marketplace: true, price: true, quantity: true, listingStatus: true, isPublished: true, offerActive: true },
+        select: {
+          channel: true, marketplace: true, price: true, quantity: true, listingStatus: true,
+          isPublished: true, offerActive: true,
+          title: true, masterTitle: true, description: true, masterDescription: true, platformAttributes: true,
+        },
       },
     },
     take: MAX_PRODUCTS,
@@ -95,6 +129,7 @@ export async function runListingAutomationOnce(opts?: { forceDryRun?: boolean })
 
   if (wantPrice) result.byTrigger.price_diverged = { productsScanned: 0, matched: 0 }
   if (wantInv) result.byTrigger.inventory_low = { productsScanned: 0, matched: 0 }
+  if (wantHealth) result.byTrigger.listing_health_low = { productsScanned: 0, matched: 0 }
 
   for (const p of products) {
     const coords = buildCoords(p)
@@ -132,6 +167,18 @@ export async function runListingAutomationOnce(opts?: { forceDryRun?: boolean })
         const stat = result.byTrigger.inventory_low
         stat.productsScanned++
         const res = await evaluateAllRulesForTrigger({ domain: 'listings', trigger: 'inventory_low', context: ctx, forceDryRun })
+        stat.matched += res.filter((r) => r.matched).length
+      }
+    }
+
+    // listing_health_low — marketplace-aware readiness (OL.C rule).
+    if (wantHealth) {
+      const health = computeHealth(p)
+      if (health) {
+        const ctx: ListingRuleContext = { ...base, trigger: 'listing_health_low', health }
+        const stat = result.byTrigger.listing_health_low
+        stat.productsScanned++
+        const res = await evaluateAllRulesForTrigger({ domain: 'listings', trigger: 'listing_health_low', context: ctx, forceDryRun })
         stat.matched += res.filter((r) => r.matched).length
       }
     }
