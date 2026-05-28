@@ -4567,8 +4567,12 @@ function SpreadsheetCell({ col, value, isActive, cellBg, width, cellHeight, ri, 
 
   // Enum cell: custom dropdown
   if (col.kind === 'enum' && col.options && col.options.length > 0) {
+    // A selection-only cell holding a value Amazon doesn't list. Allowed (you
+    // can type your own) but flagged, since Amazon may reject it at submit.
+    const strictInvalid = !!col.selectionOnly && !!displayValue && !col.options.includes(displayValue)
     return (
       <td {...tdShared} className={baseCls} style={{ ...cellStyle, ...selStyle }}
+        title={strictInvalid ? `"${displayValue}" isn't in Amazon's valid values for this field — Amazon may reject it at submit` : undefined}
         onClick={() => { if (isActive) setDropdownOpen(true) }}
         onDoubleClick={(e) => {
           const charPos = getCharIndexFromPoint(e.clientX, e.clientY)
@@ -4579,8 +4583,11 @@ function SpreadsheetCell({ col, value, isActive, cellBg, width, cellHeight, ri, 
           setDropdownOpen(true)
         }}>
         <div className="px-1.5 flex items-center justify-between gap-1 cursor-pointer group/cell" style={hStyle}>
-          <span className={cn('text-xs truncate flex-1', isEmpty ? 'text-slate-300 dark:text-slate-600 italic' : 'text-slate-800 dark:text-slate-200')}>
-            {displayValue || (col.required ? '⚠ required' : col.options[0] ? `e.g. ${col.options[0]}` : '—')}
+          <span className={cn('text-xs truncate flex-1 flex items-center gap-1',
+            strictInvalid ? 'text-amber-600 dark:text-amber-400'
+            : isEmpty ? 'text-slate-300 dark:text-slate-600 italic' : 'text-slate-800 dark:text-slate-200')}>
+            {strictInvalid && <AlertCircle className="w-3 h-3 shrink-0" aria-hidden />}
+            <span className="truncate">{displayValue || (col.required ? '⚠ required' : col.options[0] ? `e.g. ${col.options[0]}` : '—')}</span>
           </span>
           <ChevronDown className="w-3 h-3 text-slate-400 flex-shrink-0 opacity-0 group-hover/cell:opacity-100 transition-opacity" />
         </div>
@@ -4722,7 +4729,9 @@ function EnumDropdown({ options, current, selectionOnly = false, onSelect, onClo
     return options.filter((o) => !q || o.toLowerCase().includes(q))
   }, [options, query])
 
-  const hasCustom = !selectionOnly && query.trim() !== '' && !options.includes(query.trim())
+  // A typed value not in the list is always allowed (you can write your own);
+  // for selection-only fields it's flagged, since Amazon may reject it.
+  const hasCustom = query.trim() !== '' && !options.includes(query.trim())
   const totalItems = filtered.length + (hasCustom ? 1 : 0)
 
   useEffect(() => { searchRef.current?.focus() }, [])
@@ -4759,7 +4768,7 @@ function EnumDropdown({ options, current, selectionOnly = false, onSelect, onClo
       onKeyDown={handleKeyDown}>
       <div className="px-2 py-1.5 border-b border-slate-100 dark:border-slate-700">
         <input ref={searchRef} type="text" value={query} onChange={(e) => setQuery(e.target.value)}
-          placeholder={selectionOnly ? 'Search…' : 'Search or type a value…'}
+          placeholder={selectionOnly ? 'Search Amazon’s values…' : 'Search or type your own…'}
           className="w-full text-xs px-1.5 py-1 border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500" />
       </div>
       <div ref={listRef} className="max-h-52 overflow-y-auto">
@@ -4780,16 +4789,26 @@ function EnumDropdown({ options, current, selectionOnly = false, onSelect, onClo
           <div className="px-3 py-2 text-xs text-slate-400 italic">No matches</div>
         )}
         {hasCustom && (
-          <div role="option"
+          <div role="option" aria-selected={false}
             onMouseDown={(e) => { e.preventDefault(); onSelect(query.trim()) }}
             onMouseEnter={() => setHighlighted(filtered.length)}
             className={cn(
-              'px-3 py-1.5 text-xs cursor-pointer border-t border-slate-100 dark:border-slate-700 flex items-center gap-1.5',
-              highlighted === filtered.length ? 'bg-blue-500 text-white'
-              : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700/50',
+              'px-3 py-1.5 text-xs cursor-pointer border-t flex items-center gap-1.5',
+              selectionOnly ? 'border-amber-200 dark:border-amber-800/60' : 'border-slate-100 dark:border-slate-700',
+              highlighted === filtered.length
+                ? (selectionOnly ? 'bg-amber-500 text-white' : 'bg-blue-500 text-white')
+                : (selectionOnly
+                    ? 'text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30'
+                    : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700/50'),
             )}>
+            {selectionOnly && <AlertCircle className="w-3 h-3 shrink-0" />}
             <span className="opacity-60">Use</span>
             <span className="font-mono font-medium truncate">&ldquo;{query.trim()}&rdquo;</span>
+            {selectionOnly && (
+              <span className={cn('ml-auto text-[10px] shrink-0', highlighted === filtered.length ? 'text-amber-100' : 'text-amber-500/80')}>
+                not in Amazon&apos;s list
+              </span>
+            )}
           </div>
         )}
       </div>
