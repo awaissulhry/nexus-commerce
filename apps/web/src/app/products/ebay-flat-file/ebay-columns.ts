@@ -16,6 +16,9 @@ export interface EbayColumn {
   kind: EbayColumnKind
   options?: string[]
   optionLabels?: Record<string, string>
+  /** Enum strictness: 'open' = suggest + type freely (eBay FREE_TEXT);
+   *  'strict' = eBay only accepts listed values (SELECTION_ONLY). */
+  enumMode?: 'open' | 'strict'
   /** Usage level from eBay API (REQUIRED / RECOMMENDED / OPTIONAL) */
   guidance?: string
   maxLength?: number
@@ -389,6 +392,8 @@ export interface CategoryAspect {
   label: string       // e.g. 'Brand'
   kind: EbayColumnKind
   options?: string[]
+  /** Enum strictness from eBay's aspectMode (see EbayColumn.enumMode). */
+  enumMode?: 'open' | 'strict'
   required: boolean
   recommended: boolean
   /** Usage level from eBay API: REQUIRED / RECOMMENDED / OPTIONAL */
@@ -413,6 +418,7 @@ export function buildCategoryColumns(aspects: CategoryAspect[]): EbayColumnGroup
       label: a.label + (a.required ? ' *' : a.recommended ? ' ○' : '') + (a.variantEligible ? ' ↕' : ''),
       kind: a.kind,
       options: a.options,
+      enumMode: a.enumMode,
       required: a.required,
       guidance: a.guidance,
       width: a.width,

@@ -14,6 +14,14 @@ export interface FlatFileColumn {
   /** Display labels for option values — keys are option values, values are human-readable names */
   optionLabels?: Record<string, string>
   /**
+   * How strictly the options list is enforced (enum columns only):
+   * - 'open'   — suggestions; any typed value is valid (eBay FREE_TEXT).
+   * - 'strict' — eBay only accepts listed values (SELECTION_ONLY); a typed
+   *              custom value is still allowed but flagged.
+   * Undefined keeps the legacy behavior (open, no flag).
+   */
+  enumMode?: 'open' | 'strict'
+  /**
    * Which Amazon parentage levels this field applies to (undefined = all).
    * Drives the listing guidance highlight in the grid.
    */

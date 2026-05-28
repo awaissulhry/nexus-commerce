@@ -520,17 +520,28 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
         { throwOnError: false },
       );
 
-      // Map EbayAspectRich to column definitions the frontend can consume
+      // Map EbayAspectRich to column definitions the frontend can consume.
+      // FF-EN.0 — any aspect eBay gives values for becomes a pick-or-type
+      // combobox, not just SELECTION_ONLY ones. enumMode carries eBay's
+      // aspectMode so the grid can suggest-only (FREE_TEXT) vs flag a
+      // non-listed value (SELECTION_ONLY) — but typing a custom value is
+      // always allowed.
       const aspects = richAspects.map((a) => {
-        const isEnum = a.mode === 'SELECTION_ONLY' && a.values.length > 0;
+        const isEnum = a.values.length > 0;
         const isNumber = a.dataType === 'NUMBER';
         const kind = isEnum ? 'enum' : isNumber ? 'number' : 'text';
+        const enumMode: 'open' | 'strict' | undefined = isEnum
+          ? a.mode === 'SELECTION_ONLY'
+            ? 'strict'
+            : 'open'
+          : undefined;
         const label = a.englishName ? `${a.name} (${a.englishName})` : a.name;
         return {
           id: `aspect_${a.name.replace(/\s+/g, '_')}`,
           label,
           kind,
           options: isEnum ? a.values : undefined,
+          enumMode,
           required: a.required || a.usage === 'REQUIRED',
           recommended: a.usage === 'RECOMMENDED',
           // guidance propagates eBay's usage level so the grid can shade low-priority fields
