@@ -3455,6 +3455,7 @@
   "products.edit.cockpit.xchannel.noChanges": "Nothing to propagate — values already match.",
   "products.edit.cockpit.xchannel.currencyMismatch": "Different currency — set manually",
   "products.edit.cockpit.xchannel.needsReview": "Machine-translated — review",
+  "products.edit.cockpit.xchannel.translateUnavailable": "Couldn't auto-translate — set manually",
   "products.edit.cockpit.xchannel.unchanged": "unchanged",
   "products.edit.cockpit.xchannel.verify": "Verify",
   "products.edit.cockpit.xchannel.backTranslation": "English",

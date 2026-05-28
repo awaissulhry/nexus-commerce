@@ -60,6 +60,17 @@ export default function CockpitDrawer({
   const panelRef = useRef<HTMLDivElement>(null)
   const restoreFocusRef = useRef<HTMLElement | null>(null)
 
+  // Keep the latest onClose in a ref so the focus/scroll effect can run
+  // ONLY on open-state changes. Callers usually pass an inline arrow for
+  // onClose (new identity every render); including it in the deps re-ran
+  // this effect on every parent re-render (the cockpit re-renders
+  // constantly from SSE/heartbeat), thrashing focus — which slammed shut
+  // any native <select> the moment it was clicked.
+  const onCloseRef = useRef(onClose)
+  useEffect(() => {
+    onCloseRef.current = onClose
+  }, [onClose])
+
   useEffect(() => {
     if (!open) return
 
@@ -76,7 +87,7 @@ export default function CockpitDrawer({
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.stopPropagation()
-        onClose()
+        onCloseRef.current()
       }
     }
     window.addEventListener('keydown', onKey)
@@ -88,7 +99,7 @@ export default function CockpitDrawer({
       // Restore focus to the trigger.
       restoreFocusRef.current?.focus?.()
     }
-  }, [open, onClose])
+  }, [open])
 
   // Unmount-on-close only when not keepMounted. keepMounted slides the
   // panel off-screen (transform) so children stay mounted.

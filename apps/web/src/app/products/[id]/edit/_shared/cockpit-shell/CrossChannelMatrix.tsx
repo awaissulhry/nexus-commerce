@@ -15,6 +15,7 @@
 
 import { useEffect, useState } from 'react'
 import { Loader2, ArrowRight, AlertTriangle, Languages, Check } from 'lucide-react'
+import { cn } from '@/lib/utils'
 import CockpitDrawer from './CockpitDrawer'
 import {
   useFieldLinks,
@@ -175,7 +176,13 @@ export default function CrossChannelMatrix({ productId, open, onClose }: CrossCh
     { v: 'price', label: t('products.edit.cockpit.xchannel.fieldPrice') },
     { v: 'brand', label: t('products.edit.cockpit.xchannel.fieldBrand') },
   ]
-  const applicable = preview?.entries.filter((e) => e.action !== 'skip' && !e.unchanged) ?? []
+  // Only rows that will actually write: not skipped, changed, and with a
+  // resolved value. A "translate" row with a null proposal (AI off /
+  // failed) can't apply, so it must not be counted as actionable.
+  const applicable =
+    preview?.entries.filter(
+      (e) => e.action !== 'skip' && !e.unchanged && e.proposedValue != null,
+    ) ?? []
   const appliedMap = new Map(
     (applyResult?.results ?? []).map((r) => [coordKey(r.channel, r.marketplace), r.ok]),
   )
@@ -205,40 +212,62 @@ export default function CrossChannelMatrix({ productId, open, onClose }: CrossCh
 
         {rows && rows.length > 0 && (
           <>
-            {/* Propagation bar */}
-            <div className="flex flex-wrap items-end gap-2 rounded-lg border border-slate-200 dark:border-slate-800 p-3">
-              <label className="text-xs text-slate-500 dark:text-slate-400">
-                {t('products.edit.cockpit.xchannel.fieldLabel')}
-                <select
-                  value={field}
-                  onChange={(e) => {
-                    setField(e.target.value as FieldChoice)
-                    setPreview(null)
-                  }}
-                  className="mt-1 block rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-sm text-slate-900 dark:text-slate-100"
-                >
-                  {fieldOptions.map((o) => (
-                    <option key={o.v} value={o.v}>{o.label}</option>
-                  ))}
-                </select>
-              </label>
-              <label className="text-xs text-slate-500 dark:text-slate-400">
-                {t('products.edit.cockpit.xchannel.sourceLabel')}
-                <select
-                  value={source}
-                  onChange={(e) => {
-                    setSource(e.target.value)
-                    setPreview(null)
-                  }}
-                  className="mt-1 block rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-sm text-slate-900 dark:text-slate-100"
-                >
-                  {rows.map((r) => (
-                    <option key={coordKey(r.channel, r.marketplace)} value={coordKey(r.channel, r.marketplace)}>
+            {/* Propagation bar — segmented buttons (no native <select>, which
+                glitched inside the re-rendering drawer). */}
+            <div className="space-y-2 rounded-lg border border-slate-200 dark:border-slate-800 p-3">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="w-12 shrink-0 text-xs text-slate-500 dark:text-slate-400">
+                  {t('products.edit.cockpit.xchannel.fieldLabel')}
+                </span>
+                {fieldOptions.map((o) => (
+                  <button
+                    key={o.v}
+                    type="button"
+                    onClick={() => {
+                      setField(o.v)
+                      setPreview(null)
+                      setApplyResult(null)
+                    }}
+                    aria-pressed={field === o.v}
+                    className={cn(
+                      'rounded px-2.5 py-1 text-xs font-medium',
+                      field === o.v
+                        ? 'bg-blue-600 text-white'
+                        : 'border border-slate-200 text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800',
+                    )}
+                  >
+                    {o.label}
+                  </button>
+                ))}
+              </div>
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="w-12 shrink-0 text-xs text-slate-500 dark:text-slate-400">
+                  {t('products.edit.cockpit.xchannel.sourceLabel')}
+                </span>
+                {rows.map((r) => {
+                  const ck = coordKey(r.channel, r.marketplace)
+                  return (
+                    <button
+                      key={ck}
+                      type="button"
+                      onClick={() => {
+                        setSource(ck)
+                        setPreview(null)
+                        setApplyResult(null)
+                      }}
+                      aria-pressed={source === ck}
+                      className={cn(
+                        'rounded px-2 py-1 text-xs font-medium',
+                        source === ck
+                          ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900'
+                          : 'border border-slate-200 text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800',
+                      )}
+                    >
                       {r.channel} {r.marketplace}
-                    </option>
-                  ))}
-                </select>
-              </label>
+                    </button>
+                  )
+                })}
+              </div>
               <button
                 type="button"
                 onClick={() => void handlePropagate()}
@@ -299,6 +328,11 @@ export default function CrossChannelMatrix({ productId, open, onClose }: CrossCh
                   <ul className="divide-y divide-slate-100 dark:divide-slate-800">
                     {preview.entries.map((e) => {
                       const k = coordKey(e.channel, e.marketplace)
+                      // Translate target with no resolved value = AI off /
+                      // failed. Don't render it as "current → —" (looks like
+                      // a deletion); show a clear "couldn't translate" note.
+                      const untranslatable =
+                        e.action === 'translate' && e.proposedValue == null && !e.currencyMismatch
                       return (
                         <li key={k} className="px-3 py-2 text-xs">
                           <div className="flex items-center justify-between gap-2">
@@ -310,6 +344,12 @@ export default function CrossChannelMatrix({ productId, open, onClose }: CrossCh
                                 <span className="inline-flex items-center gap-1 rounded bg-amber-50 px-1.5 py-0.5 text-[10px] text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
                                   <AlertTriangle aria-hidden className="h-3 w-3" />
                                   {t('products.edit.cockpit.xchannel.currencyMismatch')}
+                                </span>
+                              )}
+                              {untranslatable && (
+                                <span className="inline-flex items-center gap-1 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+                                  <Languages aria-hidden className="h-3 w-3" />
+                                  {t('products.edit.cockpit.xchannel.translateUnavailable')}
                                 </span>
                               )}
                               {e.needsReview && !e.currencyMismatch && (
@@ -331,7 +371,7 @@ export default function CrossChannelMatrix({ productId, open, onClose }: CrossCh
                                 ))}
                             </span>
                           </div>
-                          {!e.currencyMismatch && (
+                          {!e.currencyMismatch && !untranslatable && (
                             <div className="mt-1 text-slate-500 dark:text-slate-400">
                               <span className="line-through opacity-60">{e.currentValue ?? '—'}</span>
                               <span className="mx-1">→</span>

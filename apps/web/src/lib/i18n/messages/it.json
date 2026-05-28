@@ -3459,6 +3459,7 @@
   "products.edit.cockpit.xchannel.noChanges": "Niente da propagare — i valori coincidono già.",
   "products.edit.cockpit.xchannel.currencyMismatch": "Valuta diversa — imposta manualmente",
   "products.edit.cockpit.xchannel.needsReview": "Tradotto automaticamente — da rivedere",
+  "products.edit.cockpit.xchannel.translateUnavailable": "Impossibile tradurre automaticamente — imposta manualmente",
   "products.edit.cockpit.xchannel.unchanged": "invariato",
   "products.edit.cockpit.xchannel.verify": "Verifica",
   "products.edit.cockpit.xchannel.backTranslation": "Inglese",
