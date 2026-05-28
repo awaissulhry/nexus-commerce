@@ -1350,6 +1350,64 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // FCF.1 — GET /api/products/:id/fulfillment
+  // Per channel×marketplace fulfillment view. Returns the effective method
+  // for each of the product's listings: the persisted ChannelListing
+  // .fulfillmentMethod when set ('listing'), else derived ('derived') —
+  // merchant channels (eBay/Shopify/Woo/Etsy) are always FBM, Amazon falls
+  // back to the product-level method. Read-only; nothing here changes
+  // publishing. Drives the per-pool quantity binding in later FCF phases.
+  fastify.get<{ Params: { id: string } }>('/products/:id/fulfillment', async (request, reply) => {
+    try {
+      const { id } = request.params
+      const MERCHANT_CHANNELS = new Set(['EBAY', 'SHOPIFY', 'WOOCOMMERCE', 'ETSY'])
+
+      const product = await prisma.product.findUnique({
+        where: { id },
+        select: {
+          id: true,
+          fulfillmentMethod: true,
+          channelListings: {
+            select: {
+              channel: true,
+              marketplace: true,
+              region: true,
+              fulfillmentMethod: true,
+              listingStatus: true,
+            },
+            orderBy: [{ channel: 'asc' }, { marketplace: 'asc' }],
+          },
+        },
+      })
+      if (!product) {
+        return reply.code(404).send({ success: false, error: 'Product not found' })
+      }
+
+      const listings = product.channelListings.map((cl) => {
+        let method = cl.fulfillmentMethod as 'FBA' | 'FBM' | null
+        let source: 'listing' | 'derived' = 'listing'
+        if (method == null) {
+          source = 'derived'
+          method = MERCHANT_CHANNELS.has(cl.channel)
+            ? 'FBM'
+            : ((product.fulfillmentMethod as 'FBA' | 'FBM' | null) ?? 'FBM')
+        }
+        return {
+          channel: cl.channel,
+          marketplace: cl.marketplace,
+          region: cl.region,
+          fulfillmentMethod: method,
+          source,
+          listingStatus: cl.listingStatus,
+        }
+      })
+
+      return { success: true, productId: product.id, productFulfillmentMethod: product.fulfillmentMethod, listings }
+    } catch (error) {
+      return reply.code(500).send({ success: false, error: error instanceof Error ? error.message : 'Unknown error' })
+    }
+  })
+
   // ES.5 — GET /api/products/:id/state?at=<ISO>
   // Reconstructs the product state as it existed at a given point in
   // time. Uses AuditLog `before` snapshots + ProductEvent deltas to

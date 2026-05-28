@@ -1356,6 +1356,15 @@ model ChannelListing {
   // Units to reserve; marketplace sees (actualStock - stockBuffer)
   stockBuffer Int @default(0)
 
+  // ── FCF.1: Per channel×marketplace fulfillment ─────────────────
+  // Fulfillment method for THIS listing (channel + marketplace), promoting
+  // it off the product-level Product.fulfillmentMethod. e.g. FBA on
+  // Amazon-IT but FBM on Amazon-DE, and always FBM on eBay/merchant
+  // channels. Null = not yet resolved → callers derive (eBay→FBM,
+  // Amazon→Product.fulfillmentMethod / stock-location). Drives which stock
+  // pool backs the published quantity (FCF.2/.3).
+  fulfillmentMethod FulfillmentMethod?
+
   // ── Channel & Market Identification ─────────────────────────────
   // Examples: "AMAZON_US", "AMAZON_DE", "EBAY_US", "EBAY_DE", "SHOPIFY", etc.
   channelMarket String // Composite key: CHANNEL_REGION (legacy)
