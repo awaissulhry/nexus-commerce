@@ -76,6 +76,7 @@ export interface BackfillReport {
   apply: boolean
   source: { campaigns: number; metrics: number; fxPairs: number }
   written: { campaigns: number; links: number; metrics: number }
+  skippedDupLinks: number
   fxMissing: number
   parity: { campaignsOk: boolean; metricsOk: boolean; costOk: boolean; ok: boolean } | null
 }
@@ -100,8 +101,14 @@ export async function backfillAmazonShadow(opts: { apply: boolean }): Promise<Ba
   }
 
   const extToNew = new Map<string, string>()
+  // MarketingCampaignLink has @@unique([externalId, marketplace]) GLOBALLY.
+  // Multi-market legacy campaigns can share an externalCampaignId across
+  // rows, and the marketplaceId→code mapping can collapse distinct raw ids
+  // to the same code — both would collide. Track used keys and skip dupes.
+  const usedLinkKeys = new Set<string>()
   let writtenCampaigns = 0
   let writtenLinks = 0
+  let skippedDupLinks = 0
 
   for (const c of campaigns) {
     const surface = SURFACE_BY_TYPE[c.type] ?? 'SD'
@@ -109,13 +116,23 @@ export async function backfillAmazonShadow(opts: { apply: boolean }): Promise<Ba
       ...(c.marketplace ? [c.marketplace] : []),
       ...c.linkedMarketplaces.filter((m) => m !== c.marketplace),
     ]
-    const marketplaces = rawMarkets.map((m) => normMarket(m, marketCodes))
+    // Map to codes then dedupe within the campaign (two raw ids → one code).
+    const marketplaces = [...new Set(rawMarkets.map((m) => normMarket(m, marketCodes)))]
     const primary = c.marketplace ? normMarket(c.marketplace, marketCodes) : marketplaces[0] ?? 'IT'
     const externalId = c.externalCampaignId ?? `legacy:${c.id}`
     const budgetScope = c.budgetScope === 'MULTI_MARKETPLACE' ? 'MULTI_MARKET' : 'SINGLE_MARKET'
 
+    const eligibleMarkets = marketplaces.filter((mkt) => {
+      const key = `${externalId}|${mkt}`
+      if (usedLinkKeys.has(key)) {
+        skippedDupLinks++
+        return false
+      }
+      usedLinkKeys.add(key)
+      return true
+    })
     const linkData = await Promise.all(
-      marketplaces.map(async (mkt) => {
+      eligibleMarkets.map(async (mkt) => {
         const conn = await prisma.amazonAdsConnection.findFirst({ where: { marketplace: mkt } })
         return {
           marketplace: mkt,
@@ -217,27 +234,26 @@ export async function backfillAmazonShadow(opts: { apply: boolean }): Promise<Ba
     writtenMetrics = res.count
 
     // Roll up real spend/sales onto the denormalized campaign columns from
-    // the CAMPAIGN-grain metrics (the legacy Campaign.spend/sales aggregates
-    // are often 0; the truth lives in the daily performance rows). spend =
-    // sum(costEurCents) — EUR-normalized; sales = sum(sales7dCents). The
-    // roster + summary read these columns, so this is what makes the cockpit
-    // show accurate numbers.
-    const rollups = await prisma.campaignMetric.groupBy({
-      by: ['campaignId'],
-      where: { channel: 'AMAZON', entityType: 'CAMPAIGN', campaignId: { not: null } },
-      _sum: { costEurCents: true, sales7dCents: true },
-    })
-    await Promise.all(
-      rollups.map((r) =>
-        prisma.marketingCampaign.update({
-          where: { id: r.campaignId! },
-          data: {
-            spendCents: Number(r._sum.costEurCents ?? 0n),
-            salesCents: r._sum.sales7dCents ?? 0,
-          },
-        }),
-      ),
-    )
+    // the CAMPAIGN-grain metrics (legacy Campaign.spend/sales aggregates are
+    // often 0; the truth lives in the daily performance rows). spend =
+    // sum(costEurCents) EUR-normalized; sales = sum(sales7dCents). A SINGLE
+    // SQL UPDATE...FROM — not 338 concurrent prisma.update() calls, which
+    // exhaust prod's pooled Neon connections. The roster + summary read
+    // these columns, so this is what makes the cockpit show real numbers.
+    await prisma.$executeRawUnsafe(`
+      UPDATE "MarketingCampaign" mc
+      SET "spendCents" = COALESCE(agg.spend, 0)::int,
+          "salesCents" = COALESCE(agg.sales, 0)::int
+      FROM (
+        SELECT "campaignId",
+               SUM("costEurCents") AS spend,
+               SUM("sales7dCents") AS sales
+        FROM "CampaignMetric"
+        WHERE channel = 'AMAZON' AND "entityType" = 'CAMPAIGN' AND "campaignId" IS NOT NULL
+        GROUP BY "campaignId"
+      ) agg
+      WHERE mc.id = agg."campaignId"
+    `)
   } else {
     writtenMetrics = perf.length
   }
@@ -266,6 +282,7 @@ export async function backfillAmazonShadow(opts: { apply: boolean }): Promise<Ba
     apply,
     source: { campaigns: campaigns.length, metrics: perf.length, fxPairs: fx.size },
     written: { campaigns: writtenCampaigns, links: writtenLinks, metrics: writtenMetrics },
+    skippedDupLinks,
     fxMissing,
     parity,
   }

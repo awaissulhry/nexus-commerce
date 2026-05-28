@@ -100,22 +100,41 @@ async function main() {
 
   // externalCampaignId → new MarketingCampaign.id (for CAMPAIGN-grain metric linkage).
   const extToNew = new Map()
+  // MarketingCampaignLink @@unique([externalId, marketplace]) is GLOBAL —
+  // guard against dupes from shared externalCampaignId + marketplaceId→code
+  // collapse.
+  const usedLinkKeys = new Set()
   let createdCampaigns = 0
   let createdLinks = 0
+  let skippedDupLinks = 0
 
   for (const c of campaigns) {
     const surface = SURFACE_BY_TYPE[c.type] ?? 'SD'
     const marketplaces = [
-      ...(c.marketplace ? [c.marketplace] : []),
-      ...c.linkedMarketplaces.filter((m) => m !== c.marketplace),
-    ].map((m) => normMarket(m, marketCodes))
+      ...new Set(
+        [
+          ...(c.marketplace ? [c.marketplace] : []),
+          ...c.linkedMarketplaces.filter((m) => m !== c.marketplace),
+        ].map((m) => normMarket(m, marketCodes)),
+      ),
+    ]
     const primary = c.marketplace ? normMarket(c.marketplace, marketCodes) : marketplaces[0] ?? 'IT'
     const externalId = c.externalCampaignId ?? `legacy:${c.id}`
     const budgetScope = c.budgetScope === 'MULTI_MARKETPLACE' ? 'MULTI_MARKET' : 'SINGLE_MARKET'
 
+    // Drop links whose (externalId, marketplace) key was already used.
+    const eligibleMarkets = marketplaces.filter((mkt) => {
+      const key = `${externalId}|${mkt}`
+      if (usedLinkKeys.has(key)) {
+        skippedDupLinks++
+        return false
+      }
+      usedLinkKeys.add(key)
+      return true
+    })
     // Resolve a connection per market (sentinel when none).
     const linkData = await Promise.all(
-      marketplaces.map(async (mkt) => {
+      eligibleMarkets.map(async (mkt) => {
         const conn = await prisma.amazonAdsConnection.findFirst({ where: { marketplace: mkt } })
         return {
           marketplace: mkt,
@@ -221,18 +240,20 @@ async function main() {
     createdMetrics = res.count
 
     // Roll up real spend/sales onto MarketingCampaign from CAMPAIGN-grain
-    // metrics (legacy Campaign.spend/sales aggregates are often 0).
-    const rollups = await prisma.campaignMetric.groupBy({
-      by: ['campaignId'],
-      where: { channel: 'AMAZON', entityType: 'CAMPAIGN', campaignId: { not: null } },
-      _sum: { costEurCents: true, sales7dCents: true },
-    })
-    for (const r of rollups) {
-      await prisma.marketingCampaign.update({
-        where: { id: r.campaignId },
-        data: { spendCents: Number(r._sum.costEurCents ?? 0n), salesCents: r._sum.sales7dCents ?? 0 },
-      })
-    }
+    // metrics (legacy Campaign.spend/sales aggregates are often 0). Single
+    // SQL UPDATE...FROM — not N concurrent prisma.update() calls.
+    await prisma.$executeRawUnsafe(`
+      UPDATE "MarketingCampaign" mc
+      SET "spendCents" = COALESCE(agg.spend, 0)::int,
+          "salesCents" = COALESCE(agg.sales, 0)::int
+      FROM (
+        SELECT "campaignId", SUM("costEurCents") AS spend, SUM("sales7dCents") AS sales
+        FROM "CampaignMetric"
+        WHERE channel = 'AMAZON' AND "entityType" = 'CAMPAIGN' AND "campaignId" IS NOT NULL
+        GROUP BY "campaignId"
+      ) agg
+      WHERE mc.id = agg."campaignId"
+    `)
   } else {
     createdMetrics = perf.length
   }
