@@ -59,6 +59,12 @@ interface MarketPricing {
   marketplace: string; price: number | null; salePrice: number | null
   listedQty: number | null; physicalStock: number; listingStatus: string
   lastSyncedAt: string | null
+  // FCF.4b — per channel×marketplace fulfillment + resolved pool.
+  fulfillmentMethod?: 'FBA' | 'FBM' | null
+  fulfillmentSource?: 'listing' | 'derived'
+  buffer?: number
+  warehouseAvailable?: number
+  fbaSellable?: number
 }
 
 interface ChannelVariantRow {
@@ -185,6 +191,55 @@ function EditCell({
   )
 }
 
+// ── Fulfillment cell (FCF.4b) ───────────────────────────────────────────────
+// Compact FBA|FBM segmented toggle for the selected market. The active segment
+// reflects the resolved method; italic = only derived (not yet persisted on the
+// listing). Clicking either segment persists ChannelListing.fulfillmentMethod.
+
+function FulfillmentCell({ fulfil, saving, onSet }: {
+  fulfil: { method: 'FBA' | 'FBM' | null; source: 'listing' | 'derived'; atp: number }
+  saving?: 'saving' | 'flash' | 'error'
+  onSet: (m: 'FBA' | 'FBM') => void
+}) {
+  const { method, source } = fulfil
+  return (
+    <td className="px-2 py-1.5 text-center">
+      <div className="inline-flex items-center gap-1">
+        <div className="inline-flex rounded border border-slate-200 dark:border-slate-700 overflow-hidden" role="group" aria-label="Fulfillment method">
+          {(['FBA', 'FBM'] as const).map((m) => {
+            const active = method === m
+            return (
+              <button
+                key={m} type="button" onClick={() => onSet(m)}
+                aria-pressed={active}
+                className={cn(
+                  'px-1.5 py-0.5 text-[11px] font-medium transition-colors',
+                  active
+                    ? m === 'FBA'
+                      ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300'
+                      : 'bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-300'
+                    : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300',
+                  active && source === 'derived' && 'italic',
+                )}
+                title={
+                  active && source === 'derived'
+                    ? `Derived ${m} (not set on the listing) — click to set explicitly`
+                    : active ? `${m} — set on this listing` : `Switch to ${m}`
+                }
+              >
+                {m}
+              </button>
+            )
+          })}
+        </div>
+        {saving === 'saving' && <Loader2 className="w-3 h-3 animate-spin text-slate-400" />}
+        {saving === 'flash' && <Check className="w-3 h-3 text-green-600" />}
+        {saving === 'error' && <AlertCircle className="w-3 h-3 text-red-500" />}
+      </div>
+    </td>
+  )
+}
+
 // ── Main component ─────────────────────────────────────────────────────────
 
 interface Props {
@@ -277,6 +332,11 @@ export default function MatrixTab({ product, discardSignal = 0 }: Props) {
             marketplace: m.marketplace, price: null, salePrice: null,
             listedQty: m.listedQty, physicalStock: v.physicalStock,
             listingStatus: m.listingStatus, lastSyncedAt: m.lastSyncedAt,
+            fulfillmentMethod: m.fulfillmentMethod ?? null,
+            fulfillmentSource: m.fulfillmentSource ?? 'derived',
+            buffer: m.buffer ?? 0,
+            warehouseAvailable: m.warehouseAvailable ?? 0,
+            fbaSellable: m.fbaSellable ?? 0,
           })),
         })))
       }
@@ -358,6 +418,17 @@ export default function MatrixTab({ product, discardSignal = 0 }: Props) {
   function getListingStatus(variantId: string, market: string): string {
     return channelData.find((v) => v.variantId === variantId)
       ?.markets.find((m) => m.marketplace === market)?.listingStatus ?? '—'
+  }
+  // FCF.4b — resolved fulfillment method + the available-to-publish for that
+  // pool (warehouse for FBM, FBA SELLABLE for FBA, less the listing buffer).
+  function getFulfillment(variantId: string, market: string): {
+    method: 'FBA' | 'FBM' | null; source: 'listing' | 'derived'; atp: number
+  } {
+    const m = invData.find((v) => v.variantId === variantId)?.markets.find((mm) => mm.marketplace === market)
+    const method = m?.fulfillmentMethod ?? null
+    const buffer = m?.buffer ?? 0
+    const pool = method === 'FBA' ? (m?.fbaSellable ?? 0) : (m?.warehouseAvailable ?? 0)
+    return { method, source: m?.fulfillmentSource ?? 'derived', atp: Math.max(0, pool - buffer) }
   }
 
   // ── Optimistic cell state helpers ────────────────────────────────────
@@ -451,6 +522,47 @@ export default function MatrixTab({ product, discardSignal = 0 }: Props) {
       void refetch() // revert by re-fetching
     }
   }, [backend, product.id, refetch])
+
+  // ── Set fulfillment method (FBA/FBM) for a variant × market ──────────
+  // FCF.4b — writes ChannelListing.fulfillmentMethod. Optimistic: the row's
+  // method flips instantly and ATP recomputes from the raw pools already in
+  // state, so no refetch flicker. null clears the override (back to derived).
+  const patchFulfillment = useCallback(async (variantId: string, market: string, method: 'FBA' | 'FBM') => {
+    const key = `${variantId}:fulfil:${market}`
+    const prev = invDataRef.current.find((v) => v.variantId === variantId)?.markets.find((m) => m.marketplace === market)
+    const prevMethod = prev?.fulfillmentMethod ?? null
+    const prevSource = prev?.fulfillmentSource ?? 'derived'
+    if (prevMethod === method) return
+    setCellState((s) => ({ ...s, [key]: 'saving' }))
+    setInvData((data) => data.map((v) =>
+      v.variantId !== variantId ? v : {
+        ...v, markets: v.markets.map((m) =>
+          m.marketplace !== market ? m : { ...m, fulfillmentMethod: method, fulfillmentSource: 'listing' as const }
+        ),
+      }
+    ))
+    try {
+      const res = await fetch(`${backend}/api/products/${product.id}/fulfillment`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ updates: [{ variantId, marketplace: market, channel: 'AMAZON', fulfillmentMethod: method }] }),
+      })
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? `HTTP ${res.status}`)
+      flash(key)
+      emitInvalidation({ type: 'channel-pricing.updated', id: product.id })
+      setHasUnpublishedChanges(true)
+    } catch (e: any) {
+      // Revert
+      setInvData((data) => data.map((v) =>
+        v.variantId !== variantId ? v : {
+          ...v, markets: v.markets.map((m) =>
+            m.marketplace !== market ? m : { ...m, fulfillmentMethod: prevMethod, fulfillmentSource: prevSource }
+          ),
+        }
+      ))
+      errCell(key); setError(e.message)
+    }
+  }, [backend, product.id])
 
   // ── Dispatch cell commit to correct patcher ──────────────────────────
   const commitCell = useCallback((addr: CellAddr, value: number) => {
@@ -839,6 +951,8 @@ export default function MatrixTab({ product, discardSignal = 0 }: Props) {
                 </span> price
               </SortTh>
               <SortTh col={`lq:${selectedMarket}`} className="text-right">Listed qty</SortTh>
+              <th className="px-2 py-2 text-center text-xs font-semibold uppercase tracking-wide text-slate-400 whitespace-nowrap" title="Fulfillment method on this market — sets ChannelListing.fulfillmentMethod. FBM is backed by your warehouse, FBA by Amazon SELLABLE stock.">Fulfilment</th>
+              <th className="px-2 py-2 text-right text-xs font-semibold uppercase tracking-wide text-slate-400" title="Available to publish for the selected method's pool, less the listing buffer.">Avail.</th>
               <th className="px-2 py-2 text-right text-xs font-semibold uppercase tracking-wide text-slate-400">Physical</th>
               <th className="px-2 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">Status</th>
               <th className="px-2 py-2 w-8" />
@@ -846,7 +960,7 @@ export default function MatrixTab({ product, discardSignal = 0 }: Props) {
           </thead>
           <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
             {sortedRows.length === 0 && (
-              <tr><td colSpan={axes.length + 7} className="py-10 text-center text-sm text-slate-400">
+              <tr><td colSpan={axes.length + 9} className="py-10 text-center text-sm text-slate-400">
                 No variants yet. Click "Add variant" to create the first one.
               </td></tr>
             )}
@@ -893,6 +1007,17 @@ export default function MatrixTab({ product, discardSignal = 0 }: Props) {
                     cellState={cellState} drag={drag}
                     onDragStart={startDrag} onDragEnter={enterDrag}
                   />
+                  <FulfillmentCell
+                    fulfil={getFulfillment(child.id, selectedMarket)}
+                    saving={cellState[`${child.id}:fulfil:${selectedMarket}`]}
+                    onSet={(m) => patchFulfillment(child.id, selectedMarket, m)}
+                  />
+                  <td className="px-2 py-1.5 text-right tabular-nums text-sm text-slate-600 dark:text-slate-300">
+                    {(() => {
+                      const f = getFulfillment(child.id, selectedMarket)
+                      return f.method == null ? <span className="text-slate-300">—</span> : f.atp.toLocaleString()
+                    })()}
+                  </td>
                   <EditCell
                     addr={{ kind: 'master', childId: child.id, field: 'totalStock' }}
                     value={getPhysicalStock(child.id)} readOnly

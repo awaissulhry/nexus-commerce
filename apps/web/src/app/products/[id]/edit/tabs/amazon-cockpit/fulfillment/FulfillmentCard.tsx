@@ -36,6 +36,9 @@ interface MarketRow {
   listingStatus: string | null
   lastSyncedAt: string | null
   fulfillmentChannel: Method
+  // FCF.4b — operator-set ChannelListing.fulfillmentMethod (resolved). Preferred
+  // over the ingested fulfillmentChannel so a Matrix-tab edit shows here too.
+  fulfillmentMethod?: Method
 }
 interface VariantRow {
   variantId: string
@@ -113,11 +116,14 @@ export default function FulfillmentCard({
 
   const productRow = data?.product.markets.find((m) => m.marketplace === marketplace) ?? null
   const method: Method =
-    productRow?.fulfillmentChannel ?? seedFulfillment ?? normalizeMethod(productFulfillment)
+    productRow?.fulfillmentMethod ?? productRow?.fulfillmentChannel ?? seedFulfillment ?? normalizeMethod(productFulfillment)
 
   // Per-variant method counts on THIS market — surfaces mixed fulfilment.
   const variantMethods = (data?.variants ?? [])
-    .map((v) => v.markets.find((m) => m.marketplace === marketplace)?.fulfillmentChannel ?? null)
+    .map((v) => {
+      const mk = v.markets.find((m) => m.marketplace === marketplace)
+      return mk?.fulfillmentMethod ?? mk?.fulfillmentChannel ?? null
+    })
     .filter((m): m is 'FBA' | 'FBM' => m != null)
   const fbaCount = variantMethods.filter((m) => m === 'FBA').length
   const fbmCount = variantMethods.filter((m) => m === 'FBM').length

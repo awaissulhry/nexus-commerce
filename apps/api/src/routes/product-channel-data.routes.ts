@@ -10,6 +10,8 @@
 
 import type { FastifyInstance } from 'fastify'
 import prisma from '../db.js'
+import { computeAvailableToPublish } from '../services/available-to-publish.service.js'
+import { MARKETPLACE_ID_TO_CODE } from '../utils/marketplace-code.js'
 
 // Normalize Amazon's fulfilment value (stored on
 // ChannelListing.platformAttributes.fulfillmentChannel) to FBA/FBM. AFN =
@@ -21,6 +23,10 @@ function normalizeFulfillment(pa: unknown): 'FBA' | 'FBM' | null {
   if (s === 'MFN' || s === 'FBM' || s === 'MERCHANT') return 'FBM'
   return null
 }
+
+// FCF.4b — merchant channels are always merchant-fulfilled (FBM); they can
+// never be backed by Amazon FBA stock.
+const MERCHANT_CHANNELS = new Set(['EBAY', 'SHOPIFY', 'WOOCOMMERCE', 'ETSY'])
 
 export default async function productChannelDataRoutes(fastify: FastifyInstance) {
 
@@ -210,65 +216,116 @@ export default async function productChannelDataRoutes(fastify: FastifyInstance)
 
       const product = await prisma.product.findUnique({
         where: { id },
-        select: { id: true, isParent: true, totalStock: true },
+        select: { id: true, sku: true, isParent: true, totalStock: true, fulfillmentMethod: true },
       })
       if (!product) return reply.code(404).send({ error: 'Product not found' })
 
       // Product-level ChannelListing (used for non-parent + product summary row)
       const channelListings = await prisma.channelListing.findMany({
         where: { productId: id, channel },
-        select: { marketplace: true, channel: true, quantity: true, stockBuffer: true, listingStatus: true, lastSyncedAt: true, platformAttributes: true },
+        select: { marketplace: true, channel: true, quantity: true, stockBuffer: true, listingStatus: true, lastSyncedAt: true, platformAttributes: true, fulfillmentMethod: true },
         orderBy: { marketplace: 'asc' },
       })
 
-      const productMarkets = channelListings.map((cl) => ({
-        marketplace: cl.marketplace,
-        channel: cl.channel,
-        listedQty: cl.quantity ?? null,
-        buffer: cl.stockBuffer ?? 0,
-        listingStatus: cl.listingStatus,
-        lastSyncedAt: cl.lastSyncedAt?.toISOString() ?? null,
-        fulfillmentChannel: normalizeFulfillment(cl.platformAttributes),
-      }))
-
-      let variantRows: Array<{
-        variantId: string; sku: string
-        attributes: Record<string, string>
-        physicalStock: number
-        markets: typeof productMarkets
-      }> = []
-
-      if (product.isParent) {
-        // Use child Product rows + their ChannelListing — same model the Matrix
-        // tab and the PATCH /channel-pricing endpoint both operate on.
-        const children = await prisma.product.findMany({
-          where: { parentId: id, deletedAt: null },
-          select: {
-            id: true, sku: true, totalStock: true, variantAttributes: true,
-            channelListings: {
-              where: { channel },
-              select: { marketplace: true, channel: true, quantity: true, stockBuffer: true, listingStatus: true, lastSyncedAt: true, platformAttributes: true },
+      // FCF.4b — child product rows (parent only). Loaded up-front so the stock
+      // pools below can be batched across product + every child in one query.
+      const children = product.isParent
+        ? await prisma.product.findMany({
+            where: { parentId: id, deletedAt: null },
+            select: {
+              id: true, sku: true, totalStock: true, variantAttributes: true,
+              channelListings: {
+                where: { channel },
+                select: { marketplace: true, channel: true, quantity: true, stockBuffer: true, listingStatus: true, lastSyncedAt: true, platformAttributes: true, fulfillmentMethod: true },
+              },
             },
-          },
-          orderBy: { sku: 'asc' },
-        })
+            orderBy: { sku: 'asc' },
+          })
+        : []
 
-        variantRows = children.map((c) => ({
-          variantId: c.id,
-          sku: c.sku,
-          attributes: (c.variantAttributes as Record<string, string> | null) ?? {},
-          physicalStock: c.totalStock ?? 0,
-          markets: c.channelListings.map((cl) => ({
-            marketplace: cl.marketplace,
-            channel: cl.channel,
-            listedQty: cl.quantity ?? null,
-            buffer: cl.stockBuffer ?? 0,
-            listingStatus: cl.listingStatus,
-            lastSyncedAt: cl.lastSyncedAt?.toISOString() ?? null,
-            fulfillmentChannel: normalizeFulfillment(cl.platformAttributes),
-          })),
-        }))
+      // FCF.4b — gather the two stock pools once for the product + all children,
+      // then compute availableToPublish per (variant, market). FBM listings are
+      // backed by own-warehouse StockLevel.available; FBA listings by SELLABLE
+      // FbaInventoryDetail scoped to the listing's marketplace. Mirrors the
+      // FCF.1 GET /products/:id/fulfillment endpoint, batched for the matrix.
+      const allProductIds = [id, ...children.map((c) => c.id)]
+      const allSkus = [product.sku, ...children.map((c) => c.sku)].filter((s): s is string => !!s)
+      const [whRows, fbaRows] = await Promise.all([
+        prisma.stockLevel.findMany({
+          where: { productId: { in: allProductIds }, location: { type: 'WAREHOUSE' } },
+          select: { productId: true, available: true },
+        }),
+        allSkus.length > 0
+          ? prisma.fbaInventoryDetail.findMany({
+              where: { sku: { in: allSkus }, condition: 'SELLABLE' },
+              select: { sku: true, quantity: true, marketplaceId: true },
+            })
+          : Promise.resolve([] as Array<{ sku: string; quantity: number; marketplaceId: string }>),
+      ])
+      const warehouseByProduct = new Map<string, number>()
+      for (const r of whRows) warehouseByProduct.set(r.productId, (warehouseByProduct.get(r.productId) ?? 0) + r.available)
+      const fbaBySkuMarket = new Map<string, number>()
+      for (const r of fbaRows) {
+        const code = MARKETPLACE_ID_TO_CODE[r.marketplaceId] ?? r.marketplaceId
+        const key = `${r.sku}::${code}`
+        fbaBySkuMarket.set(key, (fbaBySkuMarket.get(key) ?? 0) + r.quantity)
       }
+
+      // Resolve the effective fulfillment method for a listing: the persisted
+      // FCF.1 ChannelListing.fulfillmentMethod when set ('listing'), else
+      // derived — merchant channels → FBM, Amazon → ingested fulfillmentChannel
+      // → product-level method → FBM. Then bind availableToPublish to that pool.
+      const productMethod = (product.fulfillmentMethod as 'FBA' | 'FBM' | null) ?? null
+      function buildMarket(cl: {
+        marketplace: string; channel: string; quantity: number | null; stockBuffer: number | null
+        listingStatus: string | null; lastSyncedAt: Date | null; platformAttributes: unknown
+        fulfillmentMethod: 'FBA' | 'FBM' | null
+      }, productId: string, sku: string | null) {
+        const ingested = normalizeFulfillment(cl.platformAttributes)
+        let method = cl.fulfillmentMethod
+        let source: 'listing' | 'derived' = 'listing'
+        if (method == null) {
+          source = 'derived'
+          method = MERCHANT_CHANNELS.has(cl.channel) ? 'FBM' : (ingested ?? productMethod ?? 'FBM')
+        }
+        const code = cl.marketplace?.toUpperCase() ?? cl.marketplace
+        const warehouseAvailable = warehouseByProduct.get(productId) ?? 0
+        const fbaSellable = sku ? fbaBySkuMarket.get(`${sku}::${code}`) ?? 0 : 0
+        const atp = computeAvailableToPublish({
+          fulfillmentMethod: method,
+          warehouseAvailable,
+          fbaSellable,
+          stockBuffer: cl.stockBuffer ?? 0,
+        })
+        return {
+          marketplace: cl.marketplace,
+          channel: cl.channel,
+          listedQty: cl.quantity ?? null,
+          buffer: cl.stockBuffer ?? 0,
+          listingStatus: cl.listingStatus,
+          lastSyncedAt: cl.lastSyncedAt?.toISOString() ?? null,
+          fulfillmentChannel: ingested,
+          // FCF.4b — operator-set per channel×marketplace method + resolved pool.
+          fulfillmentMethod: method,
+          fulfillmentSource: source,
+          availableToPublish: atp.available,
+          pool: atp.pool,
+          // Raw pools (pre-buffer) so the matrix can recompute ATP instantly
+          // when the operator toggles the method, without a refetch.
+          warehouseAvailable,
+          fbaSellable,
+        }
+      }
+
+      const productMarkets = channelListings.map((cl) => buildMarket(cl, id, product.sku))
+
+      const variantRows = children.map((c) => ({
+        variantId: c.id,
+        sku: c.sku,
+        attributes: (c.variantAttributes as Record<string, string> | null) ?? {},
+        physicalStock: c.totalStock ?? 0,
+        markets: c.channelListings.map((cl) => buildMarket(cl, c.id, c.sku)),
+      }))
 
       return reply.send({
         productId: id,
@@ -281,6 +338,72 @@ export default async function productChannelDataRoutes(fastify: FastifyInstance)
       })
     },
   )
+
+  // ── PATCH /api/products/:id/fulfillment ─────────────────────────────────
+  //
+  // FCF.4b — set ChannelListing.fulfillmentMethod per channel×marketplace.
+  // Mirrors PATCH /channel-pricing: when variantId is provided it is a child
+  // Product ID (the Matrix tab operates on children); otherwise the update is
+  // product-level. Pass fulfillmentMethod: null to clear the override and fall
+  // back to the derived method. Writing FBA/FBM also mirrors the value into
+  // platformAttributes.fulfillmentChannel so the read-side (cockpit card,
+  // channel-inventory ingested signal) stays consistent until the next sync.
+  fastify.patch<{
+    Params: { id: string }
+    Body: {
+      updates: Array<{
+        variantId?: string | null
+        marketplace: string
+        channel?: string
+        fulfillmentMethod: 'FBA' | 'FBM' | null
+      }>
+    }
+  }>('/products/:id/fulfillment', async (request, reply) => {
+    const { id } = request.params
+    const { updates } = request.body
+    if (!updates?.length) return reply.code(400).send({ error: 'updates must be non-empty' })
+    for (const u of updates) {
+      if (u.fulfillmentMethod != null && u.fulfillmentMethod !== 'FBA' && u.fulfillmentMethod !== 'FBM') {
+        return reply.code(400).send({ error: `invalid fulfillmentMethod: ${u.fulfillmentMethod}` })
+      }
+    }
+
+    const ops = updates.map(async (u) => {
+      const mp = u.marketplace.toUpperCase()
+      const ch = (u.channel ?? 'AMAZON').toUpperCase()
+      const productId = u.variantId ?? id
+
+      // Keep the ingested fulfillmentChannel mirror in step with the operator's
+      // choice so read surfaces reading platformAttributes don't show stale data.
+      const existing = await prisma.channelListing.findUnique({
+        where: { productId_channel_marketplace: { productId, channel: ch, marketplace: mp } },
+        select: { platformAttributes: true },
+      })
+      const pa = { ...((existing?.platformAttributes as Record<string, unknown> | null) ?? {}) }
+      if (u.fulfillmentMethod == null) delete pa.fulfillmentChannel
+      else pa.fulfillmentChannel = u.fulfillmentMethod === 'FBA' ? 'AFN' : 'MFN'
+      const paJson = pa as unknown as Parameters<typeof prisma.channelListing.upsert>[0]['create']['platformAttributes']
+
+      await prisma.channelListing.upsert({
+        where: { productId_channel_marketplace: { productId, channel: ch, marketplace: mp } },
+        update: { fulfillmentMethod: u.fulfillmentMethod, platformAttributes: paJson, lastSyncedAt: new Date(), syncStatus: 'PENDING' },
+        create: {
+          productId,
+          channel: ch,
+          marketplace: mp,
+          channelMarket: `${ch}_${mp}`,
+          region: mp,
+          fulfillmentMethod: u.fulfillmentMethod,
+          platformAttributes: paJson,
+          lastSyncedAt: new Date(),
+          syncStatus: 'PENDING',
+        },
+      })
+    })
+
+    await Promise.allSettled(ops)
+    return reply.send({ ok: true, updated: updates.length })
+  })
 
   // ── GET /api/products/:id/listings ──────────────────────────────────────
   // T3.3 — all of a product's channel listings (every channel × market)
