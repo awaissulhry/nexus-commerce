@@ -924,11 +924,8 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
   // ── Slot: channel strip ────────────────────────────────────────────────
 
   const renderChannelStrip = useCallback(() => (
-    <div className="flex items-center gap-4 flex-wrap">
-      <ChannelStrip channel="ebay" marketplace={marketplace} familyId={familyId} />
-      <FlatFileMarketStrip markets={EBAY_MARKETPLACES} active={marketplace} onSelect={handleMarketSwitch} />
-    </div>
-  ), [marketplace, familyId, handleMarketSwitch])
+    <ChannelStrip channel="ebay" marketplace={marketplace} familyId={familyId} />
+  ), [marketplace, familyId])
 
   // ── Slot: push extras (after Save button) ─────────────────────────────
 
@@ -1085,10 +1082,8 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
   // ── Slot: Bar3 left ────────────────────────────────────────────────────
 
   const renderBar3Left = useCallback(() => (
-    <span className="text-xs text-slate-500 dark:text-slate-400 font-medium whitespace-nowrap flex-shrink-0">
-      All markets
-    </span>
-  ), [])
+    <FlatFileMarketStrip markets={EBAY_MARKETPLACES} active={marketplace} onSelect={handleMarketSwitch} />
+  ), [marketplace, handleMarketSwitch])
 
   // ── Slot: modals ───────────────────────────────────────────────────────
 
