@@ -59,6 +59,10 @@ export interface PropagationEntryDto {
   // skipped so the operator sets it manually instead of copying a raw
   // number across currencies.
   currencyMismatch?: boolean
+  // T3.3b/B3 — value came from machine translation; flag for operator
+  // review (they can't read the target language). Verify via the
+  // back-translate endpoint.
+  needsReview?: boolean
 }
 
 export interface PropagatePreview {

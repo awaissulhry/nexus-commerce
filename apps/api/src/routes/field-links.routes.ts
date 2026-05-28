@@ -96,6 +96,18 @@ async function fillTranslations(args: {
     list.push(e);
     byLang.set(e.language, list);
   }
+  if (byLang.size === 0) return false;
+  // B3 — scope the house glossary to the product's brand (+ global terms).
+  let brand: string | null = null;
+  try {
+    const p = await prisma.product.findUnique({
+      where: { id: args.productId },
+      select: { brand: true },
+    });
+    brand = p?.brand ?? null;
+  } catch {
+    /* glossary is best-effort; translation still runs without it */
+  }
   let calls = 0;
   let budgetExceeded = false;
   for (const [lang, langEntries] of byLang) {
@@ -104,6 +116,21 @@ async function fillTranslations(args: {
       break;
     }
     calls++;
+    // B3 — preferred/avoided terms for this target language.
+    let glossary: Array<{ preferred: string; avoid?: string[]; context?: string | null }> = [];
+    try {
+      const terms = await prisma.terminologyPreference.findMany({
+        where: { language: lang, OR: [{ brand }, { brand: null }] },
+        select: { preferred: true, avoid: true, context: true },
+      });
+      glossary = terms.map((tt) => ({
+        preferred: tt.preferred,
+        avoid: tt.avoid,
+        context: tt.context,
+      }));
+    } catch {
+      /* glossary best-effort */
+    }
     try {
       const res = await translateProductCopy({
         source: { [tf]: args.editedValue } as { name?: string; description?: string },
@@ -111,9 +138,15 @@ async function fillTranslations(args: {
         fields: [tf],
         productId: args.productId,
         feature: "cockpit-propagate",
+        brand: brand ?? undefined,
+        glossary: glossary.length > 0 ? glossary : undefined,
       });
       const translated = tf === "name" ? res.name : res.description;
-      for (const e of langEntries) e.proposedValue = translated ?? null;
+      // B3 — machine translation the operator can't self-check → flag.
+      for (const e of langEntries) {
+        e.proposedValue = translated ?? null;
+        e.needsReview = true;
+      }
     } catch (err) {
       args.log?.warn?.({ err, lang }, "propagate translate failed");
     }
@@ -396,6 +429,33 @@ export async function fieldLinksRoutes(app: FastifyInstance) {
       } catch (err) {
         request.log?.error({ err }, "cross-channel propagate-preview failed");
         return reply.status(503).send({ entries: [], error: "Cross-channel preview unavailable." });
+      }
+    },
+  );
+
+  // T3.3b / B3 — on-demand back-translation. Given a value in some target
+  // language, translate it BACK to English so an English-only operator can
+  // verify a machine-translated proposal means what they intend before
+  // applying it. One AI call, only when the operator clicks "verify".
+  app.post(
+    "/api/products/:id/cross-channel/back-translate",
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      const body = (request.body ?? {}) as { value?: string; language?: string };
+      const value = (body.value ?? "").trim();
+      if (!value) return reply.send({ english: "" });
+      try {
+        const res = await translateProductCopy({
+          source: { name: value },
+          targetLanguage: "en",
+          fields: ["name"],
+          productId: id,
+          feature: "cockpit-backtranslate",
+        });
+        return reply.send({ english: res.name ?? "" });
+      } catch (err) {
+        request.log?.error({ err }, "back-translate failed");
+        return reply.status(503).send({ english: "", error: "Back-translation unavailable." });
       }
     },
   );

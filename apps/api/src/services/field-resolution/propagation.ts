@@ -41,6 +41,9 @@ export interface PropagationEntry {
   language: string | null
   /** current === proposed (no-op) — UI leaves it unchecked. */
   unchanged: boolean
+  /** T3.3b/B3 — value came from machine translation; the operator
+   *  can't read the target language, so flag it for review. */
+  needsReview?: boolean
 }
 
 export interface PlanInput {

@@ -41,6 +41,10 @@ export interface TranslateInput {
   feature?: string
   /** AiUsageLog entity binding (productId here). */
   productId?: string
+  /** T3.3b/B3 — preferred / avoided house terms for the target language,
+   *  injected as hard constraints so machine translation respects house
+   *  terminology (e.g. Giubbotto vs Giacca) that operators can't verify. */
+  glossary?: Array<{ preferred: string; avoid?: string[]; context?: string | null }>
 }
 
 export interface TranslateResult {
@@ -71,9 +75,15 @@ function buildPrompt(input: TranslateInput, fields: TranslatableField[]): string
     ``,
     input.brand ? `Brand: ${input.brand}` : '',
     input.productType ? `Product type: ${input.productType}` : '',
-    ``,
-    `Source (English unless otherwise tagged):`,
   ]
+  if (input.glossary && input.glossary.length > 0) {
+    lines.push('', 'Use these house terms exactly:')
+    for (const g of input.glossary) {
+      const avoid = g.avoid && g.avoid.length > 0 ? ` (do NOT use: ${g.avoid.join(', ')})` : ''
+      lines.push(`- ${g.preferred}${avoid}${g.context ? ` — ${g.context}` : ''}`)
+    }
+  }
+  lines.push('', 'Source (English unless otherwise tagged):')
   if (fields.includes('name') && input.source.name) {
     lines.push(`name: ${input.source.name}`)
   }
