@@ -6,11 +6,11 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Wallet, Plus, Trash2, CalendarDays, X } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
+import { eur0 as eur } from '@/app/_shared/ads-ui'
 
 interface Plan { id: string; marketplace: string; tag: string | null; month: string; monthlyBudgetCents: number; autoPacing: boolean; stopOverSpend: boolean; calendar: Array<{ day: number; pct: number }>; spendCents: number | null; pct: number | null; expectedPct: number; status: 'on-track' | 'over' | 'under' | 'no-budget' }
 interface Result { month: string; daysInMonth: number; dayOfMonth: number; rows: Plan[]; totals: { budgetCents: number; spendCents: number; pct: number | null } }
 
-const eur = (c: number | null) => (c == null ? '—' : new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(c / 100))
 const STATUS_CHIP: Record<string, string> = {
   'on-track': 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300',
   over: 'bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300',

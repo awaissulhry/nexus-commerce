@@ -5,6 +5,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Radar, Download } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
+import { eur, num, pct } from '@/app/_shared/ads-ui'
 
 interface SovRow {
   query: string; impressions: number; clicks: number; costCents: number; orders: number
@@ -14,9 +15,6 @@ interface SovRow {
 }
 interface SovResult { windowDays: number; totalImpressions: number; queries: number; rows: SovRow[]; summary: { cannibalizedQueries: number; outbidQueries: number; weakRelevanceQueries: number } }
 
-const eur = (c: number | null) => (c == null ? '—' : new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR' }).format(c / 100))
-const num = (n: number) => new Intl.NumberFormat('en-US').format(Math.round(n))
-const pct = (v: number | null, dp = 1) => (v == null ? '—' : `${(v * 100).toFixed(dp)}%`)
 
 const DAYS = [7, 14, 30, 60, 90]
 const FLAG_CHIP: Record<string, string> = {

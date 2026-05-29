@@ -5,12 +5,11 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Crosshair, Download } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
+import { eur0 as eur, x2 } from '@/app/_shared/ads-ui'
 
 interface Row { campaignId: string; name: string; marketplace: string | null; branded: boolean; spendCents: number; adSalesCents: number; roas: number | null; incrementalityFactor: number; incrementalSalesCents: number; iroas: number | null }
 interface Result { windowDays: number; brandTerms: string[]; brandedFactor: number; nonBrandedFactor: number; totals: { spendCents: number; adSalesCents: number; roas: number | null; incrementalSalesCents: number; iroas: number | null; brandedSpendCents: number; nonBrandedSpendCents: number }; rows: Row[]; note: string }
 
-const eur = (c: number | null) => (c == null ? '—' : new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(c / 100))
-const x2 = (v: number | null) => (v == null ? '—' : `${v.toFixed(2)}×`)
 const DAYS = [7, 14, 30, 60, 90]
 
 export function IncrementalityClient() {
