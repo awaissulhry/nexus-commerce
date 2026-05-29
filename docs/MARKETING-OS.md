@@ -159,6 +159,9 @@ sandbox-safe; live writes behind the same P8/ads-write-gate. Tabs added:
 | AX2.5 | **Bulk ops** — bulk budget +10%/−10%/set; bulksheet CSV import (id\|externalCampaignId, budget, status) | Campaigns bulk bar + toolbar import |
 | AX2.6 | **Share of Voice + impression-share intel** — within-account SOV, cannibalization, outbid / weak-CTR proxies | `/marketing/advertising/share-of-voice` |
 | AX2.7 | **AI + rules recommendations** — bid/negative/graduate/budget/SOV in one impact-ranked feed, one-click apply + Anthropic brief | `/marketing/advertising/recommendations` |
+| AX2.8 | **Goal-based guided builder** — pick a goal (grow / launch / defend / liquidate / custom) → structure, bidding, budget, match types pre-set + a strategy tip | `/marketing/advertising/create` |
+| AX2.9 | **Sponsored Brands creatives** — brand name + headline + logo asset + creative type (collection / spotlight / video) + landing + featured ASINs, via `/sb/v4/ads` | builder, SB type |
+| AX2.10 | **Data-grounded bid suggestions** — suggest keyword bids from your own observed CPCs (not Amazon's generic number) | builder → "Suggest bid from data" |
 
 **How to test (sandbox-safe):**
 - Targeting: open any campaign → Targeting → "+ Add targeting" → add an ASIN / category / auto / negative → it appears in the list (sandbox `sb-tgt-*` id; audit row written).
