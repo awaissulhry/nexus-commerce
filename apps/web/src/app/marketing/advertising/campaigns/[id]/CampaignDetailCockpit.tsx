@@ -44,7 +44,7 @@ export function CampaignDetailCockpit({ campaign, history }: { campaign: Campaig
   const [placeSaving, setPlaceSaving] = useState(false)
   const [placeMsg, setPlaceMsg] = useState('')
   const firstAg = campaign.adGroups[0]?.id ?? ''
-  const [tForm, setTForm] = useState({ open: false, adGroupId: firstAg, kind: 'PRODUCT' as 'PRODUCT' | 'CATEGORY' | 'AUTO' | 'NEGATIVE', value: '', auto: 'CLOSE_MATCH', bid: '0.50', saving: false, msg: '' })
+  const [tForm, setTForm] = useState({ open: false, adGroupId: firstAg, kind: 'PRODUCT' as 'PRODUCT' | 'CATEGORY' | 'AUTO' | 'AUDIENCE' | 'NEGATIVE', value: '', auto: 'CLOSE_MATCH', audType: 'AUDIENCE', bid: '0.50', saving: false, msg: '' })
 
   const spendC = Math.round(parseFloat(campaign.spend || '0') * 100), salesC = Math.round(parseFloat(campaign.sales || '0') * 100)
   const acos = campaign.acos != null ? parseFloat(campaign.acos) : salesC > 0 ? spendC / salesC : null
@@ -101,8 +101,8 @@ export function CampaignDetailCockpit({ campaign, history }: { campaign: Campaig
         setTargets((ts) => [{ id: r.id, kind: 'PRODUCT', expressionType: 'ASIN', expressionValue: `NOT ${tForm.value.trim()}`, bidCents: 0, status: 'ENABLED', impressions: 0, clicks: 0, spendCents: 0, salesCents: 0 }, ...ts])
       } else {
         const value = tForm.kind === 'AUTO' ? tForm.auto : tForm.value.trim()
-        if (!value) throw new Error(tForm.kind === 'CATEGORY' ? 'Category id required' : 'ASIN required')
-        const r = await fetch(`${getBackendUrl()}/api/advertising/targets/create`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adGroupId: tForm.adGroupId, kind: tForm.kind, value, bidEur: parseFloat(tForm.bid) || 0.5 }) }).then((x) => x.json())
+        if (!value) throw new Error(tForm.kind === 'CATEGORY' ? 'Category id required' : tForm.kind === 'AUDIENCE' ? 'Audience id / ASIN required' : 'ASIN required')
+        const r = await fetch(`${getBackendUrl()}/api/advertising/targets/create`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adGroupId: tForm.adGroupId, kind: tForm.kind, value, audienceType: tForm.kind === 'AUDIENCE' ? tForm.audType : undefined, bidEur: parseFloat(tForm.bid) || 0.5 }) }).then((x) => x.json())
         if (r?.error) throw new Error(r.error)
         setTargets((ts) => [{ id: r.id, kind: tForm.kind, expressionType: tForm.kind === 'PRODUCT' ? 'ASIN' : tForm.kind === 'CATEGORY' ? 'CATEGORY' : 'AUTO', expressionValue: value, bidCents: Math.round((parseFloat(tForm.bid) || 0.5) * 100), status: 'ENABLED', impressions: 0, clicks: 0, spendCents: 0, salesCents: 0 }, ...ts])
       }
@@ -158,16 +158,22 @@ export function CampaignDetailCockpit({ campaign, history }: { campaign: Campaig
                   </select></label>
                 <label className="flex flex-col text-[11px] text-slate-500">Type
                   <select value={tForm.kind} onChange={(e) => setTForm((f) => ({ ...f, kind: e.target.value as typeof f.kind, value: '' }))} className="mt-0.5 px-2 py-1 text-sm rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900">
-                    <option value="PRODUCT">Product (ASIN)</option><option value="CATEGORY">Category</option><option value="AUTO">Auto-targeting</option><option value="NEGATIVE">Negative ASIN</option>
+                    <option value="PRODUCT">Product (ASIN)</option><option value="CATEGORY">Category</option><option value="AUTO">Auto-targeting</option><option value="AUDIENCE">Audience (SD)</option><option value="NEGATIVE">Negative ASIN</option>
                   </select></label>
+                {tForm.kind === 'AUDIENCE' && (
+                  <label className="flex flex-col text-[11px] text-slate-500">Audience type
+                    <select value={tForm.audType} onChange={(e) => setTForm((f) => ({ ...f, audType: e.target.value }))} className="mt-0.5 px-2 py-1 text-sm rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900">
+                      <option value="AUDIENCE">Amazon audience (in-market / lifestyle / interests)</option><option value="VIEWS_REMARKETING">Views remarketing</option><option value="PURCHASES_REMARKETING">Purchases remarketing</option>
+                    </select></label>
+                )}
                 {tForm.kind === 'AUTO' ? (
                   <label className="flex flex-col text-[11px] text-slate-500">Match
                     <select value={tForm.auto} onChange={(e) => setTForm((f) => ({ ...f, auto: e.target.value }))} className="mt-0.5 px-2 py-1 text-sm rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900">
                       <option value="CLOSE_MATCH">Close match</option><option value="LOOSE_MATCH">Loose match</option><option value="SUBSTITUTES">Substitutes</option><option value="COMPLEMENTS">Complements</option>
                     </select></label>
                 ) : (
-                  <label className="flex flex-col text-[11px] text-slate-500">{tForm.kind === 'CATEGORY' ? 'Category id' : 'ASIN'}
-                    <input value={tForm.value} onChange={(e) => setTForm((f) => ({ ...f, value: e.target.value }))} placeholder={tForm.kind === 'CATEGORY' ? 'e.g. 12345678011' : 'B0XXXXXXXX'} className="mt-0.5 px-2 py-1 text-sm rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 w-36" /></label>
+                  <label className="flex flex-col text-[11px] text-slate-500">{tForm.kind === 'CATEGORY' ? 'Category id' : tForm.kind === 'AUDIENCE' ? (tForm.audType === 'AUDIENCE' ? 'Audience id' : 'ASIN / category') : 'ASIN'}
+                    <input value={tForm.value} onChange={(e) => setTForm((f) => ({ ...f, value: e.target.value }))} placeholder={tForm.kind === 'CATEGORY' ? 'e.g. 12345678011' : tForm.kind === 'AUDIENCE' && tForm.audType === 'AUDIENCE' ? 'audienceId' : 'B0XXXXXXXX'} className="mt-0.5 px-2 py-1 text-sm rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 w-36" /></label>
                 )}
                 {tForm.kind !== 'NEGATIVE' && (
                   <label className="flex flex-col text-[11px] text-slate-500">Bid €

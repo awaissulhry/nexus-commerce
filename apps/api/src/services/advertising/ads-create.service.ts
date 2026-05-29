@@ -16,7 +16,7 @@ import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import {
   createCampaign, createAdGroup, createKeyword, createProductAd,
-  createTarget, createNegativeProductTarget, updateCampaign,
+  createTarget, createNegativeProductTarget, createSdTarget, updateCampaign,
   type AdsRegion,
 } from './ads-api-client.js'
 import { checkAdsWriteGate } from './ads-write-gate.js'
@@ -120,29 +120,45 @@ const AUTO_EXPRESSION: Record<string, string> = {
   CLOSE_MATCH: 'queryHighRelMatches', LOOSE_MATCH: 'queryBroadRelMatches',
   SUBSTITUTES: 'asinSubstituteRelated', COMPLEMENTS: 'asinAccessoryRelated',
 }
+// SD audience expression builder. VIEWS/PURCHASES = remarketing lookback on
+// a product/category; AUDIENCE = an Amazon-built audience (in-market /
+// lifestyle / interests) by audienceId.
+const AUDIENCE_EXPRESSION: Record<string, (v: string) => Array<{ type: string; value?: string }>> = {
+  VIEWS_REMARKETING: (v) => [{ type: 'views', value: v }],
+  PURCHASES_REMARKETING: (v) => [{ type: 'purchases', value: v }],
+  AUDIENCE: (v) => [{ type: 'audience', value: v }],
+}
 export interface NewTarget {
   adGroupId: string
-  kind: 'PRODUCT' | 'CATEGORY' | 'AUTO'
-  // PRODUCT → an ASIN; CATEGORY → a browse-node id; AUTO → one of AUTO_EXPRESSION keys
+  kind: 'PRODUCT' | 'CATEGORY' | 'AUTO' | 'AUDIENCE'
+  // PRODUCT → an ASIN; CATEGORY → a browse-node id; AUTO → one of AUTO_EXPRESSION keys;
+  // AUDIENCE → audienceId (or product/category for remarketing), with audienceType set.
   value: string
+  audienceType?: 'VIEWS_REMARKETING' | 'PURCHASES_REMARKETING' | 'AUDIENCE'
   bidEur: number; userId?: string
 }
 export async function createTargetLocal(input: NewTarget): Promise<{ id: string; externalTargetId: string | null; mode: string }> {
-  const ag = await prisma.adGroup.findUnique({ where: { id: input.adGroupId }, select: { externalAdGroupId: true, campaign: { select: { externalCampaignId: true, marketplace: true } } } })
+  const ag = await prisma.adGroup.findUnique({ where: { id: input.adGroupId }, select: { externalAdGroupId: true, campaign: { select: { externalCampaignId: true, marketplace: true, adProduct: true } } } })
   if (!ag) throw new Error('ad group not found')
+  const isAudience = input.kind === 'AUDIENCE'
+  const audType = input.audienceType ?? 'AUDIENCE'
   const expression = input.kind === 'PRODUCT'
     ? [{ type: 'asinSameAs', value: input.value }]
     : input.kind === 'CATEGORY'
       ? [{ type: 'asinCategorySameAs', value: input.value }]
-      : [{ type: AUTO_EXPRESSION[input.value] ?? input.value }]
-  const expressionType = input.kind === 'PRODUCT' ? 'ASIN' : input.kind === 'CATEGORY' ? 'CATEGORY' : 'AUTO'
+      : isAudience
+        ? (AUDIENCE_EXPRESSION[audType] ?? AUDIENCE_EXPRESSION.AUDIENCE)(input.value)
+        : [{ type: AUTO_EXPRESSION[input.value] ?? input.value }]
+  const expressionType = input.kind === 'PRODUCT' ? 'ASIN' : input.kind === 'CATEGORY' ? 'CATEGORY' : isAudience ? audType : 'AUTO'
   let externalId: string | null = null, mode = 'local'
   if (ag.externalAdGroupId && ag.campaign?.externalCampaignId && ag.campaign.marketplace) {
     const ctx = await resolveCtx(ag.campaign.marketplace)
     if (ctx) {
       const gate = await checkAdsWriteGate({ marketplace: ag.campaign.marketplace, payloadValueCents: Math.round(input.bidEur * 100) })
       if (gate.allowed) {
-        const r = await createTarget(ctx, { externalCampaignId: ag.campaign.externalCampaignId, externalAdGroupId: ag.externalAdGroupId, expression, expressionType: input.kind === 'AUTO' ? 'AUTO' : 'MANUAL', bid: input.bidEur, state: 'enabled' })
+        const r = isAudience || ag.campaign.adProduct === 'SPONSORED_DISPLAY'
+          ? await createSdTarget(ctx, { externalCampaignId: ag.campaign.externalCampaignId, externalAdGroupId: ag.externalAdGroupId, expression, bid: input.bidEur, state: 'enabled' })
+          : await createTarget(ctx, { externalCampaignId: ag.campaign.externalCampaignId, externalAdGroupId: ag.externalAdGroupId, expression, expressionType: input.kind === 'AUTO' ? 'AUTO' : 'MANUAL', bid: input.bidEur, state: 'enabled' })
         externalId = r.externalId; mode = r.mode
       }
     }

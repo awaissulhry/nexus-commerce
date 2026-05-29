@@ -2370,7 +2370,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   // ── AX2.1: Product / ASIN / category / auto targeting ───────────────
   fastify.post('/advertising/targets/create', async (request, reply) => {
     const b = request.body as Record<string, unknown>
-    if (!b?.adGroupId || !b?.kind || !b?.value || b?.bidEur == null) { reply.status(400); return { error: 'adGroupId, kind (PRODUCT|CATEGORY|AUTO), value, bidEur required' } }
+    if (!b?.adGroupId || !b?.kind || !b?.value || b?.bidEur == null) { reply.status(400); return { error: 'adGroupId, kind (PRODUCT|CATEGORY|AUTO|AUDIENCE), value, bidEur required' } }
     const { createTargetLocal } = await import('../services/advertising/ads-create.service.js')
     try { return await createTargetLocal(b as never) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
   })

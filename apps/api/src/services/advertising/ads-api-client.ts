@@ -538,6 +538,27 @@ export async function createNegativeProductTarget(ctx: ClientContext, input: Cre
   return { ok: true, mode: 'live', externalId: response?.negativeTargetingClauses?.success?.[0]?.targetId ?? null, rawResponse: response }
 }
 
+// ── Sponsored Display audience / contextual targeting (AX2.3) ───────────
+// SD /sd/targets. Audience targeting expressions: remarketing on
+// views/purchases, plus Amazon-built audiences (in-market / lifestyle /
+// interests) by audienceId. Contextual product/category reuse the same
+// asinSameAs / asinCategorySameAs clause shape as SP.
+export interface CreateSdTargetInput {
+  externalCampaignId: string; externalAdGroupId: string
+  expression: Array<{ type: string; value?: string }>
+  bid: number; state?: 'enabled' | 'paused'
+}
+export async function createSdTarget(ctx: ClientContext, input: CreateSdTargetInput): Promise<{ ok: boolean; mode: AdsMode; externalId: string | null; rawResponse: unknown }> {
+  if (adsMode() === 'sandbox') {
+    const externalId = `sb-sdtgt-${randomUUID().slice(0, 8)}`
+    logger.info('[ADS-SANDBOX] createSdTarget', { input, externalId })
+    return { ok: true, mode: 'sandbox', externalId, rawResponse: { sandbox: true } }
+  }
+  const body = [{ campaignId: input.externalCampaignId, adGroupId: input.externalAdGroupId, expression: input.expression, bid: input.bid, state: (input.state ?? 'enabled').toUpperCase() }]
+  const response = await liveCall<{ success?: Array<{ targetId: string }> }>({ ...ctx, method: 'POST', path: '/sd/targets', body, contentType: 'application/json', acceptHeader: 'application/json' })
+  return { ok: true, mode: 'live', externalId: response?.success?.[0]?.targetId ?? null, rawResponse: response }
+}
+
 // ── Reports (Amazon's async request → poll → download pattern) ─────────
 
 export type ReportType =
