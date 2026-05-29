@@ -2373,6 +2373,18 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     try { return await applyPlan({ dailyBudgetEur: 10, defaultBidEur: 0.5, ...(b as object) } as never) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
   })
 
+  // ── AX.7: Negative + keyword harvesting ─────────────────────────────
+  fastify.get('/advertising/harvest/preview', async (request, reply) => {
+    const q = request.query as Record<string, string | undefined>
+    const { previewHarvest } = await import('../services/advertising/ads-harvest.service.js')
+    reply.header('Cache-Control', 'private, max-age=30')
+    return previewHarvest({ windowDays: q.windowDays ? Number(q.windowDays) : undefined, minSpendCents: q.minSpendCents ? Number(q.minSpendCents) : undefined, minOrders: q.minOrders ? Number(q.minOrders) : undefined })
+  })
+  fastify.post('/advertising/harvest/apply', async (request, reply) => {
+    const { applyHarvest } = await import('../services/advertising/ads-harvest.service.js')
+    try { return await applyHarvest((request.body ?? {}) as never) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
+  })
+
   // ── AD.2: Mutation routes ───────────────────────────────────────────
   // Every write goes through ads-mutation.service which (1) updates the
   // local row immediately, (2) enqueues OutboundSyncQueue with a 5-min
