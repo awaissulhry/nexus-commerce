@@ -4,6 +4,7 @@
  */
 import { config } from './config.js'
 import { startWorker } from './worker.js'
+import { startScheduler } from './scheduler.js'
 import { buildHttp } from './http.js'
 import { bidQueue, connection } from './queue.js'
 
@@ -13,6 +14,7 @@ async function main() {
   const worker = startWorker()
   const app = buildHttp()
   await app.listen({ port: config.httpPort, host: '0.0.0.0' })
+  const stopScheduler = startScheduler(app.log)
   app.log.info(
     { dryRun: config.worker.dryRun, concurrency: config.worker.concurrency, region: config.amazon.region },
     'bidding-engine up',
@@ -21,6 +23,7 @@ async function main() {
   const shutdown = async (signal: string) => {
     app.log.info(`${signal} received — draining`)
     try {
+      stopScheduler()
       await worker.close()
       await app.close()
       await bidQueue.close()
