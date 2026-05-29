@@ -1079,6 +1079,10 @@ async function start() {
       await import('./services/marketing/marketing-action-handlers.js');
       const { startMarketingRuleEvaluatorCron } = await import('./jobs/marketing-rule-evaluator.job.js');
       startMarketingRuleEvaluatorCron();
+      // UM.5 follow-up — auto-drain queued MKT_* mutations once their grace
+      // window elapses (finalizes CampaignAction; sandbox or live-dispatch).
+      const { startMarketingSyncDrainCron } = await import('./jobs/marketing-sync-drain.job.js');
+      startMarketingSyncDrainCron();
     }
 
     // SR.1 — Sentient Review Loop. Default-OFF — opt in via

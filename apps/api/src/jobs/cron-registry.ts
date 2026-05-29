@@ -83,6 +83,7 @@ import {
 // AD.3 — advertising-domain AutomationRule evaluator.
 import { runAdvertisingRuleEvaluatorCron } from './advertising-rule-evaluator.job.js'
 import { runMarketingRuleEvaluatorCron } from './marketing-rule-evaluator.job.js'
+import { runMarketingSyncDrainCron } from './marketing-sync-drain.job.js'
 // AD.5 — cross-marketplace BudgetPool rebalancer.
 import { runBudgetPoolRebalanceCron } from './budget-pool-rebalance.job.js'
 // SR.1 — Sentient Review Loop ingest + spike detector.
@@ -197,6 +198,7 @@ export const CRON_REGISTRY: Record<string, () => Promise<unknown>> = {
   'true-profit-rollup': () => runTrueProfitRollupCron(),
   'advertising-rule-evaluator': () => runAdvertisingRuleEvaluatorCron(),
   'marketing-rule-evaluator': () => runMarketingRuleEvaluatorCron(),
+  'marketing-sync-drain': () => runMarketingSyncDrainCron(),
   'budget-pool-rebalance': () => runBudgetPoolRebalanceCron(),
 
   // SR.1 — Sentient Review Loop. Gated by NEXUS_ENABLE_REVIEW_INGEST=1.
