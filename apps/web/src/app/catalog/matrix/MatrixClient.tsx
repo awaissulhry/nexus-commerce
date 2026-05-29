@@ -30,6 +30,7 @@ import {
   XCircle,
   ArrowUpDown,
   Download,
+  ClipboardCopy,
 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { Input } from '@/components/ui/Input'
@@ -558,6 +559,27 @@ export default function MatrixClient() {
     toast.success('Exported', { description: `${flatRows.length} rows · ${cols.length} columns` })
   }, [flatRows, visibleColumns, toast])
 
+  // CC.1.4 — copy the selected rows (or the whole view if none selected)
+  // to the clipboard as TSV so operators can paste into Excel/Sheets.
+  const copyToClipboard = useCallback(async () => {
+    const cols = visibleColumns.filter((c) => !['__select', '__expand', '__actions'].includes(c.id))
+    const rowsToCopy =
+      selectedIds.size > 0
+        ? flatRows.filter((fr) => selectedIds.has(fr.kind === 'parent' ? fr.parent.id : fr.variant!.id))
+        : flatRows
+    const header = cols.map((c) => c.label || c.id).join('\t')
+    const body = rowsToCopy.map((fr) => {
+      const entity = fr.kind === 'parent' ? fr.parent : fr.variant!
+      return cols.map((c) => exportCellValue(entity, c.id, fr.parent.brand).replace(/\t|\n/g, ' ')).join('\t')
+    })
+    try {
+      await navigator.clipboard.writeText([header, ...body].join('\n'))
+      toast.success('Copied', { description: `${rowsToCopy.length} rows to clipboard (TSV)` })
+    } catch {
+      toast.error('Copy failed', { description: 'Clipboard unavailable in this browser context' })
+    }
+  }, [flatRows, visibleColumns, selectedIds, toast])
+
   // ── Virtualizer ─────────────────────────────────────────────────
   const parentRef = useRef<HTMLDivElement>(null)
   const rowVirtualizer = useVirtualizer({
@@ -653,6 +675,17 @@ export default function MatrixClient() {
             >
               <ColumnsIcon className="w-3 h-3" />
               Columns
+            </button>
+            {/* CC.1.4 — copy selected (or whole view) as TSV */}
+            <button
+              type="button"
+              onClick={() => void copyToClipboard()}
+              disabled={flatRows.length === 0}
+              className="inline-flex items-center gap-1.5 px-2 py-1 rounded text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800 disabled:opacity-40"
+              title={selectedIds.size > 0 ? `Copy ${selectedIds.size} selected rows (TSV)` : 'Copy the current view (TSV)'}
+            >
+              <ClipboardCopy className="w-3 h-3" />
+              Copy
             </button>
             {/* CC.1.3 — export current view to CSV */}
             <button
