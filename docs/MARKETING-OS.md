@@ -162,6 +162,8 @@ sandbox-safe; live writes behind the same P8/ads-write-gate. Tabs added:
 | AX2.8 | **Goal-based guided builder** — pick a goal (grow / launch / defend / liquidate / custom) → structure, bidding, budget, match types pre-set + a strategy tip | `/marketing/advertising/create` |
 | AX2.9 | **Sponsored Brands creatives** — brand name + headline + logo asset + creative type (collection / spotlight / video) + landing + featured ASINs, via `/sb/v4/ads` | builder, SB type |
 | AX2.10 | **Data-grounded bid suggestions** — suggest keyword bids from your own observed CPCs (not Amazon's generic number) | builder → "Suggest bid from data" |
+| AX2.11 | **Dayparting intelligence** — day-of-week conversion heatmap (bid-up/pause) → one-click AdSchedule | `/marketing/advertising/dayparting` (top panel) |
+| AX2.12 | **Ads alerts** — ACOS breach / zero-sales / spend spike / sales drop watch feed | alerts strip atop `/recommendations` |
 
 **How to test (sandbox-safe):**
 - Targeting: open any campaign → Targeting → "+ Add targeting" → add an ASIN / category / auto / negative → it appears in the list (sandbox `sb-tgt-*` id; audit row written).
