@@ -40,7 +40,7 @@ export default function InventoryAnalyticsClient({ initialData }: { initialData:
   };
 
   const formatCurrency = (amount: number) =>
-    amount.toLocaleString("en-US", { style: "currency", currency: "USD" });
+    amount.toLocaleString("en-IE", { style: "currency", currency: "EUR" });
 
   const dist = data.stockDistribution;
   const total = dist.outOfStock + dist.lowStock + dist.healthyStock + dist.overStock || 1;

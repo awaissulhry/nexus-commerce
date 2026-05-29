@@ -39,7 +39,7 @@ export default function ReportDetailClient({ initialData }: { initialData: Repor
     });
 
   const formatCurrency = (amount: number) =>
-    amount.toLocaleString("en-US", { style: "currency", currency: "USD" });
+    amount.toLocaleString("en-IE", { style: "currency", currency: "EUR" });
 
   const renderSection = (section: ReportSection, index: number) => {
     switch (section.type) {

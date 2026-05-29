@@ -34,7 +34,7 @@ export default function RevenueClient({ initialData }: { initialData: RevenueDat
   };
 
   const formatCurrency = (amount: number) =>
-    amount.toLocaleString("en-US", { style: "currency", currency: "USD" });
+    amount.toLocaleString("en-IE", { style: "currency", currency: "EUR" });
 
   const changeIndicator = (change: number) => {
     if (change > 0) return <span className="text-green-600 text-xs font-bold">▲ {change}%</span>;

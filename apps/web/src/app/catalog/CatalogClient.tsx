@@ -48,7 +48,7 @@ export default function CatalogClient({ products }: CatalogClientProps) {
           : parseFloat(amount.toString())
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
-      currency: 'USD',
+      currency: 'EUR',
     }).format(num)
   }
 

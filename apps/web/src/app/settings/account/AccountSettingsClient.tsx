@@ -74,7 +74,7 @@ export default function AccountSettingsClient({ settings }: Props) {
     postalCode: "",
     country: "US",
     timezone: "America/New_York",
-    currency: "USD",
+    currency: "EUR",
     primaryMarketplace: null,
   };
 

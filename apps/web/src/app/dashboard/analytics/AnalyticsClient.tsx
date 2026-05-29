@@ -29,7 +29,7 @@ export default function AnalyticsClient({ initialData }: { initialData: Analytic
   };
 
   const formatCurrency = (amount: number) =>
-    amount.toLocaleString("en-US", { style: "currency", currency: "USD" });
+    amount.toLocaleString("en-IE", { style: "currency", currency: "EUR" });
 
   return (
     <div className="space-y-6">

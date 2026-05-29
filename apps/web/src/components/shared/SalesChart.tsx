@@ -31,7 +31,7 @@ const METRIC_CONFIG = {
     format: (v: number) =>
       new Intl.NumberFormat("en-US", {
         style: "currency",
-        currency: "USD",
+        currency: "EUR",
         minimumFractionDigits: 0,
       }).format(v),
   },

@@ -24,7 +24,7 @@ export default function BuyBox({ price, salePrice, stock, fulfillmentMethod, bra
   }
 
   const formatCurrency = (amount: number) =>
-    new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount)
+    new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR' }).format(amount)
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-6 sticky top-8">

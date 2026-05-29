@@ -39,7 +39,7 @@ export default function ChannelAnalyticsClient({ initialData }: { initialData: C
   };
 
   const formatCurrency = (amount: number) =>
-    amount.toLocaleString("en-US", { style: "currency", currency: "USD" });
+    amount.toLocaleString("en-IE", { style: "currency", currency: "EUR" });
 
   const formatDate = (iso: string | null) => {
     if (!iso) return "Never";
