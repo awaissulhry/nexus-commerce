@@ -2454,6 +2454,23 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     try { return await ingestMarketingStream(messages as never) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
   })
 
+  // ── AX3.2: Full-funnel Goal builder (branded + unbranded) ───────────
+  fastify.post('/advertising/goals/suggest-targets', async (request, reply) => {
+    const b = request.body as { brandTerms?: string[]; asins?: string[]; limit?: number }
+    if (!Array.isArray(b?.brandTerms)) { reply.status(400); return { error: 'brandTerms[] required' } }
+    const { suggestTargets } = await import('../services/advertising/ads-goal.service.js')
+    try { return await suggestTargets({ brandTerms: b.brandTerms, asins: b.asins, limit: b.limit }) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
+  })
+  fastify.post('/advertising/goals/apply', async (request, reply) => {
+    const b = request.body as Record<string, unknown>
+    if (!b?.goalName) { reply.status(400); return { error: 'goalName required' } }
+    const { buildGoalPlan, applyGoalPlan } = await import('../services/advertising/ads-goal.service.js')
+    try {
+      const plan = buildGoalPlan(b as never)
+      return await applyGoalPlan(plan)
+    } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
+  })
+
   // ── AX3.3: Amazon DSP + Performance+/Brand+ ─────────────────────────
   fastify.get('/advertising/dsp/meta', async (_request, reply) => {
     const { DSP_CHANNELS, DSP_OBJECTIVES } = await import('../services/advertising/ads-dsp.service.js')
