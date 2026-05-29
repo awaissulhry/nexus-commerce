@@ -58,6 +58,10 @@ enum SyncChannel {
   EBAY
   SHOPIFY
   WOOCOMMERCE
+  // UM.9/11/12/13 — external marketing-channel mutation routing targets.
+  GOOGLE
+  META
+  TIKTOK
 }
 
 enum OutboundSyncStatus {

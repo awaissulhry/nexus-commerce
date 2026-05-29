@@ -24,6 +24,8 @@ import { adapterFor } from './adapters/types.js'
 // Ensure the channel adapters self-register.
 import './adapters/amazon.adapter.js'
 import './adapters/internal.adapter.js'
+import './adapters/ebay.adapter.js'
+import './adapters/stub-adapters.js'
 
 const GRACE_PERIOD_MS = Number(process.env.NEXUS_MARKETING_GRACE_MS ?? 5 * 60 * 1000)
 
@@ -258,13 +260,21 @@ export async function drainMarketingSyncOnce(limit = 50): Promise<{ processed: n
 // Map the unified MktChannel to the OutboundSyncQueue SyncChannel enum.
 // GOOGLE/META/TIKTOK aren't in SyncChannel yet (added with their adapters,
 // P12/P13); fall back to AMAZON for routing only those reach in P5 is none.
-function channelToSyncChannel(channel: MktChannel): 'AMAZON' | 'EBAY' | 'SHOPIFY' {
+function channelToSyncChannel(channel: MktChannel): 'AMAZON' | 'EBAY' | 'SHOPIFY' | 'GOOGLE' | 'META' | 'TIKTOK' {
   switch (channel) {
     case 'EBAY':
       return 'EBAY'
     case 'SHOPIFY':
       return 'SHOPIFY'
+    case 'GOOGLE':
+      return 'GOOGLE'
+    case 'META':
+      return 'META'
+    case 'TIKTOK':
+      return 'TIKTOK'
     default:
+      // AMAZON + INTERNAL route to AMAZON sync-channel (INTERNAL never hits
+      // an external sync; its launch is handled in-adapter).
       return 'AMAZON'
   }
 }

@@ -639,6 +639,20 @@ const marketingOsRoutes: FastifyPluginAsync = async (app) => {
     }
   })
 
+  // ── eBay shadow backfill trigger (P9) ─────────────────────────────────
+  // Mirrors the Amazon backfill — populates the eBay lens from the legacy
+  // EbayCampaign table (no creds needed). Defaults dry-run; ?mode=apply writes.
+  app.post('/marketing/os/backfill/ebay', async (request, reply) => {
+    const apply = (request.query as Record<string, string | undefined>)?.mode === 'apply'
+    const { backfillEbayShadow } = await import('../services/marketing/ebay-backfill.service.js')
+    try {
+      return await backfillEbayShadow({ apply })
+    } catch (err) {
+      reply.status(500)
+      return { error: (err as Error)?.message ?? 'ebay backfill failed' }
+    }
+  })
+
   // ── Diagnostics (P3.2) ────────────────────────────────────────────────
   // Surfaces the CampaignMetric grain breakdown so we can see how spend is
   // distributed (CAMPAIGN vs TARGET vs AD_GROUP vs …) and how many rows
