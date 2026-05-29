@@ -9,7 +9,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { ChevronLeft, Package, Tag, MonitorPlay, Wand2 } from 'lucide-react'
+import { ChevronLeft, Package, Tag, MonitorPlay, Wand2, TrendingUp, Rocket, Shield, Flame, Settings2 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 
 type CType = 'SP' | 'SB' | 'SD'
@@ -19,13 +19,31 @@ const TYPES: Array<{ key: CType; label: string; blurb: string; icon: typeof Pack
   { key: 'SD', label: 'Sponsored Display', blurb: 'Re-engage and convert shoppers on and off Amazon by interest and behaviour.', icon: MonitorPlay },
 ]
 
+// AX2.8 — goal-driven presets. Each goal pre-configures the builder with a
+// sensible structure / bidding / budget so the operator just confirms.
+type Defaults = { targetingType: string; biddingStrategy: string; dailyBudgetEur: string; defaultBidEur: string; matchTypes: Record<string, boolean> }
+const GOALS: Array<{ key: string; label: string; blurb: string; icon: typeof Package; type?: CType; tip?: string; defaults?: Defaults }> = [
+  { key: 'grow', label: 'Grow profitable sales', blurb: 'Target-ACOS bidding on your best converters. Balanced manual Sponsored Products.', icon: TrendingUp, type: 'SP', tip: 'Manual SP with exact + phrase coverage and up-&-down bidding toward your target ACOS. Pair with the Bid optimizer.', defaults: { targetingType: 'MANUAL', biddingStrategy: 'autoForSales', dailyBudgetEur: '20', defaultBidEur: '0.75', matchTypes: { EXACT: true, PHRASE: true, BROAD: false } } },
+  { key: 'launch', label: 'Launch a new product', blurb: 'Maximise discovery — automatic targeting and broad reach to learn fast.', icon: Rocket, type: 'SP', tip: 'Auto SP to harvest converting search terms, then graduate the winners to exact via Harvesting.', defaults: { targetingType: 'AUTO', biddingStrategy: 'legacyForSales', dailyBudgetEur: '25', defaultBidEur: '0.90', matchTypes: { EXACT: true, PHRASE: true, BROAD: true } } },
+  { key: 'defend', label: 'Defend your brand', blurb: 'Own your branded searches with tight exact-match coverage.', icon: Shield, type: 'SP', tip: 'Exact-match on brand terms with fixed bids to hold top-of-search position cheaply.', defaults: { targetingType: 'MANUAL', biddingStrategy: 'manual', dailyBudgetEur: '10', defaultBidEur: '0.60', matchTypes: { EXACT: true, PHRASE: false, BROAD: false } } },
+  { key: 'liquidate', label: 'Liquidate aged stock', blurb: 'Push slow movers hard with aggressive bids and a high budget.', icon: Flame, type: 'SP', tip: 'Aggressive auto SP; once it moves, attach a target-ACOS rule to protect margin.', defaults: { targetingType: 'AUTO', biddingStrategy: 'autoForSales', dailyBudgetEur: '30', defaultBidEur: '1.10', matchTypes: { EXACT: true, PHRASE: true, BROAD: true } } },
+  { key: 'custom', label: 'Custom / advanced', blurb: 'Choose the ad type and configure every setting yourself.', icon: Settings2 },
+]
+
 export function CreateCampaignClient() {
+  const [goal, setGoal] = useState<string | null>(null)
+  const [goalTip, setGoalTip] = useState<string | null>(null)
   const [type, setType] = useState<CType | null>(null)
   const [f, setF] = useState({ name: '', marketplace: 'IT', targetingType: 'MANUAL', dailyBudgetEur: '10', biddingStrategy: 'legacyForSales', defaultBidEur: '0.50', adGroupName: '', productSku: '', keywords: '', matchTypes: { EXACT: true, PHRASE: true, BROAD: false } as Record<string, boolean> })
   const [busy, setBusy] = useState(false)
   const [result, setResult] = useState<string | null>(null)
 
   const set = (k: string, v: unknown) => setF((s) => ({ ...s, [k]: v }))
+  const selectGoal = (g: typeof GOALS[number]) => {
+    if (g.key === 'custom') { setGoal('custom'); setType(null); setGoalTip(null); return }
+    if (g.defaults) setF((s) => ({ ...s, ...g.defaults }))
+    setType(g.type ?? 'SP'); setGoalTip(g.tip ?? null); setGoal(g.key)
+  }
   const post = (path: string, body: unknown) => fetch(`${getBackendUrl()}/api/advertising${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then((r) => r.json())
 
   const create = async () => {
@@ -47,9 +65,29 @@ export function CreateCampaignClient() {
     } finally { setBusy(false) }
   }
 
+  // Step 0 — goal selection (the guided entry point).
+  if (!goal) {
+    return (
+      <div className="max-w-[1100px]">
+        <div className="flex items-center justify-between mb-1"><h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100">What&apos;s your goal?</h1><Link href="/marketing/advertising/architect" className="inline-flex items-center gap-1 text-sm text-violet-600 hover:underline"><Wand2 size={14} /> Or paste keywords (Auto-architect)</Link></div>
+        <p className="text-sm text-slate-500 mb-4">Pick a goal and we&apos;ll pre-configure the structure, bidding, and budget — you just confirm. Advanced users can go custom.</p>
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {GOALS.map((g) => { const Icon = g.icon; return (
+            <button key={g.key} onClick={() => selectGoal(g)} className="text-left p-4 rounded-lg border border-slate-200 dark:border-slate-800 hover:border-blue-400 hover:shadow-sm transition">
+              <Icon size={22} className="text-blue-500 mb-2" />
+              <div className="font-semibold text-slate-800 dark:text-slate-100">{g.label}</div>
+              <div className="text-xs text-slate-500 mt-1">{g.blurb}</div>
+            </button>
+          ) })}
+        </div>
+      </div>
+    )
+  }
+
   if (!type) {
     return (
       <div className="max-w-[1100px]">
+        <button onClick={() => { setGoal(null); setResult(null) }} className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700 mb-2"><ChevronLeft size={14} /> Goals</button>
         <div className="flex items-center justify-between mb-4"><h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100">Choose your campaign type</h1><Link href="/marketing/advertising/architect" className="inline-flex items-center gap-1 text-sm text-violet-600 hover:underline"><Wand2 size={14} /> Or paste keywords (Auto-architect)</Link></div>
         <div className="grid md:grid-cols-3 gap-4">
           {TYPES.map((t) => { const Icon = t.icon; return (
@@ -67,9 +105,10 @@ export function CreateCampaignClient() {
 
   return (
     <div className="max-w-[760px]">
-      <button onClick={() => { setType(null); setResult(null) }} className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700 mb-2"><ChevronLeft size={14} /> Campaign type</button>
-      <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100 mb-1">New {TYPES.find((t) => t.key === type)!.label}</h1>
-      <p className="text-sm text-slate-500 mb-4">Configure settings, ad group, product, and (manual) keywords. Created via the gated write path (sandbox-safe).</p>
+      <button onClick={() => { if (goal === 'custom') { setType(null) } else { setGoal(null); setType(null); setGoalTip(null) } setResult(null) }} className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700 mb-2"><ChevronLeft size={14} /> {goal === 'custom' ? 'Campaign type' : 'Goals'}</button>
+      <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100 mb-1">New {TYPES.find((t) => t.key === type)!.label}{goal && goal !== 'custom' ? ` · ${GOALS.find((g) => g.key === goal)?.label}` : ''}</h1>
+      <p className="text-sm text-slate-500 mb-3">Configure settings, ad group, product, and (manual) keywords. Created via the gated write path (sandbox-safe).</p>
+      {goalTip && <div className="text-sm text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/30 rounded-md px-3 py-2 mb-4">💡 {goalTip}</div>}
       <div className="space-y-3">
         <label className="block text-xs text-slate-500">Campaign name<input value={f.name} onChange={(e) => set('name', e.target.value)} className="w-full mt-0.5 px-2 py-1.5 text-sm rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950" /></label>
         <div className="flex gap-2">
