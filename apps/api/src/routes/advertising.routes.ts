@@ -2358,6 +2358,19 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const { createProductAdLocal } = await import('../services/advertising/ads-create.service.js')
     try { return await createProductAdLocal(b as never) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
   })
+  // ── AX2.1: Product / ASIN / category / auto targeting ───────────────
+  fastify.post('/advertising/targets/create', async (request, reply) => {
+    const b = request.body as Record<string, unknown>
+    if (!b?.adGroupId || !b?.kind || !b?.value || b?.bidEur == null) { reply.status(400); return { error: 'adGroupId, kind (PRODUCT|CATEGORY|AUTO), value, bidEur required' } }
+    const { createTargetLocal } = await import('../services/advertising/ads-create.service.js')
+    try { return await createTargetLocal(b as never) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
+  })
+  fastify.post('/advertising/negative-targets/create', async (request, reply) => {
+    const b = request.body as Record<string, unknown>
+    if (!b?.adGroupId || !b?.asin) { reply.status(400); return { error: 'adGroupId, asin required' } }
+    const { createNegativeProductTargetLocal } = await import('../services/advertising/ads-create.service.js')
+    try { return await createNegativeProductTargetLocal(b as never) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
+  })
 
   // ── AX.6: Keyword-paste auto-architect ──────────────────────────────
   fastify.post('/advertising/architect/preview', async (request, reply) => {

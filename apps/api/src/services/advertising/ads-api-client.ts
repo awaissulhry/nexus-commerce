@@ -499,6 +499,39 @@ export async function createProductAd(ctx: ClientContext, input: CreateProductAd
   return { ok: true, mode: 'live', externalId: response?.productAds?.success?.[0]?.adId ?? null, rawResponse: response }
 }
 
+// ── Product / category / auto targeting (AX2.1) — v3 SP /sp/targets POST.
+// expression is the Amazon targeting clause: ASIN → [{type:'asinSameAs',
+// value}], category → [{type:'asinCategorySameAs', value}], auto →
+// [{type:'queryHighRelMatches'|'queryBroadRelMatches'|'asinSubstituteRelated'
+// |'asinAccessoryRelated'}]. ────────────────────────────────────────────
+export interface CreateTargetInput {
+  externalCampaignId: string; externalAdGroupId: string
+  expression: Array<{ type: string; value?: string }>
+  expressionType: 'MANUAL' | 'AUTO'; bid: number; state?: 'enabled' | 'paused'
+}
+export async function createTarget(ctx: ClientContext, input: CreateTargetInput): Promise<{ ok: boolean; mode: AdsMode; externalId: string | null; rawResponse: unknown }> {
+  if (adsMode() === 'sandbox') {
+    const externalId = `sb-tgt-${randomUUID().slice(0, 8)}`
+    logger.info('[ADS-SANDBOX] createTarget', { input, externalId })
+    return { ok: true, mode: 'sandbox', externalId, rawResponse: { sandbox: true } }
+  }
+  const v3 = { campaignId: input.externalCampaignId, adGroupId: input.externalAdGroupId, expressionType: input.expressionType, expression: input.expression, bid: input.bid, state: (input.state ?? 'enabled').toUpperCase() }
+  const response = await liveCall<{ targetingClauses?: { success?: Array<{ targetId: string }> } }>({ ...ctx, method: 'POST', path: '/sp/targets', body: { targetingClauses: [v3] }, contentType: 'application/vnd.spTargetingClause.v3+json', acceptHeader: 'application/vnd.spTargetingClause.v3+json' })
+  return { ok: true, mode: 'live', externalId: response?.targetingClauses?.success?.[0]?.targetId ?? null, rawResponse: response }
+}
+
+export interface CreateNegativeTargetInput { externalCampaignId: string; externalAdGroupId: string; asin: string; state?: 'enabled' | 'paused' }
+export async function createNegativeProductTarget(ctx: ClientContext, input: CreateNegativeTargetInput): Promise<{ ok: boolean; mode: AdsMode; externalId: string | null; rawResponse: unknown }> {
+  if (adsMode() === 'sandbox') {
+    const externalId = `sb-ntgt-${randomUUID().slice(0, 8)}`
+    logger.info('[ADS-SANDBOX] createNegativeProductTarget', { input, externalId })
+    return { ok: true, mode: 'sandbox', externalId, rawResponse: { sandbox: true } }
+  }
+  const v3 = { campaignId: input.externalCampaignId, adGroupId: input.externalAdGroupId, expression: [{ type: 'asinSameAs', value: input.asin }], state: (input.state ?? 'enabled').toUpperCase() }
+  const response = await liveCall<{ negativeTargetingClauses?: { success?: Array<{ targetId: string }> } }>({ ...ctx, method: 'POST', path: '/sp/negativeTargets', body: { negativeTargetingClauses: [v3] }, contentType: 'application/vnd.spNegativeTargetingClause.v3+json', acceptHeader: 'application/vnd.spNegativeTargetingClause.v3+json' })
+  return { ok: true, mode: 'live', externalId: response?.negativeTargetingClauses?.success?.[0]?.targetId ?? null, rawResponse: response }
+}
+
 // ── Reports (Amazon's async request → poll → download pattern) ─────────
 
 export type ReportType =

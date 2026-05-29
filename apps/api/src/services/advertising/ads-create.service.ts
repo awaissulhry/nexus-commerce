@@ -16,6 +16,7 @@ import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import {
   createCampaign, createAdGroup, createKeyword, createProductAd,
+  createTarget, createNegativeProductTarget,
   type AdsRegion,
 } from './ads-api-client.js'
 import { checkAdsWriteGate } from './ads-write-gate.js'
@@ -108,4 +109,63 @@ export async function createProductAdLocal(input: NewProductAd): Promise<{ id: s
   const ad = await prisma.adProductAd.create({ data: { adGroupId: input.adGroupId, asin: input.asin ?? null, sku: input.sku ?? null, productId: input.productId ?? null, status: 'ENABLED', externalAdId: externalId } })
   await audit('create_product_ad', 'PRODUCT_AD', ad.id, { sku: input.sku, asin: input.asin, externalId }, input.userId)
   return { id: ad.id, externalAdId: externalId }
+}
+
+// ── AX2.1 — Product / category / auto targeting ─────────────────────────
+// Amazon SP product-targeting expressions. AUTO targets are the four
+// auto-campaign clauses (close-match / loose-match / substitutes /
+// complements). PRODUCT = a specific ASIN; CATEGORY = a browse-node category
+// (optionally refined by brand/price/rating — kept simple here: the node id).
+const AUTO_EXPRESSION: Record<string, string> = {
+  CLOSE_MATCH: 'queryHighRelMatches', LOOSE_MATCH: 'queryBroadRelMatches',
+  SUBSTITUTES: 'asinSubstituteRelated', COMPLEMENTS: 'asinAccessoryRelated',
+}
+export interface NewTarget {
+  adGroupId: string
+  kind: 'PRODUCT' | 'CATEGORY' | 'AUTO'
+  // PRODUCT → an ASIN; CATEGORY → a browse-node id; AUTO → one of AUTO_EXPRESSION keys
+  value: string
+  bidEur: number; userId?: string
+}
+export async function createTargetLocal(input: NewTarget): Promise<{ id: string; externalTargetId: string | null; mode: string }> {
+  const ag = await prisma.adGroup.findUnique({ where: { id: input.adGroupId }, select: { externalAdGroupId: true, campaign: { select: { externalCampaignId: true, marketplace: true } } } })
+  if (!ag) throw new Error('ad group not found')
+  const expression = input.kind === 'PRODUCT'
+    ? [{ type: 'asinSameAs', value: input.value }]
+    : input.kind === 'CATEGORY'
+      ? [{ type: 'asinCategorySameAs', value: input.value }]
+      : [{ type: AUTO_EXPRESSION[input.value] ?? input.value }]
+  const expressionType = input.kind === 'PRODUCT' ? 'ASIN' : input.kind === 'CATEGORY' ? 'CATEGORY' : 'AUTO'
+  let externalId: string | null = null, mode = 'local'
+  if (ag.externalAdGroupId && ag.campaign?.externalCampaignId && ag.campaign.marketplace) {
+    const ctx = await resolveCtx(ag.campaign.marketplace)
+    if (ctx) {
+      const gate = await checkAdsWriteGate({ marketplace: ag.campaign.marketplace, payloadValueCents: Math.round(input.bidEur * 100) })
+      if (gate.allowed) {
+        const r = await createTarget(ctx, { externalCampaignId: ag.campaign.externalCampaignId, externalAdGroupId: ag.externalAdGroupId, expression, expressionType: input.kind === 'AUTO' ? 'AUTO' : 'MANUAL', bid: input.bidEur, state: 'enabled' })
+        externalId = r.externalId; mode = r.mode
+      }
+    }
+  }
+  const t = await prisma.adTarget.create({ data: { adGroupId: input.adGroupId, kind: input.kind, expressionType, expressionValue: input.value, bidCents: Math.round(input.bidEur * 100), status: 'ENABLED', externalTargetId: externalId } })
+  await audit('create_target', 'AD_TARGET', t.id, { kind: input.kind, value: input.value, externalId, mode }, input.userId)
+  logger.info('[AX2.1] createTargetLocal', { id: t.id, kind: input.kind, externalId, mode })
+  return { id: t.id, externalTargetId: externalId, mode }
+}
+
+export interface NewNegativeProductTarget { adGroupId: string; asin: string; userId?: string }
+export async function createNegativeProductTargetLocal(input: NewNegativeProductTarget): Promise<{ id: string; externalTargetId: string | null; mode: string }> {
+  const ag = await prisma.adGroup.findUnique({ where: { id: input.adGroupId }, select: { externalAdGroupId: true, campaign: { select: { externalCampaignId: true, marketplace: true } } } })
+  if (!ag) throw new Error('ad group not found')
+  let externalId: string | null = null, mode = 'local'
+  if (ag.externalAdGroupId && ag.campaign?.externalCampaignId && ag.campaign.marketplace) {
+    const ctx = await resolveCtx(ag.campaign.marketplace)
+    if (ctx) {
+      const gate = await checkAdsWriteGate({ marketplace: ag.campaign.marketplace, payloadValueCents: 0 })
+      if (gate.allowed) { const r = await createNegativeProductTarget(ctx, { externalCampaignId: ag.campaign.externalCampaignId, externalAdGroupId: ag.externalAdGroupId, asin: input.asin, state: 'enabled' }); externalId = r.externalId; mode = r.mode }
+    }
+  }
+  const t = await prisma.adTarget.create({ data: { adGroupId: input.adGroupId, kind: 'PRODUCT', expressionType: 'ASIN', expressionValue: input.asin, bidCents: 0, status: 'ENABLED', externalTargetId: externalId, isNegative: true, negativeLevel: 'AD_GROUP' } })
+  await audit('create_negative_product_target', 'AD_TARGET', t.id, { asin: input.asin, externalId, mode }, input.userId)
+  return { id: t.id, externalTargetId: externalId, mode }
 }
