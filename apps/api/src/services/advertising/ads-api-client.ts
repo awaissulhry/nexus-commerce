@@ -307,6 +307,9 @@ export interface CampaignPatch {
   dailyBudget?: number
   biddingStrategy?: AdsCampaignDTO['biddingStrategy']
   endDate?: string | null
+  // AX2.2 — per-placement bid adjustments (0–900%). Amazon placements:
+  // PLACEMENT_TOP (top of search), PLACEMENT_PRODUCT_PAGE, PLACEMENT_REST_OF_SEARCH.
+  placementBidding?: Array<{ placement: string; percentage: number }>
 }
 
 // ── Write operations — v3 SP batch PUT (intentionally not v1) ────────
@@ -349,13 +352,16 @@ export async function updateCampaign(
   const v3Campaign: Record<string, unknown> = { campaignId: externalCampaignId }
   if (patch.state) v3Campaign.state = patch.state.toUpperCase()
   if (patch.dailyBudget != null) v3Campaign.budget = { budget: patch.dailyBudget, budgetType: 'DAILY' }
-  if (patch.biddingStrategy) {
+  if (patch.biddingStrategy || patch.placementBidding) {
     const map: Record<string, string> = {
       legacyForSales: 'LEGACY_FOR_SALES',
       autoForSales: 'AUTO_FOR_SALES',
       manual: 'MANUAL',
     }
-    v3Campaign.dynamicBidding = { strategy: map[patch.biddingStrategy] }
+    const db: Record<string, unknown> = {}
+    if (patch.biddingStrategy) db.strategy = map[patch.biddingStrategy]
+    if (patch.placementBidding) db.placementBidding = patch.placementBidding.map((p) => ({ placement: p.placement, percentage: p.percentage }))
+    v3Campaign.dynamicBidding = db
   }
   if (patch.endDate !== undefined) v3Campaign.endDate = patch.endDate
   const response = await liveCall<unknown>({

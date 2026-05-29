@@ -39,6 +39,10 @@ export function CampaignDetailCockpit({ campaign, history }: { campaign: Campaig
   const [searchTerms, setSearchTerms] = useState<Array<Record<string, unknown>> | null>(null)
   const [placements, setPlacements] = useState<Array<Record<string, unknown>> | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
+  const [placeAdj, setPlaceAdj] = useState<Record<string, string>>({ PLACEMENT_TOP: '0', PLACEMENT_PRODUCT_PAGE: '0', PLACEMENT_REST_OF_SEARCH: '0' })
+  const [placeStrat, setPlaceStrat] = useState(campaign.biddingStrategy?.toLowerCase().includes('auto') ? 'autoForSales' : campaign.biddingStrategy?.toLowerCase().includes('manual') ? 'manual' : 'legacyForSales')
+  const [placeSaving, setPlaceSaving] = useState(false)
+  const [placeMsg, setPlaceMsg] = useState('')
   const firstAg = campaign.adGroups[0]?.id ?? ''
   const [tForm, setTForm] = useState({ open: false, adGroupId: firstAg, kind: 'PRODUCT' as 'PRODUCT' | 'CATEGORY' | 'AUTO' | 'NEGATIVE', value: '', auto: 'CLOSE_MATCH', bid: '0.50', saving: false, msg: '' })
 
@@ -61,7 +65,19 @@ export function CampaignDetailCockpit({ campaign, history }: { campaign: Campaig
     if (placements != null) return
     const r = await fetch(`${getBackendUrl()}/api/advertising/campaigns/${campaign.id}/placements`, { cache: 'no-store' }).then((x) => x.json()).catch(() => ({ placements: [] }))
     setPlacements(r.placements ?? [])
-  }, [placements, campaign.id])
+    const seed: Record<string, string> = {}
+    for (const p of (r.placements ?? []) as Array<Record<string, unknown>>) { const k = String(p.placement ?? ''); if (k in placeAdj && Number(p.adjustmentPct) > 0) seed[k] = String(p.adjustmentPct) }
+    if (Object.keys(seed).length) setPlaceAdj((a) => ({ ...a, ...seed }))
+  }, [placements, campaign.id, placeAdj])
+  const savePlacements = async () => {
+    setPlaceSaving(true); setPlaceMsg('')
+    try {
+      const adjustments = Object.entries(placeAdj).map(([placement, v]) => ({ placement, percentage: Math.max(0, Math.min(900, Math.round(parseFloat(v) || 0))) }))
+      const r = await fetch(`${getBackendUrl()}/api/advertising/campaigns/${campaign.id}/placements`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adjustments, biddingStrategy: placeStrat }) }).then((x) => x.json())
+      if (r?.error) throw new Error(r.error)
+      setPlaceMsg(`✓ saved (${r.mode})`)
+    } catch (e) { setPlaceMsg((e as Error).message) } finally { setPlaceSaving(false) }
+  }
   useEffect(() => { if (tab === 'searchterms') void loadSearchTerms(); if (tab === 'placements') void loadPlacements() }, [tab, loadSearchTerms, loadPlacements])
 
   const saveBid = async (t: Target) => {
@@ -173,8 +189,23 @@ export function CampaignDetailCockpit({ campaign, history }: { campaign: Campaig
         )}
         {tab === 'placements' && (
           placements == null ? <div className="p-6 text-center text-slate-400 text-sm">Loading…</div> :
+          <><div className="border-b border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/40 px-3 py-3">
+            <div className="flex flex-wrap items-end gap-3">
+              <span className="text-xs font-medium text-slate-600 dark:text-slate-300">Bid adjustments by placement</span>
+              {([['PLACEMENT_TOP', 'Top of search'], ['PLACEMENT_PRODUCT_PAGE', 'Product pages'], ['PLACEMENT_REST_OF_SEARCH', 'Rest of search']] as const).map(([k, label]) => (
+                <label key={k} className="flex flex-col text-[11px] text-slate-500">{label}
+                  <span className="mt-0.5 inline-flex items-center gap-1"><input type="number" min="0" max="900" step="1" value={placeAdj[k]} onChange={(e) => setPlaceAdj((a) => ({ ...a, [k]: e.target.value }))} className="w-20 px-2 py-1 text-sm rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-right" /><span className="text-slate-400">%</span></span></label>
+              ))}
+              <label className="flex flex-col text-[11px] text-slate-500">Bidding strategy
+                <select value={placeStrat} onChange={(e) => setPlaceStrat(e.target.value)} className="mt-0.5 px-2 py-1 text-sm rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900">
+                  <option value="legacyForSales">Down only</option><option value="autoForSales">Up and down</option><option value="manual">Fixed</option>
+                </select></label>
+              <button onClick={savePlacements} disabled={placeSaving} className="px-3 py-1 text-sm rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50">{placeSaving ? 'Saving…' : 'Save adjustments'}</button>
+              {placeMsg && <span className={`text-xs ${placeMsg.startsWith('✓') ? 'text-emerald-600' : 'text-rose-600'}`}>{placeMsg}</span>}
+            </div>
+          </div>
           <table className="w-full text-sm"><thead className="bg-slate-50 dark:bg-slate-900/60 text-xs text-slate-500"><tr><th className="text-left px-3 py-2">Placement</th><th className="text-right px-3 py-2">Adjustment</th><th className="text-right px-3 py-2">Impr</th><th className="text-right px-3 py-2">Clicks</th><th className="text-right px-3 py-2">Cost</th><th className="text-right px-3 py-2">Orders</th></tr></thead>
-          <tbody className="divide-y divide-slate-100 dark:divide-slate-800">{placements.length === 0 ? <tr><td colSpan={6} className="px-3 py-6 text-center text-slate-400 text-xs">No placement data yet.</td></tr> : placements.map((p, i) => <tr key={i} className="hover:bg-slate-50 dark:hover:bg-slate-900/40"><td className="px-3 py-1.5">{String(p.placement ?? '')}</td><td className="px-3 py-1.5 text-right tabular-nums">{Number(p.adjustmentPct ?? 0)}%</td><td className="px-3 py-1.5 text-right tabular-nums">{num(Number(p.impressions ?? 0))}</td><td className="px-3 py-1.5 text-right tabular-nums">{num(Number(p.clicks ?? 0))}</td><td className="px-3 py-1.5 text-right tabular-nums">{eur(Number(p.costMicros ?? 0) / 10000)}</td><td className="px-3 py-1.5 text-right tabular-nums">{num(Number(p.orders7d ?? 0))}</td></tr>)}</tbody></table>
+          <tbody className="divide-y divide-slate-100 dark:divide-slate-800">{placements.length === 0 ? <tr><td colSpan={6} className="px-3 py-6 text-center text-slate-400 text-xs">No placement data yet.</td></tr> : placements.map((p, i) => <tr key={i} className="hover:bg-slate-50 dark:hover:bg-slate-900/40"><td className="px-3 py-1.5">{String(p.placement ?? '')}</td><td className="px-3 py-1.5 text-right tabular-nums">{Number(p.adjustmentPct ?? 0)}%</td><td className="px-3 py-1.5 text-right tabular-nums">{num(Number(p.impressions ?? 0))}</td><td className="px-3 py-1.5 text-right tabular-nums">{num(Number(p.clicks ?? 0))}</td><td className="px-3 py-1.5 text-right tabular-nums">{eur(Number(p.costMicros ?? 0) / 10000)}</td><td className="px-3 py-1.5 text-right tabular-nums">{num(Number(p.orders7d ?? 0))}</td></tr>)}</tbody></table></>
         )}
         {tab === 'history' && (
           <table className="w-full text-sm"><thead className="bg-slate-50 dark:bg-slate-900/60 text-xs text-slate-500"><tr><th className="text-left px-3 py-2">Field</th><th className="text-left px-3 py-2">Change</th><th className="text-left px-3 py-2">By</th><th className="text-right px-3 py-2">When</th></tr></thead>

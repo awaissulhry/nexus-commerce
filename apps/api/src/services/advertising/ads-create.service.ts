@@ -16,7 +16,7 @@ import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import {
   createCampaign, createAdGroup, createKeyword, createProductAd,
-  createTarget, createNegativeProductTarget,
+  createTarget, createNegativeProductTarget, updateCampaign,
   type AdsRegion,
 } from './ads-api-client.js'
 import { checkAdsWriteGate } from './ads-write-gate.js'
@@ -151,6 +151,36 @@ export async function createTargetLocal(input: NewTarget): Promise<{ id: string;
   await audit('create_target', 'AD_TARGET', t.id, { kind: input.kind, value: input.value, externalId, mode }, input.userId)
   logger.info('[AX2.1] createTargetLocal', { id: t.id, kind: input.kind, externalId, mode })
   return { id: t.id, externalTargetId: externalId, mode }
+}
+
+// ── AX2.2 — placement bid adjustments (top-of-search / product-pages /
+// rest-of-search), stored in Campaign.dynamicBidding JSON + pushed to
+// Amazon's dynamicBidding.placementBidding behind the write gate. ───────
+export interface PlacementBiddingInput {
+  campaignId: string
+  adjustments: Array<{ placement: string; percentage: number }>
+  biddingStrategy?: 'legacyForSales' | 'autoForSales' | 'manual'
+  userId?: string
+}
+export async function updatePlacementBidding(input: PlacementBiddingInput): Promise<{ ok: boolean; adjustments: Array<{ placement: string; percentage: number }>; mode: string }> {
+  const c = await prisma.campaign.findUnique({ where: { id: input.campaignId }, select: { externalCampaignId: true, marketplace: true, dynamicBidding: true } })
+  if (!c) throw new Error('campaign not found')
+  const adjustments = input.adjustments
+    .filter((a) => a.placement)
+    .map((a) => ({ placement: a.placement, percentage: Math.max(0, Math.min(900, Math.round(a.percentage))) }))
+  const db = { ...((c.dynamicBidding as Record<string, unknown>) ?? {}), placementBidding: adjustments }
+  let mode = 'local'
+  if (c.externalCampaignId && c.marketplace) {
+    const ctx = await resolveCtx(c.marketplace)
+    if (ctx) {
+      const gate = await checkAdsWriteGate({ marketplace: c.marketplace, payloadValueCents: 0 })
+      if (gate.allowed) { const r = await updateCampaign(ctx, c.externalCampaignId, { placementBidding: adjustments, biddingStrategy: input.biddingStrategy }); mode = r.mode }
+    }
+  }
+  await prisma.campaign.update({ where: { id: input.campaignId }, data: { dynamicBidding: db as never, ...(input.biddingStrategy ? { biddingStrategy: input.biddingStrategy === 'autoForSales' ? 'AUTO_FOR_SALES' : input.biddingStrategy === 'manual' ? 'MANUAL' : 'LEGACY_FOR_SALES' } : {}) } })
+  await audit('update_placement_bidding', 'CAMPAIGN', input.campaignId, { adjustments, mode }, input.userId)
+  logger.info('[AX2.2] updatePlacementBidding', { campaignId: input.campaignId, adjustments, mode })
+  return { ok: true, adjustments, mode }
 }
 
 export interface NewNegativeProductTarget { adGroupId: string; asin: string; userId?: string }

@@ -245,6 +245,15 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // ── PATCH placement bid adjustments (AX2.2) ─────────────────────────
+  fastify.patch('/advertising/campaigns/:id/placements', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const b = request.body as { adjustments?: Array<{ placement: string; percentage: number }>; biddingStrategy?: string }
+    if (!Array.isArray(b?.adjustments)) { reply.status(400); return { error: 'adjustments[] required' } }
+    const { updatePlacementBidding } = await import('../services/advertising/ads-create.service.js')
+    try { return await updatePlacementBidding({ campaignId: id, adjustments: b.adjustments, biddingStrategy: b.biddingStrategy as never }) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
+  })
+
   // ── GET /advertising/fba-storage-age/:productId ─────────────────────
   fastify.get('/advertising/fba-storage-age/:productId', async (request, _reply) => {
     const { productId } = request.params as { productId: string }
