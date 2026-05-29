@@ -686,6 +686,24 @@ const marketingOsRoutes: FastifyPluginAsync = async (app) => {
     return { queueId: r.queueId, processed, note: 'No-op-value write (current budget → itself). status=live-success means the live path works.' }
   })
 
+  // ── eBay live sync (P9 live) ──────────────────────────────────────────
+  // Pulls Promoted Listings campaigns from eBay's Marketing API (reusing
+  // the existing eBay OAuth) into EbayCampaign, then mirrors to
+  // MarketingCampaign. Requires the connected token to carry sell.marketing
+  // (re-authorize once after the scope addition). Reports a 403 hint if not.
+  app.post('/marketing/os/sync/ebay', async (_request, reply) => {
+    try {
+      const { syncEbayCampaigns } = await import('../services/marketing/ebay-marketing-api.service.js')
+      const sync = await syncEbayCampaigns()
+      const { backfillEbayShadow } = await import('../services/marketing/ebay-backfill.service.js')
+      const mirror = await backfillEbayShadow({ apply: true })
+      return { sync, mirror }
+    } catch (err) {
+      reply.status(500)
+      return { error: (err as Error)?.message ?? 'ebay sync failed' }
+    }
+  })
+
   // ── eBay shadow backfill trigger (P9) ─────────────────────────────────
   // Mirrors the Amazon backfill — populates the eBay lens from the legacy
   // EbayCampaign table (no creds needed). Defaults dry-run; ?mode=apply writes.

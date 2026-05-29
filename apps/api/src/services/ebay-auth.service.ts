@@ -76,6 +76,10 @@ export class EbayAuthService {
         "https://api.ebay.com/oauth/api_scope/sell.account",
         "https://api.ebay.com/oauth/api_scope/sell.inventory",
         "https://api.ebay.com/oauth/api_scope/sell.fulfillment",
+        // UM.9 — Promoted Listings (eBay Marketing API). Additive; takes
+        // effect on the next operator re-authorization (existing tokens
+        // keep their current scopes until re-consent).
+        "https://api.ebay.com/oauth/api_scope/sell.marketing",
       ].join(" "),
       state,
     });
