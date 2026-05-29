@@ -1,0 +1,27 @@
+{
+  "name": "@nexus/bidding-engine",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Hybrid bidding engine microservice — inventory-elasticity bid optimization over BullMQ with native 429 token-bucket throttling. Isolated from the primary Fastify app; talks to it over internal REST.",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "bullmq": "^5.76.2",
+    "dotenv": "^17.4.2",
+    "fastify": "^5.0.0",
+    "ioredis": "^5.10.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.21.0",
+    "typescript": "^5.6.0",
+    "vitest": "^2.0.0"
+  }
+}
