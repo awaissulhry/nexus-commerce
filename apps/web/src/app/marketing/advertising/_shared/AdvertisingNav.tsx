@@ -15,7 +15,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Activity, Warehouse, TrendingUp, Bot, Wallet, Rss, Search, ClipboardList, BarChart2, Lightbulb, Stethoscope, Wand2, Sprout } from 'lucide-react'
+import { Activity, Warehouse, TrendingUp, Bot, Wallet, Rss, Search, ClipboardList, BarChart2, Lightbulb, Stethoscope, Wand2, Sprout, Gauge } from 'lucide-react'
 
 import type { LucideIcon } from 'lucide-react'
 
@@ -45,6 +45,12 @@ const TABS: Tab[] = [
     label: 'Harvesting',
     icon: Sprout,
     matchPrefix: '/marketing/advertising/harvest',
+  },
+  {
+    href: '/marketing/advertising/bid-optimizer',
+    label: 'Bid optimizer',
+    icon: Gauge,
+    matchPrefix: '/marketing/advertising/bid-optimizer',
   },
   {
     href: '/marketing/advertising/storage-age',

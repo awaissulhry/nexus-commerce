@@ -1070,6 +1070,8 @@ async function start() {
       const { startBudgetPoolRebalanceCron } = await import('./jobs/budget-pool-rebalance.job.js');
       // Side-effect: registers the 8 action handlers into ACTION_HANDLERS.
       await import('./services/advertising/automation-action-handlers.js');
+      // AX.8 — registers bid_to_target_acos handler.
+      await import('./services/advertising/ads-bid-optimizer.service.js');
       startAllAdvertisingCrons();
       startAdvertisingRuleEvaluatorCron();
       startBudgetPoolRebalanceCron();

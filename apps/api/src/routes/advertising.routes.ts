@@ -2373,6 +2373,18 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     try { return await applyPlan({ dailyBudgetEur: 10, defaultBidEur: 0.5, ...(b as object) } as never) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
   })
 
+  // ── AX.8: Target-ACOS bid optimization ──────────────────────────────
+  fastify.get('/advertising/bid-optimizer/preview', async (request, reply) => {
+    const q = request.query as Record<string, string | undefined>
+    const { previewBidOptimization } = await import('../services/advertising/ads-bid-optimizer.service.js')
+    reply.header('Cache-Control', 'private, max-age=30')
+    return previewBidOptimization({ targetAcos: q.targetAcos ? Number(q.targetAcos) : undefined, campaignId: q.campaignId })
+  })
+  fastify.post('/advertising/bid-optimizer/apply', async (request, reply) => {
+    const { applyBidOptimization } = await import('../services/advertising/ads-bid-optimizer.service.js')
+    try { return await applyBidOptimization((request.body ?? { changes: [] }) as never) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
+  })
+
   // ── AX.7: Negative + keyword harvesting ─────────────────────────────
   fastify.get('/advertising/harvest/preview', async (request, reply) => {
     const q = request.query as Record<string, string | undefined>
