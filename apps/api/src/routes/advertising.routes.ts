@@ -210,6 +210,41 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     return { items, count: items.length }
   })
 
+  // ── GET /advertising/campaigns/:id/placements (AX.3) ────────────────
+  // Placement-level performance + current bid adjustment % (from
+  // Campaign.dynamicBidding). Read-only; placement WRITES land in AX.8.
+  fastify.get('/advertising/campaigns/:id/placements', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const campaign = await prisma.campaign.findUnique({
+      where: { id },
+      select: { externalCampaignId: true, dynamicBidding: true },
+    })
+    if (!campaign?.externalCampaignId) {
+      reply.header('Cache-Control', 'private, max-age=60')
+      return { placements: [] }
+    }
+    const rows = await prisma.amazonAdsPlacementReport.groupBy({
+      by: ['placement'],
+      where: { campaignId: campaign.externalCampaignId },
+      _sum: { impressions: true, clicks: true, costMicros: true, sales7dCents: true, orders7d: true },
+    })
+    const db = (campaign.dynamicBidding ?? {}) as { placementBidding?: Array<{ placement: string; percentage: number }> }
+    const adj: Record<string, number> = {}
+    for (const p of db.placementBidding ?? []) adj[p.placement] = p.percentage
+    reply.header('Cache-Control', 'private, max-age=60')
+    return {
+      placements: rows.map((r) => ({
+        placement: r.placement,
+        impressions: r._sum.impressions ?? 0,
+        clicks: r._sum.clicks ?? 0,
+        costMicros: (r._sum.costMicros ?? 0n).toString(),
+        sales7dCents: r._sum.sales7dCents ?? 0,
+        orders7d: r._sum.orders7d ?? 0,
+        adjustmentPct: adj[r.placement] ?? 0,
+      })),
+    }
+  })
+
   // ── GET /advertising/fba-storage-age/:productId ─────────────────────
   fastify.get('/advertising/fba-storage-age/:productId', async (request, _reply) => {
     const { productId } = request.params as { productId: string }
