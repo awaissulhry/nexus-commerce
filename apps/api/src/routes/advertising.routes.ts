@@ -2454,6 +2454,19 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     try { return await ingestMarketingStream(messages as never) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
   })
 
+  // ── AX3.5: iROAS / incrementality (modeled) ─────────────────────────
+  fastify.get('/advertising/incrementality', async (request, reply) => {
+    const q = request.query as Record<string, string | undefined>
+    const { analyzeIncrementality } = await import('../services/advertising/ads-incrementality.service.js')
+    reply.header('Cache-Control', 'private, max-age=120')
+    return analyzeIncrementality({
+      windowDays: q.windowDays ? Number(q.windowDays) : undefined,
+      brandTerms: q.brandTerms ? q.brandTerms.split(',') : undefined,
+      brandedFactor: q.brandedFactor ? Number(q.brandedFactor) : undefined,
+      nonBrandedFactor: q.nonBrandedFactor ? Number(q.nonBrandedFactor) : undefined,
+    })
+  })
+
   // ── AX3.1: Retail-readiness guard ───────────────────────────────────
   fastify.get('/advertising/retail-readiness', async (request, reply) => {
     const q = request.query as Record<string, string | undefined>
