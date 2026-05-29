@@ -2373,6 +2373,14 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     try { return await applyPlan({ dailyBudgetEur: 10, defaultBidEur: 0.5, ...(b as object) } as never) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
   })
 
+  // ── AX.11: Search-term n-gram analysis ──────────────────────────────
+  fastify.get('/advertising/ngrams', async (request, reply) => {
+    const q = request.query as Record<string, string | undefined>
+    const { analyzeNgrams } = await import('../services/advertising/ads-ngram.service.js')
+    reply.header('Cache-Control', 'private, max-age=120')
+    return analyzeNgrams({ windowDays: q.windowDays ? Number(q.windowDays) : undefined })
+  })
+
   // ── AX.10: Budget pacing ────────────────────────────────────────────
   fastify.get('/advertising/pacing/preview', async (request, reply) => {
     const q = request.query as Record<string, string | undefined>
