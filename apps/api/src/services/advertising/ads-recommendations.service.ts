@@ -16,8 +16,9 @@ import { previewBidOptimization, applyBidOptimization } from './ads-bid-optimize
 import { previewHarvest, applyHarvest, type HarvestCandidate } from './ads-harvest.service.js'
 import { previewPacing, applyPacing } from './ads-budget-pacing.service.js'
 import { analyzeShareOfVoice } from './ads-impression-share.service.js'
+import { analyzeRetailReadiness, applyRetailGuard } from './ads-retail-readiness.service.js'
 
-export type RecCategory = 'bid' | 'negative' | 'graduate' | 'budget' | 'sov'
+export type RecCategory = 'bid' | 'negative' | 'graduate' | 'budget' | 'sov' | 'retail'
 export type RecSeverity = 'high' | 'medium' | 'low'
 export interface Recommendation {
   id: string
@@ -38,11 +39,12 @@ export interface RecommendationsResult {
 
 export async function buildRecommendations(opts: { windowDays?: number; targetAcos?: number } = {}): Promise<RecommendationsResult> {
   const windowDays = opts.windowDays ?? 30
-  const [bid, harvest, pacing, sov] = await Promise.all([
+  const [bid, harvest, pacing, sov, retail] = await Promise.all([
     previewBidOptimization({ targetAcos: opts.targetAcos }),
     previewHarvest({ windowDays }),
     previewPacing(),
     analyzeShareOfVoice({ windowDays, limit: 500 }),
+    analyzeRetailReadiness({}),
   ])
 
   const recs: Recommendation[] = []
@@ -120,13 +122,27 @@ export async function buildRecommendations(opts: { windowDays?: number; targetAc
     })
   }
 
+  // Retail readiness — campaigns advertising only unsellable products (the
+  // "Inventory Shortage Optimization" strategy). High severity: pure waste.
+  for (const c of retail.campaigns.filter((x) => x.verdict === 'pause').slice(0, 50)) {
+    recs.push({
+      id: `retail:${c.campaignId}`,
+      category: 'retail',
+      severity: 'high',
+      title: `Pause ${c.name} — unsellable`,
+      detail: c.reason,
+      estImpactCents: 0,
+      apply: { kind: 'retail-pause', payload: { campaignIds: [c.campaignId] } },
+    })
+  }
+
   recs.sort((a, b) => {
     const sev = { high: 0, medium: 1, low: 2 }
     if (sev[a.severity] !== sev[b.severity]) return sev[a.severity] - sev[b.severity]
     return b.estImpactCents - a.estImpactCents
   })
 
-  const counts: Record<RecCategory, number> = { bid: 0, negative: 0, graduate: 0, budget: 0, sov: 0 }
+  const counts: Record<RecCategory, number> = { bid: 0, negative: 0, graduate: 0, budget: 0, sov: 0, retail: 0 }
   for (const r of recs) counts[r.category]++
   const potentialMonthlyImpactCents = recs.reduce((s, r) => s + (r.category === 'sov' ? 0 : r.estImpactCents), 0)
 
@@ -143,6 +159,8 @@ export async function applyRecommendation(args: { kind: string; payload: Record<
       return { ok: true, result: await applyHarvest({ negatives: args.payload.negatives as HarvestCandidate[], userId: args.userId }) }
     case 'harvest-graduate':
       return { ok: true, result: await applyHarvest({ graduations: args.payload.graduations as Array<HarvestCandidate & { bidEur?: number }>, userId: args.userId }) }
+    case 'retail-pause':
+      return { ok: true, result: await applyRetailGuard({ campaignIds: args.payload.campaignIds as string[], actor: args.userId }) }
     default:
       throw new Error(`unknown recommendation kind: ${args.kind}`)
   }
