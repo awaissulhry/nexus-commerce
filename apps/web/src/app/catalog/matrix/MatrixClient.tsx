@@ -186,6 +186,15 @@ export default function MatrixClient() {
     } catch { /* ignore */ }
   }, [sortConfig])
 
+  // ── CC.1.2 — faceted filters (client-side; all rows are loaded) ──
+  const [statusFilter, setStatusFilter] = useState<Set<string>>(new Set())
+  const [stockFilter, setStockFilter] = useState<'all' | 'in' | 'low' | 'out'>('all')
+  const LOW_STOCK = 10
+  const toggleStatus = useCallback((s: string) => {
+    setStatusFilter((prev) => { const n = new Set(prev); n.has(s) ? n.delete(s) : n.add(s); return n })
+  }, [])
+  const filtersActive = statusFilter.size > 0 || stockFilter !== 'all'
+
   // ── C.4 — column visibility state (localStorage-persisted) ──────
   const [pickerOpen, setPickerOpen] = useState(false)
   const [visibleIds, setVisibleIds] = useState<Set<string>>(() => {
@@ -489,6 +498,15 @@ export default function MatrixClient() {
         )
       if (!parentMatches) continue
 
+      // CC.1.2 — status + stock facets (parent-level).
+      if (statusFilter.size > 0 && !statusFilter.has(row.status)) continue
+      if (stockFilter !== 'all') {
+        const s = row.totalStock ?? 0
+        if (stockFilter === 'out' && s > 0) continue
+        if (stockFilter === 'in' && s <= 0) continue
+        if (stockFilter === 'low' && !(s > 0 && s <= LOW_STOCK)) continue
+      }
+
       out.push({ kind: 'parent', parent: row, key: row.id })
       if (expanded.has(row.id)) {
         for (const v of row.variants) {
@@ -497,7 +515,7 @@ export default function MatrixClient() {
       }
     }
     return out
-  }, [data, expanded, search, sortConfig])
+  }, [data, expanded, search, sortConfig, statusFilter, stockFilter])
 
   // ── Virtualizer ─────────────────────────────────────────────────
   const parentRef = useRef<HTMLDivElement>(null)
@@ -605,14 +623,52 @@ export default function MatrixClient() {
             />
           </div>
         </div>
-        <div className="relative max-w-md">
-          <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-400" />
-          <Input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search SKU, name, brand…"
-            className="pl-7"
-          />
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="relative max-w-md flex-1 min-w-[220px]">
+            <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-400" />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search SKU, name, brand…"
+              className="pl-7"
+            />
+          </div>
+          {/* CC.1.2 — status facet chips */}
+          {STATUS_OPTIONS.map((s) => (
+            <button
+              key={s.value}
+              type="button"
+              onClick={() => toggleStatus(s.value)}
+              className={cn(
+                'px-2 py-1 text-xs rounded border transition-colors',
+                statusFilter.has(s.value)
+                  ? 'bg-blue-50 dark:bg-blue-950/30 border-blue-400 text-blue-700 dark:text-blue-300'
+                  : 'bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 hover:border-zinc-400',
+              )}
+            >
+              {s.label}
+            </button>
+          ))}
+          {/* CC.1.2 — stock facet */}
+          <select
+            value={stockFilter}
+            onChange={(e) => setStockFilter(e.target.value as typeof stockFilter)}
+            className="px-2 py-1 text-xs rounded border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-300"
+          >
+            <option value="all">All stock</option>
+            <option value="in">In stock</option>
+            <option value="low">Low (≤{LOW_STOCK})</option>
+            <option value="out">Out of stock</option>
+          </select>
+          {filtersActive && (
+            <button
+              type="button"
+              onClick={() => { setStatusFilter(new Set()); setStockFilter('all') }}
+              className="text-xs text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 underline-offset-2 hover:underline"
+            >
+              Clear filters
+            </button>
+          )}
         </div>
       </div>
 
