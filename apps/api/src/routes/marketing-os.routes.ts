@@ -639,6 +639,53 @@ const marketingOsRoutes: FastifyPluginAsync = async (app) => {
     }
   })
 
+  // ── Amazon cutover readiness + guarded test (P8) ──────────────────────
+  // Status: what's needed for unified Amazon writes to go live. The flip is
+  // deliberate + reversible (NEXUS_MARKETING_AMAZON_LIVE). Nothing here
+  // writes live unless ALL gates are green.
+  app.get('/marketing/os/cutover/amazon/status', async (_request, reply) => {
+    reply.header('Cache-Control', 'private, max-age=15')
+    const { adsMode } = await import('../services/advertising/ads-api-client.js')
+    const conns = await prisma.amazonAdsConnection.findMany({
+      where: { isActive: true },
+      select: { marketplace: true, mode: true, writesEnabledAt: true },
+    })
+    const marketingLive = process.env.NEXUS_MARKETING_AMAZON_LIVE === '1'
+    const mode = adsMode()
+    const writeReadyConns = conns.filter((c) => c.mode === 'production' && c.writesEnabledAt != null)
+    return {
+      gates: {
+        NEXUS_MARKETING_AMAZON_LIVE: marketingLive,
+        adsMode: mode,
+        productionConnectionsWithWritesEnabled: writeReadyConns.length,
+      },
+      ready: marketingLive && mode === 'live' && writeReadyConns.length > 0,
+      connections: conns.map((c) => ({ marketplace: c.marketplace, mode: c.mode, writesEnabled: c.writesEnabledAt != null })),
+      note: 'Unified Amazon writes fire only when all three gates are green. Until then the cockpit/automation run sandbox (no external write). Legacy Trading Desk stays authoritative.',
+    }
+  })
+
+  // Guarded test: writes a campaign's CURRENT budget back to itself — a
+  // no-op-VALUE live write that exercises the end-to-end live path without
+  // changing actual spend. Safe to run repeatedly.
+  app.post('/marketing/os/cutover/amazon/test', async (request, reply) => {
+    const q = request.query as Record<string, string | undefined>
+    if (!q.campaignId) {
+      reply.status(400)
+      return { error: 'campaignId required' }
+    }
+    const c = await prisma.marketingCampaign.findUnique({ where: { id: q.campaignId }, select: { id: true, channel: true, budgetCents: true } })
+    if (!c || c.channel !== 'AMAZON') {
+      reply.status(404)
+      return { error: 'Amazon campaign not found' }
+    }
+    const { enqueueCampaignMutation, processMarketingSyncRow } = await import('../services/marketing/marketing-mutation.service.js')
+    // No-op value: write current budget back. applyImmediately skips grace.
+    const r = await enqueueCampaignMutation({ campaignId: c.id, syncType: 'MKT_BUDGET_UPDATE', payload: { budgetCents: c.budgetCents ?? 100 }, applyImmediately: true, userId: 'cutover-test' })
+    const processed = await processMarketingSyncRow(r.queueId)
+    return { queueId: r.queueId, processed, note: 'No-op-value write (current budget → itself). status=live-success means the live path works.' }
+  })
+
   // ── eBay shadow backfill trigger (P9) ─────────────────────────────────
   // Mirrors the Amazon backfill — populates the eBay lens from the legacy
   // EbayCampaign table (no creds needed). Defaults dry-run; ?mode=apply writes.

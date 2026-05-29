@@ -167,12 +167,47 @@ class AmazonAdapter implements ChannelAdapter {
     return rows.map(normalizeMetric)
   }
 
-  async applyMutation(_mutation: NormalizedMutation, _ctx: AdapterCtx): Promise<MutationResult> {
-    throw new Error('AmazonAdapter.applyMutation is not enabled until P5 (read-only shadow in P2)')
+  /**
+   * P8 cutover — route unified writes through the SHIPPED live Amazon path
+   * (ads-api-client.updateCampaign, which is itself sandbox-safe via
+   * adsMode). Triple-gated: this only fires when the marketing write gate
+   * already returned mode='live' (NEXUS_MARKETING_AMAZON_LIVE=1 + adsMode
+   * live), AND here we additionally require an active production
+   * AmazonAdsConnection with writesEnabledAt (the AD.4 two-key). Any miss →
+   * sandbox-style success (no external write).
+   */
+  async applyMutation(mutation: NormalizedMutation, ctx: AdapterCtx): Promise<MutationResult> {
+    const conn = await prisma.amazonAdsConnection.findFirst({
+      where: { marketplace: ctx.marketplace, isActive: true },
+      select: { profileId: true, region: true, mode: true, writesEnabledAt: true },
+    })
+    const writeReady = conn && conn.mode === 'production' && conn.writesEnabledAt != null
+    if (!writeReady || !mutation.externalId) {
+      logger.info('[UM][AMAZON] write not ready — sandbox no-op', { marketplace: ctx.marketplace, hasConn: !!conn })
+      return { ok: true, status: 'SUCCESS', externalId: mutation.externalId ?? null, wouldChange: mutation.payload }
+    }
+
+    const { updateCampaign } = await import('../../advertising/ads-api-client.js')
+    const patch: { state?: 'enabled' | 'paused' | 'archived'; dailyBudget?: number } = {}
+    if (mutation.syncType === 'MKT_STATE_UPDATE') {
+      const s = mutation.payload.status as string
+      patch.state = s === 'ACTIVE' ? 'enabled' : s === 'PAUSED' ? 'paused' : 'archived'
+    }
+    if (mutation.syncType === 'MKT_BUDGET_UPDATE' && typeof mutation.payload.budgetCents === 'number') {
+      patch.dailyBudget = (mutation.payload.budgetCents as number) / 100 // Amazon expects EUR units
+    }
+    if (Object.keys(patch).length === 0) return { ok: true, status: 'SUCCESS', wouldChange: { noop: mutation.syncType } }
+
+    const res = await updateCampaign(
+      { profileId: conn.profileId, region: (conn.region as 'EU' | 'NA' | 'FE') ?? 'EU' },
+      mutation.externalId,
+      patch,
+    )
+    return { ok: res.ok, status: res.ok ? 'SUCCESS' : 'FAILED', externalId: mutation.externalId, channelResponseId: `amzn:${res.mode}` }
   }
 
-  async setBudget(_externalId: string, _cents: number, _ctx: AdapterCtx): Promise<MutationResult> {
-    throw new Error('AmazonAdapter.setBudget is not enabled until P7 (read-only shadow in P2)')
+  async setBudget(externalId: string, cents: number, ctx: AdapterCtx): Promise<MutationResult> {
+    return this.applyMutation({ syncType: 'MKT_BUDGET_UPDATE', externalId, entityType: 'CAMPAIGN', payload: { budgetCents: cents } }, ctx)
   }
 }
 

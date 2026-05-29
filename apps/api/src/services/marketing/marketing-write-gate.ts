@@ -39,9 +39,12 @@ function maxWriteValueCents(): number {
 function channelLiveEnabled(channel: MktChannel): boolean {
   switch (channel) {
     case 'AMAZON':
-      // Amazon live via the UNIFIED path waits for P8 cutover. Until then
-      // the legacy ads-mutation path stays authoritative; unified = sandbox.
-      return false
+      // P8 cutover: unified Amazon writes go live ONLY when explicitly
+      // enabled (NEXUS_MARKETING_AMAZON_LIVE=1). Default OFF → sandbox, so
+      // deploying the cutover machinery changes nothing until the operator
+      // flips this. The adapter ALSO requires adsMode=live + an active
+      // production connection with writesEnabledAt (defense in depth).
+      return process.env.NEXUS_MARKETING_AMAZON_LIVE === '1'
     case 'EBAY':
       return process.env.NEXUS_MARKETING_WRITES_EBAY === '1'
     case 'SHOPIFY':
