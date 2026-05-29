@@ -20,6 +20,7 @@ import Link from 'next/link'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts'
 import { Search, RefreshCw, SlidersHorizontal, Play, Pause, Download, FileDown, Rows, AlignJustify } from 'lucide-react'
 import { KpiStrip, PreferencesModal, type KpiTileSpec, type PreferencesValue, type PreferencesColumnSpec } from '@/app/_shared/grid-lens'
+import { StatusChip } from '@/app/_shared/ads-ui'
 import { getBackendUrl } from '@/lib/backend-url'
 
 interface CampaignBase {
@@ -67,11 +68,6 @@ const x2 = (v: number | null | undefined) => (v == null ? '—' : `${v.toFixed(2
 
 // ── Column registry (Amazon-grade) ───────────────────────────────────────
 interface ColDef extends PreferencesColumnSpec { render: (r: Row) => React.ReactNode; align?: 'right' | 'left'; num?: boolean }
-const STATUS_CHIP: Record<string, string> = {
-  ENABLED: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300',
-  PAUSED: 'bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300',
-  ARCHIVED: 'bg-slate-100 text-slate-500 dark:bg-slate-800', DRAFT: 'bg-slate-100 text-slate-600 dark:bg-slate-800',
-}
 
 export function AdCampaignsCockpit({ initial }: { initial: { items: CampaignBase[]; count: number } }) {
   const [rowsRaw, setRowsRaw] = useState<CampaignBase[]>(initial.items)
@@ -370,7 +366,7 @@ function COLUMN_DEFS(
 ): ColDef[] {
   return [
     { key: 'name', label: 'Campaign', width: 280, render: (r) => <Link href={`/marketing/advertising/campaigns/${r.base.id}`} className="font-medium text-blue-600 hover:underline truncate block max-w-[260px]">{r.base.name}</Link> },
-    { key: 'status', label: 'Status', width: 100, render: (r) => <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs ${STATUS_CHIP[r.base.status] ?? STATUS_CHIP.DRAFT}`}><span className={`w-1.5 h-1.5 rounded-full ${r.base.status === 'ENABLED' ? 'bg-emerald-500' : r.base.status === 'PAUSED' ? 'bg-amber-500' : 'bg-slate-400'}`} />{r.base.status}</span> },
+    { key: 'status', label: 'Status', width: 100, render: (r) => <StatusChip status={r.base.status} /> },
     { key: 'type', label: 'Type', width: 60, render: (r) => <span className="text-xs text-slate-500">{r.base.type}</span> },
     { key: 'adProduct', label: 'Ad product', width: 150, render: (r) => <span className="text-xs text-slate-500">{r.base.adProduct ?? '—'}</span> },
     { key: 'marketplace', label: 'Market', width: 70, render: (r) => <span className="text-xs">{r.base.marketplace ?? '—'}</span> },

@@ -6,12 +6,10 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Zap } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
+import { eur0 as eur, pct } from '@/app/_shared/ads-ui'
 
 interface Entity { id: string; label: string; status?: string | null; impressions: number; clicks: number; spendCents: number; salesCents: number; orders: number; acos: number | null }
 interface Result { date: string | null; counts: { enabled: number; paused: number }; campaigns: Entity[]; keywords: Entity[]; asins: Entity[]; placements: Array<{ placement: string; spendCents: number; salesCents: number; sharePct: number }> }
-
-const eur = (c: number) => new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(c / 100)
-const pct = (v: number | null) => (v == null ? '—' : `${(v * 100).toFixed(0)}%`)
 
 function TopList({ title, rows }: { title: string; rows: Entity[] }) {
   const max = Math.max(1, ...rows.map((r) => r.salesCents))

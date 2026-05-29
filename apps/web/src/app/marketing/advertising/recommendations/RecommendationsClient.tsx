@@ -6,14 +6,12 @@ import { useCallback, useEffect, useState } from 'react'
 import { Sparkles, Check, ArrowUpRight, AlertTriangle, X } from 'lucide-react'
 import Link from 'next/link'
 import { getBackendUrl } from '@/lib/backend-url'
+import { eur0 as eur, MetricStrip, type RecMetrics } from '@/app/_shared/ads-ui'
 
 type RecCategory = 'bid' | 'negative' | 'graduate' | 'budget' | 'sov' | 'retail'
 type RecSeverity = 'high' | 'medium' | 'low'
-interface RecMetrics { impressions?: number; clicks?: number; ctr?: number | null; spendCents?: number; salesCents?: number; orders?: number; acos?: number | null; roas?: number | null; cvr?: number | null }
 interface Recommendation { id: string; category: RecCategory; severity: RecSeverity; title: string; detail: string; estImpactCents: number; apply: { kind: string; payload: unknown } | null; metrics?: RecMetrics }
 interface RecResult { generatedAt: string; windowDays: number; counts: Record<RecCategory, number>; potentialMonthlyImpactCents: number; recommendations: Recommendation[] }
-
-const eur = (c: number) => new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(c / 100)
 const SEV_CHIP: Record<RecSeverity, string> = {
   high: 'bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300',
   medium: 'bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300',
@@ -173,28 +171,6 @@ export function RecommendationsClient() {
           })}
         </div>
       </div>
-    </div>
-  )
-}
-
-// Supporting metrics that justify a recommendation (trailing window). Only
-// renders the fields the source provided.
-function MetricStrip({ m }: { m: RecMetrics }) {
-  const eur0 = (c?: number) => (c == null ? null : new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(c / 100))
-  const num = (n?: number) => (n == null ? null : new Intl.NumberFormat('en-US').format(Math.round(n)))
-  const pc = (v?: number | null, dp = 1) => (v == null ? null : `${(v * 100).toFixed(dp)}%`)
-  const cells: Array<[string, string | null]> = [
-    ['Impr', num(m.impressions)], ['Clicks', num(m.clicks)], ['CTR', pc(m.ctr, 2)],
-    ['Spend', eur0(m.spendCents)], ['Sales', eur0(m.salesCents)], ['Orders', num(m.orders)],
-    ['ACOS', pc(m.acos)], ['ROAS', m.roas == null ? null : `${m.roas.toFixed(2)}×`], ['CVR', pc(m.cvr, 2)],
-  ]
-  const shown = cells.filter(([, v]) => v != null)
-  if (!shown.length) return null
-  return (
-    <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1.5 text-[11px] text-slate-500 dark:text-slate-400">
-      {shown.map(([k, v]) => (
-        <span key={k}><span className="text-slate-400">{k}</span> <span className="tabular-nums text-slate-600 dark:text-slate-300">{v}</span></span>
-      ))}
     </div>
   )
 }

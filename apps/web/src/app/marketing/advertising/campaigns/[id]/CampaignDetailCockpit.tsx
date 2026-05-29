@@ -13,6 +13,7 @@ import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { ChevronLeft, Check } from 'lucide-react'
 import { KpiStrip, type KpiTileSpec } from '@/app/_shared/grid-lens'
+import { StatusChip } from '@/app/_shared/ads-ui'
 import { getBackendUrl } from '@/lib/backend-url'
 import { Megaphone, MousePointerClick, ShoppingCart, TrendingUp } from 'lucide-react'
 
@@ -169,7 +170,7 @@ export function CampaignDetailCockpit({ campaign, history }: { campaign: Campaig
       <Link href="/marketing/advertising/campaigns" className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700 mb-2"><ChevronLeft size={14} /> All campaigns</Link>
       <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100">{campaign.name}</h1>
       <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 mt-1 mb-3">
-        <span className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800">{campaign.status}</span>
+        <StatusChip status={campaign.status} />
         <span>{campaign.type}</span><span>·</span><span>{campaign.marketplace ?? '—'}</span><span>·</span>
         <span>Budget {eur(Math.round(parseFloat(campaign.dailyBudget || '0') * 100))}/d</span><span>·</span>
         <span>{campaign.biddingStrategy}</span>
