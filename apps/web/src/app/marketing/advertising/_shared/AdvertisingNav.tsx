@@ -15,7 +15,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Activity, Warehouse, TrendingUp, Bot, Wallet, Rss, Search, ClipboardList, BarChart2, Lightbulb, Stethoscope, Wand2, Sprout, Gauge, Clock, Brain } from 'lucide-react'
+import { Activity, Warehouse, TrendingUp, Bot, Wallet, Rss, Search, ClipboardList, BarChart2, Lightbulb, Stethoscope, Wand2, Sprout, Gauge, Clock, Brain, Radar } from 'lucide-react'
 
 import type { LucideIcon } from 'lucide-react'
 
@@ -69,6 +69,12 @@ const TABS: Tab[] = [
     label: 'N-gram intel',
     icon: Brain,
     matchPrefix: '/marketing/advertising/ngrams',
+  },
+  {
+    href: '/marketing/advertising/share-of-voice',
+    label: 'Share of voice',
+    icon: Radar,
+    matchPrefix: '/marketing/advertising/share-of-voice',
   },
   {
     href: '/marketing/advertising/storage-age',

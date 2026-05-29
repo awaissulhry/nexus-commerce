@@ -2413,6 +2413,14 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     return analyzeNgrams({ windowDays: q.windowDays ? Number(q.windowDays) : undefined })
   })
 
+  // ── AX2.6: Share of Voice + impression-share intel ──────────────────
+  fastify.get('/advertising/share-of-voice', async (request, reply) => {
+    const q = request.query as Record<string, string | undefined>
+    const { analyzeShareOfVoice } = await import('../services/advertising/ads-impression-share.service.js')
+    reply.header('Cache-Control', 'private, max-age=120')
+    return analyzeShareOfVoice({ windowDays: q.windowDays ? Number(q.windowDays) : undefined, marketplace: q.marketplace, limit: q.limit ? Number(q.limit) : undefined })
+  })
+
   // ── AX.10: Budget pacing ────────────────────────────────────────────
   fastify.get('/advertising/pacing/preview', async (request, reply) => {
     const q = request.query as Record<string, string | undefined>
