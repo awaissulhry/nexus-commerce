@@ -2436,6 +2436,20 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     return analyzeShareOfVoice({ windowDays: q.windowDays ? Number(q.windowDays) : undefined, marketplace: q.marketplace, limit: q.limit ? Number(q.limit) : undefined })
   })
 
+  // ── AX3.14: Advertising Events log ──────────────────────────────────
+  fastify.get('/advertising/events', async (request, reply) => {
+    const q = request.query as Record<string, string | undefined>
+    const { listEvents } = await import('../services/advertising/ads-events.service.js')
+    reply.header('Cache-Control', 'private, max-age=30')
+    return listEvents({ limit: q.limit ? Number(q.limit) : undefined, source: q.source, entityType: q.entityType })
+  })
+  fastify.post('/advertising/events/custom', async (request, reply) => {
+    const b = request.body as { note?: string; entityType?: string; entityId?: string }
+    if (!b?.note) { reply.status(400); return { error: 'note required' } }
+    const { addCustomEvent } = await import('../services/advertising/ads-events.service.js')
+    try { return await addCustomEvent(b as { note: string; entityType?: string; entityId?: string }) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
+  })
+
   // ── AX3.13: Automation Health ───────────────────────────────────────
   fastify.get('/advertising/automation-health', async (_request, reply) => {
     const { analyzeAutomationHealth } = await import('../services/advertising/ads-automation-health.service.js')
