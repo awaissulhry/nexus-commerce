@@ -141,3 +141,33 @@ backend; all writes sandbox-safe behind the P8/ads-write-gate.
 3. Hourly traffic + conversion then accumulate into AmazonAdsDailyPerformance
    automatically, powering intraday bid moves + dayparting. (Until subscribed,
    the endpoint simply receives nothing.)
+
+---
+
+# Advertising parity-plus (AX2-series)
+
+Closes the gap to Pacvue / Perpetua / Intentwise / Quartile / Skai. All
+sandbox-safe; live writes behind the same P8/ads-write-gate. Tabs added:
+**Recommendations** (top) · **Share of voice**.
+
+| Phase | What | Where |
+|---|---|---|
+| AX2.1 | **Product / ASIN / category / auto / negative targeting** — v3 SP `/sp/targets` + `/sp/negativeTargets` create | Campaign detail → Targeting → "+ Add targeting" (Product ASIN · Category · Auto close/loose/substitutes/complements · Negative ASIN) |
+| AX2.2 | **Placement bid-adjustment writes** — v3 `dynamicBidding.placementBidding` | Campaign detail → Placements → top-of-search / product-pages / rest-of-search % + bidding strategy → Save |
+| AX2.3 | **Sponsored Display audiences** — `/sd/targets` (Amazon in-market/lifestyle/interests + views/purchases remarketing) | Targeting builder → Audience (SD) |
+| AX2.4 | **Cockpit UI upgrade** — toggleable multi-metric chart, CSV export, density toggle, segmented SP/SB/SD filter, status dots | `/marketing/advertising/campaigns` |
+| AX2.5 | **Bulk ops** — bulk budget +10%/−10%/set; bulksheet CSV import (id\|externalCampaignId, budget, status) | Campaigns bulk bar + toolbar import |
+| AX2.6 | **Share of Voice + impression-share intel** — within-account SOV, cannibalization, outbid / weak-CTR proxies | `/marketing/advertising/share-of-voice` |
+| AX2.7 | **AI + rules recommendations** — bid/negative/graduate/budget/SOV in one impact-ranked feed, one-click apply + Anthropic brief | `/marketing/advertising/recommendations` |
+
+**How to test (sandbox-safe):**
+- Targeting: open any campaign → Targeting → "+ Add targeting" → add an ASIN / category / auto / negative → it appears in the list (sandbox `sb-tgt-*` id; audit row written).
+- Placements: campaign → Placements → set Top-of-search 50% → Save → `mode: sandbox`; reopen to confirm persisted.
+- Bulk import: select campaigns → Export CSV; edit a budget; re-import via the import button → "✓ N updated".
+- SOV: `/share-of-voice` → SOV bars, Cannibalized/Outbid/Weak-CTR filters, CSV. (Needs search-term report data.)
+- Recommendations: `/recommendations` → AI brief + ranked feed; click **Apply** on a bid/negative/budget/graduate item (sandbox) or **Apply all high-priority**. API: `curl $BASE/../advertising/recommendations`.
+
+**Still operator-gated / optional next:** real competitive impression-share
+(needs Amazon's impression-share report subscription); `ANTHROPIC_API_KEY` on
+Railway for the AI brief (degrades to a rules summary without it); goal-based
+guided builder + Sponsored Brands creative management (assets-dependent).
