@@ -18,6 +18,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useVirtualizer } from '@tanstack/react-virtual'
 import {
   AlertCircle, ArrowUpDown, Check, ChevronDown, Copy, Layers,
   Loader2, Percent, Plus, Redo2, RefreshCw, Send, Trash2, Undo2,
@@ -698,6 +699,132 @@ export default function MatrixTab({ product, discardSignal = 0 }: Props) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [children, channelData, invData, sortBy, sortDir, selectedMarket])
 
+  // ── F.1 — Row virtualization (threshold-gated) ────────────────────────
+  // Large variant families (color × size → hundreds of rows) stay at
+  // 60fps via windowing. Below VIRTUALIZE_AT the table renders exactly as
+  // before — zero behaviour change for the common small-family case.
+  // Safe with the Excel features: all edits are address-based (CellAddr),
+  // not DOM-queried, and drag-fill is a viewport-bounded gesture.
+  const VIRTUALIZE_AT = 60
+  const ROW_PX = 41
+  const matrixScrollRef = useRef<HTMLDivElement>(null)
+  const virtualize = sortedRows.length > VIRTUALIZE_AT
+  const totalCols = axes.length + 9
+  const rowVirtualizer = useVirtualizer({
+    count: sortedRows.length,
+    getScrollElement: () => matrixScrollRef.current,
+    estimateSize: () => ROW_PX,
+    overscan: 12,
+  })
+
+  // Extracted so both the plain map and the virtualized window render an
+  // identical row.
+  const renderRow = (child: ChildRow) => {
+    const basePriceAddr: MasterAddr = { kind: 'master', childId: child.id, field: 'basePrice' }
+    const chanPriceAddr: ChanAddr   = { kind: 'chan', childId: child.id, field: 'price', marketplace: selectedMarket }
+    const listedQtyAddr: ChanAddr   = { kind: 'chan', childId: child.id, field: 'quantity', marketplace: selectedMarket }
+    const isActiveMaster = activeEdit ? cellKey(activeEdit) === cellKey(basePriceAddr) : false
+    const isActiveChanP  = activeEdit ? cellKey(activeEdit) === cellKey(chanPriceAddr) : false
+    const isActiveChanQ  = activeEdit ? cellKey(activeEdit) === cellKey(listedQtyAddr) : false
+    const status = getListingStatus(child.id, selectedMarket)
+    return (
+      <tr key={child.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 group/row">
+        {axes.map((ax) => (
+          <td key={ax} className="px-2 py-1.5 text-sm font-medium text-slate-700 dark:text-slate-300 whitespace-nowrap">
+            {getAttr(child, ax) ?? <span className="text-slate-300">—</span>}
+          </td>
+        ))}
+        <td className="px-2 py-1.5 font-mono text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">{child.sku}</td>
+        <EditCell
+          addr={basePriceAddr} value={readNumber(child.basePrice)} prefix="€"
+          active={isActiveMaster}
+          onActivate={() => setActiveEdit(basePriceAddr)}
+          onCommit={(v) => commitCell(basePriceAddr, v)}
+          onDeactivate={() => setActiveEdit(null)}
+          cellState={cellState} drag={drag}
+          onDragStart={startDrag} onDragEnter={enterDrag}
+        />
+        <EditCell
+          addr={chanPriceAddr} value={getChannelPrice(child.id, selectedMarket)} prefix="€"
+          active={isActiveChanP}
+          onActivate={() => setActiveEdit(chanPriceAddr)}
+          onCommit={(v) => commitCell(chanPriceAddr, v)}
+          onDeactivate={() => setActiveEdit(null)}
+          cellState={cellState} drag={drag}
+          onDragStart={startDrag} onDragEnter={enterDrag}
+        />
+        <EditCell
+          addr={listedQtyAddr} value={getListedQty(child.id, selectedMarket)}
+          active={isActiveChanQ}
+          onActivate={() => setActiveEdit(listedQtyAddr)}
+          onCommit={(v) => commitCell(listedQtyAddr, v)}
+          onDeactivate={() => setActiveEdit(null)}
+          cellState={cellState} drag={drag}
+          onDragStart={startDrag} onDragEnter={enterDrag}
+        />
+        <FulfillmentCell
+          fulfil={getFulfillment(child.id, selectedMarket)}
+          saving={cellState[`${child.id}:fulfil:${selectedMarket}`]}
+          onSet={(m) => patchFulfillment(child.id, selectedMarket, m)}
+        />
+        {(() => {
+          const f = getFulfillment(child.id, selectedMarket)
+          if (f.method == null) {
+            return <td className="px-2 py-1.5 text-right text-sm text-slate-300">—</td>
+          }
+          // FCF.6 — flag oversell: listing publishes more than the
+          // pool can back (after reservations + buffer).
+          const listed = getListedQty(child.id, selectedMarket)
+          const oversold = listed > f.atp
+          return (
+            <td
+              className={cn(
+                'px-2 py-1.5 text-right tabular-nums text-sm',
+                oversold
+                  ? 'text-rose-600 dark:text-rose-400 font-semibold'
+                  : 'text-slate-600 dark:text-slate-300',
+              )}
+              title={
+                oversold
+                  ? `Oversold: listing ${listed}, pool can back ${f.atp} (drift +${listed - f.atp})`
+                  : undefined
+              }
+            >
+              {oversold && <AlertCircle className="w-3 h-3 inline mr-0.5 -mt-0.5" />}
+              {f.atp.toLocaleString()}
+            </td>
+          )
+        })()}
+        <EditCell
+          addr={{ kind: 'master', childId: child.id, field: 'totalStock' }}
+          value={getPhysicalStock(child.id)} readOnly
+          active={false} onActivate={() => {}} onCommit={() => {}} onDeactivate={() => {}}
+          cellState={cellState} drag={drag}
+          onDragStart={startDrag} onDragEnter={enterDrag}
+        />
+        <td className="px-2 py-1.5">
+          <span className={cn('text-xs',
+            (status === 'ACTIVE' || status === 'BUYABLE') && 'text-green-600',
+            (status === 'INACTIVE' || status === 'DRAFT' || status === '—') && 'text-gray-400',
+            (status === 'ERROR' || status === 'SUPPRESSED') && 'text-red-500',
+          )}>{status}</span>
+        </td>
+        <td className="px-2 py-1.5">
+          <div className="flex items-center gap-1 opacity-0 group-hover/row:opacity-100 transition-opacity">
+            <button type="button" onClick={() => setEditTarget(child)}
+              className="p-1 text-slate-400 hover:text-slate-600 rounded">
+              <ChevronDown className="w-3.5 h-3.5" />
+            </button>
+            <button type="button" onClick={() => openDelete(child)}
+              className="p-1 text-slate-400 hover:text-red-500 rounded">
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </td>
+      </tr>
+    )
+  }
+
   function toggleSort(col: string) {
     if (sortBy === col) setSortDir((d) => d === 'asc' ? 'desc' : 'asc')
     else { setSortBy(col); setSortDir('asc') }
@@ -938,7 +1065,13 @@ export default function MatrixTab({ product, discardSignal = 0 }: Props) {
       )}
 
       {/* Grid */}
-      <div className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-auto">
+      <div
+        ref={matrixScrollRef}
+        className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-auto"
+        // F.1 — bound the height only when windowing so the inner scroll
+        // drives the virtualizer; small families keep page-scroll.
+        style={virtualize ? { maxHeight: '70vh' } : undefined}
+      >
         <table className="w-full text-sm">
           <thead className="bg-slate-50 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-700 sticky top-0">
             <tr>
@@ -964,111 +1097,29 @@ export default function MatrixTab({ product, discardSignal = 0 }: Props) {
                 No variants yet. Click "Add variant" to create the first one.
               </td></tr>
             )}
-            {sortedRows.map((child) => {
-              const basePriceAddr: MasterAddr = { kind: 'master', childId: child.id, field: 'basePrice' }
-              const chanPriceAddr: ChanAddr   = { kind: 'chan', childId: child.id, field: 'price', marketplace: selectedMarket }
-              const listedQtyAddr: ChanAddr   = { kind: 'chan', childId: child.id, field: 'quantity', marketplace: selectedMarket }
-              const isActiveMaster = activeEdit ? cellKey(activeEdit) === cellKey(basePriceAddr) : false
-              const isActiveChanP  = activeEdit ? cellKey(activeEdit) === cellKey(chanPriceAddr) : false
-              const isActiveChanQ  = activeEdit ? cellKey(activeEdit) === cellKey(listedQtyAddr) : false
-              const status = getListingStatus(child.id, selectedMarket)
-              return (
-                <tr key={child.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 group/row">
-                  {axes.map((ax) => (
-                    <td key={ax} className="px-2 py-1.5 text-sm font-medium text-slate-700 dark:text-slate-300 whitespace-nowrap">
-                      {getAttr(child, ax) ?? <span className="text-slate-300">—</span>}
-                    </td>
-                  ))}
-                  <td className="px-2 py-1.5 font-mono text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">{child.sku}</td>
-                  <EditCell
-                    addr={basePriceAddr} value={readNumber(child.basePrice)} prefix="€"
-                    active={isActiveMaster}
-                    onActivate={() => setActiveEdit(basePriceAddr)}
-                    onCommit={(v) => commitCell(basePriceAddr, v)}
-                    onDeactivate={() => setActiveEdit(null)}
-                    cellState={cellState} drag={drag}
-                    onDragStart={startDrag} onDragEnter={enterDrag}
-                  />
-                  <EditCell
-                    addr={chanPriceAddr} value={getChannelPrice(child.id, selectedMarket)} prefix="€"
-                    active={isActiveChanP}
-                    onActivate={() => setActiveEdit(chanPriceAddr)}
-                    onCommit={(v) => commitCell(chanPriceAddr, v)}
-                    onDeactivate={() => setActiveEdit(null)}
-                    cellState={cellState} drag={drag}
-                    onDragStart={startDrag} onDragEnter={enterDrag}
-                  />
-                  <EditCell
-                    addr={listedQtyAddr} value={getListedQty(child.id, selectedMarket)}
-                    active={isActiveChanQ}
-                    onActivate={() => setActiveEdit(listedQtyAddr)}
-                    onCommit={(v) => commitCell(listedQtyAddr, v)}
-                    onDeactivate={() => setActiveEdit(null)}
-                    cellState={cellState} drag={drag}
-                    onDragStart={startDrag} onDragEnter={enterDrag}
-                  />
-                  <FulfillmentCell
-                    fulfil={getFulfillment(child.id, selectedMarket)}
-                    saving={cellState[`${child.id}:fulfil:${selectedMarket}`]}
-                    onSet={(m) => patchFulfillment(child.id, selectedMarket, m)}
-                  />
-                  {(() => {
-                    const f = getFulfillment(child.id, selectedMarket)
-                    if (f.method == null) {
-                      return <td className="px-2 py-1.5 text-right text-sm text-slate-300">—</td>
-                    }
-                    // FCF.6 — flag oversell: listing publishes more than the
-                    // pool can back (after reservations + buffer).
-                    const listed = getListedQty(child.id, selectedMarket)
-                    const oversold = listed > f.atp
-                    return (
-                      <td
-                        className={cn(
-                          'px-2 py-1.5 text-right tabular-nums text-sm',
-                          oversold
-                            ? 'text-rose-600 dark:text-rose-400 font-semibold'
-                            : 'text-slate-600 dark:text-slate-300',
-                        )}
-                        title={
-                          oversold
-                            ? `Oversold: listing ${listed}, pool can back ${f.atp} (drift +${listed - f.atp})`
-                            : undefined
-                        }
-                      >
-                        {oversold && <AlertCircle className="w-3 h-3 inline mr-0.5 -mt-0.5" />}
-                        {f.atp.toLocaleString()}
-                      </td>
-                    )
-                  })()}
-                  <EditCell
-                    addr={{ kind: 'master', childId: child.id, field: 'totalStock' }}
-                    value={getPhysicalStock(child.id)} readOnly
-                    active={false} onActivate={() => {}} onCommit={() => {}} onDeactivate={() => {}}
-                    cellState={cellState} drag={drag}
-                    onDragStart={startDrag} onDragEnter={enterDrag}
-                  />
-                  <td className="px-2 py-1.5">
-                    <span className={cn('text-xs',
-                      (status === 'ACTIVE' || status === 'BUYABLE') && 'text-green-600',
-                      (status === 'INACTIVE' || status === 'DRAFT' || status === '—') && 'text-gray-400',
-                      (status === 'ERROR' || status === 'SUPPRESSED') && 'text-red-500',
-                    )}>{status}</span>
-                  </td>
-                  <td className="px-2 py-1.5">
-                    <div className="flex items-center gap-1 opacity-0 group-hover/row:opacity-100 transition-opacity">
-                      <button type="button" onClick={() => setEditTarget(child)}
-                        className="p-1 text-slate-400 hover:text-slate-600 rounded">
-                        <ChevronDown className="w-3.5 h-3.5" />
-                      </button>
-                      <button type="button" onClick={() => openDelete(child)}
-                        className="p-1 text-slate-400 hover:text-red-500 rounded">
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              )
-            })}
+            {/* F.1 — below the threshold: render every row (unchanged).
+                Above it: window the rows with leading/trailing spacer rows
+                that preserve <table> semantics + scrollbar height. */}
+            {!virtualize
+              ? sortedRows.map(renderRow)
+              : (() => {
+                  const items = rowVirtualizer.getVirtualItems()
+                  const padTop = items.length ? items[0].start : 0
+                  const padBottom = items.length
+                    ? rowVirtualizer.getTotalSize() - items[items.length - 1].end
+                    : 0
+                  return (
+                    <>
+                      {padTop > 0 && (
+                        <tr aria-hidden style={{ height: padTop }}><td colSpan={totalCols} className="p-0 border-0" /></tr>
+                      )}
+                      {items.map((vi) => renderRow(sortedRows[vi.index]))}
+                      {padBottom > 0 && (
+                        <tr aria-hidden style={{ height: padBottom }}><td colSpan={totalCols} className="p-0 border-0" /></tr>
+                      )}
+                    </>
+                  )
+                })()}
           </tbody>
         </table>
       </div>
