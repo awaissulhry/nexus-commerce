@@ -2436,6 +2436,25 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     return analyzeShareOfVoice({ windowDays: q.windowDays ? Number(q.windowDays) : undefined, marketplace: q.marketplace, limit: q.limit ? Number(q.limit) : undefined })
   })
 
+  // ── AX3.10: Budget Manager ──────────────────────────────────────────
+  fastify.get('/advertising/budget-manager', async (request, reply) => {
+    const q = request.query as Record<string, string | undefined>
+    const { analyzeBudgetManager } = await import('../services/advertising/ads-budget-manager.service.js')
+    reply.header('Cache-Control', 'private, max-age=60')
+    return analyzeBudgetManager({ month: q.month })
+  })
+  fastify.post('/advertising/budget-manager/plans', async (request, reply) => {
+    const b = request.body as Record<string, unknown>
+    if (!b?.id && (!b?.marketplace || !b?.month)) { reply.status(400); return { error: 'marketplace + month required (or id to update)' } }
+    const { upsertBudgetPlan } = await import('../services/advertising/ads-budget-manager.service.js')
+    try { return await upsertBudgetPlan(b as never) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
+  })
+  fastify.delete('/advertising/budget-manager/plans/:id', async (request) => {
+    const { id } = request.params as { id: string }
+    const { deleteBudgetPlan } = await import('../services/advertising/ads-budget-manager.service.js')
+    await deleteBudgetPlan(id); return { ok: true }
+  })
+
   // ── AX3.2: Full-funnel Goal builder (branded + unbranded) ───────────
   fastify.post('/advertising/goals/suggest-targets', async (request, reply) => {
     const b = request.body as { brandTerms?: string[]; asins?: string[]; limit?: number }

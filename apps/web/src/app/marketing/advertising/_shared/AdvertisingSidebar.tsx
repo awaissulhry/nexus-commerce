@@ -32,6 +32,7 @@ const GROUPS: Group[] = [
   ] },
   { label: 'Optimize', items: [
     { href: '/marketing/advertising/bid-optimizer', label: 'Bid optimizer', icon: Gauge },
+    { href: '/marketing/advertising/budget-manager', label: 'Budget Manager', icon: Wallet },
     { href: '/marketing/advertising/pacing', label: 'Budget pacing', icon: Wallet },
     { href: '/marketing/advertising/dayparting', label: 'Dayparting', icon: Clock },
     { href: '/marketing/advertising/harvest', label: 'Harvesting', icon: Sprout },

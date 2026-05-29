@@ -11919,3 +11919,25 @@ model AdAudience {
   @@index([status])
   @@index([audienceType])
 }
+
+// AX3.10 — Budget Manager: a monthly budget per (marketplace, tag) with
+// auto-pacing + stop-over-spend guards and an optional per-day allocation
+// calendar (tentpole events like Prime Day / Black Friday). Spend is read
+// live from AmazonAdsDailyPerformance; only the plan is stored here.
+model AdBudgetPlan {
+  id               String   @id @default(cuid())
+  marketplace      String
+  tag              String? // sub-tag / portfolio label; null = marketplace-level
+  month            String // "YYYY-MM"
+  monthlyBudgetCents Int    @default(0)
+  autoPacing       Boolean  @default(false)
+  stopOverSpend    Boolean  @default(false)
+  // [{ day: 1-31, pct: number }] — per-day % of the monthly budget. Empty =
+  // even daily split. Used for event-weighted pacing.
+  calendar         Json     @default("[]")
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  createdBy        String?
+
+  @@index([month, marketplace])
+}
