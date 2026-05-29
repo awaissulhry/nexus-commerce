@@ -30,7 +30,7 @@ const eur = (c: number | null | undefined) => (c == null ? '—' : new Intl.Numb
 const num = (n: number) => new Intl.NumberFormat('en-US').format(Math.round(n))
 const pct = (v: number | null | undefined) => (v == null ? '—' : `${(v * 100).toFixed(1)}%`)
 
-type Tab = 'adgroups' | 'targeting' | 'searchterms' | 'placements' | 'history'
+type Tab = 'adgroups' | 'targeting' | 'searchterms' | 'bidadjust' | 'negatives' | 'settings' | 'history'
 
 export function CampaignDetailCockpit({ campaign, history }: { campaign: CampaignDetailData; history: BidHistoryRow[] }) {
   const [tab, setTab] = useState<Tab>('adgroups')
@@ -45,6 +45,12 @@ export function CampaignDetailCockpit({ campaign, history }: { campaign: Campaig
   const [placeMsg, setPlaceMsg] = useState('')
   const firstAg = campaign.adGroups[0]?.id ?? ''
   const [tForm, setTForm] = useState({ open: false, adGroupId: firstAg, kind: 'PRODUCT' as 'PRODUCT' | 'CATEGORY' | 'AUTO' | 'AUDIENCE' | 'NEGATIVE', value: '', auto: 'CLOSE_MATCH', audType: 'AUDIENCE', bid: '0.50', saving: false, msg: '' })
+  // Campaign settings (editable, Amazon-native).
+  const [settings, setSettings] = useState({ name: campaign.name, dailyBudget: String(parseFloat(campaign.dailyBudget || '0').toFixed(2)), biddingStrategy: campaign.biddingStrategy?.toLowerCase().includes('auto') ? 'autoForSales' : campaign.biddingStrategy?.toLowerCase().includes('manual') ? 'manual' : 'legacyForSales', status: campaign.status, saving: false, msg: '' })
+  // Negative targeting (campaign-level add).
+  const [negForm, setNegForm] = useState({ kind: 'KEYWORD' as 'KEYWORD' | 'ASIN', value: '', match: 'NEGATIVE_EXACT', adGroupId: firstAg, saving: false, msg: '' })
+  const [addedNegs, setAddedNegs] = useState<Array<{ kind: string; value: string; match?: string }>>([])
+  const [stAddBusy, setStAddBusy] = useState<string | null>(null)
 
   const spendC = Math.round(parseFloat(campaign.spend || '0') * 100), salesC = Math.round(parseFloat(campaign.sales || '0') * 100)
   const acos = campaign.acos != null ? parseFloat(campaign.acos) : salesC > 0 ? spendC / salesC : null
@@ -78,7 +84,7 @@ export function CampaignDetailCockpit({ campaign, history }: { campaign: Campaig
       setPlaceMsg(`✓ saved (${r.mode})`)
     } catch (e) { setPlaceMsg((e as Error).message) } finally { setPlaceSaving(false) }
   }
-  useEffect(() => { if (tab === 'searchterms') void loadSearchTerms(); if (tab === 'placements') void loadPlacements() }, [tab, loadSearchTerms, loadPlacements])
+  useEffect(() => { if (tab === 'searchterms') void loadSearchTerms(); if (tab === 'bidadjust') void loadPlacements() }, [tab, loadSearchTerms, loadPlacements])
 
   const saveBid = async (t: Target) => {
     const v = bidEdit[t.id]; if (v == null) return
@@ -113,12 +119,48 @@ export function CampaignDetailCockpit({ campaign, history }: { campaign: Campaig
     if (!campaign.externalCampaignId) return
     await fetch(`${getBackendUrl()}/api/advertising/negative-keywords/create`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ externalCampaignId: campaign.externalCampaignId, keywordText: query, matchType: 'NEGATIVE_EXACT', scope: 'CAMPAIGN' }) }).catch(() => {})
   }
+  // Amazon-style "Add as" from a search term: promote to a managed keyword or negate it.
+  const addSearchTermAs = async (query: string, as: 'EXACT' | 'PHRASE' | 'BROAD' | 'NEGATIVE') => {
+    if (!query) return
+    setStAddBusy(query + as)
+    try {
+      if (as === 'NEGATIVE') { await addNegative(query) }
+      else if (firstAg) { await fetch(`${getBackendUrl()}/api/advertising/keywords/create`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adGroupId: firstAg, keywordText: query, matchType: as, bidEur: 0.5 }) }).catch(() => {}) }
+    } finally { setStAddBusy(null) }
+  }
+  const saveSettings = async () => {
+    setSettings((s) => ({ ...s, saving: true, msg: '' }))
+    try {
+      const r = await fetch(`${getBackendUrl()}/api/advertising/campaigns/${campaign.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: settings.name, dailyBudget: parseFloat(settings.dailyBudget) || undefined, biddingStrategy: settings.biddingStrategy, status: settings.status }) }).then((x) => x.json())
+      if (r?.error) throw new Error(r.error)
+      setSettings((s) => ({ ...s, saving: false, msg: '✓ saved' }))
+    } catch (e) { setSettings((s) => ({ ...s, saving: false, msg: (e as Error).message })) }
+  }
+  const submitNegative = async () => {
+    if (!negForm.value.trim()) { setNegForm((f) => ({ ...f, msg: 'Value required' })); return }
+    setNegForm((f) => ({ ...f, saving: true, msg: '' }))
+    try {
+      if (negForm.kind === 'ASIN') {
+        if (!negForm.adGroupId) throw new Error('Pick an ad group')
+        const r = await fetch(`${getBackendUrl()}/api/advertising/negative-targets/create`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adGroupId: negForm.adGroupId, asin: negForm.value.trim() }) }).then((x) => x.json())
+        if (r?.error) throw new Error(r.error)
+      } else {
+        if (!campaign.externalCampaignId) throw new Error('Campaign not synced')
+        const r = await fetch(`${getBackendUrl()}/api/advertising/negative-keywords/create`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ externalCampaignId: campaign.externalCampaignId, keywordText: negForm.value.trim(), matchType: negForm.match, scope: 'CAMPAIGN' }) }).then((x) => x.json())
+        if (r?.error) throw new Error(r.error)
+      }
+      setAddedNegs((n) => [{ kind: negForm.kind, value: negForm.value.trim(), match: negForm.kind === 'KEYWORD' ? negForm.match : undefined }, ...n])
+      setNegForm((f) => ({ ...f, value: '', saving: false, msg: '✓ added' }))
+    } catch (e) { setNegForm((f) => ({ ...f, saving: false, msg: (e as Error).message })) }
+  }
 
   const TABS: Array<[Tab, string, number]> = [
     ['adgroups', 'Ad groups', campaign.adGroups.length],
-    ['targeting', 'Targeting', targets.length],
+    ['targeting', 'Targeting', targets.filter((t) => !t.expressionValue.startsWith('NOT ')).length],
     ['searchterms', 'Search terms', searchTerms?.length ?? 0],
-    ['placements', 'Placements', placements?.length ?? 0],
+    ['bidadjust', 'Bid adjustments', 0],
+    ['negatives', 'Negative targeting', addedNegs.length],
+    ['settings', 'Campaign settings', 0],
     ['history', 'History', history.length],
   ]
 
@@ -191,9 +233,48 @@ export function CampaignDetailCockpit({ campaign, history }: { campaign: Campaig
         {tab === 'searchterms' && (
           searchTerms == null ? <div className="p-6 text-center text-slate-400 text-sm">Loading…</div> :
           <table className="w-full text-sm"><thead className="bg-slate-50 dark:bg-slate-900/60 text-xs text-slate-500"><tr><th className="text-left px-3 py-2">Search term</th><th className="text-left px-3 py-2">Match</th><th className="text-right px-3 py-2">Impr</th><th className="text-right px-3 py-2">Clicks</th><th className="text-right px-3 py-2">Spend</th><th className="text-right px-3 py-2">Orders</th><th className="text-right px-3 py-2">Sales</th><th className="px-3 py-2"></th></tr></thead>
-          <tbody className="divide-y divide-slate-100 dark:divide-slate-800">{searchTerms.length === 0 ? <tr><td colSpan={8} className="px-3 py-6 text-center text-slate-400 text-xs">No search-term data yet (run the search-terms report cycle).</td></tr> : searchTerms.map((s, i) => <tr key={i} className="hover:bg-slate-50 dark:hover:bg-slate-900/40"><td className="px-3 py-1.5">{String(s.query ?? '')}</td><td className="px-3 py-1.5 text-xs text-slate-500">{String(s.matchType ?? '')}</td><td className="px-3 py-1.5 text-right tabular-nums">{num(Number(s.impressions ?? 0))}</td><td className="px-3 py-1.5 text-right tabular-nums">{num(Number(s.clicks ?? 0))}</td><td className="px-3 py-1.5 text-right tabular-nums">{eur(Number(s.costMicros ?? 0) / 10000)}</td><td className="px-3 py-1.5 text-right tabular-nums">{num(Number(s.orders7d ?? 0))}</td><td className="px-3 py-1.5 text-right tabular-nums">{eur(Number(s.sales7dCents ?? 0))}</td><td className="px-3 py-1.5 text-right"><button onClick={() => addNegative(String(s.query ?? ''))} className="text-xs text-rose-600 hover:underline">+ Negative</button></td></tr>)}</tbody></table>
+          <tbody className="divide-y divide-slate-100 dark:divide-slate-800">{searchTerms.length === 0 ? <tr><td colSpan={8} className="px-3 py-6 text-center text-slate-400 text-xs">No search-term data yet (run the search-terms report cycle).</td></tr> : searchTerms.map((s, i) => <tr key={i} className="hover:bg-slate-50 dark:hover:bg-slate-900/40"><td className="px-3 py-1.5">{String(s.query ?? '')}</td><td className="px-3 py-1.5 text-xs text-slate-500">{String(s.matchType ?? '')}</td><td className="px-3 py-1.5 text-right tabular-nums">{num(Number(s.impressions ?? 0))}</td><td className="px-3 py-1.5 text-right tabular-nums">{num(Number(s.clicks ?? 0))}</td><td className="px-3 py-1.5 text-right tabular-nums">{eur(Number(s.costMicros ?? 0) / 10000)}</td><td className="px-3 py-1.5 text-right tabular-nums">{num(Number(s.orders7d ?? 0))}</td><td className="px-3 py-1.5 text-right tabular-nums">{eur(Number(s.sales7dCents ?? 0))}</td><td className="px-3 py-1.5 text-right"><div className="inline-flex items-center gap-1 text-xs">{(['EXACT', 'PHRASE', 'BROAD'] as const).map((m) => <button key={m} disabled={stAddBusy === String(s.query ?? '') + m} onClick={() => addSearchTermAs(String(s.query ?? ''), m)} title={`Add as ${m.toLowerCase()} keyword`} className="px-1 text-blue-600 hover:underline disabled:opacity-40">{m[0]}</button>)}<button onClick={() => addSearchTermAs(String(s.query ?? ''), 'NEGATIVE')} className="px-1 text-rose-600 hover:underline">⊘</button></div></td></tr>)}</tbody></table>
         )}
-        {tab === 'placements' && (
+        {tab === 'negatives' && (<>
+          <div className="border-b border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/40 px-3 py-2 flex flex-wrap items-end gap-2">
+            <label className="flex flex-col text-[11px] text-slate-500">Type
+              <select value={negForm.kind} onChange={(e) => setNegForm((f) => ({ ...f, kind: e.target.value as 'KEYWORD' | 'ASIN' }))} className="mt-0.5 px-2 py-1 text-sm rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900"><option value="KEYWORD">Negative keyword</option><option value="ASIN">Negative product (ASIN)</option></select></label>
+            {negForm.kind === 'KEYWORD' ? (
+              <label className="flex flex-col text-[11px] text-slate-500">Match
+                <select value={negForm.match} onChange={(e) => setNegForm((f) => ({ ...f, match: e.target.value }))} className="mt-0.5 px-2 py-1 text-sm rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900"><option value="NEGATIVE_EXACT">Negative exact</option><option value="NEGATIVE_PHRASE">Negative phrase</option></select></label>
+            ) : (
+              <label className="flex flex-col text-[11px] text-slate-500">Ad group
+                <select value={negForm.adGroupId} onChange={(e) => setNegForm((f) => ({ ...f, adGroupId: e.target.value }))} className="mt-0.5 px-2 py-1 text-sm rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 min-w-[9rem]">{campaign.adGroups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}</select></label>
+            )}
+            <label className="flex flex-col text-[11px] text-slate-500">{negForm.kind === 'KEYWORD' ? 'Keyword' : 'ASIN'}
+              <input value={negForm.value} onChange={(e) => setNegForm((f) => ({ ...f, value: e.target.value }))} placeholder={negForm.kind === 'KEYWORD' ? 'e.g. damen' : 'B0XXXXXXXX'} className="mt-0.5 px-2 py-1 text-sm rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 w-44" /></label>
+            <button onClick={submitNegative} disabled={negForm.saving} className="px-3 py-1 text-sm rounded bg-rose-600 text-white hover:bg-rose-700 disabled:opacity-50">{negForm.saving ? 'Adding…' : 'Add negative'}</button>
+            {negForm.msg && <span className={`text-xs ${negForm.msg.startsWith('✓') ? 'text-emerald-600' : 'text-rose-600'}`}>{negForm.msg}</span>}
+          </div>
+          <table className="w-full text-sm"><thead className="bg-slate-50 dark:bg-slate-900/60 text-xs text-slate-500"><tr><th className="text-left px-3 py-2">Negative</th><th className="text-left px-3 py-2">Type</th><th className="text-left px-3 py-2">Match</th></tr></thead>
+          <tbody className="divide-y divide-slate-100 dark:divide-slate-800">{addedNegs.length === 0 ? <tr><td colSpan={3} className="px-3 py-6 text-center text-slate-400 text-xs">Add negative keywords or products to stop wasted impressions on irrelevant searches.</td></tr> : addedNegs.map((n, i) => <tr key={i}><td className="px-3 py-1.5">{n.value}</td><td className="px-3 py-1.5 text-xs text-slate-500">{n.kind === 'ASIN' ? 'Product' : 'Keyword'}</td><td className="px-3 py-1.5 text-xs text-slate-500">{n.match?.replace('NEGATIVE_', '').toLowerCase() ?? '—'}</td></tr>)}</tbody></table>
+        </>)}
+        {tab === 'settings' && (
+          <div className="p-4 max-w-[640px] space-y-3">
+            <label className="block text-xs text-slate-500">Campaign name<input value={settings.name} onChange={(e) => setSettings((s) => ({ ...s, name: e.target.value }))} className="w-full mt-0.5 px-2 py-1.5 text-sm rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950" /></label>
+            <div className="flex gap-2">
+              <label className="flex-1 text-xs text-slate-500">Daily budget €<input type="number" step="0.01" value={settings.dailyBudget} onChange={(e) => setSettings((s) => ({ ...s, dailyBudget: e.target.value }))} className="w-full mt-0.5 px-2 py-1.5 text-sm rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950" /></label>
+              <label className="flex-1 text-xs text-slate-500">Bidding strategy<select value={settings.biddingStrategy} onChange={(e) => setSettings((s) => ({ ...s, biddingStrategy: e.target.value }))} className="w-full mt-0.5 px-2 py-1.5 text-sm rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950"><option value="legacyForSales">Dynamic bids — down only</option><option value="autoForSales">Dynamic bids — up and down</option><option value="manual">Fixed bids</option></select></label>
+              <label className="flex-1 text-xs text-slate-500">Status<select value={settings.status} onChange={(e) => setSettings((s) => ({ ...s, status: e.target.value }))} className="w-full mt-0.5 px-2 py-1.5 text-sm rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950"><option value="ENABLED">Active</option><option value="PAUSED">Paused</option><option value="ARCHIVED">Archived</option></select></label>
+            </div>
+            <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-slate-500 pt-1">
+              <div><dt className="inline text-slate-400">Type:</dt> <dd className="inline">{campaign.type}</dd></div>
+              <div><dt className="inline text-slate-400">Marketplace:</dt> <dd className="inline">{campaign.marketplace ?? '—'}</dd></div>
+              <div><dt className="inline text-slate-400">Campaign ID:</dt> <dd className="inline font-mono">{campaign.externalCampaignId ?? '—'}</dd></div>
+              <div><dt className="inline text-slate-400">Schedule:</dt> <dd className="inline">{campaign.startDate?.slice(0, 10) ?? '—'} → {campaign.endDate?.slice(0, 10) ?? 'no end'}</dd></div>
+            </dl>
+            <div className="flex items-center gap-3 pt-1">
+              <button onClick={saveSettings} disabled={settings.saving} className="px-3 py-1.5 text-sm rounded-md bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50">{settings.saving ? 'Saving…' : 'Save settings'}</button>
+              {settings.msg && <span className={`text-sm ${settings.msg.startsWith('✓') ? 'text-emerald-700 dark:text-emerald-300' : 'text-rose-600'}`}>{settings.msg}</span>}
+            </div>
+          </div>
+        )}
+        {tab === 'bidadjust' && (
           placements == null ? <div className="p-6 text-center text-slate-400 text-sm">Loading…</div> :
           <><div className="border-b border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/40 px-3 py-3">
             <div className="flex flex-wrap items-end gap-3">
