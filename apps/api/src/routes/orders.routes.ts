@@ -315,7 +315,12 @@ export async function ordersRoutes(app: FastifyInstance) {
       //   manual-total or accepts the €0.
       if (awaitingPrice || abandonedAwaitingPrice) {
         where.channel = 'AMAZON'
-        where.currencyCode = 'EUR'
+        // Awaiting-price is currency-agnostic: an order missing its OrderTotal
+        // is "awaiting price" on UK/SE/PL just as on the EUR markets. The old
+        // currencyCode='EUR' filter was a single-market leftover that silently
+        // hid genuine awaiting-price orders on non-EUR marketplaces (MS-series
+        // expanded Xavia to 11 EU markets). No currency is summed here — this
+        // only counts/lists orders — so removing the filter is safe.
         where.totalPrice = 0
         where.items = { some: { quantity: { gt: 0 } } }
         const abandonmentDaysRaw = Number(process.env.NEXUS_AWAITING_PRICE_ABANDONMENT_DAYS ?? 60)
