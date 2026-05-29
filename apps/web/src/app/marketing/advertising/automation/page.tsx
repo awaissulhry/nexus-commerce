@@ -99,6 +99,10 @@ export default async function AutomationPage() {
         <Stat label="Disabled" value={rules.length - live - dryRun} tone="slate" />
       </div>
 
+      <div className="flex flex-wrap items-center gap-2 mb-3">
+        <Link href="/marketing/advertising/automation/new" className="inline-flex items-center gap-1 px-3 py-1.5 text-sm rounded-md bg-blue-600 text-white hover:bg-blue-700">+ Create rule</Link>
+        <Link href="/marketing/advertising/automation/library" className="inline-flex items-center gap-1 px-3 py-1.5 text-sm rounded-md border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800">Rule library</Link>
+      </div>
       <AutomationActionsClient hasRules={rules.length > 0} />
 
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md overflow-hidden">
