@@ -20,6 +20,11 @@ import { analyzeRetailReadiness, applyRetailGuard } from './ads-retail-readiness
 
 export type RecCategory = 'bid' | 'negative' | 'graduate' | 'budget' | 'sov' | 'retail'
 export type RecSeverity = 'high' | 'medium' | 'low'
+export interface RecMetrics {
+  impressions?: number; clicks?: number; ctr?: number | null
+  spendCents?: number; salesCents?: number; orders?: number
+  acos?: number | null; roas?: number | null; cvr?: number | null
+}
 export interface Recommendation {
   id: string
   category: RecCategory
@@ -28,6 +33,7 @@ export interface Recommendation {
   detail: string
   estImpactCents: number // ranking weight (potential saved/earned)
   apply: { kind: string; payload: unknown } | null
+  metrics?: RecMetrics // supporting data that justifies the recommendation
 }
 export interface RecommendationsResult {
   generatedAt: string
@@ -58,6 +64,7 @@ export async function buildRecommendations(opts: { windowDays?: number; targetAc
       title: `${cut ? 'Lower' : 'Raise'} bid on “${p.expression}” (${p.matchType})`,
       detail: `${p.reason}. €${(p.currentBidCents / 100).toFixed(2)} → €${(p.proposedBidCents / 100).toFixed(2)}.`,
       estImpactCents: cut ? Math.abs(p.spendCents) : Math.round(p.salesCents * 0.1),
+      metrics: { clicks: p.clicks, spendCents: p.spendCents, salesCents: p.salesCents, acos: p.acos, roas: p.spendCents > 0 ? p.salesCents / p.spendCents : null },
       apply: { kind: 'bid', payload: { changes: [{ targetId: p.targetId, proposedBidCents: p.proposedBidCents }] } },
     })
   }
@@ -70,6 +77,7 @@ export async function buildRecommendations(opts: { windowDays?: number; targetAc
       title: `Negate wasteful search term “${n.query}”`,
       detail: `${n.clicks} clicks, ${n.orders} orders, €${(n.costCents / 100).toFixed(2)} spent with no return.`,
       estImpactCents: n.costCents,
+      metrics: { impressions: n.impressions, clicks: n.clicks, ctr: n.impressions > 0 ? n.clicks / n.impressions : null, spendCents: n.costCents, salesCents: n.salesCents, orders: n.orders, acos: n.salesCents > 0 ? n.costCents / n.salesCents : null },
       apply: { kind: 'harvest-negative', payload: { negatives: [n] } },
     })
   }
@@ -81,6 +89,7 @@ export async function buildRecommendations(opts: { windowDays?: number; targetAc
       title: `Graduate converting term “${g.query}” to exact`,
       detail: `${g.orders} orders, €${(g.salesCents / 100).toFixed(2)} sales — promote to a managed exact-match keyword.`,
       estImpactCents: g.salesCents,
+      metrics: { impressions: g.impressions, clicks: g.clicks, spendCents: g.costCents, salesCents: g.salesCents, orders: g.orders, acos: g.salesCents > 0 ? g.costCents / g.salesCents : null, cvr: g.clicks > 0 ? g.orders / g.clicks : null },
       apply: { kind: 'harvest-graduate', payload: { graduations: [g] } },
     })
   }
@@ -94,6 +103,7 @@ export async function buildRecommendations(opts: { windowDays?: number; targetAc
       title: `${up ? 'Raise' : 'Cut'} budget for ${p.name}`,
       detail: `${p.reason}. €${(p.currentBudgetCents / 100).toFixed(2)} → €${(p.proposedBudgetCents / 100).toFixed(2)}/day.`,
       estImpactCents: Math.abs(p.proposedBudgetCents - p.currentBudgetCents) * 30,
+      metrics: { spendCents: p.spendCents, salesCents: p.salesCents, roas: p.roas, acos: p.salesCents > 0 ? p.spendCents / p.salesCents : null },
       apply: { kind: 'budget', payload: { changes: [{ campaignId: p.campaignId, proposedBudgetCents: p.proposedBudgetCents }] } },
     })
   }
@@ -107,6 +117,7 @@ export async function buildRecommendations(opts: { windowDays?: number; targetAc
       title: `Likely outbid on “${r.query}”`,
       detail: `High CPC (€${((r.cpcCents ?? 0) / 100).toFixed(2)}) but low impressions — raise the bid or add the term where it isn't yet targeted.`,
       estImpactCents: r.costCents,
+      metrics: { impressions: r.impressions, clicks: r.clicks, ctr: r.ctr, spendCents: r.costCents, orders: r.orders, cvr: r.cvr },
       apply: null,
     })
   }
@@ -118,6 +129,7 @@ export async function buildRecommendations(opts: { windowDays?: number; targetAc
       title: `${r.campaignCount} campaigns competing on “${r.query}”`,
       detail: `Consolidate or negate overlapping campaigns to stop bidding against yourself.`,
       estImpactCents: Math.round(r.costCents * 0.2),
+      metrics: { impressions: r.impressions, clicks: r.clicks, ctr: r.ctr, spendCents: r.costCents, orders: r.orders },
       apply: null,
     })
   }

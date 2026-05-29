@@ -9,7 +9,8 @@ import { getBackendUrl } from '@/lib/backend-url'
 
 type RecCategory = 'bid' | 'negative' | 'graduate' | 'budget' | 'sov' | 'retail'
 type RecSeverity = 'high' | 'medium' | 'low'
-interface Recommendation { id: string; category: RecCategory; severity: RecSeverity; title: string; detail: string; estImpactCents: number; apply: { kind: string; payload: unknown } | null }
+interface RecMetrics { impressions?: number; clicks?: number; ctr?: number | null; spendCents?: number; salesCents?: number; orders?: number; acos?: number | null; roas?: number | null; cvr?: number | null }
+interface Recommendation { id: string; category: RecCategory; severity: RecSeverity; title: string; detail: string; estImpactCents: number; apply: { kind: string; payload: unknown } | null; metrics?: RecMetrics }
 interface RecResult { generatedAt: string; windowDays: number; counts: Record<RecCategory, number>; potentialMonthlyImpactCents: number; recommendations: Recommendation[] }
 
 const eur = (c: number) => new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(c / 100)
@@ -35,13 +36,18 @@ export function RecommendationsClient() {
   const [loading, setLoading] = useState(false)
   const [brief, setBrief] = useState<{ tldr: string; modelUsed: string } | null>(null)
   const [cat, setCat] = useState<RecCategory | 'all'>('all')
+  const [view, setView] = useState<'pending' | 'applied'>('pending')
   const [applied, setApplied] = useState<Set<string>>(new Set())
   const [dismissed, setDismissed] = useState<Set<string>>(new Set())
   const [busy, setBusy] = useState<string | null>(null)
   const [alerts, setAlerts] = useState<Array<{ id: string; campaignId: string | null; campaignName: string; type: string; severity: string; message: string }>>([])
 
+  // Applied recs persist across reloads (rec ids are deterministic).
+  useEffect(() => { try { const s = localStorage.getItem('ax.recs.applied'); if (s) setApplied(new Set(JSON.parse(s))) } catch {} }, [])
+  const persistApplied = (next: Set<string>) => { try { localStorage.setItem('ax.recs.applied', JSON.stringify([...next])) } catch {} }
+
   const load = useCallback(() => {
-    setLoading(true); setApplied(new Set())
+    setLoading(true)
     fetch(`${getBackendUrl()}/api/advertising/recommendations`, { cache: 'no-store' }).then((x) => x.json()).then(setData).catch(() => {}).finally(() => setLoading(false))
     setBrief(null)
     fetch(`${getBackendUrl()}/api/advertising/recommendations/brief`, { cache: 'no-store' }).then((x) => x.json()).then(setBrief).catch(() => {})
@@ -54,7 +60,7 @@ export function RecommendationsClient() {
     setBusy(r.id)
     try {
       const res = await fetch(`${getBackendUrl()}/api/advertising/recommendations/apply`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(r.apply) }).then((x) => x.json())
-      if (!res?.error) setApplied((s) => new Set(s).add(r.id))
+      if (!res?.error) setApplied((s) => { const n = new Set(s).add(r.id); persistApplied(n); return n })
     } finally { setBusy(null) }
   }
   const applyAllHigh = async () => {
@@ -62,7 +68,11 @@ export function RecommendationsClient() {
     for (const r of targets) await apply(r) // sequential to keep audit ordering clean
   }
 
-  const recs = (data?.recommendations ?? []).filter((r) => !dismissed.has(r.id)).filter((r) => cat === 'all' ? true : r.category === cat)
+  const recs = (data?.recommendations ?? [])
+    .filter((r) => !dismissed.has(r.id))
+    .filter((r) => view === 'applied' ? applied.has(r.id) : !applied.has(r.id))
+    .filter((r) => cat === 'all' ? true : r.category === cat)
+  const appliedCount = (data?.recommendations ?? []).filter((r) => applied.has(r.id)).length
 
   return (
     <div className="max-w-[1200px]">
@@ -101,6 +111,13 @@ export function RecommendationsClient() {
         </div>
       )}
 
+      {/* Pending / Applied tabs */}
+      <div className="inline-flex rounded-md border border-slate-200 dark:border-slate-700 overflow-hidden mb-3">
+        {([['pending', 'Pending', (data?.recommendations.length ?? 0) - appliedCount], ['applied', 'Applied', appliedCount]] as const).map(([v, label, n]) => (
+          <button key={v} onClick={() => setView(v)} className={`px-3 py-1.5 text-sm border-l first:border-l-0 border-slate-200 dark:border-slate-700 ${view === v ? 'bg-slate-900 text-white dark:bg-slate-700' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>{label} ({n})</button>
+        ))}
+      </div>
+
       {/* Strategies rail + cards (Perpetua-style) */}
       <div className="grid grid-cols-1 lg:grid-cols-[260px_1fr] gap-4">
         <aside className="space-y-1">
@@ -136,6 +153,7 @@ export function RecommendationsClient() {
                     <span className="font-medium text-slate-900 dark:text-slate-100 truncate">{r.title}</span>
                   </div>
                   <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{r.detail}</p>
+                  {r.metrics && <MetricStrip m={r.metrics} />}
                 </div>
                 {r.category !== 'sov' && r.estImpactCents > 0 && <span className="text-xs tabular-nums text-slate-400 shrink-0 mt-1">{eur(r.estImpactCents)}</span>}
                 <div className="shrink-0 flex items-center gap-1">
@@ -155,6 +173,28 @@ export function RecommendationsClient() {
           })}
         </div>
       </div>
+    </div>
+  )
+}
+
+// Supporting metrics that justify a recommendation (trailing window). Only
+// renders the fields the source provided.
+function MetricStrip({ m }: { m: RecMetrics }) {
+  const eur0 = (c?: number) => (c == null ? null : new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(c / 100))
+  const num = (n?: number) => (n == null ? null : new Intl.NumberFormat('en-US').format(Math.round(n)))
+  const pc = (v?: number | null, dp = 1) => (v == null ? null : `${(v * 100).toFixed(dp)}%`)
+  const cells: Array<[string, string | null]> = [
+    ['Impr', num(m.impressions)], ['Clicks', num(m.clicks)], ['CTR', pc(m.ctr, 2)],
+    ['Spend', eur0(m.spendCents)], ['Sales', eur0(m.salesCents)], ['Orders', num(m.orders)],
+    ['ACOS', pc(m.acos)], ['ROAS', m.roas == null ? null : `${m.roas.toFixed(2)}×`], ['CVR', pc(m.cvr, 2)],
+  ]
+  const shown = cells.filter(([, v]) => v != null)
+  if (!shown.length) return null
+  return (
+    <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1.5 text-[11px] text-slate-500 dark:text-slate-400">
+      {shown.map(([k, v]) => (
+        <span key={k}><span className="text-slate-400">{k}</span> <span className="tabular-nums text-slate-600 dark:text-slate-300">{v}</span></span>
+      ))}
     </div>
   )
 }
