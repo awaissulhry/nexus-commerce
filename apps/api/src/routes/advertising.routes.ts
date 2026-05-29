@@ -2454,6 +2454,19 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     try { return await ingestMarketingStream(messages as never) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
   })
 
+  // ── AX3.1: Retail-readiness guard ───────────────────────────────────
+  fastify.get('/advertising/retail-readiness', async (request, reply) => {
+    const q = request.query as Record<string, string | undefined>
+    const { analyzeRetailReadiness } = await import('../services/advertising/ads-retail-readiness.service.js')
+    reply.header('Cache-Control', 'private, max-age=120')
+    return analyzeRetailReadiness({ marketplace: q.marketplace, campaignId: q.campaignId })
+  })
+  fastify.post('/advertising/retail-readiness/apply', async (request, reply) => {
+    const b = request.body as { campaignIds?: string[]; marketplace?: string }
+    const { applyRetailGuard } = await import('../services/advertising/ads-retail-readiness.service.js')
+    try { return await applyRetailGuard({ campaignIds: b?.campaignIds, marketplace: b?.marketplace }) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
+  })
+
   // ── AX2.12: Ads alerts (anomaly watch) ──────────────────────────────
   fastify.get('/advertising/alerts', async (request, reply) => {
     const q = request.query as Record<string, string | undefined>
