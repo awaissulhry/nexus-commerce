@@ -31,7 +31,6 @@ import {
   Truck,
   Undo2,
   Megaphone,
-  Target,
   Image as ImageIcon,
   Star,
   FileEdit,
@@ -573,34 +572,22 @@ export default function AppSidebar() {
             active={pathname.startsWith('/marketing/calendar')}
           />
           <NavItem
-            href="/marketing/automation-os"
-            icon={Zap}
-            label="Automation"
-            active={pathname.startsWith('/marketing/automation-os')}
-          />
-          <NavItem
             href="/marketing/budgets"
             icon={Wallet}
             label="Budgets"
             active={pathname.startsWith('/marketing/budgets')}
           />
           <NavItem
+            href="/marketing/automation-os"
+            icon={Zap}
+            label="Automation"
+            active={pathname.startsWith('/marketing/automation-os')}
+          />
+          <NavItem
             href="/marketing/analytics"
             icon={BarChart3}
             label="Analytics"
             active={pathname.startsWith('/marketing/analytics')}
-          />
-          <NavItem
-            href="/pricing/promotions"
-            icon={Megaphone}
-            label="Promotions"
-            active={pathname.startsWith('/pricing/promotions')}
-          />
-          <NavItem
-            href="/marketing/advertising"
-            icon={Target}
-            label="Advertising"
-            active={pathname === '/marketing/advertising'}
           />
           <NavParentItem
             storageKey="marketing.content"
@@ -656,7 +643,7 @@ export default function AppSidebar() {
             <NavItem
               href="/marketing/automation"
               icon={Zap}
-              label="Automation"
+              label="Content automation"
               nested
               active={pathname.startsWith('/marketing/automation')}
             />

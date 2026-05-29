@@ -26,6 +26,7 @@ import {
   Plus,
   Rocket,
   X,
+  Target,
 } from 'lucide-react'
 import { KpiStrip, SharedLensTabs, type KpiTileSpec, type LensTab } from '@/app/_shared/grid-lens'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -67,7 +68,7 @@ export interface RosterSummary {
   salesCents: number
 }
 
-type LensKey = 'ALL' | 'AMAZON' | 'EBAY' | 'SHOPIFY' | 'EXTERNAL' | 'INTERNAL'
+type LensKey = 'ALL' | 'AMAZON' | 'EBAY' | 'SHOPIFY' | 'EXTERNAL' | 'INTERNAL' | 'PROMOTIONS'
 type SortKey = 'spendCents' | 'salesCents' | 'acos' | 'roas' | 'name' | 'status'
 
 const LENS_TABS: ReadonlyArray<LensTab<LensKey>> = [
@@ -77,10 +78,16 @@ const LENS_TABS: ReadonlyArray<LensTab<LensKey>> = [
   { key: 'SHOPIFY', label: 'Shopify' },
   { key: 'EXTERNAL', label: 'External' },
   { key: 'INTERNAL', label: 'Content & outreach' },
+  { key: 'PROMOTIONS', label: 'Promotions' },
 ]
 
 // External lens maps to the off-platform ad networks.
 const EXTERNAL_CHANNELS = new Set(['GOOGLE', 'META', 'TIKTOK'])
+// Promotions lens is a cross-channel SURFACE filter (deals/discounts/markdowns).
+const PROMOTION_SURFACES = new Set(['DISCOUNT', 'MARKDOWN', 'DEAL'])
+// Pseudo-lenses are surface/derived filters, not a single channel — they
+// don't map to the server-side channel param.
+const PSEUDO_LENSES = new Set<LensKey>(['ALL', 'EXTERNAL', 'PROMOTIONS'])
 
 const CHANNEL_CHIP: Record<string, string> = {
   AMAZON: 'bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300',
@@ -160,7 +167,7 @@ export function MarketingCampaignsClient({
     setLoading(true)
     try {
       const params = new URLSearchParams()
-      if (lens !== 'ALL' && lens !== 'EXTERNAL') params.set('channel', lens)
+      if (!PSEUDO_LENSES.has(lens)) params.set('channel', lens)
       if (statusFilter) params.set('status', statusFilter)
       if (search.trim()) params.set('q', search.trim())
       const [r, s] = await Promise.all([
@@ -225,6 +232,7 @@ export function MarketingCampaignsClient({
   const rows = useMemo(() => {
     let r = campaigns
     if (lens === 'EXTERNAL') r = r.filter((c) => EXTERNAL_CHANNELS.has(c.channel))
+    if (lens === 'PROMOTIONS') r = r.filter((c) => PROMOTION_SURFACES.has(c.surface))
     const dir = sortDir === 'asc' ? 1 : -1
     return [...r].sort((a, b) => {
       const av = a[sortKey]
@@ -263,9 +271,17 @@ export function MarketingCampaignsClient({
               <Radio size={12} className="animate-pulse" /> live
             </span>
           )}
-          <button onClick={() => setShowCreate(true)} className="ml-auto inline-flex items-center gap-1 px-3 py-1.5 text-sm rounded-md bg-blue-600 text-white hover:bg-blue-700">
-            <Plus size={14} /> New campaign
-          </button>
+          <div className="ml-auto flex items-center gap-2">
+            <Link href="/marketing/advertising" className="inline-flex items-center gap-1 px-2.5 py-1.5 text-sm rounded-md border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800" title="Amazon Trading Desk — search terms, reports, aged stock, true profit, feeds">
+              <Target size={14} /> Trading Desk
+            </Link>
+            <Link href="/pricing/promotions" className="inline-flex items-center gap-1 px-2.5 py-1.5 text-sm rounded-md border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800" title="Promotion scheduler (deals, markdowns, discounts)">
+              <Megaphone size={14} /> Promotion scheduler
+            </Link>
+            <button onClick={() => setShowCreate(true)} className="inline-flex items-center gap-1 px-3 py-1.5 text-sm rounded-md bg-blue-600 text-white hover:bg-blue-700">
+              <Plus size={14} /> New campaign
+            </button>
+          </div>
         </div>
         <p className="text-sm text-slate-500 dark:text-slate-400">
           Unified cross-channel campaigns across all markets. Pause/resume + budget edits run through the guarded mutation path (Amazon in sandbox until cutover — no live write fires).
