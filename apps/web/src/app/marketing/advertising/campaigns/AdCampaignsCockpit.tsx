@@ -18,7 +18,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts'
-import { Search, RefreshCw, SlidersHorizontal, Play, Pause, Download } from 'lucide-react'
+import { Search, RefreshCw, SlidersHorizontal, Play, Pause, Download, FileDown, Rows, AlignJustify } from 'lucide-react'
 import { KpiStrip, PreferencesModal, type KpiTileSpec, type PreferencesValue, type PreferencesColumnSpec } from '@/app/_shared/grid-lens'
 import { getBackendUrl } from '@/lib/backend-url'
 
@@ -52,6 +52,14 @@ const DATE_PRESETS = [
   { key: '90', label: 'Last 90 days', days: 90 },
 ]
 
+const CHART_METRICS: Array<{ key: string; label: string; color: string; axis: 'l' | 'r' }> = [
+  { key: 'clicks', label: 'Clicks', color: '#6366f1', axis: 'l' },
+  { key: 'cost', label: 'Cost', color: '#14b8a6', axis: 'r' },
+  { key: 'sales', label: 'Sales', color: '#a855f7', axis: 'r' },
+  { key: 'orders', label: 'Orders', color: '#f59e0b', axis: 'l' },
+  { key: 'impressions', label: 'Impressions', color: '#94a3b8', axis: 'l' },
+]
+
 const eur = (c: number | null | undefined) => (c == null ? '—' : new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR' }).format(c / 100))
 const num = (n: number | null | undefined) => (n == null ? '—' : new Intl.NumberFormat('en-US').format(Math.round(n)))
 const pct = (v: number | null | undefined, dp = 1) => (v == null ? '—' : `${(v * 100).toFixed(dp)}%`)
@@ -80,6 +88,8 @@ export function AdCampaignsCockpit({ initial }: { initial: { items: CampaignBase
   const [budgetEdits, setBudgetEdits] = useState<Record<string, string>>({})
   const [busy, setBusy] = useState<string | null>(null)
   const [prefsOpen, setPrefsOpen] = useState(false)
+  const [density, setDensity] = useState<'comfortable' | 'compact'>('comfortable')
+  const [chartMetrics, setChartMetrics] = useState<Set<string>>(() => new Set(['clicks', 'cost', 'sales']))
   const [prefs, setPrefs] = useState<PreferencesValue>(() => {
     if (typeof window !== 'undefined') {
       try { const s = localStorage.getItem('ax.campaigns.prefs.v1'); if (s) return JSON.parse(s) } catch {}
@@ -176,6 +186,16 @@ export function AdCampaignsCockpit({ initial }: { initial: { items: CampaignBase
     await Promise.all(ids.map((id) => fetch(`${getBackendUrl()}/api/advertising/campaigns/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status }) })))
     setSelected(new Set()); void refetch()
   }
+  const exportCsv = () => {
+    const headers = ['Campaign', 'Status', 'Type', 'Market', 'Budget/d', 'Impressions', 'Clicks', 'CTR%', 'Spend', 'CPC', 'Orders', 'CVR%', 'Sales', 'ACOS%', 'ROAS', 'Margin%']
+    const lines = [headers.join(',')]
+    for (const r of filtered) {
+      const v = [r.base.name, r.base.status, r.base.type, r.base.marketplace ?? '', (r.budgetC / 100).toFixed(2), r.impressions, r.clicks, r.ctr != null ? (r.ctr * 100).toFixed(2) : '', (r.spendC / 100).toFixed(2), r.cpc != null ? (r.cpc / 100).toFixed(2) : '', r.orders, r.cvr != null ? (r.cvr * 100).toFixed(2) : '', (r.salesC / 100).toFixed(2), r.acos != null ? (r.acos * 100).toFixed(1) : '', r.roas != null ? r.roas.toFixed(2) : '', r.marginPct != null ? (r.marginPct * 100).toFixed(1) : '']
+      lines.push(v.map((x) => `"${String(x).replace(/"/g, '""')}"`).join(','))
+    }
+    const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `campaigns-${days}d.csv`; a.click(); URL.revokeObjectURL(url)
+  }
 
   const cols = useMemo(() => COLUMN_DEFS(budgetEdits, setBudgetEdits, saveBudget, toggleStatus, busy), [budgetEdits, busy])
   const visibleCols = useMemo(() => {
@@ -185,6 +205,7 @@ export function AdCampaignsCockpit({ initial }: { initial: { items: CampaignBase
 
   const toggleSort = (k: string) => { if (sortKey === k) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc')); else { setSortKey(k); setSortDir('desc') } }
   const allChecked = filtered.length > 0 && filtered.every((r) => selected.has(r.base.id))
+  const rowPad = density === 'compact' ? 'py-0.5' : 'py-1.5'
 
   return (
     <div>
@@ -201,19 +222,27 @@ export function AdCampaignsCockpit({ initial }: { initial: { items: CampaignBase
 
       {/* Performance chart */}
       {trend.length > 0 && (
-        <div className="rounded-lg border border-slate-200 dark:border-slate-800 p-3 mb-4 h-64">
+        <div className="rounded-lg border border-slate-200 dark:border-slate-800 p-3 mb-4">
+          <div className="flex flex-wrap gap-1.5 mb-2">
+            {CHART_METRICS.map((m) => {
+              const on = chartMetrics.has(m.key)
+              return <button key={m.key} onClick={() => setChartMetrics((s) => { const n = new Set(s); n.has(m.key) ? n.delete(m.key) : n.add(m.key); return n })} className={`inline-flex items-center gap-1.5 px-2 py-0.5 text-xs rounded-full border transition ${on ? 'border-transparent text-white' : 'border-slate-200 dark:border-slate-700 text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800'}`} style={on ? { backgroundColor: m.color } : undefined}><span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: on ? '#fff' : m.color }} />{m.label}</button>
+            })}
+          </div>
+          <div className="h-60">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={trend} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" className="stroke-slate-100 dark:stroke-slate-800" />
-              <XAxis dataKey="date" tick={{ fontSize: 10 }} />
-              <YAxis yAxisId="l" tick={{ fontSize: 10 }} /><YAxis yAxisId="r" orientation="right" tick={{ fontSize: 10 }} />
+              <XAxis dataKey="date" tick={{ fontSize: 10 }} tickFormatter={(d: string) => (typeof d === 'string' ? d.slice(5) : d)} />
+              <YAxis yAxisId="l" tick={{ fontSize: 10 }} width={44} /><YAxis yAxisId="r" orientation="right" tick={{ fontSize: 10 }} width={44} />
               <Tooltip contentStyle={{ fontSize: 12 }} />
               <Legend wrapperStyle={{ fontSize: 11 }} />
-              <Line yAxisId="l" type="monotone" dataKey="clicks" stroke="#6366f1" dot={false} name="Clicks" />
-              <Line yAxisId="r" type="monotone" dataKey={(d: TrendPoint) => d.cost ?? d.spend} stroke="#14b8a6" dot={false} name="Cost" />
-              <Line yAxisId="r" type="monotone" dataKey="sales" stroke="#a855f7" dot={false} name="Sales" />
+              {CHART_METRICS.filter((m) => chartMetrics.has(m.key)).map((m) => (
+                <Line key={m.key} yAxisId={m.axis} type="monotone" dataKey={m.key === 'cost' ? ((d: TrendPoint) => d.cost ?? d.spend) : m.key} stroke={m.color} strokeWidth={2} dot={false} name={m.label} />
+              ))}
             </LineChart>
           </ResponsiveContainer>
+          </div>
         </div>
       )}
 
@@ -221,11 +250,22 @@ export function AdCampaignsCockpit({ initial }: { initial: { items: CampaignBase
       <div className="flex flex-wrap items-center gap-2 mb-2">
         <div className="relative"><Search size={14} className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400" /><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Find a campaign…" className="pl-7 pr-2 py-1.5 text-sm rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 w-56" /></div>
         <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="py-1.5 px-2 text-sm rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"><option value="">All status</option>{['ENABLED', 'PAUSED', 'ARCHIVED', 'DRAFT'].map((s) => <option key={s}>{s}</option>)}</select>
-        <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} className="py-1.5 px-2 text-sm rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"><option value="">All types</option>{['SP', 'SB', 'SD'].map((s) => <option key={s}>{s}</option>)}</select>
+        <div className="inline-flex rounded-md border border-slate-200 dark:border-slate-700 overflow-hidden">
+          {[['', 'All'], ['SP', 'SP'], ['SB', 'SB'], ['SD', 'SD']].map(([v, label]) => (
+            <button key={v} onClick={() => setTypeFilter(v)} className={`px-2.5 py-1.5 text-xs border-l first:border-l-0 border-slate-200 dark:border-slate-700 ${typeFilter === v ? 'bg-blue-600 text-white' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>{label}</button>
+          ))}
+        </div>
         <Link href="/marketing/advertising/create" className="inline-flex items-center gap-1 py-1.5 px-3 text-sm rounded-md bg-slate-900 text-white dark:bg-slate-700 hover:bg-slate-800">+ Create campaign</Link>
-        <button onClick={() => setPrefsOpen(true)} className="inline-flex items-center gap-1 py-1.5 px-2 text-sm rounded-md border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"><SlidersHorizontal size={14} /> Columns ({visibleCols.length})</button>
-        <button onClick={() => void refetch()} className="inline-flex items-center gap-1 py-1.5 px-2 text-sm rounded-md border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"><RefreshCw size={14} className={loading ? 'animate-spin' : ''} /></button>
-        <span className="text-xs text-slate-400 ml-auto">{filtered.length} campaigns</span>
+        <div className="ml-auto flex items-center gap-2">
+          <span className="text-xs text-slate-400">{filtered.length} campaigns</span>
+          <div className="inline-flex rounded-md border border-slate-200 dark:border-slate-700 overflow-hidden" title="Row density">
+            <button onClick={() => setDensity('comfortable')} className={`px-1.5 py-1.5 ${density === 'comfortable' ? 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200' : 'text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}><Rows size={14} /></button>
+            <button onClick={() => setDensity('compact')} className={`px-1.5 py-1.5 border-l border-slate-200 dark:border-slate-700 ${density === 'compact' ? 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200' : 'text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}><AlignJustify size={14} /></button>
+          </div>
+          <button onClick={exportCsv} className="inline-flex items-center gap-1 py-1.5 px-2 text-sm rounded-md border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800" title="Export CSV"><FileDown size={14} /></button>
+          <button onClick={() => setPrefsOpen(true)} className="inline-flex items-center gap-1 py-1.5 px-2 text-sm rounded-md border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"><SlidersHorizontal size={14} /> Columns ({visibleCols.length})</button>
+          <button onClick={() => void refetch()} className="inline-flex items-center gap-1 py-1.5 px-2 text-sm rounded-md border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"><RefreshCw size={14} className={loading ? 'animate-spin' : ''} /></button>
+        </div>
       </div>
 
       {/* Bulk bar */}
@@ -255,9 +295,9 @@ export function AdCampaignsCockpit({ initial }: { initial: { items: CampaignBase
             {filtered.length === 0 && <tr><td colSpan={visibleCols.length + 1} className="px-3 py-10 text-center text-slate-400">No campaigns. Run the Amazon Ads sync to import.</td></tr>}
             {filtered.map((r) => (
               <tr key={r.base.id} className="hover:bg-slate-50 dark:hover:bg-slate-900/40">
-                <td className="sticky left-0 z-10 bg-white dark:bg-slate-950 px-2 py-1.5"><input type="checkbox" checked={selected.has(r.base.id)} onChange={(e) => setSelected((s) => { const n = new Set(s); e.target.checked ? n.add(r.base.id) : n.delete(r.base.id); return n })} /></td>
+                <td className={`sticky left-0 z-10 bg-white dark:bg-slate-950 px-2 ${rowPad}`}><input type="checkbox" checked={selected.has(r.base.id)} onChange={(e) => setSelected((s) => { const n = new Set(s); e.target.checked ? n.add(r.base.id) : n.delete(r.base.id); return n })} /></td>
                 {visibleCols.map((c, i) => (
-                  <td key={c.key} className={`px-3 py-1.5 whitespace-nowrap ${c.align === 'right' ? 'text-right tabular-nums' : ''} ${i === 0 && prefs.stickyFirstColumn ? 'sticky left-8 z-10 bg-white dark:bg-slate-950' : ''}`} style={{ width: c.width }}>{c.render(r)}</td>
+                  <td key={c.key} className={`px-3 ${rowPad} whitespace-nowrap ${c.align === 'right' ? 'text-right tabular-nums' : ''} ${i === 0 && prefs.stickyFirstColumn ? 'sticky left-8 z-10 bg-white dark:bg-slate-950' : ''}`} style={{ width: c.width }}>{c.render(r)}</td>
                 ))}
               </tr>
             ))}
@@ -284,7 +324,7 @@ function COLUMN_DEFS(
 ): ColDef[] {
   return [
     { key: 'name', label: 'Campaign', width: 280, render: (r) => <Link href={`/marketing/advertising/campaigns/${r.base.id}`} className="font-medium text-blue-600 hover:underline truncate block max-w-[260px]">{r.base.name}</Link> },
-    { key: 'status', label: 'Status', width: 90, render: (r) => <span className={`px-1.5 py-0.5 rounded text-xs ${STATUS_CHIP[r.base.status] ?? STATUS_CHIP.DRAFT}`}>{r.base.status}</span> },
+    { key: 'status', label: 'Status', width: 100, render: (r) => <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs ${STATUS_CHIP[r.base.status] ?? STATUS_CHIP.DRAFT}`}><span className={`w-1.5 h-1.5 rounded-full ${r.base.status === 'ENABLED' ? 'bg-emerald-500' : r.base.status === 'PAUSED' ? 'bg-amber-500' : 'bg-slate-400'}`} />{r.base.status}</span> },
     { key: 'type', label: 'Type', width: 60, render: (r) => <span className="text-xs text-slate-500">{r.base.type}</span> },
     { key: 'adProduct', label: 'Ad product', width: 150, render: (r) => <span className="text-xs text-slate-500">{r.base.adProduct ?? '—'}</span> },
     { key: 'marketplace', label: 'Market', width: 70, render: (r) => <span className="text-xs">{r.base.marketplace ?? '—'}</span> },
