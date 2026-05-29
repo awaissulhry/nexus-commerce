@@ -12,7 +12,7 @@ import {
   Boxes, AlertTriangle, LayoutGrid, Sparkles,
   Settings2, X,
   Package, Plus, FolderTree, Network,
-  Upload,
+  Upload, FileUp,
   DollarSign, Download,
   AlignJustify, Menu as MenuIcon, Equal,
   Trash2,
@@ -1306,6 +1306,15 @@ export default function ProductsWorkspace() {
             >
               Upload photos
             </Button>
+            {/* OL nav fix — bulk product create from spreadsheet was only
+                reachable by URL; surface it next to the photo upload. */}
+            <Link
+              href="/products/upload"
+              className="h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5 text-slate-700 dark:text-slate-300"
+              title="Bulk-create / update products from an Excel/CSV spreadsheet"
+            >
+              <FileUp size={12} /> Bulk upload
+            </Link>
             <Button
               variant="secondary"
               onClick={() => exportProductsCsv(products)}
