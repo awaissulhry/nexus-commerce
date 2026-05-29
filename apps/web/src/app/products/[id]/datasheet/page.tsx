@@ -6,23 +6,27 @@
  * spec sheet lives at /products/[id]/datasheet/print/ — accessible
  * via the Print button in this hub's header.
  *
- * Phase 1 ships only the shell: header + tab navigation + stubs for
- * each tab. Subsequent ATM phases fill in:
+ * SHIPPED (ATM.2–ATM.12): all tabs below render real components — this
+ * is no longer a shell. Each tab does its own Prisma fetch under the
+ * Suspense boundary. (Doc kept current per OL.CC.5 verify — the old
+ * "Phase 1 stubs" note was stale and misread by an audit.)
  *
- *   ATM.2  — Header health pulse (markets active, sync status, drift)
- *   ATM.3  — Master attribute matrix
- *   ATM.4  — Per-channel × per-market value expansion
- *   ATM.5  — Channel readiness scorecard
- *   ATM.6  — Validation engine
- *   ATM.7  — Drift & conflict resolver
- *   ATM.8  — Pricing × market grid
- *   ATM.9  — Translations × language matrix
- *   ATM.10 — Compliance × market grid
- *   ATM.11 — Images × channel × variant matrix
- *   ATM.12 — Audit timeline
- *   ATM.13 — Bulk + saved views
- *   ATM.14 — Output modes (already covers DS print + line sheet)
- *   ATM.15 — Real-time + perf + a11y polish
+ *   ATM.2  — Header health pulse (markets active, sync status, drift) ✅
+ *   ATM.3  — Master attribute matrix (AttributesTab) ✅
+ *   ATM.4  — Per-channel × per-market value expansion (ChannelsTab) ✅
+ *   ATM.5  — Channel readiness scorecard (LaunchReadiness) ✅
+ *   ATM.6  — Validation engine (validationRules.ts) ✅
+ *   ATM.8  — Pricing × market grid (PricingTab) ✅
+ *   ATM.9  — Translations × language matrix (TranslationsTab) ✅
+ *   ATM.10 — Compliance × market grid (CompliancePerMarketTab) ✅
+ *   ATM.11 — Images × channel × variant matrix (ImagesTab) ✅
+ *   ATM.12 — Audit timeline (HistoryTab) ✅
+ *   ATM.14 — Output modes (print line-sheet + JSON export) ✅
+ *   ATM.15 — Real-time (HubLiveRefresh) + perf + a11y ✅
+ *   Deferred: ATM.7 (drift/conflict resolver), ATM.13 (bulk + saved views).
+ *
+ * Read/inspect/print/export surface — complementary to the edit-focused
+ * /products/[id]/edit editor, not redundant with it.
  *
  * URL shape: /products/[id]/datasheet?tab=overview (default).
  * The querystring tab avoids creating eight separate sub-routes for
@@ -248,7 +252,8 @@ export default async function ProductDatasheetHubPage({
         })}
       </nav>
 
-      {/* ── Tab content (stubs gradually replaced by ATM.3+) ──────── */}
+      {/* ── Tab content (all tabs are real components; TabStub is an
+          unreachable fallback for an unknown ?tab=) ──────────────── */}
       {/* EH.6 — Suspense around the active tab so the page shell
           (header, health pulse, tab nav) streams first while the
           tab body's own Prisma fetch runs. The `key={tab}` makes
