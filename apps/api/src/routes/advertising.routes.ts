@@ -2359,6 +2359,20 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     try { return await createProductAdLocal(b as never) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
   })
 
+  // ── AX.6: Keyword-paste auto-architect ──────────────────────────────
+  fastify.post('/advertising/architect/preview', async (request, reply) => {
+    const b = request.body as Record<string, unknown>
+    if (!b?.baseName || !b?.marketplace || !b?.strategy || !Array.isArray(b?.keywords)) { reply.status(400); return { error: 'baseName, marketplace, strategy, keywords[] required' } }
+    const { buildPlan } = await import('../services/advertising/ads-architect.service.js')
+    return buildPlan({ dailyBudgetEur: 10, defaultBidEur: 0.5, ...(b as object) } as never)
+  })
+  fastify.post('/advertising/architect/apply', async (request, reply) => {
+    const b = request.body as Record<string, unknown>
+    if (!b?.baseName || !b?.marketplace || !b?.strategy || !Array.isArray(b?.keywords)) { reply.status(400); return { error: 'baseName, marketplace, strategy, keywords[] required' } }
+    const { applyPlan } = await import('../services/advertising/ads-architect.service.js')
+    try { return await applyPlan({ dailyBudgetEur: 10, defaultBidEur: 0.5, ...(b as object) } as never) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
+  })
+
   // ── AD.2: Mutation routes ───────────────────────────────────────────
   // Every write goes through ads-mutation.service which (1) updates the
   // local row immediately, (2) enqueues OutboundSyncQueue with a 5-min
