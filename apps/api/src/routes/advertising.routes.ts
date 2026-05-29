@@ -2373,6 +2373,16 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     try { return await applyPlan({ dailyBudgetEur: 10, defaultBidEur: 0.5, ...(b as object) } as never) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
   })
 
+  // ── AX.12: Amazon Marketing Stream ingest (hourly) ──────────────────
+  // The operator creates an AMS subscription (Ads API → their AWS Firehose
+  // → this endpoint). Accepts a single message or { messages: [...] }.
+  fastify.post('/advertising/marketing-stream/ingest', async (request, reply) => {
+    const b = request.body as Record<string, unknown>
+    const messages = Array.isArray((b as { messages?: unknown[] })?.messages) ? (b as { messages: unknown[] }).messages : [b]
+    const { ingestMarketingStream } = await import('../services/advertising/ads-marketing-stream.service.js')
+    try { return await ingestMarketingStream(messages as never) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
+  })
+
   // ── AX.11: Search-term n-gram analysis ──────────────────────────────
   fastify.get('/advertising/ngrams', async (request, reply) => {
     const q = request.query as Record<string, string | undefined>

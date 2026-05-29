@@ -111,3 +111,33 @@ Sandbox stubs registered (cockpit lenses + create work). Going live = provision 
 - Live adapters for Shopify/Google/Meta/TikTok (need credentials).
 - P14 legacy-surface retirement (`/marketing/advertising`, `/listings/ebay/campaigns`) — only after channel parity, to avoid removing working tools.
 - Deep MC-publish / RV-send delegation for INTERNAL launches (currently records intent behind `NEXUS_MARKETING_WRITES_INTERNAL`).
+
+---
+
+# Advertising cockpit (AX-series)
+
+One Amazon-grade ad cockpit at `/marketing/advertising` (sidebar
+"Advertising"; `/marketing/campaigns` redirects in). Tabs: Campaigns
+(40-50 customizable columns + KPI + chart) · Auto-architect · Harvesting ·
+Bid optimizer · Dayparting · Budget pacing · N-gram intel · Create campaign
+· (+ legacy Aged-stock/Profit/Reports/etc.). Built on the live AD-series
+backend; all writes sandbox-safe behind the P8/ads-write-gate.
+
+**Automation (each: preview → select → apply; or as automation-rule handlers):**
+- **Auto-architect** — paste keywords → match-type-split / SKAG / auto-funnel campaigns.
+- **Harvesting** — wasteful search terms → negatives; converters → graduate to Exact.
+- **Bid optimizer** — move bids toward target ACOS (`bid_to_target_acos` rule handler).
+- **Dayparting** — run campaigns only in day×hour windows (`AdSchedule` + 15-min cron).
+- **Budget pacing** — raise out-of-budget winners / cut losers (`pace_budget` rule handler).
+- **N-gram intel** — winning/wasteful word fragments across all search terms (+CSV).
+
+**AX.12 — Amazon Marketing Stream (hourly), operator setup to go live:**
+1. In the Amazon Ads console / Ads API, create an **AMS subscription** for
+   the `sp-traffic` + `sp-conversion` datasets, delivering to **your AWS
+   Firehose**.
+2. Point the Firehose (via Lambda/HTTP) at
+   `POST https://nexusapi-production-b7bb.up.railway.app/api/advertising/marketing-stream/ingest`
+   (single message or `{ messages: [...] }`).
+3. Hourly traffic + conversion then accumulate into AmazonAdsDailyPerformance
+   automatically, powering intraday bid moves + dayparting. (Until subscribed,
+   the endpoint simply receives nothing.)
