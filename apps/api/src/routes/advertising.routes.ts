@@ -2494,6 +2494,13 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const { runDaypartingOnce } = await import('../jobs/ad-dayparting.job.js')
     try { return await runDaypartingOnce() } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
   })
+  // ── AX2.11: Dayparting intelligence (day-of-week conversion) ────────
+  fastify.get('/advertising/dayparting-intel', async (request, reply) => {
+    const q = request.query as Record<string, string | undefined>
+    const { analyzeDayparting } = await import('../services/advertising/ads-dayparting-intel.service.js')
+    reply.header('Cache-Control', 'private, max-age=300')
+    return analyzeDayparting({ windowDays: q.windowDays ? Number(q.windowDays) : undefined, campaignId: q.campaignId })
+  })
 
   // ── AX.8: Target-ACOS bid optimization ──────────────────────────────
   fastify.get('/advertising/bid-optimizer/preview', async (request, reply) => {
