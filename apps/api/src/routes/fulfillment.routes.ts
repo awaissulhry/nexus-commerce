@@ -2122,6 +2122,7 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
           carrierCode: true,
           status: true,
           costCents: true,
+          currencyCode: true,
           weightGrams: true,
           shippedAt: true,
           deliveredAt: true,
@@ -2162,6 +2163,22 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
       // Daily trend — yyyy-mm-dd → ships
       const dailyShips: Record<string, number> = {}
 
+      // FX-normalize shipping costs to EUR before summing — shipments span
+      // EUR/GBP/SEK/PLN across the 11 markets, so a raw sum mixed currencies
+      // into a bogus € total. Fetch each present currency's rate once.
+      const { getFxRate } = await import('../services/fx-rate.service.js')
+      const rateToEur = new Map<string, number>()
+      for (const cur of new Set(shipments.map((s) => s.currencyCode ?? 'EUR'))) {
+        if (cur === 'EUR') { rateToEur.set(cur, 1); continue }
+        const r = await getFxRate(prisma, 'EUR', cur) // 1 EUR = r units of `cur`
+        rateToEur.set(cur, r && r > 0 ? r : 1)
+      }
+      const toEurCents = (cents: number, cur: string | null): number => {
+        const c = cur ?? 'EUR'
+        const r = rateToEur.get(c) ?? 1
+        return c === 'EUR' ? cents : Math.round(cents / r)
+      }
+
       for (const s of shipments) {
         if (s.shippedAt && s.order?.purchaseDate) {
           timeToShipHours.push(
@@ -2173,13 +2190,13 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
           else onTimeCount++
         }
         if (s.costCents != null) {
-          totalCostCents += s.costCents
+          totalCostCents += toEurCents(s.costCents, s.currencyCode)
           costsCounted++
         }
         const cc = s.carrierCode as string
         if (!byCarrier[cc]) byCarrier[cc] = { count: 0, totalCostCents: 0, lateCount: 0 }
         byCarrier[cc].count++
-        if (s.costCents != null) byCarrier[cc].totalCostCents += s.costCents
+        if (s.costCents != null) byCarrier[cc].totalCostCents += toEurCents(s.costCents, s.currencyCode)
         if (s.shippedAt && s.order?.shipByDate && s.shippedAt > s.order.shipByDate) {
           byCarrier[cc].lateCount++
         }
