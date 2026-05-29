@@ -20,6 +20,7 @@ async function getFBAInventoryData(): Promise<InventoryItem[]> {
       images: true,
     },
     orderBy: { updatedAt: "desc" },
+    take: 1000, // safety cap — avoids loading an unbounded FBA catalog into memory
   });
 
   return products.map((product: any): InventoryItem => {

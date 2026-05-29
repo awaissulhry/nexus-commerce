@@ -95,6 +95,7 @@ async function getAllProducts(): Promise<Product[]> {
       orderBy: {
         name: 'asc',
       },
+      take: 1000, // safety cap — selector list, avoids loading the whole catalog
     })
 
     await prisma.$disconnect()

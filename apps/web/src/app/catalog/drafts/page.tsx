@@ -21,6 +21,7 @@ export default async function DraftsPage() {
         variations: true,
       },
       orderBy: { updatedAt: "desc" },
+      take: 2000, // safety cap — drafts filtered in JS below; bound the scan
     });
   } catch (err) {
     // eslint-disable-next-line no-console
