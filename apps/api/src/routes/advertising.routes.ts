@@ -2457,6 +2457,68 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     return analyzeAutomationHealth()
   })
 
+  // ── Internal: bidding-engine microservice contract (token-gated) ────
+  // services/bidding-engine reads contexts + reports applied bids here; the
+  // DB stays owned by this app. Auth via x-internal-token header.
+  const internalAuthed = (request: { headers: Record<string, unknown> }): boolean => {
+    const token = process.env.NEXUS_INTERNAL_API_TOKEN
+    return !!token && request.headers['x-internal-token'] === token
+  }
+  fastify.get('/internal/bidding/contexts', async (request, reply) => {
+    if (!internalAuthed(request as never)) { reply.status(401); return { error: 'unauthorized' } }
+    const q = request.query as Record<string, string | undefined>
+    const limit = Math.min(q.limit ? Number(q.limit) : 500, 2000)
+    const targets = await prisma.adTarget.findMany({
+      where: {
+        kind: 'KEYWORD', status: 'ENABLED', isNegative: false,
+        externalTargetId: { not: null }, clicks: { gt: 0 },
+        ...(q.marketplace ? { adGroup: { campaign: { marketplace: q.marketplace } } } : {}),
+      },
+      take: limit,
+      select: {
+        id: true, externalTargetId: true, bidCents: true, clicks: true, spendCents: true,
+        salesCents: true, ordersCount: true,
+        adGroup: { select: { campaign: { select: { marketplace: true, dynamicBidding: true } } } },
+      },
+    })
+    // Resolve profileId (accountRef) per marketplace once.
+    const conns = await prisma.amazonAdsConnection.findMany({ where: { isActive: true }, select: { marketplace: true, profileId: true } })
+    const profileByMkt = new Map(conns.map((c) => [c.marketplace, c.profileId]))
+    const contexts = targets.flatMap((t) => {
+      const mkt = t.adGroup?.campaign?.marketplace ?? null
+      const accountRef = mkt ? profileByMkt.get(mkt) : undefined
+      if (!accountRef || !t.externalTargetId) return []
+      const cr = t.clicks > 0 ? (t.ordersCount ?? 0) / t.clicks : 0
+      const acosTargetBps = Math.round(((t.adGroup?.campaign?.dynamicBidding as { targetAcos?: number })?.targetAcos ?? 0.3) * 10000)
+      return [{
+        bridgeId: t.id, externalId: t.externalTargetId, accountRef,
+        currentBidMinor: t.bidCents,
+        aovMinor: (t.ordersCount ?? 0) > 0 ? Math.round(t.salesCents / (t.ordersCount ?? 1)) : 5000,
+        cr7d: cr, cr30d: cr, acosTargetBps, acos1hBps: null, daysOfSupply: null,
+        bidMinMinor: 5, bidMaxMinor: Math.max(t.bidCents * 3, 300),
+      }]
+    })
+    reply.header('Cache-Control', 'no-store')
+    return { contexts }
+  })
+  fastify.post('/internal/bidding/applied', async (request, reply) => {
+    if (!internalAuthed(request as never)) { reply.status(401); return { error: 'unauthorized' } }
+    const b = request.body as { bridgeId?: string; externalId?: string; bidMinor?: number; prevBidMinor?: number; status?: string }
+    if (!b?.bridgeId || b?.bidMinor == null) { reply.status(400); return { error: 'bridgeId + bidMinor required' } }
+    if (b.status === 'applied') {
+      await prisma.adTarget.update({ where: { id: b.bridgeId }, data: { bidCents: b.bidMinor } }).catch(() => {})
+    }
+    await prisma.advertisingActionLog.create({
+      data: {
+        actionType: 'bid_set_by_engine', entityType: 'AD_TARGET', entityId: b.bridgeId,
+        payloadBefore: { bidCents: b.prevBidMinor ?? null },
+        payloadAfter: { bidCents: b.bidMinor, source: 'bidding-engine' } as object,
+        amazonResponseStatus: b.status === 'applied' ? 'SUCCESS' : b.status === 'failed' ? 'FAILED' : 'PENDING',
+      },
+    }).catch(() => {})
+    return { ok: true }
+  })
+
   // ── AX3.12: Live Ad Momentum ────────────────────────────────────────
   fastify.get('/advertising/momentum', async (request, reply) => {
     const q = request.query as Record<string, string | undefined>
