@@ -20,12 +20,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import {
-  AlertCircle, ArrowUpDown, Check, ChevronDown, Copy, Layers,
+  AlertCircle, ArrowUpDown, Check, ChevronDown, Copy, GripVertical, Layers,
   Loader2, Percent, Plus, Redo2, RefreshCw, Send, Trash2, Undo2,
 } from 'lucide-react'
 import { Modal, ModalFooter } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
+import { SortStack, type SortFieldOption } from '@/app/_shared/grid-lens'
 import { getBackendUrl } from '@/lib/backend-url'
 import { emitInvalidation, useInvalidationChannel } from '@/lib/sync/invalidation-channel'
 import {
@@ -295,8 +296,18 @@ export default function MatrixTab({ product, discardSignal = 0 }: Props) {
   const [bulkSrc, setBulkSrc]           = useState('IT')
   const [bulkDst, setBulkDst]           = useState('DE')
   const [bulkApplying, setBulkApplying] = useState(false)
-  const [sortBy, setSortBy]             = useState<string | null>(null)
-  const [sortDir, setSortDir]           = useState<'asc' | 'desc'>('asc')
+  // H.3 — multi-column sort via the shared SortStack ("field:dir" pairs;
+  // stack order = precedence). Header click sets a single primary sort;
+  // the "+ Sort" builder stacks more levels.
+  const [sortStack, setSortStack]       = useState<string[]>([])
+  // H.2 — row selection. Bulk actions scope to the selection when any
+  // row is checked, else to all variants.
+  const [selectedVariants, setSelectedVariants] = useState<Set<string>>(new Set())
+  // H.4 — manual drag-to-reorder. childId order, persisted per product in
+  // localStorage (a visual arrangement, not a marketplace order — no
+  // schema field exists). null = no manual order (use the sort stack).
+  const [manualOrder, setManualOrder]   = useState<string[] | null>(null)
+  const [dragRowId, setDragRowId]       = useState<string | null>(null)
 
   // ── Fetch ─────────────────────────────────────────────────────────────
   const refetch = useCallback(async () => {
@@ -686,18 +697,59 @@ export default function MatrixTab({ product, discardSignal = 0 }: Props) {
   }, [product.variationAxes, children])
 
   const sortedRows = useMemo(() => {
-    if (!sortBy) return children
+    if (sortStack.length === 0) return children
+    // Compare one field, asc-oriented (caller flips for desc).
+    const cmpField = (a: ChildRow, b: ChildRow, field: string): number => {
+      if (field === 'basePrice') return readNumber(a.basePrice) - readNumber(b.basePrice)
+      if (field === 'totalStock') return readNumber(a.totalStock) - readNumber(b.totalStock)
+      if (field === 'sku') return String(a.sku ?? '').localeCompare(String(b.sku ?? ''))
+      if (field.startsWith('cp:')) { const mp = field.slice(3); return getChannelPrice(a.id, mp) - getChannelPrice(b.id, mp) }
+      if (field.startsWith('lq:')) { const mp = field.slice(3); return getListedQty(a.id, mp) - getListedQty(b.id, mp) }
+      return String(getAttr(a, field) ?? '').localeCompare(String(getAttr(b, field) ?? ''))
+    }
     return [...children].sort((a, b) => {
-      let av = 0, bv = 0
-      if (sortBy === 'basePrice') { av = readNumber(a.basePrice); bv = readNumber(b.basePrice) }
-      else if (sortBy === 'totalStock') { av = readNumber(a.totalStock); bv = readNumber(b.totalStock) }
-      else if (sortBy.startsWith('cp:')) { const mp = sortBy.slice(3); av = getChannelPrice(a.id, mp); bv = getChannelPrice(b.id, mp) }
-      else if (sortBy.startsWith('lq:')) { const mp = sortBy.slice(3); av = getListedQty(a.id, mp); bv = getListedQty(b.id, mp) }
-      else { av = String(getAttr(a, sortBy) ?? '').localeCompare(String(getAttr(b, sortBy) ?? '')); return sortDir === 'asc' ? av : -av }
-      return sortDir === 'asc' ? av - bv : bv - av
+      for (const pair of sortStack) {
+        const [field, dir] = pair.split(':')
+        const r = cmpField(a, b, field)
+        if (r !== 0) return dir === 'desc' ? -r : r
+      }
+      return 0
     })
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [children, channelData, invData, sortBy, sortDir, selectedMarket])
+  }, [children, channelData, invData, sortStack, selectedMarket])
+
+  // H.4 — a manual arrangement (drag-to-reorder) takes precedence over the
+  // sort stack when present; rows not in the saved order fall to the end.
+  const displayRows = useMemo(() => {
+    if (!manualOrder) return sortedRows
+    const pos = new Map(manualOrder.map((id, i) => [id, i]))
+    return [...sortedRows].sort((a, b) => (pos.get(a.id) ?? 1e9) - (pos.get(b.id) ?? 1e9))
+  }, [sortedRows, manualOrder])
+
+  // Restore / persist the manual order per product (client-side only).
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(`matrix-order:${product.id}`)
+      setManualOrder(raw ? (JSON.parse(raw) as string[]) : null)
+    } catch { /* ignore */ }
+  }, [product.id])
+  useEffect(() => {
+    try {
+      if (manualOrder) localStorage.setItem(`matrix-order:${product.id}`, JSON.stringify(manualOrder))
+      else localStorage.removeItem(`matrix-order:${product.id}`)
+    } catch { /* ignore */ }
+  }, [manualOrder, product.id])
+
+  // Drop the dragged row onto a target row → new manual order.
+  const reorderRows = (targetId: string) => {
+    if (!dragRowId || dragRowId === targetId) return
+    const ids = displayRows.map((c) => c.id)
+    const from = ids.indexOf(dragRowId)
+    const to = ids.indexOf(targetId)
+    if (from < 0 || to < 0) return
+    ids.splice(to, 0, ids.splice(from, 1)[0])
+    setManualOrder(ids)
+  }
 
   // ── F.1 — Row virtualization (threshold-gated) ────────────────────────
   // Large variant families (color × size → hundreds of rows) stay at
@@ -708,10 +760,25 @@ export default function MatrixTab({ product, discardSignal = 0 }: Props) {
   const VIRTUALIZE_AT = 60
   const ROW_PX = 41
   const matrixScrollRef = useRef<HTMLDivElement>(null)
-  const virtualize = sortedRows.length > VIRTUALIZE_AT
-  const totalCols = axes.length + 9
+  const virtualize = displayRows.length > VIRTUALIZE_AT
+  // +1 leading select column (H.2)
+  const totalCols = axes.length + 10
+  const allSelected = displayRows.length > 0 && displayRows.every((c) => selectedVariants.has(c.id))
+  const someSelected = selectedVariants.size > 0
+  const toggleVariant = (id: string) => setSelectedVariants((prev) => {
+    const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n
+  })
+  // H.3 — sortable-field catalog for the shared SortStack builder.
+  const sortFields: SortFieldOption[] = useMemo(() => [
+    ...axes.map((ax) => ({ value: ax, label: ax })),
+    { value: 'sku', label: 'SKU' },
+    { value: 'basePrice', label: 'Base price' },
+    { value: `cp:${selectedMarket}`, label: `${selectedMarket} price` },
+    { value: `lq:${selectedMarket}`, label: `${selectedMarket} qty` },
+    { value: 'totalStock', label: 'Physical' },
+  ], [axes, selectedMarket])
   const rowVirtualizer = useVirtualizer({
-    count: sortedRows.length,
+    count: displayRows.length,
     getScrollElement: () => matrixScrollRef.current,
     estimateSize: () => ROW_PX,
     overscan: 12,
@@ -728,7 +795,39 @@ export default function MatrixTab({ product, discardSignal = 0 }: Props) {
     const isActiveChanQ  = activeEdit ? cellKey(activeEdit) === cellKey(listedQtyAddr) : false
     const status = getListingStatus(child.id, selectedMarket)
     return (
-      <tr key={child.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 group/row">
+      <tr
+        key={child.id}
+        onDragOver={dragRowId && !virtualize ? (e) => e.preventDefault() : undefined}
+        onDrop={dragRowId && !virtualize ? () => { reorderRows(child.id); setDragRowId(null) } : undefined}
+        className={cn(
+          'hover:bg-slate-50 dark:hover:bg-slate-800/30 group/row',
+          selectedVariants.has(child.id) && 'bg-blue-50/40 dark:bg-blue-950/10',
+          dragRowId && dragRowId !== child.id && !virtualize && 'hover:border-t-2 hover:border-blue-400',
+        )}
+      >
+        {/* H.2 row select + H.4 drag-to-reorder handle */}
+        <td className="px-2 py-1.5 w-12">
+          <div className="flex items-center gap-1">
+            {!virtualize && (
+              <span
+                draggable
+                onDragStart={() => setDragRowId(child.id)}
+                onDragEnd={() => setDragRowId(null)}
+                title="Drag to reorder"
+                className="cursor-grab active:cursor-grabbing text-slate-300 hover:text-slate-500 dark:text-slate-600 dark:hover:text-slate-400 opacity-0 group-hover/row:opacity-100 transition-opacity"
+              >
+                <GripVertical className="w-3.5 h-3.5" />
+              </span>
+            )}
+            <input
+              type="checkbox"
+              aria-label={`Select variant ${child.sku}`}
+              checked={selectedVariants.has(child.id)}
+              onChange={() => toggleVariant(child.id)}
+              className="h-3.5 w-3.5 align-middle rounded border-slate-300 dark:border-slate-600 text-blue-600 focus:ring-blue-500/40 cursor-pointer"
+            />
+          </div>
+        </td>
         {axes.map((ax) => (
           <td key={ax} className="px-2 py-1.5 text-sm font-medium text-slate-700 dark:text-slate-300 whitespace-nowrap">
             {getAttr(child, ax) ?? <span className="text-slate-300">—</span>}
@@ -825,31 +924,41 @@ export default function MatrixTab({ product, discardSignal = 0 }: Props) {
     )
   }
 
+  // Header click = single primary sort; flips dir if already primary.
+  // (Multi-level stacking is done via the SortStack "+ Sort" builder.)
   function toggleSort(col: string) {
-    if (sortBy === col) setSortDir((d) => d === 'asc' ? 'desc' : 'asc')
-    else { setSortBy(col); setSortDir('asc') }
+    setManualOrder(null) // a column sort clears the manual arrangement
+    setSortStack((prev) => {
+      const [pf, pd] = (prev[0] ?? '').split(':')
+      if (pf === col && prev.length === 1) return [`${col}:${pd === 'asc' ? 'desc' : 'asc'}`]
+      return [`${col}:asc`]
+    })
   }
 
   // ── Bulk apply ───────────────────────────────────────────────────────
   async function applyBulk() {
     setBulkApplying(true)
     try {
+      // H.2 — scope to the selected variants when any are checked.
+      const targets = selectedVariants.size > 0
+        ? children.filter((c) => selectedVariants.has(c.id))
+        : children
       const updates: any[] = []
       if (bulkMode === 'price') {
         const price = parseFloat(bulkValue); if (isNaN(price)) return
-        for (const c of children) updates.push({ variantId: c.id, marketplace: selectedMarket, channel: 'AMAZON', price })
+        for (const c of targets) updates.push({ variantId: c.id, marketplace: selectedMarket, channel: 'AMAZON', price })
       } else if (bulkMode === 'qty') {
         const qty = parseInt(bulkValue, 10); if (isNaN(qty)) return
-        for (const c of children) updates.push({ variantId: c.id, marketplace: selectedMarket, channel: 'AMAZON', quantity: qty })
+        for (const c of targets) updates.push({ variantId: c.id, marketplace: selectedMarket, channel: 'AMAZON', quantity: qty })
       } else if (bulkMode === 'pct') {
         const pct = parseFloat(bulkValue); if (isNaN(pct)) return
         const factor = 1 + pct / 100
-        for (const c of children) {
+        for (const c of targets) {
           const cur = getChannelPrice(c.id, selectedMarket)
           if (cur) updates.push({ variantId: c.id, marketplace: selectedMarket, channel: 'AMAZON', price: Math.round(cur * factor * 100) / 100 })
         }
       } else if (bulkMode === 'copy') {
-        for (const c of children) {
+        for (const c of targets) {
           const src = getChannelPrice(c.id, bulkSrc)
           if (src) updates.push({ variantId: c.id, marketplace: bulkDst, channel: 'AMAZON', price: src })
         }
@@ -893,12 +1002,13 @@ export default function MatrixTab({ product, discardSignal = 0 }: Props) {
 
   // ── Sort header button ────────────────────────────────────────────────
   function SortTh({ col, children: label, className }: { col: string; children: React.ReactNode; className?: string }) {
+    const active = sortStack.some((p) => p.split(':')[0] === col)
     return (
       <th onClick={() => toggleSort(col)}
         className={cn('px-2 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 select-none whitespace-nowrap', className)}>
         <span className="flex items-center gap-0.5">
           {label}
-          <ArrowUpDown className={cn('w-3 h-3 opacity-30', sortBy === col && 'opacity-100 text-blue-500')} />
+          <ArrowUpDown className={cn('w-3 h-3 opacity-30', active && 'opacity-100 text-blue-500')} />
         </span>
       </th>
     )
@@ -977,6 +1087,13 @@ export default function MatrixTab({ product, discardSignal = 0 }: Props) {
         <span className="flex items-center gap-1"><Layers className="w-3.5 h-3.5" />{axes.join(' × ') || 'No axes'}</span>
         <span className="text-slate-300 dark:text-slate-600">·</span>
         <span>{children.length} variants</span>
+        {someSelected && (<>
+          <span className="text-slate-300 dark:text-slate-600">·</span>
+          <span className="text-blue-600 dark:text-blue-400">
+            {selectedVariants.size} selected
+            <button type="button" onClick={() => setSelectedVariants(new Set())} className="ml-1.5 text-xs text-slate-400 hover:text-slate-600 underline-offset-2 hover:underline">clear</button>
+          </span>
+        </>)}
         <span className="text-slate-300 dark:text-slate-600">·</span>
         <span>{children.reduce((s, c) => s + readNumber(c.totalStock), 0).toLocaleString()} physical</span>
       </div>
@@ -1017,6 +1134,18 @@ export default function MatrixTab({ product, discardSignal = 0 }: Props) {
           </button>
         ))}
 
+        <div className="h-4 w-px bg-slate-200 dark:bg-slate-700" />
+
+        {/* H.3 — shared multi-column sort builder */}
+        <SortStack fields={sortFields} stack={sortStack} onChange={(next) => { setManualOrder(null); setSortStack(next) }} />
+        {manualOrder && (
+          <button type="button" onClick={() => setManualOrder(null)}
+            className="text-xs text-slate-400 hover:text-slate-600 underline-offset-2 hover:underline"
+            title="Clear the manual drag order">
+            custom order · reset
+          </button>
+        )}
+
         <div className="ml-auto flex items-center gap-2">
           <button type="button" onClick={() => void refetch()} className="p-1.5 text-slate-400 hover:text-slate-600 rounded border border-slate-200 dark:border-slate-700">
             <RefreshCw className="w-3.5 h-3.5" />
@@ -1032,7 +1161,9 @@ export default function MatrixTab({ product, discardSignal = 0 }: Props) {
         <div className="flex items-center gap-3 px-3 py-2 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-lg text-sm flex-wrap">
           {(bulkMode === 'price' || bulkMode === 'qty') && (<>
             <span className="text-xs font-medium text-slate-600 dark:text-slate-300">
-              {bulkMode === 'price' ? `Set price for all variants on ${selectedMarket}` : `Set listed qty for all variants on ${selectedMarket}`}
+              {bulkMode === 'price'
+                ? `Set price for ${someSelected ? `${selectedVariants.size} selected` : 'all'} variants on ${selectedMarket}`
+                : `Set listed qty for ${someSelected ? `${selectedVariants.size} selected` : 'all'} variants on ${selectedMarket}`}
             </span>
             <div className="flex items-center gap-1">
               {bulkMode === 'price' && <span className="text-xs text-slate-400">€</span>}
@@ -1075,6 +1206,17 @@ export default function MatrixTab({ product, discardSignal = 0 }: Props) {
         <table className="w-full text-sm">
           <thead className="bg-slate-50 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-700 sticky top-0">
             <tr>
+              {/* H.2 — select-all */}
+              <th className="px-2 py-2 w-9">
+                <input
+                  type="checkbox"
+                  aria-label={allSelected ? 'Clear selection' : 'Select all variants'}
+                  checked={allSelected}
+                  ref={(el) => { if (el) el.indeterminate = someSelected && !allSelected }}
+                  onChange={() => setSelectedVariants(allSelected ? new Set() : new Set(displayRows.map((c) => c.id)))}
+                  className="h-3.5 w-3.5 align-middle rounded border-slate-300 dark:border-slate-600 text-blue-600 focus:ring-blue-500/40 cursor-pointer"
+                />
+              </th>
               {axes.map((ax) => <SortTh key={ax} col={ax}>{ax}</SortTh>)}
               <SortTh col="sku">SKU</SortTh>
               <SortTh col="basePrice" className="text-right">Base price</SortTh>
@@ -1092,16 +1234,17 @@ export default function MatrixTab({ product, discardSignal = 0 }: Props) {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-            {sortedRows.length === 0 && (
-              <tr><td colSpan={axes.length + 9} className="py-10 text-center text-sm text-slate-400">
+            {displayRows.length === 0 && (
+              <tr><td colSpan={totalCols} className="py-10 text-center text-sm text-slate-400">
                 No variants yet. Click "Add variant" to create the first one.
               </td></tr>
             )}
             {/* F.1 — below the threshold: render every row (unchanged).
                 Above it: window the rows with leading/trailing spacer rows
-                that preserve <table> semantics + scrollbar height. */}
+                that preserve <table> semantics + scrollbar height.
+                H.4 drag-reorder is only offered in the non-windowed path. */}
             {!virtualize
-              ? sortedRows.map(renderRow)
+              ? displayRows.map(renderRow)
               : (() => {
                   const items = rowVirtualizer.getVirtualItems()
                   const padTop = items.length ? items[0].start : 0
@@ -1113,7 +1256,7 @@ export default function MatrixTab({ product, discardSignal = 0 }: Props) {
                       {padTop > 0 && (
                         <tr aria-hidden style={{ height: padTop }}><td colSpan={totalCols} className="p-0 border-0" /></tr>
                       )}
-                      {items.map((vi) => renderRow(sortedRows[vi.index]))}
+                      {items.map((vi) => renderRow(displayRows[vi.index]))}
                       {padBottom > 0 && (
                         <tr aria-hidden style={{ height: padBottom }}><td colSpan={totalCols} className="p-0 border-0" /></tr>
                       )}

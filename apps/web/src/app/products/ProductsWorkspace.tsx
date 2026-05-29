@@ -1333,6 +1333,14 @@ export default function ProductsWorkspace() {
             >
               <BarChart2 size={12} /> Portfolio
             </Link>
+            {/* OL.H.1 — listing automation rules (price/inventory/health/content) */}
+            <Link
+              href="/products/automation"
+              className="h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5 text-slate-700 dark:text-slate-300"
+              title="Listing automation — cross-market price / inventory / health / content rules"
+            >
+              <Sparkles size={12} /> Automation
+            </Link>
             {/* F.1 — recycle-bin toggle. Subdued styling so it doesn't
                 steal attention from the primary actions; flips active
                 when the operator is inside the bin so it's obvious how
