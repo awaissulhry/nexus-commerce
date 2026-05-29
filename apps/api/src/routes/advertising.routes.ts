@@ -2436,6 +2436,14 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     return analyzeShareOfVoice({ windowDays: q.windowDays ? Number(q.windowDays) : undefined, marketplace: q.marketplace, limit: q.limit ? Number(q.limit) : undefined })
   })
 
+  // ── AX3.12: Live Ad Momentum ────────────────────────────────────────
+  fastify.get('/advertising/momentum', async (request, reply) => {
+    const q = request.query as Record<string, string | undefined>
+    const { getMomentum } = await import('../services/advertising/ads-momentum.service.js')
+    reply.header('Cache-Control', 'private, max-age=120')
+    return getMomentum({ date: q.date })
+  })
+
   // ── AX3.10: Budget Manager ──────────────────────────────────────────
   fastify.get('/advertising/budget-manager', async (request, reply) => {
     const q = request.query as Record<string, string | undefined>

@@ -14,7 +14,7 @@ import {
   Activity, Target, Plus, Wand2, Sparkles, Gauge, Wallet, Clock, Sprout,
   Radar, Brain, Crosshair, PackageX, Lightbulb, BarChart2, Tv, Users,
   Bot, Search, ClipboardList, TrendingUp, Warehouse, Rss, Stethoscope,
-  PanelLeftClose, PanelLeftOpen,
+  PanelLeftClose, PanelLeftOpen, Zap,
 } from 'lucide-react'
 
 interface Item { href: string; label: string; icon: LucideIcon }
@@ -23,6 +23,7 @@ interface Group { label: string; items: Item[] }
 const GROUPS: Group[] = [
   { label: 'Overview', items: [
     { href: '/marketing/advertising/campaigns', label: 'Campaigns', icon: Activity },
+    { href: '/marketing/advertising/momentum', label: 'Live momentum', icon: Zap },
     { href: '/marketing/advertising/recommendations', label: 'Recommendations', icon: Sparkles },
   ] },
   { label: 'Build', items: [
