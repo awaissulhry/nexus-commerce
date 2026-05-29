@@ -89,6 +89,7 @@ import channelPublishRoutes from "./routes/channel-publish.routes.js";
 import cloudinaryWebhookRoutes from "./routes/cloudinary-webhook.routes.js";
 import repricingRulesRoutes from "./routes/repricing-rules.routes.js";
 import categoriesRoutes from "./routes/categories.routes.js";
+import pimCategoriesRoutes from "./routes/pim-categories.routes.js";
 import listingWizardRoutes from "./routes/listing-wizard.routes.js";
 import wizardTemplateRoutes from "./routes/wizard-templates.routes.js";
 import gtinExemptionRoutes from "./routes/gtin-exemption.routes.js";
@@ -118,6 +119,7 @@ import { listingsSyndicationRoutes } from "./routes/listings-syndication.routes.
 import { listingHealthRoutes } from "./routes/listing-health.routes.js";
 import { fieldLinksRoutes } from "./routes/field-links.routes.js";
 import productsCatalogRoutes from "./routes/products-catalog.routes.js";
+import productsSearchRoutes from "./routes/products-search.routes.js";
 import productsAiRoutes from "./routes/products-ai.routes.js";
 import productsImagesRoutes from "./routes/products-images.routes.js";
 import listingImagesRoutes from "./routes/listing-images.routes.js";
@@ -229,6 +231,7 @@ import { initializeChannelSyncWorker } from "./workers/channel-sync.worker.js";
 import { initializeBulkListWorker } from "./workers/bulk-list.worker.js";
 import { initializeBulkJobWorker } from "./workers/bulk-job.worker.js";
 import { initializeReadCacheWorker } from "./workers/read-cache.worker.js";
+import { initializeSearchIndexWorker } from "./workers/search-index.worker.js";
 import { initializeQueue, closeQueue } from "./lib/queue.js";
 import { logger } from "./utils/logger.js";
 import prisma from "./db.js";
@@ -347,6 +350,10 @@ async function tryStartQueueWorkers(): Promise<void> {
     initializeBulkListWorker();
     initializeBulkJobWorker();
     initializeReadCacheWorker();
+    if (process.env.SEARCH_ENGINE_ENABLED === '1') {
+      initializeSearchIndexWorker();
+      logger.info('✅ Search-index worker started (SEARCH_ENGINE_ENABLED=1)');
+    }
     queueWorkersStarted = true;
     logger.info('✅ Queue workers started (BullMQ outbound-sync + channel-sync + bulk-list + bulk-job + read-cache)');
   } catch (err) {
@@ -526,6 +533,7 @@ app.register(channelPublishRoutes, { prefix: '/api' });
 app.register(cloudinaryWebhookRoutes, { prefix: '/api' });
 app.register(repricingRulesRoutes, { prefix: '/api' });
 app.register(categoriesRoutes, { prefix: '/api' });
+app.register(pimCategoriesRoutes, { prefix: '/api' });
 app.register(listingWizardRoutes, { prefix: '/api' });
 app.register(wizardTemplateRoutes, { prefix: '/api' });
 app.register(gtinExemptionRoutes, { prefix: '/api' });
@@ -553,6 +561,7 @@ app.register(auditLogRoutes, { prefix: '/api' });
 app.register(syncLogsRoutes, { prefix: '/api' });
 app.register(listingsSyndicationRoutes, { prefix: '/api' });
 app.register(productsCatalogRoutes, { prefix: '/api' });
+app.register(productsSearchRoutes, { prefix: '/api' });
 app.register(productsAiRoutes, { prefix: '/api' });
 app.register(productsImagesRoutes, { prefix: '/api' });
 app.register(listingImagesRoutes, { prefix: '/api' });

@@ -241,6 +241,44 @@ export class ProductReadCacheService {
       }
     }
 
+    // ── PIM category facets ──────────────────────────────────────────
+    // Direct memberships + closure ancestor rollup, so the fallback grid
+    // path can filter by a parent category and match the whole subtree
+    // (categoryIds via `hasSome`) — mirroring the Typesense doc.
+    const memberships = await prisma.productCategory.findMany({
+      where: { productId },
+      select: { categoryId: true, isPrimary: true },
+    })
+    let primaryCategoryId: string | null = null
+    const categoryIdSet = new Set<string>()
+    let categoryPathJson: Prisma.InputJsonValue | null = null
+    if (memberships.length > 0) {
+      const directIds = memberships.map((m) => m.categoryId)
+      primaryCategoryId =
+        memberships.find((m) => m.isPrimary)?.categoryId ?? directIds[0]
+      for (const id of directIds) categoryIdSet.add(id)
+      // All ancestors (incl. self at depth 0) of every direct category.
+      const closure = await prisma.categoryClosure.findMany({
+        where: { descendantId: { in: directIds } },
+        select: { ancestorId: true },
+      })
+      for (const c of closure) categoryIdSet.add(c.ancestorId)
+      // Breadcrumb of the primary category: ancestor chain ordered
+      // root→leaf (depth desc), with localized names.
+      const path = await prisma.categoryClosure.findMany({
+        where: { descendantId: primaryCategoryId },
+        orderBy: { depth: 'desc' },
+        select: {
+          ancestor: { select: { id: true, slug: true, name: true } },
+        },
+      })
+      categoryPathJson = path.map((p) => ({
+        id: p.ancestor.id,
+        slug: p.ancestor.slug,
+        name: p.ancestor.name,
+      })) as unknown as Prisma.InputJsonValue
+    }
+
     const data = {
       sku: product.sku,
       name: product.name,
@@ -277,6 +315,9 @@ export class ProductReadCacheService {
       coverageJson: Object.keys(coverageMap).length > 0
         ? (coverageMap as Prisma.InputJsonValue)
         : null,
+      primaryCategoryId,
+      categoryIds: Array.from(categoryIdSet),
+      categoryPathJson,
       createdAt: product.createdAt,
       updatedAt: product.updatedAt,
       deletedAt: product.deletedAt ?? null,
@@ -298,13 +339,23 @@ export class ProductReadCacheService {
     // dedups rapid bursts.
     if (product.parentId) {
       void import('../lib/queue.js')
-        .then(({ readCacheQueue }) =>
-          readCacheQueue.add(
+        .then(({ readCacheQueue, searchIndexQueue }) => {
+          void readCacheQueue.add(
             'refresh',
             { productId: product.parentId },
             { jobId: `cache:refresh:${product.parentId}`, delay: 2000 },
-          ),
-        )
+          )
+          // Mirror the re-index so the parent's borrowed-thumbnail doc
+          // re-derives when a child's images change. Gated like the
+          // primary enqueue path.
+          if (process.env.SEARCH_ENGINE_ENABLED === '1') {
+            void searchIndexQueue.add(
+              'index',
+              { productId: product.parentId },
+              { jobId: `search:index:${product.parentId}`, delay: 2000 },
+            )
+          }
+        })
         .catch(() => {/* parent re-enqueue is best-effort */})
     }
   }

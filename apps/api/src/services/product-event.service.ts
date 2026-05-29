@@ -15,7 +15,7 @@
 
 import prisma from '../db.js'
 import type { Prisma } from '@prisma/client'
-import { readCacheQueue } from '../lib/queue.js'
+import { readCacheQueue, searchIndexQueue } from '../lib/queue.js'
 import { publishListingEvent } from './listing-events.service.js'
 
 // ── Types ────────────────────────────────────────────────────────────
@@ -139,6 +139,24 @@ export class ProductEventService {
           err instanceof Error ? err.message : String(err),
         ),
       )
+
+    // PIM search read-engine fan-out. Separate queue so a Typesense
+    // outage can't wedge the read-cache rebuild above. Gated on
+    // SEARCH_ENGINE_ENABLED; same debounce + jobId dedupe. Fail-open.
+    if (process.env.SEARCH_ENGINE_ENABLED === '1') {
+      void searchIndexQueue
+        .add(
+          'index',
+          { productId: input.aggregateId },
+          { jobId: `search:index:${input.aggregateId}`, delay: 2000 },
+        )
+        .catch((err) =>
+          console.warn(
+            '[ProductEvent] searchIndexQueue.add failed:',
+            err instanceof Error ? err.message : String(err),
+          ),
+        )
+    }
   }
 
   /** Emit one event inside an existing Prisma transaction (atomic). */

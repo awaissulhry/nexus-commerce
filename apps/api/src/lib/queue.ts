@@ -105,6 +105,21 @@ export const readCacheQueue: Queue = new Queue('read-cache', {
   },
 })
 
+// PIM search read-engine indexer queue. Parallel sibling to readCacheQueue
+// (NOT folded into it) so a Typesense outage can never back up or fail the
+// load-bearing ProductReadCache rebuild. Same jobId-dedupe + 2s debounce
+// discipline (jobId = "search:index:<productId>"). Only enqueued when
+// SEARCH_ENGINE_ENABLED=1 (gated at the product-event enqueue point).
+export const searchIndexQueue: Queue = new Queue('search-index', {
+  connection: redis.connection,
+  defaultJobOptions: {
+    attempts: 3,
+    backoff: { type: 'fixed', delay: 5000 },
+    removeOnComplete: { age: 3600 },
+    removeOnFail: { age: 86400 },
+  },
+})
+
 // W13.1 — out-of-process bulk-job processor. Large jobs (W13.2
 // promotion threshold) get enqueued here so the API process
 // stays responsive while a 10k-row batch chews on its work.
@@ -192,6 +207,8 @@ export async function closeQueue() {
   try {
     await outboundSyncQueue.close()
     await channelSyncQueue.close()
+    await readCacheQueue.close()
+    await searchIndexQueue.close()
     await queueEvents.close()
     await channelSyncQueueEvents.close()
     if (_redis) await _redis.quit()

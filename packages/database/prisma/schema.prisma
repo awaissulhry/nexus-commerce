@@ -197,6 +197,14 @@ model Product {
   // RepricingDecision rows for the audit trail.
   repricingRules RepricingRule[]
 
+  // ── PIM Category taxonomy (net-new) ───────────────────────────
+  // M:N membership in the internal infinite-depth category tree
+  // (Category + CategoryClosure). Distinct from marketplace
+  // CategorySchema (Amazon/eBay product-type attribute schemas).
+  // One row per (product, category); one flagged isPrimary for the
+  // breadcrumb/face category. Cascade on product delete.
+  categories ProductCategory[]
+
   // Pricing intelligence
   costPrice       Decimal? @db.Decimal(10, 2) // Cost of goods for margin calc
   minMargin       Decimal? @db.Decimal(5, 2) // Minimum acceptable margin percentage (e.g., 15 for 15%)
@@ -7718,7 +7726,7 @@ model SupplierProduct {
   // InboundShipment. Replenishment recommendations prefer
   // lastLandedCostCents over costCents when present so EOQ math
   // works against true-cost.
-  lastLandedCostCents    Int?
+  lastLandedCostCents     Int?
   lastLandedCostUpdatedAt DateTime?
 
   supplier Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
@@ -7788,8 +7796,8 @@ model PurchaseOrder {
   // Surfaces on the factory PDF in PO.12 as the "Ship to" block.
   shipToAddress Json?
 
-  supplier         Supplier?           @relation(fields: [supplierId], references: [id])
-  warehouse        Warehouse?          @relation(fields: [warehouseId], references: [id])
+  supplier         Supplier?                 @relation(fields: [supplierId], references: [id])
+  warehouse        Warehouse?                @relation(fields: [warehouseId], references: [id])
   items            PurchaseOrderItem[]
   inboundShipments InboundShipment[]
   // PO.1 — PO-level docs (supplier quote, contract refs, customer art,
@@ -7878,14 +7886,14 @@ model PurchaseOrderAttachment {
 //   { items: [{ sku, qty, unitCostCents, note }], total, currency }
 // Stored as Json so future fields can land without a migration.
 model PurchaseOrderRevision {
-  id              String   @id @default(cuid())
-  purchaseOrderId String
-  version         Int // monotonic per parent PO; starts at 2 (v1 = the original)
-  reason          String?
-  status          String   @default("PENDING") // see comment above
-  snapshotJson    Json
-  createdBy       String?
-  createdAt       DateTime @default(now())
+  id                 String    @id @default(cuid())
+  purchaseOrderId    String
+  version            Int // monotonic per parent PO; starts at 2 (v1 = the original)
+  reason             String?
+  status             String    @default("PENDING") // see comment above
+  snapshotJson       Json
+  createdBy          String?
+  createdAt          DateTime  @default(now())
   supplierNotifiedAt DateTime?
   supplierAckedAt    DateTime?
   cancelledAt        DateTime?
@@ -7903,13 +7911,13 @@ model PurchaseOrderRevision {
 // resolved user IDs / emails for the notification fan-out; the raw
 // markdown body keeps the @-mention text for re-render.
 model PoComment {
-  id              String   @id @default(cuid())
+  id              String    @id @default(cuid())
   purchaseOrderId String
   userId          String?
   body            String
   // Either userIds or email strings — whichever the @-picker resolved.
-  mentions        String[] @default([])
-  createdAt       DateTime @default(now())
+  mentions        String[]  @default([])
+  createdAt       DateTime  @default(now())
   editedAt        DateTime?
 
   purchaseOrder PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
@@ -7957,14 +7965,14 @@ model PoTemplate {
   notes        String?
 
   createdBy String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
   deletedAt DateTime?
 
   items     PoTemplateItem[]
   schedules PoSchedule[]
-  supplier  Supplier?  @relation(fields: [supplierId], references: [id], onDelete: SetNull)
-  warehouse Warehouse? @relation(fields: [warehouseId], references: [id], onDelete: SetNull)
+  supplier  Supplier?        @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  warehouse Warehouse?       @relation(fields: [warehouseId], references: [id], onDelete: SetNull)
 
   @@index([supplierId])
   @@index([deletedAt])
@@ -8002,16 +8010,16 @@ model PoTemplateItem {
 // expectedDeliveryDate = today + expectedLeadDays. Null = no
 // expected date (operator fills in after).
 model PoSchedule {
-  id                 String   @id @default(cuid())
-  templateId         String
-  cadence            String // DAILY | WEEKLY | MONTHLY | QUARTERLY
-  cadenceInterval    Int      @default(1)
-  startsAt           DateTime
-  nextRunAt          DateTime
-  lastRunAt          DateTime?
-  lastGeneratedPoId  String?
-  isActive           Boolean  @default(true)
-  expectedLeadDays   Int?
+  id                String    @id @default(cuid())
+  templateId        String
+  cadence           String // DAILY | WEEKLY | MONTHLY | QUARTERLY
+  cadenceInterval   Int       @default(1)
+  startsAt          DateTime
+  nextRunAt         DateTime
+  lastRunAt         DateTime?
+  lastGeneratedPoId String?
+  isActive          Boolean   @default(true)
+  expectedLeadDays  Int?
 
   createdBy String?
   createdAt DateTime @default(now())
@@ -9750,11 +9758,11 @@ model ReviewRequest {
   lastAttemptAt DateTime?
   nextRetryAt   DateTime?
 
-  order          Order                 @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  rule           ReviewRule?           @relation(fields: [ruleId], references: [id], onDelete: SetNull)
-  sentimentCheck ReviewSentimentCheck?
+  order             Order                 @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  rule              ReviewRule?           @relation(fields: [ruleId], references: [id], onDelete: SetNull)
+  sentimentCheck    ReviewSentimentCheck?
   // RV.9.7 — Reviews heuristically attributed to this request.
-  attributedReviews Review[] @relation("ReviewAttribution")
+  attributedReviews Review[]              @relation("ReviewAttribution")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -9789,11 +9797,11 @@ model ReviewRule {
   createdBy            String?
   notes                String?
 
-  requests        ReviewRequest[]
-  sentimentChecks ReviewSentimentCheck[]
+  requests          ReviewRequest[]
+  sentimentChecks   ReviewSentimentCheck[]
   // RV.9.7 — Reviews heuristically attributed to a request created
   // by this rule.
-  attributedReviews Review[] @relation("ReviewRuleAttribution")
+  attributedReviews Review[]               @relation("ReviewRuleAttribution")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -11095,6 +11103,21 @@ model ProductReadCache {
   updatedAt DateTime
   deletedAt DateTime?
 
+  // ── PIM category facets (net-new) ─────────────────────────────────
+  // primaryCategoryId      = the product's isPrimary ProductCategory.
+  // categoryIds            = the product's direct categories PLUS all of
+  //                          their ancestor ids (the closure rollup). A
+  //                          parent-category filter (`hasSome`) therefore
+  //                          matches every product anywhere in the subtree
+  //                          without a join. Mirrors the Typesense doc's
+  //                          `categoryIds[]` so the fallback path filters
+  //                          identically.
+  // categoryPathJson       = localized breadcrumb labels for the primary
+  //                          category. Shape: [{ id, slug, name: {en,it} }]
+  primaryCategoryId String?
+  categoryIds       String[]
+  categoryPathJson  Json?
+
   // ── Cache bookkeeping ──────────────────────────────────────────────
   cacheRefreshedAt DateTime @default(now())
   // IN.4 — count of ChannelListings where any followMaster*=false
@@ -11114,6 +11137,108 @@ model ProductReadCache {
   @@index([channelCount])
   @@index([variantCount])
   @@index([driftCount])
+  @@index([primaryCategoryId])
+  // GIN index on categoryIds[] for fast subtree (`hasSome`) filtering;
+  // Prisma emits the gin operator-class index for String[] @@index.
+  @@index([categoryIds], type: Gin)
+}
+
+// ── PIM Category taxonomy (net-new) ──────────────────────────────────
+//
+// An internal, infinite-depth product category tree, stored as a node
+// table (Category) + a closure table (CategoryClosure) for O(1)-join
+// ancestor/descendant queries. This is the operator's OWN merchandising
+// taxonomy — deliberately separate from `CategorySchema` (line ~5568),
+// which only caches Amazon/eBay marketplace product-type attribute
+// schemas.
+//
+// Why a closure table (vs materialized path / ltree):
+//   • "all descendants of X" and "all ancestors of X" are each a single
+//     indexed join — needed for subtree facet rollups and breadcrumbs.
+//   • No LIKE 'path%' scans; no Postgres ltree extension dependency on
+//     Neon.
+//   • Product↔Category join references a stable categoryId, never an
+//     encoded path string that a re-parent would have to rewrite across
+//     every member product.
+model Category {
+  id String @id @default(cuid())
+
+  // Self-relation for the human-readable adjacency view. The closure
+  // table (below) is the query workhorse; parentId is the source of
+  // truth that the closure is derived from. Restrict on delete so a
+  // non-empty node cannot be removed out from under its children — the
+  // service surfaces a 409 and forces an explicit move/empty first.
+  parentId String?
+  parent   Category?  @relation("CategoryTree", fields: [parentId], references: [id], onDelete: Restrict)
+  children Category[] @relation("CategoryTree")
+
+  // Identity / ordering.
+  slug      String // URL-safe segment, unique among siblings
+  code      String? // optional operator-facing external reference
+  sortOrder Int     @default(0)
+  isActive  Boolean @default(true)
+  // Denormalized tree depth (root = 0). Cheap sorting + breadcrumb hint;
+  // recomputed on create/move alongside the closure rows.
+  depth     Int     @default(0)
+
+  // Localized content — reuses the per-locale JSONB convention from
+  // Product.localizedContent. Shape: { "en": { ... }, "it": { ... } }.
+  name        Json  @default("{\"en\":{},\"it\":{}}")
+  description Json?
+  // Optional category-level attribute defaults (same JSONB-attrs approach
+  // as Product.categoryAttributes); inherited/merged by member products
+  // at resolve time if desired.
+  attributes  Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Closure rows where this node is the ancestor / the descendant.
+  ancestorLinks   CategoryClosure[] @relation("CategoryAncestor")
+  descendantLinks CategoryClosure[] @relation("CategoryDescendant")
+
+  // Member products.
+  products ProductCategory[]
+
+  @@unique([parentId, slug])
+  @@index([parentId])
+  @@index([isActive])
+  @@index([slug])
+}
+
+// One row per (ancestor, descendant) reachable pair, INCLUDING the
+// self-pair at depth 0. Example for A → B → C:
+//   (A,A,0) (B,B,0) (C,C,0) (A,B,1) (B,C,1) (A,C,2)
+// "descendants of A"  = rows WHERE ancestorId = A   (B, C, A)
+// "ancestors of C"    = rows WHERE descendantId = C (A, B, C)
+model CategoryClosure {
+  ancestorId   String
+  descendantId String
+  depth        Int // hops from ancestor → descendant (self = 0)
+
+  ancestor   Category @relation("CategoryAncestor", fields: [ancestorId], references: [id], onDelete: Cascade)
+  descendant Category @relation("CategoryDescendant", fields: [descendantId], references: [id], onDelete: Cascade)
+
+  @@id([ancestorId, descendantId])
+  @@index([descendantId])
+  @@index([ancestorId, depth])
+}
+
+// Product ↔ Category membership (M:N). A product may live in several
+// categories; exactly one should be flagged isPrimary (enforced in the
+// service, not the schema, so bulk re-assign stays cheap).
+model ProductCategory {
+  productId  String
+  categoryId String
+  isPrimary  Boolean  @default(false)
+  assignedAt DateTime @default(now())
+
+  product  Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@id([productId, categoryId])
+  @@index([categoryId])
+  @@index([productId, isPrimary])
 }
 
 // ── ES.1 — Immutable Product Event Log ───────────────────────────────
@@ -11901,19 +12026,19 @@ model AdSchedule {
 // definition is stored here and (when live) materialised into an AMC/DSP
 // audience. `externalAudienceId` holds the activated id.
 model AdAudience {
-  id                 String    @id @default(cuid())
+  id                 String   @id @default(cuid())
   name               String
   audienceType       String // CART_ABANDONERS | PRODUCT_VIEWERS | PAST_PURCHASERS | LOOKALIKE | SUPPRESSION | COMPETITOR_VIEWERS | CUSTOM
   marketplace        String?
-  lookbackDays       Int       @default(30)
-  asins              String[]  @default([])
-  params             Json      @default("{}")
+  lookbackDays       Int      @default(30)
+  asins              String[] @default([])
+  params             Json     @default("{}")
   estimatedReach     Int?
   reachBasis         String? // computed | amc-estimate | unknown
-  status             String    @default("DRAFT") // DRAFT | ACTIVE | ARCHIVED
+  status             String   @default("DRAFT") // DRAFT | ACTIVE | ARCHIVED
   externalAudienceId String?
-  createdAt          DateTime  @default(now())
-  updatedAt          DateTime  @updatedAt
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
   createdBy          String?
 
   @@index([status])
@@ -11925,19 +12050,19 @@ model AdAudience {
 // calendar (tentpole events like Prime Day / Black Friday). Spend is read
 // live from AmazonAdsDailyPerformance; only the plan is stored here.
 model AdBudgetPlan {
-  id               String   @id @default(cuid())
-  marketplace      String
-  tag              String? // sub-tag / portfolio label; null = marketplace-level
-  month            String // "YYYY-MM"
-  monthlyBudgetCents Int    @default(0)
-  autoPacing       Boolean  @default(false)
-  stopOverSpend    Boolean  @default(false)
+  id                 String   @id @default(cuid())
+  marketplace        String
+  tag                String? // sub-tag / portfolio label; null = marketplace-level
+  month              String // "YYYY-MM"
+  monthlyBudgetCents Int      @default(0)
+  autoPacing         Boolean  @default(false)
+  stopOverSpend      Boolean  @default(false)
   // [{ day: 1-31, pct: number }] — per-day % of the monthly budget. Empty =
   // even daily split. Used for event-weighted pacing.
-  calendar         Json     @default("[]")
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
-  createdBy        String?
+  calendar           Json     @default("[]")
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  createdBy          String?
 
   @@index([month, marketplace])
 }

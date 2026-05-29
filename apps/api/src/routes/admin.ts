@@ -19,6 +19,12 @@ import {
   resetShadowBuffer,
   isShadowEnabled,
 } from '../services/pim/resolver-shadow.js'
+import { productSearchIndexerService } from '../services/product-search-indexer.service.js'
+import {
+  isSearchConfigured,
+  searchHealthy,
+  documentCount,
+} from '../lib/typesense.js'
 
 // RB.1 — entities tracked by /admin/recycle-bin. Each maps to a Prisma
 // model that carries a `deletedAt` column. The same list drives the
@@ -843,5 +849,47 @@ export async function adminRoutes(app: FastifyInstance) {
   app.post('/admin/pim/resolver-shadow-reset', async (_request, reply) => {
     resetShadowBuffer()
     return reply.send({ ok: true })
+  })
+
+  // ── PIM search engine (Typesense) admin ──────────────────────────────
+  //
+  // GET  /admin/search/status   — configured / healthy / doc-count vs
+  //                                ProductReadCache row-count (cutover gate)
+  // POST /admin/search/backfill — seed/rebuild the products collection
+  //                                from ProductReadCache. Idempotent.
+  app.get('/admin/search/status', async (_request, reply) => {
+    const configured = isSearchConfigured()
+    const [healthy, docs, cacheCount] = await Promise.all([
+      configured ? searchHealthy() : Promise.resolve(false),
+      configured ? documentCount() : Promise.resolve(-1),
+      prisma.productReadCache.count({ where: { deletedAt: null } }),
+    ])
+    return reply.send({
+      configured,
+      healthy,
+      searchEngineEnabled: process.env.SEARCH_ENGINE_ENABLED === '1',
+      gridPrimary: process.env.SEARCH_GRID_PRIMARY === '1',
+      documentCount: docs,
+      cacheCount,
+      inSync: docs >= 0 ? docs === cacheCount : false,
+    })
+  })
+
+  app.post('/admin/search/backfill', async (_request, reply) => {
+    if (!isSearchConfigured()) {
+      return reply.code(409).send({
+        error:
+          'Search engine not configured. Set SEARCH_ENGINE_ENABLED=1 and TYPESENSE_* env vars.',
+      })
+    }
+    try {
+      const result = await productSearchIndexerService.backfillAll()
+      const docs = await documentCount()
+      return reply.send({ ok: true, ...result, documentCount: docs })
+    } catch (err) {
+      return reply.code(500).send({
+        error: err instanceof Error ? err.message : String(err),
+      })
+    }
   })
 }
