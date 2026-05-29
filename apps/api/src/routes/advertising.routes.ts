@@ -2454,6 +2454,23 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     try { return await ingestMarketingStream(messages as never) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
   })
 
+  // ── AX3.3: Amazon DSP + Performance+/Brand+ ─────────────────────────
+  fastify.get('/advertising/dsp/meta', async (_request, reply) => {
+    const { DSP_CHANNELS, DSP_OBJECTIVES } = await import('../services/advertising/ads-dsp.service.js')
+    reply.header('Cache-Control', 'private, max-age=600')
+    return { channels: DSP_CHANNELS, objectives: DSP_OBJECTIVES }
+  })
+  fastify.get('/advertising/dsp', async () => {
+    const { listDspCampaigns } = await import('../services/advertising/ads-dsp.service.js')
+    return listDspCampaigns()
+  })
+  fastify.post('/advertising/dsp/create', async (request, reply) => {
+    const b = request.body as Record<string, unknown>
+    if (!b?.name || !b?.mode || !b?.objective || b?.dailyBudgetEur == null) { reply.status(400); return { error: 'name, mode (PERFORMANCE_PLUS|BRAND_PLUS), objective, dailyBudgetEur required' } }
+    const { createDspCampaign } = await import('../services/advertising/ads-dsp.service.js')
+    try { return await createDspCampaign(b as never) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
+  })
+
   // ── AX3.4: AMC-style no-SQL audiences ───────────────────────────────
   fastify.get('/advertising/audience-templates', async (_request, reply) => {
     const { AUDIENCE_TEMPLATES } = await import('../services/advertising/ads-audience.service.js')

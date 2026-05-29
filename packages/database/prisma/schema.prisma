@@ -16,6 +16,7 @@ enum CampaignType {
   SP // Sponsored Products
   SB // Sponsored Brands
   SD // Sponsored Display
+  DSP // AX3.3 — Amazon DSP (Performance+ / Brand+)
 }
 
 enum CampaignStatus {
