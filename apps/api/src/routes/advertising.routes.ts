@@ -2380,6 +2380,13 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const { createNegativeProductTargetLocal } = await import('../services/advertising/ads-create.service.js')
     try { return await createNegativeProductTargetLocal(b as never) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
   })
+  // ── AX2.9: Sponsored Brands creative ────────────────────────────────
+  fastify.post('/advertising/sb-creatives/create', async (request, reply) => {
+    const b = request.body as Record<string, unknown>
+    if (!b?.adGroupId || !b?.brandName || !b?.headline || !Array.isArray(b?.asins)) { reply.status(400); return { error: 'adGroupId, brandName, headline, asins[] required' } }
+    const { createSbAdLocal } = await import('../services/advertising/ads-create.service.js')
+    try { return await createSbAdLocal(b as never) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
+  })
 
   // ── AX.6: Keyword-paste auto-architect ──────────────────────────────
   fastify.post('/advertising/architect/preview', async (request, reply) => {

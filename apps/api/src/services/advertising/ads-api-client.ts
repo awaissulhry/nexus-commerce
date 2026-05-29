@@ -559,6 +559,36 @@ export async function createSdTarget(ctx: ClientContext, input: CreateSdTargetIn
   return { ok: true, mode: 'live', externalId: response?.success?.[0]?.targetId ?? null, rawResponse: response }
 }
 
+// ── Sponsored Brands creative (AX2.9) — SB ads carry a brand creative
+// (brandName + logo + headline) plus a landing destination (store page /
+// product list / custom URL) and one of several creative layouts (product
+// collection / store spotlight / video). Posted via the SB v4 ads endpoint. ─
+export interface CreateSbAdInput {
+  externalCampaignId: string; externalAdGroupId: string
+  brandName: string; headline: string; logoAssetId?: string
+  creativeType: 'productCollection' | 'storeSpotlight' | 'video'
+  landingType: 'store' | 'productList' | 'url'; landingUrl?: string
+  asins: string[]; state?: 'enabled' | 'paused'
+}
+export async function createSbAd(ctx: ClientContext, input: CreateSbAdInput): Promise<{ ok: boolean; mode: AdsMode; externalId: string | null; rawResponse: unknown }> {
+  if (adsMode() === 'sandbox') {
+    const externalId = `sb-sbad-${randomUUID().slice(0, 8)}`
+    logger.info('[ADS-SANDBOX] createSbAd', { input, externalId })
+    return { ok: true, mode: 'sandbox', externalId, rawResponse: { sandbox: true } }
+  }
+  const creative: Record<string, unknown> = {
+    brandName: input.brandName, headline: input.headline,
+    ...(input.logoAssetId ? { brandLogoAssetID: input.logoAssetId } : {}),
+    asins: input.asins,
+  }
+  const landingPage: Record<string, unknown> = input.landingType === 'url' && input.landingUrl
+    ? { url: input.landingUrl }
+    : { pageType: input.landingType === 'store' ? 'STORE' : 'PRODUCT_LIST' }
+  const body = { ads: [{ campaignId: input.externalCampaignId, adGroupId: input.externalAdGroupId, adType: input.creativeType, creative, landingPage, state: (input.state ?? 'enabled').toUpperCase() }] }
+  const response = await liveCall<{ ads?: { success?: Array<{ adId: string }> } }>({ ...ctx, method: 'POST', path: '/sb/v4/ads', body, contentType: 'application/vnd.sbAdResource.v4+json', acceptHeader: 'application/vnd.sbAdResource.v4+json' })
+  return { ok: true, mode: 'live', externalId: response?.ads?.success?.[0]?.adId ?? null, rawResponse: response }
+}
+
 // ── Reports (Amazon's async request → poll → download pattern) ─────────
 
 export type ReportType =

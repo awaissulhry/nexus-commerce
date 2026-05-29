@@ -34,7 +34,7 @@ export function CreateCampaignClient() {
   const [goal, setGoal] = useState<string | null>(null)
   const [goalTip, setGoalTip] = useState<string | null>(null)
   const [type, setType] = useState<CType | null>(null)
-  const [f, setF] = useState({ name: '', marketplace: 'IT', targetingType: 'MANUAL', dailyBudgetEur: '10', biddingStrategy: 'legacyForSales', defaultBidEur: '0.50', adGroupName: '', productSku: '', keywords: '', matchTypes: { EXACT: true, PHRASE: true, BROAD: false } as Record<string, boolean> })
+  const [f, setF] = useState({ name: '', marketplace: 'IT', targetingType: 'MANUAL', dailyBudgetEur: '10', biddingStrategy: 'legacyForSales', defaultBidEur: '0.50', adGroupName: '', productSku: '', keywords: '', matchTypes: { EXACT: true, PHRASE: true, BROAD: false } as Record<string, boolean>, brandName: '', headline: '', logoAssetId: '', creativeType: 'productCollection', landingType: 'productList', landingUrl: '', sbAsins: '' })
   const [busy, setBusy] = useState(false)
   const [result, setResult] = useState<string | null>(null)
 
@@ -53,15 +53,22 @@ export function CreateCampaignClient() {
       const c = await post('/campaigns/create', { name: f.name, type, marketplace: f.marketplace, targetingType: f.targetingType, dailyBudgetEur: parseFloat(f.dailyBudgetEur) || 10, biddingStrategy: f.biddingStrategy })
       if (!c?.id) { setResult(`Error: ${c?.error ?? 'campaign create failed'}`); return }
       const g = await post('/adgroups/create', { campaignId: c.id, name: f.adGroupName || `${f.name} - Ad group`, defaultBidEur: parseFloat(f.defaultBidEur) || 0.5 })
-      let kw = 0
-      if (f.productSku.trim()) await post('/product-ads/create', { adGroupId: g.id, sku: f.productSku.trim() })
+      let kw = 0, extra = ''
+      if (type === 'SB') {
+        const asins = f.sbAsins.split(/[\n,]/).map((x) => x.trim()).filter(Boolean)
+        const sb = await post('/sb-creatives/create', { adGroupId: g.id, brandName: f.brandName, headline: f.headline, logoAssetId: f.logoAssetId || undefined, creativeType: f.creativeType, landingType: f.landingType, landingUrl: f.landingType === 'url' ? f.landingUrl : undefined, asins })
+        if (sb?.error) { setResult(`Error: ${sb.error}`); return }
+        extra = ` with a Brands creative (${asins.length} ASINs)`
+      } else if (f.productSku.trim()) {
+        await post('/product-ads/create', { adGroupId: g.id, sku: f.productSku.trim() })
+      }
       if (f.targetingType === 'MANUAL' && f.keywords.trim()) {
         const mts = Object.entries(f.matchTypes).filter(([, v]) => v).map(([k]) => k)
         for (const text of f.keywords.split('\n').map((x) => x.trim()).filter(Boolean)) {
           for (const mt of mts) { await post('/keywords/create', { adGroupId: g.id, keywordText: text, matchType: mt, bidEur: parseFloat(f.defaultBidEur) || 0.5 }); kw++ }
         }
       }
-      setResult(`✓ Created campaign "${f.name}"${kw ? ` with ${kw} keywords` : ''}.`)
+      setResult(`✓ Created campaign "${f.name}"${extra}${kw ? ` with ${kw} keywords` : ''}.`)
     } finally { setBusy(false) }
   }
 
@@ -121,7 +128,24 @@ export function CreateCampaignClient() {
           <label className="flex-1 text-xs text-slate-500">Default bid €<input value={f.defaultBidEur} onChange={(e) => set('defaultBidEur', e.target.value)} className="w-full mt-0.5 px-2 py-1.5 text-sm rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950" /></label>
           <label className="flex-1 text-xs text-slate-500">Ad group name<input value={f.adGroupName} onChange={(e) => set('adGroupName', e.target.value)} placeholder="(auto)" className="w-full mt-0.5 px-2 py-1.5 text-sm rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950" /></label>
         </div>
-        <label className="block text-xs text-slate-500">Product SKU to advertise<input value={f.productSku} onChange={(e) => set('productSku', e.target.value)} placeholder="MISANO-JACKET-XL-BLACK" className="w-full mt-0.5 px-2 py-1.5 text-sm rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950" /></label>
+        {type === 'SB' ? (
+          <div className="rounded-lg border border-slate-200 dark:border-slate-800 p-3 space-y-3">
+            <div className="text-xs font-medium text-slate-600 dark:text-slate-300">Brand creative</div>
+            <div className="flex gap-2">
+              <label className="flex-1 text-xs text-slate-500">Brand name<input value={f.brandName} onChange={(e) => set('brandName', e.target.value)} placeholder="Xavia" className="w-full mt-0.5 px-2 py-1.5 text-sm rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950" /></label>
+              <label className="flex-1 text-xs text-slate-500">Logo asset id<input value={f.logoAssetId} onChange={(e) => set('logoAssetId', e.target.value)} placeholder="(from Creative Asset Library)" className="w-full mt-0.5 px-2 py-1.5 text-sm rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950" /></label>
+            </div>
+            <label className="block text-xs text-slate-500">Headline<input value={f.headline} onChange={(e) => set('headline', e.target.value)} maxLength={50} placeholder="Premium Italian motorcycle gear" className="w-full mt-0.5 px-2 py-1.5 text-sm rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950" /><span className="text-[10px] text-slate-400">{f.headline.length}/50</span></label>
+            <div className="flex gap-2">
+              <label className="flex-1 text-xs text-slate-500">Creative type<select value={f.creativeType} onChange={(e) => set('creativeType', e.target.value)} className="w-full mt-0.5 px-2 py-1.5 text-sm rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950"><option value="productCollection">Product collection</option><option value="storeSpotlight">Store spotlight</option><option value="video">Video</option></select></label>
+              <label className="flex-1 text-xs text-slate-500">Landing<select value={f.landingType} onChange={(e) => set('landingType', e.target.value)} className="w-full mt-0.5 px-2 py-1.5 text-sm rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950"><option value="productList">New landing page</option><option value="store">Store page</option><option value="url">Custom URL</option></select></label>
+            </div>
+            {f.landingType === 'url' && <label className="block text-xs text-slate-500">Landing URL<input value={f.landingUrl} onChange={(e) => set('landingUrl', e.target.value)} placeholder="https://amazon.it/stores/…" className="w-full mt-0.5 px-2 py-1.5 text-sm rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950" /></label>}
+            <label className="block text-xs text-slate-500">Featured ASINs (one per line / comma-separated)<textarea value={f.sbAsins} onChange={(e) => set('sbAsins', e.target.value)} rows={3} placeholder="B0XXXXXXXX&#10;B0YYYYYYYY" className="w-full mt-0.5 px-2 py-1.5 text-sm rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 font-mono" /></label>
+          </div>
+        ) : (
+          <label className="block text-xs text-slate-500">Product SKU to advertise<input value={f.productSku} onChange={(e) => set('productSku', e.target.value)} placeholder="MISANO-JACKET-XL-BLACK" className="w-full mt-0.5 px-2 py-1.5 text-sm rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950" /></label>
+        )}
         {f.targetingType === 'MANUAL' && (
           <>
             <label className="block text-xs text-slate-500">Keywords (one per line)<textarea value={f.keywords} onChange={(e) => set('keywords', e.target.value)} rows={6} className="w-full mt-0.5 px-2 py-1.5 text-sm rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 font-mono" /></label>

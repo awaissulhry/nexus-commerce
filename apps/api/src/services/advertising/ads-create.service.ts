@@ -16,7 +16,7 @@ import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import {
   createCampaign, createAdGroup, createKeyword, createProductAd,
-  createTarget, createNegativeProductTarget, createSdTarget, updateCampaign,
+  createTarget, createNegativeProductTarget, createSdTarget, createSbAd, updateCampaign,
   type AdsRegion,
 } from './ads-api-client.js'
 import { checkAdsWriteGate } from './ads-write-gate.js'
@@ -167,6 +167,41 @@ export async function createTargetLocal(input: NewTarget): Promise<{ id: string;
   await audit('create_target', 'AD_TARGET', t.id, { kind: input.kind, value: input.value, externalId, mode }, input.userId)
   logger.info('[AX2.1] createTargetLocal', { id: t.id, kind: input.kind, externalId, mode })
   return { id: t.id, externalTargetId: externalId, mode }
+}
+
+// ── AX2.9 — Sponsored Brands creative (brand headline + logo + ASINs +
+// landing). Stored in AdProductAd.creativeJson (adType BRAND_AD); the full
+// envelope is sent to SB v4 /sb/ads behind the write gate. ───────────────
+export interface NewSbAd {
+  adGroupId: string
+  brandName: string; headline: string; logoAssetId?: string
+  creativeType?: 'productCollection' | 'storeSpotlight' | 'video'
+  landingType?: 'store' | 'productList' | 'url'; landingUrl?: string
+  asins: string[]; userId?: string
+}
+export async function createSbAdLocal(input: NewSbAd): Promise<{ id: string; externalAdId: string | null; mode: string }> {
+  const ag = await prisma.adGroup.findUnique({ where: { id: input.adGroupId }, select: { externalAdGroupId: true, campaign: { select: { externalCampaignId: true, marketplace: true } } } })
+  if (!ag) throw new Error('ad group not found')
+  const asins = input.asins.map((a) => a.trim()).filter(Boolean)
+  if (asins.length === 0) throw new Error('at least one ASIN required')
+  const creativeType = input.creativeType ?? 'productCollection'
+  const landingType = input.landingType ?? 'productList'
+  let externalId: string | null = null, mode = 'local'
+  if (ag.externalAdGroupId && ag.campaign?.externalCampaignId && ag.campaign.marketplace) {
+    const ctx = await resolveCtx(ag.campaign.marketplace)
+    if (ctx) {
+      const gate = await checkAdsWriteGate({ marketplace: ag.campaign.marketplace, payloadValueCents: 0 })
+      if (gate.allowed) {
+        const r = await createSbAd(ctx, { externalCampaignId: ag.campaign.externalCampaignId, externalAdGroupId: ag.externalAdGroupId, brandName: input.brandName, headline: input.headline, logoAssetId: input.logoAssetId, creativeType, landingType, landingUrl: input.landingUrl, asins, state: 'enabled' })
+        externalId = r.externalId; mode = r.mode
+      }
+    }
+  }
+  const creativeJson = { brandName: input.brandName, headline: input.headline, logoAssetId: input.logoAssetId ?? null, creativeType, landingType, landingUrl: input.landingUrl ?? null, asins }
+  const ad = await prisma.adProductAd.create({ data: { adGroupId: input.adGroupId, asin: asins[0], status: 'ENABLED', externalAdId: externalId, adType: 'BRAND_AD', creativeJson: creativeJson as never } })
+  await audit('create_sb_ad', 'PRODUCT_AD', ad.id, { ...creativeJson, externalId, mode }, input.userId)
+  logger.info('[AX2.9] createSbAdLocal', { id: ad.id, externalId, mode, asins: asins.length })
+  return { id: ad.id, externalAdId: externalId, mode }
 }
 
 // ── AX2.2 — placement bid adjustments (top-of-search / product-pages /
