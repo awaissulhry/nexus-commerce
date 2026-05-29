@@ -2380,6 +2380,14 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const { createNegativeProductTargetLocal } = await import('../services/advertising/ads-create.service.js')
     try { return await createNegativeProductTargetLocal(b as never) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
   })
+  // ── AX2.10: Data-grounded bid suggestions ───────────────────────────
+  fastify.post('/advertising/bid-suggestions', async (request, reply) => {
+    const b = request.body as { keywords?: string[]; matchType?: string; marketplace?: string }
+    if (!Array.isArray(b?.keywords) || b.keywords.length === 0) { reply.status(400); return { error: 'keywords[] required' } }
+    const { suggestBids } = await import('../services/advertising/ads-bid-suggest.service.js')
+    try { return await suggestBids({ keywords: b.keywords, matchType: b.matchType, marketplace: b.marketplace }) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
+  })
+
   // ── AX2.9: Sponsored Brands creative ────────────────────────────────
   fastify.post('/advertising/sb-creatives/create', async (request, reply) => {
     const b = request.body as Record<string, unknown>

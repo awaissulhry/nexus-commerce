@@ -37,8 +37,22 @@ export function CreateCampaignClient() {
   const [f, setF] = useState({ name: '', marketplace: 'IT', targetingType: 'MANUAL', dailyBudgetEur: '10', biddingStrategy: 'legacyForSales', defaultBidEur: '0.50', adGroupName: '', productSku: '', keywords: '', matchTypes: { EXACT: true, PHRASE: true, BROAD: false } as Record<string, boolean>, brandName: '', headline: '', logoAssetId: '', creativeType: 'productCollection', landingType: 'productList', landingUrl: '', sbAsins: '' })
   const [busy, setBusy] = useState(false)
   const [result, setResult] = useState<string | null>(null)
+  const [bidHint, setBidHint] = useState<string | null>(null)
 
   const set = (k: string, v: unknown) => setF((s) => ({ ...s, [k]: v }))
+  const suggestBid = async () => {
+    const kws = f.keywords.split('\n').map((x) => x.trim()).filter(Boolean)
+    if (kws.length === 0) { setBidHint('Add keywords first'); return }
+    setBidHint('…')
+    try {
+      const r = await fetch(`${getBackendUrl()}/api/advertising/bid-suggestions`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ keywords: kws }) }).then((x) => x.json())
+      if (r?.error) { setBidHint(r.error); return }
+      const mid = Math.round(r.suggestions.reduce((s: number, x: { suggestedBidCents: number }) => s + x.suggestedBidCents, 0) / r.suggestions.length)
+      set('defaultBidEur', (mid / 100).toFixed(2))
+      const tokenMatched = r.suggestions.filter((x: { basis: string }) => x.basis === 'token-match').length
+      setBidHint(`€${(mid / 100).toFixed(2)} suggested from your CPCs (${tokenMatched}/${r.suggestions.length} keyword-matched)`)
+    } catch { setBidHint('Could not fetch suggestion') }
+  }
   const selectGoal = (g: typeof GOALS[number]) => {
     if (g.key === 'custom') { setGoal('custom'); setType(null); setGoalTip(null); return }
     if (g.defaults) setF((s) => ({ ...s, ...g.defaults }))
@@ -149,7 +163,11 @@ export function CreateCampaignClient() {
         {f.targetingType === 'MANUAL' && (
           <>
             <label className="block text-xs text-slate-500">Keywords (one per line)<textarea value={f.keywords} onChange={(e) => set('keywords', e.target.value)} rows={6} className="w-full mt-0.5 px-2 py-1.5 text-sm rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 font-mono" /></label>
-            <div className="flex gap-3 text-sm">{['EXACT', 'PHRASE', 'BROAD'].map((m) => <label key={m} className="flex items-center gap-1"><input type="checkbox" checked={f.matchTypes[m]} onChange={(e) => set('matchTypes', { ...f.matchTypes, [m]: e.target.checked })} /> {m[0]}{m.slice(1).toLowerCase()}</label>)}</div>
+            <div className="flex items-center gap-3 text-sm flex-wrap">
+              {['EXACT', 'PHRASE', 'BROAD'].map((m) => <label key={m} className="flex items-center gap-1"><input type="checkbox" checked={f.matchTypes[m]} onChange={(e) => set('matchTypes', { ...f.matchTypes, [m]: e.target.checked })} /> {m[0]}{m.slice(1).toLowerCase()}</label>)}
+              <button type="button" onClick={suggestBid} className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded-md border border-violet-300 text-violet-700 dark:text-violet-300 dark:border-violet-800 hover:bg-violet-50 dark:hover:bg-violet-950/30"><Wand2 size={12} /> Suggest bid from data</button>
+              {bidHint && <span className="text-xs text-slate-500">{bidHint}</span>}
+            </div>
           </>
         )}
         <div className="flex items-center gap-3 pt-1">
