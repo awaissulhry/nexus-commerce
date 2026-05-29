@@ -15,7 +15,7 @@
 import type { Metadata } from 'next'
 import { Suspense } from 'react'
 import { AdvertisingNav } from '../_shared/AdvertisingNav'
-import { CampaignsListClient } from './CampaignsListClient'
+import { AdCampaignsCockpit } from './AdCampaignsCockpit'
 import { getBackendUrl } from '@/lib/backend-url'
 
 export const metadata: Metadata = { title: 'Amazon Ads · Campaigns' }
@@ -141,7 +141,7 @@ export default async function AdvertisingCampaignsPage() {
       </div>
       <AdvertisingNav />
       <Suspense fallback={<div className="text-sm text-slate-500">Loading…</div>}>
-        <CampaignsListClient initial={initial} />
+        <AdCampaignsCockpit initial={initial} />
       </Suspense>
     </div>
   )
