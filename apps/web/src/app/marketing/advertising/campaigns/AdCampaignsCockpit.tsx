@@ -90,6 +90,8 @@ export function AdCampaignsCockpit({ initial }: { initial: { items: CampaignBase
   const [prefsOpen, setPrefsOpen] = useState(false)
   const [density, setDensity] = useState<'comfortable' | 'compact'>('comfortable')
   const [chartMetrics, setChartMetrics] = useState<Set<string>>(() => new Set(['clicks', 'cost', 'sales']))
+  const [bulkBudgetVal, setBulkBudgetVal] = useState('')
+  const [importMsg, setImportMsg] = useState('')
   const [prefs, setPrefs] = useState<PreferencesValue>(() => {
     if (typeof window !== 'undefined') {
       try { const s = localStorage.getItem('ax.campaigns.prefs.v1'); if (s) return JSON.parse(s) } catch {}
@@ -186,6 +188,43 @@ export function AdCampaignsCockpit({ initial }: { initial: { items: CampaignBase
     await Promise.all(ids.map((id) => fetch(`${getBackendUrl()}/api/advertising/campaigns/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status }) })))
     setSelected(new Set()); void refetch()
   }
+  const bulkBudget = async (mode: 'set' | 'pct', value: number) => {
+    const targets = filtered.filter((r) => selected.has(r.base.id))
+    await Promise.all(targets.map((r) => {
+      const next = mode === 'set' ? value : Math.max(1, Math.round((r.budgetC / 100) * (1 + value / 100) * 100) / 100)
+      return fetch(`${getBackendUrl()}/api/advertising/campaigns/${r.base.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ dailyBudget: next }) })
+    }))
+    setSelected(new Set()); setBulkBudgetVal(''); void refetch()
+  }
+  // AX2.5 — bulksheet import: CSV with columns id|externalCampaignId, budget, status.
+  const importCsv = async (file: File) => {
+    setImportMsg('Importing…')
+    try {
+      const text = await file.text()
+      const lines = text.split(/\r?\n/).filter((l) => l.trim())
+      const header = lines.shift()?.split(',').map((h) => h.trim().toLowerCase().replace(/^"|"$/g, '')) ?? []
+      const idIx = header.findIndex((h) => h === 'id' || h === 'campaign id' || h === 'externalcampaignid')
+      const extIx = header.findIndex((h) => h === 'externalcampaignid')
+      const budIx = header.findIndex((h) => h.startsWith('budget'))
+      const statIx = header.findIndex((h) => h === 'status')
+      if (idIx < 0 && extIx < 0) { setImportMsg('CSV needs an id (or externalCampaignId) column'); return }
+      const byExt = new Map(rowsRaw.map((r) => [r.externalCampaignId ?? '', r.id]))
+      let applied = 0, skipped = 0
+      await Promise.all(lines.map(async (line) => {
+        const cells = line.split(',').map((c) => c.trim().replace(/^"|"$/g, ''))
+        let id = idIx >= 0 ? cells[idIx] : ''
+        if ((!id || !rowsRaw.some((r) => r.id === id)) && extIx >= 0) id = byExt.get(cells[extIx]) ?? id
+        if (!id || !rowsRaw.some((r) => r.id === id)) { skipped++; return }
+        const patch: Record<string, unknown> = {}
+        if (budIx >= 0 && cells[budIx] && Number.isFinite(parseFloat(cells[budIx]))) patch.dailyBudget = parseFloat(cells[budIx])
+        if (statIx >= 0 && cells[statIx]) patch.status = cells[statIx].toUpperCase()
+        if (Object.keys(patch).length === 0) { skipped++; return }
+        await fetch(`${getBackendUrl()}/api/advertising/campaigns/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch) })
+        applied++
+      }))
+      setImportMsg(`✓ ${applied} updated${skipped ? `, ${skipped} skipped` : ''}`); void refetch()
+    } catch (e) { setImportMsg((e as Error).message) }
+  }
   const exportCsv = () => {
     const headers = ['Campaign', 'Status', 'Type', 'Market', 'Budget/d', 'Impressions', 'Clicks', 'CTR%', 'Spend', 'CPC', 'Orders', 'CVR%', 'Sales', 'ACOS%', 'ROAS', 'Margin%']
     const lines = [headers.join(',')]
@@ -257,12 +296,14 @@ export function AdCampaignsCockpit({ initial }: { initial: { items: CampaignBase
         </div>
         <Link href="/marketing/advertising/create" className="inline-flex items-center gap-1 py-1.5 px-3 text-sm rounded-md bg-slate-900 text-white dark:bg-slate-700 hover:bg-slate-800">+ Create campaign</Link>
         <div className="ml-auto flex items-center gap-2">
+          {importMsg && <span className={`text-xs ${importMsg.startsWith('✓') ? 'text-emerald-600' : 'text-slate-400'}`}>{importMsg}</span>}
           <span className="text-xs text-slate-400">{filtered.length} campaigns</span>
           <div className="inline-flex rounded-md border border-slate-200 dark:border-slate-700 overflow-hidden" title="Row density">
             <button onClick={() => setDensity('comfortable')} className={`px-1.5 py-1.5 ${density === 'comfortable' ? 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200' : 'text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}><Rows size={14} /></button>
             <button onClick={() => setDensity('compact')} className={`px-1.5 py-1.5 border-l border-slate-200 dark:border-slate-700 ${density === 'compact' ? 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200' : 'text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}><AlignJustify size={14} /></button>
           </div>
           <button onClick={exportCsv} className="inline-flex items-center gap-1 py-1.5 px-2 text-sm rounded-md border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800" title="Export CSV"><FileDown size={14} /></button>
+          <label className="inline-flex items-center gap-1 py-1.5 px-2 text-sm rounded-md border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer" title="Import bulksheet CSV (id, budget, status)"><Download size={14} className="rotate-180" /><input type="file" accept=".csv,text/csv" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) void importCsv(f); e.target.value = '' }} /></label>
           <button onClick={() => setPrefsOpen(true)} className="inline-flex items-center gap-1 py-1.5 px-2 text-sm rounded-md border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"><SlidersHorizontal size={14} /> Columns ({visibleCols.length})</button>
           <button onClick={() => void refetch()} className="inline-flex items-center gap-1 py-1.5 px-2 text-sm rounded-md border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"><RefreshCw size={14} className={loading ? 'animate-spin' : ''} /></button>
         </div>
@@ -274,6 +315,11 @@ export function AdCampaignsCockpit({ initial }: { initial: { items: CampaignBase
           <span className="text-blue-700 dark:text-blue-300">{selected.size} selected</span>
           <button onClick={() => void bulkStatus('ENABLED')} className="px-2 py-0.5 rounded border border-emerald-300 text-emerald-700 hover:bg-emerald-50">Enable</button>
           <button onClick={() => void bulkStatus('PAUSED')} className="px-2 py-0.5 rounded border border-amber-300 text-amber-700 hover:bg-amber-50">Pause</button>
+          <span className="w-px h-4 bg-blue-200 dark:bg-blue-800" />
+          <span className="text-blue-700 dark:text-blue-300">Budget</span>
+          <button onClick={() => void bulkBudget('pct', 10)} className="px-2 py-0.5 rounded border border-blue-300 text-blue-700 hover:bg-blue-100">+10%</button>
+          <button onClick={() => void bulkBudget('pct', -10)} className="px-2 py-0.5 rounded border border-blue-300 text-blue-700 hover:bg-blue-100">−10%</button>
+          <span className="inline-flex items-center gap-1">set €<input type="number" step="0.01" value={bulkBudgetVal} onChange={(e) => setBulkBudgetVal(e.target.value)} className="w-16 px-1 py-0.5 rounded border border-blue-300 bg-white dark:bg-slate-900" /><button disabled={!bulkBudgetVal} onClick={() => { const n = parseFloat(bulkBudgetVal); if (Number.isFinite(n) && n > 0) void bulkBudget('set', n) }} className="px-2 py-0.5 rounded border border-blue-300 text-blue-700 hover:bg-blue-100 disabled:opacity-40">Apply</button></span>
           <button onClick={() => setSelected(new Set())} className="text-slate-400 ml-auto">Clear</button>
         </div>
       )}
