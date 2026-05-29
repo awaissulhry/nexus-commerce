@@ -11,6 +11,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import Link from 'next/link'
 import {
   Megaphone,
   Wallet,
@@ -331,7 +332,7 @@ export function MarketingCampaignsClient({
             {rows.map((c) => (
               <tr key={c.id} className="hover:bg-slate-50 dark:hover:bg-slate-900/40">
                 <td className="px-3 py-2">
-                  <div className="font-medium text-slate-800 dark:text-slate-100 truncate max-w-[280px]">{c.name}</div>
+                  <Link href={`/marketing/campaigns/${c.id}`} className="font-medium text-slate-800 dark:text-slate-100 truncate max-w-[280px] block hover:text-blue-600 hover:underline">{c.name}</Link>
                   <div className="text-xs text-slate-400">{c.surface}{c.adProduct ? ` · ${c.adProduct}` : ''}{c.targetCount ? ` · ${c.targetCount} targets` : ''}</div>
                 </td>
                 <td className="px-3 py-2">

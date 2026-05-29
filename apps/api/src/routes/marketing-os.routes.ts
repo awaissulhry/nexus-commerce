@@ -703,6 +703,24 @@ const marketingOsRoutes: FastifyPluginAsync = async (app) => {
     }
   })
 
+  // ── Campaign action history (P3-detail) ──────────────────────────────
+  app.get('/marketing/os/campaigns/:id/actions', async (request, reply) => {
+    reply.header('Cache-Control', 'private, max-age=10')
+    const { id } = request.params as { id: string }
+    const actions = await prisma.campaignAction.findMany({
+      where: { campaignId: id },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+    })
+    const metrics = await prisma.campaignMetric.findMany({
+      where: { campaignId: id, entityType: 'CAMPAIGN' },
+      orderBy: { date: 'desc' },
+      take: 60,
+      select: { date: true, impressions: true, clicks: true, costEurCents: true, sales7dCents: true, currencyCode: true },
+    })
+    return { actions, metrics }
+  })
+
   // ── SSE stream ────────────────────────────────────────────────────────
   // Mirrors /api/orders/events: ping on connect, ?since=<ms> replay,
   // 25s heartbeat, cleanup on close.
