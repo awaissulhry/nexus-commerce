@@ -29,6 +29,7 @@ import {
   CheckCircle2,
   XCircle,
   ArrowUpDown,
+  Download,
 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { Input } from '@/components/ui/Input'
@@ -144,6 +145,24 @@ function rowCmpAsc(a: MatrixRow, b: MatrixRow, colId: string): number {
   if (colId === 'totalStock') return (a.totalStock ?? 0) - (b.totalStock ?? 0)
   if (colId === 'channelCoverage') return (a.channelCoverage?.length ?? 0) - (b.channelCoverage?.length ?? 0)
   return rowSortStr(a, colId).localeCompare(rowSortStr(b, colId), undefined, { numeric: true })
+}
+// CC.1.3 — display value for export (parent or variant; brand inherits).
+function exportCellValue(e: MatrixRow | MatrixVariant, colId: string, parentBrand: string | null): string {
+  switch (colId) {
+    case 'sku': return e.sku ?? ''
+    case 'name': return e.name ?? ''
+    case 'brand': return (('brand' in e ? (e as MatrixRow).brand : parentBrand) ?? '')
+    case 'status': return e.status ?? ''
+    case 'basePrice': return e.basePrice == null ? '' : String(e.basePrice)
+    case 'totalStock': return String(e.totalStock ?? 0)
+    case 'channelCoverage': return (e.channelCoverage ?? []).map((c) => `${c.channel}:${c.marketplace}=${c.status}`).join('; ')
+    default:
+      if (colId.startsWith('attr:')) return formatDynamicValue(dynamicAttrValue(e, colId))
+      return ''
+  }
+}
+function csvField(v: string): string {
+  return /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v
 }
 function applySortConfig(rows: MatrixRow[], cfg: MatrixSortLevel[]): MatrixRow[] {
   if (cfg.length === 0) return rows
@@ -517,6 +536,28 @@ export default function MatrixClient() {
     return out
   }, [data, expanded, search, sortConfig, statusFilter, stockFilter])
 
+  // CC.1.3 — export the current view (visible columns × filtered/sorted
+  // rows, parents + expanded variants) to CSV, client-side.
+  const exportCsv = useCallback(() => {
+    const cols = visibleColumns.filter((c) => !['__select', '__expand', '__actions'].includes(c.id))
+    const header = ['Level', ...cols.map((c) => c.label || c.id)]
+    const lines = [header.map(csvField).join(',')]
+    for (const fr of flatRows) {
+      const isParent = fr.kind === 'parent'
+      const entity = isParent ? fr.parent : fr.variant!
+      const row = [isParent ? 'Parent' : 'Variant', ...cols.map((c) => exportCellValue(entity, c.id, fr.parent.brand))]
+      lines.push(row.map(csvField).join(','))
+    }
+    const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `catalog-matrix-${flatRows.length}-rows.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+    toast.success('Exported', { description: `${flatRows.length} rows · ${cols.length} columns` })
+  }, [flatRows, visibleColumns, toast])
+
   // ── Virtualizer ─────────────────────────────────────────────────
   const parentRef = useRef<HTMLDivElement>(null)
   const rowVirtualizer = useVirtualizer({
@@ -612,6 +653,17 @@ export default function MatrixClient() {
             >
               <ColumnsIcon className="w-3 h-3" />
               Columns
+            </button>
+            {/* CC.1.3 — export current view to CSV */}
+            <button
+              type="button"
+              onClick={exportCsv}
+              disabled={flatRows.length === 0}
+              className="inline-flex items-center gap-1.5 px-2 py-1 rounded text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800 disabled:opacity-40"
+              title="Export the current filtered/sorted view to CSV"
+            >
+              <Download className="w-3 h-3" />
+              Export
             </button>
             <SavedViewsMenu
               activeViewId={activeViewId}
