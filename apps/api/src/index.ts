@@ -1072,6 +1072,9 @@ async function start() {
       await import('./services/advertising/automation-action-handlers.js');
       // AX.8 — registers bid_to_target_acos handler.
       await import('./services/advertising/ads-bid-optimizer.service.js');
+      // AX.9 — dayparting cron (every 15 min, applies schedule windows).
+      const { startDaypartingCron } = await import('./jobs/ad-dayparting.job.js');
+      startDaypartingCron();
       startAllAdvertisingCrons();
       startAdvertisingRuleEvaluatorCron();
       startBudgetPoolRebalanceCron();

@@ -11866,3 +11866,30 @@ model CalendarEntry {
   @@index([campaignId])
   @@index([retailEventId])
 }
+
+// ════════════════════════════════════════════════════════════════════
+// AX.9 — Dayparting / ad scheduling. A campaign runs (ENABLED) only
+// during its active day×hour windows; the ad-dayparting cron pauses it
+// outside them and re-enables inside — "bid/run when likely to convert".
+// References Campaign by id (no Prisma relation, to keep this additive).
+// ════════════════════════════════════════════════════════════════════
+model AdSchedule {
+  id              String    @id @default(cuid())
+  campaignId      String // local Campaign.id
+  name            String
+  // Active windows the campaign SHOULD deliver in. JSON:
+  // [{ days: [1,2,3,4,5], startHour: 8, endHour: 22 }] (0=Sun..6=Sat,
+  // hour 0-23 local). Empty = always (no-op).
+  windows         Json      @default("[]")
+  timezone        String    @default("Europe/Rome")
+  enabled         Boolean   @default(true)
+  // Last status the cron applied, to avoid redundant writes/churn.
+  lastApplied     String? // ENABLED | PAUSED
+  lastEvaluatedAt DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  createdBy       String?
+
+  @@index([campaignId])
+  @@index([enabled])
+}

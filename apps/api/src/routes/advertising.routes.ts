@@ -2373,6 +2373,33 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     try { return await applyPlan({ dailyBudgetEur: 10, defaultBidEur: 0.5, ...(b as object) } as never) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
   })
 
+  // ── AX.9: Dayparting schedules ──────────────────────────────────────
+  fastify.get('/advertising/schedules', async (_request, reply) => {
+    reply.header('Cache-Control', 'private, max-age=15')
+    const items = await prisma.adSchedule.findMany({ orderBy: { createdAt: 'desc' } })
+    return { items, count: items.length }
+  })
+  fastify.post('/advertising/schedules', async (request, reply) => {
+    const b = request.body as Record<string, unknown>
+    if (!b?.campaignId || !b?.name) { reply.status(400); return { error: 'campaignId, name required' } }
+    return prisma.adSchedule.create({ data: { campaignId: b.campaignId as string, name: b.name as string, windows: (b.windows as object) ?? [], timezone: (b.timezone as string) ?? 'Europe/Rome', enabled: (b.enabled as boolean) ?? true } })
+  })
+  fastify.patch('/advertising/schedules/:id', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const b = request.body as Record<string, unknown>
+    const data: Record<string, unknown> = {}
+    for (const k of ['name', 'windows', 'timezone', 'enabled']) if (b[k] !== undefined) data[k] = b[k]
+    try { return await prisma.adSchedule.update({ where: { id }, data }) } catch { reply.status(404); return { error: 'not found' } }
+  })
+  fastify.delete('/advertising/schedules/:id', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    try { await prisma.adSchedule.delete({ where: { id } }); return { ok: true } } catch { reply.status(404); return { error: 'not found' } }
+  })
+  fastify.post('/advertising/dayparting/run-now', async (_request, reply) => {
+    const { runDaypartingOnce } = await import('../jobs/ad-dayparting.job.js')
+    try { return await runDaypartingOnce() } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
+  })
+
   // ── AX.8: Target-ACOS bid optimization ──────────────────────────────
   fastify.get('/advertising/bid-optimizer/preview', async (request, reply) => {
     const q = request.query as Record<string, string | undefined>
