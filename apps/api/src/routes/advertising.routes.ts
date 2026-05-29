@@ -2436,6 +2436,14 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     return analyzeShareOfVoice({ windowDays: q.windowDays ? Number(q.windowDays) : undefined, marketplace: q.marketplace, limit: q.limit ? Number(q.limit) : undefined })
   })
 
+  // ── AX2.12: Ads alerts (anomaly watch) ──────────────────────────────
+  fastify.get('/advertising/alerts', async (request, reply) => {
+    const q = request.query as Record<string, string | undefined>
+    const { buildAlerts } = await import('../services/advertising/ads-alerts.service.js')
+    reply.header('Cache-Control', 'private, max-age=120')
+    return buildAlerts({ windowDays: q.windowDays ? Number(q.windowDays) : undefined, acosThreshold: q.acosThreshold ? Number(q.acosThreshold) : undefined })
+  })
+
   // ── AX2.7: Unified AI + rules recommendations feed ──────────────────
   fastify.get('/advertising/recommendations', async (request, reply) => {
     const q = request.query as Record<string, string | undefined>

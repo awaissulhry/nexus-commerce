@@ -3,7 +3,8 @@
 /** AX2.7 — Unified AI + rules recommendations feed with one-click apply. */
 
 import { useCallback, useEffect, useState } from 'react'
-import { Sparkles, Check, ArrowUpRight } from 'lucide-react'
+import { Sparkles, Check, ArrowUpRight, AlertTriangle } from 'lucide-react'
+import Link from 'next/link'
 import { getBackendUrl } from '@/lib/backend-url'
 
 type RecCategory = 'bid' | 'negative' | 'graduate' | 'budget' | 'sov'
@@ -27,12 +28,14 @@ export function RecommendationsClient() {
   const [cat, setCat] = useState<RecCategory | 'all'>('all')
   const [applied, setApplied] = useState<Set<string>>(new Set())
   const [busy, setBusy] = useState<string | null>(null)
+  const [alerts, setAlerts] = useState<Array<{ id: string; campaignId: string | null; campaignName: string; type: string; severity: string; message: string }>>([])
 
   const load = useCallback(() => {
     setLoading(true); setApplied(new Set())
     fetch(`${getBackendUrl()}/api/advertising/recommendations`, { cache: 'no-store' }).then((x) => x.json()).then(setData).catch(() => {}).finally(() => setLoading(false))
     setBrief(null)
     fetch(`${getBackendUrl()}/api/advertising/recommendations/brief`, { cache: 'no-store' }).then((x) => x.json()).then(setBrief).catch(() => {})
+    fetch(`${getBackendUrl()}/api/advertising/alerts`, { cache: 'no-store' }).then((x) => x.json()).then((r) => setAlerts(r.alerts ?? [])).catch(() => {})
   }, [])
   useEffect(() => { load() }, [load])
 
@@ -56,6 +59,23 @@ export function RecommendationsClient() {
     <div className="max-w-[1100px]">
       <div className="flex items-center gap-2 mb-1"><Sparkles size={20} className="text-amber-500" /><h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100">Recommendations</h1></div>
       <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">Everything worth doing right now — bid moves, wasted-spend negatives, converting terms to promote, budget shifts — ranked by impact, each one click to apply.{loading ? ' (loading…)' : ''}</p>
+
+      {/* Alerts strip (AX2.12) */}
+      {alerts.length > 0 && (
+        <div className="rounded-lg border border-rose-200 dark:border-rose-900/50 bg-rose-50/60 dark:bg-rose-950/20 px-4 py-3 mb-4">
+          <div className="flex items-center gap-1.5 text-xs font-medium text-rose-700 dark:text-rose-300 mb-2"><AlertTriangle size={13} /> {alerts.length} active alert{alerts.length > 1 ? 's' : ''}</div>
+          <div className="space-y-1">
+            {alerts.slice(0, 6).map((a) => (
+              <div key={a.id} className="flex items-center gap-2 text-sm">
+                <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${a.severity === 'high' ? 'bg-rose-500' : 'bg-amber-500'}`} />
+                {a.campaignId ? <Link href={`/marketing/advertising/campaigns/${a.campaignId}`} className="font-medium text-slate-800 dark:text-slate-100 hover:underline truncate max-w-[260px]">{a.campaignName}</Link> : <span className="font-medium truncate max-w-[260px]">{a.campaignName}</span>}
+                <span className="text-slate-600 dark:text-slate-300">{a.message}</span>
+              </div>
+            ))}
+            {alerts.length > 6 && <div className="text-xs text-slate-400">+{alerts.length - 6} more</div>}
+          </div>
+        </div>
+      )}
 
       {/* AI brief */}
       <div className="rounded-lg border border-amber-200 dark:border-amber-900/50 bg-amber-50/60 dark:bg-amber-950/20 px-4 py-3 mb-4">
