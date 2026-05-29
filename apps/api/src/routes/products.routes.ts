@@ -3463,6 +3463,47 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // CC.2 — POST /api/products/bulk-upload-preflight
+  //   Read-only awareness check for the /products/upload flow: given the
+  //   SKUs + GTINs (UPC/EAN) in the parsed file, report which SKUs ALREADY
+  //   exist (those will UPDATE, not create) and any GTIN that already
+  //   belongs to a different SKU (a likely mistake). Lets the operator see
+  //   "N new · M update existing" + collisions before committing the
+  //   create/update via /inventory/bulk-upload. No writes.
+  fastify.post<{ Body: { skus?: string[]; gtins?: string[] } }>(
+    '/products/bulk-upload-preflight',
+    async (request, reply) => {
+      const skus = Array.isArray(request.body?.skus)
+        ? request.body!.skus.map((s) => String(s).trim()).filter(Boolean).slice(0, 5000)
+        : []
+      const gtins = Array.isArray(request.body?.gtins)
+        ? request.body!.gtins.map((g) => String(g).trim()).filter(Boolean).slice(0, 5000)
+        : []
+      try {
+        const existing = skus.length
+          ? await prisma.product.findMany({ where: { sku: { in: skus } }, select: { sku: true } })
+          : []
+        const existingSkus = existing.map((p) => p.sku)
+
+        // GTIN collisions: a product whose upc/ean matches an uploaded
+        // GTIN. Surfaced so the operator notices an identifier already in
+        // use (potential duplicate / typo).
+        const gtinHits = gtins.length
+          ? await prisma.product.findMany({
+              where: { OR: [{ upc: { in: gtins } }, { ean: { in: gtins } }] },
+              select: { sku: true, upc: true, ean: true },
+            })
+          : []
+        const gtinCollisions = gtinHits.map((p) => ({ sku: p.sku, gtin: p.upc && gtins.includes(p.upc) ? p.upc : p.ean }))
+
+        return reply.send({ existingSkus, gtinCollisions })
+      } catch (error: any) {
+        fastify.log.error({ err: error }, '[products/bulk-upload-preflight] failed')
+        return reply.code(500).send({ error: error?.message ?? String(error) })
+      }
+    },
+  )
+
   // POST /api/products/bulk-upload-zip
   //   D.5: ZIP archive with one folder per SKU. Each folder may
   //   carry a data.json (field updates) and/or description.html.

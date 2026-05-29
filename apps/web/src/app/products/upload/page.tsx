@@ -103,9 +103,36 @@ export default function InventoryUploadPage() {
   const [importResult, setImportResult] = useState<ImportResult | null>(null)
   const [importError, setImportError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  // CC.2 — pre-import awareness: which SKUs already exist (→ will UPDATE)
+  // and which uploaded GTINs collide with another product.
+  const [existingSkus, setExistingSkus] = useState<Set<string>>(new Set())
+  const [gtinCollisions, setGtinCollisions] = useState<Array<{ sku: string; gtin: string | null }>>([])
 
   const errorCount = rows.filter((r) => r.errors.length > 0).length
   const validCount = rows.filter((r) => r.errors.length === 0).length
+  // CC.2 — split valid rows into create-new vs update-existing.
+  const updateCount = rows.filter((r) => r.errors.length === 0 && existingSkus.has(r.sku)).length
+  const newCount = validCount - updateCount
+
+  // CC.2 — read-only preflight: classify SKUs (new vs existing) + GTIN
+  // collisions so the operator sees the impact before importing.
+  const runPreflight = useCallback(async (parsed: ParsedRow[]) => {
+    const valid = parsed.filter((r) => r.errors.length === 0 && r.sku)
+    const skus = valid.map((r) => r.sku)
+    const gtins = valid.flatMap((r) => [r.upc, r.ean].filter(Boolean))
+    if (skus.length === 0) { setExistingSkus(new Set()); setGtinCollisions([]); return }
+    try {
+      const res = await fetch(`${getBackendUrl()}/api/products/bulk-upload-preflight`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ skus, gtins }),
+      })
+      if (!res.ok) return
+      const j = (await res.json()) as { existingSkus?: string[]; gtinCollisions?: Array<{ sku: string; gtin: string | null }> }
+      setExistingSkus(new Set(j.existingSkus ?? []))
+      setGtinCollisions(j.gtinCollisions ?? [])
+    } catch { /* non-fatal — preview still works without the split */ }
+  }, [])
 
   // ── File parsing ─────────────────────────────────────────────────────────
 
@@ -175,13 +202,14 @@ export default function InventoryUploadPage() {
         setRows(parsed)
         setStage('preview')
         setImportError(null)
+        void runPreflight(parsed)
       } catch (err) {
         setImportError(`Failed to parse file: ${err instanceof Error ? err.message : String(err)}`)
       }
     }
 
     reader.readAsArrayBuffer(file)
-  }, [])
+  }, [runPreflight])
 
   // ── Drag & Drop handlers ─────────────────────────────────────────────────
 
@@ -263,6 +291,8 @@ export default function InventoryUploadPage() {
     setFileName('')
     setImportResult(null)
     setImportError(null)
+    setExistingSkus(new Set())
+    setGtinCollisions([])
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
@@ -371,6 +401,25 @@ export default function InventoryUploadPage() {
               <p className="text-2xl font-bold text-red-600 dark:text-red-400">{errorCount}</p>
             </div>
           </div>
+
+          {/* CC.2 — create-vs-update awareness + GTIN collisions */}
+          {validCount > 0 && (
+            <div className="mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-blue-200 dark:border-blue-900 bg-blue-50 dark:bg-blue-950/20 px-4 py-2.5 text-sm">
+              <span className="font-medium text-blue-800 dark:text-blue-200">
+                {newCount} new product{newCount !== 1 ? 's' : ''} will be created
+              </span>
+              {updateCount > 0 && (
+                <span className="text-amber-700 dark:text-amber-300">
+                  · {updateCount} existing SKU{updateCount !== 1 ? 's' : ''} will be <strong>updated</strong> (overwritten)
+                </span>
+              )}
+              {gtinCollisions.length > 0 && (
+                <span className="text-rose-700 dark:text-rose-300">
+                  · ⚠ {gtinCollisions.length} GTIN collision{gtinCollisions.length !== 1 ? 's' : ''} (identifier already used by another SKU)
+                </span>
+              )}
+            </div>
+          )}
 
           {/* Preview table */}
           <div className="bg-white dark:bg-slate-900 rounded-lg shadow overflow-hidden mb-6">
