@@ -36,7 +36,6 @@ import {
   FileEdit,
   LayoutGrid,
   CalendarDays,
-  Wallet,
   BadgeCheck,
   BookOpen,
   Palette,
@@ -560,34 +559,16 @@ export default function AppSidebar() {
 
         <NavGroup label="Marketing">
           <NavItem
-            href="/marketing/campaigns"
-            icon={LayoutGrid}
-            label="Campaigns"
-            active={pathname.startsWith('/marketing/campaigns')}
+            href="/marketing/advertising/campaigns"
+            icon={Megaphone}
+            label="Advertising"
+            active={pathname.startsWith('/marketing/advertising') || pathname.startsWith('/marketing/campaigns')}
           />
           <NavItem
             href="/marketing/calendar"
             icon={CalendarDays}
             label="Calendar"
             active={pathname.startsWith('/marketing/calendar')}
-          />
-          <NavItem
-            href="/marketing/budgets"
-            icon={Wallet}
-            label="Budgets"
-            active={pathname.startsWith('/marketing/budgets')}
-          />
-          <NavItem
-            href="/marketing/automation-os"
-            icon={Zap}
-            label="Automation"
-            active={pathname.startsWith('/marketing/automation-os')}
-          />
-          <NavItem
-            href="/marketing/analytics"
-            icon={BarChart3}
-            label="Analytics"
-            active={pathname.startsWith('/marketing/analytics')}
           />
           <NavParentItem
             storageKey="marketing.content"
