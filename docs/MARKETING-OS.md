@@ -172,6 +172,29 @@ sandbox-safe; live writes behind the same P8/ads-write-gate. Tabs added:
 - SOV: `/share-of-voice` → SOV bars, Cannibalized/Outbid/Weak-CTR filters, CSV. (Needs search-term report data.)
 - Recommendations: `/recommendations` → AI brief + ranked feed; click **Apply** on a bid/negative/budget/graduate item (sandbox) or **Apply all high-priority**. API: `curl $BASE/../advertising/recommendations`.
 
+---
+
+# Advertising beyond-Pacvue (AX3-series)
+
+Closes the gap to Pacvue / Perpetua on DSP, AMC, retail-readiness, and
+full-funnel. New cockpit tabs: **New goal · DSP · Audiences · Retail readiness
+· iROAS**, plus retail folded into **Recommendations** as a strategy.
+
+| Phase | What | Where |
+|---|---|---|
+| AX3.1 | **Native retail-readiness guard** — auto-flag/pause campaigns advertising out-of-stock / lost-Buy-Box / uncompetitive products (we own the data; Pacvue integrates it) | `/marketing/advertising/retail-readiness` |
+| AX3.2 | **Full-funnel Goal builder** — one goal → coordinated Branded + Unbranded SP campaigns, each own Target ACoS + budget; Suggest Targets from search-term history; bulk-ASIN | `/marketing/advertising/goals` |
+| AX3.3 | **Amazon DSP + Performance+/Brand+** — guided programmatic builder (conversion vs awareness), inventory channels, AMC audience link | `/marketing/advertising/dsp` |
+| AX3.4 | **AMC-style no-SQL audiences** — 6 templates (viewers / cart / purchasers / lookalike / suppression / competitor) → activate | `/marketing/advertising/audiences` |
+| AX3.5 | **iROAS / incrementality (modeled)** — branded vs non-branded incrementality factors → incremental sales + iROAS vs reported ROAS | `/marketing/advertising/incrementality` |
+| AX3.6 | **Strategy grouping** — Recommendations regrouped into Perpetua-style strategies (Budget / Bid / Negatives / Graduation / Inventory Shortage / SoV) + accept/dismiss | `/recommendations` |
+
+**Retail-readiness auto-pilot:** set `NEXUS_ADS_RETAIL_GUARD_APPLY=1` + enable
+the ads cron to auto-pause at-risk campaigns (gated; sandbox-safe until P8).
+**DSP / AMC go-live:** need a DSP advertiser entitlement + AMC instance; until
+then DSP campaigns & audiences are created locally (sandbox ids) so the full
+plan/build flow works now.
+
 **Still operator-gated / optional next:** real competitive impression-share
 (needs Amazon's impression-share report subscription); `ANTHROPIC_API_KEY` on
 Railway for the AI brief (degrades to a rules summary without it); goal-based
