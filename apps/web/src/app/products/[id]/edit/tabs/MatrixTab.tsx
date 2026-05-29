@@ -742,11 +742,15 @@ export default function MatrixTab({ product, discardSignal = 0 }: Props) {
     return [...sortedRows].sort((a, b) => (pos.get(a.id) ?? 1e9) - (pos.get(b.id) ?? 1e9))
   }, [sortedRows, manualOrder])
 
-  // Restore / persist the manual order per product (client-side only).
+  // Restore / persist the manual order + sort config per product
+  // (client-side) so both survive reloads until the operator changes
+  // or resets them.
   useEffect(() => {
     try {
       const raw = localStorage.getItem(`matrix-order:${product.id}`)
       setManualOrder(raw ? (JSON.parse(raw) as string[]) : null)
+      const rawSort = localStorage.getItem(`matrix-sort:${product.id}`)
+      setSortConfig(rawSort ? (JSON.parse(rawSort) as MatrixSortLevel[]) : [])
     } catch { /* ignore */ }
   }, [product.id])
   useEffect(() => {
@@ -755,6 +759,12 @@ export default function MatrixTab({ product, discardSignal = 0 }: Props) {
       else localStorage.removeItem(`matrix-order:${product.id}`)
     } catch { /* ignore */ }
   }, [manualOrder, product.id])
+  useEffect(() => {
+    try {
+      if (sortConfig.length) localStorage.setItem(`matrix-sort:${product.id}`, JSON.stringify(sortConfig))
+      else localStorage.removeItem(`matrix-sort:${product.id}`)
+    } catch { /* ignore */ }
+  }, [sortConfig, product.id])
 
   // Drop the dragged row onto a target row → new manual order.
   const reorderRows = (targetId: string) => {
@@ -999,6 +1009,19 @@ export default function MatrixTab({ product, discardSignal = 0 }: Props) {
     }
   }
 
+  // H.2b — bulk set fulfilment (FBA/FBM) on the selected variants for the
+  // active market. Reuses the per-row patchFulfillment.
+  async function bulkSetFulfilment(method: 'FBA' | 'FBM') {
+    const targets = children.filter((c) => selectedVariants.has(c.id))
+    if (targets.length === 0) return
+    setBulkApplying(true)
+    try {
+      await Promise.all(targets.map((c) => patchFulfillment(c.id, selectedMarket, method)))
+    } finally {
+      setBulkApplying(false)
+    }
+  }
+
   // ── Delete variant ───────────────────────────────────────────────────
   async function openDelete(child: ChildRow) {
     setDeleteTarget(child); setDeleteLoading(true)
@@ -1143,8 +1166,10 @@ export default function MatrixTab({ product, discardSignal = 0 }: Props) {
 
         <div className="h-4 w-px bg-slate-200 dark:bg-slate-700" />
 
-        {/* Bulk action buttons */}
-        {(['price', 'qty', 'pct', 'copy'] as const).map((mode) => (
+        {/* Bulk action buttons — operate on ALL variants. Hidden while a
+            selection is active; the selection bar below hosts the same
+            ops scoped to the checked rows. */}
+        {!someSelected && (['price', 'qty', 'pct', 'copy'] as const).map((mode) => (
           <button key={mode} type="button" onClick={() => setBulkMode(bulkMode === mode ? 'none' : mode)}
             className={cn('px-2 py-1 text-xs rounded border transition-colors',
               bulkMode === mode ? 'bg-blue-50 dark:bg-blue-950/30 border-blue-400 text-blue-700 dark:text-blue-300'
@@ -1199,6 +1224,34 @@ export default function MatrixTab({ product, discardSignal = 0 }: Props) {
           </Button>
         </div>
       </div>
+
+      {/* H.2b — selection action bar: bulk edits scoped to the checked
+          variants. Surfaces the value ops + bulk fulfilment + clear. */}
+      {someSelected && (
+        <div className="flex items-center gap-2 px-3 py-2 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-lg text-sm flex-wrap">
+          <span className="font-medium text-blue-700 dark:text-blue-300">{selectedVariants.size} selected</span>
+          <button type="button" onClick={() => setSelectedVariants(new Set())}
+            className="text-xs text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 underline-offset-2 hover:underline">Clear</button>
+          <div className="h-4 w-px bg-blue-200 dark:bg-blue-800" />
+          {(['price', 'qty', 'pct', 'copy'] as const).map((mode) => (
+            <button key={mode} type="button" onClick={() => setBulkMode(bulkMode === mode ? 'none' : mode)}
+              className={cn('px-2 py-1 text-xs rounded border transition-colors',
+                bulkMode === mode ? 'bg-blue-100 dark:bg-blue-900/40 border-blue-400 text-blue-700 dark:text-blue-300'
+                  : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:border-slate-400')}>
+              {mode === 'price' && `€ Set ${selectedMarket} price`}
+              {mode === 'qty'   && `# Set ${selectedMarket} qty`}
+              {mode === 'pct'   && <><Percent className="w-3 h-3 inline mr-0.5" />Adjust %</>}
+              {mode === 'copy'  && <><Copy className="w-3 h-3 inline mr-0.5" />Copy market</>}
+            </button>
+          ))}
+          <div className="h-4 w-px bg-blue-200 dark:bg-blue-800" />
+          <span className="text-xs text-slate-500 dark:text-slate-400">{selectedMarket} fulfilment:</span>
+          <button type="button" disabled={bulkApplying} onClick={() => void bulkSetFulfilment('FBA')}
+            className="px-2 py-1 text-xs rounded border bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:border-slate-400 disabled:opacity-50">FBA</button>
+          <button type="button" disabled={bulkApplying} onClick={() => void bulkSetFulfilment('FBM')}
+            className="px-2 py-1 text-xs rounded border bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:border-slate-400 disabled:opacity-50">FBM</button>
+        </div>
+      )}
 
       {/* Bulk panel */}
       {bulkMode !== 'none' && (
