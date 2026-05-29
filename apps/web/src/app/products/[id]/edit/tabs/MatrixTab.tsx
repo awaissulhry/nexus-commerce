@@ -26,7 +26,7 @@ import {
 import { Modal, ModalFooter } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
-import { SortStack, type SortFieldOption } from '@/app/_shared/grid-lens'
+import MatrixSortPanel, { type MatrixSortLevel, type MatrixSortField } from './MatrixSortPanel'
 import { getBackendUrl } from '@/lib/backend-url'
 import { emitInvalidation, useInvalidationChannel } from '@/lib/sync/invalidation-channel'
 import {
@@ -296,10 +296,10 @@ export default function MatrixTab({ product, discardSignal = 0 }: Props) {
   const [bulkSrc, setBulkSrc]           = useState('IT')
   const [bulkDst, setBulkDst]           = useState('DE')
   const [bulkApplying, setBulkApplying] = useState(false)
-  // H.3 — multi-column sort via the shared SortStack ("field:dir" pairs;
-  // stack order = precedence). Header click sets a single primary sort;
-  // the "+ Sort" builder stacks more levels.
-  const [sortStack, setSortStack]       = useState<string[]>([])
+  // H.3 — multi-level sort via the flat-file-style MatrixSortPanel
+  // (each level A→Z / Z→A / Custom). Header click sets a single level.
+  const [sortConfig, setSortConfig]     = useState<MatrixSortLevel[]>([])
+  const [sortPanelOpen, setSortPanelOpen] = useState(false)
   // H.2 — row selection. Bulk actions scope to the selection when any
   // row is checked, else to all variants.
   const [selectedVariants, setSelectedVariants] = useState<Set<string>>(new Set())
@@ -696,27 +696,43 @@ export default function MatrixTab({ product, discardSignal = 0 }: Props) {
     return Array.from(seen)
   }, [product.variationAxes, children])
 
+  // String value of a field for a row (Custom-order + value-list use).
+  const rowValueStr = (c: ChildRow, colId: string): string => {
+    if (colId === 'basePrice') return String(readNumber(c.basePrice))
+    if (colId === 'totalStock') return String(readNumber(c.totalStock))
+    if (colId === 'sku') return String(c.sku ?? '')
+    if (colId.startsWith('cp:')) return String(getChannelPrice(c.id, colId.slice(3)))
+    if (colId.startsWith('lq:')) return String(getListedQty(c.id, colId.slice(3)))
+    return String(getAttr(c, colId) ?? '')
+  }
+  // Ascending comparison for a field (numeric where it makes sense).
+  const cmpAsc = (a: ChildRow, b: ChildRow, colId: string): number => {
+    if (colId === 'basePrice') return readNumber(a.basePrice) - readNumber(b.basePrice)
+    if (colId === 'totalStock') return readNumber(a.totalStock) - readNumber(b.totalStock)
+    if (colId.startsWith('cp:')) { const mp = colId.slice(3); return getChannelPrice(a.id, mp) - getChannelPrice(b.id, mp) }
+    if (colId.startsWith('lq:')) { const mp = colId.slice(3); return getListedQty(a.id, mp) - getListedQty(b.id, mp) }
+    return rowValueStr(a, colId).localeCompare(rowValueStr(b, colId), undefined, { numeric: true })
+  }
+
   const sortedRows = useMemo(() => {
-    if (sortStack.length === 0) return children
-    // Compare one field, asc-oriented (caller flips for desc).
-    const cmpField = (a: ChildRow, b: ChildRow, field: string): number => {
-      if (field === 'basePrice') return readNumber(a.basePrice) - readNumber(b.basePrice)
-      if (field === 'totalStock') return readNumber(a.totalStock) - readNumber(b.totalStock)
-      if (field === 'sku') return String(a.sku ?? '').localeCompare(String(b.sku ?? ''))
-      if (field.startsWith('cp:')) { const mp = field.slice(3); return getChannelPrice(a.id, mp) - getChannelPrice(b.id, mp) }
-      if (field.startsWith('lq:')) { const mp = field.slice(3); return getListedQty(a.id, mp) - getListedQty(b.id, mp) }
-      return String(getAttr(a, field) ?? '').localeCompare(String(getAttr(b, field) ?? ''))
-    }
+    if (sortConfig.length === 0) return children
     return [...children].sort((a, b) => {
-      for (const pair of sortStack) {
-        const [field, dir] = pair.split(':')
-        const r = cmpField(a, b, field)
-        if (r !== 0) return dir === 'desc' ? -r : r
+      for (const lvl of sortConfig) {
+        let r = 0
+        if (lvl.mode === 'custom') {
+          const ia = lvl.customOrder.indexOf(rowValueStr(a, lvl.colId))
+          const ib = lvl.customOrder.indexOf(rowValueStr(b, lvl.colId))
+          r = (ia < 0 ? 1e9 : ia) - (ib < 0 ? 1e9 : ib)
+        } else {
+          r = cmpAsc(a, b, lvl.colId)
+          if (lvl.mode === 'desc') r = -r
+        }
+        if (r !== 0) return r
       }
       return 0
     })
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [children, channelData, invData, sortStack, selectedMarket])
+  }, [children, channelData, invData, sortConfig, selectedMarket])
 
   // H.4 — a manual arrangement (drag-to-reorder) takes precedence over the
   // sort stack when present; rows not in the saved order fall to the end.
@@ -768,15 +784,21 @@ export default function MatrixTab({ product, discardSignal = 0 }: Props) {
   const toggleVariant = (id: string) => setSelectedVariants((prev) => {
     const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n
   })
-  // H.3 — sortable-field catalog for the shared SortStack builder.
-  const sortFields: SortFieldOption[] = useMemo(() => [
-    ...axes.map((ax) => ({ value: ax, label: ax })),
-    { value: 'sku', label: 'SKU' },
-    { value: 'basePrice', label: 'Base price' },
-    { value: `cp:${selectedMarket}`, label: `${selectedMarket} price` },
-    { value: `lq:${selectedMarket}`, label: `${selectedMarket} qty` },
-    { value: 'totalStock', label: 'Physical' },
+  // H.3 — sortable-field catalog for the MatrixSortPanel (grouped).
+  const sortFields: MatrixSortField[] = useMemo(() => [
+    ...axes.map((ax) => ({ id: ax, label: ax, group: 'Variant' })),
+    { id: 'sku', label: 'SKU', group: 'Identity' },
+    { id: 'basePrice', label: 'Base price', group: 'Pricing' },
+    { id: `cp:${selectedMarket}`, label: `${selectedMarket} price`, group: 'Pricing' },
+    { id: `lq:${selectedMarket}`, label: `${selectedMarket} qty`, group: 'Inventory' },
+    { id: 'totalStock', label: 'Physical', group: 'Inventory' },
   ], [axes, selectedMarket])
+  // Distinct values of a field across the current variants (Custom mode).
+  const valuesFor = (colId: string): string[] => {
+    const seen = new Set<string>()
+    for (const c of children) { const v = rowValueStr(c, colId).trim(); if (v) seen.add(v) }
+    return [...seen].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
+  }
   const rowVirtualizer = useVirtualizer({
     count: displayRows.length,
     getScrollElement: () => matrixScrollRef.current,
@@ -925,13 +947,13 @@ export default function MatrixTab({ product, discardSignal = 0 }: Props) {
   }
 
   // Header click = single primary sort; flips dir if already primary.
-  // (Multi-level stacking is done via the SortStack "+ Sort" builder.)
+  // (Multi-level + Custom value order live in the MatrixSortPanel.)
   function toggleSort(col: string) {
     setManualOrder(null) // a column sort clears the manual arrangement
-    setSortStack((prev) => {
-      const [pf, pd] = (prev[0] ?? '').split(':')
-      if (pf === col && prev.length === 1) return [`${col}:${pd === 'asc' ? 'desc' : 'asc'}`]
-      return [`${col}:asc`]
+    setSortConfig((prev) => {
+      const sole = prev.length === 1 && prev[0].colId === col ? prev[0] : null
+      const mode: MatrixSortLevel['mode'] = sole ? (sole.mode === 'asc' ? 'desc' : 'asc') : 'asc'
+      return [{ id: `hdr-${col}`, colId: col, mode, customOrder: [] }]
     })
   }
 
@@ -1002,7 +1024,7 @@ export default function MatrixTab({ product, discardSignal = 0 }: Props) {
 
   // ── Sort header button ────────────────────────────────────────────────
   function SortTh({ col, children: label, className }: { col: string; children: React.ReactNode; className?: string }) {
-    const active = sortStack.some((p) => p.split(':')[0] === col)
+    const active = sortConfig.some((l) => l.colId === col)
     return (
       <th onClick={() => toggleSort(col)}
         className={cn('px-2 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 select-none whitespace-nowrap', className)}>
@@ -1136,8 +1158,30 @@ export default function MatrixTab({ product, discardSignal = 0 }: Props) {
 
         <div className="h-4 w-px bg-slate-200 dark:bg-slate-700" />
 
-        {/* H.3 — shared multi-column sort builder */}
-        <SortStack fields={sortFields} stack={sortStack} onChange={(next) => { setManualOrder(null); setSortStack(next) }} />
+        {/* H.3 — flat-file-style multi-level sort panel (replica; the
+            real flat file is untouched). */}
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setSortPanelOpen((o) => !o)}
+            className={cn('inline-flex items-center gap-1 px-2 py-1 text-xs rounded border transition-colors',
+              sortConfig.length > 0
+                ? 'bg-blue-50 dark:bg-blue-950/30 border-blue-400 text-blue-700 dark:text-blue-300'
+                : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-500 hover:border-slate-400')}
+          >
+            <ArrowUpDown className="w-3.5 h-3.5" />
+            Sort{sortConfig.length > 0 ? ` (${sortConfig.length})` : ''}
+          </button>
+          {sortPanelOpen && (
+            <MatrixSortPanel
+              fields={sortFields}
+              valuesFor={valuesFor}
+              initial={sortConfig}
+              onApply={(levels) => { setManualOrder(null); setSortConfig(levels); setSortPanelOpen(false) }}
+              onClose={() => setSortPanelOpen(false)}
+            />
+          )}
+        </div>
         {manualOrder && (
           <button type="button" onClick={() => setManualOrder(null)}
             className="text-xs text-slate-400 hover:text-slate-600 underline-offset-2 hover:underline"
