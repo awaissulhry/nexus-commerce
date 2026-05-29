@@ -26,7 +26,7 @@ import {
 import { Modal, ModalFooter } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
-import MatrixSortPanel, { type MatrixSortLevel, type MatrixSortField } from './MatrixSortPanel'
+import { MatrixSortPanel, type MatrixSortLevel, type MatrixSortField } from '@/app/_shared/grid-lens'
 import { getBackendUrl } from '@/lib/backend-url'
 import { emitInvalidation, useInvalidationChannel } from '@/lib/sync/invalidation-channel'
 import {

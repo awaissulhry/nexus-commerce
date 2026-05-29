@@ -28,6 +28,7 @@ import {
   Search,
   CheckCircle2,
   XCircle,
+  ArrowUpDown,
 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { Input } from '@/components/ui/Input'
@@ -58,6 +59,7 @@ import {
   type SavedView,
 } from './_shared/savedViews'
 import { Columns as ColumnsIcon } from 'lucide-react'
+import { MatrixSortPanel, type MatrixSortLevel, type MatrixSortField } from '@/app/_shared/grid-lens'
 
 const STATUS_OPTIONS = [
   { value: 'ACTIVE', label: 'Active' },
@@ -121,6 +123,47 @@ interface FlatRow {
 
 const ROW_HEIGHT = 44
 
+// CC.1.1 — sort helpers over a MatrixRow. Structural columns aren't sortable.
+const SORTABLE_SKIP = new Set(['__select', '__expand', '__actions'])
+function rowSortStr(row: MatrixRow, colId: string): string {
+  switch (colId) {
+    case 'sku': return row.sku ?? ''
+    case 'name': return row.name ?? ''
+    case 'brand': return row.brand ?? ''
+    case 'status': return row.status ?? ''
+    case 'basePrice': return row.basePrice == null ? '' : String(row.basePrice)
+    case 'totalStock': return String(row.totalStock ?? 0)
+    case 'channelCoverage': return String(row.channelCoverage?.length ?? 0)
+    default:
+      if (colId.startsWith('attr:')) return formatDynamicValue(dynamicAttrValue(row, colId))
+      return ''
+  }
+}
+function rowCmpAsc(a: MatrixRow, b: MatrixRow, colId: string): number {
+  if (colId === 'basePrice') return (a.basePrice ?? 0) - (b.basePrice ?? 0)
+  if (colId === 'totalStock') return (a.totalStock ?? 0) - (b.totalStock ?? 0)
+  if (colId === 'channelCoverage') return (a.channelCoverage?.length ?? 0) - (b.channelCoverage?.length ?? 0)
+  return rowSortStr(a, colId).localeCompare(rowSortStr(b, colId), undefined, { numeric: true })
+}
+function applySortConfig(rows: MatrixRow[], cfg: MatrixSortLevel[]): MatrixRow[] {
+  if (cfg.length === 0) return rows
+  return [...rows].sort((a, b) => {
+    for (const lvl of cfg) {
+      let r = 0
+      if (lvl.mode === 'custom') {
+        const ia = lvl.customOrder.indexOf(rowSortStr(a, lvl.colId))
+        const ib = lvl.customOrder.indexOf(rowSortStr(b, lvl.colId))
+        r = (ia < 0 ? 1e9 : ia) - (ib < 0 ? 1e9 : ib)
+      } else {
+        r = rowCmpAsc(a, b, lvl.colId)
+        if (lvl.mode === 'desc') r = -r
+      }
+      if (r !== 0) return r
+    }
+    return 0
+  })
+}
+
 export default function MatrixClient() {
   const { toast } = useToast()
   const [data, setData] = useState<MatrixResponse | null>(null)
@@ -128,6 +171,20 @@ export default function MatrixClient() {
   const [error, setError] = useState<string | null>(null)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [search, setSearch] = useState('')
+
+  // ── CC.1.1 — multi-level sort (flat-file-style MatrixSortPanel) ──
+  const SORT_KEY = 'catalog-matrix:sort:v1'
+  const [sortConfig, setSortConfig] = useState<MatrixSortLevel[]>(() => {
+    if (typeof window === 'undefined') return []
+    try { const raw = window.localStorage.getItem(SORT_KEY); return raw ? (JSON.parse(raw) as MatrixSortLevel[]) : [] } catch { return [] }
+  })
+  const [sortPanelOpen, setSortPanelOpen] = useState(false)
+  useEffect(() => {
+    try {
+      if (sortConfig.length) window.localStorage.setItem(SORT_KEY, JSON.stringify(sortConfig))
+      else window.localStorage.removeItem(SORT_KEY)
+    } catch { /* ignore */ }
+  }, [sortConfig])
 
   // ── C.4 — column visibility state (localStorage-persisted) ──────
   const [pickerOpen, setPickerOpen] = useState(false)
@@ -160,6 +217,36 @@ export default function MatrixClient() {
     () => visibleColumns.map((c) => c.width).join(' '),
     [visibleColumns],
   )
+
+  // CC.1.1 — sortable-field catalog for the MatrixSortPanel (grouped:
+  // built-in Fields vs dynamic Attributes). Structural cols excluded.
+  const sortFields: MatrixSortField[] = useMemo(
+    () =>
+      visibleColumns
+        .filter((c) => !SORTABLE_SKIP.has(c.id))
+        .map((c) => ({ id: c.id, label: c.label || c.id, group: c.dynamic ? 'Attributes' : 'Fields' })),
+    [visibleColumns],
+  )
+  const valuesFor = useCallback(
+    (colId: string): string[] => {
+      const seen = new Set<string>()
+      for (const row of data?.rows ?? []) {
+        const v = rowSortStr(row, colId).trim()
+        if (v) seen.add(v)
+      }
+      return [...seen].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
+    },
+    [data],
+  )
+  // Header click = single primary sort; flips dir if already primary.
+  const toggleSort = useCallback((colId: string) => {
+    if (SORTABLE_SKIP.has(colId)) return
+    setSortConfig((prev) => {
+      const sole = prev.length === 1 && prev[0].colId === colId ? prev[0] : null
+      const mode: MatrixSortLevel['mode'] = sole ? (sole.mode === 'asc' ? 'desc' : 'asc') : 'asc'
+      return [{ id: `hdr-${colId}`, colId, mode, customOrder: [] }]
+    })
+  }, [])
 
   const toggleColumn = useCallback(
     (id: string) => {
@@ -384,7 +471,9 @@ export default function MatrixClient() {
     if (!data) return []
     const needle = search.trim().toLowerCase()
     const out: FlatRow[] = []
-    for (const row of data.rows) {
+    // CC.1.1 — sort parents by the configured stack; variants ride along.
+    const orderedRows = applySortConfig(data.rows, sortConfig)
+    for (const row of orderedRows) {
       // Filter: parent matches if any of its own fields or any
       // variant's SKU/name matches. Variants don't filter independently
       // — they ride along with their parent for the hierarchical view.
@@ -408,7 +497,7 @@ export default function MatrixClient() {
       }
     }
     return out
-  }, [data, expanded, search])
+  }, [data, expanded, search, sortConfig])
 
   // ── Virtualizer ─────────────────────────────────────────────────
   const parentRef = useRef<HTMLDivElement>(null)
@@ -473,6 +562,31 @@ export default function MatrixClient() {
             >
               Collapse all
             </button>
+            {/* CC.1.1 — flat-file-style multi-level sort */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setSortPanelOpen((o) => !o)}
+                className={cn(
+                  'inline-flex items-center gap-1.5 px-2 py-1 rounded',
+                  sortConfig.length > 0
+                    ? 'text-blue-700 bg-blue-50 dark:text-blue-300 dark:bg-blue-950/30'
+                    : 'text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800',
+                )}
+              >
+                <ArrowUpDown className="w-3 h-3" />
+                Sort{sortConfig.length > 0 ? ` (${sortConfig.length})` : ''}
+              </button>
+              {sortPanelOpen && (
+                <MatrixSortPanel
+                  fields={sortFields}
+                  valuesFor={valuesFor}
+                  initial={sortConfig}
+                  onApply={(levels) => { setSortConfig(levels); setSortPanelOpen(false) }}
+                  onClose={() => setSortPanelOpen(false)}
+                />
+              )}
+            </div>
             <button
               type="button"
               onClick={() => setPickerOpen(true)}
@@ -517,18 +631,27 @@ export default function MatrixClient() {
         )}
         style={{ gridTemplateColumns: gridCols }}
       >
-        {visibleColumns.map((c) => (
-          <div
-            key={c.id}
-            className={cn(
-              'truncate px-1',
-              c.align === 'right' && 'text-right',
-              c.align === 'center' && 'text-center',
-            )}
-          >
-            {c.label}
-          </div>
-        ))}
+        {visibleColumns.map((c) => {
+          const sortable = !SORTABLE_SKIP.has(c.id)
+          const active = sortConfig.some((l) => l.colId === c.id)
+          return (
+            <div
+              key={c.id}
+              onClick={sortable ? () => toggleSort(c.id) : undefined}
+              className={cn(
+                'truncate px-1 flex items-center gap-0.5',
+                c.align === 'right' && 'justify-end text-right',
+                c.align === 'center' && 'justify-center text-center',
+                sortable && 'cursor-pointer hover:text-zinc-800 dark:hover:text-zinc-200 select-none',
+              )}
+            >
+              {c.label}
+              {sortable && c.label && (
+                <ArrowUpDown className={cn('w-3 h-3 opacity-30', active && 'opacity-100 text-blue-500')} />
+              )}
+            </div>
+          )
+        })}
       </div>
 
       {/* Body */}
