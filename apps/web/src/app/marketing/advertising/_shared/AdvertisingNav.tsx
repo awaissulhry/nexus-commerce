@@ -15,7 +15,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Activity, Warehouse, TrendingUp, Bot, Wallet, Rss, Search, ClipboardList, BarChart2, Lightbulb, Stethoscope, Wand2, Sprout, Gauge, Clock, Brain, Radar, Sparkles, PackageX, Crosshair } from 'lucide-react'
+import { Activity, Warehouse, TrendingUp, Bot, Wallet, Rss, Search, ClipboardList, BarChart2, Lightbulb, Stethoscope, Wand2, Sprout, Gauge, Clock, Brain, Radar, Sparkles, PackageX, Crosshair, Users } from 'lucide-react'
 
 import type { LucideIcon } from 'lucide-react'
 
@@ -93,6 +93,12 @@ const TABS: Tab[] = [
     label: 'iROAS',
     icon: Crosshair,
     matchPrefix: '/marketing/advertising/incrementality',
+  },
+  {
+    href: '/marketing/advertising/audiences',
+    label: 'Audiences',
+    icon: Users,
+    matchPrefix: '/marketing/advertising/audiences',
   },
   {
     href: '/marketing/advertising/storage-age',

@@ -2454,6 +2454,33 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     try { return await ingestMarketingStream(messages as never) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
   })
 
+  // ── AX3.4: AMC-style no-SQL audiences ───────────────────────────────
+  fastify.get('/advertising/audience-templates', async (_request, reply) => {
+    const { AUDIENCE_TEMPLATES } = await import('../services/advertising/ads-audience.service.js')
+    reply.header('Cache-Control', 'private, max-age=600')
+    return { templates: AUDIENCE_TEMPLATES }
+  })
+  fastify.get('/advertising/audiences', async (_request) => {
+    const { listAudiences } = await import('../services/advertising/ads-audience.service.js')
+    return listAudiences()
+  })
+  fastify.post('/advertising/audiences', async (request, reply) => {
+    const b = request.body as Record<string, unknown>
+    if (!b?.name || !b?.audienceType) { reply.status(400); return { error: 'name, audienceType required' } }
+    const { createAudience } = await import('../services/advertising/ads-audience.service.js')
+    try { return await createAudience(b as never) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
+  })
+  fastify.post('/advertising/audiences/:id/activate', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const { activateAudience } = await import('../services/advertising/ads-audience.service.js')
+    try { return await activateAudience(id) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
+  })
+  fastify.post('/advertising/audiences/:id/archive', async (request) => {
+    const { id } = request.params as { id: string }
+    const { archiveAudience } = await import('../services/advertising/ads-audience.service.js')
+    return archiveAudience(id)
+  })
+
   // ── AX3.5: iROAS / incrementality (modeled) ─────────────────────────
   fastify.get('/advertising/incrementality', async (request, reply) => {
     const q = request.query as Record<string, string | undefined>

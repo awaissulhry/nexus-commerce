@@ -11893,3 +11893,28 @@ model AdSchedule {
   @@index([campaignId])
   @@index([enabled])
 }
+
+// AX3.4 — AMC-style no-SQL audience definitions. Operators compose audiences
+// from templates (cart abandoners / product viewers / past purchasers /
+// lookalike / suppression / competitor viewers) without writing SQL; the
+// definition is stored here and (when live) materialised into an AMC/DSP
+// audience. `externalAudienceId` holds the activated id.
+model AdAudience {
+  id                 String    @id @default(cuid())
+  name               String
+  audienceType       String // CART_ABANDONERS | PRODUCT_VIEWERS | PAST_PURCHASERS | LOOKALIKE | SUPPRESSION | COMPETITOR_VIEWERS | CUSTOM
+  marketplace        String?
+  lookbackDays       Int       @default(30)
+  asins              String[]  @default([])
+  params             Json      @default("{}")
+  estimatedReach     Int?
+  reachBasis         String? // computed | amc-estimate | unknown
+  status             String    @default("DRAFT") // DRAFT | ACTIVE | ARCHIVED
+  externalAudienceId String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  createdBy          String?
+
+  @@index([status])
+  @@index([audienceType])
+}
