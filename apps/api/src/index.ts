@@ -1075,6 +1075,8 @@ async function start() {
       // AX.9 — dayparting cron (every 15 min, applies schedule windows).
       const { startDaypartingCron } = await import('./jobs/ad-dayparting.job.js');
       startDaypartingCron();
+      // AX.10 — registers pace_budget handler.
+      await import('./services/advertising/ads-budget-pacing.service.js');
       startAllAdvertisingCrons();
       startAdvertisingRuleEvaluatorCron();
       startBudgetPoolRebalanceCron();

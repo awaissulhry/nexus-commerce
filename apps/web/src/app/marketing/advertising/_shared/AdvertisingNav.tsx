@@ -59,6 +59,12 @@ const TABS: Tab[] = [
     matchPrefix: '/marketing/advertising/dayparting',
   },
   {
+    href: '/marketing/advertising/pacing',
+    label: 'Budget pacing',
+    icon: Wallet,
+    matchPrefix: '/marketing/advertising/pacing',
+  },
+  {
     href: '/marketing/advertising/storage-age',
     label: 'Aged Stock',
     icon: Warehouse,

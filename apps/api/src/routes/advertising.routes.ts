@@ -2373,6 +2373,18 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     try { return await applyPlan({ dailyBudgetEur: 10, defaultBidEur: 0.5, ...(b as object) } as never) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
   })
 
+  // ── AX.10: Budget pacing ────────────────────────────────────────────
+  fastify.get('/advertising/pacing/preview', async (request, reply) => {
+    const q = request.query as Record<string, string | undefined>
+    const { previewPacing } = await import('../services/advertising/ads-budget-pacing.service.js')
+    reply.header('Cache-Control', 'private, max-age=30')
+    return previewPacing({ targetRoas: q.targetRoas ? Number(q.targetRoas) : undefined })
+  })
+  fastify.post('/advertising/pacing/apply', async (request, reply) => {
+    const { applyPacing } = await import('../services/advertising/ads-budget-pacing.service.js')
+    try { return await applyPacing((request.body ?? { changes: [] }) as never) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
+  })
+
   // ── AX.9: Dayparting schedules ──────────────────────────────────────
   fastify.get('/advertising/schedules', async (_request, reply) => {
     reply.header('Cache-Control', 'private, max-age=15')
