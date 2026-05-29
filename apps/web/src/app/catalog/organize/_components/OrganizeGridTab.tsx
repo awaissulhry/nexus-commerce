@@ -1108,6 +1108,39 @@ function ReviewModal({
   const attachCount = changes.filter((c) => c.action === 'attach').length
   const detachCount = changes.filter((c) => c.action === 'detach').length
 
+  // CC.3 — data-quality gate: pull family-completeness for the products
+  // being organized so the operator sees incomplete records BEFORE
+  // publishing (soft warning, not a hard block — ship-then-triage).
+  const [quality, setQuality] = useState<Record<string, { score: number; filled: number; totalRequired: number }>>({})
+  useEffect(() => {
+    const ids = Array.from(new Set(changes.map((c) => c.product.id)))
+    if (ids.length === 0) return
+    let cancelled = false
+    fetch(`${getBackendUrl()}/api/products/family-completeness/bulk`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ productIds: ids }),
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j: { results?: Record<string, unknown> } | null) => {
+        if (cancelled || !j?.results) return
+        const next: Record<string, { score: number; filled: number; totalRequired: number }> = {}
+        for (const [id, v] of Object.entries(j.results)) {
+          const r = v as { score?: number; filled?: number; totalRequired?: number }
+          if (typeof r?.score === 'number' && r.score >= 0) {
+            next[id] = { score: r.score, filled: r.filled ?? 0, totalRequired: r.totalRequired ?? 0 }
+          }
+        }
+        setQuality(next)
+      })
+      .catch(() => { /* non-fatal — review still works without scores */ })
+    return () => { cancelled = true }
+  }, [changes])
+  const incompleteCount = changes.filter((c) => {
+    const q = quality[c.product.id]
+    return q && q.score < 100
+  }).length
+
   return (
     <Modal
       open
@@ -1135,6 +1168,17 @@ function ReviewModal({
           <span className="text-xs">Publishes to catalog + enqueues channel sync. Attach changes undoable for 48h.</span>
         </div>
 
+        {/* CC.3 — data-quality gate (soft warning) */}
+        {incompleteCount > 0 && (
+          <div className="flex items-start gap-2 rounded-lg border border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/20 px-3 py-2 text-xs text-amber-800 dark:text-amber-200">
+            <AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
+            <span>
+              <strong>{incompleteCount}</strong> of {changes.length} product{changes.length === 1 ? '' : 's'} {incompleteCount === 1 ? 'has' : 'have'} incomplete
+              required data — they’ll publish but may be suppressed or rejected by a channel until completed. Review the % per row below.
+            </span>
+          </div>
+        )}
+
         <div className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
           <table className="w-full text-sm">
             <thead className="bg-slate-50 dark:bg-slate-800">
@@ -1156,6 +1200,17 @@ function ReviewModal({
                     <td className="px-3 py-2.5 align-top">
                       <div className="font-mono text-xs text-slate-700 dark:text-slate-300">{c.product.sku}</div>
                       <div className="text-xs text-slate-400 truncate max-w-[140px]">{c.product.name}</div>
+                      {/* CC.3 — completeness chip */}
+                      {(() => {
+                        const q = quality[c.product.id]
+                        if (!q) return null
+                        const tone = q.score >= 100 ? 'text-emerald-600 dark:text-emerald-400' : q.score >= 50 ? 'text-amber-600 dark:text-amber-400' : 'text-rose-600 dark:text-rose-400'
+                        return (
+                          <div className={`mt-0.5 text-[10.5px] font-medium ${tone}`} title={`${q.filled}/${q.totalRequired} required fields`}>
+                            {q.score}% complete
+                          </div>
+                        )
+                      })()}
                     </td>
                     <td className="px-3 py-2.5 align-top">
                       {isDetach ? (
