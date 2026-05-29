@@ -2436,24 +2436,6 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     return analyzeShareOfVoice({ windowDays: q.windowDays ? Number(q.windowDays) : undefined, marketplace: q.marketplace, limit: q.limit ? Number(q.limit) : undefined })
   })
 
-  // ── AX.12: Amazon Marketing Stream ingest (hourly traffic/conversion) ─
-  // Destination for an AWS Firehose / Lambda forwarding AMS records.
-  // Accepts a single message, a raw array, or { messages: [...] } (the
-  // shape a Firehose HTTP-endpoint or Lambda transform typically posts).
-  fastify.post('/advertising/marketing-stream/ingest', async (request, reply) => {
-    const body = request.body as unknown
-    const messages = Array.isArray(body)
-      ? body
-      : (body && typeof body === 'object' && Array.isArray((body as { messages?: unknown[] }).messages))
-        ? (body as { messages: unknown[] }).messages
-        : body && typeof body === 'object'
-          ? [body]
-          : []
-    if (messages.length === 0) { reply.status(400); return { error: 'expected a message, an array, or { messages: [...] }' } }
-    const { ingestMarketingStream } = await import('../services/advertising/ads-marketing-stream.service.js')
-    try { return await ingestMarketingStream(messages as never) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
-  })
-
   // ── AX3.2: Full-funnel Goal builder (branded + unbranded) ───────────
   fastify.post('/advertising/goals/suggest-targets', async (request, reply) => {
     const b = request.body as { brandTerms?: string[]; asins?: string[]; limit?: number }
