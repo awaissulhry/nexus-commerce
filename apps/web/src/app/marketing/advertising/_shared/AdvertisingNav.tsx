@@ -15,7 +15,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Activity, Warehouse, TrendingUp, Bot, Wallet, Rss, Search, ClipboardList, BarChart2, Lightbulb, Stethoscope, Wand2, Sprout, Gauge, Clock, Brain, Radar } from 'lucide-react'
+import { Activity, Warehouse, TrendingUp, Bot, Wallet, Rss, Search, ClipboardList, BarChart2, Lightbulb, Stethoscope, Wand2, Sprout, Gauge, Clock, Brain, Radar, Sparkles } from 'lucide-react'
 
 import type { LucideIcon } from 'lucide-react'
 
@@ -33,6 +33,12 @@ const TABS: Tab[] = [
     label: 'Campaigns',
     icon: Activity,
     matchPrefix: '/marketing/advertising/campaigns',
+  },
+  {
+    href: '/marketing/advertising/recommendations',
+    label: 'Recommendations',
+    icon: Sparkles,
+    matchPrefix: '/marketing/advertising/recommendations',
   },
   {
     href: '/marketing/advertising/architect',

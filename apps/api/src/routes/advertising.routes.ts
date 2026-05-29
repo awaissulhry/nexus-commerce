@@ -2421,6 +2421,26 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     return analyzeShareOfVoice({ windowDays: q.windowDays ? Number(q.windowDays) : undefined, marketplace: q.marketplace, limit: q.limit ? Number(q.limit) : undefined })
   })
 
+  // ── AX2.7: Unified AI + rules recommendations feed ──────────────────
+  fastify.get('/advertising/recommendations', async (request, reply) => {
+    const q = request.query as Record<string, string | undefined>
+    const { buildRecommendations } = await import('../services/advertising/ads-recommendations.service.js')
+    reply.header('Cache-Control', 'private, max-age=60')
+    return buildRecommendations({ windowDays: q.windowDays ? Number(q.windowDays) : undefined, targetAcos: q.targetAcos ? Number(q.targetAcos) : undefined })
+  })
+  fastify.get('/advertising/recommendations/brief', async (request) => {
+    const q = request.query as Record<string, string | undefined>
+    const { buildRecommendations, generateAdsBrief } = await import('../services/advertising/ads-recommendations.service.js')
+    const result = await buildRecommendations({ windowDays: q.windowDays ? Number(q.windowDays) : undefined })
+    return generateAdsBrief(result, q.language === 'it' ? 'it' : 'en')
+  })
+  fastify.post('/advertising/recommendations/apply', async (request, reply) => {
+    const b = request.body as { kind?: string; payload?: Record<string, unknown> }
+    if (!b?.kind || !b?.payload) { reply.status(400); return { error: 'kind + payload required' } }
+    const { applyRecommendation } = await import('../services/advertising/ads-recommendations.service.js')
+    try { return await applyRecommendation({ kind: b.kind, payload: b.payload }) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
+  })
+
   // ── AX.10: Budget pacing ────────────────────────────────────────────
   fastify.get('/advertising/pacing/preview', async (request, reply) => {
     const q = request.query as Record<string, string | undefined>
