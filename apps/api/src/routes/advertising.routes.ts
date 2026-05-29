@@ -2331,6 +2331,34 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     return getAdvertisingRuleEvaluatorStatus()
   })
 
+  // ── AX.4: CREATE routes (campaign/adGroup/keyword/productAd) ─────────
+  // Local-first; v3 SP POST behind the write gate (sandbox-safe). Feed the
+  // campaign builder (AX.5) + keyword-paste architect (AX.6).
+  fastify.post('/advertising/campaigns/create', async (request, reply) => {
+    const b = request.body as Record<string, unknown>
+    if (!b?.name || !b?.type || !b?.marketplace || b?.dailyBudgetEur == null) { reply.status(400); return { error: 'name, type, marketplace, dailyBudgetEur required' } }
+    const { createCampaignLocal } = await import('../services/advertising/ads-create.service.js')
+    try { return await createCampaignLocal(b as never) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
+  })
+  fastify.post('/advertising/adgroups/create', async (request, reply) => {
+    const b = request.body as Record<string, unknown>
+    if (!b?.campaignId || !b?.name || b?.defaultBidEur == null) { reply.status(400); return { error: 'campaignId, name, defaultBidEur required' } }
+    const { createAdGroupLocal } = await import('../services/advertising/ads-create.service.js')
+    try { return await createAdGroupLocal(b as never) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
+  })
+  fastify.post('/advertising/keywords/create', async (request, reply) => {
+    const b = request.body as Record<string, unknown>
+    if (!b?.adGroupId || !b?.keywordText || !b?.matchType || b?.bidEur == null) { reply.status(400); return { error: 'adGroupId, keywordText, matchType, bidEur required' } }
+    const { createKeywordLocal } = await import('../services/advertising/ads-create.service.js')
+    try { return await createKeywordLocal(b as never) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
+  })
+  fastify.post('/advertising/product-ads/create', async (request, reply) => {
+    const b = request.body as Record<string, unknown>
+    if (!b?.adGroupId || (!b?.sku && !b?.asin)) { reply.status(400); return { error: 'adGroupId + sku|asin required' } }
+    const { createProductAdLocal } = await import('../services/advertising/ads-create.service.js')
+    try { return await createProductAdLocal(b as never) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
+  })
+
   // ── AD.2: Mutation routes ───────────────────────────────────────────
   // Every write goes through ads-mutation.service which (1) updates the
   // local row immediately, (2) enqueues OutboundSyncQueue with a 5-min

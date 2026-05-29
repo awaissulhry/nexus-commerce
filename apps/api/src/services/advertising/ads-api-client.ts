@@ -32,6 +32,7 @@
  * the OAuth + write paths properly behind the ads-write-gate.
  */
 
+import { randomUUID } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
@@ -432,6 +433,70 @@ export async function updateTarget(
     acceptHeader: 'application/vnd.spKeyword.v3+json',
   })
   return { ok: true, mode: 'live', rawResponse: response }
+}
+
+// ── CREATE (AX.4) — v3 SP POST. Same LWA-Bearer v3 path as the updates;
+// sandbox short-circuits returning a generated external id so the full
+// create → local-row → (later) live-sync flow exercises end-to-end. ─────
+
+export interface CreateCampaignInput {
+  name: string
+  targetingType: 'MANUAL' | 'AUTO'
+  dailyBudget: number // EUR units
+  state?: 'enabled' | 'paused'
+  startDate?: string // YYYY-MM-DD
+  biddingStrategy?: 'legacyForSales' | 'autoForSales' | 'manual'
+}
+export async function createCampaign(ctx: ClientContext, input: CreateCampaignInput): Promise<{ ok: boolean; mode: AdsMode; externalId: string | null; rawResponse: unknown }> {
+  if (adsMode() === 'sandbox') {
+    const externalId = `sb-camp-${randomUUID().slice(0, 8)}`
+    logger.info('[ADS-SANDBOX] createCampaign', { profileId: ctx.profileId, input, externalId })
+    return { ok: true, mode: 'sandbox', externalId, rawResponse: { sandbox: true } }
+  }
+  const v3: Record<string, unknown> = {
+    name: input.name, targetingType: input.targetingType, state: (input.state ?? 'enabled').toUpperCase(),
+    budget: { budget: input.dailyBudget, budgetType: 'DAILY' },
+    dynamicBidding: { strategy: { legacyForSales: 'LEGACY_FOR_SALES', autoForSales: 'AUTO_FOR_SALES', manual: 'MANUAL' }[input.biddingStrategy ?? 'legacyForSales'] },
+    ...(input.startDate ? { startDate: input.startDate } : {}),
+  }
+  const response = await liveCall<{ campaigns?: { success?: Array<{ campaignId: string }> } }>({ ...ctx, method: 'POST', path: '/sp/campaigns', body: { campaigns: [v3] }, contentType: 'application/vnd.spCampaign.v3+json', acceptHeader: 'application/vnd.spCampaign.v3+json' })
+  return { ok: true, mode: 'live', externalId: response?.campaigns?.success?.[0]?.campaignId ?? null, rawResponse: response }
+}
+
+export interface CreateAdGroupInput { externalCampaignId: string; name: string; defaultBid: number; state?: 'enabled' | 'paused' }
+export async function createAdGroup(ctx: ClientContext, input: CreateAdGroupInput): Promise<{ ok: boolean; mode: AdsMode; externalId: string | null; rawResponse: unknown }> {
+  if (adsMode() === 'sandbox') {
+    const externalId = `sb-adg-${randomUUID().slice(0, 8)}`
+    logger.info('[ADS-SANDBOX] createAdGroup', { input, externalId })
+    return { ok: true, mode: 'sandbox', externalId, rawResponse: { sandbox: true } }
+  }
+  const v3 = { campaignId: input.externalCampaignId, name: input.name, defaultBid: input.defaultBid, state: (input.state ?? 'enabled').toUpperCase() }
+  const response = await liveCall<{ adGroups?: { success?: Array<{ adGroupId: string }> } }>({ ...ctx, method: 'POST', path: '/sp/adGroups', body: { adGroups: [v3] }, contentType: 'application/vnd.spAdGroup.v3+json', acceptHeader: 'application/vnd.spAdGroup.v3+json' })
+  return { ok: true, mode: 'live', externalId: response?.adGroups?.success?.[0]?.adGroupId ?? null, rawResponse: response }
+}
+
+export interface CreateKeywordInput { externalCampaignId: string; externalAdGroupId: string; keywordText: string; matchType: 'EXACT' | 'PHRASE' | 'BROAD'; bid: number; state?: 'enabled' | 'paused' }
+export async function createKeyword(ctx: ClientContext, input: CreateKeywordInput): Promise<{ ok: boolean; mode: AdsMode; externalId: string | null; rawResponse: unknown }> {
+  if (adsMode() === 'sandbox') {
+    const externalId = `sb-kw-${randomUUID().slice(0, 8)}`
+    logger.info('[ADS-SANDBOX] createKeyword', { input, externalId })
+    return { ok: true, mode: 'sandbox', externalId, rawResponse: { sandbox: true } }
+  }
+  const v3 = { campaignId: input.externalCampaignId, adGroupId: input.externalAdGroupId, keywordText: input.keywordText, matchType: input.matchType, bid: input.bid, state: (input.state ?? 'enabled').toUpperCase() }
+  const response = await liveCall<{ keywords?: { success?: Array<{ keywordId: string }> } }>({ ...ctx, method: 'POST', path: '/sp/keywords', body: { keywords: [v3] }, contentType: 'application/vnd.spKeyword.v3+json', acceptHeader: 'application/vnd.spKeyword.v3+json' })
+  return { ok: true, mode: 'live', externalId: response?.keywords?.success?.[0]?.keywordId ?? null, rawResponse: response }
+}
+
+export interface CreateProductAdInput { externalCampaignId: string; externalAdGroupId: string; sku?: string; asin?: string; state?: 'enabled' | 'paused' }
+export async function createProductAd(ctx: ClientContext, input: CreateProductAdInput): Promise<{ ok: boolean; mode: AdsMode; externalId: string | null; rawResponse: unknown }> {
+  if (adsMode() === 'sandbox') {
+    const externalId = `sb-ad-${randomUUID().slice(0, 8)}`
+    logger.info('[ADS-SANDBOX] createProductAd', { input, externalId })
+    return { ok: true, mode: 'sandbox', externalId, rawResponse: { sandbox: true } }
+  }
+  const v3: Record<string, unknown> = { campaignId: input.externalCampaignId, adGroupId: input.externalAdGroupId, state: (input.state ?? 'enabled').toUpperCase(), ...(input.sku ? { sku: input.sku } : {}), ...(input.asin ? { asin: input.asin } : {}) }
+  const response = await liveCall<{ productAds?: { success?: Array<{ adId: string }> } }>({ ...ctx, method: 'POST', path: '/sp/productAds', body: { productAds: [v3] }, contentType: 'application/vnd.spProductAd.v3+json', acceptHeader: 'application/vnd.spProductAd.v3+json' })
+  return { ok: true, mode: 'live', externalId: response?.productAds?.success?.[0]?.adId ?? null, rawResponse: response }
 }
 
 // ── Reports (Amazon's async request → poll → download pattern) ─────────

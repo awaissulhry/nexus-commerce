@@ -1,0 +1,111 @@
+/**
+ * AX.4 — Amazon Ads CREATE service (campaigns / ad groups / keywords /
+ * product ads). Local-first: writes the local Prisma row immediately
+ * (so the cockpit reflects it), and — when the write gate allows — calls
+ * the v3 SP POST create and stores the returned external id. Sandbox
+ * short-circuits inside ads-api-client (returns a generated sb- id), so
+ * the full flow exercises end-to-end without touching the live account.
+ * Every create writes an AdvertisingActionLog audit row.
+ *
+ * Creates intentionally skip the 5-min grace window (unlike updates) — a
+ * created entity has no "previous value" to revert to; the local row is
+ * the source of truth and a follow-up pause/archive handles unwind.
+ */
+
+import prisma from '../../db.js'
+import { logger } from '../../utils/logger.js'
+import {
+  createCampaign, createAdGroup, createKeyword, createProductAd,
+  type AdsRegion,
+} from './ads-api-client.js'
+import { checkAdsWriteGate } from './ads-write-gate.js'
+
+async function resolveCtx(marketplace: string): Promise<{ profileId: string; region: AdsRegion } | null> {
+  const conn = await prisma.amazonAdsConnection.findFirst({ where: { marketplace, isActive: true }, select: { profileId: true, region: true } })
+  return conn ? { profileId: conn.profileId, region: (conn.region as AdsRegion) ?? 'EU' } : null
+}
+
+async function audit(actionType: string, entityType: string, entityId: string, payloadAfter: object, userId?: string) {
+  await prisma.advertisingActionLog.create({
+    data: { userId: userId ?? null, actionType, entityType, entityId, payloadBefore: {}, payloadAfter, amazonResponseStatus: 'SUCCESS' },
+  }).catch(() => {})
+}
+
+export interface NewCampaign {
+  name: string; type: 'SP' | 'SB' | 'SD'; marketplace: string
+  targetingType?: 'MANUAL' | 'AUTO'; dailyBudgetEur: number
+  biddingStrategy?: 'legacyForSales' | 'autoForSales' | 'manual'; userId?: string
+}
+export async function createCampaignLocal(input: NewCampaign): Promise<{ id: string; externalCampaignId: string | null; mode: string }> {
+  const ctx = await resolveCtx(input.marketplace)
+  let externalId: string | null = null, mode = 'local'
+  if (ctx) {
+    const gate = await checkAdsWriteGate({ marketplace: input.marketplace, payloadValueCents: Math.round(input.dailyBudgetEur * 100) })
+    if (gate.allowed) {
+      const r = await createCampaign(ctx, { name: input.name, targetingType: input.targetingType ?? 'MANUAL', dailyBudget: input.dailyBudgetEur, biddingStrategy: input.biddingStrategy, state: 'enabled' })
+      externalId = r.externalId; mode = r.mode
+    }
+  }
+  const adProduct = { SP: 'SPONSORED_PRODUCTS', SB: 'SPONSORED_BRANDS', SD: 'SPONSORED_DISPLAY' }[input.type]
+  const campaign = await prisma.campaign.create({
+    data: {
+      name: input.name, type: input.type, adProduct, status: 'ENABLED', marketplace: input.marketplace,
+      externalCampaignId: externalId, dailyBudget: input.dailyBudgetEur, biddingStrategy: (input.biddingStrategy === 'autoForSales' ? 'AUTO_FOR_SALES' : input.biddingStrategy === 'manual' ? 'MANUAL' : 'LEGACY_FOR_SALES'),
+      startDate: new Date(), lastSyncStatus: externalId ? 'SUCCESS' : 'PENDING',
+    },
+  })
+  await audit('create_campaign', 'CAMPAIGN', campaign.id, { name: input.name, externalId, mode }, input.userId)
+  logger.info('[AX.4] createCampaignLocal', { id: campaign.id, externalId, mode })
+  return { id: campaign.id, externalCampaignId: externalId, mode }
+}
+
+export interface NewAdGroup { campaignId: string; name: string; defaultBidEur: number; userId?: string }
+export async function createAdGroupLocal(input: NewAdGroup): Promise<{ id: string; externalAdGroupId: string | null }> {
+  const campaign = await prisma.campaign.findUnique({ where: { id: input.campaignId }, select: { externalCampaignId: true, marketplace: true } })
+  if (!campaign) throw new Error('campaign not found')
+  let externalId: string | null = null
+  if (campaign.externalCampaignId && campaign.marketplace) {
+    const ctx = await resolveCtx(campaign.marketplace)
+    if (ctx) {
+      const gate = await checkAdsWriteGate({ marketplace: campaign.marketplace, payloadValueCents: Math.round(input.defaultBidEur * 100) })
+      if (gate.allowed) { const r = await createAdGroup(ctx, { externalCampaignId: campaign.externalCampaignId, name: input.name, defaultBid: input.defaultBidEur, state: 'enabled' }); externalId = r.externalId }
+    }
+  }
+  const ag = await prisma.adGroup.create({ data: { campaignId: input.campaignId, name: input.name, defaultBidCents: Math.round(input.defaultBidEur * 100), status: 'ENABLED', externalAdGroupId: externalId } })
+  await audit('create_ad_group', 'AD_GROUP', ag.id, { name: input.name, externalId }, input.userId)
+  return { id: ag.id, externalAdGroupId: externalId }
+}
+
+export interface NewKeyword { adGroupId: string; keywordText: string; matchType: 'EXACT' | 'PHRASE' | 'BROAD'; bidEur: number; userId?: string }
+export async function createKeywordLocal(input: NewKeyword): Promise<{ id: string; externalTargetId: string | null }> {
+  const ag = await prisma.adGroup.findUnique({ where: { id: input.adGroupId }, select: { externalAdGroupId: true, campaign: { select: { externalCampaignId: true, marketplace: true } } } })
+  if (!ag) throw new Error('ad group not found')
+  let externalId: string | null = null
+  if (ag.externalAdGroupId && ag.campaign?.externalCampaignId && ag.campaign.marketplace) {
+    const ctx = await resolveCtx(ag.campaign.marketplace)
+    if (ctx) {
+      const gate = await checkAdsWriteGate({ marketplace: ag.campaign.marketplace, payloadValueCents: Math.round(input.bidEur * 100) })
+      if (gate.allowed) { const r = await createKeyword(ctx, { externalCampaignId: ag.campaign.externalCampaignId, externalAdGroupId: ag.externalAdGroupId, keywordText: input.keywordText, matchType: input.matchType, bid: input.bidEur, state: 'enabled' }); externalId = r.externalId }
+    }
+  }
+  const t = await prisma.adTarget.create({ data: { adGroupId: input.adGroupId, kind: 'KEYWORD', expressionType: input.matchType, expressionValue: input.keywordText, bidCents: Math.round(input.bidEur * 100), status: 'ENABLED', externalTargetId: externalId } })
+  await audit('create_keyword', 'AD_TARGET', t.id, { keywordText: input.keywordText, matchType: input.matchType, externalId }, input.userId)
+  return { id: t.id, externalTargetId: externalId }
+}
+
+export interface NewProductAd { adGroupId: string; sku?: string; asin?: string; productId?: string; userId?: string }
+export async function createProductAdLocal(input: NewProductAd): Promise<{ id: string; externalAdId: string | null }> {
+  const ag = await prisma.adGroup.findUnique({ where: { id: input.adGroupId }, select: { externalAdGroupId: true, campaign: { select: { externalCampaignId: true, marketplace: true } } } })
+  if (!ag) throw new Error('ad group not found')
+  let externalId: string | null = null
+  if (ag.externalAdGroupId && ag.campaign?.externalCampaignId && ag.campaign.marketplace) {
+    const ctx = await resolveCtx(ag.campaign.marketplace)
+    if (ctx) {
+      const gate = await checkAdsWriteGate({ marketplace: ag.campaign.marketplace, payloadValueCents: 0 })
+      if (gate.allowed) { const r = await createProductAd(ctx, { externalCampaignId: ag.campaign.externalCampaignId, externalAdGroupId: ag.externalAdGroupId, sku: input.sku, asin: input.asin, state: 'enabled' }); externalId = r.externalId }
+    }
+  }
+  const ad = await prisma.adProductAd.create({ data: { adGroupId: input.adGroupId, asin: input.asin ?? null, sku: input.sku ?? null, productId: input.productId ?? null, status: 'ENABLED', externalAdId: externalId } })
+  await audit('create_product_ad', 'PRODUCT_AD', ad.id, { sku: input.sku, asin: input.asin, externalId }, input.userId)
+  return { id: ad.id, externalAdId: externalId }
+}
