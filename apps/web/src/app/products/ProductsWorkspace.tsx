@@ -68,10 +68,8 @@ import { WorkflowLens } from './_lenses/WorkflowLens'
 import { ReadinessLens } from './_lenses/ReadinessLens'
 import { TranslationsLens } from './_lenses/TranslationsLens'
 import { BulkActionBar } from './_components/BulkActionBar'
-// FP.4 — local FiltersPopover replaced by the shared FilterPopover.
-// The file at ./_components/FiltersPopover.tsx is now unused; left in
-// place for one cycle so any hot-reloading dev environment doesn't
-// chase a missing file. Safe to delete in a follow-up commit.
+// FP.4 — the local FiltersPopover was replaced by the shared
+// FilterPopover; the dead component was removed in OL.G.1.
 import { SavedViewsButton } from './_components/SavedViewsButton'
 import { Pagination } from './_components/Pagination'
 import { MobileProductList } from './_components/MobileProductList'
