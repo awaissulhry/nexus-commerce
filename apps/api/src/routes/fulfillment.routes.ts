@@ -5441,6 +5441,7 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
       include: {
         products: { include: { } as any },
         purchaseOrders: { take: 20, orderBy: { createdAt: 'desc' } },
+        contacts: { orderBy: [{ isPrimary: 'desc' }, { createdAt: 'asc' }] }, // PD.2
       },
     })
     if (!supplier) return reply.code(404).send({ error: 'Supplier not found' })
@@ -5689,9 +5690,83 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.patch('/fulfillment/suppliers/:id', async (request, reply) => {
     try {
       const { id } = request.params as { id: string }
-      const body = request.body as any
-      const updated = await prisma.supplier.update({ where: { id }, data: body })
+      const body = (request.body ?? {}) as Record<string, any>
+      // PD.2 — whitelist editable scalar fields (was mass-assign `body`).
+      const ALLOWED = [
+        'name', 'contactName', 'email', 'phone', 'addressLine1', 'city',
+        'postalCode', 'country', 'taxId', 'paymentTerms', 'defaultCurrency',
+        'leadTimeDays', 'isActive', 'notes',
+      ] as const
+      const data: Record<string, any> = {}
+      for (const k of ALLOWED) {
+        if (k in body) {
+          data[k] = k === 'leadTimeDays'
+            ? Math.max(0, Number(body[k]) || 0)
+            : k === 'isActive'
+              ? !!body[k]
+              : (body[k] === '' ? null : body[k])
+        }
+      }
+      const updated = await prisma.supplier.update({ where: { id }, data })
       return updated
+    } catch (error: any) {
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  // ── PD.2 — supplier contact persons (multi-contact book) ───────────
+  fastify.get('/fulfillment/suppliers/:id/contacts', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const items = await prisma.supplierContact.findMany({
+        where: { supplierId: id },
+        orderBy: [{ isPrimary: 'desc' }, { createdAt: 'asc' }],
+      })
+      return { items }
+    } catch (error: any) {
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  function sanitizeContact(body: any): Record<string, any> {
+    const data: Record<string, any> = {}
+    for (const k of ['name', 'role', 'email', 'phone', 'whatsapp', 'wechat', 'notes'] as const) {
+      if (k in body) data[k] = body[k] ? String(body[k]).trim() : null
+    }
+    if ('isPrimary' in body) data.isPrimary = !!body.isPrimary
+    return data
+  }
+
+  fastify.post('/fulfillment/suppliers/:id/contacts', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const data = sanitizeContact(request.body ?? {})
+      if (!data.name) return reply.code(400).send({ error: 'name required' })
+      const created = await prisma.supplierContact.create({ data: { ...data, supplierId: id } as any })
+      return created
+    } catch (error: any) {
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  fastify.patch('/fulfillment/suppliers/:id/contacts/:contactId', async (request, reply) => {
+    try {
+      const { contactId } = request.params as { id: string; contactId: string }
+      const data = sanitizeContact(request.body ?? {})
+      const updated = await prisma.supplierContact.update({ where: { id: contactId }, data })
+      return updated
+    } catch (error: any) {
+      const msg = error instanceof Error ? error.message : String(error)
+      if (msg.includes('Record to update not found')) return reply.code(404).send({ error: 'Contact not found' })
+      return reply.code(500).send({ error: msg })
+    }
+  })
+
+  fastify.delete('/fulfillment/suppliers/:id/contacts/:contactId', async (request, reply) => {
+    try {
+      const { contactId } = request.params as { id: string; contactId: string }
+      await prisma.supplierContact.delete({ where: { id: contactId } })
+      return { ok: true }
     } catch (error: any) {
       return reply.code(500).send({ error: error?.message ?? String(error) })
     }
