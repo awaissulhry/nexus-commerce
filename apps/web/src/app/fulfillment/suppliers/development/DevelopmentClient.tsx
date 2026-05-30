@@ -1,31 +1,31 @@
 'use client'
 
-// PD.5 — new-product development board (R&D pipeline). Project list with
-// status, create, and a detail drawer with candidate suppliers (sourcing
-// scaffolding for PD.6). Reached via an in-page tab from /fulfillment/
-// suppliers — no new sidebar link.
+// FP.1 — new-product development board, rebuilt on the app's own design
+// system (Card / Badge / Button / PageHeader, light + dark) so it matches
+// the rest of the app. Project detail is now a full page (./[id]) instead
+// of a cramped dark drawer.
 
-import { useCallback, useEffect, useState } from 'react'
-import Link from 'next/link'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { Plus, FlaskConical, ArrowRight } from 'lucide-react'
+import PageHeader from '@/components/layout/PageHeader'
+import { Card } from '@/components/ui/Card'
+import { Badge } from '@/components/ui/Badge'
+import { Button } from '@/components/ui/Button'
+import { EmptyState } from '@/components/ui/EmptyState'
 import { getBackendUrl } from '@/lib/backend-url'
 
 const API = getBackendUrl()
 
-const STATUSES = ['CONCEPT', 'SOURCING', 'SAMPLING', 'QUOTING', 'PRE_PRODUCTION', 'APPROVED', 'LAUNCHED', 'DROPPED', 'ON_HOLD'] as const
+export const STATUSES = ['CONCEPT', 'SOURCING', 'SAMPLING', 'QUOTING', 'PRE_PRODUCTION', 'APPROVED', 'LAUNCHED', 'DROPPED', 'ON_HOLD'] as const
 
-const STATUS_TONE: Record<string, string> = {
-  CONCEPT: 'bg-slate-700 text-slate-200',
-  SOURCING: 'bg-blue-900/60 text-blue-200',
-  SAMPLING: 'bg-violet-900/60 text-violet-200',
-  QUOTING: 'bg-cyan-900/60 text-cyan-200',
-  PRE_PRODUCTION: 'bg-amber-900/60 text-amber-200',
-  APPROVED: 'bg-emerald-900/60 text-emerald-200',
-  LAUNCHED: 'bg-emerald-600 text-white',
-  DROPPED: 'bg-rose-950/60 text-rose-300',
-  ON_HOLD: 'bg-slate-800 text-slate-400',
+export const STATUS_VARIANT: Record<string, 'default' | 'success' | 'warning' | 'danger' | 'info'> = {
+  CONCEPT: 'default', SOURCING: 'info', SAMPLING: 'info', QUOTING: 'info',
+  PRE_PRODUCTION: 'warning', APPROVED: 'success', LAUNCHED: 'success',
+  DROPPED: 'danger', ON_HOLD: 'default',
 }
 
-type Project = {
+export type Project = {
   id: string
   code: string
   name: string
@@ -38,18 +38,18 @@ type Project = {
   _count?: { candidates: number }
 }
 
-function eur(cents: number | null): string {
-  return cents == null ? '—' : `€${(cents / 100).toFixed(2)}`
+export function eur(cents: number | null): string {
+  return cents == null ? '—' : `€${(cents / 100).toLocaleString()}`
 }
 
 export default function DevelopmentClient() {
+  const router = useRouter()
   const [projects, setProjects] = useState<Project[]>([])
   const [loading, setLoading] = useState(true)
   const [creating, setCreating] = useState(false)
   const [name, setName] = useState('')
   const [productType, setProductType] = useState('')
-  const [openId, setOpenId] = useState<string | null>(null)
-  const [statusFilter, setStatusFilter] = useState<string | null>(null) // PD.11
+  const [statusFilter, setStatusFilter] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -68,313 +68,97 @@ export default function DevelopmentClient() {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: name.trim(), productType: productType.trim() || undefined }),
       })
-      if (res.ok) { setName(''); setProductType(''); const p = await res.json(); void load(); setOpenId(p.id) }
+      if (res.ok) { const p = await res.json(); router.push(`/fulfillment/suppliers/development/${p.id}`) }
     } finally { setCreating(false) }
   }
-  const setStatus = async (id: string, status: string) => {
-    await fetch(`${API}/api/fulfillment/development/projects/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status }) })
-    void load()
-  }
+
+  const shown = useMemo(
+    () => (statusFilter ? projects.filter((p) => p.status === statusFilter) : projects),
+    [projects, statusFilter],
+  )
+
+  const inputCls = 'h-9 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2.5 text-base text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500'
 
   return (
-    <div className="space-y-3 text-slate-200">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Link href="/fulfillment/suppliers" className="text-xs text-slate-400 hover:text-slate-200">← Suppliers</Link>
-          <h1 className="text-sm font-semibold">Product Development</h1>
+    <div className="space-y-5">
+      <PageHeader
+        title="Product Development"
+        description="Develop new products from concept to launch — source suppliers, request samples, build the factory pack, clear certification."
+        breadcrumbs={[
+          { label: 'Fulfillment', href: '/fulfillment' },
+          { label: 'Suppliers', href: '/fulfillment/suppliers' },
+          { label: 'Development' },
+        ]}
+      />
+
+      {/* New project */}
+      <Card>
+        <div className="flex flex-wrap items-center gap-2">
+          <input value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') void create() }} placeholder="New project name (e.g. Adventure helmet 2027)" className={`${inputCls} w-72`} />
+          <input value={productType} onChange={(e) => setProductType(e.target.value)} placeholder="Product type (Helmet…)" className={`${inputCls} w-48`} />
+          <Button variant="primary" icon={<Plus size={15} />} onClick={create} loading={creating} disabled={!name.trim()}>New project</Button>
         </div>
-        <span className="text-[11px] text-slate-500">{projects.length} project{projects.length === 1 ? '' : 's'}</span>
-      </div>
+      </Card>
 
-      {/* Create */}
-      <div className="flex flex-wrap items-end gap-2 rounded-lg border border-slate-700 bg-slate-900/40 p-3">
-        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="New project name (e.g. Adventure helmet 2027)" className="w-72 rounded border border-slate-700 bg-slate-950 px-2 py-1.5 text-xs text-slate-100 focus:outline-none" />
-        <input value={productType} onChange={(e) => setProductType(e.target.value)} placeholder="Product type (Helmet…)" className="w-44 rounded border border-slate-700 bg-slate-950 px-2 py-1.5 text-xs text-slate-100 focus:outline-none" />
-        <button onClick={create} disabled={creating || !name.trim()} className="rounded bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-500 disabled:opacity-50">New project</button>
-      </div>
-
-      {/* PD.11 — pipeline funnel (click a stage to filter) */}
+      {/* Pipeline funnel */}
       {projects.length > 0 && (
-        <div className="flex flex-wrap gap-1.5">
-          <button onClick={() => setStatusFilter(null)} className={`rounded px-2 py-1 text-[11px] ${statusFilter === null ? 'bg-slate-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}`}>All {projects.length}</button>
+        <div className="flex flex-wrap items-center gap-1.5">
+          <button onClick={() => setStatusFilter(null)} className={`rounded-md border px-2.5 py-1 text-sm font-medium ${statusFilter === null ? 'border-slate-900 bg-slate-900 text-white dark:border-slate-100 dark:bg-slate-100 dark:text-slate-900' : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
+            All {projects.length}
+          </button>
           {STATUSES.filter((s) => projects.some((p) => p.status === s)).map((s) => {
             const n = projects.filter((p) => p.status === s).length
+            const active = statusFilter === s
             return (
-              <button key={s} onClick={() => setStatusFilter(statusFilter === s ? null : s)} className={`rounded px-2 py-1 text-[11px] font-medium ${statusFilter === s ? 'ring-2 ring-white/40 ' : ''}${STATUS_TONE[s] ?? 'bg-slate-700'}`}>
-                {s.replace(/_/g, ' ')} {n}
+              <button key={s} onClick={() => setStatusFilter(active ? null : s)} className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-sm ${active ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/40' : 'border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
+                <Badge variant={STATUS_VARIANT[s]} size="sm">{s.replace(/_/g, ' ')}</Badge>
+                <span className="tabular-nums text-slate-500 dark:text-slate-400">{n}</span>
               </button>
             )
           })}
         </div>
       )}
 
-      {/* List */}
-      <div className="overflow-x-auto rounded-lg border border-slate-700 bg-slate-900/40">
-        <table className="w-full text-xs">
-          <thead>
-            <tr className="border-b border-slate-700 text-left text-[10px] uppercase tracking-wide text-slate-500">
-              <th className="px-3 py-2">Project</th>
-              <th className="px-2 py-2">Status</th>
-              <th className="px-2 py-2">Type</th>
-              <th className="px-2 py-2 text-right">Target cost</th>
-              <th className="px-2 py-2 text-center">Suppliers</th>
-              <th className="px-2 py-2">Launch</th>
-              <th className="px-2 py-2"></th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              <tr><td colSpan={7} className="px-3 py-8 text-center text-slate-500">Loading…</td></tr>
-            ) : projects.length === 0 ? (
-              <tr><td colSpan={7} className="px-3 py-8 text-center text-slate-500">No projects yet. Start one above.</td></tr>
-            ) : (statusFilter ? projects.filter((p) => p.status === statusFilter) : projects).map((p) => (
-              <tr key={p.id} className="border-b border-slate-800 hover:bg-slate-800/40">
-                <td className="px-3 py-2">
-                  <button onClick={() => setOpenId(p.id)} className="text-left">
-                    <div className="font-medium text-slate-200">{p.name}</div>
-                    <div className="font-mono text-[10px] text-slate-500">{p.code}</div>
-                  </button>
-                </td>
-                <td className="px-2 py-2">
-                  <select value={p.status} onChange={(e) => setStatus(p.id, e.target.value)} className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${STATUS_TONE[p.status] ?? 'bg-slate-700'}`}>
-                    {STATUSES.map((s) => <option key={s} value={s} className="bg-slate-900 text-slate-200">{s.replace(/_/g, ' ')}</option>)}
-                  </select>
-                </td>
-                <td className="px-2 py-2 text-slate-400">{p.productType ?? '—'}</td>
-                <td className="px-2 py-2 text-right tabular-nums">{eur(p.targetCostCents)}</td>
-                <td className="px-2 py-2 text-center">{p._count?.candidates ?? 0}</td>
-                <td className="px-2 py-2 text-slate-400">{p.targetLaunchDate ? new Date(p.targetLaunchDate).toLocaleDateString() : '—'}</td>
-                <td className="px-2 py-2 text-right"><button onClick={() => setOpenId(p.id)} className="text-blue-400 hover:underline">Open →</button></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      {openId && <ProjectDrawer id={openId} onClose={() => { setOpenId(null); void load() }} />}
-    </div>
-  )
-}
-
-type Candidate = {
-  id: string
-  supplierId: string
-  quotedCostCents: number | null
-  sampleStatus: string | null
-  isSelected: boolean
-  notes: string | null
-  supplier: { id: string; name: string; leadTimeDays: number; defaultCurrency: string | null }
-}
-type DevAttachment = { id: string; kind: string; url: string; filename: string | null; uploadedAt: string }
-type DevPo = { id: string; poNumber: string; status: string; poKind: string; totalCents: number }
-type DevCert = { id: string; type: string; status: string; required: boolean; certNumber: string | null; expiresAt: string | null }
-type ProjectDetail = Project & { candidates: Candidate[]; attachments: DevAttachment[]; purchaseOrders: DevPo[]; certifications: DevCert[] }
-
-const CERT_TYPES = ['CE', 'ECE_22_06', 'EN_13594', 'EN_1621', 'GPSR', 'OTHER'] as const
-const CERT_STATUS_TONE: Record<string, string> = {
-  PENDING: 'bg-slate-700 text-slate-300', IN_PROGRESS: 'bg-amber-900/60 text-amber-200',
-  APPROVED: 'bg-emerald-900/60 text-emerald-200', REJECTED: 'bg-rose-950/60 text-rose-300',
-}
-
-function ProjectDrawer({ id, onClose }: { id: string; onClose: () => void }) {
-  const [p, setP] = useState<ProjectDetail | null>(null)
-  const [suppliers, setSuppliers] = useState<Array<{ id: string; name: string }>>([])
-  const [addId, setAddId] = useState('')
-
-  const load = useCallback(async () => {
-    const res = await fetch(`${API}/api/fulfillment/development/projects/${id}`, { cache: 'no-store' })
-    if (res.ok) setP(await res.json())
-  }, [id])
-  useEffect(() => { void load() }, [load])
-  useEffect(() => {
-    void (async () => {
-      const res = await fetch(`${API}/api/fulfillment/suppliers`, { cache: 'no-store' })
-      if (res.ok) setSuppliers((await res.json()).items ?? [])
-    })()
-  }, [])
-
-  const patchProject = async (b: Record<string, unknown>) => { await fetch(`${API}/api/fulfillment/development/projects/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(b) }); void load() }
-  const addCandidate = async () => { if (!addId) return; await fetch(`${API}/api/fulfillment/development/projects/${id}/candidates`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ supplierId: addId }) }); setAddId(''); void load() }
-  const patchCandidate = async (cid: string, b: Record<string, unknown>) => { await fetch(`${API}/api/fulfillment/development/projects/${id}/candidates/${cid}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(b) }); void load() }
-  const delCandidate = async (cid: string) => { await fetch(`${API}/api/fulfillment/development/projects/${id}/candidates/${cid}`, { method: 'DELETE' }); void load() }
-
-  return (
-    <div className="fixed inset-0 z-40 flex justify-end" onClick={onClose}>
-      <div className="absolute inset-0 bg-black/50" />
-      <aside onClick={(e) => e.stopPropagation()} className="relative h-full w-full max-w-xl overflow-y-auto bg-slate-900 text-slate-200 shadow-2xl">
-        {!p ? <div className="p-5 text-slate-500">Loading…</div> : (
-          <div className="space-y-4 p-5">
-            <div className="flex items-start justify-between">
-              <div>
-                <div className="text-lg font-semibold">{p.name}</div>
-                <div className="font-mono text-[11px] text-slate-500">{p.code}</div>
-              </div>
-              <div className="flex items-center gap-2">
-                {/* PD.10 — launch → create product */}
-                {p.linkedProductId ? (
-                  <a href={`/products/${p.linkedProductId}/edit`} target="_blank" rel="noopener noreferrer" className="rounded border border-emerald-700 bg-emerald-900/40 px-2 py-0.5 text-[11px] text-emerald-200 hover:bg-emerald-900/60">Launched → product ↗</a>
-                ) : (
-                  <button
-                    onClick={async () => {
-                      if (!window.confirm('Launch this project? This creates a real Product and (if a supplier is selected) seeds its catalog with the factory name.')) return
-                      const res = await fetch(`${API}/api/fulfillment/development/projects/${id}/launch`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
-                      const d = await res.json().catch(() => ({}))
-                      if (!res.ok) { alert(d.error ?? 'Launch failed'); return }
-                      void load()
-                      if (d.linkedProductId) window.open(`/products/${d.linkedProductId}/edit`, '_blank')
-                    }}
-                    className="rounded border border-emerald-700 bg-emerald-900/40 px-2 py-0.5 text-[11px] text-emerald-200 hover:bg-emerald-900/60"
-                  >Launch → product</button>
-                )}
-                <button onClick={onClose} className="text-slate-400 hover:text-slate-200">✕</button>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3 text-xs">
-              <label className="block">
-                <span className="text-[10px] uppercase tracking-wide text-slate-500">Status</span>
-                <select defaultValue={p.status} onChange={(e) => patchProject({ status: e.target.value })} className="mt-0.5 w-full rounded border border-slate-700 bg-slate-950 px-2 py-1 text-slate-100">
-                  {STATUSES.map((s) => <option key={s} value={s}>{s.replace(/_/g, ' ')}</option>)}
-                </select>
-              </label>
-              <label className="block">
-                <span className="text-[10px] uppercase tracking-wide text-slate-500">Target cost (€)</span>
-                <input type="number" step="0.01" defaultValue={p.targetCostCents != null ? (p.targetCostCents / 100).toFixed(2) : ''} onBlur={(e) => patchProject({ targetCostEur: e.target.value })} className="mt-0.5 w-full rounded border border-slate-700 bg-slate-950 px-2 py-1 text-slate-100" />
-              </label>
-              <label className="block">
-                <span className="text-[10px] uppercase tracking-wide text-slate-500">Product type</span>
-                <input defaultValue={p.productType ?? ''} onBlur={(e) => patchProject({ productType: e.target.value })} className="mt-0.5 w-full rounded border border-slate-700 bg-slate-950 px-2 py-1 text-slate-100" />
-              </label>
-              <label className="block">
-                <span className="text-[10px] uppercase tracking-wide text-slate-500">Target launch</span>
-                <input type="date" defaultValue={p.targetLaunchDate ? p.targetLaunchDate.slice(0, 10) : ''} onBlur={(e) => patchProject({ targetLaunchDate: e.target.value })} className="mt-0.5 w-full rounded border border-slate-700 bg-slate-950 px-2 py-1 text-slate-100" />
-              </label>
-            </div>
-
-            <label className="block">
-              <span className="text-[10px] uppercase tracking-wide text-slate-500">Brief</span>
-              <textarea defaultValue={p.brief ?? ''} rows={3} onBlur={(e) => patchProject({ brief: e.target.value })} placeholder="What are we developing, target specs, references…" className="mt-0.5 w-full rounded border border-slate-700 bg-slate-950 px-2 py-1 text-xs text-slate-100" />
-            </label>
-
-            {/* Candidate suppliers */}
-            <div>
-              <div className="mb-1 flex items-center justify-between">
-                <span className="text-[10px] uppercase tracking-wide text-slate-500">Candidate suppliers (sourcing)</span>
-                <div className="flex items-center gap-1.5">
-                  <select value={addId} onChange={(e) => setAddId(e.target.value)} className="rounded border border-slate-700 bg-slate-950 px-1.5 py-0.5 text-[11px] text-slate-100">
-                    <option value="">+ add supplier…</option>
-                    {suppliers.filter((s) => !p.candidates.some((c) => c.supplierId === s.id)).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-                  </select>
-                  <button onClick={addCandidate} disabled={!addId} className="rounded border border-emerald-700 bg-emerald-900/40 px-2 py-0.5 text-[11px] text-emerald-300 disabled:opacity-50">Add</button>
-                </div>
-              </div>
-              <div className="space-y-1">
-                {p.candidates.length === 0 && <div className="text-[11px] text-slate-500">No candidates yet.</div>}
-                {p.candidates.map((c) => (
-                  <div key={c.id} className={`flex flex-wrap items-center gap-2 rounded border px-2 py-1 text-[11px] ${c.isSelected ? 'border-emerald-700 bg-emerald-950/20' : 'border-slate-800'}`}>
-                    <button onClick={() => patchCandidate(c.id, { isSelected: !c.isSelected })} title="Select supplier" className={c.isSelected ? 'text-emerald-400' : 'text-slate-600 hover:text-slate-300'}>{c.isSelected ? '★' : '☆'}</button>
-                    <span className="min-w-0 flex-1 truncate font-medium text-slate-200">
-                      {c.supplier.name} <span className="text-slate-500">· LT {c.supplier.leadTimeDays}d</span>
-                      {/* PD.6 — sourcing comparison badges */}
-                      {c.quotedCostCents != null && p.candidates.filter((x) => x.quotedCostCents != null).every((x) => c.quotedCostCents! <= x.quotedCostCents!) && <span className="ml-1 rounded bg-emerald-900/60 px-1 text-[9px] text-emerald-300">cheapest</span>}
-                      {p.candidates.every((x) => c.supplier.leadTimeDays <= x.supplier.leadTimeDays) && <span className="ml-1 rounded bg-blue-900/60 px-1 text-[9px] text-blue-300">fastest</span>}
-                      {p.targetCostCents != null && c.quotedCostCents != null && c.quotedCostCents > p.targetCostCents && <span className="ml-1 rounded bg-rose-950/60 px-1 text-[9px] text-rose-300">over target</span>}
-                    </span>
-                    <span className="inline-flex items-center gap-1">
-                      <span className="text-slate-500">quote €</span>
-                      <input type="number" step="0.01" defaultValue={c.quotedCostCents != null ? (c.quotedCostCents / 100).toFixed(2) : ''} onBlur={(e) => patchCandidate(c.id, { quotedCostEur: e.target.value })} className="w-16 rounded border border-slate-700 bg-slate-950 px-1 py-0.5 text-right text-slate-100" />
-                    </span>
-                    <select defaultValue={c.sampleStatus ?? ''} onChange={(e) => patchCandidate(c.id, { sampleStatus: e.target.value })} className="rounded border border-slate-700 bg-slate-950 px-1 py-0.5 text-[10px] text-slate-100">
-                      <option value="">sample…</option>
-                      {['REQUESTED', 'RECEIVED', 'APPROVED', 'REJECTED'].map((s) => <option key={s} value={s}>{s}</option>)}
-                    </select>
-                    <button onClick={() => delCandidate(c.id)} className="text-slate-600 hover:text-rose-400">✕</button>
-                  </div>
+      {/* Projects table */}
+      {loading ? (
+        <Card><div className="py-10 text-center text-slate-500 dark:text-slate-400">Loading…</div></Card>
+      ) : projects.length === 0 ? (
+        <EmptyState icon={FlaskConical} title="No development projects yet" description="Start one above to source suppliers, track samples, and build a factory pack." />
+      ) : (
+        <Card noPadding>
+          <div className="overflow-x-auto">
+            <table className="w-full text-base">
+              <thead>
+                <tr className="border-b border-slate-200 dark:border-slate-800 text-left text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                  <th className="px-4 py-2.5 font-semibold">Project</th>
+                  <th className="px-3 py-2.5 font-semibold">Status</th>
+                  <th className="px-3 py-2.5 font-semibold">Type</th>
+                  <th className="px-3 py-2.5 font-semibold text-right">Target cost</th>
+                  <th className="px-3 py-2.5 font-semibold text-center">Suppliers</th>
+                  <th className="px-3 py-2.5 font-semibold">Launch</th>
+                  <th className="px-3 py-2.5"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {shown.map((p) => (
+                  <tr key={p.id} onClick={() => router.push(`/fulfillment/suppliers/development/${p.id}`)} className="cursor-pointer border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                    <td className="px-4 py-2.5">
+                      <div className="font-medium text-slate-900 dark:text-slate-100">{p.name}</div>
+                      <div className="font-mono text-xs text-slate-400 dark:text-slate-500">{p.code}</div>
+                    </td>
+                    <td className="px-3 py-2.5"><Badge variant={STATUS_VARIANT[p.status]} size="sm">{p.status.replace(/_/g, ' ')}</Badge></td>
+                    <td className="px-3 py-2.5 text-slate-600 dark:text-slate-300">{p.productType ?? '—'}</td>
+                    <td className="px-3 py-2.5 text-right tabular-nums text-slate-700 dark:text-slate-300">{eur(p.targetCostCents)}</td>
+                    <td className="px-3 py-2.5 text-center tabular-nums text-slate-600 dark:text-slate-400">{p._count?.candidates ?? 0}</td>
+                    <td className="px-3 py-2.5 text-slate-600 dark:text-slate-300">{p.targetLaunchDate ? new Date(p.targetLaunchDate).toLocaleDateString() : '—'}</td>
+                    <td className="px-3 py-2.5 text-right"><ArrowRight size={15} className="inline text-slate-400" /></td>
+                  </tr>
                 ))}
-              </div>
-            </div>
-
-            {/* PD.7 — tech packs / reference art / sample photos */}
-            <div>
-              <div className="mb-1 flex items-center justify-between">
-                <span className="text-[10px] uppercase tracking-wide text-slate-500">Tech packs &amp; references</span>
-                <label className="cursor-pointer rounded border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] text-slate-200 hover:bg-slate-700">
-                  + Upload
-                  <input type="file" className="hidden" onChange={async (e) => {
-                    const f = e.target.files?.[0]; if (!f) return
-                    const fd = new FormData(); fd.append('file', f); fd.append('kind', 'TECH_PACK')
-                    await fetch(`${API}/api/fulfillment/development/projects/${id}/attachments`, { method: 'POST', body: fd })
-                    e.target.value = ''
-                    void load()
-                  }} />
-                </label>
-              </div>
-              <div className="space-y-1">
-                {p.attachments.length === 0 && <div className="text-[11px] text-slate-500">No files yet.</div>}
-                {p.attachments.map((a) => (
-                  <div key={a.id} className="flex items-center gap-2 rounded border border-slate-800 px-2 py-1 text-[11px]">
-                    <span className="rounded bg-slate-800 px-1 text-[9px] text-slate-400">{a.kind}</span>
-                    <a href={a.url} target="_blank" rel="noopener noreferrer" className="min-w-0 flex-1 truncate text-blue-400 hover:underline">{a.filename ?? 'file'}</a>
-                    <button onClick={async () => { await fetch(`${API}/api/fulfillment/development/projects/${id}/attachments/${a.id}`, { method: 'DELETE' }); void load() }} className="text-slate-600 hover:text-rose-400">✕</button>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* PD.8 — sample purchase orders spun from this project */}
-            <div>
-              <div className="mb-1 flex items-center justify-between">
-                <span className="text-[10px] uppercase tracking-wide text-slate-500">Sample purchase orders</span>
-                <button
-                  onClick={async () => {
-                    const res = await fetch(`${API}/api/fulfillment/development/projects/${id}/sample-po`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
-                    if (res.ok) { const po = await res.json(); void load(); window.open(`/fulfillment/purchase-orders/${po.id}`, '_blank') }
-                    else { const d = await res.json().catch(() => ({})); alert(d.error ?? 'Failed to create sample PO') }
-                  }}
-                  className="rounded border border-blue-700 bg-blue-900/40 px-2 py-0.5 text-[11px] text-blue-200 hover:bg-blue-900/60"
-                >+ Sample PO</button>
-              </div>
-              <div className="space-y-1">
-                {p.purchaseOrders.length === 0 && <div className="text-[11px] text-slate-500">No sample POs yet. Select a candidate supplier (★), then create one.</div>}
-                {p.purchaseOrders.map((po) => (
-                  <a key={po.id} href={`/fulfillment/purchase-orders/${po.id}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 rounded border border-slate-800 px-2 py-1 text-[11px] hover:bg-slate-800/50">
-                    <span className="rounded bg-blue-900/40 px-1 text-[9px] text-blue-300">{po.poKind}</span>
-                    <span className="font-mono text-slate-300">{po.poNumber}</span>
-                    <span className="text-slate-500">{po.status}</span>
-                    <span className="ml-auto tabular-nums text-slate-400">{eur(po.totalCents)}</span>
-                  </a>
-                ))}
-              </div>
-            </div>
-
-            {/* PD.9 — compliance / certifications (required ones gate launch) */}
-            <div>
-              <div className="mb-1 flex items-center justify-between">
-                <span className="text-[10px] uppercase tracking-wide text-slate-500">Compliance / certifications</span>
-                <select defaultValue="" onChange={async (e) => { const t = e.target.value; if (!t) return; e.target.value = ''; await fetch(`${API}/api/fulfillment/development/projects/${id}/certifications`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: t }) }); void load() }} className="rounded border border-slate-700 bg-slate-950 px-1.5 py-0.5 text-[11px] text-slate-100">
-                  <option value="">+ add cert…</option>
-                  {CERT_TYPES.map((t) => <option key={t} value={t}>{t.replace(/_/g, ' ')}</option>)}
-                </select>
-              </div>
-              <div className="space-y-1">
-                {p.certifications.length === 0 && <div className="text-[11px] text-slate-500">No certifications tracked. Required ones gate launch.</div>}
-                {p.certifications.map((cert) => (
-                  <div key={cert.id} className="flex flex-wrap items-center gap-2 rounded border border-slate-800 px-2 py-1 text-[11px]">
-                    <span className="font-medium text-slate-200">{cert.type.replace(/_/g, ' ')}</span>
-                    {cert.required && <span className="rounded bg-slate-800 px-1 text-[9px] text-slate-400">required</span>}
-                    <select defaultValue={cert.status} onChange={async (e) => { await fetch(`${API}/api/fulfillment/development/projects/${id}/certifications/${cert.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: e.target.value }) }); void load() }} className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${CERT_STATUS_TONE[cert.status] ?? 'bg-slate-700'}`}>
-                      {['PENDING', 'IN_PROGRESS', 'APPROVED', 'REJECTED'].map((s) => <option key={s} value={s} className="bg-slate-900 text-slate-200">{s.replace(/_/g, ' ')}</option>)}
-                    </select>
-                    <input defaultValue={cert.certNumber ?? ''} onBlur={async (e) => { await fetch(`${API}/api/fulfillment/development/projects/${id}/certifications/${cert.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ certNumber: e.target.value }) }); void load() }} placeholder="cert #" className="w-24 rounded border border-slate-700 bg-slate-950 px-1 py-0.5 text-slate-100" />
-                    <input type="date" defaultValue={cert.expiresAt ? cert.expiresAt.slice(0, 10) : ''} onBlur={async (e) => { await fetch(`${API}/api/fulfillment/development/projects/${id}/certifications/${cert.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ expiresAt: e.target.value }) }); void load() }} className="rounded border border-slate-700 bg-slate-950 px-1 py-0.5 text-slate-100" />
-                    <button onClick={async () => { await fetch(`${API}/api/fulfillment/development/projects/${id}/certifications/${cert.id}`, { method: 'DELETE' }); void load() }} className="text-slate-600 hover:text-rose-400">✕</button>
-                  </div>
-                ))}
-              </div>
-            </div>
+              </tbody>
+            </table>
           </div>
-        )}
-      </aside>
+        </Card>
+      )}
     </div>
   )
 }

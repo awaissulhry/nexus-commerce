@@ -1,0 +1,327 @@
+'use client'
+
+// FP.1 — development project detail, on the app design system. Tabs:
+// Overview · Sourcing · Files · Compliance. (Factory Pack tab arrives in
+// FP.7.) Migrates all the prior drawer logic into a proper light-themed
+// page with the shared Card/Badge/Button components.
+
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useParams, useRouter } from 'next/navigation'
+import {
+  ArrowLeft, Rocket, Plus, Trash2, Star, Upload, FileText, ExternalLink,
+} from 'lucide-react'
+import PageHeader from '@/components/layout/PageHeader'
+import { Card } from '@/components/ui/Card'
+import { Badge } from '@/components/ui/Badge'
+import { Button } from '@/components/ui/Button'
+import { useToast } from '@/components/ui/Toast'
+import { useConfirm } from '@/components/ui/ConfirmProvider'
+import { getBackendUrl } from '@/lib/backend-url'
+import { STATUSES, eur, type Project } from '../DevelopmentClient'
+
+const API = getBackendUrl()
+
+type Candidate = {
+  id: string; supplierId: string; quotedCostCents: number | null
+  sampleStatus: string | null; isSelected: boolean; notes: string | null
+  supplier: { id: string; name: string; leadTimeDays: number; defaultCurrency: string | null }
+}
+type DevAttachment = { id: string; kind: string; url: string; filename: string | null; uploadedAt: string }
+type DevPo = { id: string; poNumber: string; status: string; poKind: string; totalCents: number }
+type DevCert = { id: string; type: string; status: string; required: boolean; certNumber: string | null; expiresAt: string | null }
+type ProjectDetail = Project & { candidates: Candidate[]; attachments: DevAttachment[]; purchaseOrders: DevPo[]; certifications: DevCert[] }
+
+const CERT_TYPES = ['CE', 'ECE_22_06', 'EN_13594', 'EN_1621', 'GPSR', 'OTHER'] as const
+const CERT_VARIANT: Record<string, 'default' | 'success' | 'warning' | 'danger' | 'info'> = {
+  PENDING: 'default', IN_PROGRESS: 'warning', APPROVED: 'success', REJECTED: 'danger',
+}
+
+const TABS = ['Overview', 'Sourcing', 'Files', 'Compliance'] as const
+type Tab = (typeof TABS)[number]
+
+const inputCls = 'h-9 w-full rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2.5 text-base text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-500'
+const labelCls = 'text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400'
+
+export default function ProjectDetailClient() {
+  const params = useParams<{ id: string }>()
+  const id = params?.id as string
+  const router = useRouter()
+  const { toast } = useToast()
+  const askConfirm = useConfirm()
+
+  const [p, setP] = useState<ProjectDetail | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [tab, setTab] = useState<Tab>('Overview')
+  const [suppliers, setSuppliers] = useState<Array<{ id: string; name: string }>>([])
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    try {
+      const res = await fetch(`${API}/api/fulfillment/development/projects/${id}`, { cache: 'no-store' })
+      if (res.ok) setP(await res.json())
+    } finally { setLoading(false) }
+  }, [id])
+  useEffect(() => { if (id) void load() }, [id, load])
+  useEffect(() => {
+    void (async () => {
+      const res = await fetch(`${API}/api/fulfillment/suppliers`, { cache: 'no-store' })
+      if (res.ok) setSuppliers((await res.json()).items ?? [])
+    })()
+  }, [])
+
+  const patchProject = useCallback(async (b: Record<string, unknown>) => {
+    const res = await fetch(`${API}/api/fulfillment/development/projects/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(b) })
+    if (!res.ok) { const d = await res.json().catch(() => ({})); toast.error(d.error ?? 'Update failed') }
+    void load()
+  }, [id, load, toast])
+
+  const patchCandidate = async (cid: string, b: Record<string, unknown>) => { await fetch(`${API}/api/fulfillment/development/projects/${id}/candidates/${cid}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(b) }); void load() }
+  const launch = async () => {
+    const ok = await askConfirm({ title: 'Launch this project?', description: 'Creates a real Product and, if a supplier is selected, seeds its catalog with the factory name. Required certifications must be approved.', confirmLabel: 'Launch' })
+    if (!ok) return
+    const res = await fetch(`${API}/api/fulfillment/development/projects/${id}/launch`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
+    const d = await res.json().catch(() => ({}))
+    if (!res.ok) { toast.error(d.error ?? 'Launch failed'); return }
+    toast.success('Launched — product created')
+    void load()
+    if (d.linkedProductId) window.open(`/products/${d.linkedProductId}/edit`, '_blank')
+  }
+
+  if (loading && !p) {
+    return <div className="space-y-5"><PageHeader title="Project" breadcrumbs={[{ label: 'Fulfillment', href: '/fulfillment' }, { label: 'Development', href: '/fulfillment/suppliers/development' }, { label: '…' }]} /><Card><div className="py-10 text-center text-slate-500">Loading…</div></Card></div>
+  }
+  if (!p) {
+    return <div className="space-y-5"><PageHeader title="Project not found" breadcrumbs={[{ label: 'Fulfillment', href: '/fulfillment' }, { label: 'Development', href: '/fulfillment/suppliers/development' }]} /></div>
+  }
+
+  return (
+    <div className="space-y-5">
+      <PageHeader
+        title={p.name}
+        description={`${p.code}${p.productType ? ` · ${p.productType}` : ''}`}
+        breadcrumbs={[
+          { label: 'Fulfillment', href: '/fulfillment' },
+          { label: 'Suppliers', href: '/fulfillment/suppliers' },
+          { label: 'Development', href: '/fulfillment/suppliers/development' },
+          { label: p.code },
+        ]}
+        actions={
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" icon={<ArrowLeft size={14} />} onClick={() => router.push('/fulfillment/suppliers/development')}>Back</Button>
+            {p.linkedProductId ? (
+              <a href={`/products/${p.linkedProductId}/edit`} target="_blank" rel="noopener noreferrer"><Badge variant="success">Launched → product ↗</Badge></a>
+            ) : (
+              <Button variant="primary" size="sm" icon={<Rocket size={14} />} onClick={launch}>Launch → product</Button>
+            )}
+          </div>
+        }
+      />
+
+      {/* Tab bar */}
+      <div className="flex items-center gap-1 border-b border-slate-200 dark:border-slate-800">
+        {TABS.map((t) => {
+          const count = t === 'Sourcing' ? p.candidates.length : t === 'Files' ? p.attachments.length : t === 'Compliance' ? p.certifications.length : undefined
+          return (
+            <button key={t} onClick={() => setTab(t)} className={`-mb-px border-b-2 px-3 py-2 text-base font-medium ${tab === t ? 'border-blue-600 text-blue-700 dark:text-blue-300' : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'}`}>
+              {t}{count != null ? <span className="ml-1.5 text-xs text-slate-400">{count}</span> : null}
+            </button>
+          )
+        })}
+      </div>
+
+      {tab === 'Overview' && <OverviewTab p={p} onPatch={patchProject} onReload={load} />}
+      {tab === 'Sourcing' && <SourcingTab p={p} suppliers={suppliers} onReload={load} onPatchCandidate={patchCandidate} />}
+      {tab === 'Files' && <FilesTab p={p} onReload={load} />}
+      {tab === 'Compliance' && <ComplianceTab p={p} onReload={load} />}
+    </div>
+  )
+}
+
+function OverviewTab({ p, onPatch, onReload }: { p: ProjectDetail; onPatch: (b: Record<string, unknown>) => void; onReload: () => void }) {
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+      <div className="lg:col-span-2 space-y-5">
+        <Card title="Brief & specs">
+          <textarea defaultValue={p.brief ?? ''} rows={6} onBlur={(e) => onPatch({ brief: e.target.value })} placeholder="What are we developing — target specs, construction notes, references…" className="w-full rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-base text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+        </Card>
+        <Card title="Sample purchase orders" action={<SamplePoButton projectId={p.id} onReload={onReload} />}>
+          {p.purchaseOrders.length === 0 ? (
+            <p className="text-sm text-slate-500 dark:text-slate-400">No sample POs yet. Select a candidate supplier in Sourcing, then create one.</p>
+          ) : (
+            <div className="space-y-1.5">
+              {p.purchaseOrders.map((po) => (
+                <a key={po.id} href={`/fulfillment/purchase-orders/${po.id}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 rounded-md border border-slate-200 dark:border-slate-800 px-2.5 py-1.5 text-base hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                  <Badge variant="info" size="sm">{po.poKind}</Badge>
+                  <span className="font-mono text-slate-700 dark:text-slate-300">{po.poNumber}</span>
+                  <span className="text-sm text-slate-500">{po.status}</span>
+                  <span className="ml-auto tabular-nums text-slate-600 dark:text-slate-400">{eur(po.totalCents)}</span>
+                  <ExternalLink size={13} className="text-slate-400" />
+                </a>
+              ))}
+            </div>
+          )}
+        </Card>
+      </div>
+      <Card title="Details">
+        <div className="space-y-3">
+          <label className="block">
+            <span className={labelCls}>Status</span>
+            <select defaultValue={p.status} onChange={(e) => onPatch({ status: e.target.value })} className={`${inputCls} mt-1`}>
+              {STATUSES.map((s) => <option key={s} value={s}>{s.replace(/_/g, ' ')}</option>)}
+            </select>
+          </label>
+          <label className="block">
+            <span className={labelCls}>Product type</span>
+            <input defaultValue={p.productType ?? ''} onBlur={(e) => onPatch({ productType: e.target.value })} className={`${inputCls} mt-1`} />
+          </label>
+          <label className="block">
+            <span className={labelCls}>Target cost (€)</span>
+            <input type="number" step="0.01" defaultValue={p.targetCostCents != null ? (p.targetCostCents / 100).toFixed(2) : ''} onBlur={(e) => onPatch({ targetCostEur: e.target.value })} className={`${inputCls} mt-1`} />
+          </label>
+          <label className="block">
+            <span className={labelCls}>Target launch</span>
+            <input type="date" defaultValue={p.targetLaunchDate ? p.targetLaunchDate.slice(0, 10) : ''} onBlur={(e) => onPatch({ targetLaunchDate: e.target.value })} className={`${inputCls} mt-1`} />
+          </label>
+        </div>
+      </Card>
+    </div>
+  )
+}
+
+function SamplePoButton({ projectId, onReload }: { projectId: string; onReload: () => void }) {
+  const { toast } = useToast()
+  const [busy, setBusy] = useState(false)
+  return (
+    <Button variant="secondary" size="sm" icon={<Plus size={14} />} loading={busy} onClick={async () => {
+      setBusy(true)
+      try {
+        const res = await fetch(`${API}/api/fulfillment/development/projects/${projectId}/sample-po`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
+        const d = await res.json().catch(() => ({}))
+        if (!res.ok) { toast.error(d.error ?? 'Failed'); return }
+        onReload()
+        if (d.id) window.open(`/fulfillment/purchase-orders/${d.id}`, '_blank')
+      } finally { setBusy(false) }
+    }}>Sample PO</Button>
+  )
+}
+
+function SourcingTab({ p, suppliers, onReload, onPatchCandidate }: { p: ProjectDetail; suppliers: Array<{ id: string; name: string }>; onReload: () => void; onPatchCandidate: (cid: string, b: Record<string, unknown>) => void }) {
+  const [addId, setAddId] = useState('')
+  const { toast } = useToast()
+  const quotes = useMemo(() => p.candidates.map((c) => c.quotedCostCents).filter((n): n is number => n != null), [p.candidates])
+  const minLt = useMemo(() => p.candidates.length ? Math.min(...p.candidates.map((c) => c.supplier.leadTimeDays)) : null, [p.candidates])
+  const addCandidate = async () => {
+    if (!addId) return
+    const res = await fetch(`${API}/api/fulfillment/development/projects/${p.id}/candidates`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ supplierId: addId }) })
+    if (!res.ok) { const d = await res.json().catch(() => ({})); toast.error(d.error ?? 'Failed') }
+    setAddId(''); onReload()
+  }
+  return (
+    <Card title="Candidate suppliers" action={
+      <div className="flex items-center gap-2">
+        <select value={addId} onChange={(e) => setAddId(e.target.value)} className={`${inputCls} w-48`}>
+          <option value="">+ add supplier…</option>
+          {suppliers.filter((s) => !p.candidates.some((c) => c.supplierId === s.id)).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+        </select>
+        <Button variant="secondary" size="sm" onClick={addCandidate} disabled={!addId}>Add</Button>
+      </div>
+    }>
+      {p.candidates.length === 0 ? (
+        <p className="text-sm text-slate-500 dark:text-slate-400">No candidates yet. Add suppliers to compare quotes and lead times.</p>
+      ) : (
+        <div className="space-y-2">
+          {p.candidates.map((c) => {
+            const cheapest = c.quotedCostCents != null && quotes.length > 0 && c.quotedCostCents === Math.min(...quotes)
+            const fastest = minLt != null && c.supplier.leadTimeDays === minLt
+            const over = p.targetCostCents != null && c.quotedCostCents != null && c.quotedCostCents > p.targetCostCents
+            return (
+              <div key={c.id} className={`flex flex-wrap items-center gap-2 rounded-md border px-3 py-2 ${c.isSelected ? 'border-emerald-300 bg-emerald-50/50 dark:border-emerald-900 dark:bg-emerald-950/20' : 'border-slate-200 dark:border-slate-800'}`}>
+                <button onClick={() => onPatchCandidate(c.id, { isSelected: !c.isSelected })} title="Select supplier" className={c.isSelected ? 'text-amber-500' : 'text-slate-300 hover:text-amber-400'}><Star size={16} className={c.isSelected ? 'fill-amber-400' : ''} /></button>
+                <span className="font-medium text-slate-900 dark:text-slate-100">{c.supplier.name}</span>
+                <span className="text-sm text-slate-500">LT {c.supplier.leadTimeDays}d</span>
+                {cheapest && <Badge variant="success" size="sm">cheapest</Badge>}
+                {fastest && <Badge variant="info" size="sm">fastest</Badge>}
+                {over && <Badge variant="danger" size="sm">over target</Badge>}
+                <span className="ml-auto inline-flex items-center gap-1.5 text-sm text-slate-500">quote €
+                  <input type="number" step="0.01" defaultValue={c.quotedCostCents != null ? (c.quotedCostCents / 100).toFixed(2) : ''} onBlur={(e) => onPatchCandidate(c.id, { quotedCostEur: e.target.value })} className="h-8 w-20 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-1.5 text-right text-base text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                </span>
+                <select defaultValue={c.sampleStatus ?? ''} onChange={(e) => onPatchCandidate(c.id, { sampleStatus: e.target.value })} className="h-8 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-1.5 text-sm text-slate-700 dark:text-slate-200 focus:outline-none">
+                  <option value="">sample…</option>
+                  {['REQUESTED', 'RECEIVED', 'APPROVED', 'REJECTED'].map((s) => <option key={s} value={s}>{s}</option>)}
+                </select>
+                <button onClick={async () => { await fetch(`${API}/api/fulfillment/development/projects/${p.id}/candidates/${c.id}`, { method: 'DELETE' }); onReload() }} className="text-slate-400 hover:text-rose-500"><Trash2 size={14} /></button>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </Card>
+  )
+}
+
+function FilesTab({ p, onReload }: { p: ProjectDetail; onReload: () => void }) {
+  const [uploading, setUploading] = useState(false)
+  return (
+    <Card title="Tech packs, references & sample photos" action={
+      <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2.5 py-1.5 text-base font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800">
+        {uploading ? '…' : <><Upload size={14} /> Upload</>}
+        <input type="file" className="hidden" disabled={uploading} onChange={async (e) => {
+          const f = e.target.files?.[0]; if (!f) return
+          setUploading(true)
+          try {
+            const fd = new FormData(); fd.append('file', f); fd.append('kind', 'TECH_PACK')
+            await fetch(`${API}/api/fulfillment/development/projects/${p.id}/attachments`, { method: 'POST', body: fd })
+            e.target.value = ''; onReload()
+          } finally { setUploading(false) }
+        }} />
+      </label>
+    }>
+      {p.attachments.length === 0 ? (
+        <p className="text-sm text-slate-500 dark:text-slate-400">No files yet. Upload tech packs, reference art, measurement sheets, or sample photos.</p>
+      ) : (
+        <div className="space-y-1.5">
+          {p.attachments.map((a) => (
+            <div key={a.id} className="flex items-center gap-2 rounded-md border border-slate-200 dark:border-slate-800 px-2.5 py-1.5 text-base">
+              <FileText size={15} className="text-slate-400" />
+              <Badge variant="default" size="sm">{a.kind}</Badge>
+              <a href={a.url} target="_blank" rel="noopener noreferrer" className="min-w-0 flex-1 truncate text-blue-700 hover:underline dark:text-blue-300">{a.filename ?? 'file'}</a>
+              <button onClick={async () => { await fetch(`${API}/api/fulfillment/development/projects/${p.id}/attachments/${a.id}`, { method: 'DELETE' }); onReload() }} className="text-slate-400 hover:text-rose-500"><Trash2 size={14} /></button>
+            </div>
+          ))}
+        </div>
+      )}
+    </Card>
+  )
+}
+
+function ComplianceTab({ p, onReload }: { p: ProjectDetail; onReload: () => void }) {
+  const patchCert = async (cid: string, b: Record<string, unknown>) => { await fetch(`${API}/api/fulfillment/development/projects/${p.id}/certifications/${cid}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(b) }); onReload() }
+  return (
+    <Card title="Compliance / certifications" description="Required certifications gate launch (CE / ECE 22.06 / EN 13594 / EN 1621 / GPSR)." action={
+      <select defaultValue="" onChange={async (e) => { const t = e.target.value; if (!t) return; e.target.value = ''; await fetch(`${API}/api/fulfillment/development/projects/${p.id}/certifications`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: t }) }); onReload() }} className={`${inputCls} w-44`}>
+        <option value="">+ add cert…</option>
+        {CERT_TYPES.map((t) => <option key={t} value={t}>{t.replace(/_/g, ' ')}</option>)}
+      </select>
+    }>
+      {p.certifications.length === 0 ? (
+        <p className="text-sm text-slate-500 dark:text-slate-400">No certifications tracked yet.</p>
+      ) : (
+        <div className="space-y-2">
+          {p.certifications.map((cert) => (
+            <div key={cert.id} className="flex flex-wrap items-center gap-2 rounded-md border border-slate-200 dark:border-slate-800 px-3 py-2">
+              <span className="font-medium text-slate-900 dark:text-slate-100">{cert.type.replace(/_/g, ' ')}</span>
+              {cert.required && <Badge variant="default" size="sm">required</Badge>}
+              <select defaultValue={cert.status} onChange={(e) => patchCert(cert.id, { status: e.target.value })} className="h-8 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-1.5 text-sm text-slate-700 dark:text-slate-200 focus:outline-none">
+                {['PENDING', 'IN_PROGRESS', 'APPROVED', 'REJECTED'].map((s) => <option key={s} value={s}>{s.replace(/_/g, ' ')}</option>)}
+              </select>
+              <Badge variant={CERT_VARIANT[cert.status] ?? 'default'} size="sm">{cert.status.replace(/_/g, ' ')}</Badge>
+              <input defaultValue={cert.certNumber ?? ''} onBlur={(e) => patchCert(cert.id, { certNumber: e.target.value })} placeholder="cert #" className="h-8 w-28 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-1.5 text-base text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+              <input type="date" defaultValue={cert.expiresAt ? cert.expiresAt.slice(0, 10) : ''} onBlur={(e) => patchCert(cert.id, { expiresAt: e.target.value })} className="h-8 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-1.5 text-base text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+              <button onClick={async () => { await fetch(`${API}/api/fulfillment/development/projects/${p.id}/certifications/${cert.id}`, { method: 'DELETE' }); onReload() }} className="ml-auto text-slate-400 hover:text-rose-500"><Trash2 size={14} /></button>
+            </div>
+          ))}
+        </div>
+      )}
+    </Card>
+  )
+}
