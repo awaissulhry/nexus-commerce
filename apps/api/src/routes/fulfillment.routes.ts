@@ -11678,48 +11678,76 @@ Return ONLY valid JSON, no prose:
 
       const rows = await prisma.dailySalesAggregate.findMany({
         where: { sku: { in: skus }, channel, marketplace, day: { gte: historyStart, lt: today } },
-        select: { sku: true, day: true, unitsSold: true },
+        select: { sku: true, day: true, unitsSold: true, isStockOut: true },
       })
-      const bySku = new Map<string, Map<string, number>>()
+      const bySku = new Map<string, Map<string, { u: number; oos: boolean }>>()
       for (const r of rows) {
         let m = bySku.get(r.sku)
         if (!m) {
           m = new Map()
           bySku.set(r.sku, m)
         }
-        m.set(r.day.toISOString().slice(0, 10), r.unitsSold)
+        m.set(r.day.toISOString().slice(0, 10), { u: r.unitsSold, oos: !!r.isStockOut })
       }
 
-      const results: Array<{ sku: string; regime: string; forecast: number; actual: number }> = []
+      const results: Array<{
+        sku: string
+        regime: string
+        forecast: number
+        uForecast: number
+        actual: number
+      }> = []
       let totalF = 0
+      let totalUF = 0
       let totalA = 0
+      let oosDays = 0
+      let totalDays = 0
       const ape: number[] = []
       for (const sku of skus) {
-        const m = bySku.get(sku) ?? new Map<string, number>()
+        const m = bySku.get(sku) ?? new Map<string, { u: number; oos: boolean }>()
         const hist: number[] = []
+        const oos: boolean[] = []
         const cur = new Date(historyStart)
         while (cur < today) {
-          hist.push(m.get(cur.toISOString().slice(0, 10)) ?? 0)
+          const rec = m.get(cur.toISOString().slice(0, 10))
+          hist.push(rec?.u ?? 0)
+          oos.push(rec?.oos ?? false)
           cur.setUTCDate(cur.getUTCDate() + 1)
         }
         const train = hist.slice(0, hist.length - holdout)
+        const trainOos = oos.slice(0, oos.length - holdout)
         const test = hist.slice(hist.length - holdout)
+        totalDays += train.length
+        oosDays += trainOos.filter(Boolean).length
+        // Demand unconstraining: impute OOS-zero days with the mean rate over
+        // the IN-STOCK days, so suppressed (censored) demand doesn't drag the
+        // forecast down. In-stock zeros stay zero (real no-demand).
+        const inStock = train.filter((_, i) => !trainOos[i])
+        const inStockRate = inStock.length ? inStock.reduce((a, b) => a + b, 0) / inStock.length : 0
+        const uTrain = train.map((v, i) => (trainOos[i] && v === 0 ? inStockRate : v))
         const fc = forecastDailyDemand(train, holdout)
+        const ufc = forecastDailyDemand(uTrain, holdout)
         const fSum = fc.points.reduce((a, p) => a + p.value, 0)
+        const ufSum = ufc.points.reduce((a, p) => a + p.value, 0)
         const aSum = test.reduce((a, b) => a + b, 0)
         totalF += fSum
+        totalUF += ufSum
         totalA += aSum
-        if (aSum > 0) ape.push(Math.abs(fSum - aSum) / aSum)
-        results.push({ sku, regime: fc.regime, forecast: Math.round(fSum * 10) / 10, actual: aSum })
+        if (aSum > 0) ape.push(Math.abs(ufSum - aSum) / aSum)
+        results.push({
+          sku,
+          regime: fc.regime,
+          forecast: Math.round(fSum * 10) / 10,
+          uForecast: Math.round(ufSum * 10) / 10,
+          actual: aSum,
+        })
       }
       const withSales = results.filter((r) => r.actual > 0)
       const mape = ape.length ? ape.reduce((a, b) => a + b, 0) / ape.length : null
-      // Bucket by volume so we separate high-volume accuracy from low-volume noise.
       const high = withSales.filter((r) => r.actual >= 10)
-      const highBias =
-        high.reduce((a, r) => a + r.actual, 0) > 0
-          ? high.reduce((a, r) => a + r.forecast, 0) / high.reduce((a, r) => a + r.actual, 0)
-          : null
+      const hAct = high.reduce((a, r) => a + r.actual, 0)
+      const cHighBias = hAct > 0 ? high.reduce((a, r) => a + r.forecast, 0) / hAct : null
+      const uHighBias = hAct > 0 ? high.reduce((a, r) => a + r.uForecast, 0) / hAct : null
       return {
         ok: true,
         holdout,
@@ -11727,14 +11755,23 @@ Return ONLY valid JSON, no prose:
         marketplace,
         skusEvaluated: results.length,
         skusWithSales: withSales.length,
-        overallBias: totalA > 0 ? Math.round((totalF / totalA) * 1000) / 1000 : null,
-        highVolumeBias: highBias != null ? Math.round(highBias * 1000) / 1000 : null,
+        // If ~0, isStockOut isn't populated → unconstraining is a no-op.
+        stockOutDayPct: totalDays > 0 ? Math.round((oosDays / totalDays) * 1000) / 1000 : 0,
+        constrained: {
+          overallBias: totalA > 0 ? Math.round((totalF / totalA) * 1000) / 1000 : null,
+          highVolumeBias: cHighBias != null ? Math.round(cHighBias * 1000) / 1000 : null,
+        },
+        unconstrained: {
+          overallBias: totalA > 0 ? Math.round((totalUF / totalA) * 1000) / 1000 : null,
+          highVolumeBias: uHighBias != null ? Math.round(uHighBias * 1000) / 1000 : null,
+          mape: mape != null ? Math.round(mape * 1000) / 1000 : null,
+        },
         highVolumeCount: high.length,
-        totalForecast: Math.round(totalF),
         totalActual: totalA,
-        mape: mape != null ? Math.round(mape * 1000) / 1000 : null,
-        underHalf: withSales.filter((r) => r.forecast < 0.5 * r.actual).length,
-        topByActual: withSales.sort((a, b) => b.actual - a.actual).slice(0, 12),
+        topByActual: withSales
+          .sort((a, b) => b.actual - a.actual)
+          .slice(0, 12)
+          .map((r) => ({ sku: r.sku, A: r.actual, F: r.forecast, uF: r.uForecast })),
       }
     } catch (error: any) {
       fastify.log.error({ err: error }, '[forecast-backtest] failed')
