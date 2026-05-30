@@ -1599,6 +1599,13 @@ function PricingDetailDrawer({
           </div>
         )}
 
+        {/* PH.3 — Price history timeline */}
+        <PriceHistorySection
+          sku={row.sku}
+          channel={row.channel}
+          marketplace={row.marketplace}
+        />
+
         {/* Push action */}
         <div className="border border-slate-200 dark:border-slate-800 rounded p-3">
           <div className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-2">
@@ -1659,6 +1666,232 @@ function Item({
         {suffix ? <span className="text-slate-400 dark:text-slate-500 ml-1">{suffix}</span> : null}
       </dd>
     </>
+  )
+}
+
+// ── PH.3 — Price-history timeline ───────────────────────────────────────
+// Reads GET /api/pricing/price-history (PH.2) for this exact coordinate
+// and renders a sparkline + a chronological change list with a source
+// chip and reason per change. Answers "why did this price change, and
+// what was it before?" without leaving the drawer.
+
+interface PriceHistoryEvent {
+  id: string
+  channel: string
+  marketplace: string
+  fulfillmentMethod: string | null
+  oldPrice: number | null
+  newPrice: number | null
+  currency: string
+  source: string
+  reason: string
+  ruleId: string | null
+  actor: string | null
+  changedAt: string
+}
+interface PriceHistorySeries {
+  channel: string
+  marketplace: string
+  points: Array<{ t: string; price: number }>
+}
+
+// Source → chip palette. Operator edits read cool/blue, automation reads
+// violet, promotions read warm (start green / end amber), system reads grey.
+const PRICE_SOURCE_CHIP: Record<string, string> = {
+  MANUAL_OVERRIDE:
+    'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-900',
+  BULK_OVERRIDE:
+    'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-900',
+  REPRICER:
+    'bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-950 dark:text-violet-300 dark:border-violet-900',
+  PROMO_START:
+    'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-900',
+  PROMO_END:
+    'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-900',
+}
+const PRICE_SOURCE_LABEL: Record<string, string> = {
+  MANUAL_OVERRIDE: 'Manual',
+  BULK_OVERRIDE: 'Bulk edit',
+  REPRICER: 'Repricer',
+  PROMO_START: 'Promo start',
+  PROMO_END: 'Promo end',
+  CHANNEL_RULE: 'Channel rule',
+  MASTER_INHERIT: 'Master',
+  FX: 'FX',
+}
+
+function relativeTime(iso: string): string {
+  const then = new Date(iso).getTime()
+  const secs = Math.max(0, (Date.now() - then) / 1000)
+  if (secs < 60) return 'just now'
+  const mins = Math.floor(secs / 60)
+  if (mins < 60) return `${mins}m ago`
+  const hours = Math.floor(mins / 60)
+  if (hours < 24) return `${hours}h ago`
+  const days = Math.floor(hours / 24)
+  if (days < 30) return `${days}d ago`
+  const months = Math.floor(days / 30)
+  return `${months}mo ago`
+}
+
+// Tiny inline sparkline — no chart-lib dependency. Normalizes the series
+// to the box and draws a polyline; a flat/single-point series renders a
+// centred line so it never collapses to nothing.
+function Sparkline({ points }: { points: Array<{ t: string; price: number }> }) {
+  const W = 240
+  const H = 40
+  const P = 4
+  if (points.length === 0) return null
+  const prices = points.map((p) => p.price)
+  const min = Math.min(...prices)
+  const max = Math.max(...prices)
+  const span = max - min || 1
+  const n = points.length
+  const x = (i: number) =>
+    n === 1 ? W / 2 : P + (i / (n - 1)) * (W - 2 * P)
+  const y = (v: number) => H - P - ((v - min) / span) * (H - 2 * P)
+  const d = points.map((p, i) => `${x(i).toFixed(1)},${y(p.price).toFixed(1)}`).join(' ')
+  const last = points[n - 1]
+  return (
+    <svg
+      width={W}
+      height={H}
+      viewBox={`0 0 ${W} ${H}`}
+      className="w-full h-10"
+      preserveAspectRatio="none"
+      aria-hidden
+    >
+      <polyline
+        points={d}
+        fill="none"
+        className="stroke-violet-500 dark:stroke-violet-400"
+        strokeWidth={1.5}
+        strokeLinejoin="round"
+        strokeLinecap="round"
+      />
+      <circle cx={x(n - 1)} cy={y(last.price)} r={2.5} className="fill-violet-600 dark:fill-violet-400" />
+    </svg>
+  )
+}
+
+function PriceHistorySection({
+  sku,
+  channel,
+  marketplace,
+}: {
+  sku: string
+  channel: string
+  marketplace: string
+}) {
+  const [loading, setLoading] = useState(true)
+  const [events, setEvents] = useState<PriceHistoryEvent[]>([])
+  const [series, setSeries] = useState<PriceHistorySeries[]>([])
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    setLoading(true)
+    setError(null)
+    const params = new URLSearchParams({ sku, channel, marketplace, limit: '50' })
+    fetch(`${getBackendUrl()}/api/pricing/price-history?${params}`, {
+      cache: 'no-store',
+    })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
+      .then((json) => {
+        if (cancelled) return
+        setEvents(json.events ?? [])
+        setSeries(json.series ?? [])
+      })
+      .catch((e) => {
+        if (!cancelled) setError(e instanceof Error ? e.message : String(e))
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [sku, channel, marketplace])
+
+  const coordSeries = series.find(
+    (s) => s.channel === channel && s.marketplace === marketplace,
+  )
+  const currency = events[0]?.currency ?? 'EUR'
+
+  return (
+    <div className="border border-slate-200 dark:border-slate-800 rounded p-3">
+      <div className="flex items-center gap-1.5 text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-2">
+        <Clock size={12} />
+        Price history
+        {!loading && events.length > 0 && (
+          <span className="ml-1 text-slate-400 dark:text-slate-500 normal-case font-normal tracking-normal">
+            ({events.length})
+          </span>
+        )}
+      </div>
+
+      {loading ? (
+        <div className="flex items-center gap-2 text-base text-slate-400 dark:text-slate-500 py-2">
+          <Loader2 size={14} className="animate-spin" /> Loading…
+        </div>
+      ) : error ? (
+        <div className="text-base text-slate-400 dark:text-slate-500 py-2">
+          Couldn’t load history ({error}).
+        </div>
+      ) : events.length === 0 ? (
+        <div className="text-base text-slate-400 dark:text-slate-500 py-2">
+          No recorded price changes yet. Changes from bulk edits, the
+          repricer, and promotions will appear here.
+        </div>
+      ) : (
+        <>
+          {coordSeries && coordSeries.points.length >= 2 && (
+            <div className="mb-2">
+              <Sparkline points={coordSeries.points} />
+            </div>
+          )}
+          <ul className="space-y-2 max-h-64 overflow-y-auto">
+            {events.map((e) => (
+              <li key={e.id} className="flex items-start gap-2 text-base">
+                <span
+                  className={cn(
+                    'mt-0.5 px-1.5 py-0.5 rounded border text-xs font-medium whitespace-nowrap',
+                    PRICE_SOURCE_CHIP[e.source] ??
+                      'bg-slate-50 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700',
+                  )}
+                >
+                  {PRICE_SOURCE_LABEL[e.source] ?? e.source}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-1.5 font-mono tabular-nums text-slate-800 dark:text-slate-200">
+                    {e.oldPrice != null && (
+                      <span className="text-slate-400 dark:text-slate-500 line-through">
+                        {e.oldPrice.toFixed(2)}
+                      </span>
+                    )}
+                    {e.oldPrice != null && <ChevronRight size={12} className="text-slate-400" />}
+                    <span className="font-semibold">
+                      {e.newPrice != null ? `${e.newPrice.toFixed(2)} ${currency}` : 'cleared'}
+                    </span>
+                  </div>
+                  {e.reason && (
+                    <div className="text-sm text-slate-500 dark:text-slate-400 truncate" title={e.reason}>
+                      {e.reason}
+                    </div>
+                  )}
+                </div>
+                <span
+                  className="text-sm text-slate-400 dark:text-slate-500 whitespace-nowrap"
+                  title={new Date(e.changedAt).toLocaleString()}
+                >
+                  {relativeTime(e.changedAt)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+    </div>
   )
 }
 
