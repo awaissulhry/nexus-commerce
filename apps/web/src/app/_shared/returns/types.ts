@@ -150,9 +150,25 @@ export type ReturnWindowView = {
   reason?: string
 }
 
+// R6.1 — the resolved policy (most-specific match in the cascade) that
+// drives the refund composer's fee suggestions.
+export type ResolvedPolicyView = {
+  channel: string
+  marketplace: string | null
+  productType: string | null
+  windowDays: number
+  refundDeadlineDays: number
+  buyerPaysReturn: boolean
+  restockingFeePct: number | null
+  autoApprove: boolean
+  highValueThresholdCents: number | null
+  source: 'most_specific' | 'channel_marketplace' | 'channel_only' | 'fallback'
+}
+
 export type ReturnPolicyView = {
   window: ReturnWindowView
   deadline: RefundDeadlineView
+  resolved?: ResolvedPolicyView
 }
 
 // RX.0 — single aggregate payload returned by GET /returns/:id/full.

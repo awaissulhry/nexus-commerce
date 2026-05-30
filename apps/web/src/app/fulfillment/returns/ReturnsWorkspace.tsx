@@ -52,6 +52,7 @@ import {
   type ItemChecklist,
   type RefundDeadlineView,
   type RefundRow,
+  type ResolvedPolicyView,
   type ReturnFull,
   type ReturnRow,
   type SavedView,
@@ -942,7 +943,6 @@ function ReturnDrawer({ id, onClose, onChanged }: { id: string; onClose: () => v
   const [ret, setRet] = useState<ReturnRow | null>(null)
   const [loading, setLoading] = useState(true)
   const [conditions, setConditions] = useState<Record<string, string>>({})
-  const [refundCents, setRefundCents] = useState<string>('')
   // R2.1 + R5.1 — activity log + refund history. Fetched in parallel
   // with the return detail so the drawer paints once with full
   // context.
@@ -951,6 +951,9 @@ function ReturnDrawer({ id, onClose, onChanged }: { id: string; onClose: () => v
   // RX.0 — refund-deadline now arrives with the aggregate so the badge
   // renders from drawer state instead of its own fetch.
   const [deadline, setDeadline] = useState<RefundDeadlineView | null>(null)
+  // RX.3 — resolved policy (restocking %, who-pays-shipping) feeds the
+  // refund composer's fee suggestions, from the same aggregate fetch.
+  const [resolvedPolicy, setResolvedPolicy] = useState<ResolvedPolicyView | null>(null)
 
   const fetchOne = useCallback(async () => {
     setLoading(true)
@@ -966,6 +969,7 @@ function ReturnDrawer({ id, onClose, onChanged }: { id: string; onClose: () => v
         setAudit(data.audit?.items ?? [])
         setRefunds(data.refunds?.items ?? [])
         setDeadline(data.policy?.deadline ?? null)
+        setResolvedPolicy(data.policy?.resolved ?? null)
       }
     } finally { setLoading(false) }
   }, [id])
@@ -1017,8 +1021,7 @@ function ReturnDrawer({ id, onClose, onChanged }: { id: string; onClose: () => v
    * override for when the operator already issued the refund in the
    * channel back office and just needs Nexus to reflect.
    */
-  const submitRefund = async (skipChannelPush: boolean) => {
-    const cents = refundCents ? Math.round(Number(refundCents) * 100) : null
+  const submitRefund = async (payload: RefundSubmitPayload) => {
     setRefundBusy(true)
     setRefundResult(null)
     try {
@@ -1027,7 +1030,7 @@ function ReturnDrawer({ id, onClose, onChanged }: { id: string; onClose: () => v
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ refundCents: cents, skipChannelPush }),
+          body: JSON.stringify(payload),
         },
       )
       const json = await res.json().catch(() => ({}))
@@ -1231,35 +1234,18 @@ function ReturnDrawer({ id, onClose, onChanged }: { id: string; onClose: () => v
 
                   {ret.refundStatus !== 'REFUNDED' && (
                     <div className="pt-2 border-t border-slate-100 dark:border-slate-800 space-y-2">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-sm text-slate-500 dark:text-slate-400 mr-1">Refund:</span>
-                        <input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          value={refundCents}
-                          onChange={(e) => setRefundCents(e.target.value)}
-                          placeholder="0.00"
-                          className="h-8 w-24 px-2 text-right tabular-nums border border-slate-200 dark:border-slate-700 rounded text-base"
-                        />
-                        <span className="text-sm text-slate-500 dark:text-slate-400">€</span>
-                        <button
-                          onClick={() => submitRefund(false)}
-                          disabled={refundBusy}
-                          className="h-8 px-3 text-base bg-slate-900 dark:bg-slate-100 text-white rounded hover:bg-slate-800 disabled:opacity-50 inline-flex items-center gap-1.5"
-                          title={`Issue refund on ${ret.channel} and mark refunded locally`}
-                        >
-                          {refundBusy ? '…' : `Refund on ${ret.channel}`}
-                        </button>
-                        <button
-                          onClick={() => submitRefund(true)}
-                          disabled={refundBusy}
-                          className="h-8 px-3 text-base border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 rounded hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50"
-                          title="Already refunded in channel back office — just mark Nexus"
-                        >
-                          Mark only
-                        </button>
-                      </div>
+                      {/* RX.3 — refund composer: kind (cash / store-credit
+                          / exchange), per-line allocation, and policy-
+                          driven fee deduction. Refunds stay a human click;
+                          this only enriches what gets sent. */}
+                      <RefundComposer
+                        channel={ret.channel}
+                        items={ret.items}
+                        defaultAmountCents={ret.refundCents}
+                        policy={resolvedPolicy}
+                        busy={refundBusy}
+                        onSubmit={submitRefund}
+                      />
                       {/* H.14 — channel outcome surface. Each tone
                           maps to one of the four publisher outcomes. */}
                       {refundResult && (
@@ -2126,6 +2112,173 @@ function RefundRetryBanner({
         <span className="text-xs text-rose-600 dark:text-rose-400">
           Auto-retry runs hourly via cron (when enabled)
         </span>
+      </div>
+    </div>
+  )
+}
+
+// RX.3 — payload the composer sends to POST /returns/:id/refund.
+type RefundSubmitPayload = {
+  refundCents: number
+  kind: 'CASH' | 'STORE_CREDIT' | 'EXCHANGE'
+  skipChannelPush: boolean
+  perLineAmounts?: Record<string, number>
+  grossCents?: number
+  restockingFeeCents?: number
+  returnShippingFeeCents?: number
+}
+
+const REFUND_KINDS: Array<{ k: 'CASH' | 'STORE_CREDIT' | 'EXCHANGE'; label: string }> = [
+  { k: 'CASH', label: 'Cash' },
+  { k: 'STORE_CREDIT', label: 'Store credit' },
+  { k: 'EXCHANGE', label: 'Exchange' },
+]
+
+// RX.3 — refund composer. Kind (cash / store-credit / exchange),
+// optional per-line allocation, and policy-driven fee deduction, all
+// resolving to a single NET figure. Cash can push to the channel;
+// store-credit/exchange are recorded locally (our channel adapters only
+// issue cash refunds — the operator settles the credit/exchange in the
+// channel, then records it here), which keeps the channel total from
+// ever disagreeing with what we mark refunded.
+function RefundComposer({
+  channel, items, defaultAmountCents, policy, busy, onSubmit,
+}: {
+  channel: string
+  items: ReturnRow['items']
+  defaultAmountCents: number | null
+  policy: ResolvedPolicyView | null
+  busy: boolean
+  onSubmit: (payload: RefundSubmitPayload) => void
+}) {
+  const [kind, setKind] = useState<'CASH' | 'STORE_CREDIT' | 'EXCHANGE'>('CASH')
+  const [amount, setAmount] = useState<string>(defaultAmountCents != null ? (defaultAmountCents / 100).toFixed(2) : '')
+  const [perLineOpen, setPerLineOpen] = useState(false)
+  const [lines, setLines] = useState<Record<string, string>>({})
+  const [restockEuros, setRestockEuros] = useState<string>('')
+  const [shipEuros, setShipEuros] = useState<string>('')
+
+  const grossCents = useMemo(() => {
+    if (perLineOpen) {
+      return Object.values(lines).reduce((s, v) => s + (Number(v) > 0 ? Math.round(Number(v) * 100) : 0), 0)
+    }
+    return amount && Number(amount) > 0 ? Math.round(Number(amount) * 100) : 0
+  }, [perLineOpen, lines, amount])
+
+  const restockCents = restockEuros && Number(restockEuros) > 0 ? Math.round(Number(restockEuros) * 100) : 0
+  const shipCents = shipEuros && Number(shipEuros) > 0 ? Math.round(Number(shipEuros) * 100) : 0
+  const netCents = Math.max(0, grossCents - restockCents - shipCents)
+  const fmt = (c: number) => `€${(c / 100).toFixed(2)}`
+
+  const suggestRestock = () => {
+    if (policy?.restockingFeePct && grossCents > 0) {
+      setRestockEuros(((grossCents * (policy.restockingFeePct / 100)) / 100).toFixed(2))
+    }
+  }
+
+  const submit = (skipChannelPush: boolean) => {
+    if (netCents <= 0) return
+    const payload: RefundSubmitPayload = { refundCents: netCents, kind, skipChannelPush }
+    if (grossCents !== netCents) payload.grossCents = grossCents
+    if (restockCents > 0) payload.restockingFeeCents = restockCents
+    if (shipCents > 0) payload.returnShippingFeeCents = shipCents
+    if (perLineOpen) {
+      const map: Record<string, number> = {}
+      for (const [k, v] of Object.entries(lines)) { const c = Math.round(Number(v) * 100); if (c > 0) map[k] = c }
+      if (Object.keys(map).length) payload.perLineAmounts = map
+    }
+    onSubmit(payload)
+  }
+
+  return (
+    <div className="space-y-2.5">
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="text-sm text-slate-500 dark:text-slate-400 mr-1">Type:</span>
+        <div className="inline-flex rounded-md border border-slate-200 dark:border-slate-700 overflow-hidden">
+          {REFUND_KINDS.map((rk) => (
+            <button
+              key={rk.k}
+              onClick={() => setKind(rk.k)}
+              className={`h-7 px-2.5 text-sm ${kind === rk.k ? 'bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900' : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
+            >
+              {rk.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="flex items-center gap-2 flex-wrap">
+        {!perLineOpen ? (
+          <>
+            <span className="text-sm text-slate-500 dark:text-slate-400">Amount:</span>
+            <input type="number" step="0.01" min="0" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" className="h-8 w-24 px-2 text-right tabular-nums border border-slate-200 dark:border-slate-700 rounded text-base" />
+            <span className="text-sm text-slate-500 dark:text-slate-400">€</span>
+          </>
+        ) : (
+          <span className="text-sm text-slate-500 dark:text-slate-400">Per-line gross: <span className="font-semibold tabular-nums text-slate-700 dark:text-slate-300">{fmt(grossCents)}</span></span>
+        )}
+        {items.length > 1 && (
+          <button onClick={() => setPerLineOpen((o) => !o)} className="text-xs text-blue-700 dark:text-blue-300 hover:underline">
+            {perLineOpen ? 'Use single amount' : 'Per-line allocation'}
+          </button>
+        )}
+      </div>
+
+      {perLineOpen && (
+        <div className="space-y-1 pl-1">
+          {items.map((it) => (
+            <div key={it.id} className="flex items-center gap-2">
+              <span className="font-mono text-xs text-slate-600 dark:text-slate-300 flex-1 truncate">{it.sku} ×{it.quantity}</span>
+              <input type="number" step="0.01" min="0" value={lines[it.id] ?? ''} onChange={(e) => setLines((l) => ({ ...l, [it.id]: e.target.value }))} placeholder="0.00" className="h-7 w-20 px-2 text-right tabular-nums border border-slate-200 dark:border-slate-700 rounded text-sm" />
+              <span className="text-xs text-slate-400">€</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="flex items-center gap-2 flex-wrap text-sm">
+        <span className="text-slate-500 dark:text-slate-400">Deduct:</span>
+        <span className="inline-flex items-center gap-1">
+          <input type="number" step="0.01" min="0" value={restockEuros} onChange={(e) => setRestockEuros(e.target.value)} placeholder="0" className="h-7 w-16 px-1.5 text-right tabular-nums border border-slate-200 dark:border-slate-700 rounded text-sm" />
+          <span className="text-xs text-slate-400">€ restock</span>
+        </span>
+        {policy?.restockingFeePct ? (
+          <button onClick={suggestRestock} className="text-xs text-blue-700 dark:text-blue-300 hover:underline" title={`Policy restocking fee: ${policy.restockingFeePct}%`}>
+            apply {policy.restockingFeePct}%
+          </button>
+        ) : null}
+        <span className="inline-flex items-center gap-1">
+          <input type="number" step="0.01" min="0" value={shipEuros} onChange={(e) => setShipEuros(e.target.value)} placeholder="0" className="h-7 w-16 px-1.5 text-right tabular-nums border border-slate-200 dark:border-slate-700 rounded text-sm" />
+          <span className="text-xs text-slate-400">€ return ship</span>
+        </span>
+        {policy?.buyerPaysReturn && <span className="text-xs text-amber-700 dark:text-amber-300">policy: buyer pays return</span>}
+      </div>
+
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="text-sm text-slate-600 dark:text-slate-300">Net: <span className="font-bold tabular-nums">{fmt(netCents)}</span></span>
+        {(restockCents > 0 || shipCents > 0) && grossCents > 0 && (
+          <span className="text-xs text-slate-400">({fmt(grossCents)} − {fmt(restockCents + shipCents)} fees)</span>
+        )}
+      </div>
+
+      <div className="flex items-center gap-2 flex-wrap">
+        {kind === 'CASH' ? (
+          <>
+            <button onClick={() => submit(false)} disabled={busy || netCents <= 0} className="h-8 px-3 text-base bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 rounded hover:bg-slate-800 disabled:opacity-50 inline-flex items-center gap-1.5" title={`Issue refund on ${channel} and mark refunded`}>
+              {busy ? '…' : `Refund on ${channel}`}
+            </button>
+            <button onClick={() => submit(true)} disabled={busy || netCents <= 0} className="h-8 px-3 text-base border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 rounded hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50" title="Already refunded in channel back office — just mark Nexus">
+              Mark only
+            </button>
+          </>
+        ) : (
+          <>
+            <button onClick={() => submit(true)} disabled={busy || netCents <= 0} className="h-8 px-3 text-base bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 rounded hover:bg-slate-800 disabled:opacity-50" title={`Record ${kind === 'STORE_CREDIT' ? 'store credit' : 'exchange'} against this return`}>
+              {busy ? '…' : `Record ${kind === 'STORE_CREDIT' ? 'store credit' : 'exchange'}`}
+            </button>
+            <span className="text-xs text-slate-400">Issue the {kind === 'STORE_CREDIT' ? 'store credit' : 'exchange'} in {channel}, then record it here.</span>
+          </>
+        )}
       </div>
     </div>
   )

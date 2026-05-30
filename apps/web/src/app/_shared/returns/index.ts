@@ -13,6 +13,7 @@ export type {
   ReturnRow,
   RefundDeadlineView,
   ReturnWindowView,
+  ResolvedPolicyView,
   ReturnPolicyView,
   ReturnFull,
   SavedView,

@@ -364,11 +364,11 @@ const returnsRoutes: FastifyPluginAsync = async (fastify) => {
       })
       if (!ret) return reply.code(404).send({ error: 'Return not found' })
 
-      const { checkReturnWindow, checkRefundDeadline } = await import(
+      const { checkReturnWindow, checkRefundDeadline, resolveReturnPolicy } = await import(
         '../services/return-policies/resolver.service.js'
       )
 
-      const [audit, refunds, window, deadline] = await Promise.all([
+      const [audit, refunds, window, deadline, resolved] = await Promise.all([
         prisma.auditLog.findMany({
           where: { entityType: 'Return', entityId: id },
           orderBy: { createdAt: 'desc' },
@@ -396,6 +396,12 @@ const returnsRoutes: FastifyPluginAsync = async (fastify) => {
           marketplace: ret.marketplace,
           receivedAt: ret.receivedAt,
         }),
+        // RX.3 — resolved policy drives the refund composer's fee
+        // suggestions (restocking %, who pays return shipping).
+        resolveReturnPolicy({
+          channel: ret.channel,
+          marketplace: ret.marketplace,
+        }),
       ])
 
       // Strip the drawer-only order date fields that the detail route
@@ -410,7 +416,7 @@ const returnsRoutes: FastifyPluginAsync = async (fastify) => {
         return: { ...rest, order: slimOrder },
         audit: { items: audit },
         refunds: { items: refunds },
-        policy: { window, deadline },
+        policy: { window, deadline, resolved },
       })
     } catch (error: any) {
       return reply.code(500).send({ error: error?.message ?? String(error) })
@@ -857,12 +863,23 @@ const returnsRoutes: FastifyPluginAsync = async (fastify) => {
         kind?: 'CASH' | 'STORE_CREDIT' | 'EXCHANGE'
         skipChannelPush?: boolean
         reason?: string
+        // RX.3 — financial precision. Per-line refund allocation +
+        // order-level fee breakdown. amountCents stays the NET figure
+        // actually moved to the buyer; the breakdown is recorded for the
+        // fiscal/audit trail and the per-line map for line-level pushes.
+        perLineAmounts?: Record<string, number>
+        grossCents?: number
+        restockingFeeCents?: number
+        returnShippingFeeCents?: number
       }
 
       // Resolve the Return so we know channel + currency.
       const ret = await prisma.return.findUnique({
         where: { id },
-        select: { id: true, channel: true, currencyCode: true, refundCents: true, refundedAt: true },
+        select: {
+          id: true, channel: true, currencyCode: true, refundCents: true, refundedAt: true,
+          items: { select: { id: true } },
+        },
       })
       if (!ret) return reply.code(404).send({ error: 'Return not found' })
 
@@ -896,6 +913,39 @@ const returnsRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.code(400).send({ error: 'refundCents required (or stage on Return first)' })
       }
 
+      // RX.3 — validate + normalise the per-line refund allocation.
+      // Keys must reference items on this return; values are positive
+      // integer cents. We only forward the map to the channel publisher
+      // when it sums exactly to the net amount (no order-level fee
+      // discrepancy), so a channel push can never disagree with the
+      // total we mark refunded. Otherwise it's recorded for our own
+      // reporting and the publisher refunds the net total as before.
+      let perLineAmounts: Record<string, number> | null = null
+      if (body.perLineAmounts && typeof body.perLineAmounts === 'object') {
+        const validIds = new Set(ret.items.map((i) => i.id))
+        const norm: Record<string, number> = {}
+        for (const [k, v] of Object.entries(body.perLineAmounts)) {
+          if (typeof v !== 'number' || !Number.isFinite(v) || v <= 0) continue
+          if (!validIds.has(k)) {
+            return reply.code(400).send({ error: `perLineAmounts references unknown return item ${k}` })
+          }
+          norm[k] = Math.round(v)
+        }
+        if (Object.keys(norm).length) perLineAmounts = norm
+      }
+      const sumPerLine = perLineAmounts
+        ? Object.values(perLineAmounts).reduce((a, b) => a + b, 0)
+        : 0
+
+      // RX.3 — fee breakdown note for the fiscal/audit trail. The net
+      // (amountCents) is authoritative; this records how it was derived.
+      const feeParts: string[] = []
+      const c = (cents: number) => `€${(cents / 100).toFixed(2)}`
+      if (typeof body.grossCents === 'number' && body.grossCents > amountCents) feeParts.push(`gross ${c(body.grossCents)}`)
+      if (typeof body.restockingFeeCents === 'number' && body.restockingFeeCents > 0) feeParts.push(`restocking −${c(body.restockingFeeCents)}`)
+      if (typeof body.returnShippingFeeCents === 'number' && body.returnShippingFeeCents > 0) feeParts.push(`return shipping −${c(body.returnShippingFeeCents)}`)
+      const feeNote = feeParts.length ? `Net ${c(amountCents)} (${feeParts.join(', ')})` : null
+
       // Stage the cache up-front so the channel publisher (which
       // reads ret.refundCents) sees the amount we intend to issue.
       if (ret.refundCents !== amountCents) {
@@ -920,6 +970,8 @@ const returnsRoutes: FastifyPluginAsync = async (fastify) => {
             currencyCode: ret.currencyCode || 'EUR',
             kind: (body.kind ?? 'CASH') as any,
             reason: body.reason ?? null,
+            perLineAmounts: (perLineAmounts ?? undefined) as any,
+            notes: feeNote,
             channel: ret.channel,
             channelStatus: 'PENDING',
             actor: (request.headers['x-user-id'] as string | undefined) ?? null,
@@ -997,6 +1049,10 @@ const returnsRoutes: FastifyPluginAsync = async (fastify) => {
       const publish = await publishRefundToChannel({
         returnId: id,
         reasonText: body.reason,
+        // Only forward line-level amounts when they reconcile to the net
+        // total — otherwise the channel total could drift from what we
+        // mark refunded.
+        ...(perLineAmounts && sumPerLine === amountCents ? { itemAmountsCents: perLineAmounts } : {}),
       })
       const durationMs = Date.now() - t0
 
