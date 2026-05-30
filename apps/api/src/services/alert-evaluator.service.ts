@@ -18,8 +18,8 @@
  * Notification channels supported today:
  *   - 'log'                — stdout via logger.warn (always works)
  *   - 'webhook:<url>'      — POST { rule, event, value } to the URL
- *   - 'email:<addr>'       — STUB (returns ok=false until wired)
- *   - 'slack:<channel>'    — STUB (returns ok=false until wired)
+ *   - 'email:<addr>'       — sent via the Resend transport (L.18.0)
+ *   - 'slack:<channel>'    — POSTed to NEXUS_SLACK_WEBHOOK_URL (L.18.0)
  *
  * Failure to dispatch one channel doesn't block the others; each
  * channel result is captured in AlertEvent.notifications.

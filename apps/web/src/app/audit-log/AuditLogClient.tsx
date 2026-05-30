@@ -21,7 +21,6 @@ import {
 import { Badge } from '@/components/ui/Badge'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { Input } from '@/components/ui/Input'
-import { useToast } from '@/components/ui/Toast'
 import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
 import { AutoRefreshSelect } from '@/app/_shared/grid-lens'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -370,7 +369,6 @@ export default function AuditLogClient() {
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
-  const { toast } = useToast()
 
   // URL-shareable filter state.
   const urlEntityType = searchParams.get('entityType') ?? ''
@@ -388,6 +386,7 @@ export default function AuditLogClient() {
   const [debouncedSearch, setDebouncedSearch] = useState(urlSearch)
   const [data, setData] = useState<SearchResponse | null>(null)
   const [loading, setLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [lastFetchedAt, setLastFetchedAt] = useState<number | null>(null)
   const [autoRefreshMin, setAutoRefreshMin] = useState<0 | 5 | 15>(0)
@@ -451,6 +450,42 @@ export default function AuditLogClient() {
       setLoading(false)
     }
   }, [urlEntityType, urlEntityId, urlEntityIds, urlAction, urlSearch, urlSince])
+
+  // Load-more: fetch the next page with the server cursor and append. The
+  // /api/audit-log/search route already returns nextCursor; we keep the
+  // current facets (they describe the full filtered set, not the page) and
+  // only extend items + advance the cursor.
+  const loadMore = useCallback(async () => {
+    if (!data?.nextCursor || loadingMore) return
+    setLoadingMore(true)
+    try {
+      const url = new URL(`${getBackendUrl()}/api/audit-log/search`)
+      if (urlEntityType) url.searchParams.set('entityType', urlEntityType)
+      if (urlEntityId) url.searchParams.set('entityId', urlEntityId)
+      else if (urlEntityIds) url.searchParams.set('entityIds', urlEntityIds)
+      if (urlAction) url.searchParams.set('action', urlAction)
+      if (urlSearch) url.searchParams.set('search', urlSearch)
+      if (urlSince) url.searchParams.set('since', urlSince)
+      url.searchParams.set('limit', '50')
+      url.searchParams.set('cursor', data.nextCursor)
+      const res = await fetch(url.toString(), { cache: 'no-store' })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body.error ?? `HTTP ${res.status}`)
+      }
+      const json: SearchResponse = await res.json()
+      setData((prev) =>
+        prev
+          ? { ...json, items: [...prev.items, ...json.items], facets: prev.facets }
+          : json,
+      )
+      setError(null)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setLoadingMore(false)
+    }
+  }, [data, loadingMore, urlEntityType, urlEntityId, urlEntityIds, urlAction, urlSearch, urlSince])
 
   useEffect(() => {
     fetchData()
@@ -658,12 +693,12 @@ export default function AuditLogClient() {
             <div className="text-center py-2">
               <button
                 type="button"
-                onClick={() => {
-                  toast.info('Pagination — load more not yet wired (PR follow-up)')
-                }}
-                className="text-sm text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 italic"
+                onClick={loadMore}
+                disabled={loadingMore}
+                className="inline-flex items-center gap-1.5 text-sm text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-slate-100 disabled:opacity-50"
               >
-                More entries available · cursor pagination coming
+                {loadingMore && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                {loadingMore ? 'Loading…' : 'Load more'}
               </button>
             </div>
           )}
