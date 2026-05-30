@@ -81,6 +81,49 @@ export async function syncKeywordsForAdGroups(opts: { profileId: string; region:
   return { positives: pos.length, negatives: neg.length, upserted, adGroups: externalAdGroupIds.length, mode: adsMode() }
 }
 
+/**
+ * AF.7 — fleet-wide keyword resync. Pulls CURRENT keywords (with clean numeric
+ * bids) for EVERY campaign's ad groups via the v3 list API, fixing the €0-bid
+ * positives left by the v1 export (whose nested bid coerced to 0). Groups ad
+ * groups by connection profile/region and chunks the list filter.
+ */
+export async function resyncAllCampaignKeywords(opts: { chunk?: number } = {}): Promise<{ profiles: number; adGroups: number; positives: number; negatives: number; upserted: number; mode: string }> {
+  const chunk = opts.chunk ?? 40
+  const mode = adsMode()
+  if (mode === 'sandbox') return { profiles: 0, adGroups: 0, positives: 0, negatives: 0, upserted: 0, mode }
+
+  const { normalizeMarketplaceCode } = await import('../../utils/marketplace-code.js')
+  const conns = await prisma.amazonAdsConnection.findMany({ where: { isActive: true }, select: { profileId: true, region: true, marketplace: true } })
+  // Map each campaign's marketplace (short code or Amazon id) → a connection.
+  const campaigns = await prisma.campaign.findMany({
+    where: { externalCampaignId: { not: null } },
+    select: { marketplace: true, adGroups: { select: { externalAdGroupId: true } } },
+  })
+  const agsByProfile = new Map<string, { region: AdsRegion; ids: Set<string> }>()
+  for (const c of campaigns) {
+    const code = normalizeMarketplaceCode(c.marketplace) ?? c.marketplace
+    const conn = conns.find((x) => x.marketplace === code || x.marketplace === c.marketplace)
+    if (!conn) continue
+    const region: AdsRegion = (conn.region === 'NA' || conn.region === 'FE') ? (conn.region as AdsRegion) : 'EU'
+    const bucket = agsByProfile.get(conn.profileId) ?? { region, ids: new Set<string>() }
+    for (const ag of c.adGroups) if (ag.externalAdGroupId) bucket.ids.add(ag.externalAdGroupId)
+    agsByProfile.set(conn.profileId, bucket)
+  }
+
+  let adGroups = 0, positives = 0, negatives = 0, upserted = 0
+  for (const [profileId, { region, ids }] of agsByProfile) {
+    const all = [...ids]
+    adGroups += all.length
+    for (let i = 0; i < all.length; i += chunk) {
+      const slice = all.slice(i, i + chunk)
+      const r = await syncKeywordsForAdGroups({ profileId, region, externalAdGroupIds: slice }).catch((e) => { logger.warn('[kw-resync-all] chunk failed', { profileId, error: String(e).slice(0, 160) }); return null })
+      if (r) { positives += r.positives; negatives += r.negatives; upserted += r.upserted }
+    }
+  }
+  logger.info('[kw-resync-all] done', { profiles: agsByProfile.size, adGroups, positives, negatives, upserted })
+  return { profiles: agsByProfile.size, adGroups, positives, negatives, upserted, mode }
+}
+
 /** Resolve a campaign's profile + ad groups, then sync its keywords via the list API. */
 export async function syncCampaignKeywords(campaignId: string): Promise<KeywordSyncResult & { campaignId: string }> {
   const campaign = await prisma.campaign.findUnique({

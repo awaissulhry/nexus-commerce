@@ -3592,6 +3592,12 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const { syncCampaignKeywords } = await import('../services/advertising/ads-keyword-list-sync.service.js')
     try { return { ok: true, ...(await syncCampaignKeywords(b.campaignId)) } } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
   })
+  // AF.7 — fleet-wide keyword resync (real Amazon bids via v3 list API).
+  fastify.post('/advertising/keywords/resync-all', async (request, reply) => {
+    const b = (request.body ?? {}) as { chunk?: number }
+    const { resyncAllCampaignKeywords } = await import('../services/advertising/ads-keyword-list-sync.service.js')
+    try { return { ok: true, ...(await resyncAllCampaignKeywords({ chunk: b.chunk })) } } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
+  })
 
   // ── AME.15-17: campaign launcher + keyword-graduation funnel ────────
   fastify.get('/advertising/funnel/state', async (request, reply) => {
