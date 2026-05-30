@@ -101,6 +101,7 @@ export function ByProductView() {
   const [search, setSearch] = useState('')
   const [mode, setMode] = useState<Mode>('advertised')
   const [expandMode, setExpandMode] = useState<ExpandMode>('campaigns') // PCG.1
+  const [statusFilter, setStatusFilter] = useState('') // PCG.2 — applies to the campaign expansion
   const [marketplace, setMarketplace] = useState('')
   const [marketplaces, setMarketplaces] = useState<string[]>([])
   const [prefsOpen, setPrefsOpen] = useState(false)
@@ -151,6 +152,7 @@ export function ByProductView() {
       let kids: Row[]
       if (expandMode === 'campaigns') {
         qp.set('productId', parentId)
+        if (statusFilter) qp.set('status', statusFilter)
         const r = await fetch(`${getBackendUrl()}/api/advertising/by-product/campaigns?${qp}`, { cache: 'no-store' }).then((x) => x.json()).catch(() => ({ rows: [] }))
         kids = (r.rows ?? []).map((c: Record<string, unknown>) => ({
           id: String(c.id), parentId, isParent: false, kind: 'campaign' as const,
@@ -176,9 +178,9 @@ export function ByProductView() {
     } finally {
       setLoadingChildren((s) => { const n = new Set(s); n.delete(parentId); return n })
     }
-  }, [childrenByParent, windowDays, marketplace, expandMode])
-  // Switching Campaigns⇄Variants clears cached children so open rows refetch.
-  useEffect(() => { setChildrenByParent({}); setExpandedParents(new Set()) }, [expandMode])
+  }, [childrenByParent, windowDays, marketplace, expandMode, statusFilter])
+  // Switching expand mode / status / market clears cached children so open rows refetch.
+  useEffect(() => { setChildrenByParent({}); setExpandedParents(new Set()) }, [expandMode, statusFilter, marketplace])
 
   const onToggleExpand = useCallback((productId: string) => {
     setExpandedParents((prev) => {
@@ -346,6 +348,12 @@ export function ByProductView() {
         <select value={marketplace} onChange={(e) => setMarketplace(e.target.value)} aria-label="Filter by marketplace" className="px-2 py-1.5 text-sm rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950">
           <option value="">All markets</option>
           {marketplaces.map((m) => <option key={m} value={m}>{m}</option>)}
+        </select>
+        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label="Filter campaigns by status" title="Filters the campaigns shown when you expand a product" className="px-2 py-1.5 text-sm rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950">
+          <option value="">All statuses</option>
+          <option value="ENABLED">Enabled</option>
+          <option value="PAUSED">Paused</option>
+          <option value="ARCHIVED">Archived</option>
         </select>
         <div className="inline-flex items-center rounded-md border border-slate-200 dark:border-slate-700 p-0.5">
           {CHANNELS.map((c) => (

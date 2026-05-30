@@ -83,6 +83,7 @@ export function AdCampaignsCockpit({ initial }: { initial: { items: CampaignBase
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
   const [typeFilter, setTypeFilter] = useState('')
+  const [marketplaceFilter, setMarketplaceFilter] = useState('') // PCG.2
   const [sortKey, setSortKey] = useState('spendC')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
   const [selected, setSelected] = useState<Set<string>>(new Set())
@@ -146,6 +147,7 @@ export function AdCampaignsCockpit({ initial }: { initial: { items: CampaignBase
     if (search.trim()) { const q = search.toLowerCase(); r = r.filter((x) => x.base.name.toLowerCase().includes(q)) }
     if (statusFilter) r = r.filter((x) => x.base.status === statusFilter)
     if (typeFilter) r = r.filter((x) => x.base.type === typeFilter)
+    if (marketplaceFilter) r = r.filter((x) => x.base.marketplace === marketplaceFilter)
     const dir = sortDir === 'asc' ? 1 : -1
     const get = (x: Row): number | string => {
       switch (sortKey) {
@@ -158,7 +160,9 @@ export function AdCampaignsCockpit({ initial }: { initial: { items: CampaignBase
       }
     }
     return [...r].sort((a, b) => { const av = get(a), bv = get(b); return typeof av === 'string' && typeof bv === 'string' ? av.localeCompare(bv) * dir : ((av as number) - (bv as number)) * dir })
-  }, [rows, search, statusFilter, typeFilter, sortKey, sortDir])
+  }, [rows, search, statusFilter, typeFilter, marketplaceFilter, sortKey, sortDir])
+  // PCG.2 — distinct markets present, for the marketplace filter.
+  const markets = useMemo(() => [...new Set(rowsRaw.map((c) => c.marketplace).filter((m): m is string => !!m))].sort(), [rowsRaw])
 
   // Totals for KPIs.
   const totals = useMemo(() => filtered.reduce((a, r) => ({ impr: a.impr + r.impressions, clicks: a.clicks + r.clicks, spendC: a.spendC + r.spendC, salesC: a.salesC + r.salesC, orders: a.orders + r.orders }), { impr: 0, clicks: 0, spendC: 0, salesC: 0, orders: 0 }), [filtered])
@@ -307,10 +311,16 @@ export function AdCampaignsCockpit({ initial }: { initial: { items: CampaignBase
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-2 mb-2">
         <div className="relative"><Search size={14} className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400" /><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Find a campaign…" className="pl-7 pr-2 py-1.5 text-sm rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 w-56" /></div>
-        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="py-1.5 px-2 text-sm rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"><option value="">All status</option>{['ENABLED', 'PAUSED', 'ARCHIVED', 'DRAFT'].map((s) => <option key={s}>{s}</option>)}</select>
+        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label="Filter by status" className="py-1.5 px-2 text-sm rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"><option value="">All status</option>{['ENABLED', 'PAUSED', 'ARCHIVED', 'DRAFT'].map((s) => <option key={s}>{s}</option>)}</select>
+        <select value={marketplaceFilter} onChange={(e) => setMarketplaceFilter(e.target.value)} aria-label="Filter by marketplace" className="py-1.5 px-2 text-sm rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"><option value="">All markets</option>{markets.map((m) => <option key={m} value={m}>{m}</option>)}</select>
         <div className="inline-flex rounded-md border border-slate-200 dark:border-slate-700 overflow-hidden">
           {[['', 'All'], ['SP', 'SP'], ['SB', 'SB'], ['SD', 'SD']].map(([v, label]) => (
             <button key={v} onClick={() => setTypeFilter(v)} className={`px-2.5 py-1.5 text-xs border-l first:border-l-0 border-slate-200 dark:border-slate-700 ${typeFilter === v ? 'bg-blue-600 text-white' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>{label}</button>
+          ))}
+        </div>
+        <div className="inline-flex items-center rounded-md border border-slate-200 dark:border-slate-700 p-0.5" title="Channel — eBay/Shopify have no keyword PPC yet">
+          {[['Amazon', true], ['eBay', false], ['Shopify', false]].map(([label, on]) => (
+            <span key={label as string} className={`px-2 py-1 text-xs rounded ${on ? 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-medium' : 'text-slate-300 dark:text-slate-600 cursor-not-allowed'}`}>{label}</span>
           ))}
         </div>
         <Link href="/marketing/advertising/create" className="inline-flex items-center gap-1 py-1.5 px-3 text-sm rounded-md bg-slate-900 text-white dark:bg-slate-700 hover:bg-slate-800">+ Create campaign</Link>
