@@ -16,7 +16,7 @@ import { getBackendUrl } from '@/lib/backend-url'
 import { CampaignTrendChart, type TrendRow } from '../../CampaignTrendChart'
 
 interface Ad { id: string; asin: string | null; sku: string | null; productId: string | null; status: string; name: string; photoUrl: string | null; impressions: number; clicks: number; spendCents: number; salesCents: number; orders: number; acos: number | null; roas: number | null }
-interface AgTarget { id: string; kind: string; expressionType: string; expressionValue: string; bidCents: number; status: string; impressions: number; clicks: number; spendCents: number; salesCents: number; ordersCount?: number }
+interface AgTarget { id: string; kind: string; expressionType: string; expressionValue: string; bidCents: number; status: string; impressions: number; clicks: number; spendCents: number; salesCents: number; ordersCount?: number; isNegative?: boolean }
 export interface AdGroupDetail {
   id: string; name: string; status: string; defaultBidCents: number
   campaign: { id: string; name: string; marketplace: string | null; type: string; status: string; externalCampaignId: string | null; dailyBudget?: string }
@@ -191,7 +191,7 @@ export function AdGroupDetailCockpit({ adGroup }: { adGroup: AdGroupDetail }) {
               <table className="w-full text-sm">
                 <thead className="bg-slate-50 dark:bg-slate-900/60 text-xs text-slate-500"><tr><th className="text-left px-3 py-2">Target</th><th className="text-left px-3 py-2">Match</th><th className="text-right px-3 py-2">Bid</th><th className="text-left px-3 py-2">Status</th></tr></thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {data.targets.length === 0 ? <tr><td colSpan={4} className="px-3 py-8 text-center text-slate-400 text-xs">No targets. Auto-targeting ad groups discover terms automatically.</td></tr> : data.targets.map((t) => (
+                  {data.targets.filter((t) => !t.isNegative).length === 0 ? <tr><td colSpan={4} className="px-3 py-8 text-center text-slate-400 text-xs">No keyword/product targets. Auto-targeting ad groups discover terms automatically.</td></tr> : data.targets.filter((t) => !t.isNegative).map((t) => (
                     <tr key={t.id} className="hover:bg-slate-50 dark:hover:bg-slate-900/40"><td className="px-3 py-1.5">{t.expressionValue}</td><td className="px-3 py-1.5 text-xs text-slate-500">{t.expressionType}</td><td className="px-3 py-1.5 text-right tabular-nums">{eur(t.bidCents)}</td><td className="px-3 py-1.5"><StatusChip status={t.status} dot /></td></tr>
                   ))}
                 </tbody>
@@ -209,10 +209,16 @@ export function AdGroupDetailCockpit({ adGroup }: { adGroup: AdGroupDetail }) {
               </table>
             )}
             {tab === 'negatives' && (
-              <div className="p-4 text-sm text-slate-600 dark:text-slate-300">
-                Negative keywords and ASINs for this ad group are managed alongside the campaign so they apply consistently.
-                <div className="mt-3"><Link href={`/marketing/advertising/campaigns/${adGroup.campaign.id}`} className="inline-flex items-center gap-1 px-3 py-1.5 text-sm rounded-md bg-blue-600 text-white hover:bg-blue-700">Manage negative targeting →</Link></div>
-              </div>
+              data.targets.filter((t) => t.isNegative).length === 0
+                ? <div className="p-4 text-sm text-slate-600 dark:text-slate-300">No negative keywords on this ad group yet.<div className="mt-3"><Link href={`/marketing/advertising/campaigns/${adGroup.campaign.id}`} className="inline-flex items-center gap-1 px-3 py-1.5 text-sm rounded-md bg-blue-600 text-white hover:bg-blue-700">Manage negative targeting →</Link></div></div>
+                : <table className="w-full text-sm">
+                    <thead className="bg-slate-50 dark:bg-slate-900/60 text-xs text-slate-500"><tr><th className="text-left px-3 py-2">Negative</th><th className="text-left px-3 py-2">Match</th></tr></thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                      {data.targets.filter((t) => t.isNegative).map((t) => (
+                        <tr key={t.id} className="hover:bg-slate-50 dark:hover:bg-slate-900/40"><td className="px-3 py-1.5">{t.expressionValue}</td><td className="px-3 py-1.5 text-xs text-slate-500">Negative {t.expressionType.toLowerCase()}</td></tr>
+                      ))}
+                    </tbody>
+                  </table>
             )}
             {tab === 'settings' && (
               <dl className="p-4 grid grid-cols-2 gap-x-6 gap-y-2 text-sm max-w-xl">
