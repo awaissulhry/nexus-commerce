@@ -197,6 +197,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
         impressions: true, clicks: true, costMicros: true,
         sales7dCents: true, sales14dCents: true, orders7d: true,
       },
+      _max: { date: true }, // AME.4 — data-freshness signal for the detail UI
     })
     const campImpr = cagg._sum.impressions ?? 0
     const campClicks = cagg._sum.clicks ?? 0
@@ -268,6 +269,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
         adGroups,
         metricsWindowDays: windowDays,
         metricsSource: 'daily_performance',
+        dataThrough: cagg._max.date ? cagg._max.date.toISOString().slice(0, 10) : null,
       },
     }
   })
@@ -2104,6 +2106,22 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const asinKeyed = await prisma.amazonAdsDailyPerformance.count({ where: { entityType: 'PRODUCT_AD', date: { gte: since }, entityId: { startsWith: 'ASIN:' } } })
     const total = await prisma.amazonAdsDailyPerformance.count({ where: { entityType: 'PRODUCT_AD', date: { gte: since } } })
     return { windowDays, byDay, asinKeyedRows: asinKeyed, totalProductAdRows: total, sample: sample.map((s) => ({ ...s, costMicros: s.costMicros.toString() })) }
+  })
+
+  // ── AME.4: reconciliation + self-heal ───────────────────────────────
+  // GET = report (account vs attributed spend, EUR-normalised + data
+  // freshness per marketplace). POST = also self-heal the stale stored
+  // Campaign.spend columns from the daily table. The displayed surfaces
+  // already derive live (AME.1–3); this proves + maintains it.
+  fastify.get('/advertising/reconcile', async (request) => {
+    const q = request.query as { windowDays?: string }
+    const { reconcileAdMetrics } = await import('../services/advertising/ads-reconcile.service.js')
+    return reconcileAdMetrics({ windowDays: Number(q.windowDays) || 30, heal: false })
+  })
+  fastify.post('/advertising/reconcile', async (request) => {
+    const b = (request.body ?? {}) as { windowDays?: number }
+    const { reconcileAdMetrics } = await import('../services/advertising/ads-reconcile.service.js')
+    return reconcileAdMetrics({ windowDays: Number(b.windowDays) || 30, heal: true })
   })
 
   // POST /api/advertising/debug/wipe-product-ad — PCF.2 clean slate.

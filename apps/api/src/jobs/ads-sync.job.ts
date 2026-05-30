@@ -66,6 +66,7 @@ import prisma from '../db.js'
 let fbaStorageAgeTask: ReturnType<typeof cron.schedule> | null = null
 let trueProfitRollupTask: ReturnType<typeof cron.schedule> | null = null
 let adsMetricsIngestTask: ReturnType<typeof cron.schedule> | null = null
+let adsReconcileTask: ReturnType<typeof cron.schedule> | null = null
 let fbaFeesIngestTask: ReturnType<typeof cron.schedule> | null = null
 let reportCreateTask: ReturnType<typeof cron.schedule> | null = null
 let reportCreateStTask: ReturnType<typeof cron.schedule> | null = null
@@ -147,6 +148,44 @@ export function startTrueProfitRollupCron(): void {
     void runTrueProfitRollupCron()
   })
   logger.info('true-profit-rollup cron: scheduled', { schedule })
+}
+
+// ── ads-metrics-reconcile (AME.4) ─────────────────────────────────────
+// Nightly self-heal: recompute the stale stored Campaign.spend columns from
+// the daily-performance table + log account-vs-attributed variance and stale
+// marketplaces. Runs after the report ingest so the daily rows are fresh.
+
+export async function runAdsReconcileCron(): Promise<void> {
+  try {
+    await recordCronRun('ads-metrics-reconcile', async () => {
+      const { reconcileAdMetrics } = await import('../services/advertising/ads-reconcile.service.js')
+      const r = await reconcileAdMetrics({ windowDays: 30, heal: true })
+      const summary = `healed=${r.campaignsHealed} driftBefore=€${(r.storedSpendDriftCentsBefore / 100).toFixed(2)} account=€${(r.accountSpendCents / 100).toFixed(2)} variance=${r.variancePct ?? '—'}% through=${r.dataThrough ?? '—'} stale=${r.staleMarketplaces.length}`
+      if (r.staleMarketplaces.length > 0) logger.warn('ads-metrics-reconcile: stale marketplaces', { stale: r.staleMarketplaces })
+      logger.info('ads-metrics-reconcile cron: completed', { summary })
+      return summary
+    })
+  } catch (err) {
+    logger.error('ads-metrics-reconcile cron: failure', {
+      error: err instanceof Error ? err.message : String(err),
+    })
+  }
+}
+
+export function startAdsReconcileCron(): void {
+  if (adsReconcileTask) {
+    logger.warn('ads-metrics-reconcile cron already started')
+    return
+  }
+  const schedule = process.env.NEXUS_ADS_RECONCILE_SCHEDULE ?? '30 3 * * *'
+  if (!cron.validate(schedule)) {
+    logger.error('ads-metrics-reconcile cron: invalid schedule', { schedule })
+    return
+  }
+  adsReconcileTask = cron.schedule(schedule, () => {
+    void runAdsReconcileCron()
+  })
+  logger.info('ads-metrics-reconcile cron: scheduled', { schedule })
 }
 
 // ── ads-metrics-ingest (AD.2) ─────────────────────────────────────────
@@ -458,6 +497,8 @@ export function startAllAdvertisingCrons(): void {
   // Phase 11 async Reports pipeline (ads-report-create/poll/ingest).
   startFbaStorageAgeIngestCron()
   startTrueProfitRollupCron()
+  // AME.4 — nightly reconcile + self-heal of stored campaign metrics.
+  startAdsReconcileCron()
   // AD.4 Step 6: FBA fees
   startFbaFeesIngestCron()
   // Phase 11: Reports API pipeline (performance data)

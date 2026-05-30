@@ -79,6 +79,7 @@ import { runAllWooCommerceSyncJobs } from './woocommerce-sync.job.js'
 import {
   runFbaStorageAgeIngestCron,
   runTrueProfitRollupCron,
+  runAdsReconcileCron,
 } from './ads-sync.job.js'
 // AD.3 — advertising-domain AutomationRule evaluator.
 import { runAdvertisingRuleEvaluatorCron } from './advertising-rule-evaluator.job.js'
@@ -197,6 +198,7 @@ export const CRON_REGISTRY: Record<string, () => Promise<unknown>> = {
   // Gated by NEXUS_ENABLE_AMAZON_ADS_CRON=1; sandbox-safe.
   'fba-storage-age-ingest': () => runFbaStorageAgeIngestCron(),
   'true-profit-rollup': () => runTrueProfitRollupCron(),
+  'ads-metrics-reconcile': () => runAdsReconcileCron(),
   'advertising-rule-evaluator': () => runAdvertisingRuleEvaluatorCron(),
   'marketing-rule-evaluator': () => runMarketingRuleEvaluatorCron(),
   'marketing-sync-drain': () => runMarketingSyncDrainCron(),
