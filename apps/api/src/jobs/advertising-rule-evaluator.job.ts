@@ -35,6 +35,7 @@ import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
 import { recordCronRun } from '../utils/cron-observability.js'
 import { evaluateAllRulesForTrigger } from '../services/automation-rule.service.js'
+import { microsToCents } from '../services/advertising/ads-metrics-math.js'
 import cron from 'node-cron'
 
 // Trigger thresholds — env-tunable for testing.
@@ -59,6 +60,7 @@ interface TickSummary {
   profitabilityContexts: number
   cacSpikeContexts: number
   underperformContexts: number
+  campaignBudgetContexts: number
   totalEvaluations: number
   totalMatches: number
   durationMs: number
@@ -382,13 +384,70 @@ async function applyMarketplaceScope<C extends { marketplace: string | null }>(
   return { evaluations, matches }
 }
 
+// ── CAMPAIGN_PERFORMANCE_BUDGET (AME.12) ──────────────────────────────
+// Performance/ROAS-guardrail budget rules. Yields every enabled campaign with
+// its windowed ROAS/ACOS (from the daily table — accurate, not the stale stored
+// columns) + budget utilisation, so a rule can raise the daily budget on
+// winners that are budget-capped and trim losers. The adjust_ad_budget action +
+// per-rule guardrails (maxValueCentsEur, dryRun) do the rest.
+const BUDGET_RULE_WINDOW_DAYS = 7
+
+interface CampaignBudgetContext {
+  trigger: 'CAMPAIGN_PERFORMANCE_BUDGET'
+  marketplace: string | null
+  campaign: {
+    id: string; externalCampaignId: string | null; name: string
+    dailyBudgetCents: number; spendCents: number; salesCents: number
+    acos: number | null; roas: number | null
+    avgDailySpendCents: number; budgetUtilization: number | null
+  }
+}
+
+async function buildCampaignBudgetContexts(): Promise<CampaignBudgetContext[]> {
+  const since = new Date(); since.setUTCDate(since.getUTCDate() - BUDGET_RULE_WINDOW_DAYS); since.setUTCHours(0, 0, 0, 0)
+  const campaigns = await prisma.campaign.findMany({
+    where: { status: 'ENABLED' },
+    select: { id: true, name: true, externalCampaignId: true, marketplace: true, dailyBudget: true },
+  })
+  if (campaigns.length === 0) return []
+  const perf = await prisma.amazonAdsDailyPerformance.groupBy({
+    by: ['localEntityId'],
+    where: { entityType: 'CAMPAIGN', localEntityId: { in: campaigns.map((c) => c.id) }, date: { gte: since } },
+    _sum: { costMicros: true, sales7dCents: true, sales14dCents: true },
+  })
+  const byId = new Map(perf.map((p) => [p.localEntityId!, p]))
+  const out: CampaignBudgetContext[] = []
+  for (const c of campaigns) {
+    const p = byId.get(c.id)
+    const spendCents = microsToCents(p?._sum.costMicros)
+    if (spendCents === 0) continue
+    const salesCents = (p?._sum.sales7dCents ?? 0) + (p?._sum.sales14dCents ?? 0)
+    const dailyBudgetCents = Math.round(Number(c.dailyBudget) * 100)
+    const avgDailySpendCents = Math.round(spendCents / BUDGET_RULE_WINDOW_DAYS)
+    out.push({
+      trigger: 'CAMPAIGN_PERFORMANCE_BUDGET',
+      marketplace: c.marketplace,
+      campaign: {
+        id: c.id, externalCampaignId: c.externalCampaignId, name: c.name,
+        dailyBudgetCents, spendCents, salesCents,
+        acos: salesCents > 0 ? spendCents / salesCents : null,
+        roas: spendCents > 0 ? salesCents / spendCents : null,
+        avgDailySpendCents,
+        budgetUtilization: dailyBudgetCents > 0 ? avgDailySpendCents / dailyBudgetCents : null,
+      },
+    })
+  }
+  return out
+}
+
 export async function runAdvertisingRuleEvaluatorOnce(): Promise<TickSummary> {
   const startedAt = Date.now()
-  const [fbaAge, profitability, cacSpike, underperform] = await Promise.all([
+  const [fbaAge, profitability, cacSpike, underperform, campaignBudget] = await Promise.all([
     buildFbaAgeContexts(),
     buildProfitabilityContexts(),
     buildCacSpikeContexts(),
     buildUnderperformContexts(),
+    buildCampaignBudgetContexts(),
   ])
 
   let totalEvaluations = 0
@@ -398,6 +457,7 @@ export async function runAdvertisingRuleEvaluatorOnce(): Promise<TickSummary> {
     ['AD_SPEND_PROFITABILITY_BREACH', profitability],
     ['CAC_SPIKE', cacSpike],
     ['AD_TARGET_UNDERPERFORMING', underperform],
+    ['CAMPAIGN_PERFORMANCE_BUDGET', campaignBudget],
   ]
   for (const [trigger, contexts] of passes) {
     const r = await applyMarketplaceScope(trigger, contexts)
@@ -410,6 +470,7 @@ export async function runAdvertisingRuleEvaluatorOnce(): Promise<TickSummary> {
     profitabilityContexts: profitability.length,
     cacSpikeContexts: cacSpike.length,
     underperformContexts: underperform.length,
+    campaignBudgetContexts: campaignBudget.length,
     totalEvaluations,
     totalMatches,
     durationMs: Date.now() - startedAt,

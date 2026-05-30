@@ -104,25 +104,44 @@ export const ADVERTISING_TEMPLATES: AdvertisingRuleTemplate[] = [
     scopeMarketplace: null,
   },
   {
-    name: 'Boost budget on profitable campaigns',
+    // AME.12 — performance budget rule on the dedicated CAMPAIGN_PERFORMANCE_BUDGET
+    // trigger (replaces the old AD_TARGET_UNDERPERFORMING proxy). Scales winners
+    // that are budget-capped: strong 7-day ROAS + spending most of their budget.
+    name: 'Scale budget-capped winners',
     description:
-      'When ACOS is low (< 0.20) and impressions > 5000, suggests a +15% increase to the campaign daily budget (respecting maxDailyAdSpendCentsEur). Dry-run by default — operator approves auto-up per campaign.',
-    trigger: 'AD_TARGET_UNDERPERFORMING', // inverse-signal proxy until a dedicated trigger lands in AD.5
+      'When a campaign\'s 7-day ROAS ≥ 4 and it is using ≥ 85% of its daily budget (i.e. capped), raises the daily budget +20% (within guardrails). Dry-run by default.',
+    trigger: 'CAMPAIGN_PERFORMANCE_BUDGET',
     conditions: [
-      { field: 'campaign.acos', op: 'lte', value: 0.2 },
-      { field: 'adTarget.spendCents', op: 'gte', value: 5000 },
+      { field: 'campaign.roas', op: 'gte', value: 4 },
+      { field: 'campaign.budgetUtilization', op: 'gte', value: 0.85 },
     ],
     actions: [
-      {
-        type: 'adjust_ad_budget',
-        percent: 15,
-        reason: 'Profitable campaign (ACOS < 0.20) — budget +15%',
-      },
-      { type: 'notify', target: 'operator', message: 'Budget increased 15% on high-ROAS campaign' },
+      { type: 'adjust_ad_budget', percent: 20, reason: 'ROAS ≥ 4 & budget-capped — budget +20%' },
+      { type: 'notify', target: 'operator', message: 'Budget +20% on a budget-capped high-ROAS campaign' },
     ],
     maxExecutionsPerDay: 10,
     maxValueCentsEur: 50000,
     maxDailyAdSpendCentsEur: 20000,
+    scopeMarketplace: null,
+  },
+  {
+    // AME.12 — performance budget rule: ROAS guardrail. Trims budget on
+    // campaigns whose ACOS has drifted over the ceiling.
+    name: 'Trim budget on weak ACOS',
+    description:
+      'When a campaign\'s 7-day ACOS ≥ 0.40 (well above target) with meaningful spend, lowers the daily budget −15% to stem the bleed. Dry-run by default.',
+    trigger: 'CAMPAIGN_PERFORMANCE_BUDGET',
+    conditions: [
+      { field: 'campaign.acos', op: 'gte', value: 0.4 },
+      { field: 'campaign.spendCents', op: 'gte', value: 5000 },
+    ],
+    actions: [
+      { type: 'adjust_ad_budget', percent: -15, reason: 'ACOS ≥ 40% — budget −15%' },
+      { type: 'notify', target: 'operator', message: 'Budget −15% on a high-ACOS campaign' },
+    ],
+    maxExecutionsPerDay: 10,
+    maxValueCentsEur: 50000,
+    maxDailyAdSpendCentsEur: null,
     scopeMarketplace: null,
   },
 ]
