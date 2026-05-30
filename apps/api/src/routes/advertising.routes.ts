@@ -1569,6 +1569,19 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     return { ok: true, ...result }
   })
 
+  // POST /api/advertising/reports/create-advertised-product-cycle (SP only) — PC.0
+  fastify.post('/advertising/reports/create-advertised-product-cycle', async (request, reply) => {
+    const body = request.body as { startDate?: string; endDate?: string }
+    if (!body.startDate || !body.endDate) {
+      return reply.code(400).send({ error: 'startDate and endDate (YYYY-MM-DD) required' })
+    }
+    const { runAdvertisedProductReportCycle } = await import(
+      '../services/advertising/ads-reports.service.js'
+    )
+    const result = await runAdvertisedProductReportCycle({ startDate: body.startDate, endDate: body.endDate })
+    return { ok: true, ...result }
+  })
+
   // POST /api/advertising/debug/backfill-campaign-adproduct — Phase B follow-up
   //
   // One-time backfill: derives Campaign.adProduct from the legacy `type`

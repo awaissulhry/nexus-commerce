@@ -45,6 +45,7 @@ import {
   runReportCreationCycle,
   runSearchTermReportCycle,
   runPlacementReportCycle,
+  runAdvertisedProductReportCycle,
   pollPendingJobs,
   ingestCompletedJob,
   cleanupOldSearchTerms,
@@ -69,6 +70,7 @@ let fbaFeesIngestTask: ReturnType<typeof cron.schedule> | null = null
 let reportCreateTask: ReturnType<typeof cron.schedule> | null = null
 let reportCreateStTask: ReturnType<typeof cron.schedule> | null = null
 let reportCreatePlTask: ReturnType<typeof cron.schedule> | null = null
+let reportCreateApTask: ReturnType<typeof cron.schedule> | null = null
 let reportPollTask: ReturnType<typeof cron.schedule> | null = null
 let reportIngestTask: ReturnType<typeof cron.schedule> | null = null
 let searchTermCleanupTask: ReturnType<typeof cron.schedule> | null = null
@@ -267,6 +269,23 @@ export function startReportCreatePlCron(): void {
   logger.info('ads-report-create-pl cron: scheduled', { schedule })
 }
 
+// 01:50 UTC daily — advertised-product reports (SP only) — PC.0
+export async function runReportCreateApCron(): Promise<void> {
+  await recordCronRun('ads-report-create-ap', async () => {
+    const { startDate, endDate } = yesterday()
+    const result = await runAdvertisedProductReportCycle({ startDate, endDate })
+    return `created=${result.jobsCreated} skipped=${result.jobsSkipped} errors=${result.errors.length}`
+  }).catch((err) => logger.error('ads-report-create-ap cron: failure', { error: String(err) }))
+}
+
+export function startReportCreateApCron(): void {
+  if (reportCreateApTask) { logger.warn('ads-report-create-ap already started'); return }
+  const schedule = process.env.NEXUS_ADS_REPORT_CREATE_AP_SCHEDULE ?? '50 1 * * *'
+  if (!cron.validate(schedule)) { logger.error('ads-report-create-ap: invalid schedule', { schedule }); return }
+  reportCreateApTask = cron.schedule(schedule, () => { void runReportCreateApCron() })
+  logger.info('ads-report-create-ap cron: scheduled', { schedule })
+}
+
 // Every 10 min — poll PENDING/IN_PROGRESS jobs → advance status
 export async function runReportPollCron(): Promise<void> {
   await recordCronRun('ads-report-poll', async () => {
@@ -445,6 +464,7 @@ export function startAllAdvertisingCrons(): void {
   startReportCreateCron()
   startReportCreateStCron()
   startReportCreatePlCron()
+  startReportCreateApCron()
   startReportPollCron()
   startReportIngestCron()
   startSearchTermCleanupCron()
@@ -472,6 +492,7 @@ export function stopAllAdvertisingCrons(): void {
     ['reportCreateTask',    reportCreateTask]    as const,
     ['reportCreateStTask',  reportCreateStTask]  as const,
     ['reportCreatePlTask',  reportCreatePlTask]  as const,
+    ['reportCreateApTask',  reportCreateApTask]  as const,
     ['reportPollTask',      reportPollTask]      as const,
     ['reportIngestTask',    reportIngestTask]    as const,
     ['searchTermCleanupTask', searchTermCleanupTask] as const,
@@ -481,7 +502,7 @@ export function stopAllAdvertisingCrons(): void {
   ]) {
     if (task) { task.stop(); logger.debug(`${key} stopped`) }
   }
-  reportCreateTask = null; reportCreateStTask = null; reportCreatePlTask = null
+  reportCreateTask = null; reportCreateStTask = null; reportCreatePlTask = null; reportCreateApTask = null
   reportPollTask = null; reportIngestTask = null; searchTermCleanupTask = null
   v1ExportCreateTask = null; v1ExportPollTask = null; v1ExportIngestTask = null
 }

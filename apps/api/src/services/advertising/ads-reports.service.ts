@@ -140,6 +140,20 @@ export const PLACEMENT_COLUMNS: string[] = [
 export const PLACEMENT_REPORT_TYPE_ID = 'spPlacement'         // DB / dispatch
 export const PLACEMENT_API_REPORT_TYPE_ID = 'spCampaigns'     // Amazon API
 
+// ── PC.0: advertised-product report (per-ASIN/per-ad daily) ──────────
+// SP-only. Amazon v3 reportTypeId 'spAdvertisedProduct', groupBy
+// ['advertiser']. This is the per-product grain the product-centric ads
+// console needs — it attributes spend/sales to the actual ad (adId →
+// AdProductAd) so we can roll up true per-product ACOS, not a campaign
+// estimate. Ingested into AmazonAdsDailyPerformance entityType='PRODUCT_AD'.
+export const ADVERTISED_PRODUCT_REPORT_TYPE_ID = 'spAdvertisedProduct'
+export const ADVERTISED_PRODUCT_COLUMNS: string[] = [
+  'date', 'campaignId', 'adGroupId', 'adId',
+  'advertisedAsin', 'advertisedSku',
+  'impressions', 'clicks', 'cost',
+  'sales7d', 'purchases7d', 'unitsSoldClicks7d',
+]
+
 // ── Stage 1: create a report job ─────────────────────────────────────
 
 export interface CreateReportJobResult {
@@ -381,6 +395,10 @@ interface ReportRow {
   // SB specific
   attributedSales14d?: number
   attributedDetailPageViewsClicks14d?: number
+  // PC.0 advertised-product rows add these:
+  adId?: string | number
+  advertisedAsin?: string
+  advertisedSku?: string
   [key: string]: unknown
 }
 
@@ -467,6 +485,8 @@ export async function ingestCompletedJob(jobId: string): Promise<IngestResult> {
     upserted = await ingestSearchTermRows(job, rows, marketplace, currencyCode)
   } else if (job.reportTypeId === PLACEMENT_REPORT_TYPE_ID) {
     upserted = await ingestPlacementRows(job, rows, marketplace, currencyCode)
+  } else if (job.reportTypeId === ADVERTISED_PRODUCT_REPORT_TYPE_ID) {
+    upserted = await ingestProductAdRows(job, rows, marketplace, currencyCode)
   } else {
     logger.warn('[ads-reports] unknown reportTypeId', { jobId, reportTypeId: job.reportTypeId })
   }
@@ -699,6 +719,82 @@ async function ingestPlacementRows(
   return upserted
 }
 
+// PC.0 — advertised-product rows → AmazonAdsDailyPerformance PRODUCT_AD.
+// Keyed by the Amazon adId (entityId); localEntityId resolves to the local
+// AdProductAd.id (by externalAdId, falling back to asin+marketplace) so the
+// product-centric console can roll up per-product spend/sales/ACOS. Rows that
+// don't match a local ad still land (localEntityId null) for the Unmatched
+// ASIN bucket. Also refreshes the AdProductAd running aggregates.
+async function ingestProductAdRows(
+  job: { id: string; profileId: string; adProduct: string },
+  rows: ReportRow[],
+  marketplace: string,
+  currencyCode: string,
+): Promise<number> {
+  let upserted = 0
+  // Resolve adId/asin → local AdProductAd once per batch (cache).
+  const adCache = new Map<string, { id: string } | null>()
+  const resolveAd = async (adId: string | null, asin: string | null): Promise<{ id: string } | null> => {
+    const key = adId ? `ad:${adId}` : asin ? `asin:${asin}:${marketplace}` : ''
+    if (!key) return null
+    if (adCache.has(key)) return adCache.get(key)!
+    let local: { id: string } | null = null
+    if (adId) local = await prisma.adProductAd.findFirst({ where: { externalAdId: adId }, select: { id: true } })
+    if (!local && asin) local = await prisma.adProductAd.findFirst({ where: { asin, adGroup: { campaign: { marketplace } } }, select: { id: true } })
+    adCache.set(key, local)
+    return local
+  }
+  for (const r of rows) {
+    if (!r.date) continue
+    const adId = r.adId != null ? String(r.adId) : null
+    const asin = r.advertisedAsin ?? null
+    const entityId = adId ?? (asin ? `ASIN:${asin}` : null)
+    if (!entityId) continue
+    const date = new Date(r.date)
+    if (Number.isNaN(date.getTime())) continue
+    const local = await resolveAd(adId, asin)
+    const sales7dCents = toCents(r.sales7d)
+    const orders7d = r.purchases7d ?? 0
+    const units7d = r.unitsSoldClicks7d ?? 0
+    try {
+      await prisma.amazonAdsDailyPerformance.upsert({
+        where: {
+          profileId_adProduct_entityType_entityId_date: {
+            profileId: job.profileId, adProduct: job.adProduct,
+            entityType: 'PRODUCT_AD', entityId, date,
+          },
+        },
+        create: {
+          profileId: job.profileId, marketplace, adProduct: job.adProduct,
+          date, entityType: 'PRODUCT_AD', entityId, localEntityId: local?.id ?? null,
+          impressions: r.impressions ?? 0, clicks: r.clicks ?? 0,
+          costMicros: toMicros(r.cost), currencyCode,
+          sales7dCents, orders7d, units7d,
+          reportRunId: job.id, reportedAt: new Date(),
+        },
+        update: {
+          marketplace, localEntityId: local?.id ?? null,
+          impressions: r.impressions ?? 0, clicks: r.clicks ?? 0,
+          costMicros: toMicros(r.cost), currencyCode,
+          sales7dCents, orders7d, units7d, reportedAt: new Date(),
+        },
+      })
+      // Keep the AdProductAd running totals fresh too (best-effort).
+      if (local) {
+        await prisma.adProductAd.update({
+          where: { id: local.id },
+          data: { impressions: r.impressions ?? 0, clicks: r.clicks ?? 0, spendCents: Math.round(Number(toMicros(r.cost)) / 10_000), salesCents: sales7dCents },
+        }).catch(() => {})
+      }
+      upserted += 1
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      logger.warn('[ads-reports] product-ad row upsert failed', { jobId: job.id, entityId, error: msg.slice(0, 200) })
+    }
+  }
+  return upserted
+}
+
 // ── Convenience: full creation cycle across all active profiles ────────
 
 export interface CreationCycleResult {
@@ -849,6 +945,48 @@ export async function runPlacementReportCycle(
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       result.errors.push(`${profile.profileId} placement: ${msg.slice(0, 800)}`)
+    }
+  }
+  return result
+}
+
+// PC.0 — advertised-product creation cycle (SP-only). Mirrors the placement
+// cycle: one job per active profile, groupBy ['advertiser'].
+export async function runAdvertisedProductReportCycle(
+  args: { startDate: string; endDate: string },
+): Promise<CreationCycleResult> {
+  const result: CreationCycleResult = { jobsCreated: 0, jobsSkipped: 0, errors: [] }
+  const profiles = await prisma.amazonAdsConnection.findMany({
+    where: { isActive: true },
+    select: { profileId: true, region: true, marketplace: true },
+  })
+  for (const profile of profiles) {
+    const region: AdsRegion = (profile.region === 'NA' || profile.region === 'FE')
+      ? (profile.region as AdsRegion) : 'EU'
+    const meta = await prisma.amazonAdsProfile.findUnique({
+      where: { profileId: profile.profileId },
+      select: { currencyCode: true },
+    })
+    const currencyCode = meta?.currencyCode ?? 'EUR'
+    try {
+      const out = await createReportJob({
+        profileId: profile.profileId,
+        region,
+        marketplace: profile.marketplace,
+        currencyCode,
+        adProduct: 'SPONSORED_PRODUCTS',
+        reportTypeId: ADVERTISED_PRODUCT_REPORT_TYPE_ID,
+        startDate: args.startDate,
+        endDate: args.endDate,
+        groupBy: ['advertiser'],
+        columns: ADVERTISED_PRODUCT_COLUMNS,
+        timeUnit: 'DAILY',
+      })
+      if (out.alreadyExisted) result.jobsSkipped += 1
+      else result.jobsCreated += 1
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      result.errors.push(`${profile.profileId} advertised-product: ${msg.slice(0, 800)}`)
     }
   }
   return result
