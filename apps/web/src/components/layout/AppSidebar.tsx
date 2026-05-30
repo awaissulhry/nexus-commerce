@@ -10,6 +10,7 @@ import {
   Layers,
   FileSpreadsheet,
   Boxes,
+  Factory,
   ChevronRight,
   ChevronDown,
   ShoppingBag,
@@ -532,6 +533,14 @@ export default function AppSidebar() {
             icon={ShoppingCart}
             label="Purchase Orders"
             active={pathname.startsWith('/fulfillment/purchase-orders')}
+          />
+          {/* A4 — Suppliers: per-product cost / MOQ / lead-time master that
+              feeds EOQ + working-capital + landed-cost in replenishment. */}
+          <NavItem
+            href="/fulfillment/suppliers"
+            icon={Factory}
+            label="Suppliers"
+            active={pathname.startsWith('/fulfillment/suppliers')}
           />
           <NavItem
             href="/fulfillment/carriers"
