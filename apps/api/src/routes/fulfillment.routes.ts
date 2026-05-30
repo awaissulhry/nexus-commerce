@@ -151,6 +151,7 @@ import {
   generateForecastForSeries,
   generateForecastsForAll,
 } from '../services/forecast.service.js'
+import { computeCategorySeasonalIndices } from '../services/category-seasonality.service.js'
 import {
   getAccuracyForSku,
   getAccuracyAggregate,
@@ -10969,6 +10970,37 @@ Return ONLY valid JSON, no prose:
   // for every series in the catalog. With { sku, channel, marketplace }
   // body, regenerates a single series (useful for debugging a specific
   // SKU's forecast in dev / after a manual data correction).
+  // RX.B1 — read-only preview of the category seasonal indices that the
+  // forecaster will apply. Lets an operator (and us) eyeball the curve and
+  // its data backing BEFORE trusting it on live order recommendations.
+  fastify.get('/fulfillment/forecast/seasonality-preview', async (_request, reply) => {
+    try {
+      const result = await computeCategorySeasonalIndices()
+      const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+      return {
+        ok: true,
+        generatedAt: result.generatedAt,
+        appliedCategories: result.indices.filter((i) => i.applied).length,
+        totalCategories: result.indices.length,
+        months: MONTHS,
+        indices: result.indices.map((i) => ({
+          productType: i.productType,
+          applied: i.applied,
+          totalUnits: i.totalUnits,
+          monthsWithData: i.monthsWithData,
+          shrink: i.shrink,
+          peakMonth: MONTHS[i.monthly.indexOf(Math.max(...i.monthly))],
+          troughMonth: MONTHS[i.monthly.indexOf(Math.min(...i.monthly))],
+          monthly: i.monthly.map((v) => Math.round(v * 100) / 100),
+          monthlyRaw: i.monthlyRaw,
+        })),
+      }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[seasonality-preview] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
   fastify.post('/fulfillment/forecast/run', async (request, reply) => {
     try {
       const body = (request.body ?? {}) as {
