@@ -5984,7 +5984,10 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
       const { id } = request.params as { id: string }
       const project = await prisma.developmentProject.findUnique({
         where: { id },
-        include: { candidates: { include: { supplier: { select: { id: true, name: true, leadTimeDays: true, defaultCurrency: true } } }, orderBy: [{ isSelected: 'desc' }, { createdAt: 'asc' }] } },
+        include: {
+          candidates: { include: { supplier: { select: { id: true, name: true, leadTimeDays: true, defaultCurrency: true } } }, orderBy: [{ isSelected: 'desc' }, { createdAt: 'asc' }] },
+          attachments: { orderBy: { uploadedAt: 'desc' } }, // PD.7
+        },
       })
       if (!project) return reply.code(404).send({ error: 'Project not found' })
       return project
@@ -6057,6 +6060,44 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
     try {
       const { cid } = request.params as { id: string; cid: string }
       await prisma.developmentProjectSupplier.delete({ where: { id: cid } })
+      return { ok: true }
+    } catch (error: any) {
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  // PD.7 — tech-pack / reference / sample-photo attachments (Cloudinary).
+  fastify.post('/fulfillment/development/projects/:id/attachments', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const { isCloudinaryConfigured, uploadBufferToCloudinary } = await import('../services/cloudinary.service.js')
+      if (!isCloudinaryConfigured()) return reply.code(503).send({ error: 'Cloudinary not configured' })
+      const data = await (request as any).file?.()
+      if (!data) return reply.code(400).send({ error: 'multipart file required' })
+      const kind = (data.fields?.kind?.value as string | undefined)?.toUpperCase() || 'TECH_PACK'
+      const buffer = await data.toBuffer()
+      if (buffer.length > 20 * 1024 * 1024) return reply.code(413).send({ error: 'file too large (max 20MB)' })
+      const result = await uploadBufferToCloudinary(buffer, { folder: `development/${id}`, resourceType: 'raw' })
+      const created = await prisma.developmentAttachment.create({
+        data: {
+          projectId: id,
+          kind: ['TECH_PACK', 'REFERENCE', 'MEASUREMENT', 'SAMPLE_PHOTO', 'OTHER'].includes(kind) ? kind : 'TECH_PACK',
+          url: result.url,
+          filename: data.filename ?? null,
+          sizeBytes: buffer.length,
+          uploadedBy: (request.headers['x-user-id'] as string | undefined) ?? null,
+        },
+      })
+      return created
+    } catch (error: any) {
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  fastify.delete('/fulfillment/development/projects/:id/attachments/:aid', async (request, reply) => {
+    try {
+      const { aid } = request.params as { id: string; aid: string }
+      await prisma.developmentAttachment.delete({ where: { id: aid } })
       return { ok: true }
     } catch (error: any) {
       return reply.code(500).send({ error: error?.message ?? String(error) })
