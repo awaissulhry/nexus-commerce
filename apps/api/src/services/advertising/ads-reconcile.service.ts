@@ -114,3 +114,65 @@ export async function reconcileAdMetrics(
     storedSpendDriftCentsBefore,
   }
 }
+
+// ── AF.3 — target-accuracy reconcile ───────────────────────────────────────
+// Structural correctness of the keyword/target data, independent of metrics.
+// Surfaces the failure modes this engagement closed so any regression is
+// provable: duplicate campaign rows (the marketplace-split bug), campaigns
+// that have negatives but ZERO positives (the NaN-bidCents drop symptom), and
+// per-marketplace coverage. A manual ad group (externalAdGroupId set) with no
+// positive keyword is the real tell; AUTO ad groups legitimately have none.
+export interface TargetAccuracyReport {
+  totalCampaigns: number
+  duplicateExternalIds: number
+  duplicateSamples: Array<{ externalCampaignId: string; copies: number }>
+  manualCampaignsMissingPositives: number
+  missingPositiveSamples: Array<{ id: string; name: string; marketplace: string; negatives: number }>
+  totals: { positives: number; negatives: number; zeroBidPositives: number }
+  byMarketplace: Array<{ marketplace: string; campaigns: number; positives: number; negatives: number }>
+}
+
+export async function reconcileTargetAccuracy(): Promise<TargetAccuracyReport> {
+  const campaigns = await prisma.campaign.findMany({
+    where: { externalCampaignId: { not: null } },
+    select: {
+      id: true, name: true, marketplace: true, externalCampaignId: true,
+      adGroups: { select: { externalAdGroupId: true, targetingType: true, targets: { select: { isNegative: true, bidCents: true } } } },
+    },
+  })
+
+  // Duplicate externalCampaignId rows (should be 0 after the dedupe).
+  const byExt = new Map<string, number>()
+  for (const c of campaigns) byExt.set(c.externalCampaignId!, (byExt.get(c.externalCampaignId!) ?? 0) + 1)
+  const dupes = [...byExt.entries()].filter(([, n]) => n > 1)
+
+  let positives = 0, negatives = 0, zeroBidPositives = 0
+  const missingPos: TargetAccuracyReport['missingPositiveSamples'] = []
+  const mkt = new Map<string, { campaigns: number; positives: number; negatives: number }>()
+
+  for (const c of campaigns) {
+    let cPos = 0, cNeg = 0
+    let hasManualAdGroup = false
+    for (const ag of c.adGroups) {
+      if (ag.targetingType !== 'AUTO' && ag.externalAdGroupId) hasManualAdGroup = true
+      for (const t of ag.targets) {
+        if (t.isNegative) { cNeg++ } else { cPos++; if (!t.bidCents || t.bidCents <= 0) zeroBidPositives++ }
+      }
+    }
+    positives += cPos; negatives += cNeg
+    const m = mkt.get(c.marketplace) ?? { campaigns: 0, positives: 0, negatives: 0 }
+    m.campaigns++; m.positives += cPos; m.negatives += cNeg; mkt.set(c.marketplace, m)
+    // Flag: a manual campaign with negatives but no positives (the original bug's footprint).
+    if (hasManualAdGroup && cPos === 0 && cNeg > 0) missingPos.push({ id: c.id, name: c.name, marketplace: c.marketplace, negatives: cNeg })
+  }
+
+  return {
+    totalCampaigns: campaigns.length,
+    duplicateExternalIds: dupes.length,
+    duplicateSamples: dupes.slice(0, 10).map(([externalCampaignId, copies]) => ({ externalCampaignId, copies })),
+    manualCampaignsMissingPositives: missingPos.length,
+    missingPositiveSamples: missingPos.slice(0, 20),
+    totals: { positives, negatives, zeroBidPositives },
+    byMarketplace: [...mkt.entries()].map(([marketplace, v]) => ({ marketplace, ...v })).sort((a, b) => b.campaigns - a.campaigns),
+  }
+}

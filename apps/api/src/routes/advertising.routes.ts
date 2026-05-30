@@ -2173,6 +2173,14 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     return reconcileAdMetrics({ windowDays: Number(b.windowDays) || 30, heal: true })
   })
 
+  // AF.3 — fleet-wide target-accuracy reconcile (duplicates, manual campaigns
+  // missing positives, per-marketplace coverage). Proves the keyword data is
+  // structurally correct, independent of the metrics reconcile above.
+  fastify.get('/advertising/reconcile/targets', async () => {
+    const { reconcileTargetAccuracy } = await import('../services/advertising/ads-reconcile.service.js')
+    return reconcileTargetAccuracy()
+  })
+
   // POST /api/advertising/debug/wipe-product-ad — PCF.2 clean slate.
   // Deletes all PRODUCT_AD daily rows so they can be cleanly re-ingested (one
   // report per day, deduped). Returns the deleted count. Does NOT touch
