@@ -313,9 +313,59 @@ function SpecTab({ p, onPatch }: { p: ProjectDetail; onPatch: (b: Record<string,
       <Card title="Size chart" description="Measurements the factory cuts to. Rows = sizes, columns = measurements (cm).">
         <SizeChartEditor value={p.sizeChart} onSave={(sizeChart) => onPatch({ sizeChart })} />
       </Card>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        <Card title="Materials / BOM" description="What the factory sources.">
+          <MaterialsEditor value={p.materials} onSave={(materials) => onPatch({ materials })} />
+        </Card>
+        <Card title="Colorways" description="Colour specs with Pantone / hex.">
+          <ColorwaysEditor value={p.colorways} onSave={(colorways) => onPatch({ colorways })} />
+        </Card>
+      </div>
       <Card title="Construction & special instructions">
         <textarea defaultValue={p.specNotes ?? ''} rows={5} onBlur={(e) => onPatch({ specNotes: e.target.value })} placeholder="Stitching, seams, reinforcement, tolerances, packaging…" className="w-full rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-base text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-500" />
       </Card>
+    </div>
+  )
+}
+
+function MaterialsEditor({ value, onSave }: { value: BomRow[] | null; onSave: (rows: BomRow[]) => void }) {
+  const [rows, setRows] = useState<BomRow[]>(value ?? [])
+  const [structVer, setStructVer] = useState(0)
+  const save = (next: BomRow[], structural = false) => { setRows(next); onSave(next); if (structural) setStructVer((v) => v + 1) }
+  const fieldCls = 'h-8 w-full rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-1.5 text-base text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-500'
+  return (
+    <div className="space-y-2" key={structVer}>
+      {rows.length === 0 && <p className="text-sm text-slate-500 dark:text-slate-400">No materials yet.</p>}
+      {rows.map((r, i) => (
+        <div key={i} className="grid grid-cols-[1fr_1fr_1fr_auto] items-center gap-1.5">
+          <input defaultValue={r.component} placeholder="Component (shell…)" onBlur={(e) => save(rows.map((x, j) => j === i ? { ...x, component: e.target.value } : x))} className={fieldCls} />
+          <input defaultValue={r.material} placeholder="Material (polycarb…)" onBlur={(e) => save(rows.map((x, j) => j === i ? { ...x, material: e.target.value } : x))} className={fieldCls} />
+          <input defaultValue={r.spec} placeholder="Spec / grade" onBlur={(e) => save(rows.map((x, j) => j === i ? { ...x, spec: e.target.value } : x))} className={fieldCls} />
+          <button onClick={() => save(rows.filter((_, j) => j !== i), true)} className="text-slate-400 hover:text-rose-500"><Trash2 size={14} /></button>
+        </div>
+      ))}
+      <Button variant="secondary" size="sm" icon={<Plus size={13} />} onClick={() => save([...rows, { component: '', material: '', spec: '' }], true)}>Add material</Button>
+    </div>
+  )
+}
+
+function ColorwaysEditor({ value, onSave }: { value: Colorway[] | null; onSave: (rows: Colorway[]) => void }) {
+  const [rows, setRows] = useState<Colorway[]>(value ?? [])
+  const [structVer, setStructVer] = useState(0)
+  const save = (next: Colorway[], structural = false) => { setRows(next); onSave(next); if (structural) setStructVer((v) => v + 1) }
+  const fieldCls = 'h-8 w-full rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-1.5 text-base text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-500'
+  return (
+    <div className="space-y-2" key={structVer}>
+      {rows.length === 0 && <p className="text-sm text-slate-500 dark:text-slate-400">No colorways yet.</p>}
+      {rows.map((r, i) => (
+        <div key={i} className="grid grid-cols-[1fr_1fr_auto_auto] items-center gap-1.5">
+          <input defaultValue={r.name} placeholder="Name (Matte Black…)" onBlur={(e) => save(rows.map((x, j) => j === i ? { ...x, name: e.target.value } : x))} className={fieldCls} />
+          <input defaultValue={r.pantone ?? ''} placeholder="Pantone (e.g. 426 C)" onBlur={(e) => save(rows.map((x, j) => j === i ? { ...x, pantone: e.target.value } : x))} className={fieldCls} />
+          <input type="color" defaultValue={r.hex ?? '#000000'} onBlur={(e) => save(rows.map((x, j) => j === i ? { ...x, hex: e.target.value } : x))} className="h-8 w-9 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900" />
+          <button onClick={() => save(rows.filter((_, j) => j !== i), true)} className="text-slate-400 hover:text-rose-500"><Trash2 size={14} /></button>
+        </div>
+      ))}
+      <Button variant="secondary" size="sm" icon={<Plus size={13} />} onClick={() => save([...rows, { name: '', pantone: '', hex: '#000000' }], true)}>Add colorway</Button>
     </div>
   )
 }
