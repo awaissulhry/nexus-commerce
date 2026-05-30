@@ -49,6 +49,15 @@ const num = (n: number | null | undefined) => (n == null ? '—' : new Intl.Numb
 const pct = (v: number | null | undefined) => (v == null ? '—' : `${v.toFixed(1)}%`)
 const tacosColor = (v: number | null | undefined) => (v == null ? '' : v <= 10 ? 'text-emerald-600 dark:text-emerald-400' : v <= 25 ? 'text-amber-600 dark:text-amber-400' : 'text-rose-600 dark:text-rose-400')
 
+// PC.7b — derived per-product recommendation (data-efficient, no extra call).
+function rowRec(row: { profitCents?: number; tacos?: number | null; revenueCents?: number; opportunity?: boolean }): { label: string; cls: string } | null {
+  if (row.opportunity) return { label: 'Launch ads', cls: 'bg-blue-100 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300' }
+  if ((row.profitCents ?? 0) < 0) return { label: 'Unprofitable', cls: 'bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300' }
+  if (row.tacos != null && row.tacos > 25) return { label: 'High TACOS', cls: 'bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300' }
+  if (row.tacos != null && row.tacos < 8 && (row.revenueCents ?? 0) > 0) return { label: 'Scale', cls: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300' }
+  return null
+}
+
 const DATE_PRESETS = [{ label: '7d', days: 7 }, { label: '14d', days: 14 }, { label: '30d', days: 30 }, { label: '60d', days: 60 }, { label: '90d', days: 90 }]
 
 const ALL_COLUMNS: GridLensColumn[] = [
@@ -197,7 +206,10 @@ export function ByProductView() {
           <Thumbnail src={row.photoUrl ?? null} photoCount={row.photoCount} alt={row.name} />
           <div className="min-w-0">
             <a href={`/products/${row.id}/edit?tab=ads`} target="_blank" rel="noopener noreferrer" className="block truncate text-sm font-medium text-slate-800 dark:text-slate-100 hover:underline">{row.name}</a>
-            <div className="text-[11px] text-slate-400 truncate">{row.sku}{row.asin ? ` · ${row.asin}` : ''}</div>
+            <div className="flex items-center gap-1.5 min-w-0">
+              <span className="text-[11px] text-slate-400 truncate">{row.sku}{row.asin ? ` · ${row.asin}` : ''}</span>
+              {(() => { const rec = rowRec(row); return rec ? <span className={`px-1 py-px text-[9px] font-medium rounded ${rec.cls} flex-shrink-0`}>{rec.label}</span> : null })()}
+            </div>
           </div>
         </div>
       )
