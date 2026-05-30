@@ -7759,6 +7759,7 @@ model Supplier {
   contacts        SupplierContact[] // PD.2
   comms           SupplierComm[]    // PD.3
   followUps       SupplierFollowUp[] // PD.4
+  devCandidates   DevelopmentProjectSupplier[] // PD.5
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -12342,4 +12343,45 @@ model SupplierFollowUp {
 
   @@index([supplierId])
   @@index([status, dueDate])
+}
+
+// PD.5 — new-product R&D / development project. Concept → sourcing →
+// sampling → quoting → pre-production → approved → launched. Wired to
+// suppliers (candidates) + (PD.8) sample POs + (PD.10) the launched
+// Product. Lives inside the Suppliers hub (no new sidebar link).
+model DevelopmentProject {
+  id               String    @id @default(cuid())
+  code             String    @unique // PD-YYMMDD-XXXX
+  name             String
+  status           String    @default("CONCEPT") // CONCEPT|SOURCING|SAMPLING|QUOTING|PRE_PRODUCTION|APPROVED|LAUNCHED|DROPPED|ON_HOLD
+  productType      String?
+  brief            String?
+  targetCostCents  Int?
+  targetLaunchDate DateTime?
+  ownerUserId      String?
+  linkedProductId  String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  candidates DevelopmentProjectSupplier[]
+
+  @@index([status])
+}
+
+// PD.5 — a candidate supplier for a development project (sourcing).
+model DevelopmentProjectSupplier {
+  id              String   @id @default(cuid())
+  projectId       String
+  supplierId      String
+  quotedCostCents Int?
+  sampleStatus    String?  // NONE|REQUESTED|RECEIVED|APPROVED|REJECTED
+  isSelected      Boolean  @default(false)
+  notes           String?
+  createdAt       DateTime @default(now())
+
+  project  DevelopmentProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  supplier Supplier           @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, supplierId])
+  @@index([supplierId])
 }
