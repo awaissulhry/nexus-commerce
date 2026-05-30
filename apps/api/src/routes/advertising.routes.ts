@@ -274,6 +274,81 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // ── GET /advertising/ad-groups/:id (AME.6) ──────────────────────────
+  // Amazon-parity ad-group drill-down. Metrics derive live from the daily
+  // table (same source as the campaign detail + chart). Returns the ad group
+  // + its ads (product thumbnail + per-ad metrics), targets, a daily trend
+  // and campaign context. Search-terms/negatives/history load lazily.
+  fastify.get('/advertising/ad-groups/:id', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const q = request.query as { windowDays?: string }
+    const windowDays = Math.max(1, Math.min(180, Number(q.windowDays) || 30))
+    const since = new Date(); since.setUTCDate(since.getUTCDate() - windowDays); since.setUTCHours(0, 0, 0, 0)
+
+    const adGroup = await prisma.adGroup.findUnique({
+      where: { id },
+      include: {
+        campaign: { select: { id: true, name: true, marketplace: true, type: true, status: true, externalCampaignId: true, dailyBudget: true } },
+        targets: { take: 200 },
+        productAds: { take: 200, select: { id: true, asin: true, sku: true, productId: true, status: true } },
+      },
+    })
+    if (!adGroup) { reply.code(404); return { error: 'not_found' } }
+
+    const adIds = adGroup.productAds.map((a) => a.id)
+    const [perAd, trendRows] = await Promise.all([
+      adIds.length ? prisma.amazonAdsDailyPerformance.groupBy({
+        by: ['localEntityId'],
+        where: { entityType: 'PRODUCT_AD', localEntityId: { in: adIds }, date: { gte: since } },
+        _sum: { costMicros: true, sales7dCents: true, sales14dCents: true, impressions: true, clicks: true, orders7d: true },
+      }) : Promise.resolve([]),
+      adIds.length ? prisma.amazonAdsDailyPerformance.groupBy({
+        by: ['date'],
+        where: { entityType: 'PRODUCT_AD', localEntityId: { in: adIds }, date: { gte: since } },
+        _sum: { costMicros: true, sales7dCents: true, sales14dCents: true, impressions: true, clicks: true, orders7d: true },
+        orderBy: { date: 'asc' },
+      }) : Promise.resolve([]),
+    ])
+    const metByAd = new Map(perAd.map((r) => [r.localEntityId!, r]))
+
+    const { pickFaceImage, FACE_IMAGE_SELECT, FACE_IMAGE_ORDER_BY } = await import('../services/product-read-cache.service.js')
+    const productIds = [...new Set(adGroup.productAds.map((a) => a.productId).filter((x): x is string => !!x))]
+    const prods = productIds.length ? await prisma.product.findMany({ where: { id: { in: productIds } }, select: { id: true, name: true, sku: true, images: { select: FACE_IMAGE_SELECT, orderBy: FACE_IMAGE_ORDER_BY } } }) : []
+    const prodById = new Map(prods.map((p) => [p.id, p]))
+
+    let tImpr = 0, tClicks = 0, tMicros = 0, tSales = 0, tOrders = 0
+    const ads = adGroup.productAds.map((a) => {
+      const m = metByAd.get(a.id)
+      const spendCents = microsToCents(m?._sum.costMicros)
+      const salesCents = (m?._sum.sales7dCents ?? 0) + (m?._sum.sales14dCents ?? 0)
+      tImpr += m?._sum.impressions ?? 0; tClicks += m?._sum.clicks ?? 0; tMicros += Number(m?._sum.costMicros ?? 0n); tSales += salesCents; tOrders += m?._sum.orders7d ?? 0
+      const p = a.productId ? prodById.get(a.productId) : undefined
+      return {
+        id: a.id, asin: a.asin, sku: a.sku ?? p?.sku ?? null, productId: a.productId, status: a.status,
+        name: p?.name ?? a.asin ?? a.sku ?? '—',
+        photoUrl: p ? pickFaceImage(p.images) : null,
+        impressions: m?._sum.impressions ?? 0, clicks: m?._sum.clicks ?? 0,
+        spendCents, salesCents, orders: m?._sum.orders7d ?? 0,
+        acos: salesCents > 0 ? spendCents / salesCents : null,
+        roas: spendCents > 0 ? salesCents / spendCents : null,
+      }
+    }).sort((a, b) => b.spendCents - a.spendCents)
+
+    const spendCents = microsToCents(tMicros)
+    return {
+      adGroup: {
+        id: adGroup.id, name: adGroup.name, status: adGroup.status, defaultBidCents: adGroup.defaultBidCents,
+        campaign: adGroup.campaign,
+        metrics: { impressions: tImpr, clicks: tClicks, spendCents, salesCents: tSales, orders: tOrders, acos: tSales > 0 ? spendCents / tSales : null, roas: spendCents > 0 ? tSales / spendCents : null },
+        ads,
+        targets: adGroup.targets,
+        trend: trendRows.map((r) => ({ date: r.date.toISOString().slice(0, 10), spendCents: microsToCents(r._sum.costMicros), salesCents: (r._sum.sales7dCents ?? 0) + (r._sum.sales14dCents ?? 0), impressions: r._sum.impressions ?? 0, clicks: r._sum.clicks ?? 0, orders: r._sum.orders7d ?? 0 })),
+        windowDays,
+        dataThrough: trendRows.length ? trendRows[trendRows.length - 1]!.date.toISOString().slice(0, 10) : null,
+      },
+    }
+  })
+
   // ── GET /advertising/fba-storage-age ────────────────────────────────
   fastify.get('/advertising/fba-storage-age', async (request, reply) => {
     const q = request.query as {

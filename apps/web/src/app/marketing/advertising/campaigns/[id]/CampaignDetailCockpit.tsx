@@ -53,7 +53,7 @@ const ago = (iso: string | null | undefined) => {
   return `${Math.round(s / 86400)}d ago`
 }
 
-type Tab = 'adgroups' | 'targeting' | 'searchterms' | 'bidadjust' | 'dayparting' | 'negatives' | 'settings' | 'history'
+type Tab = 'adgroups' | 'targeting' | 'searchterms' | 'bidadjust' | 'dayparting' | 'negatives' | 'budgetrules' | 'settings' | 'history'
 
 export function CampaignDetailCockpit({ campaign, history }: { campaign: CampaignDetailData; history: BidHistoryRow[] }) {
   const [tab, setTab] = useState<Tab>('adgroups')
@@ -110,6 +110,19 @@ export function CampaignDetailCockpit({ campaign, history }: { campaign: Campaig
     } finally { setTrendLoading(false) }
   }, [campaign.id, windowDays])
   useEffect(() => { void loadTrends() }, [loadTrends])
+
+  // AME.5 — ad-group rows track the chart window so the table never disagrees
+  // with the KPI chart. Seeded from the server prop (windowDays 30 default);
+  // refetched live from the daily-derived detail endpoint when the window changes.
+  const [adGroups, setAdGroups] = useState(campaign.adGroups)
+  const firstWindowRef = useRef(true)
+  useEffect(() => {
+    if (firstWindowRef.current) { firstWindowRef.current = false; return }
+    let alive = true
+    void fetch(`${getBackendUrl()}/api/advertising/campaigns/${campaign.id}?windowDays=${windowDays}`, { cache: 'no-store' })
+      .then((x) => x.json()).then((d) => { if (alive && d?.campaign?.adGroups) setAdGroups(d.campaign.adGroups) }).catch(() => {})
+    return () => { alive = false }
+  }, [campaign.id, windowDays])
 
   // CD.6 — per-entity sparklines (trailing 14d spend) for the ad-group + target
   // tables, fetched in two batched round-trips and refreshed on live events.
@@ -365,15 +378,24 @@ export function CampaignDetailCockpit({ campaign, history }: { campaign: Campaig
     } catch (e) { setNegForm((f) => ({ ...f, saving: false, msg: (e as Error).message })) }
   }
 
-  const TABS: Array<[Tab, string, number]> = [
-    ['adgroups', 'Ad groups', campaign.adGroups.length],
-    ['targeting', 'Targeting', targets.filter((t) => !t.expressionValue.startsWith('NOT ')).length],
-    ['searchterms', 'Search terms', searchTerms?.length ?? 0],
-    ['bidadjust', 'Bid adjustments', 0],
-    ['dayparting', 'Dayparting', 0],
-    ['negatives', 'Negative targeting', addedNegs.length],
-    ['settings', 'Campaign settings', 0],
-    ['history', 'History', history.length],
+  // AME.5 — Amazon-parity left-nav, grouped. "Manage" mirrors Seller Central's
+  // campaign rail; "Insights & tools" keeps our value-add panels (Amazon nests
+  // targeting/search-terms under the ad group — surfaced here + in the ad-group
+  // detail page).
+  const NAV: Array<{ group: string; items: Array<[Tab, string, number]> }> = [
+    { group: 'Manage', items: [
+      ['adgroups', 'Ad groups', adGroups.length],
+      ['bidadjust', 'Bid adjustments', 0],
+      ['negatives', 'Negative targeting', addedNegs.length],
+      ['budgetrules', 'Budget rules', 0],
+      ['settings', 'Campaign settings', 0],
+      ['history', 'History', history.length],
+    ] },
+    { group: 'Insights & tools', items: [
+      ['targeting', 'Targeting', targets.filter((t) => !t.expressionValue.startsWith('NOT ')).length],
+      ['searchterms', 'Search terms', searchTerms?.length ?? 0],
+      ['dayparting', 'Dayparting', 0],
+    ] },
   ]
 
   return (
@@ -398,24 +420,44 @@ export function CampaignDetailCockpit({ campaign, history }: { campaign: Campaig
           )}
         </span>
       </div>
-      <KpiStrip tiles={tiles} className="mb-4" />
-      <CampaignRecommendations campaignId={campaign.id} onNegate={addNegative} onGoToTab={(t) => setTab(t)} refreshKey={liveTs ?? 0} />
-      <CampaignHealth score={healthScore} factors={healthFactors} marketplace={campaign.marketplace} refreshKey={liveTs ?? 0} />
-      <CampaignProfitLens trueProfitCents={campaign.trueProfitCents} trueProfitMarginPct={campaign.trueProfitMarginPct} lifetimeSpendCents={lifeSpendC} />
-      <CampaignBudgetPace rows={trendRows} dailyBudget={campaign.dailyBudget} windowDays={windowDays} />
-      <CampaignTrendChart rows={trendRows} windowDays={windowDays} onWindowChange={setWindowDays} loading={trendLoading} />
+      <div className="flex gap-5 items-start mt-1">
+        {/* AME.5 — Amazon-parity vertical left nav (replaces the horizontal
+            scrolling tab bar). Sticky so it stays in view while scrolling. */}
+        <nav aria-label="Campaign sections" className="w-52 flex-shrink-0 sticky top-4 space-y-3">
+          {NAV.map((grp) => (
+            <div key={grp.group}>
+              <div className="px-2.5 pb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">{grp.group}</div>
+              <div className="space-y-0.5">
+                {grp.items.map(([k, label, n]) => (
+                  <button
+                    key={k}
+                    onClick={() => setTab(k)}
+                    aria-current={tab === k ? 'page' : undefined}
+                    className={`w-full text-left px-2.5 py-1.5 text-sm rounded-md flex items-center justify-between transition ${tab === k ? 'bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 font-medium' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/70'}`}
+                  >
+                    <span>{label}</span>{n > 0 ? <span className="text-xs text-slate-400 tabular-nums">{n}</span> : null}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+        </nav>
 
-      <nav className="border-b border-slate-200 dark:border-slate-800 mb-3 flex gap-1">
-        {TABS.map(([k, label, n]) => (
-          <button key={k} onClick={() => setTab(k)} className={`px-3 py-2 text-sm border-b-2 ${tab === k ? 'border-blue-600 text-blue-700 dark:text-blue-300' : 'border-transparent text-slate-500 hover:text-slate-800'}`}>{label}{n > 0 ? <span className="ml-1 text-xs text-slate-400">({n})</span> : null}</button>
-        ))}
-      </nav>
+        <div className="flex-1 min-w-0">
+          {/* KPI chart header — Amazon-style (metric tiles + windowed line chart). */}
+          <KpiStrip tiles={tiles} className="mb-3" />
+          <CampaignTrendChart rows={trendRows} windowDays={windowDays} onWindowChange={setWindowDays} loading={trendLoading} />
+          {tab === 'adgroups' && (<>
+            <CampaignRecommendations campaignId={campaign.id} onNegate={addNegative} onGoToTab={(t) => setTab(t)} refreshKey={liveTs ?? 0} />
+            <CampaignHealth score={healthScore} factors={healthFactors} marketplace={campaign.marketplace} refreshKey={liveTs ?? 0} />
+            <CampaignProfitLens trueProfitCents={campaign.trueProfitCents} trueProfitMarginPct={campaign.trueProfitMarginPct} lifetimeSpendCents={lifeSpendC} />
+          </>)}
 
-      {clampMsg && <div className="mb-2 px-3 py-1.5 text-xs rounded-md text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900">{clampMsg}</div>}
-      <div className="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800">
+          {clampMsg && <div className="my-2 px-3 py-1.5 text-xs rounded-md text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900">{clampMsg}</div>}
+          <div className="rounded-lg border border-slate-200 dark:border-slate-800 mt-3">
         {tab === 'adgroups' && (
           <table className="w-full text-sm"><thead className="bg-slate-50 dark:bg-slate-900/60 text-xs text-slate-500"><tr><th className="text-left px-3 py-2">Ad group</th><th className="text-left px-3 py-2">Status</th><th className="text-right px-3 py-2">Default bid</th><th className="text-right px-3 py-2">Targets</th><th className="text-right px-3 py-2">Impr</th><th className="text-right px-3 py-2">Clicks</th><th className="text-right px-3 py-2">Spend</th><th className="text-right px-3 py-2">Sales</th><th className="text-right px-3 py-2">14d</th></tr></thead>
-          <tbody className="divide-y divide-slate-100 dark:divide-slate-800">{campaign.adGroups.map((g) => <tr key={g.id} className="hover:bg-slate-50 dark:hover:bg-slate-900/40"><td className="px-3 py-1.5 font-medium">{g.name}</td><td className="px-3 py-1.5 text-xs">{g.status}</td><td className="px-3 py-1.5 text-right tabular-nums">{eur(g.defaultBidCents)}</td><td className="px-3 py-1.5 text-right tabular-nums">{g.targets.length}</td><td className="px-3 py-1.5 text-right tabular-nums">{num(g.impressions)}</td><td className="px-3 py-1.5 text-right tabular-nums">{num(g.clicks)}</td><td className="px-3 py-1.5 text-right tabular-nums">{eur(g.spendCents)}</td><td className="px-3 py-1.5 text-right tabular-nums">{eur(g.salesCents)}</td><td className="px-3 py-1.5 text-right" title="Spend, last 14 days"><Sparkline data={agSparks[g.id]} color="#f59e0b" /></td></tr>)}</tbody></table>
+          <tbody className="divide-y divide-slate-100 dark:divide-slate-800">{adGroups.map((g) => <tr key={g.id} className="hover:bg-slate-50 dark:hover:bg-slate-900/40"><td className="px-3 py-1.5 font-medium"><Link href={`/marketing/advertising/campaigns/${campaign.id}/ad-groups/${g.id}`} className="text-blue-600 dark:text-blue-400 hover:underline">{g.name}</Link></td><td className="px-3 py-1.5 text-xs">{g.status}</td><td className="px-3 py-1.5 text-right tabular-nums">{eur(g.defaultBidCents)}</td><td className="px-3 py-1.5 text-right tabular-nums">{g.targets.length}</td><td className="px-3 py-1.5 text-right tabular-nums">{num(g.impressions)}</td><td className="px-3 py-1.5 text-right tabular-nums">{num(g.clicks)}</td><td className="px-3 py-1.5 text-right tabular-nums">{eur(g.spendCents)}</td><td className="px-3 py-1.5 text-right tabular-nums">{eur(g.salesCents)}</td><td className="px-3 py-1.5 text-right" title="Spend, last 14 days"><Sparkline data={agSparks[g.id]} color="#f59e0b" /></td></tr>)}</tbody></table>
         )}
         {tab === 'targeting' && (<>
           <div className="border-b border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/40 px-3 py-2">
@@ -549,10 +591,22 @@ export function CampaignDetailCockpit({ campaign, history }: { campaign: Campaig
         {tab === 'dayparting' && (
           <CampaignDayparting campaignId={campaign.id} marketplace={campaign.marketplace} refreshKey={liveTs ?? 0} />
         )}
+        {tab === 'budgetrules' && (
+          <div className="p-4 space-y-4">
+            <CampaignBudgetPace rows={trendRows} dailyBudget={campaign.dailyBudget} windowDays={windowDays} />
+            <div className="rounded-lg border border-slate-200 dark:border-slate-800 p-4">
+              <div className="font-medium text-sm text-slate-700 dark:text-slate-200 mb-1">Scheduled &amp; performance-based budget rules</div>
+              <p className="text-xs text-slate-500 mb-3 max-w-prose">Automatically raise budgets for peak events (Prime Day, Black Friday) or when ROAS/CTR/conversion clears a threshold, then return to baseline. Rules are managed centrally so they apply consistently across campaigns and markets.</p>
+              <Link href="/marketing/advertising/budget-manager" className="inline-flex items-center gap-1 px-3 py-1.5 text-sm rounded-md bg-blue-600 text-white hover:bg-blue-700">Open Budget Manager →</Link>
+            </div>
+          </div>
+        )}
         {tab === 'history' && (
           <table className="w-full text-sm"><thead className="bg-slate-50 dark:bg-slate-900/60 text-xs text-slate-500"><tr><th className="text-left px-3 py-2">Field</th><th className="text-left px-3 py-2">Change</th><th className="text-left px-3 py-2">By</th><th className="text-right px-3 py-2">When</th></tr></thead>
           <tbody className="divide-y divide-slate-100 dark:divide-slate-800">{history.length === 0 ? <tr><td colSpan={4} className="px-3 py-6 text-center text-slate-400 text-xs">No changes yet.</td></tr> : history.map((h) => <tr key={h.id}><td className="px-3 py-1.5">{h.field}</td><td className="px-3 py-1.5 text-xs">{h.oldValue ?? '—'} → <span className="font-medium">{h.newValue ?? '—'}</span></td><td className="px-3 py-1.5 text-xs text-slate-500">{h.changedBy}</td><td className="px-3 py-1.5 text-right text-xs text-slate-400">{new Date(h.changedAt).toLocaleString()}</td></tr>)}</tbody></table>
         )}
+          </div>
+        </div>
       </div>
     </div>
   )
