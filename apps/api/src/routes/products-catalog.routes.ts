@@ -167,7 +167,7 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
         }>>`
           SELECT
             count(*)::bigint AS total,
-            count(*) FILTER (WHERE NOT EXISTS (SELECT 1 FROM "Image" i WHERE i."productId" = p.id))::bigint AS missing_photos,
+            count(*) FILTER (WHERE NOT EXISTS (SELECT 1 FROM "ProductImage" i WHERE i."productId" = p.id))::bigint AS missing_photos,
             count(*) FILTER (WHERE p.description IS NULL OR p.description = '')::bigint AS missing_description,
             count(*) FILTER (WHERE p.brand IS NULL OR p.brand = '')::bigint AS missing_brand,
             count(*) FILTER (WHERE p.gtin IS NULL OR p.gtin = '')::bigint AS missing_gtin
