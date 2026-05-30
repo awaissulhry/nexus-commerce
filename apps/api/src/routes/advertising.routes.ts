@@ -1148,6 +1148,59 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     return { windowDays, count: rows.length, rows, summary: curSummary, previous }
   })
 
+  // CD.6 — batched per-entity sparklines. Returns one trailing daily series
+  // (spend or clicks) per ad group / target under a campaign in a single
+  // round-trip, keyed by the LOCAL entity id (AdGroup.id / AdTarget.id) so the
+  // cockpit tables can drop a sparkline column straight in. Placements get
+  // their dedicated trend treatment in CD.7.
+  // GET /advertising/trends/sparklines?campaignId=&entityType=AD_GROUP|AD_TARGET&metric=spend|clicks&windowDays=14
+  fastify.get('/advertising/trends/sparklines', async (request, reply) => {
+    const q = request.query as { campaignId?: string; entityType?: string; metric?: string; windowDays?: string }
+    if (!q.campaignId) { reply.status(400); return { error: 'campaignId required' } }
+    const entityType = q.entityType === 'AD_TARGET' ? 'AD_TARGET' : 'AD_GROUP'
+    const metric = q.metric === 'clicks' ? 'clicks' : 'spend'
+    const windowDays = Math.max(7, Math.min(90, Number(q.windowDays ?? 14)))
+    const since = new Date()
+    since.setUTCDate(since.getUTCDate() - (windowDays - 1))
+    since.setUTCHours(0, 0, 0, 0)
+
+    // Resolve the campaign's child local ids for the requested grain.
+    const localIds = entityType === 'AD_GROUP'
+      ? (await prisma.adGroup.findMany({ where: { campaignId: q.campaignId }, select: { id: true } })).map((r) => r.id)
+      : (await prisma.adTarget.findMany({ where: { adGroup: { campaignId: q.campaignId } }, select: { id: true } })).map((r) => r.id)
+    if (localIds.length === 0) { reply.header('Cache-Control', 'private, max-age=120'); return { windowDays, metric, entityType, series: {} } }
+
+    const perf = await prisma.amazonAdsDailyPerformance.groupBy({
+      by: ['localEntityId', 'date'],
+      where: { entityType, localEntityId: { in: localIds }, date: { gte: since } },
+      _sum: { costMicros: true, clicks: true },
+    })
+
+    // Build a fixed date axis so every series is the same length + aligned.
+    const axis: string[] = []
+    for (let i = 0; i < windowDays; i++) {
+      const d = new Date(since); d.setUTCDate(since.getUTCDate() + i)
+      axis.push(d.toISOString().slice(0, 10))
+    }
+    const idx = new Map(axis.map((d, i) => [d, i]))
+    const series: Record<string, number[]> = {}
+    for (const id of localIds) series[id] = new Array(windowDays).fill(0)
+    for (const r of perf) {
+      if (!r.localEntityId) continue
+      const k = r.date.toISOString().slice(0, 10)
+      const i = idx.get(k)
+      if (i == null) continue
+      const arr = series[r.localEntityId]
+      if (!arr) continue
+      arr[i] = metric === 'clicks'
+        ? (r._sum.clicks ?? 0)
+        : Math.round(Number(r._sum.costMicros ?? 0n) / 10_000) // cents
+    }
+
+    reply.header('Cache-Control', 'private, max-age=120')
+    return { windowDays, metric, entityType, axis, series }
+  })
+
   //   - per-adProduct live status from the adapter registry
   //   - report job counts by status
   //   - search-term cardinality + negative-keyword-candidate count

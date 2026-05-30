@@ -19,6 +19,7 @@ import { StatusChip } from '@/app/_shared/ads-ui'
 import { CampaignTrendChart, type TrendRow } from './CampaignTrendChart'
 import { CampaignBudgetPace } from './CampaignBudgetPace'
 import { CampaignRecommendations } from './CampaignRecommendations'
+import { Sparkline } from './Sparkline'
 
 interface TrendSummary { impressions: number; clicks: number; orders: number; spendCents: number; salesCents: number; acos: number | null; roas: number | null; ctr: number | null }
 import { getBackendUrl } from '@/lib/backend-url'
@@ -90,6 +91,21 @@ export function CampaignDetailCockpit({ campaign, history }: { campaign: Campaig
   }, [campaign.id, windowDays])
   useEffect(() => { void loadTrends() }, [loadTrends])
 
+  // CD.6 — per-entity sparklines (trailing 14d spend) for the ad-group + target
+  // tables, fetched in two batched round-trips and refreshed on live events.
+  const [agSparks, setAgSparks] = useState<Record<string, number[]>>({})
+  const [tgtSparks, setTgtSparks] = useState<Record<string, number[]>>({})
+  const loadSparks = useCallback(async () => {
+    const base = `${getBackendUrl()}/api/advertising/trends/sparklines?campaignId=${campaign.id}&metric=spend&windowDays=14`
+    const [ag, tg] = await Promise.all([
+      fetch(`${base}&entityType=AD_GROUP`, { cache: 'no-store' }).then((x) => x.json()).catch(() => ({ series: {} })),
+      fetch(`${base}&entityType=AD_TARGET`, { cache: 'no-store' }).then((x) => x.json()).catch(() => ({ series: {} })),
+    ])
+    setAgSparks(ag.series ?? {})
+    setTgtSparks(tg.series ?? {})
+  }, [campaign.id])
+  useEffect(() => { void loadSparks() }, [loadSparks])
+
   // CD.3 — live updates. The marketing-events SSE bus fires when this
   // campaign mutates, its metrics refresh, a budget rebalances, or a rule
   // executes. On any of those: refresh server data (campaign + history),
@@ -102,12 +118,13 @@ export function CampaignDetailCockpit({ campaign, history }: { campaign: Campaig
   const onLiveEvent = useCallback(() => {
     router.refresh()
     void loadTrends()
+    void loadSparks()
     setSearchTerms(null)
     setPlacements(null)
     setLiveTs(Date.now())
     if (flashTimer.current) clearTimeout(flashTimer.current)
     flashTimer.current = setTimeout(() => setLiveTs(null), 4000)
-  }, [router, loadTrends])
+  }, [router, loadTrends, loadSparks])
   useMarketingEvents(onLiveEvent)
   useEffect(() => () => { if (flashTimer.current) clearTimeout(flashTimer.current) }, [])
 
@@ -261,8 +278,8 @@ export function CampaignDetailCockpit({ campaign, history }: { campaign: Campaig
 
       <div className="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800">
         {tab === 'adgroups' && (
-          <table className="w-full text-sm"><thead className="bg-slate-50 dark:bg-slate-900/60 text-xs text-slate-500"><tr><th className="text-left px-3 py-2">Ad group</th><th className="text-left px-3 py-2">Status</th><th className="text-right px-3 py-2">Default bid</th><th className="text-right px-3 py-2">Targets</th><th className="text-right px-3 py-2">Impr</th><th className="text-right px-3 py-2">Clicks</th><th className="text-right px-3 py-2">Spend</th><th className="text-right px-3 py-2">Sales</th></tr></thead>
-          <tbody className="divide-y divide-slate-100 dark:divide-slate-800">{campaign.adGroups.map((g) => <tr key={g.id} className="hover:bg-slate-50 dark:hover:bg-slate-900/40"><td className="px-3 py-1.5 font-medium">{g.name}</td><td className="px-3 py-1.5 text-xs">{g.status}</td><td className="px-3 py-1.5 text-right tabular-nums">{eur(g.defaultBidCents)}</td><td className="px-3 py-1.5 text-right tabular-nums">{g.targets.length}</td><td className="px-3 py-1.5 text-right tabular-nums">{num(g.impressions)}</td><td className="px-3 py-1.5 text-right tabular-nums">{num(g.clicks)}</td><td className="px-3 py-1.5 text-right tabular-nums">{eur(g.spendCents)}</td><td className="px-3 py-1.5 text-right tabular-nums">{eur(g.salesCents)}</td></tr>)}</tbody></table>
+          <table className="w-full text-sm"><thead className="bg-slate-50 dark:bg-slate-900/60 text-xs text-slate-500"><tr><th className="text-left px-3 py-2">Ad group</th><th className="text-left px-3 py-2">Status</th><th className="text-right px-3 py-2">Default bid</th><th className="text-right px-3 py-2">Targets</th><th className="text-right px-3 py-2">Impr</th><th className="text-right px-3 py-2">Clicks</th><th className="text-right px-3 py-2">Spend</th><th className="text-right px-3 py-2">Sales</th><th className="text-right px-3 py-2">14d</th></tr></thead>
+          <tbody className="divide-y divide-slate-100 dark:divide-slate-800">{campaign.adGroups.map((g) => <tr key={g.id} className="hover:bg-slate-50 dark:hover:bg-slate-900/40"><td className="px-3 py-1.5 font-medium">{g.name}</td><td className="px-3 py-1.5 text-xs">{g.status}</td><td className="px-3 py-1.5 text-right tabular-nums">{eur(g.defaultBidCents)}</td><td className="px-3 py-1.5 text-right tabular-nums">{g.targets.length}</td><td className="px-3 py-1.5 text-right tabular-nums">{num(g.impressions)}</td><td className="px-3 py-1.5 text-right tabular-nums">{num(g.clicks)}</td><td className="px-3 py-1.5 text-right tabular-nums">{eur(g.spendCents)}</td><td className="px-3 py-1.5 text-right tabular-nums">{eur(g.salesCents)}</td><td className="px-3 py-1.5 text-right" title="Spend, last 14 days"><Sparkline data={agSparks[g.id]} color="#f59e0b" /></td></tr>)}</tbody></table>
         )}
         {tab === 'targeting' && (<>
           <div className="border-b border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/40 px-3 py-2">
@@ -303,8 +320,8 @@ export function CampaignDetailCockpit({ campaign, history }: { campaign: Campaig
               </div>
             )}
           </div>
-          <table className="w-full text-sm"><thead className="bg-slate-50 dark:bg-slate-900/60 text-xs text-slate-500"><tr><th className="text-left px-3 py-2">Target</th><th className="text-left px-3 py-2">Match</th><th className="text-right px-3 py-2">Bid</th><th className="text-right px-3 py-2">Impr</th><th className="text-right px-3 py-2">Clicks</th><th className="text-right px-3 py-2">Spend</th><th className="text-right px-3 py-2">Sales</th><th className="text-right px-3 py-2">ACOS</th></tr></thead>
-          <tbody className="divide-y divide-slate-100 dark:divide-slate-800">{targets.map((t) => { const a = t.salesCents > 0 ? t.spendCents / t.salesCents : null; return <tr key={t.id} className="hover:bg-slate-50 dark:hover:bg-slate-900/40"><td className="px-3 py-1.5">{t.expressionValue}</td><td className="px-3 py-1.5 text-xs text-slate-500">{t.expressionType}</td><td className="px-3 py-1.5 text-right tabular-nums">{bidEdit[t.id] != null ? <span className="inline-flex items-center gap-1">€<input autoFocus type="number" step="0.01" value={bidEdit[t.id]} onChange={(e) => setBidEdit((s) => ({ ...s, [t.id]: e.target.value }))} onKeyDown={(e) => { if (e.key === 'Enter') saveBid(t); if (e.key === 'Escape') setBidEdit((s) => { const { [t.id]: _, ...r } = s; return r }) }} className="w-14 px-1 py-0.5 text-right text-xs rounded border border-blue-400 bg-white dark:bg-slate-900" disabled={busy === t.id} /><button onClick={() => saveBid(t)} className="text-blue-600"><Check size={12} /></button></span> : <button onClick={() => setBidEdit((s) => ({ ...s, [t.id]: (t.bidCents / 100).toFixed(2) }))} className="hover:underline decoration-dotted">{eur(t.bidCents)}</button>}</td><td className="px-3 py-1.5 text-right tabular-nums">{num(t.impressions)}</td><td className="px-3 py-1.5 text-right tabular-nums">{num(t.clicks)}</td><td className="px-3 py-1.5 text-right tabular-nums">{eur(t.spendCents)}</td><td className="px-3 py-1.5 text-right tabular-nums">{eur(t.salesCents)}</td><td className="px-3 py-1.5 text-right tabular-nums">{pct(a)}</td></tr> })}</tbody></table>
+          <table className="w-full text-sm"><thead className="bg-slate-50 dark:bg-slate-900/60 text-xs text-slate-500"><tr><th className="text-left px-3 py-2">Target</th><th className="text-left px-3 py-2">Match</th><th className="text-right px-3 py-2">Bid</th><th className="text-right px-3 py-2">Impr</th><th className="text-right px-3 py-2">Clicks</th><th className="text-right px-3 py-2">Spend</th><th className="text-right px-3 py-2">Sales</th><th className="text-right px-3 py-2">ACOS</th><th className="text-right px-3 py-2">14d</th></tr></thead>
+          <tbody className="divide-y divide-slate-100 dark:divide-slate-800">{targets.map((t) => { const a = t.salesCents > 0 ? t.spendCents / t.salesCents : null; return <tr key={t.id} className="hover:bg-slate-50 dark:hover:bg-slate-900/40"><td className="px-3 py-1.5">{t.expressionValue}</td><td className="px-3 py-1.5 text-xs text-slate-500">{t.expressionType}</td><td className="px-3 py-1.5 text-right tabular-nums">{bidEdit[t.id] != null ? <span className="inline-flex items-center gap-1">€<input autoFocus type="number" step="0.01" value={bidEdit[t.id]} onChange={(e) => setBidEdit((s) => ({ ...s, [t.id]: e.target.value }))} onKeyDown={(e) => { if (e.key === 'Enter') saveBid(t); if (e.key === 'Escape') setBidEdit((s) => { const { [t.id]: _, ...r } = s; return r }) }} className="w-14 px-1 py-0.5 text-right text-xs rounded border border-blue-400 bg-white dark:bg-slate-900" disabled={busy === t.id} /><button onClick={() => saveBid(t)} className="text-blue-600"><Check size={12} /></button></span> : <button onClick={() => setBidEdit((s) => ({ ...s, [t.id]: (t.bidCents / 100).toFixed(2) }))} className="hover:underline decoration-dotted">{eur(t.bidCents)}</button>}</td><td className="px-3 py-1.5 text-right tabular-nums">{num(t.impressions)}</td><td className="px-3 py-1.5 text-right tabular-nums">{num(t.clicks)}</td><td className="px-3 py-1.5 text-right tabular-nums">{eur(t.spendCents)}</td><td className="px-3 py-1.5 text-right tabular-nums">{eur(t.salesCents)}</td><td className="px-3 py-1.5 text-right tabular-nums">{pct(a)}</td><td className="px-3 py-1.5 text-right" title="Spend, last 14 days"><Sparkline data={tgtSparks[t.id]} color="#f59e0b" /></td></tr> })}</tbody></table>
         </>)}
         {tab === 'searchterms' && (
           searchTerms == null ? <div className="p-6 text-center text-slate-400 text-sm">Loading…</div> :
