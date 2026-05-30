@@ -7804,6 +7804,15 @@ model SupplierProduct {
   leadTimeDaysOverride Int?
   isPrimary            Boolean @default(false)
 
+  // PD.1 — factory-facing naming (per-supplier default). Factories often
+  // can't read our master SKU/name (different language); these give the
+  // operator a name/size/spec the factory understands, auto-filled onto
+  // every PO line for this supplier×product and rendered on the factory
+  // PDF + supplier email. A PO line can still override per order.
+  factoryName String?
+  factorySize String?
+  factorySpec String?
+
   // PO-Plus.7 — observed landed cost in EUR cents. Populated when the
   // operator clicks "Push to catalog" on the PO.11 three-way match
   // panel after receiving a PO. Distinct from `costCents` (which is
@@ -7925,6 +7934,14 @@ model PurchaseOrderItem {
   // PO.1 — explicit display order so PO.6 drag-reorder is durable.
   // Falls back to id-tie-break when two rows share lineOrder.
   lineOrder Int     @default(0)
+
+  // PD.1 — per-line factory-facing naming override. Auto-filled from the
+  // SupplierProduct factory* defaults; the operator can override for this
+  // one order. Rendered on the factory PDF + supplier email so the
+  // factory sees a name/size it understands.
+  factoryName String?
+  factorySize String?
+  factorySpec String?
 
   purchaseOrder        PurchaseOrder         @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
   inboundShipmentItems InboundShipmentItem[]
