@@ -565,9 +565,9 @@ async function ingestTargets(records: V1Target[]): Promise<{ upserted: number; b
       createdCount = c.count
       upserted += c.count
     } catch (err) {
-      ;(bd as Record<string, unknown>).createManyErr = String(err).slice(0, 140)
+      ;(bd as Record<string, unknown>).createManyErr = String(err).replace(/\s+/g, ' ').slice(0, 600)
       for (const d of toCreate) {
-        try { await prisma.adTarget.create({ data: d as never }); createdCount++; upserted++ } catch (e2) { if (!(bd as Record<string, unknown>).firstRowErr) (bd as Record<string, unknown>).firstRowErr = String(e2).slice(0, 140) }
+        try { await prisma.adTarget.create({ data: d as never }); createdCount++; upserted++ } catch (e2) { if (!(bd as Record<string, unknown>).firstRowErr) (bd as Record<string, unknown>).firstRowErr = String(e2).replace(/\s+/g, ' ').slice(0, 600) }
       }
     }
   }
