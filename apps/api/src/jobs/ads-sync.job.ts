@@ -78,6 +78,7 @@ let searchTermCleanupTask: ReturnType<typeof cron.schedule> | null = null
 let v1ExportCreateTask: ReturnType<typeof cron.schedule> | null = null
 let v1ExportPollTask: ReturnType<typeof cron.schedule> | null = null
 let v1ExportIngestTask: ReturnType<typeof cron.schedule> | null = null
+let keywordBidResyncTask: ReturnType<typeof cron.schedule> | null = null
 
 // ── fba-storage-age-ingest ────────────────────────────────────────────
 
@@ -481,6 +482,27 @@ export async function runV1ExportIngestCron(): Promise<void> {
   }).catch((err) => logger.error('ads-v1-export-ingest cron: failure', { error: String(err) }))
 }
 
+// AF.7 — keyword/target bid resync. The v1 export ingest above re-writes targets
+// with a €0 bid (the export's bid is nested → coerced to 0); this pulls the REAL
+// bids from the v3 list APIs (/sp/keywords + /sp/targets) so bids stay accurate
+// after every structural sync, not just on the one-time manual backfill.
+export async function runKeywordBidResyncCron(): Promise<void> {
+  await recordCronRun('ads-keyword-bid-resync', async () => {
+    const { resyncAllCampaignKeywords } = await import('../services/advertising/ads-keyword-list-sync.service.js')
+    const r = await resyncAllCampaignKeywords({})
+    return `profiles=${r.profiles} adGroups=${r.adGroups} kwUpserted=${r.upserted} targetsUpdated=${r.targetsUpdated} mode=${r.mode}`
+  }).catch((err) => logger.error('ads-keyword-bid-resync cron: failure', { error: String(err) }))
+}
+
+export function startKeywordBidResyncCron(): void {
+  if (keywordBidResyncTask) { logger.warn('ads-keyword-bid-resync already started'); return }
+  // Hourly at :45 — after the v1 ingest ticks (every 5 min) have settled the structure.
+  const schedule = process.env.NEXUS_ADS_KEYWORD_BID_RESYNC_SCHEDULE ?? '45 * * * *'
+  if (!cron.validate(schedule)) { logger.error('ads-keyword-bid-resync: invalid schedule', { schedule }); return }
+  keywordBidResyncTask = cron.schedule(schedule, () => { void runKeywordBidResyncCron() })
+  logger.info('ads-keyword-bid-resync cron: scheduled', { schedule })
+}
+
 export function startV1ExportIngestCron(): void {
   if (v1ExportIngestTask) { logger.warn('ads-v1-export-ingest already started'); return }
   const schedule = process.env.NEXUS_ADS_V1_EXPORT_INGEST_SCHEDULE ?? '2,7,12,17,22,27,32,37,42,47,52,57 * * * *'
@@ -517,6 +539,8 @@ export function startAllAdvertisingCrons(): void {
   startV1ExportCreateCron()
   startV1ExportPollCron()
   startV1ExportIngestCron()
+  // AF.7 — keep real bids after each structural sync.
+  startKeywordBidResyncCron()
 }
 
 export function stopAllAdvertisingCrons(): void {
@@ -544,10 +568,12 @@ export function stopAllAdvertisingCrons(): void {
     ['v1ExportCreateTask',  v1ExportCreateTask]  as const,
     ['v1ExportPollTask',    v1ExportPollTask]    as const,
     ['v1ExportIngestTask',  v1ExportIngestTask]  as const,
+    ['keywordBidResyncTask', keywordBidResyncTask] as const,
   ]) {
     if (task) { task.stop(); logger.debug(`${key} stopped`) }
   }
   reportCreateTask = null; reportCreateStTask = null; reportCreatePlTask = null; reportCreateApTask = null
   reportPollTask = null; reportIngestTask = null; searchTermCleanupTask = null
   v1ExportCreateTask = null; v1ExportPollTask = null; v1ExportIngestTask = null
+  keywordBidResyncTask = null
 }
