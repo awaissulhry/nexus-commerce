@@ -12,7 +12,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { List, Grid, Package, AlertTriangle, Bot, Mail, SlidersHorizontal, Upload, Inbox, Lightbulb } from 'lucide-react'
+import { List, Grid, Package, AlertTriangle, Bot, Mail, SlidersHorizontal, Upload, Inbox, Lightbulb, Wrench } from 'lucide-react'
 
 const TABS = [
   { href: '/marketing/reviews', label: 'Feed', icon: List, exact: true },
@@ -46,6 +46,13 @@ const TABS = [
     href: '/marketing/reviews/spikes',
     label: 'Spikes',
     icon: AlertTriangle,
+    exact: false,
+  },
+  // RX.5 — closed-loop action items (AI fixes for spikes).
+  {
+    href: '/marketing/reviews/actions',
+    label: 'Actions',
+    icon: Wrench,
     exact: false,
   },
   {

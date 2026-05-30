@@ -31,6 +31,7 @@ import {
 import { draftReviewReply } from '../services/reviews/review-reply.service.js'
 import { sendReviewDigestOnce } from '../services/reviews/review-digest.service.js'
 import { generateSpotlight, getLatestSpotlight } from '../services/reviews/review-spotlight.service.js'
+import { generateActionItemsForSpike } from '../services/reviews/review-actions.service.js'
 import { respondToEbayFeedback } from '../services/reviews/adapters/ebay-feedback.adapter.js'
 import { sseResponseHeaders } from '../lib/sse.js'
 import { publishReviewEvent } from '../services/review-events.service.js'
@@ -923,6 +924,57 @@ const reviewsRoutes: FastifyPluginAsync = async (fastify) => {
     reply.header('Cache-Control', 'private, max-age=60')
     return { spotlight: latest }
   })
+
+  // ── Review action items (RX.5) — closed SR.3 loop ───────────────────
+  fastify.get<{
+    Querystring: { status?: string; spikeId?: string; productId?: string; limit?: string }
+  }>('/reviews/action-items', async (request, reply) => {
+    const q = request.query ?? {}
+    const where: Record<string, unknown> = {}
+    if (q.status) where.status = q.status
+    if (q.spikeId) where.spikeId = q.spikeId
+    if (q.productId) where.productId = q.productId
+    const items = await prisma.reviewActionItem.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      take: Math.min(Number(q.limit) || 100, 300),
+    })
+    reply.header('Cache-Control', 'private, max-age=15')
+    return { items, count: items.length }
+  })
+
+  fastify.post<{ Params: { id: string }; Body: { actor?: string } }>(
+    '/reviews/spikes/:id/generate-actions',
+    async (request, reply) => {
+      const { id } = request.params
+      try {
+        const result = await generateActionItemsForSpike(id, request.body?.actor ?? 'user:anonymous')
+        return { ok: true, ...result }
+      } catch (err) {
+        reply.code(err instanceof Error && err.message === 'spike not found' ? 404 : 500)
+        return { error: 'generate_failed', message: err instanceof Error ? err.message : String(err) }
+      }
+    },
+  )
+
+  fastify.patch<{ Params: { id: string }; Body: { status?: string } }>(
+    '/reviews/action-items/:id',
+    async (request, reply) => {
+      const { id } = request.params
+      const status = request.body?.status
+      if (!status || !['OPEN', 'APPLIED', 'DISMISSED'].includes(status)) {
+        reply.code(400)
+        return { error: 'invalid_status' }
+      }
+      const existing = await prisma.reviewActionItem.findUnique({ where: { id }, select: { id: true } })
+      if (!existing) {
+        reply.code(404)
+        return { error: 'not_found' }
+      }
+      const item = await prisma.reviewActionItem.update({ where: { id }, data: { status } })
+      return { ok: true, item }
+    },
+  )
 
   fastify.post<{
     Body: { productId?: string | null; marketplace?: string | null; windowDays?: number }

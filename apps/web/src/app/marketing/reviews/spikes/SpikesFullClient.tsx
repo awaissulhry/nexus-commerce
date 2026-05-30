@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Loader2 } from 'lucide-react'
+import { Loader2, Wrench } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { CATEGORY_LABEL } from '../_shared/ReviewsNav'
 
@@ -39,6 +39,29 @@ export function SpikesFullClient({ initial }: { initial: SpikeRow[] }) {
   const [statusFilter, setStatusFilter] = useState<string>('OPEN')
   const [marketplaceFilter, setMarketplaceFilter] = useState<string>('')
   const [busy, setBusy] = useState<string | null>(null)
+  const [genBusy, setGenBusy] = useState<string | null>(null)
+  const [genMsg, setGenMsg] = useState<Record<string, string>>({})
+
+  async function genFixes(id: string) {
+    setGenBusy(id)
+    try {
+      const res = await fetch(`${getBackendUrl()}/api/reviews/spikes/${id}/generate-actions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      })
+      const json = await res.json()
+      if (res.ok && json.ok) {
+        setGenMsg((m) => ({ ...m, [id]: `Generated ${json.created?.length ?? 0} fixes →` }))
+      } else {
+        setGenMsg((m) => ({ ...m, [id]: 'Failed to generate' }))
+      }
+    } catch {
+      setGenMsg((m) => ({ ...m, [id]: 'Failed to generate' }))
+    } finally {
+      setGenBusy(null)
+    }
+  }
 
   const marketplaces = useMemo(
     () => Array.from(new Set(initial.map((s) => s.marketplace))).sort(),
@@ -171,6 +194,23 @@ export function SpikesFullClient({ initial }: { initial: SpikeRow[] }) {
                     ))}
                   </ul>
                 )}
+                {/* RX.5 — generate AI fixes for this spike */}
+                <div className="flex items-center gap-2 mt-1 mb-1">
+                  <button
+                    type="button"
+                    onClick={() => genFixes(s.id)}
+                    disabled={genBusy === s.id}
+                    className="text-xs px-2 py-1 rounded ring-1 ring-inset ring-violet-300 text-violet-700 hover:bg-violet-50 dark:ring-violet-700 dark:text-violet-300 dark:hover:bg-violet-950/40 disabled:opacity-40 inline-flex items-center gap-1"
+                  >
+                    {genBusy === s.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Wrench className="h-3 w-3" />}
+                    Generate fixes
+                  </button>
+                  {genMsg[s.id] && (
+                    <Link href="/marketing/reviews/actions" className="text-xs text-blue-600 dark:text-blue-400 hover:underline">
+                      {genMsg[s.id]}
+                    </Link>
+                  )}
+                </div>
                 {s.status === 'OPEN' && (
                   <div className="flex items-center gap-2 mt-1">
                     <button

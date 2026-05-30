@@ -319,6 +319,29 @@ so a useful brief is always produced.
 
 ---
 
+## 16. RX.5 — Closed action loop (Actions tab)
+
+SR.3 already drafts spike-driven fixes (improved bullets, an A+ module)
+via the AutomationRule engine, but the output only lived in execution
+logs. RX.5 makes those fixes **actionable**.
+
+On the **Spikes** tab, "Generate fixes" runs the drafters for a spike and
+persists `ReviewActionItem` rows (dedup: one OPEN item per spike+type):
+- **BULLETS** — 5 AI-drafted listing bullets addressing the complaint.
+- **APLUS** — a short A+ content module.
+- **RECALL_FLAG** — only for SAFETY-category spikes (helmets / protective
+  gear): a GPSR recall-assessment flag linking to
+  `/fulfillment/stock/recalls`.
+
+The **Actions** tab (`/marketing/reviews/actions`) is the workqueue:
+Open / Applied / Dismissed, with the drafted content inline, a Copy
+button, and Apply / Dismiss. Endpoints:
+`POST /api/reviews/spikes/:id/generate-actions`,
+`GET /api/reviews/action-items`, `PATCH /api/reviews/action-items/:id`.
+Heuristic fallbacks apply when no AI key is set.
+
+---
+
 ## 11. RV.9 — Operational polish notes
 
 **Setup nudge (RV.9.1).** If `/orders/reviews/rules` shows no active Xavia-IT rule (the most common first-run mistake), an amber banner offers a one-click "Set up Xavia IT default" — creates a rule with the 7–25d window, returns/refunds exclusions, sentiment diversion on. Same banner repairs misconfigured rules (scope=AMAZON_PER_MARKETPLACE but marketplace=null).

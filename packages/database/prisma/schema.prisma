@@ -9788,6 +9788,30 @@ model ReviewSpotlight {
   @@index([generatedAt])
 }
 
+// RX.5 — Closes the SR.3 loop: spike-driven AI fixes (bullets, A+ module,
+// recall flag) are persisted as actionable items an operator can apply or
+// dismiss, instead of being buried in automation execution logs.
+model ReviewActionItem {
+  id          String   @id @default(cuid())
+  spikeId     String?
+  productId   String?
+  marketplace String?
+  category    String?
+  type        String // BULLETS | APLUS | RECALL_FLAG | TASK
+  title       String
+  detail      String?
+  payload     Json?
+  status      String   @default("OPEN") // OPEN | APPLIED | DISMISSED
+  source      String   @default("manual") // manual | automation
+  createdBy   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([status, createdAt])
+  @@index([spikeId])
+  @@index([productId])
+}
+
 // SR.1 — Per-review AI classification. 1:1 with Review. Categories
 // are a closed enum-ish set encoded as a string[] so a single review
 // can match multiple themes (e.g. "Fit/Sizing" + "Quality"). topPhrases
