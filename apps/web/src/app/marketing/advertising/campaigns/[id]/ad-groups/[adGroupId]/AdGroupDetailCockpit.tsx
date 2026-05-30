@@ -135,6 +135,8 @@ export function AdGroupDetailCockpit({ adGroup }: { adGroup: AdGroupDetail }) {
   const [defBidDraft, setDefBidDraft] = useState('')
   const [editDefBid, setEditDefBid] = useState(false)
   const [err, setErr] = useState<string | null>(null)
+  // AF.7 — suggested bid (data-grounded: own observed CPCs) shown in the editor.
+  const [suggest, setSuggest] = useState<Record<string, number>>({})
   const patch = useCallback(async (url: string, body: Record<string, unknown>): Promise<Record<string, unknown> | null> => {
     setErr(null)
     const r = await fetch(`${getBackendUrl()}${url}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ applyImmediately: true, ...body }) })
@@ -158,6 +160,19 @@ export function AdGroupDetailCockpit({ adGroup }: { adGroup: AdGroupDetail }) {
     if (ok) { const eff = typeof ok.cpcClamp === 'object' && ok.cpcClamp ? Number((ok.cpcClamp as { to: number }).to) : cents; setData((d) => ({ ...d, targets: d.targets.map((x) => (x.id === t.id ? { ...x, bidCents: eff } : x)) })) }
     setBusy(null)
   }, [bidDraft, patch])
+  const loadSuggestion = useCallback(async (t: AgTarget) => {
+    if (t.kind !== 'KEYWORD' || suggest[t.id] != null) return
+    const r = await fetch(`${getBackendUrl()}/api/advertising/bid-suggestions`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ keywords: [t.expressionValue], matchType: t.expressionType, marketplace: data.campaign.marketplace }) }).then((x) => x.json()).catch(() => null)
+    const cents = r?.suggestions?.[0]?.suggestedBidCents
+    if (Number.isFinite(cents)) setSuggest((s) => ({ ...s, [t.id]: cents }))
+  }, [suggest, data.campaign.marketplace])
+  const applySuggestion = useCallback(async (t: AgTarget) => {
+    const cents = suggest[t.id]; if (!Number.isFinite(cents) || cents < 5) return
+    setEditBidId(null); setBusy(t.id)
+    const ok = await patch(`/api/advertising/ad-targets/${t.id}`, { bidCents: cents, reason: 'ad-group cockpit applied suggested bid' })
+    if (ok) { const eff = typeof ok.cpcClamp === 'object' && ok.cpcClamp ? Number((ok.cpcClamp as { to: number }).to) : cents; setData((d) => ({ ...d, targets: d.targets.map((x) => (x.id === t.id ? { ...x, bidCents: eff } : x)) })) }
+    setBusy(null)
+  }, [suggest, patch])
   const toggleAdGroupStatus = useCallback(async () => {
     setBusy('adgroup'); const s = nextStatus(data.status)
     const ok = await patch(`/api/advertising/ad-groups/${data.id}`, { status: s, reason: 'ad-group cockpit toggle' })
@@ -276,9 +291,14 @@ export function AdGroupDetailCockpit({ adGroup }: { adGroup: AdGroupDetail }) {
                       <td className="px-3 py-1.5 text-xs text-slate-500">{t.expressionType}</td>
                       <td className="px-3 py-1.5 text-right tabular-nums">
                         {editBidId === t.id ? (
-                          <input autoFocus type="number" step="0.01" min="0.05" defaultValue={(t.bidCents / 100).toFixed(2)} onChange={(e) => setBidDraft(e.target.value)} onBlur={() => saveBid(t)} onKeyDown={(e) => { if (e.key === 'Enter') saveBid(t); if (e.key === 'Escape') setEditBidId(null) }} aria-label={`Bid for ${t.expressionValue}`} className="w-20 px-1 py-0.5 rounded border border-blue-400 bg-white dark:bg-slate-900 text-right tabular-nums" />
+                          <span className="inline-flex items-center gap-1 justify-end">
+                            <input autoFocus type="number" step="0.01" min="0.05" defaultValue={(t.bidCents / 100).toFixed(2)} onChange={(e) => setBidDraft(e.target.value)} onBlur={() => saveBid(t)} onKeyDown={(e) => { if (e.key === 'Enter') saveBid(t); if (e.key === 'Escape') setEditBidId(null) }} aria-label={`Bid for ${t.expressionValue}`} className="w-20 px-1 py-0.5 rounded border border-blue-400 bg-white dark:bg-slate-900 text-right tabular-nums" />
+                            {suggest[t.id] != null && suggest[t.id] !== t.bidCents && (
+                              <button onMouseDown={(e) => { e.preventDefault(); applySuggestion(t) }} title="Apply suggested bid (from your observed CPCs)" className="px-1 py-0.5 rounded bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 text-[11px] whitespace-nowrap">↳ {eur(suggest[t.id])}</button>
+                            )}
+                          </span>
                         ) : (
-                          <button onClick={() => { setBidDraft(''); setEditBidId(t.id) }} disabled={busy === t.id} className="hover:text-blue-600 hover:underline disabled:opacity-40" title="Edit bid">{eur(t.bidCents)}</button>
+                          <button onClick={() => { setBidDraft(''); setEditBidId(t.id); void loadSuggestion(t) }} disabled={busy === t.id} className="hover:text-blue-600 hover:underline disabled:opacity-40" title="Edit bid">{eur(t.bidCents)}</button>
                         )}
                       </td>
                       <td className="px-3 py-1.5"><span className="inline-flex items-center gap-1.5"><StatusToggle status={t.status} onToggle={() => toggleTargetStatus(t)} busy={busy === t.id} /><StatusChip status={t.status} dot /></span></td>
