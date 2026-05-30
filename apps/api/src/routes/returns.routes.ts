@@ -556,6 +556,7 @@ const returnsRoutes: FastifyPluginAsync = async (fastify) => {
         marketplace?: string
         reason?: string
         isFbaReturn?: boolean
+        returnType?: string // STANDARD | WARRANTY | DEFECT (RX.6b)
         items?: Array<{ orderItemId?: string; productId?: string; sku: string; quantity: number }>
       }
       if (!body.channel) return reply.code(400).send({ error: 'channel required' })
@@ -585,6 +586,10 @@ const returnsRoutes: FastifyPluginAsync = async (fastify) => {
           status: 'REQUESTED',
           reason: body.reason ?? null,
           isFbaReturn: !!body.isFbaReturn,
+          // RX.6b — warranty/defect returns start a diagnosis track.
+          returnType: body.returnType ?? 'STANDARD',
+          warrantyStatus: body.returnType === 'WARRANTY' || body.returnType === 'DEFECT' ? 'PENDING_DIAGNOSIS' : null,
+          defectReportedAt: body.returnType === 'WARRANTY' || body.returnType === 'DEFECT' ? new Date() : null,
           idempotencyKey: idemKey,
           items: {
             create: items.map((it) => ({
@@ -2051,6 +2056,7 @@ const returnsRoutes: FastifyPluginAsync = async (fastify) => {
       inspectionChecklist?: Record<string, unknown> | null
       disposition?: string | null
       scrapReason?: string | null
+      lotId?: string | null
     }
   }>('/fulfillment/returns/:id/items/:itemId', async (request, reply) => {
     try {
@@ -2060,7 +2066,7 @@ const returnsRoutes: FastifyPluginAsync = async (fastify) => {
       if (!item) return reply.code(404).send({ error: 'Item not found' })
       if (item.returnId !== id) return reply.code(400).send({ error: 'Item does not belong to this return' })
       const data: Record<string, unknown> = {}
-      for (const k of ['notes', 'conditionGrade', 'inspectionChecklist', 'disposition', 'scrapReason'] as const) {
+      for (const k of ['notes', 'conditionGrade', 'inspectionChecklist', 'disposition', 'scrapReason', 'lotId'] as const) {
         if (k in body) data[k] = body[k]
       }
       const updated = await prisma.returnItem.update({ where: { id: itemId }, data })
@@ -2074,6 +2080,51 @@ const returnsRoutes: FastifyPluginAsync = async (fastify) => {
       return updated
     } catch (error: any) {
       return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  // RX.6b — warranty track. WARRANTY/DEFECT returns run a diagnosis →
+  // repair/replace/refund/reject routing instead of the straight refund
+  // flow. This patches the warranty fields + audits the transition. The
+  // money side (if resolution=REFUND) still goes through the normal,
+  // human-clicked refund path — this only records the warranty decision.
+  fastify.patch('/fulfillment/returns/:id/warranty', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const body = (request.body ?? {}) as {
+        warrantyStatus?: string | null
+        warrantyResolution?: string | null
+        manufacturerRef?: string | null
+        defectReportedAt?: string | null
+      }
+      const data: Record<string, unknown> = {}
+      if ('warrantyStatus' in body) data.warrantyStatus = body.warrantyStatus
+      if ('warrantyResolution' in body) data.warrantyResolution = body.warrantyResolution
+      if ('manufacturerRef' in body) data.manufacturerRef = body.manufacturerRef
+      if ('defectReportedAt' in body) {
+        data.defectReportedAt = body.defectReportedAt ? new Date(body.defectReportedAt) : null
+      }
+      if (Object.keys(data).length === 0) {
+        return reply.code(400).send({ error: 'No warranty fields to update' })
+      }
+      data.version = { increment: 1 }
+      const updated = await prisma.return.update({ where: { id }, data })
+      void auditLogService.write({
+        ...auditCtx(request),
+        entityType: 'Return',
+        entityId: id,
+        action: 'warranty-update',
+        after: {
+          warrantyStatus: updated.warrantyStatus,
+          warrantyResolution: updated.warrantyResolution,
+          manufacturerRef: updated.manufacturerRef,
+        },
+      })
+      return updated
+    } catch (error: any) {
+      const msg = error instanceof Error ? error.message : String(error)
+      if (msg.includes('Record to update not found')) return reply.code(404).send({ error: 'Return not found' })
+      return reply.code(500).send({ error: msg })
     }
   })
 
