@@ -6320,6 +6320,21 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
     for (const k of ['factoryName', 'factorySize', 'factorySpec'] as const) {
       if (body[k] !== undefined) data[k] = body[k] ? String(body[k]).trim() : null
     }
+    // S2 — per-product production + shipping time overrides (nullable ints >= 0).
+    for (const k of [
+      'productionTimeDaysOverride',
+      'productionUnitsPerDayOverride',
+      'shippingTimeDaysOverride',
+    ] as const) {
+      if (body[k] === undefined) continue
+      if (body[k] === null || body[k] === '') {
+        data[k] = null
+      } else {
+        const n = Number(body[k])
+        if (!Number.isInteger(n) || n < 0) return { error: `${k} must be an integer >= 0` }
+        data[k] = n
+      }
+    }
     return { data }
   }
 

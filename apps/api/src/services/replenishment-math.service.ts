@@ -169,6 +169,56 @@ export function reorderPoint(args: {
   return Math.ceil(v * lt + Math.max(0, args.safetyStock))
 }
 
+// ─── S2 — effective lead time = production + shipping ──────────────
+/**
+ * Resolve the lead time from the split production + shipping inputs the
+ * operator enters per supplier (or per product). Production can be a FLAT
+ * number of days OR a units/day RATE (production days = ceil(qty / rate));
+ * the rate wins when both are set, since it scales with the order size. When
+ * neither production nor shipping is configured we fall back to the legacy
+ * combined `leadTimeDays` so existing data behaves exactly as before.
+ */
+export function effectiveLeadTimeDays(args: {
+  productionTimeDays?: number | null
+  productionUnitsPerDay?: number | null
+  shippingTimeDays?: number | null
+  /** Order quantity used for rate-based production timing. */
+  expectedQty?: number | null
+  legacyLeadTimeDays: number
+}): {
+  productionDays: number
+  shippingDays: number
+  leadTimeDays: number
+  source: 'PRODUCTION_SHIPPING' | 'LEGACY'
+} {
+  const hasProd =
+    (args.productionTimeDays != null && args.productionTimeDays >= 0) ||
+    (args.productionUnitsPerDay != null && args.productionUnitsPerDay > 0)
+  const hasShip = args.shippingTimeDays != null && args.shippingTimeDays >= 0
+  if (!hasProd && !hasShip) {
+    return {
+      productionDays: 0,
+      shippingDays: 0,
+      leadTimeDays: Math.max(0, args.legacyLeadTimeDays),
+      source: 'LEGACY',
+    }
+  }
+  let productionDays = 0
+  if (args.productionUnitsPerDay != null && args.productionUnitsPerDay > 0) {
+    const qty = Math.max(1, Math.round(args.expectedQty ?? 1))
+    productionDays = Math.ceil(qty / args.productionUnitsPerDay)
+  } else if (args.productionTimeDays != null && args.productionTimeDays >= 0) {
+    productionDays = Math.round(args.productionTimeDays)
+  }
+  const shippingDays = args.shippingTimeDays != null ? Math.max(0, Math.round(args.shippingTimeDays)) : 0
+  return {
+    productionDays,
+    shippingDays,
+    leadTimeDays: productionDays + shippingDays,
+    source: 'PRODUCTION_SHIPPING',
+  }
+}
+
 // ─── Daily demand standard deviation ──────────────────────────────
 export function dailyDemandStdDev(dailyUnits: number[]): number {
   if (!Array.isArray(dailyUnits) || dailyUnits.length < 2) return 0
