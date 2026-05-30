@@ -1023,7 +1023,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
         asin: g.asin,
         photoUrl: pickFaceImage(identity.images),
         photoCount: identity.images.length,
-        adSpendCents: g.spend, revenueCents: g.revenue, profitCents: g.profit,
+        adSpendCents: g.spend, adSalesCents: g.salesC, revenueCents: g.revenue, profitCents: g.profit,
         units: g.units,
         acos: g.hasPA && g.salesC > 0 ? Math.round((g.spend / g.salesC) * 1000) / 10 : null,
         roas: g.hasPA && g.spend > 0 ? Math.round((g.salesC / g.spend) * 100) / 100 : null,
@@ -1090,6 +1090,11 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       previousTotals,
       accountSpendCents,
       unattributedSpendCents: Math.max(0, accountSpendCents - attributedSpendCents),
+      // Honest reconciliation (PCF.2): product spend can slightly EXCEED the
+      // campaign total because campaign reports lag T+2 for recent days + a
+      // small systematic variance between Amazon's advertised-product and
+      // campaign reports. Surface it as variance, not a hidden over-count.
+      overAttributedCents: Math.max(0, attributedSpendCents - accountSpendCents),
     }
   })
 
@@ -1152,7 +1157,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       return [{
         id: c.id, sku: c.sku, name: c.name, asin: st?.asin ?? null,
         photoUrl: pickFaceImage(c.images), photoCount: c.images.length,
-        adSpendCents: spend, revenueCents: rev, profitCents: p?._sum.trueProfitCents ?? 0, units: p?._sum.unitsSold ?? 0,
+        adSpendCents: spend, adSalesCents: sales, revenueCents: rev, profitCents: p?._sum.trueProfitCents ?? 0, units: p?._sum.unitsSold ?? 0,
         acos: ad && sales > 0 ? Math.round((spend / sales) * 1000) / 10 : null,
         tacos: rev > 0 ? Math.round((spend / rev) * 1000) / 10 : null,
         marginPct: rev > 0 ? Math.round(((p?._sum.trueProfitCents ?? 0) / rev) * 1000) / 10 : null,
@@ -1903,6 +1908,15 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const asinKeyed = await prisma.amazonAdsDailyPerformance.count({ where: { entityType: 'PRODUCT_AD', date: { gte: since }, entityId: { startsWith: 'ASIN:' } } })
     const total = await prisma.amazonAdsDailyPerformance.count({ where: { entityType: 'PRODUCT_AD', date: { gte: since } } })
     return { windowDays, byDay, asinKeyedRows: asinKeyed, totalProductAdRows: total, sample: sample.map((s) => ({ ...s, costMicros: s.costMicros.toString() })) }
+  })
+
+  // POST /api/advertising/debug/wipe-product-ad — PCF.2 clean slate.
+  // Deletes all PRODUCT_AD daily rows so they can be cleanly re-ingested (one
+  // report per day, deduped). Returns the deleted count. Does NOT touch
+  // CAMPAIGN/search-term/placement rows.
+  fastify.post('/advertising/debug/wipe-product-ad', async (_request) => {
+    const r = await prisma.amazonAdsDailyPerformance.deleteMany({ where: { entityType: 'PRODUCT_AD' } })
+    return { ok: true, deleted: r.count }
   })
 
   // POST /api/advertising/debug/probe-endpoints — Phase A diagnostic

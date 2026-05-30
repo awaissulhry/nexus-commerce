@@ -25,6 +25,7 @@ interface Row extends GridLensRow {
   photoUrl?: string | null
   photoCount?: number
   adSpendCents: number
+  adSalesCents?: number
   revenueCents?: number
   profitCents?: number
   tacos?: number | null
@@ -65,16 +66,19 @@ const ALL_COLUMNS: GridLensColumn[] = [
   { key: 'campaigns', label: 'Campaigns', width: 96 },
   { key: 'markets', label: 'Markets', width: 84 },
   { key: 'adspend', label: 'Ad spend', width: 110 },
-  { key: 'revenue', label: 'Revenue', width: 120 },
-  { key: 'tacos', label: 'TACOS', width: 90 },
+  { key: 'adsales', label: 'Ad sales', width: 120 },
   { key: 'acos', label: 'ACOS', width: 90 },
+  { key: 'units', label: 'Units', width: 80 },
+  // Secondary (ProductProfitDaily — total revenue currently under-reports; fix pending).
+  { key: 'revenue', label: 'Total rev', width: 120 },
+  { key: 'tacos', label: 'TACOS', width: 90 },
   { key: 'profit', label: 'True profit', width: 120 },
   { key: 'margin', label: 'Margin', width: 90 },
-  { key: 'units', label: 'Units', width: 80 },
 ]
-const DEFAULT_VISIBLE = ALL_COLUMNS.map((c) => c.key)
-const PREFS_KEY = 'ax.byproduct.prefs.v1'
-const SORT_KEYS: Record<string, string> = { adspend: 'spend', revenue: 'revenue', tacos: 'tacos', profit: 'profit', margin: 'margin', campaigns: 'campaigns' }
+// Lead with the reliable PRODUCT_AD metrics; PPD-based columns are opt-in.
+const DEFAULT_VISIBLE = ['product', 'campaigns', 'markets', 'adspend', 'adsales', 'acos', 'units']
+const PREFS_KEY = 'ax.byproduct.prefs.v2'
+const SORT_KEYS: Record<string, string> = { adspend: 'spend', adsales: 'adsales', revenue: 'revenue', tacos: 'tacos', profit: 'profit', margin: 'margin', campaigns: 'campaigns' }
 const CHANNELS = [{ key: 'AMAZON', label: 'Amazon', enabled: true }, { key: 'EBAY', label: 'eBay', enabled: false }, { key: 'SHOPIFY', label: 'Shopify', enabled: false }]
 
 export function ByProductView() {
@@ -82,6 +86,8 @@ export function ByProductView() {
   const [totals, setTotals] = useState<{ adSpendCents: number; revenueCents: number; profitCents: number; products: number }>({ adSpendCents: 0, revenueCents: 0, profitCents: 0, products: 0 })
   const [prevTotals, setPrevTotals] = useState<{ adSpendCents: number; revenueCents: number; profitCents: number } | null>(null)
   const [unattributed, setUnattributed] = useState(0)
+  const [overAttributed, setOverAttributed] = useState(0)
+  const [accountSpend, setAccountSpend] = useState(0)
   const [liveTs, setLiveTs] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
   const [windowDays, setWindowDays] = useState(30)
@@ -117,6 +123,8 @@ export function ByProductView() {
       setTotals(r.totals ?? { adSpendCents: 0, revenueCents: 0, profitCents: 0, products: 0 })
       setPrevTotals(r.previousTotals ?? null)
       setUnattributed(r.unattributedSpendCents ?? 0)
+      setOverAttributed(r.overAttributedCents ?? 0)
+      setAccountSpend(r.accountSpendCents ?? 0)
       if (Array.isArray(r.marketplaces)) setMarketplaces(r.marketplaces)
     } finally { setLoading(false) }
   }, [windowDays, sortBy, sortDir, search, marketplace, mode])
@@ -138,7 +146,7 @@ export function ByProductView() {
         id: String(v.id), parentId, isParent: false,
         sku: v.sku as string, name: String(v.name ?? ''), asin: (v.asin as string) ?? null,
         photoUrl: (v.photoUrl as string) ?? null, photoCount: Number(v.photoCount ?? 0),
-        adSpendCents: Number(v.adSpendCents ?? 0), revenueCents: Number(v.revenueCents ?? 0), profitCents: Number(v.profitCents ?? 0),
+        adSpendCents: Number(v.adSpendCents ?? 0), adSalesCents: Number(v.adSalesCents ?? 0), revenueCents: Number(v.revenueCents ?? 0), profitCents: Number(v.profitCents ?? 0),
         units: Number(v.units ?? 0), acos: v.acos == null ? null : Number(v.acos), tacos: v.tacos == null ? null : Number(v.tacos),
         marginPct: v.marginPct == null ? null : Number(v.marginPct), impressions: Number(v.impressions ?? 0), clicks: Number(v.clicks ?? 0),
         campaignCount: Number(v.campaignCount ?? 0), marketCount: Number(v.marketCount ?? 0),
@@ -180,11 +188,19 @@ export function ByProductView() {
   }, [selected, load])
 
   const dPct = (cur: number, prev: number | undefined | null) => (prev != null && prev > 0 ? Math.round(((cur - prev) / prev) * 1000) / 10 : null)
+  // Reliable portfolio metrics from the PRODUCT_AD ad-attributed sales.
+  const adSalesTotal = rows.reduce((s, r) => s + (r.adSalesCents ?? 0), 0)
+  const portfolioAcos = adSalesTotal > 0 ? (totals.adSpendCents / adSalesTotal) * 100 : null
   const tiles: KpiTileSpec[] = [
     { icon: Megaphone, label: 'Ad spend', value: eur(totals.adSpendCents), tone: 'amber', detail: `${totals.products} advertised products`, ...(prevTotals ? { delta: { pct: dPct(totals.adSpendCents, prevTotals.adSpendCents), good: (dPct(totals.adSpendCents, prevTotals.adSpendCents) ?? 0) <= 0 } } : {}) },
-    { icon: ShoppingCart, label: 'Revenue', value: eur(totals.revenueCents), tone: 'violet', detail: `TACOS ${pct(totals.revenueCents > 0 ? (totals.adSpendCents / totals.revenueCents) * 100 : null)}`, ...(prevTotals ? { delta: { pct: dPct(totals.revenueCents, prevTotals.revenueCents), good: (dPct(totals.revenueCents, prevTotals.revenueCents) ?? 0) >= 0 } } : {}) },
-    { icon: Coins, label: 'True profit', value: eur(totals.profitCents), tone: 'emerald', detail: `Margin ${pct(totals.revenueCents > 0 ? (totals.profitCents / totals.revenueCents) * 100 : null)}`, ...(prevTotals ? { delta: { pct: dPct(totals.profitCents, prevTotals.profitCents), good: (dPct(totals.profitCents, prevTotals.profitCents) ?? 0) >= 0 } } : {}) },
-    { icon: Package, label: 'Unattributed spend', value: eur(unattributed), tone: unattributed > totals.adSpendCents * 0.15 ? 'rose' : 'slate', detail: 'account − product-attributed' },
+    { icon: ShoppingCart, label: 'Ad sales', value: eur(adSalesTotal), tone: 'violet', detail: 'attributed to ads (7-day)' },
+    { icon: Coins, label: 'ACOS', value: portfolioAcos != null ? `${portfolioAcos.toFixed(1)}%` : '—', tone: 'emerald', detail: 'ad spend ÷ ad sales' },
+    // Honest reconciliation: product spend can exceed the campaign total because
+    // campaign reports lag T+2 + a small Amazon report variance — show it as
+    // variance, never a hidden "over".
+    overAttributed > 0
+      ? { icon: Package, label: 'Spend vs campaign', value: `+${eur(overAttributed)}`, tone: 'slate', detail: 'campaign report lags T+2' }
+      : { icon: Package, label: 'Unattributed spend', value: eur(unattributed), tone: unattributed > accountSpend * 0.2 ? 'amber' : 'slate', detail: `of ${eur(accountSpend)} account` },
   ]
 
   const renderCell = useCallback((row: Row, colKey: string, isChild: boolean) => {
@@ -203,6 +219,7 @@ export function ByProductView() {
         case 'campaigns': return <span className="tabular-nums text-slate-500">{num(row.campaignCount)}</span>
         case 'markets': return <span className="tabular-nums text-slate-500">{num(row.marketCount)}</span>
         case 'adspend': return <span className="tabular-nums">{eur(row.adSpendCents)}</span>
+        case 'adsales': return <span className="tabular-nums">{eur(row.adSalesCents)}</span>
         case 'revenue': return <span className="tabular-nums">{eur(row.revenueCents)}</span>
         case 'tacos': return <span className={`tabular-nums ${tacosColor(row.tacos)}`}>{pct(row.tacos)}</span>
         case 'acos': return <span className={`tabular-nums ${tacosColor(row.acos)}`}>{pct(row.acos)}</span>
@@ -233,6 +250,7 @@ export function ByProductView() {
         : <span className="tabular-nums">{num(row.campaignCount)}</span>
       case 'markets': return <span className="tabular-nums">{num(row.marketCount)}</span>
       case 'adspend': return <span className="tabular-nums font-medium">{eur(row.adSpendCents)}</span>
+      case 'adsales': return <span className="tabular-nums">{eur(row.adSalesCents)}</span>
       case 'revenue': return <span className="tabular-nums">{eur(row.revenueCents)}</span>
       case 'tacos': return <span className={`tabular-nums font-medium ${tacosColor(row.tacos)}`}>{pct(row.tacos)}</span>
       case 'acos': return <span className={`tabular-nums ${tacosColor(row.acos)}`}>{pct(row.acos)}</span>
