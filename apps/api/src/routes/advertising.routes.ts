@@ -2249,6 +2249,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
         status: 'COMPLETED',
         url: { not: null },
         rowsIngested: 0,
+        fileSize: { gte: 100 }, // AF.1 — skip empty (~22-byte) exports that starve data-rich jobs
         OR: [
           { urlExpiresAt: null },
           { urlExpiresAt: { gt: new Date() } },

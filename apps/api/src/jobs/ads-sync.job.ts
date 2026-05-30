@@ -452,13 +452,17 @@ export async function runV1ExportIngestCron(): Promise<void> {
         status: 'COMPLETED',
         url: { not: null },
         rowsIngested: 0,
+        // AF.1 — skip empty exports (fileSize ~22 = []), which otherwise keep
+        // rowsIngested=0 forever and starve the data-rich jobs out of the take.
+        fileSize: { gte: 100 },
         OR: [
           { urlExpiresAt: null }, // legacy rows missing expiry
           { urlExpiresAt: { gt: new Date() } },
         ],
       },
       select: { id: true },
-      orderBy: { completedAt: 'asc' },
+      // AF.1 — newest first so fresh presigned URLs ingest before expiring.
+      orderBy: { completedAt: 'desc' },
       take: 10,
     })
     let ingested = 0; let totalRows = 0; let errors = 0
