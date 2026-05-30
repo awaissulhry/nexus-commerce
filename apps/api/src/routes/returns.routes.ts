@@ -2173,6 +2173,32 @@ const returnsRoutes: FastifyPluginAsync = async (fastify) => {
     }, 'bulk-receive'),
   )
 
+  // ─── RX.4 — Automation engine (guardrailed, diff-then-apply) ────
+  // Preview is read-only: it computes what WOULD auto-approve without
+  // mutating anything. Apply advances only the operator-confirmed IDs
+  // REQUESTED → AUTHORIZED (reusing the bulk approve transition). No
+  // refunds are ever auto-issued.
+  fastify.get('/fulfillment/returns/automation/preview', async (_request, reply) => {
+    try {
+      const { previewReturnAutomation } = await import(
+        '../services/return-automation.service.js'
+      )
+      return reply.send(await previewReturnAutomation())
+    } catch (error: any) {
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  fastify.post<{ Body: BulkBody }>('/fulfillment/returns/automation/apply', async (request) =>
+    bulkApply(request, request.body, async (id) => {
+      const r = await prisma.return.updateMany({
+        where: { id, status: 'REQUESTED' },
+        data: { status: 'AUTHORIZED', version: { increment: 1 } },
+      })
+      return r.count > 0 ? { ok: true } : { ok: false, error: 'Not in REQUESTED state' }
+    }, 'auto-approve'),
+  )
+
   fastify.get('/fulfillment/returns/export.csv', async (request, reply) => {
     const q = request.query as any
     const where: any = {}

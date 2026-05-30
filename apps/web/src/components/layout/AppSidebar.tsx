@@ -544,14 +544,21 @@ export default function AppSidebar() {
             href="/fulfillment/returns"
             icon={Undo2}
             label="Returns"
-            active={pathname === '/fulfillment/returns' || (pathname.startsWith('/fulfillment/returns') && !pathname.includes('/analytics') && !pathname.includes('/policies'))}
-            childRoutes={['/fulfillment/returns/analytics', '/fulfillment/returns/policies']}
+            active={pathname === '/fulfillment/returns' || (pathname.startsWith('/fulfillment/returns') && !pathname.includes('/analytics') && !pathname.includes('/policies') && !pathname.includes('/automation'))}
+            childRoutes={['/fulfillment/returns/analytics', '/fulfillment/returns/policies', '/fulfillment/returns/automation']}
           >
             <NavItem
               href="/fulfillment/returns/analytics"
               icon={BarChart3}
               label="Returns Analytics"
               active={pathname === '/fulfillment/returns/analytics'}
+              nested
+            />
+            <NavItem
+              href="/fulfillment/returns/automation"
+              icon={Zap}
+              label="Returns Automation"
+              active={pathname === '/fulfillment/returns/automation'}
               nested
             />
             <NavItem
