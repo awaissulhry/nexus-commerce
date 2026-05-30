@@ -23,6 +23,8 @@ import type { FastifyPluginAsync } from 'fastify'
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
 import { testConnection, adsMode } from '../services/advertising/ads-api-client.js'
+import { allocate, microsToCents, toEurCents } from '../services/advertising/ads-metrics-math.js'
+import { getFxRate } from '../services/fx-rate.service.js'
 import {
   runFbaStorageAgeIngestOnce,
   summarizeFbaStorageAge,
@@ -72,6 +74,19 @@ function gcEnableWriteTokens(): void {
   for (const [k, v] of ENABLE_WRITES_TOKENS.entries()) {
     if (v.expiresAt < now) ENABLE_WRITES_TOKENS.delete(k)
   }
+}
+
+// AME.2 — resolve EUR-per-unit rates for a set of currency codes once, so a
+// rollup that crosses marketplaces converts native minor units to the EUR base
+// before summing. EUR maps to 1 (no-op); all current ad data is EUR.
+async function buildEurRateMap(codes: Array<string | null | undefined>): Promise<Map<string, number>> {
+  const out = new Map<string, number>()
+  for (const c of codes) {
+    const ccy = c || 'EUR'
+    if (out.has(ccy)) continue
+    out.set(ccy, ccy === 'EUR' ? 1 : await getFxRate(prisma, ccy, 'EUR'))
+  }
+  return out
 }
 
 // Best-effort actor resolution. AD.4 wires real auth; for now the
@@ -166,9 +181,6 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       return { error: 'not_found' }
     }
 
-    const microsToCents = (micros: bigint | number | null | undefined) =>
-      Math.round(Number(micros ?? 0n) / 10_000)
-
     // ── Campaign totals — authoritative + chart-consistent. CAMPAIGN daily
     // rows are Amazon's billed campaign spend; match localEntityId OR entityId
     // exactly like /trends. A single campaign = one marketplace/currency, so
@@ -219,27 +231,6 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
         cur.salesCents += (r._sum.sales7dCents ?? 0) + (r._sum.sales14dCents ?? 0)
         cur.orders += r._sum.orders7d ?? 0
       }
-    }
-
-    // Largest-remainder allocation: distribute an integer `total` across rows by
-    // `shares`, guaranteeing the parts sum exactly to `total`.
-    const allocate = (total: number, shares: number[]): number[] => {
-      const n = shares.length
-      if (n === 0) return []
-      if (total <= 0) return shares.map(() => 0)
-      const sum = shares.reduce((a, b) => a + b, 0)
-      if (sum <= 0) {
-        const base = Math.floor(total / n)
-        const out = shares.map(() => base)
-        for (let i = 0; i < total - base * n; i++) out[i] += 1
-        return out
-      }
-      const raw = shares.map((s) => (total * s) / sum)
-      const out = raw.map((v) => Math.floor(v))
-      let rem = total - out.reduce((a, b) => a + b, 0)
-      const order = raw.map((v, i) => ({ i, f: v - Math.floor(v) })).sort((a, b) => b.f - a.f)
-      for (let k = 0; k < rem; k++) out[order[k % n]!.i] += 1
-      return out
     }
 
     const groups = campaign.adGroups
@@ -385,7 +376,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       for (const r of tr) {
         const k = r.date.toISOString().slice(0, 10); const i = idx.get(k); if (i == null) continue
         if (!series[r.placement]) series[r.placement] = new Array(windowDays).fill(0)
-        series[r.placement]![i] = Math.round(Number(r._sum.costMicros ?? 0n) / 10_000) // cents
+        series[r.placement]![i] = microsToCents(r._sum.costMicros) // cents
       }
       trend = { axis, series }
     }
@@ -994,7 +985,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
         take: limit,
       })
       const rows = um.map((r) => {
-        const adSpendCents = Math.round(Number(r._sum.costMicros ?? 0n) / 10_000)
+        const adSpendCents = microsToCents(r._sum.costMicros)
         const salesC = r._sum.sales7dCents ?? 0
         return {
           id: r.entityId, sku: undefined, name: r.entityId.replace(/^ASIN:/, ''), asin: r.entityId.replace(/^ASIN:/, ''),
@@ -1014,8 +1005,11 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     type AdAgg = { spendC: number; salesC: number; impr: number; clicks: number; orders: number }
     const adByProduct = new Map<string, AdAgg>()
     if (mode === 'advertised') {
+      // AME.2 — group by currencyCode so cross-marketplace spend/sales convert
+      // to the EUR base before summing (no-op while all ad data is EUR). AME.3
+      // — round micros→cents once per (ad,currency) bucket, not per daily row.
       const perAd = await prisma.amazonAdsDailyPerformance.groupBy({
-        by: ['localEntityId'],
+        by: ['localEntityId', 'currencyCode'],
         where: { entityType: 'PRODUCT_AD', localEntityId: { not: null }, date: { gte: since }, ...(mkt ? { marketplace: mkt } : {}) },
         _sum: { costMicros: true, sales7dCents: true, impressions: true, clicks: true, orders7d: true },
       })
@@ -1023,12 +1017,14 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
         const adIds = perAd.map((r) => r.localEntityId).filter((x): x is string => !!x)
         const adProds = await prisma.adProductAd.findMany({ where: { id: { in: adIds } }, select: { id: true, productId: true } })
         const prodByAd = new Map(adProds.map((a) => [a.id, a.productId]))
+        const fxToEur = await buildEurRateMap(perAd.map((r) => r.currencyCode))
         for (const r of perAd) {
           const pid = r.localEntityId ? prodByAd.get(r.localEntityId) : null
           if (!pid) continue
+          const rate = fxToEur.get(r.currencyCode) ?? 1
           const cur = adByProduct.get(pid) ?? { spendC: 0, salesC: 0, impr: 0, clicks: 0, orders: 0 }
-          cur.spendC += Math.round(Number(r._sum.costMicros ?? 0n) / 10_000)
-          cur.salesC += r._sum.sales7dCents ?? 0
+          cur.spendC += toEurCents(microsToCents(r._sum.costMicros), rate)
+          cur.salesC += toEurCents(r._sum.sales7dCents ?? 0, rate)
           cur.impr += r._sum.impressions ?? 0
           cur.clicks += r._sum.clicks ?? 0
           cur.orders += r._sum.orders7d ?? 0
@@ -1171,11 +1167,18 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     rows = rows.slice(0, limit)
 
     // 5. Reconciliation: account ad spend (campaign-level) vs Σ attributed.
-    const acct = await prisma.amazonAdsDailyPerformance.aggregate({
+    // AME.2 — per-currency so a future non-EUR marketplace converts to the EUR
+    // base before summing (no-op while all ad data is EUR).
+    const acctRows = await prisma.amazonAdsDailyPerformance.groupBy({
+      by: ['currencyCode'],
       where: { entityType: 'CAMPAIGN', date: { gte: since }, ...(mkt ? { marketplace: mkt } : {}) },
       _sum: { costMicros: true },
     })
-    const accountSpendCents = Math.round(Number(acct._sum.costMicros ?? 0n) / 10_000)
+    const acctFx = await buildEurRateMap(acctRows.map((r) => r.currencyCode))
+    const accountSpendCents = acctRows.reduce(
+      (s, r) => s + toEurCents(microsToCents(r._sum.costMicros), acctFx.get(r.currencyCode) ?? 1),
+      0,
+    )
     const attributedSpendCents = rows.reduce((s, r) => s + r.adSpendCents, 0)
 
     // PC.5 — prior equal-length window totals for vs-period deltas.
@@ -1248,18 +1251,20 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const ads = await prisma.adProductAd.findMany({ where: { productId: { in: childIds } }, select: { id: true, productId: true, asin: true, adGroup: { select: { campaign: { select: { id: true, marketplace: true } } } } } })
     const adIds = ads.map((a) => a.id)
     const perAd = adIds.length ? await prisma.amazonAdsDailyPerformance.groupBy({
-      by: ['localEntityId'],
+      by: ['localEntityId', 'currencyCode'],
       where: { entityType: 'PRODUCT_AD', localEntityId: { in: adIds }, date: { gte: since }, ...(mkt ? { marketplace: mkt } : {}) },
       _sum: { costMicros: true, sales7dCents: true, impressions: true, clicks: true, orders7d: true },
     }) : []
     const prodByAd = new Map(ads.map((a) => [a.id, a.productId]))
+    const variantFx = await buildEurRateMap(perAd.map((r) => r.currencyCode))
     const adByVariant = new Map<string, { spendC: number; salesC: number; impr: number; clicks: number }>()
     for (const r of perAd) {
       const pid = r.localEntityId ? prodByAd.get(r.localEntityId) : null
       if (!pid) continue
+      const rate = variantFx.get(r.currencyCode) ?? 1
       const cur = adByVariant.get(pid) ?? { spendC: 0, salesC: 0, impr: 0, clicks: 0 }
-      cur.spendC += Math.round(Number(r._sum.costMicros ?? 0n) / 10_000)
-      cur.salesC += r._sum.sales7dCents ?? 0
+      cur.spendC += toEurCents(microsToCents(r._sum.costMicros), rate)
+      cur.salesC += toEurCents(r._sum.sales7dCents ?? 0, rate)
       cur.impr += r._sum.impressions ?? 0
       cur.clicks += r._sum.clicks ?? 0
       adByVariant.set(pid, cur)
@@ -1337,7 +1342,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       if (!c) continue
       let g = byCampaign.get(c.id)
       if (!g) { g = { id: c.id, name: c.name, marketplace: c.marketplace, status: c.status, adProduct: c.adProduct, dailyBudgetCents: Math.round(parseFloat(String(c.dailyBudget ?? '0')) * 100), spendC: 0, salesC: 0, impr: 0, clicks: 0, orders: 0 }; byCampaign.set(c.id, g) }
-      g.spendC += Math.round(Number(r._sum.costMicros ?? 0n) / 10_000)
+      g.spendC += microsToCents(r._sum.costMicros)
       g.salesC += r._sum.sales7dCents ?? 0
       g.impr += r._sum.impressions ?? 0
       g.clicks += r._sum.clicks ?? 0
@@ -1800,7 +1805,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       if (!arr) continue
       arr[i] = metric === 'clicks'
         ? (r._sum.clicks ?? 0)
-        : Math.round(Number(r._sum.costMicros ?? 0n) / 10_000) // cents
+        : microsToCents(r._sum.costMicros) // cents
     }
 
     reply.header('Cache-Control', 'private, max-age=120')
@@ -2087,10 +2092,10 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       prisma.amazonAdsDailyPerformance.groupBy({ by: ['date'], where: { entityType: 'PRODUCT_AD', date: { gte: since } }, _sum: { costMicros: true }, _count: { _all: true } }),
       prisma.amazonAdsDailyPerformance.groupBy({ by: ['date'], where: { entityType: 'CAMPAIGN', date: { gte: since } }, _sum: { costMicros: true } }),
     ])
-    const campByDate = new Map(camp.map((r) => [r.date.toISOString().slice(0, 10), Math.round(Number(r._sum.costMicros ?? 0n) / 10_000)]))
+    const campByDate = new Map(camp.map((r) => [r.date.toISOString().slice(0, 10), microsToCents(r._sum.costMicros)]))
     const byDay = pa.map((r) => {
       const d = r.date.toISOString().slice(0, 10)
-      const paCents = Math.round(Number(r._sum.costMicros ?? 0n) / 10_000)
+      const paCents = microsToCents(r._sum.costMicros)
       const campCents = campByDate.get(d) ?? 0
       return { date: d, productAdEur: paCents / 100, campaignEur: campCents / 100, rows: r._count._all, ratio: campCents > 0 ? Math.round((paCents / campCents) * 100) / 100 : null }
     }).sort((a, b) => a.date.localeCompare(b.date))
