@@ -3446,57 +3446,9 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     try { return await applyTopOfSearchRecommendations(b) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
   })
 
-  // ── AME.13: bidding-engine contract ─────────────────────────────────
-  // The services/bidding-engine microservice pulls BidContexts from here, runs
-  // the inventory-elasticity formula, writes bids to Amazon, then acks back.
-  // Optionally protected by NEXUS_INTERNAL_BIDDING_TOKEN (Bearer). The live
-  // run needs the engine deployed (Redis); these endpoints make it wireable.
-  function internalBiddingGuard(request: { headers: Record<string, unknown> }): boolean {
-    const token = process.env.NEXUS_INTERNAL_BIDDING_TOKEN
-    if (!token) return true
-    const auth = request.headers['authorization']
-    return typeof auth === 'string' && auth === `Bearer ${token}`
-  }
-  fastify.get('/internal/bidding/contexts', async (request, reply) => {
-    if (!internalBiddingGuard(request)) { reply.status(401); return { error: 'unauthorized' } }
-    const q = request.query as { marketplace?: string; limit?: string }
-    const limit = Math.min(Number(q.limit) || 500, 2000)
-    const targets = await prisma.adTarget.findMany({
-      where: { status: 'ENABLED', isNegative: false, externalTargetId: { not: null }, clicks: { gt: 0 }, ...(q.marketplace ? { adGroup: { campaign: { marketplace: q.marketplace } } } : {}) },
-      take: limit,
-      orderBy: { spendCents: 'desc' },
-      select: { id: true, externalTargetId: true, bidCents: true, clicks: true, ordersCount: true, salesCents: true, adGroup: { select: { campaign: { select: { marketplace: true } } } } },
-    })
-    const conns = await prisma.amazonAdsConnection.findMany({ where: { isActive: true }, select: { marketplace: true, profileId: true } })
-    const profByMkt = new Map(conns.map((c) => [c.marketplace, c.profileId]))
-    const contexts = targets.map((t) => {
-      const cr = t.clicks > 0 ? t.ordersCount / t.clicks : 0
-      const mkt = t.adGroup?.campaign?.marketplace ?? null
-      return {
-        bridgeId: t.id,
-        externalId: t.externalTargetId!,
-        accountRef: (mkt && profByMkt.get(mkt)) || 'unknown',
-        currentBidMinor: t.bidCents,
-        aovMinor: t.ordersCount > 0 ? Math.round(t.salesCents / t.ordersCount) : 0,
-        cr7d: cr, cr30d: cr, // lifetime proxy until target-level windowed CR lands
-        acosTargetBps: 3000,
-        acos1hBps: null, // populated once AMS delivers hourly target ACOS
-        daysOfSupply: null, // inventory join (future) — null = elasticity θ of 1
-        bidMinMinor: 5,
-        bidMaxMinor: Math.max(t.bidCents * 3, 200),
-      }
-    })
-    return { contexts }
-  })
-  fastify.post('/internal/bidding/applied', async (request, reply) => {
-    if (!internalBiddingGuard(request)) { reply.status(401); return { error: 'unauthorized' } }
-    const b = (request.body ?? {}) as { bridgeId?: string; externalId?: string; bidMinor?: number; prevBidMinor?: number; status?: string }
-    if (!b.bridgeId || b.bidMinor == null) { reply.status(400); return { error: 'bridgeId + bidMinor required' } }
-    if (b.status === 'applied') {
-      await prisma.adTarget.update({ where: { id: b.bridgeId }, data: { bidCents: Math.max(5, Math.round(b.bidMinor)) } }).catch(() => {})
-    }
-    return { ok: true }
-  })
+  // AME.13: the /internal/bidding/* contract endpoints live further below
+  // (a concurrent session landed a token-gated + action-logged version — kept
+  // as the single source of truth to avoid a duplicate-route boot crash).
 
   // ── AX.11: Search-term n-gram analysis ──────────────────────────────
   fastify.get('/advertising/ngrams', async (request, reply) => {
