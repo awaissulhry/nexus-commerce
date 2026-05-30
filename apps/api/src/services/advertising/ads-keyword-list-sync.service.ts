@@ -125,7 +125,7 @@ export async function syncKeywordsForAdGroups(opts: { profileId: string; region:
  * positives left by the v1 export (whose nested bid coerced to 0). Groups ad
  * groups by connection profile/region and chunks the list filter.
  */
-export async function resyncAllCampaignKeywords(opts: { chunk?: number } = {}): Promise<{ profiles: number; adGroups: number; positives: number; negatives: number; upserted: number; targetsUpdated: number; mode: string }> {
+export async function resyncAllCampaignKeywords(opts: { chunk?: number } = {}): Promise<{ profiles: number; adGroups: number; positives: number; negatives: number; upserted: number; targetsUpdated: number; stampedDefault?: number; mode: string }> {
   const chunk = opts.chunk ?? 40
   const mode = adsMode()
   if (mode === 'sandbox') return { profiles: 0, adGroups: 0, positives: 0, negatives: 0, upserted: 0, targetsUpdated: 0, mode }
@@ -162,8 +162,18 @@ export async function resyncAllCampaignKeywords(opts: { chunk?: number } = {}): 
       if (tg) { targetsUpdated += tg.updated }
     }
   }
-  logger.info('[kw-resync-all] done', { profiles: agsByProfile.size, adGroups, positives, negatives, upserted, targetsUpdated })
-  return { profiles: agsByProfile.size, adGroups, positives, negatives, upserted, targetsUpdated, mode }
+  // AF.7d — any ENABLED positive target still at €0 after both v3 syncs is a
+  // stale row (its v1 id no longer matches a live Amazon clause) or an
+  // auto-targeting clause inheriting the ad-group default. Stamp it with the
+  // ad-group default bid so no enabled target misleadingly shows €0 — the
+  // hourly resync still overwrites with the real bid for any we can fetch.
+  const stamped = await prisma.$executeRaw`
+    UPDATE "AdTarget" t SET "bidCents" = ag."defaultBidCents", "updatedAt" = NOW()
+    FROM "AdGroup" ag
+    WHERE t."adGroupId" = ag.id AND t."isNegative" = false
+      AND t.status = 'ENABLED' AND t."bidCents" <= 0 AND ag."defaultBidCents" > 0`
+  logger.info('[kw-resync-all] done', { profiles: agsByProfile.size, adGroups, positives, negatives, upserted, targetsUpdated, stampedDefault: stamped })
+  return { profiles: agsByProfile.size, adGroups, positives, negatives, upserted, targetsUpdated, stampedDefault: stamped, mode }
 }
 
 /** Resolve a campaign's profile + ad groups, then sync its keywords via the list API. */
