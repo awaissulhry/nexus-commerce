@@ -11248,6 +11248,93 @@ Return ONLY valid JSON, no prose:
   // for every series in the catalog. With { sku, channel, marketplace }
   // body, regenerates a single series (useful for debugging a specific
   // SKU's forecast in dev / after a manual data correction).
+  // RX.S1 — lean per-SKU sales over an operator-chosen timeframe. Kept
+  // SEPARATE from the heavy /fulfillment/replenishment payload so changing
+  // the timeframe re-runs only ONE small DailySalesAggregate groupBy — not
+  // the whole forecast + ATP + recommendation pipeline. The grid merges the
+  // returned { sku → units } map into its rows by SKU.
+  //
+  // Timeframe: ?preset=today|yesterday|7|10|30|60|90  OR  ?from=YYYY-MM-DD&to=YYYY-MM-DD
+  // Optional channel/marketplace filters mirror the main grid for parity.
+  fastify.get('/fulfillment/replenishment/sales-by-sku', async (request, reply) => {
+    try {
+      const q = request.query as {
+        preset?: string
+        from?: string
+        to?: string
+        channel?: string
+        marketplace?: string
+      }
+      // Resolve [from, to] (inclusive, UTC date boundaries).
+      const today = new Date()
+      today.setUTCHours(0, 0, 0, 0)
+      const dayMs = 86400000
+      const parseDate = (s?: string): Date | null => {
+        if (!s || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return null
+        const d = new Date(`${s}T00:00:00.000Z`)
+        return Number.isNaN(d.getTime()) ? null : d
+      }
+      let from: Date
+      let to: Date
+      let label: string
+      const customFrom = parseDate(q.from)
+      const customTo = parseDate(q.to)
+      if (customFrom && customTo) {
+        from = customFrom <= customTo ? customFrom : customTo
+        to = customFrom <= customTo ? customTo : customFrom
+        label = `${q.from} → ${q.to}`
+      } else {
+        const preset = (q.preset ?? '30').toLowerCase()
+        if (preset === 'today') {
+          from = new Date(today); to = new Date(today); label = 'Today'
+        } else if (preset === 'yesterday') {
+          from = new Date(today.getTime() - dayMs); to = new Date(from); label = 'Yesterday'
+        } else {
+          const n = Math.min(730, Math.max(1, Math.round(Number(preset) || 30)))
+          from = new Date(today.getTime() - (n - 1) * dayMs)
+          to = new Date(today)
+          label = `Last ${n}d`
+        }
+      }
+      const channelFilter = q.channel && q.channel !== 'ALL' ? q.channel.toUpperCase() : null
+      const marketplaceFilter =
+        q.marketplace && q.marketplace !== 'GLOBAL' && q.marketplace !== 'ALL'
+          ? q.marketplace.toUpperCase()
+          : null
+
+      const grouped = await prisma.dailySalesAggregate.groupBy({
+        by: ['sku'],
+        where: {
+          day: { gte: from, lte: to },
+          ...(channelFilter ? { channel: channelFilter } : {}),
+          ...(marketplaceFilter ? { marketplace: marketplaceFilter } : {}),
+        },
+        _sum: { unitsSold: true, grossRevenue: true },
+      })
+      const items: Record<string, { units: number; revenueCents: number }> = {}
+      for (const g of grouped) {
+        items[g.sku] = {
+          units: g._sum.unitsSold ?? 0,
+          revenueCents: Math.round(Number(g._sum.grossRevenue ?? 0) * 100),
+        }
+      }
+      const days = Math.round((to.getTime() - from.getTime()) / dayMs) + 1
+      return {
+        ok: true,
+        range: {
+          from: from.toISOString().slice(0, 10),
+          to: to.toISOString().slice(0, 10),
+          days,
+          label,
+        },
+        items,
+      }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[replenishment/sales-by-sku] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
   // RX.B1 — read-only preview of the category seasonal indices that the
   // forecaster will apply. Lets an operator (and us) eyeball the curve and
   // its data backing BEFORE trusting it on live order recommendations.
