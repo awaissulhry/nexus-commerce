@@ -16,6 +16,60 @@
 
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
+import { liveCall, adsMode, type AdsRegion } from './ads-api-client.js'
+
+// AME.9 — the AWS destination Amazon pushes AMS messages to (an SQS queue ARN
+// or a Firehose delivery-stream ARN the operator provisions + grants Amazon
+// access to). Until this is set, subscriptions cannot be created and the live
+// feed stays dormant (the ingest endpoint simply receives nothing).
+const AMS_DESTINATION_ARN = process.env.NEXUS_AMS_DESTINATION_ARN || ''
+
+// AMS datasets we care about for intraday optimisation. sp-traffic =
+// impressions/clicks/cost by hour; sp-conversion = attributed sales/orders.
+export const AMS_DATASETS = ['sp-traffic', 'sp-conversion'] as const
+export type AmsDataset = (typeof AMS_DATASETS)[number]
+
+export interface AmsSubscriptionInput { profileId: string; region: AdsRegion; dataSetId: string; destinationArn?: string; notes?: string }
+
+/**
+ * Create an Amazon Marketing Stream subscription for a dataset, pointing at the
+ * operator's AWS destination. Idempotency is the caller's responsibility (list
+ * first). Sandbox mode is a no-op so the flow is exercisable without AWS.
+ */
+export async function createAmsSubscription(input: AmsSubscriptionInput): Promise<unknown> {
+  const arn = input.destinationArn || AMS_DESTINATION_ARN
+  if (!arn) throw new Error('No AMS destination ARN configured — set NEXUS_AMS_DESTINATION_ARN (SQS/Firehose ARN) or pass destinationArn.')
+  if (adsMode() === 'sandbox') return { sandbox: true, dataSetId: input.dataSetId, destinationArn: arn, status: 'SANDBOX_NOOP' }
+  return liveCall({
+    profileId: input.profileId,
+    region: input.region,
+    method: 'POST',
+    path: '/streams/subscriptions',
+    body: { dataSetId: input.dataSetId, destinationArn: arn, notes: input.notes ?? 'Nexus AMS subscription' },
+  })
+}
+
+export async function listAmsSubscriptions(profileId: string, region: AdsRegion): Promise<unknown> {
+  if (adsMode() === 'sandbox') return { subscriptions: [] }
+  return liveCall({ profileId, region, method: 'GET', path: '/streams/subscriptions' })
+}
+
+export async function deleteAmsSubscription(profileId: string, region: AdsRegion, subscriptionId: string): Promise<unknown> {
+  if (adsMode() === 'sandbox') return { sandbox: true, subscriptionId }
+  return liveCall({ profileId, region, method: 'DELETE', path: `/streams/subscriptions/${encodeURIComponent(subscriptionId)}` })
+}
+
+/** Health: is AMS configured, and is hourly data actually flowing in? */
+export async function amsStatus(): Promise<{ configured: boolean; mode: string; hourlyRows: number; lastReportedAt: Date | null; lastDate: Date | null }> {
+  const agg = await prisma.amazonAdsHourlyPerformance.aggregate({ _count: { _all: true }, _max: { reportedAt: true, date: true } }).catch(() => null)
+  return {
+    configured: !!AMS_DESTINATION_ARN,
+    mode: adsMode(),
+    hourlyRows: agg?._count._all ?? 0,
+    lastReportedAt: agg?._max.reportedAt ?? null,
+    lastDate: agg?._max.date ?? null,
+  }
+}
 
 interface AmsTrafficMsg { dataset_id?: string; marketplace_id?: string; currency?: string; campaign_id?: string; profileId?: string; time_window_start?: string; impressions?: number; clicks?: number; cost?: number }
 interface AmsConversionMsg { dataset_id?: string; campaign_id?: string; profileId?: string; time_window_start?: string; attributed_sales_1d?: number; attributed_conversions_1d?: number; attributed_units_ordered_1d?: number }

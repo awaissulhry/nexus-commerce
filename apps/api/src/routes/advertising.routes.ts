@@ -22,7 +22,7 @@
 import type { FastifyPluginAsync } from 'fastify'
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
-import { testConnection, adsMode } from '../services/advertising/ads-api-client.js'
+import { testConnection, adsMode, type AdsRegion } from '../services/advertising/ads-api-client.js'
 import { allocate, microsToCents, toEurCents } from '../services/advertising/ads-metrics-math.js'
 import { getFxRate } from '../services/fx-rate.service.js'
 import {
@@ -3351,6 +3351,46 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const messages = Array.isArray((b as { messages?: unknown[] })?.messages) ? (b as { messages: unknown[] }).messages : [b]
     const { ingestMarketingStream } = await import('../services/advertising/ads-marketing-stream.service.js')
     try { return await ingestMarketingStream(messages as never) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
+  })
+
+  // ── AME.9: Amazon Marketing Stream subscription management ───────────
+  // Live hourly feed requires the operator to provision an AWS destination
+  // (SQS/Firehose ARN) + create a subscription per dataset. These endpoints
+  // drive that once NEXUS_AMS_DESTINATION_ARN (or a passed ARN) is set.
+  async function firstActiveAdsProfile(): Promise<{ profileId: string; region: AdsRegion } | null> {
+    const c = await prisma.amazonAdsConnection.findFirst({ where: { isActive: true }, select: { profileId: true, region: true } })
+    if (!c) return null
+    return { profileId: c.profileId, region: (c.region === 'NA' || c.region === 'FE' ? c.region : 'EU') as AdsRegion }
+  }
+  fastify.get('/advertising/marketing-stream/status', async () => {
+    const { amsStatus } = await import('../services/advertising/ads-marketing-stream.service.js')
+    return amsStatus()
+  })
+  fastify.get('/advertising/marketing-stream/subscriptions', async (request, reply) => {
+    const prof = await firstActiveAdsProfile()
+    if (!prof) { reply.status(400); return { error: 'no active Amazon Ads connection' } }
+    const { listAmsSubscriptions } = await import('../services/advertising/ads-marketing-stream.service.js')
+    try { return await listAmsSubscriptions(prof.profileId, prof.region) } catch (e) { reply.status(502); return { error: (e as Error)?.message } }
+  })
+  fastify.post('/advertising/marketing-stream/subscriptions', async (request, reply) => {
+    const b = (request.body ?? {}) as { dataSetId?: string; destinationArn?: string; notes?: string; allDatasets?: boolean }
+    const prof = await firstActiveAdsProfile()
+    if (!prof) { reply.status(400); return { error: 'no active Amazon Ads connection' } }
+    const { createAmsSubscription, AMS_DATASETS } = await import('../services/advertising/ads-marketing-stream.service.js')
+    const datasets = b.allDatasets ? [...AMS_DATASETS] : b.dataSetId ? [b.dataSetId] : []
+    if (datasets.length === 0) { reply.status(400); return { error: 'dataSetId or allDatasets:true required' } }
+    try {
+      const results = []
+      for (const ds of datasets) results.push({ dataSetId: ds, result: await createAmsSubscription({ profileId: prof.profileId, region: prof.region, dataSetId: ds, destinationArn: b.destinationArn, notes: b.notes }) })
+      return { created: results }
+    } catch (e) { reply.status(502); return { error: (e as Error)?.message } }
+  })
+  fastify.delete('/advertising/marketing-stream/subscriptions/:id', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const prof = await firstActiveAdsProfile()
+    if (!prof) { reply.status(400); return { error: 'no active Amazon Ads connection' } }
+    const { deleteAmsSubscription } = await import('../services/advertising/ads-marketing-stream.service.js')
+    try { return await deleteAmsSubscription(prof.profileId, prof.region, id) } catch (e) { reply.status(502); return { error: (e as Error)?.message } }
   })
 
   // ── AX.11: Search-term n-gram analysis ──────────────────────────────
