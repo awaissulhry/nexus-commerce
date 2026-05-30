@@ -14,6 +14,7 @@ import Link from 'next/link'
 import { ChevronLeft, Check } from 'lucide-react'
 import { KpiStrip, type KpiTileSpec } from '@/app/_shared/grid-lens'
 import { StatusChip } from '@/app/_shared/ads-ui'
+import { CampaignTrendChart } from './CampaignTrendChart'
 import { getBackendUrl } from '@/lib/backend-url'
 import { Megaphone, MousePointerClick, ShoppingCart, TrendingUp } from 'lucide-react'
 
@@ -177,6 +178,7 @@ export function CampaignDetailCockpit({ campaign, history }: { campaign: Campaig
         {campaign.startDate && <><span>·</span><span>{campaign.startDate.slice(0, 10)} → {campaign.endDate?.slice(0, 10) ?? 'no end'}</span></>}
       </div>
       <KpiStrip tiles={tiles} className="mb-4" />
+      <CampaignTrendChart campaignId={campaign.id} />
 
       <nav className="border-b border-slate-200 dark:border-slate-800 mb-3 flex gap-1">
         {TABS.map(([k, label, n]) => (

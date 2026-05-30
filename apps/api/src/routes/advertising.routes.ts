@@ -976,11 +976,34 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       marketplace?: string
       adProduct?: string
       currencyCode?: string
+      campaignId?: string
     }
     const windowDays = Math.max(7, Math.min(180, Number(query.windowDays ?? 30)))
     const since = new Date()
     since.setUTCDate(since.getUTCDate() - windowDays)
     since.setUTCHours(0, 0, 0, 0)
+
+    // CD.1 — optional per-campaign scope. Resolve the campaign so we can
+    // filter the daily-perf rows to it (localEntityId is the indexed FK to
+    // Campaign.id; entityId holds the external Amazon id — match either so
+    // the chart works regardless of which the ingester populated). When
+    // campaign-scoped we drop the account-revenue/TACOS join: TACOS is an
+    // account-level metric and would mislead at the campaign grain.
+    let campaignScope: { localEntityId: string; entityId: string | null } | null = null
+    if (query.campaignId) {
+      const c = await prisma.campaign.findUnique({
+        where: { id: query.campaignId },
+        select: { id: true, externalCampaignId: true },
+      })
+      if (!c) { reply.status(404); return { error: 'campaign not found' } }
+      campaignScope = { localEntityId: c.id, entityId: c.externalCampaignId }
+    }
+    const campaignWhere = campaignScope
+      ? { OR: [
+          { localEntityId: campaignScope.localEntityId },
+          ...(campaignScope.entityId ? [{ entityId: campaignScope.entityId }] : []),
+        ] }
+      : {}
 
     // ── Ad performance per day ──────────────────────────────────────────
     const perfByDay = await prisma.amazonAdsDailyPerformance.groupBy({
@@ -988,6 +1011,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       where: {
         date: { gte: since },
         entityType: 'CAMPAIGN',
+        ...campaignWhere,
         ...(query.marketplace ? { marketplace: query.marketplace } : {}),
         ...(query.adProduct   ? { adProduct:   query.adProduct   } : {}),
         ...(query.currencyCode ? { currencyCode: query.currencyCode } : {}),
@@ -1004,7 +1028,8 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     })
 
     // ── Total Amazon revenue per day (SP-API Sales & Traffic) ──────────
-    const salesByDay = await prisma.dailySalesAggregate.groupBy({
+    // Skipped in campaign scope (TACOS is account-level, not per-campaign).
+    const salesByDay = campaignScope ? [] : await prisma.dailySalesAggregate.groupBy({
       by: ['day'],
       where: {
         day:     { gte: since },
