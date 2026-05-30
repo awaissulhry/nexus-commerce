@@ -128,7 +128,10 @@ export interface TargetAccuracyReport {
   duplicateSamples: Array<{ externalCampaignId: string; copies: number }>
   manualCampaignsMissingPositives: number
   missingPositiveSamples: Array<{ id: string; name: string; marketplace: string; negatives: number }>
-  totals: { positives: number; negatives: number; zeroBidPositives: number }
+  // zeroBidPositives = all non-negative targets at €0. zeroBidEnabledPositives
+  // = the ones that are also ENABLED — the real defect (an enabled keyword/
+  // target with no bid won't serve). Archived/paused €0 targets are benign.
+  totals: { positives: number; negatives: number; zeroBidPositives: number; zeroBidEnabledPositives: number }
   byMarketplace: Array<{ marketplace: string; campaigns: number; positives: number; negatives: number }>
 }
 
@@ -137,7 +140,7 @@ export async function reconcileTargetAccuracy(): Promise<TargetAccuracyReport> {
     where: { externalCampaignId: { not: null } },
     select: {
       id: true, name: true, marketplace: true, externalCampaignId: true,
-      adGroups: { select: { externalAdGroupId: true, targetingType: true, targets: { select: { isNegative: true, bidCents: true } } } },
+      adGroups: { select: { externalAdGroupId: true, targetingType: true, targets: { select: { isNegative: true, bidCents: true, status: true } } } },
     },
   })
 
@@ -146,7 +149,7 @@ export async function reconcileTargetAccuracy(): Promise<TargetAccuracyReport> {
   for (const c of campaigns) byExt.set(c.externalCampaignId!, (byExt.get(c.externalCampaignId!) ?? 0) + 1)
   const dupes = [...byExt.entries()].filter(([, n]) => n > 1)
 
-  let positives = 0, negatives = 0, zeroBidPositives = 0
+  let positives = 0, negatives = 0, zeroBidPositives = 0, zeroBidEnabledPositives = 0
   const missingPos: TargetAccuracyReport['missingPositiveSamples'] = []
   const mkt = new Map<string, { campaigns: number; positives: number; negatives: number }>()
 
@@ -156,7 +159,7 @@ export async function reconcileTargetAccuracy(): Promise<TargetAccuracyReport> {
     for (const ag of c.adGroups) {
       if (ag.targetingType !== 'AUTO' && ag.externalAdGroupId) hasManualAdGroup = true
       for (const t of ag.targets) {
-        if (t.isNegative) { cNeg++ } else { cPos++; if (!t.bidCents || t.bidCents <= 0) zeroBidPositives++ }
+        if (t.isNegative) { cNeg++ } else { cPos++; if (!t.bidCents || t.bidCents <= 0) { zeroBidPositives++; if (t.status === 'ENABLED') zeroBidEnabledPositives++ } }
       }
     }
     positives += cPos; negatives += cNeg
@@ -172,7 +175,7 @@ export async function reconcileTargetAccuracy(): Promise<TargetAccuracyReport> {
     duplicateSamples: dupes.slice(0, 10).map(([externalCampaignId, copies]) => ({ externalCampaignId, copies })),
     manualCampaignsMissingPositives: missingPos.length,
     missingPositiveSamples: missingPos.slice(0, 20),
-    totals: { positives, negatives, zeroBidPositives },
+    totals: { positives, negatives, zeroBidPositives, zeroBidEnabledPositives },
     byMarketplace: [...mkt.entries()].map(([marketplace, v]) => ({ marketplace, ...v })).sort((a, b) => b.campaigns - a.campaigns),
   }
 }
