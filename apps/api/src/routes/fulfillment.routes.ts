@@ -11875,16 +11875,20 @@ Return ONLY valid JSON, no prose:
 
       const rows = await prisma.dailySalesAggregate.findMany({
         where: { sku: { in: skus }, channel, marketplace, day: { gte: historyStart, lt: today } },
-        select: { sku: true, day: true, unitsSold: true, isStockOut: true },
+        select: { sku: true, day: true, unitsSold: true, isStockOut: true, sessions: true },
       })
-      const bySku = new Map<string, Map<string, { u: number; oos: boolean }>>()
+      const bySku = new Map<string, Map<string, { u: number; oos: boolean; sessions: number | null }>>()
       for (const r of rows) {
         let m = bySku.get(r.sku)
         if (!m) {
           m = new Map()
           bySku.set(r.sku, m)
         }
-        m.set(r.day.toISOString().slice(0, 10), { u: r.unitsSold, oos: !!r.isStockOut })
+        m.set(r.day.toISOString().slice(0, 10), {
+          u: r.unitsSold,
+          oos: !!r.isStockOut,
+          sessions: r.sessions ?? null,
+        })
       }
 
       const results: Array<{
@@ -11899,16 +11903,23 @@ Return ONLY valid JSON, no prose:
       let totalA = 0
       let oosDays = 0
       let totalDays = 0
+      let daysWithSessions = 0
       const ape: number[] = []
       for (const sku of skus) {
-        const m = bySku.get(sku) ?? new Map<string, { u: number; oos: boolean }>()
+        const m = bySku.get(sku) ?? new Map<string, { u: number; oos: boolean; sessions: number | null }>()
         const hist: number[] = []
         const oos: boolean[] = []
         const cur = new Date(historyStart)
         while (cur < today) {
           const rec = m.get(cur.toISOString().slice(0, 10))
           hist.push(rec?.u ?? 0)
-          oos.push(rec?.oos ?? false)
+          // Censored = explicit isStockOut OR derived (had sessions/traffic but
+          // zero sales → people looked but couldn't buy). The latter is how we
+          // actually detect stockouts since isStockOut is never populated.
+          const sessions = rec?.sessions ?? null
+          if (sessions != null) daysWithSessions++
+          const derivedCensored = sessions != null && sessions > 0 && (rec?.u ?? 0) === 0
+          oos.push((rec?.oos ?? false) || derivedCensored)
           cur.setUTCDate(cur.getUTCDate() + 1)
         }
         const train = hist.slice(0, hist.length - holdout)
@@ -11952,8 +11963,10 @@ Return ONLY valid JSON, no prose:
         marketplace,
         skusEvaluated: results.length,
         skusWithSales: withSales.length,
-        // If ~0, isStockOut isn't populated → unconstraining is a no-op.
-        stockOutDayPct: totalDays > 0 ? Math.round((oosDays / totalDays) * 1000) / 1000 : 0,
+        // Derived-censoring coverage. If daysWithSessions ~0, the sales-traffic
+        // backfill hasn't reached the training window yet (no signal to use).
+        censoringDayPct: totalDays > 0 ? Math.round((oosDays / totalDays) * 1000) / 1000 : 0,
+        daysWithSessions,
         constrained: {
           overallBias: totalA > 0 ? Math.round((totalF / totalA) * 1000) / 1000 : null,
           highVolumeBias: cHighBias != null ? Math.round(cHighBias * 1000) / 1000 : null,
