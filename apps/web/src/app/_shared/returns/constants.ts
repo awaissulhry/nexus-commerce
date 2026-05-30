@@ -53,4 +53,6 @@ export const ACTION_LABEL: Record<string, { label: string; tone: 'info' | 'succe
   'email-received':        { label: 'Email: received',          tone: 'info' },
   'email-refunded':        { label: 'Email: refunded',          tone: 'info' },
   'email-rejected':        { label: 'Email: rejected',          tone: 'warning' },
+  'email-authorized':      { label: 'Email: approved',          tone: 'info' },
+  'email-label_ready':     { label: 'Email: label ready',       tone: 'info' },
 }

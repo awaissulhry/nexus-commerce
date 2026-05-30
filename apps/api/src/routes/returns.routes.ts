@@ -1624,13 +1624,13 @@ const returnsRoutes: FastifyPluginAsync = async (fastify) => {
     try {
       const { id } = request.params as { id: string }
       const body = (request.body ?? {}) as {
-        kind?: 'received' | 'refunded' | 'rejected'
+        kind?: 'received' | 'refunded' | 'rejected' | 'authorized' | 'label_ready'
         locale?: 'it' | 'en'
         reason?: string
         toOverride?: string
       }
-      if (!body.kind || !['received', 'refunded', 'rejected'].includes(body.kind)) {
-        return reply.code(400).send({ error: 'kind must be received | refunded | rejected' })
+      if (!body.kind || !['received', 'refunded', 'rejected', 'authorized', 'label_ready'].includes(body.kind)) {
+        return reply.code(400).send({ error: 'kind must be received | refunded | rejected | authorized | label_ready' })
       }
       const ret = await prisma.return.findUnique({
         where: { id },
