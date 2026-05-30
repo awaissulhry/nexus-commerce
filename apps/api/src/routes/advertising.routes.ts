@@ -1230,6 +1230,53 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     return { windowDays, metric, entityType, axis, series }
   })
 
+  // CD.12 — dayparting heatmap. Aggregates the hourly store (CD.11) into a
+  // weekday × hour grid in Europe/Rome wall-clock time (the AT TIME ZONE
+  // double-cast: stored UTC → Rome, never a single cast). Powers "which hours
+  // convert" + convert-aware scheduling. Empty until AMS hourly data lands.
+  // GET /advertising/campaigns/:id/dayparting?windowDays=30
+  fastify.get('/advertising/campaigns/:id/dayparting', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const q = request.query as { windowDays?: string }
+    const windowDays = Math.max(7, Math.min(90, Number(q.windowDays ?? 30)))
+    const campaign = await prisma.campaign.findUnique({ where: { id }, select: { id: true, externalCampaignId: true } })
+    if (!campaign) { reply.status(404); return { error: 'campaign not found' } }
+    const since = new Date(); since.setUTCDate(since.getUTCDate() - windowDays); since.setUTCHours(0, 0, 0, 0)
+
+    // dow: 0=Sunday..6=Saturday (Postgres EXTRACT(DOW)). hour: 0-23 Rome.
+    const rows = await prisma.$queryRaw<Array<{ dow: number; hour: number; cost: bigint | null; orders: bigint | null; sales: bigint | null; impressions: bigint | null; clicks: bigint | null }>>`
+      SELECT EXTRACT(DOW FROM ts_rome)::int AS dow,
+             EXTRACT(HOUR FROM ts_rome)::int AS hour,
+             SUM("costMicros") AS cost,
+             SUM(COALESCE("orders7d", 0)) AS orders,
+             SUM(COALESCE("sales7dCents", 0)) AS sales,
+             SUM("impressions") AS impressions,
+             SUM("clicks") AS clicks
+      FROM (
+        SELECT (("date" + (("hour")::text || ' hours')::interval) AT TIME ZONE 'UTC' AT TIME ZONE 'Europe/Rome') AS ts_rome,
+               "costMicros", "orders7d", "sales7dCents", "impressions", "clicks"
+        FROM "AmazonAdsHourlyPerformance"
+        WHERE ("localEntityId" = ${campaign.id} OR "entityId" = ${campaign.externalCampaignId ?? '__none__'})
+          AND "date" >= ${since}
+      ) t
+      GROUP BY dow, hour
+      ORDER BY dow, hour`
+
+    const cells = rows.map((r) => {
+      const costCents = Math.round(Number(r.cost ?? 0n) / 10_000)
+      const salesCents = Number(r.sales ?? 0n)
+      return {
+        dow: r.dow, hour: r.hour, costCents, salesCents,
+        orders: Number(r.orders ?? 0n),
+        impressions: Number(r.impressions ?? 0n),
+        clicks: Number(r.clicks ?? 0n),
+        acos: salesCents > 0 ? Math.round((costCents / salesCents) * 1000) / 10 : null,
+      }
+    })
+    reply.header('Cache-Control', 'private, max-age=300')
+    return { windowDays, timezone: 'Europe/Rome', hasData: cells.length > 0, cells }
+  })
+
   //   - per-adProduct live status from the adapter registry
   //   - report job counts by status
   //   - search-term cardinality + negative-keyword-candidate count

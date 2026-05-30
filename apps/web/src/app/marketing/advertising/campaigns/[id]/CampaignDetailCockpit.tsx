@@ -23,6 +23,7 @@ import { CampaignRecommendations } from './CampaignRecommendations'
 import { CampaignHealth, type HealthFactor } from './CampaignHealth'
 import { CampaignProfitLens } from './CampaignProfitLens'
 import { CampaignCopyModal } from './CampaignCopyModal'
+import { CampaignDayparting } from './CampaignDayparting'
 import { Sparkline } from './Sparkline'
 
 interface TrendSummary { impressions: number; clicks: number; orders: number; spendCents: number; salesCents: number; acos: number | null; roas: number | null; ctr: number | null }
@@ -52,7 +53,7 @@ const ago = (iso: string | null | undefined) => {
   return `${Math.round(s / 86400)}d ago`
 }
 
-type Tab = 'adgroups' | 'targeting' | 'searchterms' | 'bidadjust' | 'negatives' | 'settings' | 'history'
+type Tab = 'adgroups' | 'targeting' | 'searchterms' | 'bidadjust' | 'dayparting' | 'negatives' | 'settings' | 'history'
 
 export function CampaignDetailCockpit({ campaign, history }: { campaign: CampaignDetailData; history: BidHistoryRow[] }) {
   const [tab, setTab] = useState<Tab>('adgroups')
@@ -350,6 +351,7 @@ export function CampaignDetailCockpit({ campaign, history }: { campaign: Campaig
     ['targeting', 'Targeting', targets.filter((t) => !t.expressionValue.startsWith('NOT ')).length],
     ['searchterms', 'Search terms', searchTerms?.length ?? 0],
     ['bidadjust', 'Bid adjustments', 0],
+    ['dayparting', 'Dayparting', 0],
     ['negatives', 'Negative targeting', addedNegs.length],
     ['settings', 'Campaign settings', 0],
     ['history', 'History', history.length],
@@ -511,6 +513,9 @@ export function CampaignDetailCockpit({ campaign, history }: { campaign: Campaig
           </div>
           <table className="w-full text-sm"><thead className="bg-slate-50 dark:bg-slate-900/60 text-xs text-slate-500"><tr><th className="text-left px-3 py-2">Placement</th><th className="text-right px-3 py-2">Adjustment</th><th className="text-right px-3 py-2">Impr</th><th className="text-right px-3 py-2">Clicks</th><th className="text-right px-3 py-2">Cost</th><th className="text-right px-3 py-2">Orders</th><th className="text-right px-3 py-2">14d</th></tr></thead>
           <tbody className="divide-y divide-slate-100 dark:divide-slate-800">{placements.length === 0 ? <tr><td colSpan={7} className="px-3 py-6 text-center text-slate-400 text-xs">No placement data yet.</td></tr> : placements.map((p, i) => <tr key={i} className="hover:bg-slate-50 dark:hover:bg-slate-900/40"><td className="px-3 py-1.5">{String(p.placement ?? '')}</td><td className="px-3 py-1.5 text-right tabular-nums">{Number(p.adjustmentPct ?? 0)}%</td><td className="px-3 py-1.5 text-right tabular-nums">{num(Number(p.impressions ?? 0))}</td><td className="px-3 py-1.5 text-right tabular-nums">{num(Number(p.clicks ?? 0))}</td><td className="px-3 py-1.5 text-right tabular-nums">{eur(Number(p.costMicros ?? 0) / 10000)}</td><td className="px-3 py-1.5 text-right tabular-nums">{num(Number(p.orders7d ?? 0))}</td><td className="px-3 py-1.5 text-right" title="Spend, last 14 days"><Sparkline data={placeTrend[String(p.placement ?? '')]} color="#0ea5e9" /></td></tr>)}</tbody></table></>
+        )}
+        {tab === 'dayparting' && (
+          <CampaignDayparting campaignId={campaign.id} marketplace={campaign.marketplace} refreshKey={liveTs ?? 0} />
         )}
         {tab === 'history' && (
           <table className="w-full text-sm"><thead className="bg-slate-50 dark:bg-slate-900/60 text-xs text-slate-500"><tr><th className="text-left px-3 py-2">Field</th><th className="text-left px-3 py-2">Change</th><th className="text-left px-3 py-2">By</th><th className="text-right px-3 py-2">When</th></tr></thead>
