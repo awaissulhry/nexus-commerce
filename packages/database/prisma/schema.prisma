@@ -9712,7 +9712,16 @@ model Review {
   // 'FIXTURE' | 'IMPORT_CSV' | 'AMAZON_VOC' | 'EBAY_API' | 'SHOPIFY_WEBHOOK' | 'MANUAL'
   ingestSource     String?
 
+  // RX.2 — Response Desk triage workflow. triageStatus null is treated
+  // as NEW by the app so existing rows need no backfill.
+  triageStatus     String? // NEW | IN_PROGRESS | RESPONDED | RESOLVED | IGNORED
+  assignee         String?
+  triageTags       String[]  @default([])
+  triageNote       String?
+  triageUpdatedAt  DateTime?
+
   sentiment ReviewSentiment?
+  responses ReviewResponse[]
 
   // RV.9.7 — Heuristic attribution back to the ReviewRequest that
   // likely caused this review. Set at ingest time by the analytics
@@ -9730,6 +9739,33 @@ model Review {
   @@index([attributedRequestId])
   @@index([attributedRuleId])
   @@index([channel, ingestedAt])
+  @@index([triageStatus])
+  @@index([assignee])
+}
+
+// RX.2 — Operator/AI replies to a review. A review can have several
+// (an AI draft, an edited send, a retry). status tracks the lifecycle;
+// only eBay supports a real public reply API today — Amazon/Shopify
+// rows are stored as internal/manual responses.
+model ReviewResponse {
+  id                   String    @id @default(cuid())
+  reviewId             String
+  review               Review    @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  channel              String // AMAZON | EBAY | SHOPIFY
+  locale               String? // it | de | fr | es | en
+  body                 String
+  status               String    @default("DRAFT") // DRAFT | SENT | FAILED
+  isAiDrafted          Boolean   @default(false)
+  model                String?
+  createdBy            String?
+  providerResponseCode String?
+  errorMessage         String?
+  sentAt               DateTime?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  @@index([reviewId])
+  @@index([status])
 }
 
 // SR.1 — Per-review AI classification. 1:1 with Review. Categories

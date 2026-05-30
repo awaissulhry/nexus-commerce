@@ -12,10 +12,17 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { List, Grid, Package, AlertTriangle, Bot, Mail, SlidersHorizontal, Upload } from 'lucide-react'
+import { List, Grid, Package, AlertTriangle, Bot, Mail, SlidersHorizontal, Upload, Inbox } from 'lucide-react'
 
 const TABS = [
   { href: '/marketing/reviews', label: 'Feed', icon: List, exact: true },
+  // RX.2 — Response Desk: triage + AI-drafted replies.
+  {
+    href: '/marketing/reviews/desk',
+    label: 'Desk',
+    icon: Inbox,
+    exact: false,
+  },
   {
     href: '/marketing/reviews/heatmap',
     label: 'Heatmap',

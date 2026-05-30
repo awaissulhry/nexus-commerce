@@ -28,6 +28,8 @@ import {
   applyReviewImport,
   type CanonicalField,
 } from '../services/reviews/review-import.service.js'
+import { draftReviewReply } from '../services/reviews/review-reply.service.js'
+import { respondToEbayFeedback } from '../services/reviews/adapters/ebay-feedback.adapter.js'
 import { runReviewRuleEvaluatorOnce } from '../jobs/review-rule-evaluator.job.js'
 import { runReviewMailerOnce } from '../jobs/review-request-mailer.job.js'
 
@@ -45,10 +47,20 @@ const reviewsRoutes: FastifyPluginAsync = async (fastify) => {
       sinceDays?: string
       search?: string
       limit?: string
+      channel?: string
+      triageStatus?: string
+      assignee?: string
     }
     const where: Record<string, unknown> = {}
     if (q.marketplace) where.marketplace = q.marketplace
+    if (q.channel) where.channel = q.channel
     if (q.productId) where.productId = q.productId
+    if (q.assignee) where.assignee = q.assignee
+    if (q.triageStatus) {
+      // null triageStatus is treated as NEW.
+      where.triageStatus =
+        q.triageStatus === 'NEW' ? { in: ['NEW', null] } : q.triageStatus
+    }
     if (q.sinceDays) {
       const d = Number(q.sinceDays)
       if (Number.isFinite(d) && d > 0) {
@@ -77,6 +89,7 @@ const reviewsRoutes: FastifyPluginAsync = async (fastify) => {
       include: {
         sentiment: true,
         product: { select: { id: true, sku: true, name: true, productType: true } },
+        _count: { select: { responses: true } },
       },
     })
     reply.header('Cache-Control', 'private, max-age=30')
@@ -340,6 +353,173 @@ const reviewsRoutes: FastifyPluginAsync = async (fastify) => {
       reply.code(400)
       return { error: 'import_failed', message: err instanceof Error ? err.message : String(err) }
     }
+  })
+
+  // ── GET /reviews/desk/stats (RX.2) ──────────────────────────────────
+  // Triage workqueue counters. null triageStatus counts as NEW.
+  fastify.get('/reviews/desk/stats', async (request, reply) => {
+    const q = request.query as { channel?: string; marketplace?: string }
+    const base: Record<string, unknown> = {}
+    if (q.channel) base.channel = q.channel
+    if (q.marketplace) base.marketplace = q.marketplace
+    const grouped = await prisma.review.groupBy({
+      by: ['triageStatus'],
+      where: base,
+      _count: { _all: true },
+    })
+    const counts: Record<string, number> = {
+      NEW: 0,
+      IN_PROGRESS: 0,
+      RESPONDED: 0,
+      RESOLVED: 0,
+      IGNORED: 0,
+    }
+    for (const g of grouped) {
+      const key = g.triageStatus ?? 'NEW'
+      counts[key] = (counts[key] ?? 0) + g._count._all
+    }
+    const open = counts.NEW + counts.IN_PROGRESS
+    reply.header('Cache-Control', 'private, max-age=15')
+    return { counts, open, total: Object.values(counts).reduce((a, b) => a + b, 0) }
+  })
+
+  // ── PATCH /reviews/:id/triage (RX.2) ────────────────────────────────
+  fastify.patch<{
+    Params: { id: string }
+    Body: { status?: string; assignee?: string | null; tags?: string[]; note?: string | null }
+  }>('/reviews/:id/triage', async (request, reply) => {
+    const { id } = request.params
+    const b = request.body ?? {}
+    const VALID = ['NEW', 'IN_PROGRESS', 'RESPONDED', 'RESOLVED', 'IGNORED']
+    if (b.status && !VALID.includes(b.status)) {
+      reply.code(400)
+      return { error: 'invalid_status' }
+    }
+    const existing = await prisma.review.findUnique({ where: { id }, select: { id: true } })
+    if (!existing) {
+      reply.code(404)
+      return { error: 'not_found' }
+    }
+    const data: Record<string, unknown> = { triageUpdatedAt: new Date() }
+    if (b.status !== undefined) data.triageStatus = b.status
+    if (b.assignee !== undefined) data.assignee = b.assignee
+    if (b.tags !== undefined) data.triageTags = b.tags
+    if (b.note !== undefined) data.triageNote = b.note
+    const review = await prisma.review.update({ where: { id }, data })
+    return { review }
+  })
+
+  // ── GET /reviews/:id/responses (RX.2) ───────────────────────────────
+  fastify.get<{ Params: { id: string } }>('/reviews/:id/responses', async (request) => {
+    const { id } = request.params
+    const items = await prisma.reviewResponse.findMany({
+      where: { reviewId: id },
+      orderBy: { createdAt: 'desc' },
+    })
+    return { items, count: items.length }
+  })
+
+  // ── POST /reviews/:id/reply/draft (RX.2) ────────────────────────────
+  // AI-draft a reply and persist it as a DRAFT ReviewResponse.
+  fastify.post<{
+    Params: { id: string }
+    Body: { locale?: 'it' | 'de' | 'fr' | 'es' | 'en'; tone?: string; instructions?: string }
+  }>('/reviews/:id/reply/draft', async (request, reply) => {
+    const { id } = request.params
+    const b = request.body ?? {}
+    const review = await prisma.review.findUnique({ where: { id }, select: { id: true, channel: true } })
+    if (!review) {
+      reply.code(404)
+      return { error: 'not_found' }
+    }
+    try {
+      const draft = await draftReviewReply({
+        reviewId: id,
+        locale: b.locale,
+        tone: (b.tone as 'auto' | 'apologetic' | 'appreciative' | 'neutral') ?? 'auto',
+        instructions: b.instructions,
+      })
+      const row = await prisma.reviewResponse.create({
+        data: {
+          reviewId: id,
+          channel: review.channel,
+          locale: draft.locale,
+          body: draft.text,
+          status: 'DRAFT',
+          isAiDrafted: draft.usedAi,
+          model: draft.model,
+        },
+      })
+      return { ok: true, response: row, usedAi: draft.usedAi, tone: draft.tone }
+    } catch (err) {
+      reply.code(500)
+      return { error: 'draft_failed', message: err instanceof Error ? err.message : String(err) }
+    }
+  })
+
+  // ── POST /reviews/:id/reply/send (RX.2) ─────────────────────────────
+  // eBay → real RespondToFeedback. Amazon/Shopify → no public reply API,
+  // so the operator posts manually and this records it (MANUAL) and
+  // marks the review RESPONDED.
+  fastify.post<{
+    Params: { id: string }
+    Body: { body?: string; responseId?: string; actor?: string }
+  }>('/reviews/:id/reply/send', async (request, reply) => {
+    const { id } = request.params
+    const b = request.body ?? {}
+    const review = await prisma.review.findUnique({
+      where: { id },
+      select: { id: true, channel: true, externalReviewId: true },
+    })
+    if (!review) {
+      reply.code(404)
+      return { error: 'not_found' }
+    }
+    const text = (b.body ?? '').trim()
+    if (!text) {
+      reply.code(400)
+      return { error: 'empty_body' }
+    }
+
+    let code = 'MANUAL'
+    let ok = true
+    let errorMessage: string | null = null
+
+    if (review.channel === 'EBAY') {
+      const res = await respondToEbayFeedback(review.externalReviewId, text)
+      ok = res.ok
+      code = res.code
+      errorMessage = res.error ?? null
+    }
+    // Amazon/Shopify: no public reply API — stored as MANUAL (operator
+    // posts on-platform and confirms here).
+
+    // Upsert the response row.
+    const baseData = {
+      channel: review.channel,
+      body: text,
+      status: ok ? 'SENT' : 'FAILED',
+      providerResponseCode: code,
+      errorMessage,
+      sentAt: ok ? new Date() : null,
+      createdBy: b.actor ?? 'user:anonymous',
+    }
+    let row
+    if (b.responseId) {
+      row = await prisma.reviewResponse.update({ where: { id: b.responseId }, data: baseData })
+    } else {
+      row = await prisma.reviewResponse.create({ data: { reviewId: id, ...baseData } })
+    }
+
+    if (ok) {
+      await prisma.review.update({
+        where: { id },
+        data: { triageStatus: 'RESPONDED', triageUpdatedAt: new Date() },
+      })
+    }
+
+    if (!ok) reply.code(502)
+    return { ok, response: row, code, error: errorMessage }
   })
 
   // ── GET /reviews/spikes ─────────────────────────────────────────────

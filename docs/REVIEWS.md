@@ -237,6 +237,37 @@ outage is recorded as a note/error and the others still ingest.
 
 ---
 
+## 13. RX.2 — Response Desk (triage + AI replies)
+
+`/marketing/reviews/desk` is a workqueue over every review.
+
+**Triage.** Each review has `triageStatus` (NEW → IN_PROGRESS → RESPONDED
+/ RESOLVED / IGNORED; null = NEW), an `assignee`, free `triageTags`, and
+an internal `triageNote`. Status tabs at the top show live counts; the
+channel filter narrows the queue. `PATCH /api/reviews/:id/triage`.
+
+**AI replies.** "Draft with AI" calls `POST /api/reviews/:id/reply/draft`
+→ `draftReviewReply()`: localized per the review's marketplace (IT/DE/FR/
+ES/EN, override in the UI), tone auto-selected from sentiment
+(apologetic / appreciative / neutral), on-brand via the Brand Brain voice
+block. Policy guardrails are in the system prompt (no incentives, never
+ask to change/remove the review, no links). Falls back to a localized
+template when `ANTHROPIC_API_KEY` is absent, so a draft always appears.
+Model override: `NEXUS_REVIEW_REPLY_MODEL` (default Haiku 4.5).
+
+**Sending.** `POST /api/reviews/:id/reply/send`:
+- **eBay** → real Trading API `RespondToFeedback` (gated by
+  `NEXUS_EBAY_REAL_API` + active connection). On success the review flips
+  to RESPONDED.
+- **Amazon / Shopify** → no public reply API exists, so the operator
+  posts on-platform and the desk records it as a `MANUAL` response and
+  marks RESPONDED.
+
+Every draft/send is logged as a `ReviewResponse` row (DRAFT / SENT /
+FAILED) for an auditable reply history.
+
+---
+
 ## 11. RV.9 — Operational polish notes
 
 **Setup nudge (RV.9.1).** If `/orders/reviews/rules` shows no active Xavia-IT rule (the most common first-run mistake), an amber banner offers a one-click "Set up Xavia IT default" — creates a rule with the 7–25d window, returns/refunds exclusions, sentiment diversion on. Same banner repairs misconfigured rules (scope=AMAZON_PER_MARKETPLACE but marketplace=null).

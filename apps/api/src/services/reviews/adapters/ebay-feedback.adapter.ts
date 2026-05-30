@@ -25,6 +25,72 @@ const TRADING_ENDPOINT =
     ? 'https://api.sandbox.ebay.com/ws/api.dll'
     : 'https://api.ebay.com/ws/api.dll'
 
+function escapeXml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;')
+}
+
+/**
+ * RX.2 — post a public seller reply to a received feedback comment
+ * (Trading API RespondToFeedback, ResponseType=Reply). Same opt-in +
+ * connection gating as the read path; never throws past its boundary.
+ */
+export async function respondToEbayFeedback(
+  feedbackId: string,
+  responseText: string,
+): Promise<{ ok: boolean; code: string; error?: string }> {
+  if (process.env.NEXUS_EBAY_REAL_API !== 'true') {
+    return { ok: false, code: 'OPT_IN_OFF', error: 'NEXUS_EBAY_REAL_API not enabled' }
+  }
+  const connection = await prisma.channelConnection.findFirst({
+    where: { channelType: 'EBAY', isActive: true },
+    orderBy: { lastSyncAt: 'desc' },
+  })
+  if (!connection) return { ok: false, code: 'NO_CONNECTION', error: 'no active eBay connection' }
+  let token: string
+  try {
+    token = await ebayAuthService.getValidToken(connection.id)
+  } catch (err) {
+    return { ok: false, code: 'TOKEN', error: err instanceof Error ? err.message : String(err) }
+  }
+  const compatLevel = process.env.EBAY_COMPAT_LEVEL || '1193'
+  const siteId = process.env.EBAY_SITE_ID || '101'
+  const xml =
+    `<?xml version="1.0" encoding="utf-8"?>` +
+    `<RespondToFeedbackRequest xmlns="urn:ebay:apis:eBLBaseComponents">` +
+    `<FeedbackID>${escapeXml(feedbackId)}</FeedbackID>` +
+    `<ResponseType>Reply</ResponseType>` +
+    `<ResponseText>${escapeXml(responseText)}</ResponseText>` +
+    `</RespondToFeedbackRequest>`
+  try {
+    const res = await fetch(TRADING_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        'X-EBAY-API-CALL-NAME': 'RespondToFeedback',
+        'X-EBAY-API-COMPATIBILITY-LEVEL': compatLevel,
+        'X-EBAY-API-SITEID': siteId,
+        'X-EBAY-API-IAF-TOKEN': token,
+        'Content-Type': 'text/xml',
+      },
+      body: xml,
+    })
+    if (!res.ok) return { ok: false, code: `HTTP_${res.status}`, error: `HTTP ${res.status}` }
+    const text = await res.text()
+    const ack = text.match(/<Ack>([^<]+)<\/Ack>/)?.[1]
+    if (ack === 'Failure') {
+      const msg = text.match(/<ShortMessage>([^<]+)<\/ShortMessage>/)?.[1]
+      return { ok: false, code: 'FAILURE', error: msg ?? 'unknown' }
+    }
+    return { ok: true, code: ack ?? 'Success' }
+  } catch (err) {
+    return { ok: false, code: 'EXCEPTION', error: err instanceof Error ? err.message : String(err) }
+  }
+}
+
 function commentTypeToRating(t: string | undefined): number | undefined {
   switch ((t ?? '').toLowerCase()) {
     case 'positive':
