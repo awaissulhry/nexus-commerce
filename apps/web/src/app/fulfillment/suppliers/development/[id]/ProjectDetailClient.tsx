@@ -26,7 +26,14 @@ type Candidate = {
   sampleStatus: string | null; isSelected: boolean; notes: string | null
   supplier: { id: string; name: string; leadTimeDays: number; defaultCurrency: string | null }
 }
-type DevAttachment = { id: string; kind: string; url: string; filename: string | null; uploadedAt: string }
+type DevAttachment = { id: string; kind: string; url: string; filename: string | null; uploadedAt: string; sortOrder?: number; caption?: string | null; includeInPack?: boolean }
+const ATT_KINDS = ['TECH_PACK', 'REFERENCE', 'MEASUREMENT', 'SAMPLE_PHOTO', 'OTHER'] as const
+function isImageFile(a: { filename: string | null; url: string }): boolean {
+  return /\.(jpe?g|png|webp|gif|bmp|tiff?)($|\?)/i.test(a.filename ?? a.url)
+}
+function isPdfFile(a: { filename: string | null; url: string }): boolean {
+  return /\.pdf($|\?)/i.test(a.filename ?? a.url)
+}
 type DevPo = { id: string; poNumber: string; status: string; poKind: string; totalCents: number }
 type DevCert = { id: string; type: string; status: string; required: boolean; certNumber: string | null; expiresAt: string | null }
 type SizeChart = { columns: string[]; rows: Array<{ size: string; values: string[] }>; tolerance?: string }
@@ -268,15 +275,26 @@ function SourcingTab({ p, suppliers, onReload, onPatchCandidate }: { p: ProjectD
 
 function FilesTab({ p, onReload }: { p: ProjectDetail; onReload: () => void }) {
   const [uploading, setUploading] = useState(false)
+  const patchAtt = async (aid: string, b: Record<string, unknown>) => { await fetch(`${API}/api/fulfillment/development/projects/${p.id}/attachments/${aid}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(b) }); onReload() }
+  const move = async (i: number, dir: -1 | 1) => {
+    const arr = [...p.attachments]
+    const j = i + dir
+    if (j < 0 || j >= arr.length) return
+    ;[arr[i], arr[j]] = [arr[j], arr[i]]
+    // persist sequential order
+    await Promise.all(arr.map((a, idx) => fetch(`${API}/api/fulfillment/development/projects/${p.id}/attachments/${a.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sortOrder: idx }) })))
+    onReload()
+  }
   return (
-    <Card title="Tech packs, references & sample photos" action={
+    <Card title="Tech packs, references & sample photos" description="What goes in the factory pack — toggle, caption, and order each file." action={
       <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2.5 py-1.5 text-base font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800">
         {uploading ? '…' : <><Upload size={14} /> Upload</>}
         <input type="file" className="hidden" disabled={uploading} onChange={async (e) => {
           const f = e.target.files?.[0]; if (!f) return
           setUploading(true)
           try {
-            const fd = new FormData(); fd.append('file', f); fd.append('kind', 'TECH_PACK')
+            const kind = /\.(jpe?g|png|webp|gif)$/i.test(f.name) ? 'REFERENCE' : 'TECH_PACK'
+            const fd = new FormData(); fd.append('file', f); fd.append('kind', kind)
             await fetch(`${API}/api/fulfillment/development/projects/${p.id}/attachments`, { method: 'POST', body: fd })
             e.target.value = ''; onReload()
           } finally { setUploading(false) }
@@ -286,15 +304,41 @@ function FilesTab({ p, onReload }: { p: ProjectDetail; onReload: () => void }) {
       {p.attachments.length === 0 ? (
         <p className="text-sm text-slate-500 dark:text-slate-400">No files yet. Upload tech packs, reference art, measurement sheets, or sample photos.</p>
       ) : (
-        <div className="space-y-1.5">
-          {p.attachments.map((a) => (
-            <div key={a.id} className="flex items-center gap-2 rounded-md border border-slate-200 dark:border-slate-800 px-2.5 py-1.5 text-base">
-              <FileText size={15} className="text-slate-400" />
-              <Badge variant="default" size="sm">{a.kind}</Badge>
-              <a href={a.url} target="_blank" rel="noopener noreferrer" className="min-w-0 flex-1 truncate text-blue-700 hover:underline dark:text-blue-300">{a.filename ?? 'file'}</a>
-              <button onClick={async () => { await fetch(`${API}/api/fulfillment/development/projects/${p.id}/attachments/${a.id}`, { method: 'DELETE' }); onReload() }} className="text-slate-400 hover:text-rose-500"><Trash2 size={14} /></button>
-            </div>
-          ))}
+        <div className="space-y-2">
+          {p.attachments.map((a, i) => {
+            const img = isImageFile(a)
+            return (
+              <div key={a.id} className="flex items-start gap-3 rounded-md border border-slate-200 dark:border-slate-800 p-2">
+                <div className="flex flex-col gap-0.5 pt-1">
+                  <button onClick={() => move(i, -1)} disabled={i === 0} className="text-slate-400 hover:text-slate-700 disabled:opacity-30">▲</button>
+                  <button onClick={() => move(i, 1)} disabled={i === p.attachments.length - 1} className="text-slate-400 hover:text-slate-700 disabled:opacity-30">▼</button>
+                </div>
+                {img ? (
+                  <a href={a.url} target="_blank" rel="noopener noreferrer" className="shrink-0">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={a.url} alt={a.caption ?? a.filename ?? ''} className="h-14 w-14 rounded object-cover ring-1 ring-slate-200 dark:ring-slate-700" />
+                  </a>
+                ) : (
+                  <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded bg-slate-100 dark:bg-slate-800">
+                    {isPdfFile(a) ? <FileText size={20} className="text-rose-500" /> : <FileText size={20} className="text-slate-400" />}
+                  </div>
+                )}
+                <div className="min-w-0 flex-1 space-y-1">
+                  <div className="flex items-center gap-2">
+                    <select defaultValue={a.kind} onChange={(e) => patchAtt(a.id, { kind: e.target.value })} className="h-7 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-1.5 text-sm text-slate-700 dark:text-slate-200 focus:outline-none">
+                      {ATT_KINDS.map((k) => <option key={k} value={k}>{k.replace(/_/g, ' ')}</option>)}
+                    </select>
+                    <a href={a.url} target="_blank" rel="noopener noreferrer" className="min-w-0 flex-1 truncate text-base text-blue-700 hover:underline dark:text-blue-300">{a.filename ?? 'file'}</a>
+                    <label className="inline-flex items-center gap-1.5 text-sm text-slate-600 dark:text-slate-400">
+                      <input type="checkbox" defaultChecked={a.includeInPack !== false} onChange={(e) => patchAtt(a.id, { includeInPack: e.target.checked })} /> in pack
+                    </label>
+                    <button onClick={async () => { await fetch(`${API}/api/fulfillment/development/projects/${p.id}/attachments/${a.id}`, { method: 'DELETE' }); onReload() }} className="text-slate-400 hover:text-rose-500"><Trash2 size={14} /></button>
+                  </div>
+                  <input defaultValue={a.caption ?? ''} onBlur={(e) => patchAtt(a.id, { caption: e.target.value })} placeholder="Caption (e.g. logo placement, stitching detail)…" className="h-8 w-full rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 text-base text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                </div>
+              </div>
+            )
+          })}
         </div>
       )}
     </Card>
