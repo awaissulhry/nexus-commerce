@@ -8,7 +8,8 @@ import { CalendarClock } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 
 interface DayRow { weekday: number; label: string; impressions: number; clicks: number; costCents: number; orders: number; salesCents: number; cvr: number | null; acos: number | null; cvrIndex: number | null; recommend: 'bid-up' | 'keep' | 'bid-down' }
-interface Intel { windowDays: number; campaignId: string | null; days: DayRow[]; overallCvr: number | null; recommendedWindows: Array<{ days: number[]; startHour: number; endHour: number }>; note: string }
+interface HourRow { hour: number; impressions: number; clicks: number; costCents: number; orders: number; salesCents: number; cvr: number | null; acos: number | null; cvrIndex: number | null; recommend: 'bid-up' | 'keep' | 'bid-down' }
+interface Intel { windowDays: number; campaignId: string | null; days: DayRow[]; hours?: HourRow[]; hourlyAvailable?: boolean; peakHours?: number[]; weakHours?: number[]; overallCvr: number | null; recommendedWindows: Array<{ days: number[]; startHour: number; endHour: number }>; note: string }
 
 const pct = (v: number | null, dp = 1) => (v == null ? '—' : `${(v * 100).toFixed(dp)}%`)
 const eur = (c: number) => new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(c / 100)
@@ -65,6 +66,24 @@ export function DaypartingIntel({ onCreated }: { onCreated?: () => void }) {
             <div className="text-[10px] opacity-80 tabular-nums">{d.orders} ord · {eur(d.costCents)}</div>
           </div>
         ))}
+      </div>
+
+      {/* AME.10 — hour-of-day profile (Amazon Marketing Stream). */}
+      <div className="mb-3">
+        <div className="flex items-center justify-between mb-1">
+          <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Hour of day (UTC)</span>
+          {!intel?.hourlyAvailable && <span className="text-[11px] text-slate-400">Activate Amazon Marketing Stream for live hourly signal →</span>}
+        </div>
+        <div className="grid grid-cols-12 gap-1 sm:grid-cols-24" style={{ gridTemplateColumns: 'repeat(24, minmax(0, 1fr))' }}>
+          {Array.from({ length: 24 }, (_, h) => {
+            const hr = intel?.hours?.find((x) => x.hour === h)
+            return (
+              <div key={h} className={`rounded px-0.5 py-1 text-center ${heat(hr?.cvrIndex ?? null)}`} title={`${String(h).padStart(2, '0')}:00 UTC · CVR ${pct(hr?.cvr ?? null)} · ${hr?.orders ?? 0} ord`}>
+                <div className="text-[9px] font-medium tabular-nums">{String(h).padStart(2, '0')}</div>
+              </div>
+            )
+          })}
+        </div>
       </div>
 
       {intel && (
