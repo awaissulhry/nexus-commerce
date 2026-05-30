@@ -149,7 +149,8 @@ type Candidate = {
   notes: string | null
   supplier: { id: string; name: string; leadTimeDays: number; defaultCurrency: string | null }
 }
-type ProjectDetail = Project & { candidates: Candidate[] }
+type DevAttachment = { id: string; kind: string; url: string; filename: string | null; uploadedAt: string }
+type ProjectDetail = Project & { candidates: Candidate[]; attachments: DevAttachment[] }
 
 function ProjectDrawer({ id, onClose }: { id: string; onClose: () => void }) {
   const [p, setP] = useState<ProjectDetail | null>(null)
@@ -246,6 +247,33 @@ function ProjectDrawer({ id, onClose }: { id: string; onClose: () => void }) {
                       {['REQUESTED', 'RECEIVED', 'APPROVED', 'REJECTED'].map((s) => <option key={s} value={s}>{s}</option>)}
                     </select>
                     <button onClick={() => delCandidate(c.id)} className="text-slate-600 hover:text-rose-400">✕</button>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* PD.7 — tech packs / reference art / sample photos */}
+            <div>
+              <div className="mb-1 flex items-center justify-between">
+                <span className="text-[10px] uppercase tracking-wide text-slate-500">Tech packs &amp; references</span>
+                <label className="cursor-pointer rounded border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] text-slate-200 hover:bg-slate-700">
+                  + Upload
+                  <input type="file" className="hidden" onChange={async (e) => {
+                    const f = e.target.files?.[0]; if (!f) return
+                    const fd = new FormData(); fd.append('file', f); fd.append('kind', 'TECH_PACK')
+                    await fetch(`${API}/api/fulfillment/development/projects/${id}/attachments`, { method: 'POST', body: fd })
+                    e.target.value = ''
+                    void load()
+                  }} />
+                </label>
+              </div>
+              <div className="space-y-1">
+                {p.attachments.length === 0 && <div className="text-[11px] text-slate-500">No files yet.</div>}
+                {p.attachments.map((a) => (
+                  <div key={a.id} className="flex items-center gap-2 rounded border border-slate-800 px-2 py-1 text-[11px]">
+                    <span className="rounded bg-slate-800 px-1 text-[9px] text-slate-400">{a.kind}</span>
+                    <a href={a.url} target="_blank" rel="noopener noreferrer" className="min-w-0 flex-1 truncate text-blue-400 hover:underline">{a.filename ?? 'file'}</a>
+                    <button onClick={async () => { await fetch(`${API}/api/fulfillment/development/projects/${id}/attachments/${a.id}`, { method: 'DELETE' }); void load() }} className="text-slate-600 hover:text-rose-400">✕</button>
                   </div>
                 ))}
               </div>
