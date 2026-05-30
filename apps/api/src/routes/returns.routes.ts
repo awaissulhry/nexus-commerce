@@ -198,6 +198,23 @@ const returnsRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // RX.6a — defect → recall signals (migration-free). Clusters defect
+  // returns (DAMAGED/UNUSABLE grade or SCRAP/QUARANTINE disposition) by
+  // product and lists the product's active lots as recall candidates,
+  // for hand-off to the L-series recall workflow.
+  fastify.get('/fulfillment/returns/defect-recall', async (request, reply) => {
+    try {
+      const q = request.query as { windowDays?: string }
+      const windowDays = q.windowDays ? Number(q.windowDays) : 90
+      const { computeDefectRecallSignals } = await import(
+        '../services/returns-defect-recall.service.js'
+      )
+      return reply.send(await computeDefectRecallSignals({ windowDays }))
+    } catch (error: any) {
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
   // R1.1 — list endpoint upgrades:
   //   q       — case-insensitive search across rmaNumber, reason,
   //             notes, returnTrackingNumber, channelReturnId, and
