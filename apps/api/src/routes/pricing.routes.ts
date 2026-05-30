@@ -1375,6 +1375,94 @@ const pricingRoutes: FastifyPluginAsync = async (fastify) => {
     return { decisions }
   })
 
+  // ── PH.2: Price-change history feed ─────────────────────────────────────
+  // GET /api/pricing/price-history
+  //   ?productId= | sku=   (one required)
+  //   &channel= &marketplace=   (optional coordinate filters)
+  //   &from= &to=   (optional ISO date window)
+  //   &limit=   (default 100, max 500)
+  //
+  // Read-only timeline read from PriceChangeEvent (PH.1). Powers the
+  // /pricing matrix drawer: a chronological list of changes with source +
+  // reason, plus per-coordinate sparkline series (chronological newPrice
+  // points) so the UI can chart price-over-time without a second call.
+  fastify.get('/pricing/price-history', async (request, reply) => {
+    try {
+      const q = request.query as {
+        productId?: string
+        sku?: string
+        channel?: string
+        marketplace?: string
+        from?: string
+        to?: string
+        limit?: string
+      }
+      if (!q.productId && !q.sku) {
+        return reply.code(400).send({ error: 'productId or sku required' })
+      }
+
+      const where: Prisma.PriceChangeEventWhereInput = {}
+      if (q.productId) where.productId = q.productId
+      if (q.sku) where.sku = q.sku
+      if (q.channel) where.channel = q.channel.toUpperCase()
+      if (q.marketplace) where.marketplace = q.marketplace.toUpperCase()
+      if (q.from || q.to) {
+        const changedAt: Prisma.DateTimeFilter = {}
+        if (q.from) changedAt.gte = new Date(q.from)
+        if (q.to) changedAt.lte = new Date(q.to)
+        where.changedAt = changedAt
+      }
+
+      const limit = Math.min(parseInt(q.limit ?? '100', 10) || 100, 500)
+
+      const rows = await prisma.priceChangeEvent.findMany({
+        where,
+        orderBy: { changedAt: 'desc' },
+        take: limit,
+      })
+
+      // Per-coordinate sparkline series, oldest→newest so the chart reads
+      // left-to-right. CLEARs (newPrice null) are skipped as points but
+      // still appear in the events list below.
+      const seriesMap = new Map<
+        string,
+        { channel: string; marketplace: string; points: Array<{ t: Date; price: number }> }
+      >()
+      for (const e of [...rows].reverse()) {
+        if (e.newPrice == null) continue
+        const key = `${e.channel}|${e.marketplace}`
+        let s = seriesMap.get(key)
+        if (!s) {
+          s = { channel: e.channel, marketplace: e.marketplace, points: [] }
+          seriesMap.set(key, s)
+        }
+        s.points.push({ t: e.changedAt, price: Number(e.newPrice) })
+      }
+
+      return {
+        count: rows.length,
+        events: rows.map((e) => ({
+          id: e.id,
+          channel: e.channel,
+          marketplace: e.marketplace,
+          fulfillmentMethod: e.fulfillmentMethod,
+          oldPrice: e.oldPrice == null ? null : Number(e.oldPrice),
+          newPrice: e.newPrice == null ? null : Number(e.newPrice),
+          currency: e.currency,
+          source: e.source,
+          reason: e.reason,
+          ruleId: e.ruleId,
+          actor: e.actor,
+          changedAt: e.changedAt,
+        })),
+        series: [...seriesMap.values()],
+      }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[pricing/price-history] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
   // AC.9 — Per-product Buy Box state for the Amazon Listing Cockpit.
   //
   // Returns the latest BuyBoxHistory observation for the product on a
