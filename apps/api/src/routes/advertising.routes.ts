@@ -2227,6 +2227,15 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     return { ok: true, ...summary }
   })
 
+  // POST /api/advertising/v1/exports/refresh-expired (AF.1)
+  // Re-GETs Amazon for COMPLETED jobs whose presigned URL lapsed (rowsIngested=0)
+  // so they get a fresh URL + can finally ingest (recovers lost positive keywords).
+  fastify.post('/advertising/v1/exports/refresh-expired', async (request) => {
+    const q = request.query as { limit?: string }
+    const { refreshExpiredCompletedExports } = await import('../services/advertising/ads-v1-sync.service.js')
+    return refreshExpiredCompletedExports(q.limit ? Number(q.limit) : 40)
+  })
+
   // POST /api/advertising/v1/exports/ingest-completed
   // Ingests up to 10 COMPLETED jobs per call.
   fastify.post('/advertising/v1/exports/ingest-completed', async (_request, _reply) => {

@@ -283,6 +283,39 @@ export async function pollPendingExports(limit = 20): Promise<PollSummary> {
   return summary
 }
 
+// ── 2b. Refresh expired-URL completed exports (AF.1) ───────────────────
+// COMPLETED jobs with rowsIngested=0 whose presigned URL lapsed were never
+// re-polled (poll only handles PENDING/IN_PROGRESS) → their rows (incl. positive
+// keywords) were lost forever. Re-GET Amazon to mint a fresh URL so they ingest.
+export async function refreshExpiredCompletedExports(limit = 40): Promise<{ refreshed: number; checked: number; errors: string[] }> {
+  const now = new Date()
+  const jobs = await prisma.amazonAdsExportJob.findMany({
+    where: { status: 'COMPLETED', rowsIngested: 0, OR: [{ url: null }, { urlExpiresAt: { lt: now } }] },
+    orderBy: { completedAt: 'desc' },
+    take: limit,
+  })
+  let refreshed = 0
+  const errors: string[] = []
+  for (const job of jobs) {
+    try {
+      const conn = await prisma.amazonAdsConnection.findUnique({ where: { profileId: job.profileId }, select: { region: true } })
+      const region: AdsRegion = (conn?.region === 'NA' || conn?.region === 'FE') ? (conn.region as AdsRegion) : 'EU'
+      const mime = RESOURCE_MIME[job.resource as V1Resource]
+      const status = await liveCall<{ status: string; url?: string; urlExpiresAt?: string }>({
+        profileId: job.profileId, region, method: 'GET', path: `/exports/${job.externalExportId}`, acceptHeader: mime,
+      })
+      if ((status.status ?? '').toUpperCase() === 'COMPLETED' && status.url) {
+        await prisma.amazonAdsExportJob.update({
+          where: { id: job.id },
+          data: { url: status.url, urlExpiresAt: status.urlExpiresAt ? new Date(status.urlExpiresAt) : null, lastPolledAt: new Date() },
+        })
+        refreshed += 1
+      }
+    } catch (err) { errors.push(`${job.id}: ${(err instanceof Error ? err.message : String(err)).slice(0, 120)}`) }
+  }
+  return { refreshed, checked: jobs.length, errors }
+}
+
 // ── 3. Ingest completed export ────────────────────────────────────────
 
 export interface IngestResult {
@@ -480,9 +513,13 @@ async function ingestTargets(records: V1Target[]): Promise<{ upserted: number; b
   })
   const agMap = new Map(adGroups.map((g) => [g.externalAdGroupId ?? '', g.id]))
 
-  let upserted = 0
   // AF.1 — instrument where rows go (positives were missing fleet-wide).
   const bd = { seen: records.length, noTargetId: 0, noAdGroupId: 0, noLocalAdGroup: 0, positives: 0, negatives: 0, kwPositives: 0 }
+  // AF.1 — batch the upserts. The old per-row findFirst+write was so slow that
+  // large targets exports timed out before finishing (URLs then expired → rows
+  // lost). Build rows, bulk-fetch existing, createMany new + parallel-update.
+  type Row = { key: string; adGroupId: string; externalTargetId: string; data: Record<string, unknown> }
+  const rows: Row[] = []
   for (const r of records) {
     if (!r.targetId) { bd.noTargetId++; continue }
     if (!r.adGroupId) { bd.noAdGroupId++; continue } // campaign-level negatives
@@ -493,43 +530,36 @@ async function ingestTargets(records: V1Target[]): Promise<{ upserted: number; b
     const kind = (r.targetType ?? 'KEYWORD') as 'KEYWORD' | 'PRODUCT' | 'CATEGORY' | 'AUDIENCE'
     const expressionType = r.targetDetails?.matchType?.toUpperCase()
       ?? (kind === 'KEYWORD' ? 'BROAD' : kind === 'PRODUCT' ? 'ASIN' : 'UNKNOWN')
-    const expressionValue = r.targetDetails?.keyword
-      ?? r.targetDetails?.asin
-      ?? r.targetDetails?.categoryId
-      ?? ''
-    const data = {
-      adGroupId: localAdGroupId,
-      externalTargetId: r.targetId,
-      kind,
-      expressionType,
-      expressionValue,
-      bidCents: r.bid != null ? Math.round(r.bid * 100) : 0,
-      status: STATE_TO_PRISMA[stateLower] ?? 'ENABLED',
-      isNegative: r.negative === true,
-      negativeLevel: r.negative === true ? (r.targetLevel ?? null) : null,
-      deliveryStatus: r.deliveryStatus ?? null,
-      deliveryReasons: r.deliveryReasons ?? [],
-      lastSyncedAt: new Date(),
-      lastSyncStatus: 'SUCCESS' as const,
-      lastSyncError: null,
-    }
-    try {
-      const existing = await prisma.adTarget.findFirst({
-        where: { externalTargetId: r.targetId, adGroupId: localAdGroupId },
-        select: { id: true },
+    const expressionValue = r.targetDetails?.keyword ?? r.targetDetails?.asin ?? r.targetDetails?.categoryId ?? ''
+    rows.push({
+      key: `${localAdGroupId}|${r.targetId}`, adGroupId: localAdGroupId, externalTargetId: r.targetId,
+      data: {
+        adGroupId: localAdGroupId, externalTargetId: r.targetId, kind, expressionType, expressionValue,
+        bidCents: r.bid != null ? Math.round(r.bid * 100) : 0,
+        status: STATE_TO_PRISMA[stateLower] ?? 'ENABLED',
+        isNegative: r.negative === true,
+        negativeLevel: r.negative === true ? (r.targetLevel ?? null) : null,
+        deliveryStatus: r.deliveryStatus ?? null,
+        deliveryReasons: r.deliveryReasons ?? [],
+        lastSyncedAt: new Date(), lastSyncStatus: 'SUCCESS' as const, lastSyncError: null,
+      },
+    })
+  }
+  const existing = rows.length
+    ? await prisma.adTarget.findMany({
+        where: { adGroupId: { in: [...new Set(rows.map((x) => x.adGroupId))] }, externalTargetId: { in: rows.map((x) => x.externalTargetId) } },
+        select: { id: true, externalTargetId: true, adGroupId: true },
       })
-      if (existing) {
-        await prisma.adTarget.update({ where: { id: existing.id }, data })
-      } else {
-        await prisma.adTarget.create({ data })
-      }
-      upserted += 1
-    } catch (err) {
-      logger.warn('[ads-v1-sync] target upsert failed', {
-        targetId: r.targetId,
-        error: err instanceof Error ? err.message : String(err),
-      })
-    }
+    : []
+  const existKey = new Map(existing.map((e) => [`${e.adGroupId}|${e.externalTargetId}`, e.id]))
+  const toCreate: Array<Record<string, unknown>> = []
+  const toUpdate: Array<{ id: string; data: Record<string, unknown> }> = []
+  for (const x of rows) { const id = existKey.get(x.key); if (id) toUpdate.push({ id, data: x.data }); else toCreate.push(x.data) }
+  let upserted = 0
+  if (toCreate.length) { const c = await prisma.adTarget.createMany({ data: toCreate as never, skipDuplicates: true }); upserted += c.count }
+  for (let i = 0; i < toUpdate.length; i += 25) {
+    const chunk = toUpdate.slice(i, i + 25)
+    await Promise.all(chunk.map((u) => prisma.adTarget.update({ where: { id: u.id }, data: u.data }).then(() => { upserted++ }).catch((err) => logger.warn('[ads-v1-sync] target update failed', { id: u.id, error: String(err).slice(0, 120) }))))
   }
   logger.info('[ads-v1-sync] targets ingest breakdown', { ...bd, upserted })
   return { upserted, breakdown: { ...bd, upserted } }
