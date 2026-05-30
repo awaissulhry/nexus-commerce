@@ -10,6 +10,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { ChevronLeft, Megaphone, ShoppingCart, TrendingUp, Package, Search, Download } from 'lucide-react'
 import { KpiStrip, Thumbnail, type KpiTileSpec } from '@/app/_shared/grid-lens'
+import { useColumnResize } from '@/app/_shared/useColumnResize'
 import { StatusChip } from '@/app/_shared/ads-ui'
 import { marketplaceCode, marketplaceCountryName } from '@/lib/marketplace-code'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -67,6 +68,13 @@ export function AdGroupDetailCockpit({ adGroup }: { adGroup: AdGroupDetail }) {
   const [adStatus, setAdStatus] = useState('')
   const [sortKey, setSortKey] = useState<'spendCents' | 'salesCents' | 'acos' | 'roas' | 'orders' | 'name'>('spendCents')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
+
+  // AF.8 — resizable + persisted columns per Amazon Ads table.
+  const adCols = useColumnResize('ads:adgroup:ads', ['name', 'status', 'sku', 'cost', 'orders', 'sales', 'acos', 'roas'], { name: 260, status: 110, sku: 160, cost: 110, orders: 100, sales: 100, acos: 90, roas: 90 })
+  const tgtCols = useColumnResize('ads:adgroup:targeting', ['target', 'match', 'bid', 'status'], { target: 280, match: 110, bid: 110, status: 120 })
+  const stCols = useColumnResize('ads:adgroup:searchterms', ['query', 'match', 'impr', 'clicks', 'spend', 'orders', 'sales'], { query: 280, match: 110, impr: 90, clicks: 90, spend: 100, orders: 90, sales: 100 })
+  const negCols = useColumnResize('ads:adgroup:negatives', ['neg', 'match'], { neg: 320, match: 160 })
+  const histCols = useColumnResize('ads:adgroup:history', ['field', 'change', 'by', 'when'], { field: 160, change: 280, by: 140, when: 180 })
   const toggleSort = (k: typeof sortKey) => { if (sortKey === k) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc')); else { setSortKey(k); setSortDir(k === 'name' ? 'asc' : 'desc') } }
   const visibleAds = useMemo(() => {
     const q = adSearch.trim().toLowerCase()
@@ -230,10 +238,10 @@ export function AdGroupDetailCockpit({ adGroup }: { adGroup: AdGroupDetail }) {
                 <span className="ml-auto text-xs text-slate-400 tabular-nums">{visibleAds.length} of {data.ads.length}</span>
                 <button onClick={exportAdsCsv} className="inline-flex items-center gap-1 px-2.5 py-1 text-sm rounded-md border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800"><Download size={13} /> Export</button>
               </div>
-              <table className="w-full text-sm">
+              <table className="min-w-full text-sm" style={{ tableLayout: 'fixed', width: 'max-content' }}>
                 <thead className="bg-slate-50 dark:bg-slate-900/60 text-xs text-slate-500"><tr>
-                  <th className="text-left px-3 py-2" aria-sort={ariaSort('name')}><button onClick={() => toggleSort('name')} aria-label="Sort by ad name" className="hover:text-slate-700">Ad{sortIcon('name')}</button></th><th className="text-left px-3 py-2">Status</th><th className="text-left px-3 py-2">SKU / ASIN</th>
-                  <th className="text-right px-3 py-2" aria-sort={ariaSort('spendCents')}><button onClick={() => toggleSort('spendCents')} aria-label="Sort by total cost" className="hover:text-slate-700">Total cost{sortIcon('spendCents')}</button></th><th className="text-right px-3 py-2" aria-sort={ariaSort('orders')}><button onClick={() => toggleSort('orders')} aria-label="Sort by purchases" className="hover:text-slate-700">Purchases{sortIcon('orders')}</button></th><th className="text-right px-3 py-2" aria-sort={ariaSort('salesCents')}><button onClick={() => toggleSort('salesCents')} aria-label="Sort by sales" className="hover:text-slate-700">Sales{sortIcon('salesCents')}</button></th><th className="text-right px-3 py-2" aria-sort={ariaSort('acos')}><button onClick={() => toggleSort('acos')} aria-label="Sort by ACOS" className="hover:text-slate-700">ACOS{sortIcon('acos')}</button></th><th className="text-right px-3 py-2" aria-sort={ariaSort('roas')}><button onClick={() => toggleSort('roas')} aria-label="Sort by ROAS" className="hover:text-slate-700">ROAS{sortIcon('roas')}</button></th>
+                  <th {...adCols.thProps('name')} className="text-left px-3 py-2" aria-sort={ariaSort('name')}><button onClick={() => toggleSort('name')} aria-label="Sort by ad name" className="hover:text-slate-700">Ad{sortIcon('name')}</button><adCols.ResizeHandle col="name" /></th><th {...adCols.thProps('status')} className="text-left px-3 py-2">Status<adCols.ResizeHandle col="status" /></th><th {...adCols.thProps('sku')} className="text-left px-3 py-2">SKU / ASIN<adCols.ResizeHandle col="sku" /></th>
+                  <th {...adCols.thProps('cost')} className="text-right px-3 py-2" aria-sort={ariaSort('spendCents')}><button onClick={() => toggleSort('spendCents')} aria-label="Sort by total cost" className="hover:text-slate-700">Total cost{sortIcon('spendCents')}</button><adCols.ResizeHandle col="cost" /></th><th {...adCols.thProps('orders')} className="text-right px-3 py-2" aria-sort={ariaSort('orders')}><button onClick={() => toggleSort('orders')} aria-label="Sort by purchases" className="hover:text-slate-700">Purchases{sortIcon('orders')}</button><adCols.ResizeHandle col="orders" /></th><th {...adCols.thProps('sales')} className="text-right px-3 py-2" aria-sort={ariaSort('salesCents')}><button onClick={() => toggleSort('salesCents')} aria-label="Sort by sales" className="hover:text-slate-700">Sales{sortIcon('salesCents')}</button><adCols.ResizeHandle col="sales" /></th><th {...adCols.thProps('acos')} className="text-right px-3 py-2" aria-sort={ariaSort('acos')}><button onClick={() => toggleSort('acos')} aria-label="Sort by ACOS" className="hover:text-slate-700">ACOS{sortIcon('acos')}</button><adCols.ResizeHandle col="acos" /></th><th {...adCols.thProps('roas')} className="text-right px-3 py-2" aria-sort={ariaSort('roas')}><button onClick={() => toggleSort('roas')} aria-label="Sort by ROAS" className="hover:text-slate-700">ROAS{sortIcon('roas')}</button><adCols.ResizeHandle col="roas" /></th>
                 </tr></thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                   {visibleAds.length === 0 ? <tr><td colSpan={8} className="px-3 py-8 text-center text-slate-400 text-xs">{data.ads.length === 0 ? 'No ads in this ad group.' : 'No ads match your filters.'}</td></tr> : visibleAds.map((a) => (
@@ -259,8 +267,8 @@ export function AdGroupDetailCockpit({ adGroup }: { adGroup: AdGroupDetail }) {
               </table>
             </>)}
             {tab === 'targeting' && (
-              <table className="w-full text-sm">
-                <thead className="bg-slate-50 dark:bg-slate-900/60 text-xs text-slate-500"><tr><th className="text-left px-3 py-2">Target</th><th className="text-left px-3 py-2">Match</th><th className="text-right px-3 py-2">Bid</th><th className="text-left px-3 py-2">Status</th></tr></thead>
+              <table className="min-w-full text-sm" style={{ tableLayout: 'fixed', width: 'max-content' }}>
+                <thead className="bg-slate-50 dark:bg-slate-900/60 text-xs text-slate-500"><tr><th {...tgtCols.thProps('target')} className="text-left px-3 py-2">Target<tgtCols.ResizeHandle col="target" /></th><th {...tgtCols.thProps('match')} className="text-left px-3 py-2">Match<tgtCols.ResizeHandle col="match" /></th><th {...tgtCols.thProps('bid')} className="text-right px-3 py-2">Bid<tgtCols.ResizeHandle col="bid" /></th><th {...tgtCols.thProps('status')} className="text-left px-3 py-2">Status<tgtCols.ResizeHandle col="status" /></th></tr></thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                   {data.targets.filter((t) => !t.isNegative).length === 0 ? <tr><td colSpan={4} className="px-3 py-8 text-center text-slate-400 text-xs">No keyword/product targets. Auto-targeting ad groups discover terms automatically.</td></tr> : data.targets.filter((t) => !t.isNegative).map((t) => (
                     <tr key={t.id} className="hover:bg-slate-50 dark:hover:bg-slate-900/40">
@@ -281,8 +289,8 @@ export function AdGroupDetailCockpit({ adGroup }: { adGroup: AdGroupDetail }) {
             )}
             {tab === 'searchterms' && (
               searchTerms == null ? <div className="p-8 text-center text-slate-400 text-sm">Loading…</div> :
-              <table className="w-full text-sm">
-                <thead className="bg-slate-50 dark:bg-slate-900/60 text-xs text-slate-500"><tr><th className="text-left px-3 py-2">Search term</th><th className="text-left px-3 py-2">Match</th><th className="text-right px-3 py-2">Impr</th><th className="text-right px-3 py-2">Clicks</th><th className="text-right px-3 py-2">Spend</th><th className="text-right px-3 py-2">Orders</th><th className="text-right px-3 py-2">Sales</th></tr></thead>
+              <table className="min-w-full text-sm" style={{ tableLayout: 'fixed', width: 'max-content' }}>
+                <thead className="bg-slate-50 dark:bg-slate-900/60 text-xs text-slate-500"><tr><th {...stCols.thProps('query')} className="text-left px-3 py-2">Search term<stCols.ResizeHandle col="query" /></th><th {...stCols.thProps('match')} className="text-left px-3 py-2">Match<stCols.ResizeHandle col="match" /></th><th {...stCols.thProps('impr')} className="text-right px-3 py-2">Impr<stCols.ResizeHandle col="impr" /></th><th {...stCols.thProps('clicks')} className="text-right px-3 py-2">Clicks<stCols.ResizeHandle col="clicks" /></th><th {...stCols.thProps('spend')} className="text-right px-3 py-2">Spend<stCols.ResizeHandle col="spend" /></th><th {...stCols.thProps('orders')} className="text-right px-3 py-2">Orders<stCols.ResizeHandle col="orders" /></th><th {...stCols.thProps('sales')} className="text-right px-3 py-2">Sales<stCols.ResizeHandle col="sales" /></th></tr></thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                   {searchTerms.length === 0 ? <tr><td colSpan={7} className="px-3 py-8 text-center text-slate-400 text-xs">No search-term data yet (campaign-level report).</td></tr> : searchTerms.slice(0, 200).map((s, i) => (
                     <tr key={i} className="hover:bg-slate-50 dark:hover:bg-slate-900/40"><td className="px-3 py-1.5">{String(s.query ?? '')}</td><td className="px-3 py-1.5 text-xs text-slate-500">{String(s.matchType ?? '')}</td><td className="px-3 py-1.5 text-right tabular-nums">{num(Number(s.impressions ?? 0))}</td><td className="px-3 py-1.5 text-right tabular-nums">{num(Number(s.clicks ?? 0))}</td><td className="px-3 py-1.5 text-right tabular-nums">{eur(Number(s.costMicros ?? 0) / 10000)}</td><td className="px-3 py-1.5 text-right tabular-nums">{num(Number(s.orders7d ?? 0))}</td><td className="px-3 py-1.5 text-right tabular-nums">{eur(Number(s.sales7dCents ?? 0))}</td></tr>
@@ -293,8 +301,8 @@ export function AdGroupDetailCockpit({ adGroup }: { adGroup: AdGroupDetail }) {
             {tab === 'negatives' && (
               data.targets.filter((t) => t.isNegative).length === 0
                 ? <div className="p-4 text-sm text-slate-600 dark:text-slate-300">No negative keywords on this ad group yet.<div className="mt-3"><Link href={`/marketing/advertising/campaigns/${adGroup.campaign.id}`} className="inline-flex items-center gap-1 px-3 py-1.5 text-sm rounded-md bg-blue-600 text-white hover:bg-blue-700">Manage negative targeting →</Link></div></div>
-                : <table className="w-full text-sm">
-                    <thead className="bg-slate-50 dark:bg-slate-900/60 text-xs text-slate-500"><tr><th className="text-left px-3 py-2">Negative</th><th className="text-left px-3 py-2">Match</th></tr></thead>
+                : <table className="min-w-full text-sm" style={{ tableLayout: 'fixed', width: 'max-content' }}>
+                    <thead className="bg-slate-50 dark:bg-slate-900/60 text-xs text-slate-500"><tr><th {...negCols.thProps('neg')} className="text-left px-3 py-2">Negative<negCols.ResizeHandle col="neg" /></th><th {...negCols.thProps('match')} className="text-left px-3 py-2">Match<negCols.ResizeHandle col="match" /></th></tr></thead>
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                       {data.targets.filter((t) => t.isNegative).map((t) => (
                         <tr key={t.id} className="hover:bg-slate-50 dark:hover:bg-slate-900/40"><td className="px-3 py-1.5">{t.expressionValue}</td><td className="px-3 py-1.5 text-xs text-slate-500">Negative {t.expressionType.toLowerCase()}</td></tr>
@@ -314,8 +322,8 @@ export function AdGroupDetailCockpit({ adGroup }: { adGroup: AdGroupDetail }) {
             )}
             {tab === 'history' && (
               history == null ? <div className="p-8 text-center text-slate-400 text-sm">Loading…</div> :
-              <table className="w-full text-sm">
-                <thead className="bg-slate-50 dark:bg-slate-900/60 text-xs text-slate-500"><tr><th className="text-left px-3 py-2">Field</th><th className="text-left px-3 py-2">Change</th><th className="text-left px-3 py-2">By</th><th className="text-right px-3 py-2">When</th></tr></thead>
+              <table className="min-w-full text-sm" style={{ tableLayout: 'fixed', width: 'max-content' }}>
+                <thead className="bg-slate-50 dark:bg-slate-900/60 text-xs text-slate-500"><tr><th {...histCols.thProps('field')} className="text-left px-3 py-2">Field<histCols.ResizeHandle col="field" /></th><th {...histCols.thProps('change')} className="text-left px-3 py-2">Change<histCols.ResizeHandle col="change" /></th><th {...histCols.thProps('by')} className="text-left px-3 py-2">By<histCols.ResizeHandle col="by" /></th><th {...histCols.thProps('when')} className="text-right px-3 py-2">When<histCols.ResizeHandle col="when" /></th></tr></thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                   {history.length === 0 ? <tr><td colSpan={4} className="px-3 py-8 text-center text-slate-400 text-xs">No changes yet.</td></tr> : history.map((h, i) => (
                     <tr key={i}><td className="px-3 py-1.5">{String(h.field ?? '')}</td><td className="px-3 py-1.5 text-xs">{String(h.oldValue ?? '—')} → <span className="font-medium">{String(h.newValue ?? '—')}</span></td><td className="px-3 py-1.5 text-xs text-slate-500">{String(h.changedBy ?? '')}</td><td className="px-3 py-1.5 text-right text-xs text-slate-400">{h.changedAt ? new Date(String(h.changedAt)).toLocaleString() : ''}</td></tr>
