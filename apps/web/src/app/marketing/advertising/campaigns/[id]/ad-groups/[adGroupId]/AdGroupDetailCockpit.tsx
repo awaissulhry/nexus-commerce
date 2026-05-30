@@ -145,7 +145,8 @@ export function AdGroupDetailCockpit({ adGroup }: { adGroup: AdGroupDetail }) {
           <KpiStrip tiles={tiles} className="mb-3" />
           <CampaignTrendChart rows={trendRows} windowDays={windowDays} onWindowChange={setWindowDays} loading={false} />
 
-          <div className="rounded-lg border border-slate-200 dark:border-slate-800 mt-3">
+          {/* AF.4 — contain wide tables to this box (page no longer scrolls). */}
+          <div className="rounded-lg border border-slate-200 dark:border-slate-800 mt-3 overflow-x-auto">
             {tab === 'ads' && (<>
               <div className="flex flex-wrap items-center gap-2 px-3 py-2 border-b border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/40">
                 <div className="relative">

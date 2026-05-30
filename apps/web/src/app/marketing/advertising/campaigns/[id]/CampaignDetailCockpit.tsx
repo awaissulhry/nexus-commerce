@@ -467,7 +467,9 @@ export function CampaignDetailCockpit({ campaign, history }: { campaign: Campaig
           </>)}
 
           {clampMsg && <div className="my-2 px-3 py-1.5 text-xs rounded-md text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900">{clampMsg}</div>}
-          <div className="rounded-lg border border-slate-200 dark:border-slate-800 mt-3">
+          {/* AF.4 — overflow-x-auto contains a wide table to THIS box; without it
+              the table overflowed and scrolled the whole page (AME.5 regression). */}
+          <div className="rounded-lg border border-slate-200 dark:border-slate-800 mt-3 overflow-x-auto">
         {tab === 'adgroups' && (<>
           <div className="flex flex-wrap items-center gap-2 px-3 py-2 border-b border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/40">
             <div className="relative">
