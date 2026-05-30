@@ -903,6 +903,8 @@ export async function findNegativeKeywordCandidates(args: {
   profileId?: string
   /** Optional marketplace filter */
   marketplace?: string
+  /** Optional campaign filter (external Amazon campaign id) */
+  externalCampaignId?: string
 } = {}): Promise<NegativeKeywordCandidate[]> {
   const lookbackDays = args.lookbackDays ?? 30
   const minSpend = args.minSpend ?? 5
@@ -920,6 +922,7 @@ export async function findNegativeKeywordCandidates(args: {
       date: { gte: since },
       ...(args.profileId ? { profileId: args.profileId } : {}),
       ...(args.marketplace ? { marketplace: args.marketplace } : {}),
+      ...(args.externalCampaignId ? { campaignId: args.externalCampaignId } : {}),
     },
     _sum: {
       impressions: true,

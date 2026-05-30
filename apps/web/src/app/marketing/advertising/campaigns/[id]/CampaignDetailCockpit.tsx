@@ -18,6 +18,7 @@ import { KpiStrip, type KpiTileSpec } from '@/app/_shared/grid-lens'
 import { StatusChip } from '@/app/_shared/ads-ui'
 import { CampaignTrendChart, type TrendRow } from './CampaignTrendChart'
 import { CampaignBudgetPace } from './CampaignBudgetPace'
+import { CampaignRecommendations } from './CampaignRecommendations'
 
 interface TrendSummary { impressions: number; clicks: number; orders: number; spendCents: number; salesCents: number; acos: number | null; roas: number | null; ctr: number | null }
 import { getBackendUrl } from '@/lib/backend-url'
@@ -248,6 +249,7 @@ export function CampaignDetailCockpit({ campaign, history }: { campaign: Campaig
         </span>
       </div>
       <KpiStrip tiles={tiles} className="mb-4" />
+      <CampaignRecommendations campaignId={campaign.id} onNegate={addNegative} onGoToTab={(t) => setTab(t)} refreshKey={liveTs ?? 0} />
       <CampaignBudgetPace rows={trendRows} dailyBudget={campaign.dailyBudget} windowDays={windowDays} />
       <CampaignTrendChart rows={trendRows} windowDays={windowDays} onWindowChange={setWindowDays} loading={trendLoading} />
 

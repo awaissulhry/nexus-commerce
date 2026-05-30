@@ -799,6 +799,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       acosTarget?: string
       lowAcosTarget?: string
       marketplace?: string
+      campaignId?: string
     }
     const windowDays   = Math.max(7, Math.min(90, Number(query.windowDays   ?? 14)))
     const minSpendEur  = Math.max(0, Number(query.minSpendEur  ?? 1))
@@ -810,6 +811,22 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     since.setUTCDate(since.getUTCDate() - windowDays)
     since.setUTCHours(0, 0, 0, 0)
 
+    // CD.5 — optional per-campaign scope. Resolve the campaign once so every
+    // insight below narrows to it (negative-kw candidates by externalCampaignId,
+    // ACOS rows by entityId). When campaign-scoped we skip the STALE insight —
+    // that is an account-wide "which enabled campaigns went dark" sweep.
+    let scopeExtId: string | null = null
+    let scopeMarketplace: string | undefined = query.marketplace
+    if (query.campaignId) {
+      const c = await prisma.campaign.findUnique({
+        where: { id: query.campaignId },
+        select: { externalCampaignId: true, marketplace: true },
+      })
+      if (!c) { reply.status(404); return { error: 'campaign not found' } }
+      scopeExtId = c.externalCampaignId
+      scopeMarketplace = c.marketplace ?? query.marketplace
+    }
+
     const { findNegativeKeywordCandidates } = await import(
       '../services/advertising/ads-reports.service.js'
     )
@@ -819,7 +836,8 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       lookbackDays: windowDays,
       minSpend: minSpendEur,
       limit: 200,
-      ...(query.marketplace ? { marketplace: query.marketplace } : {}),
+      ...(scopeMarketplace ? { marketplace: scopeMarketplace } : {}),
+      ...(scopeExtId ? { externalCampaignId: scopeExtId } : {}),
     })
     const negKwTotalMicros = negKwRaw.reduce((s, r) => s + BigInt(r.totalCostMicros.toString()), 0n)
     const negKwInsight = negKwRaw.length === 0 ? null : {
@@ -845,7 +863,8 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       where: {
         date: { gte: since },
         entityType: 'CAMPAIGN',
-        ...(query.marketplace ? { marketplace: query.marketplace } : {}),
+        ...(scopeMarketplace ? { marketplace: scopeMarketplace } : {}),
+        ...(scopeExtId ? { entityId: scopeExtId } : {}),
       },
       _sum: {
         costMicros:    true,
@@ -920,7 +939,8 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     // ── 4. Stale ENABLED campaigns (no impressions in window) ───────────
-    const activeCampaigns = await prisma.campaign.findMany({
+    // Account-wide sweep — skipped when scoped to a single campaign.
+    const activeCampaigns = scopeExtId ? [] : await prisma.campaign.findMany({
       where: {
         status: 'ENABLED',
         externalCampaignId: { not: null },
