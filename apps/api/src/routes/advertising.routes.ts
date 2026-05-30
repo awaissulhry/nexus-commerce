@@ -2610,7 +2610,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   // positive keywords on createMany may be db-push'd, not in schema/migrations).
   fastify.get('/advertising/debug/adtarget-indexes', async () => {
     const idx = await prisma.$queryRawUnsafe<Array<{ indexname: string; indexdef: string }>>(
-      `SELECT indexname, indexdef FROM pg_indexes WHERE tablename = 'AdTarget'`,
+      `SELECT indexname::text AS indexname, indexdef::text AS indexdef FROM pg_indexes WHERE tablename = 'AdTarget'`,
     ).catch((e) => [{ indexname: 'error', indexdef: String(e).slice(0, 200) }])
     return { indexes: idx }
   })
