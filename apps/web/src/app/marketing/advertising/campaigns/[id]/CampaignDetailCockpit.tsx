@@ -14,7 +14,9 @@ import Link from 'next/link'
 import { ChevronLeft, Check } from 'lucide-react'
 import { KpiStrip, type KpiTileSpec } from '@/app/_shared/grid-lens'
 import { StatusChip } from '@/app/_shared/ads-ui'
-import { CampaignTrendChart } from './CampaignTrendChart'
+import { CampaignTrendChart, type TrendRow } from './CampaignTrendChart'
+
+interface TrendSummary { impressions: number; clicks: number; orders: number; spendCents: number; salesCents: number; acos: number | null; roas: number | null; ctr: number | null }
 import { getBackendUrl } from '@/lib/backend-url'
 import { Megaphone, MousePointerClick, ShoppingCart, TrendingUp } from 'lucide-react'
 
@@ -54,14 +56,42 @@ export function CampaignDetailCockpit({ campaign, history }: { campaign: Campaig
   const [addedNegs, setAddedNegs] = useState<Array<{ kind: string; value: string; match?: string }>>([])
   const [stAddBusy, setStAddBusy] = useState<string | null>(null)
 
-  const spendC = Math.round(parseFloat(campaign.spend || '0') * 100), salesC = Math.round(parseFloat(campaign.sales || '0') * 100)
-  const acos = campaign.acos != null ? parseFloat(campaign.acos) : salesC > 0 ? spendC / salesC : null
-  const roas = campaign.roas != null ? parseFloat(campaign.roas) : spendC > 0 ? salesC / spendC : null
+  // CD.1/CD.2 — campaign-scoped windowed trends + period-over-period compare.
+  // The single fetch powers both the chart (rows) and the windowed KPI tiles
+  // (summary + previous → ▲/▼ deltas). Defaults to 30d; window selector lives
+  // on the chart and is shared here.
+  const [windowDays, setWindowDays] = useState(30)
+  const [trendRows, setTrendRows] = useState<TrendRow[] | null>(null)
+  const [trendSummary, setTrendSummary] = useState<TrendSummary | null>(null)
+  const [trendPrev, setTrendPrev] = useState<TrendSummary | null>(null)
+  const [trendLoading, setTrendLoading] = useState(true)
+  const loadTrends = useCallback(async () => {
+    setTrendLoading(true)
+    try {
+      const r = await fetch(`${getBackendUrl()}/api/advertising/trends?campaignId=${campaign.id}&windowDays=${windowDays}&compare=true`, { cache: 'no-store' })
+        .then((x) => x.json()).catch(() => ({ rows: [] }))
+      setTrendRows(r.rows ?? [])
+      setTrendSummary(r.summary ?? null)
+      setTrendPrev(r.previous ?? null)
+    } finally { setTrendLoading(false) }
+  }, [campaign.id, windowDays])
+  useEffect(() => { void loadTrends() }, [loadTrends])
+
+  // Lifetime fallbacks (used until the windowed summary lands).
+  const lifeSpendC = Math.round(parseFloat(campaign.spend || '0') * 100), lifeSalesC = Math.round(parseFloat(campaign.sales || '0') * 100)
+  const sm = trendSummary
+  const impr = sm?.impressions ?? campaign.impressions
+  const clk = sm?.clicks ?? campaign.clicks
+  const spendC = sm?.spendCents ?? lifeSpendC
+  const salesC = sm?.salesCents ?? lifeSalesC
+  const acos = sm?.acos != null ? sm.acos / 100 : campaign.acos != null ? parseFloat(campaign.acos) : salesC > 0 ? spendC / salesC : null
+  const roas = sm?.roas != null ? sm.roas : campaign.roas != null ? parseFloat(campaign.roas) : spendC > 0 ? salesC / spendC : null
+  const dPct = (cur: number, prev: number | undefined | null) => (prev != null && prev > 0 ? Math.round(((cur - prev) / prev) * 1000) / 10 : null)
   const tiles: KpiTileSpec[] = [
-    { icon: Megaphone, label: 'Impressions', value: num(campaign.impressions), tone: 'slate', detail: `CTR ${pct(campaign.impressions ? campaign.clicks / campaign.impressions : null)}` },
-    { icon: MousePointerClick, label: 'Clicks', value: num(campaign.clicks), tone: 'blue', detail: `CPC ${eur(campaign.clicks ? spendC / campaign.clicks : null)}` },
-    { icon: ShoppingCart, label: 'Spend', value: eur(spendC), tone: 'amber', detail: `ACOS ${pct(acos)}` },
-    { icon: TrendingUp, label: 'Sales', value: eur(salesC), tone: 'violet', detail: `ROAS ${roas != null ? roas.toFixed(2) + '×' : '—'}` },
+    { icon: Megaphone, label: 'Impressions', value: num(impr), tone: 'slate', detail: `CTR ${pct(impr ? clk / impr : null)}`, ...(trendPrev ? { delta: { pct: dPct(impr, trendPrev.impressions), good: (dPct(impr, trendPrev.impressions) ?? 0) >= 0 } } : {}) },
+    { icon: MousePointerClick, label: 'Clicks', value: num(clk), tone: 'blue', detail: `CPC ${eur(clk ? spendC / clk : null)}`, ...(trendPrev ? { delta: { pct: dPct(clk, trendPrev.clicks), good: (dPct(clk, trendPrev.clicks) ?? 0) >= 0 } } : {}) },
+    { icon: ShoppingCart, label: 'Spend', value: eur(spendC), tone: 'amber', detail: `ACOS ${pct(acos)}`, ...(trendPrev ? { delta: { pct: dPct(spendC, trendPrev.spendCents), good: (dPct(spendC, trendPrev.spendCents) ?? 0) <= 0 } } : {}) },
+    { icon: TrendingUp, label: 'Sales', value: eur(salesC), tone: 'violet', detail: `ROAS ${roas != null ? roas.toFixed(2) + '×' : '—'}`, ...(trendPrev ? { delta: { pct: dPct(salesC, trendPrev.salesCents), good: (dPct(salesC, trendPrev.salesCents) ?? 0) >= 0 } } : {}) },
   ]
 
   const loadSearchTerms = useCallback(async () => {
@@ -178,7 +208,7 @@ export function CampaignDetailCockpit({ campaign, history }: { campaign: Campaig
         {campaign.startDate && <><span>·</span><span>{campaign.startDate.slice(0, 10)} → {campaign.endDate?.slice(0, 10) ?? 'no end'}</span></>}
       </div>
       <KpiStrip tiles={tiles} className="mb-4" />
-      <CampaignTrendChart campaignId={campaign.id} />
+      <CampaignTrendChart rows={trendRows} windowDays={windowDays} onWindowChange={setWindowDays} loading={trendLoading} />
 
       <nav className="border-b border-slate-200 dark:border-slate-800 mb-3 flex gap-1">
         {TABS.map(([k, label, n]) => (

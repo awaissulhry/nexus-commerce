@@ -40,6 +40,13 @@ export interface KpiTileSpec {
   ringClass?: string
   /** Override aria-label for screen readers (defaults to label + value). */
   ariaLabel?: string
+  /**
+   * Optional period-over-period delta chip (CD.2). `pct` is the signed
+   * percentage change vs the prior period; `good` says whether that change
+   * is favourable (e.g. spend rising is bad, sales rising is good) and drives
+   * the colour. `null` pct renders nothing.
+   */
+  delta?: { pct: number | null; good: boolean }
 }
 
 export interface KpiStripProps {
@@ -66,7 +73,15 @@ export function KpiStrip({ tiles, className }: KpiStripProps) {
             </div>
             <div className="min-w-0 flex-1">
               <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">{tile.label}</div>
-              <div className="text-[20px] font-semibold tabular-nums text-slate-900 dark:text-slate-100 mt-0.5">{tile.value}</div>
+              <div className="flex items-baseline gap-2">
+                <div className="text-[20px] font-semibold tabular-nums text-slate-900 dark:text-slate-100 mt-0.5">{tile.value}</div>
+                {tile.delta && tile.delta.pct != null && (
+                  <span className={`text-xs font-medium tabular-nums ${tile.delta.good ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}
+                    title="vs previous period">
+                    {tile.delta.pct > 0 ? '▲' : tile.delta.pct < 0 ? '▼' : '–'} {Math.abs(tile.delta.pct).toFixed(1)}%
+                  </span>
+                )}
+              </div>
               {tile.detail && (
                 <div className="text-sm text-slate-500 dark:text-slate-400 mt-0.5 truncate">{tile.detail}</div>
               )}

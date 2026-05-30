@@ -977,6 +977,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       adProduct?: string
       currencyCode?: string
       campaignId?: string
+      compare?: string
     }
     const windowDays = Math.max(7, Math.min(180, Number(query.windowDays ?? 30)))
     const since = new Date()
@@ -1082,8 +1083,49 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       }
     })
 
+    // CD.2 — period-over-period comparison. Sums the current window from the
+    // rows already computed + one aggregate query over the immediately prior
+    // equal-length window (same scope), so the detail page can render ▲/▼ vs
+    // the previous period on each KPI tile.
+    const summarize = (sp: number, sa: number, im: number, cl: number, or: number) => ({
+      impressions: im, clicks: cl, orders: or, spendCents: sp, salesCents: sa,
+      acos: sa > 0 ? Math.round((sp / sa) * 10000) / 100 : null,
+      roas: sp > 0 ? Math.round((sa / sp) * 100) / 100 : null,
+      ctr:  im > 0 ? Math.round((cl / im) * 10000) / 100 : null,
+    })
+    const curSummary = summarize(
+      rows.reduce((s, r) => s + r.adSpendCents, 0),
+      rows.reduce((s, r) => s + r.adSalesCents, 0),
+      rows.reduce((s, r) => s + r.impressions, 0),
+      rows.reduce((s, r) => s + r.clicks, 0),
+      rows.reduce((s, r) => s + r.orders, 0),
+    )
+    let previous: ReturnType<typeof summarize> | null = null
+    if (query.compare === 'true' || query.compare === '1') {
+      const prevSince = new Date(since)
+      prevSince.setUTCDate(prevSince.getUTCDate() - windowDays)
+      const prev = await prisma.amazonAdsDailyPerformance.aggregate({
+        where: {
+          date: { gte: prevSince, lt: since },
+          entityType: 'CAMPAIGN',
+          ...campaignWhere,
+          ...(query.marketplace ? { marketplace: query.marketplace } : {}),
+          ...(query.adProduct   ? { adProduct:   query.adProduct   } : {}),
+          ...(query.currencyCode ? { currencyCode: query.currencyCode } : {}),
+        },
+        _sum: { impressions: true, clicks: true, costMicros: true, sales7dCents: true, sales14dCents: true, orders7d: true },
+      })
+      previous = summarize(
+        Math.round(Number(prev._sum.costMicros ?? 0n) / 10_000),
+        (prev._sum.sales7dCents ?? 0) + (prev._sum.sales14dCents ?? 0),
+        prev._sum.impressions ?? 0,
+        prev._sum.clicks ?? 0,
+        prev._sum.orders7d ?? 0,
+      )
+    }
+
     reply.header('Cache-Control', 'private, max-age=60')
-    return { windowDays, count: rows.length, rows }
+    return { windowDays, count: rows.length, rows, summary: curSummary, previous }
   })
 
   //   - per-adProduct live status from the adapter registry
