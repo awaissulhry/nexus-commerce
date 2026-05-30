@@ -531,11 +531,20 @@ async function ingestTargets(records: V1Target[]): Promise<{ upserted: number; b
     const expressionType = r.targetDetails?.matchType?.toUpperCase()
       ?? (kind === 'KEYWORD' ? 'BROAD' : kind === 'PRODUCT' ? 'ASIN' : 'UNKNOWN')
     const expressionValue = r.targetDetails?.keyword ?? r.targetDetails?.asin ?? r.targetDetails?.categoryId ?? ''
+    // AF.1 ROOT FIX — the v1 export's `bid` can be a nested object/string, so the
+    // old `r.bid * 100` produced NaN → Prisma Int rejected it → EVERY positive
+    // keyword (which has a bid) failed to create, while negatives (no bid → 0)
+    // saved fine. That's why all positives were missing fleet-wide. Coerce safely.
+    const bidRaw: unknown = r.bid
+    const bidNum = typeof bidRaw === 'object' && bidRaw !== null
+      ? Number((bidRaw as { value?: number; amount?: number }).value ?? (bidRaw as { amount?: number }).amount)
+      : Number(bidRaw)
+    const bidCents = Number.isFinite(bidNum) && bidNum > 0 ? Math.round(bidNum * 100) : 0
     rows.push({
       key: `${localAdGroupId}|${r.targetId}`, adGroupId: localAdGroupId, externalTargetId: r.targetId,
       data: {
         adGroupId: localAdGroupId, externalTargetId: r.targetId, kind, expressionType, expressionValue,
-        bidCents: r.bid != null ? Math.round(r.bid * 100) : 0,
+        bidCents,
         status: STATE_TO_PRISMA[stateLower] ?? 'ENABLED',
         isNegative: r.negative === true,
         negativeLevel: r.negative === true ? (r.targetLevel ?? null) : null,
