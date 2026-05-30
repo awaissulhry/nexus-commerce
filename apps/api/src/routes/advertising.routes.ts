@@ -908,34 +908,41 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
         }
       }
     }
-    const usePA = adByProduct.size > 0
-
-    // The product set: PRODUCT_AD-advertised products (sorted by spend) when
-    // available, else derived from the ProductProfitDaily roll-up below.
+    // Product set. Advertised mode = UNION of PRODUCT_AD-advertised products
+    // (real spend/ACOS) and ProductProfitDaily-advertised products (fallback
+    // spend), so partial PRODUCT_AD ingestion never hides a product. Per-row we
+    // prefer PRODUCT_AD when present. Opportunity mode = selling-but-unadvertised.
     let ids: string[]
     let ppdByProduct: Map<string, { _sum: { advertisingSpendCents: number | null; grossRevenueCents: number | null; trueProfitCents: number | null; unitsSold: number | null } }>
-    if (usePA) {
-      ids = [...adByProduct.entries()].sort((a, b) => b[1].spendC - a[1].spendC).slice(0, limit).map(([pid]) => pid)
-      const ppd = await prisma.productProfitDaily.groupBy({
-        by: ['productId'],
-        where: { productId: { in: ids }, date: { gte: since }, ...(mkt ? { marketplace: mkt } : {}) },
-        _sum: { advertisingSpendCents: true, grossRevenueCents: true, trueProfitCents: true, unitsSold: true },
-        orderBy: { _sum: { grossRevenueCents: 'desc' } },
-      })
-      ppdByProduct = new Map(ppd.map((g) => [g.productId, g]))
-    } else {
+    if (mode === 'opportunity') {
       const grouped = await prisma.productProfitDaily.groupBy({
         by: ['productId'],
         where: { date: { gte: since }, ...(mkt ? { marketplace: mkt } : {}) },
         _sum: { advertisingSpendCents: true, grossRevenueCents: true, trueProfitCents: true, unitsSold: true },
-        having: mode === 'opportunity'
-          ? { advertisingSpendCents: { _sum: { equals: 0 } }, grossRevenueCents: { _sum: { gt: 0 } } }
-          : { advertisingSpendCents: { _sum: { gt: 0 } } },
-        orderBy: mode === 'opportunity' ? { _sum: { grossRevenueCents: 'desc' } } : { _sum: { advertisingSpendCents: 'desc' } },
+        having: { advertisingSpendCents: { _sum: { equals: 0 } }, grossRevenueCents: { _sum: { gt: 0 } } },
+        orderBy: { _sum: { grossRevenueCents: 'desc' } },
         take: limit,
       })
       ids = grouped.map((g) => g.productId)
       ppdByProduct = new Map(grouped.map((g) => [g.productId, g]))
+    } else {
+      const ppdAdv = await prisma.productProfitDaily.groupBy({
+        by: ['productId'],
+        where: { date: { gte: since }, ...(mkt ? { marketplace: mkt } : {}) },
+        _sum: { advertisingSpendCents: true },
+        having: { advertisingSpendCents: { _sum: { gt: 0 } } },
+      })
+      const spendRank = new Map<string, number>()
+      for (const [pid, ag] of adByProduct) spendRank.set(pid, ag.spendC)
+      for (const g of ppdAdv) if (!spendRank.has(g.productId)) spendRank.set(g.productId, g._sum.advertisingSpendCents ?? 0)
+      ids = [...spendRank.entries()].sort((a, b) => b[1] - a[1]).slice(0, limit).map(([pid]) => pid)
+      const ppd = ids.length ? await prisma.productProfitDaily.groupBy({
+        by: ['productId'],
+        where: { productId: { in: ids }, date: { gte: since }, ...(mkt ? { marketplace: mkt } : {}) },
+        _sum: { advertisingSpendCents: true, grossRevenueCents: true, trueProfitCents: true, unitsSold: true },
+        orderBy: { _sum: { grossRevenueCents: 'desc' } },
+      }) : []
+      ppdByProduct = new Map(ppd.map((g) => [g.productId, g]))
     }
     if (ids.length === 0) {
       reply.header('Cache-Control', 'private, max-age=60')
@@ -972,10 +979,10 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const rows = ids.flatMap((pid) => {
       const p = prodById.get(pid)
       if (!p) return []
-      const ad = adByProduct.get(pid)
+      const ad = adByProduct.get(pid) // PRODUCT_AD data for this product, if any
       const ppd = ppdByProduct.get(pid)
-      const adSpendCents = usePA ? (ad?.spendC ?? 0) : (ppd?._sum.advertisingSpendCents ?? 0)
-      const adSalesCents = usePA ? (ad?.salesC ?? 0) : 0
+      const adSpendCents = ad ? ad.spendC : (ppd?._sum.advertisingSpendCents ?? 0)
+      const adSalesCents = ad?.salesC ?? 0
       const revenueCents = ppd?._sum.grossRevenueCents ?? 0
       const profitCents = ppd?._sum.trueProfitCents ?? 0
       const st = structByProduct.get(pid)
@@ -989,8 +996,9 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
         photoCount: p.images.length,
         adSpendCents, revenueCents, profitCents,
         units: ppd?._sum.unitsSold ?? 0,
-        acos: usePA && adSalesCents > 0 ? Math.round((adSpendCents / adSalesCents) * 1000) / 10 : null,
-        roas: usePA && adSpendCents > 0 ? Math.round((adSalesCents / adSpendCents) * 100) / 100 : null,
+        // ACOS only when we have true per-product ad sales (PRODUCT_AD).
+        acos: ad && adSalesCents > 0 ? Math.round((adSpendCents / adSalesCents) * 1000) / 10 : null,
+        roas: ad && adSpendCents > 0 ? Math.round((adSalesCents / adSpendCents) * 100) / 100 : null,
         impressions: ad?.impr ?? 0,
         clicks: ad?.clicks ?? 0,
         tacos: revenueCents > 0 ? Math.round((adSpendCents / revenueCents) * 1000) / 10 : null,
