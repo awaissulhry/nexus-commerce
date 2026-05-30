@@ -22,6 +22,9 @@ import { Search, RefreshCw, SlidersHorizontal, Play, Pause, Download, FileDown, 
 import { KpiStrip, PreferencesModal, type KpiTileSpec, type PreferencesValue, type PreferencesColumnSpec } from '@/app/_shared/grid-lens'
 import { StatusChip } from '@/app/_shared/ads-ui'
 import { getBackendUrl } from '@/lib/backend-url'
+import { useMarketingEvents } from '@/lib/sync/use-marketing-events'
+
+interface TrendSummary { impressions: number; clicks: number; orders: number; spendCents: number; salesCents: number }
 
 interface CampaignBase {
   id: string; name: string; type: 'SP' | 'SB' | 'SD'; adProduct: string | null
@@ -73,6 +76,8 @@ export function AdCampaignsCockpit({ initial }: { initial: { items: CampaignBase
   const [rowsRaw, setRowsRaw] = useState<CampaignBase[]>(initial.items)
   const [metrics, setMetrics] = useState<Record<string, V1Metric>>({})
   const [trend, setTrend] = useState<TrendPoint[]>([])
+  const [trendPrev, setTrendPrev] = useState<TrendSummary | null>(null) // CD.13
+  const [liveTs, setLiveTs] = useState<number | null>(null) // CD.13
   const [days, setDays] = useState(30)
   const [loading, setLoading] = useState(false)
   const [search, setSearch] = useState('')
@@ -103,14 +108,18 @@ export function AdCampaignsCockpit({ initial }: { initial: { items: CampaignBase
       const [c, m, t] = await Promise.all([
         fetch(`${base}/api/advertising/campaigns?limit=500`, { cache: 'no-store' }).then((r) => r.json()).catch(() => ({ items: [] })),
         fetch(`${base}/api/advertising/campaigns/v1-metrics?windowDays=${days}`, { cache: 'no-store' }).then((r) => r.json()).catch(() => ({ items: [] })),
-        fetch(`${base}/api/advertising/trends?windowDays=${days}`, { cache: 'no-store' }).then((r) => r.json()).catch(() => ({ items: [] })),
+        fetch(`${base}/api/advertising/trends?windowDays=${days}&compare=true`, { cache: 'no-store' }).then((r) => r.json()).catch(() => ({ items: [] })),
       ])
       setRowsRaw(c.items ?? [])
       setMetrics((m.byCampaign ?? {}) as Record<string, V1Metric>)
-      setTrend((t.items ?? t.trends ?? t.daily ?? []) as TrendPoint[])
+      setTrend((t.items ?? t.trends ?? t.daily ?? t.rows ?? []) as TrendPoint[])
+      setTrendPrev((t.previous ?? null) as TrendSummary | null)
     } finally { setLoading(false) }
   }, [days])
   useEffect(() => { void refetch() }, [days, refetch])
+
+  // CD.13 — parity: live-refresh the roster on marketing events + a Live badge.
+  useMarketingEvents(useCallback(() => { void refetch(); setLiveTs(Date.now()); setTimeout(() => setLiveTs(null), 4000) }, [refetch]))
 
   // Merge + derive.
   const rows: Row[] = useMemo(() => rowsRaw.map((b) => {
@@ -153,12 +162,22 @@ export function AdCampaignsCockpit({ initial }: { initial: { items: CampaignBase
 
   // Totals for KPIs.
   const totals = useMemo(() => filtered.reduce((a, r) => ({ impr: a.impr + r.impressions, clicks: a.clicks + r.clicks, spendC: a.spendC + r.spendC, salesC: a.salesC + r.salesC, orders: a.orders + r.orders }), { impr: 0, clicks: 0, spendC: 0, salesC: 0, orders: 0 }), [filtered])
+  // CD.13 — vs-prior-period deltas (account-level compare). Only shown when no
+  // filters are active, so the filtered totals stay consistent with the
+  // account-wide previous-window summary.
+  const noFilters = !search.trim() && !statusFilter && !typeFilter
+  const dPct = (cur: number, prev: number | undefined | null) => (prev != null && prev > 0 ? Math.round(((cur - prev) / prev) * 1000) / 10 : null)
+  const delta = (cur: number, prev: number | undefined, goodWhenUp: boolean): KpiTileSpec['delta'] | undefined => {
+    if (!noFilters || !trendPrev) return undefined
+    const p = dPct(cur, prev)
+    return { pct: p, good: goodWhenUp ? (p ?? 0) >= 0 : (p ?? 0) <= 0 }
+  }
   const tiles: KpiTileSpec[] = [
-    { icon: Search, label: 'Impressions', value: num(totals.impr), tone: 'slate', detail: `CTR ${pct(totals.impr ? totals.clicks / totals.impr : null, 2)}` },
-    { icon: RefreshCw, label: 'Clicks', value: num(totals.clicks), tone: 'blue', detail: `CPC ${eur(totals.clicks ? totals.spendC / totals.clicks : null)}` },
-    { icon: Download, label: 'Spend', value: eur(totals.spendC), tone: 'amber', detail: `${filtered.length} campaigns` },
-    { icon: Play, label: 'Orders', value: num(totals.orders), tone: 'emerald', detail: `CVR ${pct(totals.clicks ? totals.orders / totals.clicks : null, 2)}` },
-    { icon: Pause, label: 'Sales', value: eur(totals.salesC), tone: 'violet', detail: `ACOS ${pct(totals.salesC ? totals.spendC / totals.salesC : null)} · ROAS ${x2(totals.spendC ? totals.salesC / totals.spendC : null)}` },
+    { icon: Search, label: 'Impressions', value: num(totals.impr), tone: 'slate', detail: `CTR ${pct(totals.impr ? totals.clicks / totals.impr : null, 2)}`, delta: delta(totals.impr, trendPrev?.impressions, true) },
+    { icon: RefreshCw, label: 'Clicks', value: num(totals.clicks), tone: 'blue', detail: `CPC ${eur(totals.clicks ? totals.spendC / totals.clicks : null)}`, delta: delta(totals.clicks, trendPrev?.clicks, true) },
+    { icon: Download, label: 'Spend', value: eur(totals.spendC), tone: 'amber', detail: `${filtered.length} campaigns`, delta: delta(totals.spendC, trendPrev?.spendCents, false) },
+    { icon: Play, label: 'Orders', value: num(totals.orders), tone: 'emerald', detail: `CVR ${pct(totals.clicks ? totals.orders / totals.clicks : null, 2)}`, delta: delta(totals.orders, trendPrev?.orders, true) },
+    { icon: Pause, label: 'Sales', value: eur(totals.salesC), tone: 'violet', detail: `ACOS ${pct(totals.salesC ? totals.spendC / totals.salesC : null)} · ROAS ${x2(totals.spendC ? totals.salesC / totals.spendC : null)}`, delta: delta(totals.salesC, trendPrev?.salesCents, true) },
   ]
 
   // Inline budget save + status toggle (existing endpoints).
@@ -251,7 +270,11 @@ export function AdCampaignsCockpit({ initial }: { initial: { items: CampaignBase
             <button key={p.key} onClick={() => setDays(p.days)} className={`px-2.5 py-1 text-xs rounded-md border ${days === p.days ? 'bg-blue-600 text-white border-blue-600' : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>{p.label}</button>
           ))}
         </div>
-        {loading && <span className="text-xs text-slate-400">updating…</span>}
+        <span className="inline-flex items-center gap-1.5 text-xs">
+          {loading && <span className="text-slate-400">updating…</span>}
+          <span className={`inline-flex h-2 w-2 rounded-full ${liveTs ? 'bg-emerald-500 animate-pulse' : 'bg-emerald-500/70'}`} />
+          <span className="text-emerald-600 dark:text-emerald-400 font-medium">{liveTs ? 'Updated just now' : 'Live'}</span>
+        </span>
       </div>
       <KpiStrip tiles={tiles} className="mb-4" />
 
