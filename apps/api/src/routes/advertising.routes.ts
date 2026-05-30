@@ -2579,6 +2579,22 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     return { jobId: job.id, jobUpdatedAt: job.updatedAt, totalRows: records.length, negativeTrueRows: negCount, topLevelKeys: records[0] ? Object.keys(records[0]) : [], matchTypeHistogram: matchTypes, sample }
   })
 
+  // AF.1c — inspect duplicate ad groups (same externalAdGroupId across campaign
+  // rows, from the A1PA…/DE marketplace mismatch) splitting targets.
+  fastify.get('/advertising/debug/adgroup-dupes', async (request) => {
+    const q = request.query as { ext?: string }
+    if (!q.ext) return { error: 'ext (externalAdGroupId) required' }
+    const ags = await prisma.adGroup.findMany({
+      where: { externalAdGroupId: q.ext },
+      select: { id: true, campaignId: true, campaign: { select: { name: true, marketplace: true, externalCampaignId: true } }, targets: { select: { isNegative: true } } },
+    })
+    return {
+      externalAdGroupId: q.ext,
+      count: ags.length,
+      adGroups: ags.map((g) => ({ localId: g.id, campaignId: g.campaignId, campaignName: g.campaign?.name, marketplace: g.campaign?.marketplace, externalCampaignId: g.campaign?.externalCampaignId, positives: g.targets.filter((t) => !t.isNegative).length, negatives: g.targets.filter((t) => t.isNegative).length })),
+    }
+  })
+
   // AF.1/AF.3 — DB-only target breakdown (instant, no export download). Tells
   // us account-wide + per-campaign how many positive vs negative keyword/product
   // targets exist, so we can see if positives are systematically missing.
