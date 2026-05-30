@@ -11387,7 +11387,18 @@ Return ONLY valid JSON, no prose:
           marketplace: body.marketplace.toUpperCase(),
           productType,
         })
-        return { ok: true, single: result }
+        // RX.B1 debug — surface why seasonality did/didn't engage.
+        const { map: dbgMap, indices: dbgIdx } = await computeCategorySeasonalIndices()
+        return {
+          ok: true,
+          single: result,
+          debug: {
+            productTypeResolved: productType,
+            skuFoundInPtMap: ptMap.has(body.sku),
+            mapHasType: productType ? dbgMap.has(productType) : false,
+            appliedTypes: dbgIdx.filter((i) => i.applied).map((i) => i.productType),
+          },
+        }
       }
       const result = await generateForecastsForAll({
         includeColdStart: !!body.includeColdStart,
