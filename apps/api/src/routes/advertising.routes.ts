@@ -2606,6 +2606,15 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // AF.1 — dump AdTarget DB indexes (the unique constraint that's dropping
+  // positive keywords on createMany may be db-push'd, not in schema/migrations).
+  fastify.get('/advertising/debug/adtarget-indexes', async () => {
+    const idx = await prisma.$queryRawUnsafe<Array<{ indexname: string; indexdef: string }>>(
+      `SELECT indexname, indexdef FROM pg_indexes WHERE tablename = 'AdTarget'`,
+    ).catch((e) => [{ indexname: 'error', indexdef: String(e).slice(0, 200) }])
+    return { indexes: idx }
+  })
+
   fastify.post('/advertising/debug/probe-endpoints', async (request, reply) => {
     const body = request.body as { profileId?: string }
     if (!body?.profileId) return reply.code(400).send({ error: 'profileId required' })
