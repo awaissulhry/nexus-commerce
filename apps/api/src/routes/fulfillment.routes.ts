@@ -5534,6 +5534,10 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
         casePack: r.casePack,
         leadTimeDaysOverride: r.leadTimeDaysOverride,
         isPrimary: r.isPrimary,
+        // PD.1 — factory-facing naming.
+        factoryName: r.factoryName,
+        factorySize: r.factorySize,
+        factorySpec: r.factorySpec,
         product: r.productId ? productById.get(r.productId) ?? null : null,
       }))
 
@@ -5749,6 +5753,10 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
       }
     }
     if (body.isPrimary !== undefined) data.isPrimary = !!body.isPrimary
+    // PD.1 — factory-facing naming (per-supplier default).
+    for (const k of ['factoryName', 'factorySize', 'factorySpec'] as const) {
+      if (body[k] !== undefined) data[k] = body[k] ? String(body[k]).trim() : null
+    }
     return { data }
   }
 
@@ -6276,6 +6284,9 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
           unitCostCents: number
           note?: string | null
           lineOrder?: number
+          factoryName?: string | null
+          factorySize?: string | null
+          factorySpec?: string | null
         }>
       }
       if (typeof body.version !== 'number') {
@@ -6333,6 +6344,10 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
             unitCostCents: it.unitCostCents,
             note: it.note ?? null,
             lineOrder: it.lineOrder ?? idx,
+            // PD.1 — per-line factory-facing naming override.
+            factoryName: it.factoryName ?? null,
+            factorySize: it.factorySize ?? null,
+            factorySpec: it.factorySpec ?? null,
           })),
         })
         return await tx.purchaseOrder.findUnique({
@@ -7534,10 +7549,16 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
           variationAttributes: variant
             ? (variant.variationAttributes as Record<string, string> | null)
             : null,
+          // PD.1 — per-line factory size override.
+          factorySize: (item as any).factorySize ?? null,
         }
         const existing = groupMap.get(identity.groupKey)
         if (existing) {
           existing.lines.push(line)
+          // PD.1 — first non-null factory name in the group wins the heading.
+          if (!existing.factoryName && (item as any).factoryName) {
+            existing.factoryName = (item as any).factoryName
+          }
         } else {
           groupMap.set(identity.groupKey, {
             productId: identity.productId,
@@ -7545,6 +7566,8 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
             productType: identity.productType,
             brand: identity.brand,
             imageUrl: identity.imageUrl,
+            // PD.1 — factory-facing name (per-line override stored on the PO).
+            factoryName: (item as any).factoryName ?? null,
             lines: [line],
           })
         }

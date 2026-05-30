@@ -84,6 +84,8 @@ export interface FactoryPoVariantLine {
   variationAttributes?: Record<string, string> | null
   /** Per-line note (defect requirements, special instructions). */
   notes?: string | null
+  /** PD.1 — per-line factory size (e.g. the factory's own size code). */
+  factorySize?: string | null
 }
 
 export interface FactoryPoProductGroup {
@@ -92,6 +94,10 @@ export interface FactoryPoProductGroup {
   productType?: string | null
   brand?: string | null
   imageUrl?: string | null
+  /** PD.1 — factory-facing product name. When set, the factory sees THIS
+   *  prominently (they often can't read our master name/language); our
+   *  product name renders as a subtitle. */
+  factoryName?: string | null
   /** When length === 1, renders as a simple line; > 1 renders the
    *  Size × Color matrix when both axes exist, else a flat list. */
   lines: FactoryPoVariantLine[]
@@ -612,11 +618,27 @@ function renderProductGroup(
   const textX = PAGE_MARGIN + THUMB_SIZE + 12
   const textWidth = pageWidth - THUMB_SIZE - 12
 
-  doc
-    .fontSize(12)
-    .font('Helvetica-Bold')
-    .fillColor(HEADER_DARK)
-    .text(group.productName, textX, startY, { width: textWidth })
+  // PD.1 — when a factory name is set, the factory sees THAT prominently
+  // (they often can't read our master name/language); our product name
+  // drops to a subtitle so we stay oriented internally.
+  if (group.factoryName) {
+    doc
+      .fontSize(13)
+      .font('Helvetica-Bold')
+      .fillColor(HEADER_DARK)
+      .text(group.factoryName, textX, startY, { width: textWidth })
+    doc
+      .fontSize(8)
+      .font('Helvetica')
+      .fillColor(TEXT_GREY)
+      .text(`(${group.productName})`, textX, doc.y, { width: textWidth })
+  } else {
+    doc
+      .fontSize(12)
+      .font('Helvetica-Bold')
+      .fillColor(HEADER_DARK)
+      .text(group.productName, textX, startY, { width: textWidth })
+  }
 
   doc.fontSize(9).font('Helvetica').fillColor(TEXT_GREY)
   const meta: string[] = []
@@ -632,10 +654,11 @@ function renderProductGroup(
   if (group.lines.length === 1) {
     const line = group.lines[0]
     const attrs = formatVariationAttrs(line.variationAttributes)
+    const factorySizePart = line.factorySize ? `    Factory size ${line.factorySize}` : ''
     doc
       .fontSize(10)
       .fillColor(HEADER_DARK)
-      .text(`SKU ${line.sku}    Qty ${line.quantity}${attrs ? `    ${attrs}` : ''}`, textX, doc.y, { width: textWidth })
+      .text(`SKU ${line.sku}    Qty ${line.quantity}${attrs ? `    ${attrs}` : ''}${factorySizePart}`, textX, doc.y, { width: textWidth })
     if (line.notes) {
       doc
         .fontSize(9)
