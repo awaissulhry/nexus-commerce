@@ -6322,6 +6322,64 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // FP.6 — factory pack PDF: cover + brief + size chart + materials +
+  // colorways + embedded images + QR file index + merged PDF appendix.
+  fastify.get('/fulfillment/development/projects/:id/factory-pack.pdf', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const q = request.query as { locale?: string }
+      const locale = (['en', 'it', 'zh'].includes(q.locale ?? '') ? q.locale : 'en') as 'en' | 'it' | 'zh'
+      const project = await prisma.developmentProject.findUnique({
+        where: { id },
+        include: {
+          attachments: { where: { includeInPack: true }, orderBy: [{ sortOrder: 'asc' }, { uploadedAt: 'desc' }] },
+          candidates: { where: { isSelected: true }, take: 1, include: { supplier: { select: { name: true } } } },
+        },
+      })
+      if (!project) return reply.code(404).send({ error: 'Project not found' })
+      const b = ((await prisma.brandSettings.findFirst()) ?? {}) as any
+
+      const isImg = (n: string) => /\.(jpe?g|png|webp|gif|bmp|tiff?)($|\?)/i.test(n)
+      const isPdf = (n: string) => /\.pdf($|\?)/i.test(n)
+      const images: Array<{ url: string; caption: string | null }> = []
+      const pdfUrls: string[] = []
+      const otherFiles: Array<{ url: string; filename: string | null }> = []
+      for (const a of project.attachments) {
+        const key = a.filename ?? a.url
+        if (isImg(key)) images.push({ url: a.url, caption: a.caption ?? null })
+        else if (isPdf(key)) pdfUrls.push(a.url)
+        else otherFiles.push({ url: a.url, filename: a.filename })
+      }
+
+      const { renderDevelopmentPackPdf } = await import('../services/development-pack-pdf.service.js')
+      const buffer = await renderDevelopmentPackPdf({
+        locale,
+        company: {
+          name: b.companyName || 'Xavia',
+          addressLines: [b.addressLine1, [b.postalCode, b.city].filter(Boolean).join(' '), b.country].filter((x: any) => x && String(x).trim()) as string[],
+          taxId: b.piva ?? null,
+          email: b.factoryEmailFrom ?? null,
+        },
+        project: {
+          code: project.code, name: project.name, productType: project.productType, revision: project.revision,
+          brief: project.brief, specNotes: project.specNotes, targetCostCents: project.targetCostCents,
+          sizeChart: project.sizeChart as any, materials: project.materials as any, colorways: project.colorways as any,
+        },
+        factoryName: null,
+        supplierName: project.candidates[0]?.supplier?.name ?? null,
+        images, pdfUrls, otherFiles,
+      })
+      reply
+        .header('Content-Type', 'application/pdf')
+        .header('Content-Disposition', `inline; filename="factory-pack-${project.code}-rev${project.revision}.pdf"`)
+        .header('Cache-Control', 'no-store')
+      return reply.send(buffer)
+    } catch (error: any) {
+      request.log.error({ err: error }, '[development factory-pack.pdf] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
   // ── A4 — SupplierProduct cost & lead-time management ───────────────
   // The replenishment math (this file, ~line 9680) reads a product's unit
   // cost / MOQ / case-pack / lead-time ONLY from the SupplierProduct row of
