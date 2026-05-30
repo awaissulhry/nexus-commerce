@@ -13,6 +13,7 @@
 import { TrendingUp } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { RepricingDecisionsClient } from './RepricingDecisionsClient'
+import { RepricingRuleStats } from './RepricingRuleStats'
 
 export const dynamic = 'force-dynamic'
 
@@ -78,6 +79,9 @@ export default async function RepricingPage() {
         <Stat label="Pending review" value={pending} color="amber" />
         <Stat label="No change" value={unchanged} color="slate" />
       </div>
+
+      {/* PH.4 — per-rule rollup: is each rule actually working? */}
+      <RepricingRuleStats />
 
       <RepricingDecisionsClient initialDecisions={decisions} />
     </div>

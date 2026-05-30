@@ -1463,6 +1463,171 @@ const pricingRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // ── PH.4: Per-rule repricing observability rollup ───────────────────────
+  // GET /api/pricing/repricing-rule-stats?windowDays=7
+  //
+  // Aggregates RepricingDecision per rule over the window so an operator can
+  // answer "is this rule actually working?": how many times it evaluated,
+  // how often it moved the price (+%), the average absolute move, and the
+  // rule's coordinate buy-box win rate. Two BuyBoxHistory groupBys (total +
+  // our-wins) feed the win-rate column without an N+1 over rules.
+  fastify.get('/pricing/repricing-rule-stats', async (request, reply) => {
+    try {
+      const q = request.query as { windowDays?: string }
+      const windowDays = Math.min(
+        90,
+        Math.max(1, parseInt(q.windowDays ?? '7', 10) || 7),
+      )
+      const since = new Date(Date.now() - windowDays * 24 * 3600 * 1000)
+
+      const [decisions, bbTotals, bbWins] = await Promise.all([
+        prisma.repricingDecision.findMany({
+          where: { createdAt: { gte: since } },
+          select: {
+            ruleId: true,
+            oldPrice: true,
+            newPrice: true,
+            applied: true,
+            createdAt: true,
+            rule: {
+              select: {
+                id: true,
+                channel: true,
+                marketplace: true,
+                strategy: true,
+                enabled: true,
+                productId: true,
+                product: { select: { id: true, name: true, brand: true } },
+              },
+            },
+          },
+          orderBy: { createdAt: 'desc' },
+          take: 20000,
+        }),
+        prisma.buyBoxHistory.groupBy({
+          by: ['productId', 'channel', 'marketplace'],
+          where: { observedAt: { gte: since } },
+          _count: { _all: true },
+        }),
+        prisma.buyBoxHistory.groupBy({
+          by: ['productId', 'channel', 'marketplace'],
+          where: { observedAt: { gte: since }, isOurOffer: true },
+          _count: { _all: true },
+        }),
+      ])
+
+      // Win-rate lookup keyed by product|channel|marketplace.
+      const winKey = (p: string, c: string, m: string) => `${p}|${c}|${m}`
+      const totalByCoord = new Map<string, number>()
+      for (const r of bbTotals) {
+        totalByCoord.set(winKey(r.productId, r.channel, r.marketplace), r._count._all)
+      }
+      const winsByCoord = new Map<string, number>()
+      for (const r of bbWins) {
+        winsByCoord.set(winKey(r.productId, r.channel, r.marketplace), r._count._all)
+      }
+
+      // Aggregate decisions per rule.
+      interface Acc {
+        ruleId: string
+        channel: string
+        marketplace: string | null
+        strategy: string
+        enabled: boolean
+        productId: string
+        product: { id: string; name: string; brand: string | null }
+        evaluations: number
+        moved: number
+        deltaSum: number
+        lastDecisionAt: Date
+        lastPrice: number
+      }
+      const byRule = new Map<string, Acc>()
+      for (const d of decisions) {
+        if (!d.rule) continue
+        const oldP = Number(d.oldPrice)
+        const newP = Number(d.newPrice)
+        const movedNow = Math.abs(newP - oldP) >= 0.01
+        let a = byRule.get(d.ruleId)
+        if (!a) {
+          a = {
+            ruleId: d.ruleId,
+            channel: d.rule.channel,
+            marketplace: d.rule.marketplace,
+            strategy: d.rule.strategy,
+            enabled: d.rule.enabled,
+            productId: d.rule.productId,
+            product: d.rule.product,
+            evaluations: 0,
+            moved: 0,
+            deltaSum: 0,
+            lastDecisionAt: d.createdAt,
+            lastPrice: newP,
+          }
+          byRule.set(d.ruleId, a)
+        }
+        a.evaluations++
+        if (movedNow) {
+          a.moved++
+          a.deltaSum += Math.abs(newP - oldP)
+        }
+        // decisions are desc-ordered, so the first seen is the latest.
+      }
+
+      const rules = [...byRule.values()]
+        .map((a) => {
+          const coordKey = winKey(
+            a.productId,
+            a.channel,
+            a.marketplace ?? '',
+          )
+          // Try exact coordinate; if the rule has no marketplace, fall back
+          // to summing any coordinate for this product+channel.
+          let observations = totalByCoord.get(coordKey) ?? 0
+          let wins = winsByCoord.get(coordKey) ?? 0
+          if (observations === 0 && !a.marketplace) {
+            for (const [k, n] of totalByCoord) {
+              if (k.startsWith(`${a.productId}|${a.channel}|`)) observations += n
+            }
+            for (const [k, n] of winsByCoord) {
+              if (k.startsWith(`${a.productId}|${a.channel}|`)) wins += n
+            }
+          }
+          return {
+            ruleId: a.ruleId,
+            channel: a.channel,
+            marketplace: a.marketplace,
+            strategy: a.strategy,
+            enabled: a.enabled,
+            product: a.product,
+            evaluations: a.evaluations,
+            moved: a.moved,
+            movedPct:
+              a.evaluations > 0
+                ? Math.round((a.moved / a.evaluations) * 1000) / 10
+                : 0,
+            avgDeltaAbs:
+              a.moved > 0 ? Math.round((a.deltaSum / a.moved) * 100) / 100 : 0,
+            lastDecisionAt: a.lastDecisionAt,
+            lastPrice: a.lastPrice,
+            buyBox:
+              observations > 0
+                ? {
+                    observations,
+                    winRatePct: Math.round((wins / observations) * 1000) / 10,
+                  }
+                : null,
+          }
+        })
+        .sort((x, y) => y.evaluations - x.evaluations)
+
+      return { windowDays, ruleCount: rules.length, rules }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[pricing/repricing-rule-stats] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
   // AC.9 — Per-product Buy Box state for the Amazon Listing Cockpit.
   //
   // Returns the latest BuyBoxHistory observation for the product on a
