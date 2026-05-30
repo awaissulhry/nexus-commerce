@@ -10160,6 +10160,11 @@ Return ONLY valid JSON, no prose:
     try {
       const q = request.query as any
       const window = Math.min(90, Math.max(7, safeNum(q.window, 30) ?? 30))
+      // S4 — recommendation basis + uplift. recBasis=period bases the recommended
+      // quantity on the selected trailing window instead of the seasonal
+      // forecast; upliftPct scales demand for a known promo/event (±).
+      const recBasis: 'forecast' | 'period' = q.recBasis === 'period' ? 'period' : 'forecast'
+      const upliftPct = Math.min(500, Math.max(-90, safeNum(q.upliftPct, 0) ?? 0))
       const since = new Date(Date.now() - window * 24 * 60 * 60 * 1000)
       since.setUTCHours(0, 0, 0, 0)
       // F.1 — Optional marketplace filter. When set, velocity is per-marketplace
@@ -10593,9 +10598,11 @@ Return ONLY valid JSON, no prose:
         const forecastVelocity = hasForecast
           ? forecastedDemand30d / 30
           : trailingVelocity
-        // Velocity used for urgency / reorder-point math: prefer
-        // forecast-derived value, fall back to trailing.
-        const velocity = forecastVelocity
+        // Velocity used for urgency / reorder-point math. S4 — operator toggles
+        // between the seasonal forecast and the selected trailing period, with
+        // an optional promo/event uplift applied on top.
+        const baseVelocity = recBasis === 'period' ? trailingVelocity : forecastVelocity
+        const velocity = baseVelocity * (1 + upliftPct / 100)
 
         // R.4 — replace the simple inline math with the composed
         // service. demandStdDev computed from per-day rows; cost

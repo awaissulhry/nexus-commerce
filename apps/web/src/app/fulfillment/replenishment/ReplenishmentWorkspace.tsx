@@ -228,6 +228,26 @@ export default function ReplenishmentWorkspace() {
     'NEEDS_REORDER') as 'ALL' | 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'NEEDS_REORDER'
   const channelFilter = searchParams.get('channel') ?? ''
   const marketplaceFilter = searchParams.get('marketplace') ?? ''
+  // S4 — recommendation basis (seasonal forecast vs selected trailing period)
+  // + optional promo/event uplift %. Persisted per device.
+  const [recBasis, setRecBasis] = useState<'forecast' | 'period'>(() => {
+    if (typeof window === 'undefined') return 'forecast'
+    return window.localStorage.getItem('nexus-replenishment-recbasis') === 'period'
+      ? 'period'
+      : 'forecast'
+  })
+  const [upliftPct, setUpliftPct] = useState<number>(() => {
+    if (typeof window === 'undefined') return 0
+    return Number(window.localStorage.getItem('nexus-replenishment-uplift') ?? '0') || 0
+  })
+  useEffect(() => {
+    try {
+      window.localStorage.setItem('nexus-replenishment-recbasis', recBasis)
+      window.localStorage.setItem('nexus-replenishment-uplift', String(upliftPct))
+    } catch {
+      /* ignore */
+    }
+  }, [recBasis, upliftPct])
   // FP.6 — client-side secondary filters in the FilterPopover.
   // None of these require backend changes (the suggestion shape
   // already carries the flags). Combined with the urgency tiles +
@@ -404,6 +424,9 @@ export default function ReplenishmentWorkspace() {
       const params = new URLSearchParams({ window: '30' })
       if (channelFilter) params.set('channel', channelFilter)
       if (marketplaceFilter) params.set('marketplace', marketplaceFilter)
+      // S4 — recommendation basis + promo/event uplift.
+      if (recBasis === 'period') params.set('recBasis', 'period')
+      if (upliftPct !== 0) params.set('upliftPct', String(upliftPct))
       const [r1, r2] = await Promise.all([
         fetch(
           `${getBackendUrl()}/api/fulfillment/replenishment?${params.toString()}`,
@@ -426,7 +449,7 @@ export default function ReplenishmentWorkspace() {
     } finally {
       setLoading(false)
     }
-  }, [channelFilter, marketplaceFilter])
+  }, [channelFilter, marketplaceFilter, recBasis, upliftPct])
 
   useEffect(() => {
     fetchData()
@@ -1452,6 +1475,36 @@ export default function ReplenishmentWorkspace() {
             </select>
             {/* RX.S1 — sales timeframe for the "Sales" column. */}
             <TimeframePicker value={salesTf} onChange={setSalesTf} labelPrefix="Sales" />
+            {/* S4 — recommendation basis toggle + promo/event uplift. */}
+            <div className="inline-flex h-8 items-center gap-1.5 rounded border border-slate-200 px-2 text-sm dark:border-slate-700 dark:bg-slate-900">
+              <span className="text-slate-500 dark:text-slate-400">Recommend:</span>
+              <div className="inline-flex items-center rounded bg-slate-100 p-0.5 dark:bg-slate-800">
+                <button
+                  onClick={() => setRecBasis('forecast')}
+                  className={cn('h-6 rounded px-2 text-xs', recBasis === 'forecast' ? 'bg-white text-slate-900 shadow-sm dark:bg-slate-900 dark:text-slate-100' : 'text-slate-500')}
+                  title="Base on the seasonal forecast"
+                >
+                  Forecast
+                </button>
+                <button
+                  onClick={() => setRecBasis('period')}
+                  className={cn('h-6 rounded px-2 text-xs', recBasis === 'period' ? 'bg-white text-slate-900 shadow-sm dark:bg-slate-900 dark:text-slate-100' : 'text-slate-500')}
+                  title="Base on the selected sales period"
+                >
+                  Period
+                </button>
+              </div>
+              <span className="ml-1 inline-flex items-center gap-0.5 text-slate-500 dark:text-slate-400" title="Promo/event uplift applied to demand">
+                <input
+                  type="number"
+                  value={upliftPct}
+                  onChange={(e) => setUpliftPct(Number(e.target.value) || 0)}
+                  className="h-6 w-12 rounded border border-slate-200 bg-white px-1 text-right text-xs dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+                  aria-label="Uplift percent"
+                />
+                <span className="text-xs">% uplift</span>
+              </span>
+            </div>
           </>
         }
         filter={
