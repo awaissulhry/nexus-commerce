@@ -12370,6 +12370,7 @@ model DevelopmentProject {
   candidates DevelopmentProjectSupplier[]
   attachments DevelopmentAttachment[] // PD.7
   purchaseOrders PurchaseOrder[] // PD.8
+  certifications DevelopmentCertification[] // PD.9
 
   @@index([status])
 }
@@ -12404,6 +12405,30 @@ model DevelopmentAttachment {
   sizeBytes  Int?
   uploadedBy String?
   uploadedAt DateTime @default(now())
+
+  project DevelopmentProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+}
+
+// PD.9 — development compliance / certification. Motorcycle gear needs CE
+// / ECE 22.06 (helmets) / EN 13594 (gloves) / EN 1621 (armour) / GPSR
+// docs. Required certs gate launch (PD.10 can't go LAUNCHED until they're
+// APPROVED). Ties into the L-series recall/GPSR work.
+model DevelopmentCertification {
+  id          String    @id @default(cuid())
+  projectId   String
+  type        String    // CE | ECE_22_06 | EN_13594 | EN_1621 | GPSR | OTHER
+  status      String    @default("PENDING") // PENDING | IN_PROGRESS | APPROVED | REJECTED
+  required    Boolean   @default(true)
+  certNumber  String?
+  issuer      String?
+  issuedAt    DateTime?
+  expiresAt   DateTime?
+  documentUrl String?
+  notes       String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
   project DevelopmentProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
