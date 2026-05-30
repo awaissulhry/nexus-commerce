@@ -41,6 +41,12 @@ export interface Suggestion {
   forecastedDemandUpper80: number | null
   forecastSource: 'FORECAST' | 'TRAILING_VELOCITY'
   daysOfStockLeft: number | null
+  // S3 — order-by date / plan-ahead countdown.
+  orderByDate?: string | null
+  orderByInDays?: number | null
+  orderByStatus?: 'OK' | 'SOON' | 'OVERDUE' | null
+  orderLeadTimeDays?: number | null
+  orderProductionDays?: number | null
   reorderPoint: number
   reorderQuantity: number
   urgency: Urgency

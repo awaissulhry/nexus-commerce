@@ -10686,6 +10686,31 @@ Return ONLY valid JSON, no prose:
         const daysOfStockLeft =
           velocity > 0 ? Math.floor(effectiveStock / velocity) : Infinity
 
+        // S3 — order-by date: the latest day to PLACE the order so it ARRIVES
+        // before stockout. Uses the precise production time for the actual
+        // recommended quantity (rate-based production scales with order size),
+        // so "production time for N units" is exact. Negative days = overdue.
+        const orderLead = effectiveLeadTimeDays({
+          productionTimeDays:
+            (spForLeadTime as any)?.productionTimeDaysOverride ?? supDefaults?.productionTimeDays ?? null,
+          productionUnitsPerDay:
+            (spForLeadTime as any)?.productionUnitsPerDayOverride ?? supDefaults?.productionUnitsPerDay ?? null,
+          shippingTimeDays:
+            (spForLeadTime as any)?.shippingTimeDaysOverride ?? supDefaults?.shippingTimeDays ?? null,
+          expectedQty: reorderQuantity,
+          legacyLeadTimeDays,
+        })
+        let orderByInDays: number | null = null
+        let orderByDate: string | null = null
+        let orderByStatus: 'OK' | 'SOON' | 'OVERDUE' | null = null
+        if (daysOfStockLeft !== Infinity && velocity > 0) {
+          orderByInDays = daysOfStockLeft - orderLead.leadTimeDays
+          const od = new Date(today)
+          od.setUTCDate(od.getUTCDate() + orderByInDays)
+          orderByDate = od.toISOString().slice(0, 10)
+          orderByStatus = orderByInDays < 0 ? 'OVERDUE' : orderByInDays <= 7 ? 'SOON' : 'OK'
+        }
+
         let globalUrgency: PromotedUrgencyTier = 'LOW'
         if (effectiveStock === 0 && velocity > 0) globalUrgency = 'CRITICAL'
         else if (daysOfStockLeft <= leadTimeDays / 2) globalUrgency = 'CRITICAL'
@@ -10813,6 +10838,13 @@ Return ONLY valid JSON, no prose:
             : null,
           forecastSource: hasForecast ? 'FORECAST' : 'TRAILING_VELOCITY',
           daysOfStockLeft: daysOfStockLeft === Infinity ? null : daysOfStockLeft,
+          // S3 — order-by date / countdown (plan-ahead). orderLeadTimeDays is the
+          // precise production+shipping time for the recommended quantity.
+          orderByDate,
+          orderByInDays,
+          orderByStatus,
+          orderLeadTimeDays: orderLead.leadTimeDays,
+          orderProductionDays: orderLead.productionDays,
           reorderPoint,
           reorderQuantity,
           // R.4 — math snapshot fields for the drawer's "Reorder math"

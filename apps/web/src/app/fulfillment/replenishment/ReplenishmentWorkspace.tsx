@@ -145,7 +145,7 @@ const URGENCY_TONE: Record<Urgency, string> = {
   LOW:      'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700',
 }
 
-type RepColumnKey = 'product' | 'urgency' | 'stock' | 'daysLeft' | 'velocity' | 'salesPeriod' | 'demand' | 'reorderQty' | 'actions'
+type RepColumnKey = 'product' | 'urgency' | 'stock' | 'daysLeft' | 'velocity' | 'salesPeriod' | 'demand' | 'reorderQty' | 'orderBy' | 'actions'
 
 const REP_COLUMNS_CATALOG: ReadonlyArray<GridLensColumn & { alwaysOn?: boolean }> = [
   { key: 'product',    label: 'Product',     width: 340, locked: true, alwaysOn: true },
@@ -158,6 +158,9 @@ const REP_COLUMNS_CATALOG: ReadonlyArray<GridLensColumn & { alwaysOn?: boolean }
   { key: 'salesPeriod', label: 'Sales',      width: 90 },
   { key: 'demand',     label: 'Demand (LT)', width: 100 },
   { key: 'reorderQty', label: 'Suggest qty', width: 100 },
+  // S3 — "order by" date + countdown so you place the PO before stockout
+  // (accounts for production + shipping time). Toggleable.
+  { key: 'orderBy',    label: 'Order by',    width: 120 },
   // XG.4 — locked-trailing so the shared PreferencesModal renders it
   // as a disabled toggle + PG.6 sticky-right freeze pins it on
   // horizontal scroll. `alwaysOn` is kept for the legacy
@@ -165,7 +168,7 @@ const REP_COLUMNS_CATALOG: ReadonlyArray<GridLensColumn & { alwaysOn?: boolean }
   { key: 'actions',    label: '',            width: 160, locked: true, alwaysOn: true },
 ]
 const REP_DEFAULT_VISIBLE: ReadonlyArray<RepColumnKey> = [
-  'product', 'urgency', 'stock', 'daysLeft', 'velocity', 'salesPeriod', 'demand', 'reorderQty', 'actions',
+  'product', 'urgency', 'stock', 'daysLeft', 'velocity', 'salesPeriod', 'demand', 'reorderQty', 'orderBy', 'actions',
 ]
 const REP_SORT_FIELDS: ReadonlyArray<SortFieldOption> = [
   { value: 'sku',         label: 'SKU' },
@@ -1046,6 +1049,25 @@ export default function ReplenishmentWorkspace() {
             {row.reorderQty}
           </span>
         )
+      case 'orderBy': {
+        // S3 — order-by date + countdown. Leaf rows only (parents aggregate).
+        const s = row.suggestion
+        if (!s || s.orderByInDays == null || s.orderByDate == null)
+          return <span className="text-slate-300 dark:text-slate-600">—</span>
+        const st = s.orderByStatus
+        const tone =
+          st === 'OVERDUE' ? 'text-rose-600 font-semibold'
+          : st === 'SOON' ? 'text-amber-600 font-medium'
+          : 'text-slate-600 dark:text-slate-400'
+        const n = s.orderByInDays
+        const label = st === 'OVERDUE' ? `overdue ${Math.abs(n)}d` : n === 0 ? 'order today' : `in ${n}d`
+        return (
+          <span className={`tabular-nums ${tone}`} title={`Order by ${s.orderByDate} — ${s.orderProductionDays ?? 0}d production + shipping`}>
+            {s.orderByDate}
+            <span className="ml-1 text-[11px] opacity-80">· {label}</span>
+          </span>
+        )
+      }
       case 'actions': {
         if (row.isParent) return null
         const s = row.suggestion!
