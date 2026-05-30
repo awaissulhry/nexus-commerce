@@ -42,6 +42,7 @@ import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
 import { repricingEngineService } from '../services/repricing-engine.service.js'
 import { recordCronRun } from '../utils/cron-observability.js'
+import { recordPriceChange } from '../services/price-history.service.js'
 
 interface RunSummary {
   enabledRules: number
@@ -101,7 +102,12 @@ export async function runRepricingEvaluatorOnce(): Promise<RunSummary> {
           channel: rule.channel,
           ...(rule.marketplace ? { marketplace: rule.marketplace } : {}),
         },
-        select: { id: true, price: true, marketplace: true },
+        select: {
+          id: true,
+          price: true,
+          marketplace: true,
+          product: { select: { sku: true } },
+        },
         orderBy: { updatedAt: 'desc' },
       })
       if (!listing) {
@@ -203,6 +209,24 @@ export async function runRepricingEvaluatorOnce(): Promise<RunSummary> {
           // Non-fatal: decision was still applied to the ChannelListing.
           // OutboundSyncQueue failure is visible via its own monitoring.
         })
+
+        // PH.1 — record the live reprice on the unified timeline. Only when
+        // the price actually changed (result.changed) and was applied live.
+        // Best-effort: never breaks the apply/enqueue above.
+        if (listing.product?.sku) {
+          await recordPriceChange(prisma, {
+            productId: rule.productId,
+            sku: listing.product.sku,
+            channel: rule.channel,
+            marketplace: rule.marketplace ?? listing.marketplace ?? 'IT',
+            oldPrice: Number(listing.price as unknown as Prisma.Decimal),
+            newPrice: result.price,
+            reason: result.reason,
+            source: 'REPRICER',
+            ruleId: rule.id,
+            actor: 'repricer',
+          })
+        }
       }
 
       summary.evaluated++

@@ -25,6 +25,7 @@ import {
   refreshAllSnapshots,
 } from '../services/pricing-snapshot.service.js'
 import { refreshFxRates } from '../services/fx-rate.service.js'
+import { priceChangeData } from '../services/price-history.service.js'
 import {
   refreshFeeEstimates,
   refreshCompetitivePricing,
@@ -1290,6 +1291,22 @@ const pricingRoutes: FastifyPluginAsync = async (fastify) => {
               reason: reasonForMode,
               changedBy: 'bulk-override',
             },
+          }),
+          // PH.1 — unified timeline row, atomic with the override above.
+          prisma.priceChangeEvent.create({
+            data: priceChangeData({
+              productId,
+              sku: snap.sku,
+              channel: snap.channel,
+              marketplace: snap.marketplace,
+              fulfillmentMethod: snap.fulfillmentMethod,
+              oldPrice: previousOverride,
+              newPrice: newOverride,
+              currency: snap.currency,
+              source: 'BULK_OVERRIDE',
+              reason: reasonForMode,
+              actor: 'bulk-override',
+            }),
           }),
         ])
         updated++

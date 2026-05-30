@@ -196,6 +196,8 @@ model Product {
   // these to decide what price to push. Decisions are logged in
   // RepricingDecision rows for the audit trail.
   repricingRules RepricingRule[]
+  // PH.1 — unified price-change timeline (one row per live price change).
+  priceChangeEvents PriceChangeEvent[]
 
   // ── PIM Category taxonomy (net-new) ───────────────────────────
   // M:N membership in the internal infinite-depth category tree
@@ -4539,6 +4541,55 @@ model PricingSnapshot {
   @@index([channel, marketplace])
   @@index([source])
   @@index([computedAt])
+}
+
+// ── PH.1: Unified price-change timeline ──────────────────────────────────
+// One append-only row per price change, written from every source that
+// mutates a live price: bulk/manual override, repricer live-apply,
+// promotion enter/exit. Distinct from RepricingDecision (rule-eval audit,
+// keyed by ruleId) and ChannelListingOverride (override-field audit, keyed
+// by channelListingId): this is the single coordinate-keyed feed the
+// /pricing drawer reads to answer "why did this price change, and what was
+// it before?". Best-effort writes — history must never break the price
+// write that triggered it.
+model PriceChangeEvent {
+  id        String  @id @default(cuid())
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  productId String
+  sku       String // denormalized for fast per-SKU timeline reads
+
+  channel           String // AMAZON | EBAY | SHOPIFY
+  marketplace       String // IT | DE | FR | …
+  fulfillmentMethod String? // FBA | FBM | null when not method-specific
+
+  // Stored as Decimal so the timeline reads back numerically. oldPrice is
+  // null when no prior price is known; newPrice is null on CLEAR (price
+  // reverts to inherited/master).
+  oldPrice Decimal? @db.Decimal(12, 2)
+  newPrice Decimal? @db.Decimal(12, 2)
+  currency String   @default("EUR")
+
+  source PriceChangeSource
+  reason String // human-readable: 'bulk-override SET_FIXED 89.99', 'matched buy box at €89.99', 'promo "Black Friday" started'
+  ruleId String? // links to the RepricingRule when source=REPRICER
+  actor  String? // 'bulk-override' | 'repricer' | 'promo-scheduler' | userId
+
+  changedAt DateTime @default(now())
+
+  @@index([productId, channel, marketplace, changedAt])
+  @@index([sku, changedAt])
+  @@index([changedAt])
+}
+
+enum PriceChangeSource {
+  MANUAL_OVERRIDE
+  BULK_OVERRIDE
+  REPRICER
+  PROMO_START
+  PROMO_END
+  CHANNEL_RULE
+  MASTER_INHERIT
+  FX
 }
 
 // ── Pricing F.1: Buy Box observation log ─────────────────────────────────

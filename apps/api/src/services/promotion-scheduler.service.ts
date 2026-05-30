@@ -18,6 +18,7 @@ import type { PrismaClient } from '@prisma/client'
 import { logger } from '../utils/logger.js'
 import { refreshSnapshotsForSkus } from './pricing-snapshot.service.js'
 import { resolvePrice } from './pricing-engine.service.js'
+import { recordPriceChange } from './price-history.service.js'
 
 interface PromotionTickResult {
   enteredEvents: number
@@ -113,6 +114,26 @@ export async function runPromotionScheduler(
           lastOverrideBy: `promotion:${action.eventId}`,
         },
       })
+      // PH.1 — record the promo start on the unified timeline. oldPrice is
+      // the standing price the sale displaces; newPrice is the promo price.
+      if (l.product?.sku) {
+        await recordPriceChange(prisma, {
+          productId: l.productId,
+          sku: l.product.sku,
+          channel: l.channel,
+          marketplace: l.marketplace,
+          oldPrice:
+            l.priceOverride != null
+              ? Number(l.priceOverride)
+              : l.price != null
+                ? Number(l.price)
+                : null,
+          newPrice: promoStr,
+          reason: `promo "${action.event.name}" started`,
+          source: 'PROMO_START',
+          actor: `promo-scheduler:${action.eventId}`,
+        })
+      }
       listingsUpdated++
       // Collect SKUs for a single batched snapshot refresh later.
       if (l.product?.sku) skusTouched.add(l.product.sku)
@@ -144,6 +165,12 @@ export async function runPromotionScheduler(
       },
       select: {
         id: true,
+        productId: true,
+        channel: true,
+        marketplace: true,
+        salePrice: true,
+        price: true,
+        priceOverride: true,
         product: { select: { sku: true, variations: { select: { sku: true } } } },
       },
     })
@@ -157,6 +184,26 @@ export async function runPromotionScheduler(
           lastOverrideBy: `promotion-clear:${action.eventId}`,
         },
       })
+      // PH.1 — record the promo end. oldPrice is the sale price being
+      // cleared; newPrice is the standing price the listing reverts to.
+      if (l.product?.sku) {
+        await recordPriceChange(prisma, {
+          productId: l.productId,
+          sku: l.product.sku,
+          channel: l.channel,
+          marketplace: l.marketplace,
+          oldPrice: l.salePrice != null ? Number(l.salePrice) : null,
+          newPrice:
+            l.priceOverride != null
+              ? Number(l.priceOverride)
+              : l.price != null
+                ? Number(l.price)
+                : null,
+          reason: `promo "${action.event.name}" ended`,
+          source: 'PROMO_END',
+          actor: `promo-scheduler:${action.eventId}`,
+        })
+      }
       listingsUpdated++
       if (l.product?.sku) skusTouched.add(l.product.sku)
       for (const v of l.product?.variations ?? []) skusTouched.add(v.sku)
