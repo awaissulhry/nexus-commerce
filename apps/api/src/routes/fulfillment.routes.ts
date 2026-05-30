@@ -5987,6 +5987,7 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
         include: {
           candidates: { include: { supplier: { select: { id: true, name: true, leadTimeDays: true, defaultCurrency: true } } }, orderBy: [{ isSelected: 'desc' }, { createdAt: 'asc' }] },
           attachments: { orderBy: { uploadedAt: 'desc' } }, // PD.7
+          purchaseOrders: { orderBy: { createdAt: 'desc' }, select: { id: true, poNumber: true, status: true, poKind: true, totalCents: true } }, // PD.8
         },
       })
       if (!project) return reply.code(404).send({ error: 'Project not found' })
@@ -6099,6 +6100,54 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
       const { aid } = request.params as { id: string; aid: string }
       await prisma.developmentAttachment.delete({ where: { id: aid } })
       return { ok: true }
+    } catch (error: any) {
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  // PD.8 — spin a sample PO from a development project to a supplier.
+  // Reuses the full PO stack; the single line carries the project name as
+  // the factory-facing name (PD.1) so the factory knows exactly what to
+  // make a sample of, even with no SKU yet.
+  fastify.post('/fulfillment/development/projects/:id/sample-po', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const body = (request.body ?? {}) as { supplierId?: string; quantity?: number; factorySize?: string; unitCostEur?: number }
+      const project = await prisma.developmentProject.findUnique({
+        where: { id },
+        include: { candidates: { where: { isSelected: true }, take: 1 } },
+      })
+      if (!project) return reply.code(404).send({ error: 'Project not found' })
+      const supplierId = body.supplierId ?? project.candidates[0]?.supplierId
+      if (!supplierId) return reply.code(400).send({ error: 'No supplier: select a candidate or pass supplierId' })
+      const qty = Math.max(1, Number(body.quantity) || 1)
+      const unitCostCents = body.unitCostEur != null && Number.isFinite(Number(body.unitCostEur)) ? Math.round(Number(body.unitCostEur) * 100) : 0
+      const warehouseId = (await prisma.warehouse.findFirst({ where: { isDefault: true } }))?.id
+      const po = await prisma.purchaseOrder.create({
+        data: {
+          poNumber: generatePoNumber(),
+          supplierId,
+          warehouseId,
+          status: 'DRAFT',
+          poKind: 'SAMPLE',
+          developmentProjectId: id,
+          notes: `Sample for development project ${project.code} — ${project.name}`,
+          totalCents: unitCostCents * qty,
+          items: {
+            create: [{
+              sku: project.code,
+              quantityOrdered: qty,
+              unitCostCents,
+              lineOrder: 0,
+              factoryName: project.name,
+              factorySize: body.factorySize?.trim() || null,
+              note: 'Development sample',
+            }],
+          },
+        },
+        include: { items: true },
+      })
+      return reply.send(po)
     } catch (error: any) {
       return reply.code(500).send({ error: error?.message ?? String(error) })
     }
