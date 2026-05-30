@@ -56,6 +56,7 @@ import {
   type ReturnRow,
   type SavedView,
 } from '@/app/_shared/returns'
+import CommandCenter from './CommandCenter'
 
 export default function ReturnsWorkspace() {
   const router = useRouter()
@@ -68,6 +69,10 @@ export default function ReturnsWorkspace() {
   // back button lands on a meaningful previous state.
   const tab = (searchParams.get('tab') ?? 'ALL') as 'ALL' | 'NON_FBA' | 'FBA'
   const statusFilter = searchParams.get('status') ?? 'ALL'
+  // RX.1 — named urgency queue from a command-center tile. Mutually
+  // exclusive with statusFilter at the UI level (selecting one clears
+  // the other) so the grid never carries two conflicting status filters.
+  const queueFilter = searchParams.get('queue') ?? ''
   const channelFilter = searchParams.get('channel') ?? ''
   const search = searchParams.get('q') ?? ''
   const sortBy = searchParams.get('sortBy') ?? 'createdAt'
@@ -169,6 +174,7 @@ export default function ReturnsWorkspace() {
     try {
       const qs = new URLSearchParams()
       if (statusFilter !== 'ALL') qs.set('status', statusFilter)
+      if (queueFilter) qs.set('queue', queueFilter)
       if (channelFilter) qs.set('channel', channelFilter)
       if (tab === 'FBA') qs.set('fbaOnly', 'true')
       else if (tab === 'NON_FBA') qs.set('fbaOnly', 'false')
@@ -185,7 +191,7 @@ export default function ReturnsWorkspace() {
         setLastFetchedAt(Date.now())
       }
     } finally { setLoading(false) }
-  }, [tab, statusFilter, channelFilter, search, sortBy, sortDir, page, pageSize])
+  }, [tab, statusFilter, queueFilter, channelFilter, search, sortBy, sortDir, page, pageSize])
 
   useEffect(() => { fetchReturns() }, [fetchReturns])
 
@@ -290,7 +296,7 @@ export default function ReturnsWorkspace() {
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
 
   // R1.2 — clear selection whenever the visible rows change.
-  useEffect(() => { setSelected(new Set()); setActiveIdx(-1) }, [tab, statusFilter, channelFilter, search, sortBy, sortDir, page, pageSize])
+  useEffect(() => { setSelected(new Set()); setActiveIdx(-1) }, [tab, statusFilter, queueFilter, channelFilter, search, sortBy, sortDir, page, pageSize])
   const toggleOne = useCallback((id: string) => {
     setSelected((prev) => {
       const next = new Set(prev)
@@ -361,7 +367,7 @@ export default function ReturnsWorkspace() {
     const onNew = () => setCreateOpen(true)
     const onExport = () => exportCsv()
     const onFocus = () => searchInputRef.current?.focus()
-    const onFilterPending = () => setFilters({ status: 'REQUESTED', page: '1' })
+    const onFilterPending = () => setFilters({ status: 'REQUESTED', queue: null, page: '1' })
     window.addEventListener('nexus:returns:new', onNew)
     window.addEventListener('nexus:returns:export', onExport)
     window.addEventListener('nexus:returns:focus-search', onFocus)
@@ -506,6 +512,17 @@ export default function ReturnsWorkspace() {
         />
       )}
 
+      {/* RX.1 — command center: urgency queues + refund-deadline SLA +
+          aging + channel health. Clicking a queue tile drives the grid
+          filter below; reloadSignal re-pulls counts whenever the list
+          refetches so the numbers and the grid never disagree. */}
+      <CommandCenter
+        activeQueue={queueFilter || null}
+        onQueue={(qv) => setFilters({ queue: qv === queueFilter ? null : qv, status: null, page: '1' })}
+        reloadSignal={lastFetchedAt ?? 0}
+        onOpenReturn={(rid) => setDrawerId(rid)}
+      />
+
       <div className="space-y-2">
         {/* Top row: search + tab + saved-views + actions */}
         <GridToolbar
@@ -638,8 +655,8 @@ export default function ReturnsWorkspace() {
             {(STATUSES as readonly string[]).map((s) => (
               <button
                 key={s}
-                onClick={() => setFilters({ status: s, page: '1' })}
-                className={`h-7 px-2 text-sm border rounded ${statusFilter === s ? 'bg-slate-900 dark:bg-slate-100 text-white border-slate-900' : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
+                onClick={() => setFilters({ status: s, queue: null, page: '1' })}
+                className={`h-7 px-2 text-sm border rounded ${statusFilter === s && !queueFilter ? 'bg-slate-900 dark:bg-slate-100 text-white border-slate-900' : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
               >
                 {s.replace(/_/g, ' ')}
               </button>

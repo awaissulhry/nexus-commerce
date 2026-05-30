@@ -202,6 +202,26 @@ const returnsRoutes: FastifyPluginAsync = async (fastify) => {
       if (q.fbaOnly === 'false') where.isFbaReturn = false
       if (q.refundStatus) where.refundStatus = q.refundStatus
 
+      // RX.1 — named urgency queues driven by the command-center tiles.
+      // The backend owns the queue → filter mapping so a tile's count
+      // can never disagree with the grid it opens (a class of "the
+      // number said 7 but I see 5" inconsistency bugs). Applied last so
+      // the queue is authoritative over a stale status param.
+      if (typeof q.queue === 'string' && q.queue) {
+        const HIGH_VALUE_CENTS = Math.max(0, Number(process.env.NEXUS_RETURNS_HIGH_VALUE_CENTS) || 15000)
+        switch (q.queue) {
+          case 'awaiting-approval':   where.status = 'REQUESTED'; break
+          case 'awaiting-arrival':    where.status = { in: ['AUTHORIZED', 'IN_TRANSIT'] }; break
+          case 'awaiting-inspection': where.status = 'RECEIVED'; break
+          case 'inspecting':          where.status = 'INSPECTING'; break
+          case 'refund-failed':       where.refundStatus = 'CHANNEL_FAILED'; break
+          case 'high-value':
+            where.status = { notIn: ['REFUNDED', 'REJECTED', 'SCRAPPED'] }
+            where.refundCents = { gte: HIGH_VALUE_CENTS }
+            break
+        }
+      }
+
       const search = typeof q.q === 'string' ? q.q.trim() : ''
       if (search) {
         where.OR = [
@@ -391,6 +411,90 @@ const returnsRoutes: FastifyPluginAsync = async (fastify) => {
         audit: { items: audit },
         refunds: { items: refunds },
         policy: { window, deadline },
+      })
+    } catch (error: any) {
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  // RX.1 — Returns Command Center aggregate. One endpoint feeds the
+  // triage header: urgency-queue counts, days-in-status aging buckets,
+  // the Italian refund-deadline summary, and per-channel refund-adapter
+  // health — each previously either un-surfaced (deadline summary,
+  // channel status) or an N-tile fetch. Queue counts, aging, high-value
+  // and refund-failed all derive from ONE scan of non-terminal returns,
+  // so the whole header costs two DB round-trips (this scan + the
+  // deadline service's scan) regardless of tile count.
+  fastify.get('/fulfillment/returns/command-center', async (_request, reply) => {
+    try {
+      const HIGH_VALUE_CENTS = Math.max(0, Number(process.env.NEXUS_RETURNS_HIGH_VALUE_CENTS) || 15000)
+
+      const open = await prisma.return.findMany({
+        where: { status: { notIn: ['REFUNDED', 'REJECTED', 'SCRAPPED'] } },
+        select: {
+          id: true, status: true, refundStatus: true, refundCents: true,
+          createdAt: true, updatedAt: true,
+        },
+        take: 5000,
+        orderBy: { createdAt: 'asc' },
+      })
+
+      const now = Date.now()
+      const DAY = 86_400_000
+      const ageDays = (d: Date) => Math.floor((now - new Date(d).getTime()) / DAY)
+
+      const queues = {
+        awaitingApproval: 0,    // REQUESTED — operator must approve/deny
+        awaitingArrival: 0,     // AUTHORIZED | IN_TRANSIT — waiting on the box
+        awaitingInspection: 0,  // RECEIVED — landed, not yet graded
+        inspecting: 0,          // INSPECTING — mid-grade
+        refundFailed: 0,        // refundStatus CHANNEL_FAILED — needs retry
+        highValue: 0,           // open + refundCents >= threshold
+        total: open.length,
+      }
+      // Aging by time-in-current-status (proxied by updatedAt): the
+      // longer a return sits untouched the worse the buyer experience
+      // and the closer the refund deadline.
+      const aging = { fresh: 0, day2: 0, day5: 0, stale: 0, staleMaxDays: 0 }
+
+      for (const r of open) {
+        switch (r.status) {
+          case 'REQUESTED': queues.awaitingApproval++; break
+          case 'AUTHORIZED':
+          case 'IN_TRANSIT': queues.awaitingArrival++; break
+          case 'RECEIVED': queues.awaitingInspection++; break
+          case 'INSPECTING': queues.inspecting++; break
+        }
+        if (r.refundStatus === 'CHANNEL_FAILED') queues.refundFailed++
+        if ((r.refundCents ?? 0) >= HIGH_VALUE_CENTS) queues.highValue++
+
+        const age = ageDays(r.updatedAt)
+        if (age < 2) aging.fresh++
+        else if (age < 5) aging.day2++
+        else if (age < 10) aging.day5++
+        else { aging.stale++; if (age > aging.staleMaxDays) aging.staleMaxDays = age }
+      }
+
+      const { summarizeRefundDeadlines } = await import(
+        '../services/return-policies/deadline-tracker.service.js'
+      )
+      const { getRefundChannelAdapterStatus } = await import(
+        '../services/refunds/refund-publisher.service.js'
+      )
+      const deadlineSummary = await summarizeRefundDeadlines()
+      const channelStatus = getRefundChannelAdapterStatus()
+
+      return reply.send({
+        queues: {
+          ...queues,
+          refundApproaching: deadlineSummary.approaching,
+          refundOverdue: deadlineSummary.overdue,
+        },
+        aging,
+        deadlineSummary,
+        channelStatus,
+        highValueThresholdCents: HIGH_VALUE_CENTS,
+        generatedAt: new Date().toISOString(),
       })
     } catch (error: any) {
       return reply.code(500).send({ error: error?.message ?? String(error) })
