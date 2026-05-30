@@ -15,6 +15,7 @@ import { getBackendUrl } from '@/lib/backend-url'
 import { ReviewsList } from './ReviewsList'
 import { SpikeFeed } from './SpikeFeed'
 import { RatingPanel, type RatingsPayload } from './RatingPanel'
+import { IngestHealthStrip, type IngestHealthPayload } from './IngestHealthStrip'
 import { ReviewsNav } from './_shared/ReviewsNav'
 
 export const dynamic = 'force-dynamic'
@@ -89,7 +90,7 @@ const CATEGORY_LABEL: Record<string, string> = {
 
 export default async function ReviewsPage() {
   const backend = getBackendUrl()
-  const [summary, reviews, spikes, ratings] = await Promise.all([
+  const [summary, reviews, spikes, ratings, health] = await Promise.all([
     fetchJson<SummaryPayload>(`${backend}/api/reviews/summary?sinceDays=30`, {
       sinceDays: 30,
       marketplace: null,
@@ -113,6 +114,11 @@ export default async function ReviewsPage() {
       count: 0,
       distribution: { '1': 0, '2': 0, '3': 0, '4': 0, '5': 0 },
       trend: [],
+    }),
+    fetchJson<IngestHealthPayload>(`${backend}/api/reviews/ingest-health`, {
+      channels: [],
+      lastIngestCron: null,
+      generatedAt: '',
     }),
   ])
 
@@ -204,6 +210,9 @@ export default async function ReviewsPage() {
           </div>
         </div>
       )}
+
+      {/* RX.1 — per-channel ingestion health */}
+      <IngestHealthStrip health={health} />
 
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4">
         {/* Reviews feed */}

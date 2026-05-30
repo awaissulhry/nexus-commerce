@@ -23,6 +23,11 @@ import {
   summarizeSpikeDetector,
 } from '../services/reviews/spike-detector.service.js'
 import { seedReviewTemplates } from '../services/reviews/review-templates.js'
+import {
+  previewReviewImport,
+  applyReviewImport,
+  type CanonicalField,
+} from '../services/reviews/review-import.service.js'
 import { runReviewRuleEvaluatorOnce } from '../jobs/review-rule-evaluator.job.js'
 import { runReviewMailerOnce } from '../jobs/review-request-mailer.job.js'
 
@@ -193,6 +198,142 @@ const reviewsRoutes: FastifyPluginAsync = async (fastify) => {
       count,
       distribution,
       trend,
+    }
+  })
+
+  // ── GET /reviews/ingest-health (RX.1) ───────────────────────────────
+  // Per-channel ingestion provenance: how many reviews per channel, by
+  // source (fixture vs real import/API), last ingest + last review date,
+  // plus the most-recent review-ingest cron run. Powers the dashboard
+  // ingest-health tile so operators can see real data is flowing in.
+  fastify.get('/reviews/ingest-health', async (_request, reply) => {
+    const CHANNELS = ['AMAZON', 'EBAY', 'SHOPIFY']
+    // Counts by (channel, source) — kept free of _max to dodge a known
+    // Prisma groupBy circular-type issue; last-dates come from cheap
+    // per-channel aggregates below.
+    const grouped = await prisma.review.groupBy({
+      by: ['channel', 'ingestSource'],
+      _count: { _all: true },
+    })
+    const allChannels = Array.from(new Set([...CHANNELS, ...grouped.map((g) => g.channel)]))
+    const [maxByChannel, lastCron] = await Promise.all([
+      Promise.all(
+        allChannels.map(async (channel) => ({
+          channel,
+          agg: await prisma.review.aggregate({
+            where: { channel },
+            _max: { ingestedAt: true, postedAt: true },
+          }),
+        })),
+      ),
+      prisma.cronRun.findFirst({
+        where: { jobName: 'review-ingest' },
+        orderBy: { startedAt: 'desc' },
+        select: { startedAt: true, finishedAt: true, status: true, outputSummary: true },
+      }),
+    ])
+    const maxMap = new Map(maxByChannel.map((m) => [m.channel, m.agg._max]))
+
+    const byChannel = allChannels.map((channel) => {
+      const rows = grouped.filter((g) => g.channel === channel)
+      const total = rows.reduce((a, r) => a + r._count._all, 0)
+      const bySource: Record<string, number> = {}
+      for (const r of rows) {
+        const src = r.ingestSource ?? 'UNKNOWN'
+        bySource[src] = (bySource[src] ?? 0) + r._count._all
+      }
+      // "Live" = anything that isn't fixture/seed data.
+      const realCount = Object.entries(bySource)
+        .filter(([src]) => src !== 'FIXTURE')
+        .reduce((a, [, n]) => a + n, 0)
+      const max = maxMap.get(channel)
+      return {
+        channel,
+        total,
+        realCount,
+        fixtureCount: bySource.FIXTURE ?? 0,
+        bySource,
+        lastIngestedAt: max?.ingestedAt ?? null,
+        lastReviewAt: max?.postedAt ?? null,
+        hasRealData: realCount > 0,
+        isCanonical: CHANNELS.includes(channel),
+      }
+    })
+
+    reply.header('Cache-Control', 'private, max-age=30')
+    return {
+      channels: byChannel,
+      lastIngestCron: lastCron,
+      generatedAt: new Date().toISOString(),
+    }
+  })
+
+  // ── POST /reviews/import/preview (RX.1) ─────────────────────────────
+  // Parse a pasted/uploaded CSV/JSON/XLSX, auto-detect the column
+  // mapping, validate + dedup-check — without writing anything.
+  fastify.post<{
+    Body: {
+      text?: string
+      bytesBase64?: string
+      fileKind?: 'csv' | 'json' | 'xlsx'
+      channel?: string
+      marketplace?: string | null
+      columnMapping?: Partial<Record<CanonicalField, string>>
+    }
+  }>('/reviews/import/preview', async (request, reply) => {
+    const b = request.body ?? {}
+    if (!b.text && !b.bytesBase64) {
+      reply.code(400)
+      return { error: 'no_input', message: 'Provide text or bytesBase64.' }
+    }
+    try {
+      const preview = await previewReviewImport({
+        text: b.text,
+        bytesBase64: b.bytesBase64,
+        fileKind: b.fileKind,
+        channel: b.channel ?? 'AMAZON',
+        marketplace: b.marketplace ?? null,
+        columnMapping: b.columnMapping,
+      })
+      return { ok: true, preview }
+    } catch (err) {
+      reply.code(400)
+      return { error: 'parse_failed', message: err instanceof Error ? err.message : String(err) }
+    }
+  })
+
+  // ── POST /reviews/import/apply (RX.1) ───────────────────────────────
+  // Ingest the validated rows through the shared sentiment pipeline.
+  fastify.post<{
+    Body: {
+      text?: string
+      bytesBase64?: string
+      fileKind?: 'csv' | 'json' | 'xlsx'
+      channel?: string
+      marketplace?: string | null
+      columnMapping?: Partial<Record<CanonicalField, string>>
+      force?: boolean
+    }
+  }>('/reviews/import/apply', async (request, reply) => {
+    const b = request.body ?? {}
+    if (!b.text && !b.bytesBase64) {
+      reply.code(400)
+      return { error: 'no_input', message: 'Provide text or bytesBase64.' }
+    }
+    try {
+      const result = await applyReviewImport({
+        text: b.text,
+        bytesBase64: b.bytesBase64,
+        fileKind: b.fileKind,
+        channel: b.channel ?? 'AMAZON',
+        marketplace: b.marketplace ?? null,
+        columnMapping: b.columnMapping,
+        force: b.force,
+      })
+      return { ok: true, result }
+    } catch (err) {
+      reply.code(400)
+      return { error: 'import_failed', message: err instanceof Error ? err.message : String(err) }
     }
   })
 

@@ -9707,6 +9707,10 @@ model Review {
   ingestedAt       DateTime @default(now())
   // Raw payload from the channel for re-extraction without re-fetch.
   rawPayload       Json?
+  // RX.1 — provenance of this row so the per-channel health tile and
+  // operators can tell fixture/seed data from real ingested reviews.
+  // 'FIXTURE' | 'IMPORT_CSV' | 'AMAZON_VOC' | 'EBAY_API' | 'SHOPIFY_WEBHOOK' | 'MANUAL'
+  ingestSource     String?
 
   sentiment ReviewSentiment?
 
@@ -9725,6 +9729,7 @@ model Review {
   @@index([postedAt])
   @@index([attributedRequestId])
   @@index([attributedRuleId])
+  @@index([channel, ingestedAt])
 }
 
 // SR.1 — Per-review AI classification. 1:1 with Review. Categories

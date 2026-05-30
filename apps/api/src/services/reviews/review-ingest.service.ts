@@ -92,7 +92,10 @@ async function liveFetch(_marketplace: string): Promise<RawReview[]> {
   return []
 }
 
-async function findOrCreateReview(raw: RawReview): Promise<{ id: string; isNew: boolean } | null> {
+async function findOrCreateReview(
+  raw: RawReview,
+  ingestSource: string,
+): Promise<{ id: string; isNew: boolean } | null> {
   const existing = await prisma.review.findFirst({
     where: { channel: raw.channel, externalReviewId: raw.externalReviewId },
     select: { id: true },
@@ -133,6 +136,7 @@ async function findOrCreateReview(raw: RawReview): Promise<{ id: string; isNew: 
       helpfulVotes: raw.helpfulVotes ?? 0,
       postedAt: new Date(raw.postedAt),
       rawPayload: (raw.rawPayload as object | null) ?? null,
+      ingestSource,
     },
     select: { id: true },
   })
@@ -191,11 +195,8 @@ export interface IngestOptions {
   force?: boolean // re-run sentiment on already-classified reviews
 }
 
-export async function runReviewIngestOnce(
-  options: IngestOptions = {},
-): Promise<IngestSummary> {
-  const mode = reviewMode()
-  const summary: IngestSummary = {
+function emptySummary(mode: 'sandbox' | 'live'): IngestSummary {
+  return {
     mode,
     marketplaces: [],
     reviewsSeen: 0,
@@ -205,6 +206,90 @@ export async function runReviewIngestOnce(
     sentimentSkipped: 0,
     errors: [],
   }
+}
+
+/**
+ * Core ingest loop for a batch of already-fetched raw reviews. Used by
+ * the sandbox cron, the live channel adapters (RX.1b), and the operator
+ * import endpoint (RX.1a) — every path funnels through the same dedup →
+ * sentiment → category-rate flow so provenance and counters stay
+ * consistent. `ingestSource` is stamped on freshly-created rows.
+ *
+ * Resilient: a single bad row records an error and continues; it never
+ * aborts the batch. Idempotent on (channel, externalReviewId).
+ */
+export async function ingestRawReviews(
+  raws: RawReview[],
+  opts: { ingestSource: string; force?: boolean; summary?: IngestSummary },
+): Promise<IngestSummary> {
+  const summary = opts.summary ?? emptySummary(reviewMode())
+  summary.reviewsSeen += raws.length
+  for (const raw of raws) {
+    try {
+      const result = await findOrCreateReview(raw, opts.ingestSource)
+      if (!result) continue
+      if (result.isNew) {
+        summary.reviewsInserted += 1
+      } else {
+        summary.reviewsSkippedExisting += 1
+      }
+      // Sentiment: re-run only when (new) OR (force=true).
+      let needsSentiment = result.isNew
+      if (!needsSentiment && opts.force) {
+        needsSentiment = true
+      }
+      if (!needsSentiment) {
+        // Confirm existing sentiment is there — otherwise extract.
+        const has = await prisma.reviewSentiment.findUnique({
+          where: { reviewId: result.id },
+          select: { id: true },
+        })
+        if (!has) needsSentiment = true
+      }
+      if (!needsSentiment) {
+        summary.sentimentSkipped += 1
+        continue
+      }
+      // Resolve product context for richer classification.
+      let productType: string | null = null
+      let brand: string | null = null
+      if (raw.asin || raw.sku) {
+        const p = await prisma.product.findFirst({
+          where: raw.asin ? { amazonAsin: raw.asin } : { sku: raw.sku ?? '' },
+          select: { productType: true, brand: true },
+        })
+        productType = p?.productType ?? null
+        brand = p?.brand ?? null
+      }
+      const extract = await extractSentiment({
+        reviewId: result.id,
+        body: raw.body,
+        title: raw.title ?? null,
+        rating: raw.rating ?? null,
+        marketplace: raw.marketplace ?? null,
+        productType,
+        brand,
+      })
+      await persistSentiment(extract)
+      await updateCategoryRates(result.id, extract)
+      summary.sentimentExtracted += 1
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      summary.errors.push(`review ${raw.externalReviewId}: ${msg}`)
+      logger.warn('[review-ingest] review failed', {
+        externalReviewId: raw.externalReviewId,
+        error: msg,
+      })
+    }
+  }
+  return summary
+}
+
+export async function runReviewIngestOnce(
+  options: IngestOptions = {},
+): Promise<IngestSummary> {
+  const mode = reviewMode()
+  const summary = emptySummary(mode)
   const marketplaces =
     options.marketplaces ??
     (process.env.NEXUS_AMAZON_ADS_MARKETPLACES ?? 'IT,DE')
@@ -215,65 +300,11 @@ export async function runReviewIngestOnce(
 
   for (const mp of marketplaces) {
     const raws = mode === 'sandbox' ? await loadFixtures(mp) : await liveFetch(mp)
-    summary.reviewsSeen += raws.length
-    for (const raw of raws) {
-      try {
-        const result = await findOrCreateReview(raw)
-        if (!result) continue
-        if (result.isNew) {
-          summary.reviewsInserted += 1
-        } else {
-          summary.reviewsSkippedExisting += 1
-        }
-        // Sentiment: re-run only when (new) OR (force=true).
-        let needsSentiment = result.isNew
-        if (!needsSentiment && options.force) {
-          needsSentiment = true
-        }
-        if (!needsSentiment) {
-          // Confirm existing sentiment is there — otherwise extract.
-          const has = await prisma.reviewSentiment.findUnique({
-            where: { reviewId: result.id },
-            select: { id: true },
-          })
-          if (!has) needsSentiment = true
-        }
-        if (!needsSentiment) {
-          summary.sentimentSkipped += 1
-          continue
-        }
-        // Resolve product context for richer classification.
-        let productType: string | null = null
-        let brand: string | null = null
-        if (raw.asin || raw.sku) {
-          const p = await prisma.product.findFirst({
-            where: raw.asin ? { amazonAsin: raw.asin } : { sku: raw.sku ?? '' },
-            select: { productType: true, brand: true },
-          })
-          productType = p?.productType ?? null
-          brand = p?.brand ?? null
-        }
-        const extract = await extractSentiment({
-          reviewId: result.id,
-          body: raw.body,
-          title: raw.title ?? null,
-          rating: raw.rating ?? null,
-          marketplace: raw.marketplace ?? null,
-          productType,
-          brand,
-        })
-        await persistSentiment(extract)
-        await updateCategoryRates(result.id, extract)
-        summary.sentimentExtracted += 1
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err)
-        summary.errors.push(`review ${raw.externalReviewId}: ${msg}`)
-        logger.warn('[review-ingest] review failed', {
-          externalReviewId: raw.externalReviewId,
-          error: msg,
-        })
-      }
-    }
+    await ingestRawReviews(raws, {
+      ingestSource: mode === 'sandbox' ? 'FIXTURE' : 'AMAZON_VOC',
+      force: options.force,
+      summary,
+    })
   }
   return summary
 }
