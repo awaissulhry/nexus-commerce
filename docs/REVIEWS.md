@@ -189,6 +189,54 @@ Ask in `#orders-eng` if you need any of these prioritized.
 
 ---
 
+## 12. RX.1 — Getting real reviews in (import + live adapters)
+
+The SR ingest pipeline classifies whatever reviews land in the `Review`
+table. Out of the box those are **sandbox fixtures**. RX.1 adds real
+data, all funnelling through the same dedup → sentiment → category-rate
+core (`ingestRawReviews`), and stamps each row's `ingestSource`.
+
+**Provenance.** Every `Review` now carries `ingestSource`:
+`FIXTURE` | `IMPORT_CSV` | `EBAY_API` | `AMAZON_VOC` | `SHOPIFY_WEBHOOK` |
+`MANUAL`. The dashboard **Ingestion health** strip shows, per channel,
+real-vs-fixture counts + last-ingest time, and a mode chip
+(`sandbox`/`live`).
+
+### Import (works today, all channels)
+`/marketing/reviews/import` → pick channel + (optional) marketplace →
+paste or upload CSV / JSON / XLSX → **Preview**. Columns auto-map (fix
+any in the mapping editor); the preview shows valid / invalid /
+duplicate / will-import counts + a sample. **Import** ingests only new,
+valid rows (idempotent — re-importing the same export is safe).
+Where to export from: Amazon Seller Central → Brand → Customer Reviews /
+Voice of the Customer; eBay feedback export; Judge.me / Loox / Yotpo.
+
+API: `POST /api/reviews/import/preview` + `/apply`
+(`{text|bytesBase64, fileKind, channel, marketplace?, columnMapping?}`).
+
+### Live adapters (opt-in; read-only; error-isolated)
+Active only when `NEXUS_REVIEW_INGEST_MODE=live`. Each adapter is gated
+on its own credentials and never throws past its boundary — a channel
+outage is recorded as a note/error and the others still ingest.
+
+- **eBay** (`fetchEbayFeedback`) — Trading API `GetFeedback`
+  (FeedbackReceivedAsSeller). Maps Positive/Neutral/Negative → 5/3/1★.
+  Runs when `NEXUS_EBAY_REAL_API=true` **and** an active eBay
+  `ChannelConnection` exists. No write to eBay.
+- **Amazon** (`fetchAmazonVocFeed`) — Amazon exposes no official
+  review-text API, so the live path reads a **licensed third-party feed**
+  (Helium10 / Jungle Scout / DataHawk) via `NEXUS_AMAZON_REVIEW_FEED_URL`
+  (+ optional `NEXUS_AMAZON_REVIEW_FEED_TOKEN`). Unset → no-op; use import.
+
+| Env var | Effect | Default |
+|---|---|---|
+| `NEXUS_REVIEW_INGEST_MODE` | `live` enables the channel adapters; anything else = sandbox fixtures. | sandbox |
+| `NEXUS_EBAY_REAL_API` | Gate for the live eBay GetFeedback call (same flag as the write-path). | unset (off) |
+| `NEXUS_AMAZON_REVIEW_FEED_URL` | JSON review feed for live Amazon ingest. | unset (import only) |
+| `NEXUS_AMAZON_REVIEW_FEED_TOKEN` | Bearer token for that feed, if needed. | unset |
+
+---
+
 ## 11. RV.9 — Operational polish notes
 
 **Setup nudge (RV.9.1).** If `/orders/reviews/rules` shows no active Xavia-IT rule (the most common first-run mistake), an amber banner offers a one-click "Set up Xavia IT default" — creates a rule with the 7–25d window, returns/refunds exclusions, sentiment diversion on. Same banner repairs misconfigured rules (scope=AMAZON_PER_MARKETPLACE but marketplace=null).

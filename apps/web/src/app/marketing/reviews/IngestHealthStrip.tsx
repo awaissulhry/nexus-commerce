@@ -30,6 +30,11 @@ export interface IngestHealthPayload {
     status: string
     outputSummary: string | null
   } | null
+  config?: {
+    mode: 'sandbox' | 'live'
+    ebayLiveEnabled: boolean
+    amazonFeedConfigured: boolean
+  }
   generatedAt: string
 }
 
@@ -62,6 +67,17 @@ export function IngestHealthStrip({ health }: { health: IngestHealthPayload }) {
           <div className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400">
             Ingestion health
           </div>
+          {health.config && (
+            <span
+              className={`text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded ring-1 ring-inset ${
+                health.config.mode === 'live'
+                  ? 'bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:ring-emerald-900'
+                  : 'bg-amber-50 text-amber-700 ring-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:ring-amber-900'
+              }`}
+            >
+              {health.config.mode}
+            </span>
+          )}
           {health.lastIngestCron && (
             <span className="text-[10px] text-slate-400 dark:text-slate-500">
               · last cron {relativeTime(health.lastIngestCron.startedAt)} ({health.lastIngestCron.status})

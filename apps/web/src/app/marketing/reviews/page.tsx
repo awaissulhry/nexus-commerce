@@ -136,8 +136,14 @@ export default async function ReviewsPage() {
             spikes feed the automation rule engine (SR.3+).
           </p>
         </div>
-        <span className="text-[10px] uppercase tracking-wider px-2 py-1 rounded ring-1 ring-inset bg-amber-50 text-amber-700 ring-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:ring-amber-900">
-          Sandbox
+        <span
+          className={`text-[10px] uppercase tracking-wider px-2 py-1 rounded ring-1 ring-inset ${
+            health.config?.mode === 'live'
+              ? 'bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:ring-emerald-900'
+              : 'bg-amber-50 text-amber-700 ring-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:ring-amber-900'
+          }`}
+        >
+          {health.config?.mode ?? 'sandbox'}
         </span>
       </div>
 

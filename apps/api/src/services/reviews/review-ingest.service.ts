@@ -31,6 +31,9 @@ import {
   persistSentiment,
   type ExtractResult,
 } from './sentiment-extraction.service.js'
+import { fetchEbayFeedback } from './adapters/ebay-feedback.adapter.js'
+import { fetchAmazonVocFeed } from './adapters/amazon-voc.adapter.js'
+import type { AdapterResult } from './adapters/types.js'
 
 const FIXTURE_DIR =
   process.env.NEXUS_REVIEW_FIXTURE_DIR ??
@@ -62,6 +65,10 @@ export interface IngestSummary {
   sentimentExtracted: number
   sentimentSkipped: number // had existing sentiment, force=false
   errors: string[]
+  // RX.1b — non-error adapter notes (e.g. "no eBay connection", "feed
+  // not configured"). Helps operators see *why* a live channel was a
+  // no-op without treating it as a failure.
+  notes: string[]
 }
 
 function reviewMode(): 'sandbox' | 'live' {
@@ -84,13 +91,6 @@ async function loadFixtures(marketplace?: string): Promise<RawReview[]> {
   }
 }
 
-async function liveFetch(_marketplace: string): Promise<RawReview[]> {
-  // Stub — live SP-API / Brand Analytics integration deferred.
-  // Real impl would call:
-  //   - GET_BRAND_ANALYTICS_CATALOG_PERFORMANCE_REPORT for stats
-  //   - third-party feed for review bodies
-  return []
-}
 
 async function findOrCreateReview(
   raw: RawReview,
@@ -205,6 +205,7 @@ function emptySummary(mode: 'sandbox' | 'live'): IngestSummary {
     sentimentExtracted: 0,
     sentimentSkipped: 0,
     errors: [],
+    notes: [],
   }
 }
 
@@ -298,15 +299,51 @@ export async function runReviewIngestOnce(
       .filter((s) => s.length > 0)
   summary.marketplaces = marketplaces
 
-  for (const mp of marketplaces) {
-    const raws = mode === 'sandbox' ? await loadFixtures(mp) : await liveFetch(mp)
-    await ingestRawReviews(raws, {
-      ingestSource: mode === 'sandbox' ? 'FIXTURE' : 'AMAZON_VOC',
-      force: options.force,
-      summary,
-    })
+  if (mode === 'sandbox') {
+    for (const mp of marketplaces) {
+      const raws = await loadFixtures(mp)
+      await ingestRawReviews(raws, { ingestSource: 'FIXTURE', force: options.force, summary })
+    }
+  } else {
+    await runLiveAdapters(marketplaces, options.force ?? false, summary)
   }
   return summary
+}
+
+/**
+ * RX.1b — live channel adapters. Each is read-only, gated on its own
+ * credentials, and error-isolated: a thrown adapter or a returned
+ * { error } is recorded and ingestion continues with the next channel.
+ */
+async function runLiveAdapters(
+  marketplaces: string[],
+  force: boolean,
+  summary: IngestSummary,
+): Promise<void> {
+  const absorb = async (
+    label: string,
+    ingestSource: string,
+    run: () => Promise<AdapterResult>,
+  ): Promise<void> => {
+    try {
+      const out = await run()
+      if (out.note) summary.notes.push(`${label}: ${out.note}`)
+      if (out.error) summary.errors.push(`${label}: ${out.error}`)
+      if (out.reviews.length > 0) {
+        await ingestRawReviews(out.reviews, { ingestSource, force, summary })
+      }
+    } catch (err) {
+      summary.errors.push(`${label}: ${err instanceof Error ? err.message : String(err)}`)
+    }
+  }
+
+  // Amazon — per-marketplace third-party feed (review bodies come from a
+  // licensed feed or the import pipeline; no official Amazon review API).
+  for (const mp of marketplaces) {
+    await absorb(`amazon:${mp}`, 'AMAZON_VOC', () => fetchAmazonVocFeed({ marketplace: mp }))
+  }
+  // eBay — channel-wide GetFeedback (not per Amazon marketplace).
+  await absorb('ebay', 'EBAY_API', () => fetchEbayFeedback({ maxPages: 5 }))
 }
 
 export function summarizeReviewIngest(s: IngestSummary): string {
@@ -317,6 +354,7 @@ export function summarizeReviewIngest(s: IngestSummary): string {
     `new=${s.reviewsInserted}`,
     `existing=${s.reviewsSkippedExisting}`,
     `sentiment+=${s.sentimentExtracted}`,
+    s.notes.length > 0 ? `notes=${s.notes.length}` : null,
     s.errors.length > 0 ? `errors=${s.errors.length}` : null,
   ]
     .filter(Boolean)

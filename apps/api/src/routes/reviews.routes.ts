@@ -264,6 +264,11 @@ const reviewsRoutes: FastifyPluginAsync = async (fastify) => {
     return {
       channels: byChannel,
       lastIngestCron: lastCron,
+      config: {
+        mode: process.env.NEXUS_REVIEW_INGEST_MODE === 'live' ? 'live' : 'sandbox',
+        ebayLiveEnabled: process.env.NEXUS_EBAY_REAL_API === 'true',
+        amazonFeedConfigured: Boolean(process.env.NEXUS_AMAZON_REVIEW_FEED_URL),
+      },
       generatedAt: new Date().toISOString(),
     }
   })
