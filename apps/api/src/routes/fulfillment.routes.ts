@@ -5702,10 +5702,16 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
         'name', 'contactName', 'email', 'phone', 'addressLine1', 'city',
         'postalCode', 'country', 'taxId', 'paymentTerms', 'defaultCurrency',
         'leadTimeDays', 'isActive', 'notes',
+        // S2 — supplier-level production/shipping defaults (nullable ints).
+        'productionTimeDays', 'productionUnitsPerDay', 'shippingTimeDays',
       ] as const
+      const NULLABLE_INTS = new Set(['productionTimeDays', 'productionUnitsPerDay', 'shippingTimeDays'])
       const data: Record<string, any> = {}
       for (const k of ALLOWED) {
-        if (k in body) {
+        if (!(k in body)) continue
+        if (NULLABLE_INTS.has(k)) {
+          data[k] = body[k] === null || body[k] === '' ? null : Math.max(0, Math.round(Number(body[k])) || 0)
+        } else {
           data[k] = k === 'leadTimeDays'
             ? Math.max(0, Number(body[k]) || 0)
             : k === 'isActive'
@@ -5716,6 +5722,34 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
       const updated = await prisma.supplier.update({ where: { id }, data })
       return updated
     } catch (error: any) {
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  // S2 — delete a supplier. Guard: refuse when it has purchase orders (keep PO
+  // history); otherwise cascade its SupplierProduct rows and clear any
+  // ReplenishmentRule.preferredSupplierId pointing at it. Closes the create/
+  // edit-but-not-delete gap on the Suppliers page.
+  fastify.delete('/fulfillment/suppliers/:id', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const poCount = await prisma.purchaseOrder.count({ where: { supplierId: id } })
+      if (poCount > 0) {
+        return reply
+          .code(409)
+          .send({ error: `Supplier has ${poCount} purchase order(s) — deactivate instead of deleting.` })
+      }
+      await prisma.$transaction([
+        prisma.replenishmentRule.updateMany({
+          where: { preferredSupplierId: id },
+          data: { preferredSupplierId: null },
+        }),
+        prisma.supplier.delete({ where: { id } }),
+      ])
+      return { ok: true }
+    } catch (error: any) {
+      if (error?.code === 'P2025') return reply.code(404).send({ error: 'supplier not found' })
+      fastify.log.error({ err: error }, '[supplier delete] failed')
       return reply.code(500).send({ error: error?.message ?? String(error) })
     }
   })

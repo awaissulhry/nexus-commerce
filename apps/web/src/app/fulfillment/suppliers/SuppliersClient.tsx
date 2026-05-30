@@ -91,6 +91,24 @@ export default function SuppliersClient() {
     }
   }
 
+  async function deleteSupplier(s: Supplier) {
+    if (
+      !window.confirm(
+        `Delete supplier "${s.name}"? This removes its product costs. (Suppliers with purchase orders can't be deleted — deactivate them instead.)`,
+      )
+    )
+      return
+    try {
+      const res = await fetch(`${API}/api/fulfillment/suppliers/${s.id}`, { method: 'DELETE' })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error ?? 'delete failed')
+      if (selectedId === s.id) setSelectedId(null)
+      await loadSuppliers()
+    } catch (e: any) {
+      alert(e?.message ?? 'Failed to delete supplier')
+    }
+  }
+
   return (
     <div className="space-y-3">
       {/* PD.5 — in-page tabs into the development board (no sidebar link) */}
@@ -132,25 +150,33 @@ export default function SuppliersClient() {
             </div>
           ) : (
             filtered.map((s) => (
-              <button
+              <div
                 key={s.id}
-                onClick={() => setSelectedId(s.id)}
-                className={`flex w-full items-center justify-between border-b border-slate-800 px-3 py-2 text-left text-xs hover:bg-slate-800/60 ${
+                className={`group flex w-full items-center justify-between border-b border-slate-800 px-3 py-2 text-xs hover:bg-slate-800/60 ${
                   s.id === selectedId ? 'bg-slate-800' : ''
                 }`}
               >
-                <div className="min-w-0">
+                <button onClick={() => setSelectedId(s.id)} className="min-w-0 flex-1 text-left">
                   <div className="truncate font-medium text-slate-200">{s.name}</div>
                   <div className="text-[11px] text-slate-500">
                     {s._count?.products ?? 0} products · LT {s.leadTimeDays}d
                   </div>
+                </button>
+                <div className="flex items-center gap-1">
+                  {!s.isActive && (
+                    <span className="rounded bg-slate-700 px-1 text-[10px] text-slate-400">
+                      inactive
+                    </span>
+                  )}
+                  <button
+                    onClick={() => deleteSupplier(s)}
+                    title="Delete supplier"
+                    className="rounded p-1 text-slate-600 opacity-0 transition hover:bg-rose-900/40 hover:text-rose-400 group-hover:opacity-100"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
                 </div>
-                {!s.isActive && (
-                  <span className="rounded bg-slate-700 px-1 text-[10px] text-slate-400">
-                    inactive
-                  </span>
-                )}
-              </button>
+              </div>
             ))
           )}
         </div>
