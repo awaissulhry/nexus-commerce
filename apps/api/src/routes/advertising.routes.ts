@@ -2536,6 +2536,37 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // AF.1 — dump raw v1 'targets' export rows to see how Amazon represents
+  // negative keywords (the negative flag / matchType). Finds the latest
+  // COMPLETED targets export job, re-downloads it, returns counts + samples.
+  // Read-only diagnostic.
+  fastify.get('/advertising/debug/v1-target-sample', async (request, reply) => {
+    const q = request.query as { match?: string; limit?: string }
+    const job = await prisma.amazonAdsExportJob.findFirst({
+      where: { resource: 'targets', status: 'COMPLETED', url: { not: null } },
+      orderBy: { updatedAt: 'desc' },
+      select: { id: true, url: true, updatedAt: true },
+    })
+    if (!job?.url) { reply.status(404); return { error: 'no completed targets export job' } }
+    let records: Array<Record<string, unknown>> = []
+    try {
+      const res = await fetch(job.url)
+      if (!res.ok) { reply.status(502); return { error: `download_${res.status} (presigned url likely expired — re-run a targets export)`, jobId: job.id } }
+      const buf = Buffer.from(await res.arrayBuffer())
+      const isGzip = buf.length >= 2 && buf[0] === 0x1f && buf[1] === 0x8b
+      const { gunzipSync } = await import('node:zlib')
+      const text = (isGzip ? gunzipSync(buf) : buf).toString('utf-8')
+      const parsed = JSON.parse(text)
+      records = Array.isArray(parsed) ? parsed : []
+    } catch (e) { reply.status(500); return { error: (e as Error).message, jobId: job.id } }
+    const negCount = records.filter((r) => (r as { negative?: unknown }).negative === true).length
+    const matchTypes: Record<string, number> = {}
+    for (const r of records) { const mt = String((r as { targetDetails?: { matchType?: string } }).targetDetails?.matchType ?? '∅'); matchTypes[mt] = (matchTypes[mt] ?? 0) + 1 }
+    const matchStr = (q.match || '').toLowerCase()
+    const sample = (matchStr ? records.filter((r) => JSON.stringify(r).toLowerCase().includes(matchStr)) : records).slice(0, Number(q.limit) || 6)
+    return { jobId: job.id, jobUpdatedAt: job.updatedAt, totalRows: records.length, negativeTrueRows: negCount, topLevelKeys: records[0] ? Object.keys(records[0]) : [], matchTypeHistogram: matchTypes, sample }
+  })
+
   fastify.post('/advertising/debug/probe-endpoints', async (request, reply) => {
     const body = request.body as { profileId?: string }
     if (!body?.profileId) return reply.code(400).send({ error: 'profileId required' })
