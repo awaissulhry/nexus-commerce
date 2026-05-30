@@ -1,12 +1,24 @@
 # Reviews — Operator Manual
 
-**Pages:**
-- `/orders/reviews/rules` — Review rules CRUD (when + who gets a review request)
-- `/marketing/reviews/requests` — Dashboard (KPIs, queue, analytics, pause toggle)
-- `/orders?lens=reviews` — Per-order history
-- Per-order: "Request review" button on `/orders/[id]`
+**The `/marketing/reviews` workspace** (one tab bar — `ReviewsNav`):
+- **Feed** `/marketing/reviews` — review feed + KPIs + star ratings + ingest health + spikes
+- **Desk** `/marketing/reviews/desk` — triage + AI-drafted replies (RX.2)
+- **Spotlight** `/marketing/reviews/spotlight` — AI Voice-of-Customer brief (RX.4)
+- **Heatmap / By Product** — day×category + per-product analytics (SR.2)
+- **Spikes** `/marketing/reviews/spikes` — quality-anomaly alerts + "Generate fixes"
+- **Actions** `/marketing/reviews/actions` — closed-loop spike fixes (RX.5)
+- **Automation** — review-domain AutomationRules (SR.3)
+- **Requests** `/marketing/reviews/requests` — post-purchase request pipeline dashboard
+- **Import** `/marketing/reviews/import` — bring in real reviews (CSV/JSON/XLSX) (RX.1)
+- **Rules** `/orders/reviews/rules` — review-request rules CRUD (mounted in the same nav)
 
-This guide covers everything needed to run the post-purchase review pipeline in production: how it works, common ops tasks, what every status means, and troubleshooting.
+Per-order: "Request review" button on `/orders/[id]`; per-order history at `/orders?lens=reviews`.
+
+This guide covers the post-purchase review pipeline (RV-series, §1–11) plus the
+RX-series rebuild that took `/marketing/reviews` to best-in-class:
+RX.0 ratings + nav, RX.1 ingestion/import (§12), RX.2 Response Desk (§13),
+RX.3 real-time/alerts/digest (§14), RX.4 Spotlight (§15), RX.5 action loop (§16),
+RX.6 request enhancements (§17).
 
 ---
 

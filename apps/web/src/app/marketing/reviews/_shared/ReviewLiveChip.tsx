@@ -66,10 +66,13 @@ export function ReviewLiveChip() {
 
   return (
     <span
+      role="status"
+      aria-live="polite"
+      aria-label={lastTs ? `Live — last review event ${new Date(lastTs).toLocaleTimeString()}` : 'Live — listening for review events'}
       className="inline-flex items-center gap-1.5 text-[10px] uppercase tracking-wider px-2 py-1 rounded ring-1 ring-inset bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:ring-emerald-900"
       title={lastTs ? `Last live event ${new Date(lastTs).toLocaleTimeString()}` : 'Listening for live review events'}
     >
-      <span className="relative flex h-2 w-2">
+      <span className="relative flex h-2 w-2" aria-hidden="true">
         <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
         <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
       </span>

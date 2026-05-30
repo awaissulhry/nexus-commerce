@@ -141,7 +141,7 @@ export function DeskClient({
         <div className="ml-auto">
           <select
             value={channel}
-            onChange={(e) => setChannel(e.target.value)}
+            onChange={(e) => setChannel(e.target.value)} aria-label="Filter by channel"
             className="text-sm rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1.5"
           >
             <option value="">All channels</option>
@@ -341,20 +341,20 @@ function ReviewDeskCard({
               <input
                 value={assignee}
                 onChange={(e) => setAssignee(e.target.value)}
-                placeholder="Assignee"
+                placeholder="Assignee" aria-label="Assignee"
                 className="flex-1 text-xs rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1"
               />
               <input
                 value={tags}
                 onChange={(e) => setTags(e.target.value)}
-                placeholder="tags, comma-separated"
+                placeholder="tags, comma-separated" aria-label="Tags, comma separated"
                 className="flex-1 text-xs rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1"
               />
             </div>
             <input
               value={note}
               onChange={(e) => setNote(e.target.value)}
-              placeholder="Internal note"
+              placeholder="Internal note" aria-label="Internal note"
               className="w-full text-xs rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1"
             />
             <div className="flex items-center gap-1.5 flex-wrap">
@@ -413,7 +413,7 @@ function ReviewDeskCard({
           </div>
           <div className="flex items-center gap-1.5 mb-2">
             <select
-              value={locale}
+              value={locale} aria-label="Reply language"
               onChange={(e) => setLocale(e.target.value)}
               className="text-xs rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-1.5 py-1"
             >
@@ -425,7 +425,7 @@ function ReviewDeskCard({
               <option value="en">EN</option>
             </select>
             <select
-              value={tone}
+              value={tone} aria-label="Reply tone"
               onChange={(e) => setTone(e.target.value)}
               className="text-xs rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-1.5 py-1"
             >
