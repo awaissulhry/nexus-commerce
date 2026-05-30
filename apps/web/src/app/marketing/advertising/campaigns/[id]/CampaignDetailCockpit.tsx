@@ -14,7 +14,8 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { ChevronLeft, Check, Lightbulb } from 'lucide-react'
 import { useMarketingEvents } from '@/lib/sync/use-marketing-events'
-import { KpiStrip, type KpiTileSpec } from '@/app/_shared/grid-lens'
+import { KpiStrip, type KpiTileSpec, BulkActionShell } from '@/app/_shared/grid-lens'
+import { Pause, Play, ChevronsUp, ChevronsDown, Ban, Plus } from 'lucide-react'
 import { StatusChip } from '@/app/_shared/ads-ui'
 import { CampaignTrendChart, type TrendRow } from './CampaignTrendChart'
 import { CampaignBudgetPace } from './CampaignBudgetPace'
@@ -72,6 +73,11 @@ export function CampaignDetailCockpit({ campaign, history }: { campaign: Campaig
   const [negForm, setNegForm] = useState({ kind: 'KEYWORD' as 'KEYWORD' | 'ASIN', value: '', match: 'NEGATIVE_EXACT', adGroupId: firstAg, saving: false, msg: '' })
   const [addedNegs, setAddedNegs] = useState<Array<{ kind: string; value: string; match?: string }>>([])
   const [stAddBusy, setStAddBusy] = useState<string | null>(null)
+  // CD.8 — bulk selection on Targeting + Search-terms.
+  const [selTargets, setSelTargets] = useState<Set<string>>(new Set())
+  const [selTerms, setSelTerms] = useState<Set<string>>(new Set())
+  const [bulkBusy, setBulkBusy] = useState(false)
+  const [bulkStatus, setBulkStatus] = useState<string | null>(null)
 
   // CD.1/CD.2 — campaign-scoped windowed trends + period-over-period compare.
   // The single fetch powers both the chart (rows) and the windowed KPI tiles
@@ -193,7 +199,9 @@ export function CampaignDetailCockpit({ campaign, history }: { campaign: Campaig
     const cents = Math.round(parseFloat(v) * 100); if (!Number.isFinite(cents) || cents < 5) return
     setBusy(t.id)
     try {
-      await fetch(`${getBackendUrl()}/api/advertising/targets/${t.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ bidCents: cents }) })
+      // Canonical audited route is /ad-targets/:id (the old /targets/:id PATCH
+      // was a 404 — pre-existing AX.3 bug fixed in CD.8).
+      await fetch(`${getBackendUrl()}/api/advertising/ad-targets/${t.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ bidCents: cents }) })
       setTargets((ts) => ts.map((x) => (x.id === t.id ? { ...x, bidCents: cents } : x)))
       setBidEdit((e) => { const { [t.id]: _, ...rest } = e; return rest })
     } finally { setBusy(null) }
@@ -230,6 +238,43 @@ export function CampaignDetailCockpit({ campaign, history }: { campaign: Campaig
       else if (firstAg) { await fetch(`${getBackendUrl()}/api/advertising/keywords/create`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adGroupId: firstAg, keywordText: query, matchType: as, bidEur: 0.5 }) }).catch(() => {}) }
     } finally { setStAddBusy(null) }
   }
+  // CD.8 — bulk target status (loop the audited /ad-targets/:id PATCH).
+  const bulkTargetStatus = async (status: 'ENABLED' | 'PAUSED') => {
+    const ids = [...selTargets]; if (!ids.length) return
+    setBulkBusy(true); setBulkStatus(null)
+    let ok = 0, fail = 0
+    for (const id of ids) {
+      try {
+        const r = await fetch(`${getBackendUrl()}/api/advertising/ad-targets/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status }) }).then((x) => x.json())
+        if (r?.ok === false) fail++; else { ok++; setTargets((ts) => ts.map((x) => (x.id === id ? { ...x, status } : x))) }
+      } catch { fail++ }
+      setBulkStatus(`${ok + fail}/${ids.length}…`)
+    }
+    setBulkBusy(false); setBulkStatus(`✓ ${ok} updated${fail ? ` · ${fail} failed` : ''}`)
+    setSelTargets(new Set())
+  }
+  // CD.8 — bulk bid adjust via the audited /ad-targets/bulk-bid endpoint.
+  const bulkTargetBid = async (factor: number) => {
+    const ids = [...selTargets]; if (!ids.length) return
+    setBulkBusy(true); setBulkStatus(null)
+    const entries = targets.filter((t) => selTargets.has(t.id)).map((t) => ({ adTargetId: t.id, bidCents: Math.max(5, Math.round(t.bidCents * factor)) }))
+    try {
+      const r = await fetch(`${getBackendUrl()}/api/advertising/ad-targets/bulk-bid`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ entries, reason: `bulk ${factor > 1 ? '+' : '−'}${Math.abs(Math.round((factor - 1) * 100))}%` }) }).then((x) => x.json())
+      if (r?.ok === false) throw new Error(r.error)
+      setTargets((ts) => ts.map((x) => { const e = entries.find((n) => n.adTargetId === x.id); return e ? { ...x, bidCents: e.bidCents } : x }))
+      setBulkStatus(`✓ ${entries.length} bids updated`)
+    } catch (e) { setBulkStatus((e as Error).message) } finally { setBulkBusy(false); setSelTargets(new Set()) }
+  }
+  // CD.8 — bulk search-term actions (reuse the single-row handlers).
+  const bulkTermAction = async (as: 'NEGATIVE' | 'EXACT') => {
+    const qs = [...selTerms]; if (!qs.length) return
+    setBulkBusy(true); setBulkStatus(null)
+    let done = 0
+    for (const q of qs) { await addSearchTermAs(q, as); done++; setBulkStatus(`${done}/${qs.length}…`) }
+    setBulkBusy(false); setBulkStatus(`✓ ${done} ${as === 'NEGATIVE' ? 'negated' : 'promoted to exact'}`)
+    setSelTerms(new Set())
+  }
+
   const saveSettings = async () => {
     setSettings((s) => ({ ...s, saving: true, msg: '' }))
     try {
@@ -339,13 +384,24 @@ export function CampaignDetailCockpit({ campaign, history }: { campaign: Campaig
               </div>
             )}
           </div>
-          <table className="w-full text-sm"><thead className="bg-slate-50 dark:bg-slate-900/60 text-xs text-slate-500"><tr><th className="text-left px-3 py-2">Target</th><th className="text-left px-3 py-2">Match</th><th className="text-right px-3 py-2">Bid</th><th className="text-right px-3 py-2">Impr</th><th className="text-right px-3 py-2">Clicks</th><th className="text-right px-3 py-2">Spend</th><th className="text-right px-3 py-2">Sales</th><th className="text-right px-3 py-2">ACOS</th><th className="text-right px-3 py-2">14d</th></tr></thead>
-          <tbody className="divide-y divide-slate-100 dark:divide-slate-800">{targets.map((t) => { const a = t.salesCents > 0 ? t.spendCents / t.salesCents : null; return <tr key={t.id} className="hover:bg-slate-50 dark:hover:bg-slate-900/40"><td className="px-3 py-1.5">{t.expressionValue}</td><td className="px-3 py-1.5 text-xs text-slate-500">{t.expressionType}</td><td className="px-3 py-1.5 text-right tabular-nums">{bidEdit[t.id] != null ? <span className="inline-flex items-center gap-1">€<input autoFocus type="number" step="0.01" value={bidEdit[t.id]} onChange={(e) => setBidEdit((s) => ({ ...s, [t.id]: e.target.value }))} onKeyDown={(e) => { if (e.key === 'Enter') saveBid(t); if (e.key === 'Escape') setBidEdit((s) => { const { [t.id]: _, ...r } = s; return r }) }} className="w-14 px-1 py-0.5 text-right text-xs rounded border border-blue-400 bg-white dark:bg-slate-900" disabled={busy === t.id} /><button onClick={() => saveBid(t)} className="text-blue-600"><Check size={12} /></button>{(() => { const sg = bidSug[t.id]; return sg && sg !== 'loading' && sg !== 'none' ? <span className="text-[10px] text-slate-400" title={`suggested range · basis: ${sg.basis}`}>{eur(sg.lowCents)}–{eur(sg.highCents)}</span> : null })()}</span> : <span className="inline-flex items-center gap-1"><button onClick={() => setBidEdit((s) => ({ ...s, [t.id]: (t.bidCents / 100).toFixed(2) }))} className="hover:underline decoration-dotted">{eur(t.bidCents)}</button><button onClick={() => suggestBid(t)} title="Suggest a bid from account CPC history" className="text-violet-500 hover:text-violet-600 disabled:opacity-40" disabled={bidSug[t.id] === 'loading'}>{bidSug[t.id] === 'loading' ? '…' : <Lightbulb size={11} />}</button></span>}</td><td className="px-3 py-1.5 text-right tabular-nums">{num(t.impressions)}</td><td className="px-3 py-1.5 text-right tabular-nums">{num(t.clicks)}</td><td className="px-3 py-1.5 text-right tabular-nums">{eur(t.spendCents)}</td><td className="px-3 py-1.5 text-right tabular-nums">{eur(t.salesCents)}</td><td className="px-3 py-1.5 text-right tabular-nums">{pct(a)}</td><td className="px-3 py-1.5 text-right" title="Spend, last 14 days"><Sparkline data={tgtSparks[t.id]} color="#f59e0b" /></td></tr> })}</tbody></table>
+          {selTargets.size > 0 && <div className="px-3 py-2 border-b border-slate-200 dark:border-slate-800"><BulkActionShell selectedCount={selTargets.size} noun="target" onClear={() => setSelTargets(new Set())} busy={bulkBusy} status={bulkStatus} actions={[
+            { id: 'enable', label: 'Enable', icon: Play, onClick: () => bulkTargetStatus('ENABLED') },
+            { id: 'pause', label: 'Pause', icon: Pause, onClick: () => bulkTargetStatus('PAUSED') },
+            { id: 'bidup', label: 'Bid +10%', icon: ChevronsUp, tone: 'primary', onClick: () => bulkTargetBid(1.1) },
+            { id: 'biddown', label: 'Bid −10%', icon: ChevronsDown, onClick: () => bulkTargetBid(0.9) },
+          ]} /></div>}
+          <table className="w-full text-sm"><thead className="bg-slate-50 dark:bg-slate-900/60 text-xs text-slate-500"><tr><th className="px-2 py-2 w-8"><input type="checkbox" aria-label="Select all targets" checked={targets.length > 0 && selTargets.size === targets.length} onChange={(e) => setSelTargets(e.target.checked ? new Set(targets.map((t) => t.id)) : new Set())} /></th><th className="text-left px-3 py-2">Target</th><th className="text-left px-3 py-2">Match</th><th className="text-right px-3 py-2">Bid</th><th className="text-right px-3 py-2">Impr</th><th className="text-right px-3 py-2">Clicks</th><th className="text-right px-3 py-2">Spend</th><th className="text-right px-3 py-2">Sales</th><th className="text-right px-3 py-2">ACOS</th><th className="text-right px-3 py-2">14d</th></tr></thead>
+          <tbody className="divide-y divide-slate-100 dark:divide-slate-800">{targets.map((t) => { const a = t.salesCents > 0 ? t.spendCents / t.salesCents : null; return <tr key={t.id} className={`hover:bg-slate-50 dark:hover:bg-slate-900/40 ${selTargets.has(t.id) ? 'bg-blue-50/50 dark:bg-blue-950/20' : ''}`}><td className="px-2 text-center"><input type="checkbox" aria-label={`Select ${t.expressionValue}`} checked={selTargets.has(t.id)} onChange={(e) => setSelTargets((s) => { const n = new Set(s); if (e.target.checked) n.add(t.id); else n.delete(t.id); return n })} /></td><td className="px-3 py-1.5">{t.expressionValue}</td><td className="px-3 py-1.5 text-xs text-slate-500">{t.expressionType}</td><td className="px-3 py-1.5 text-right tabular-nums">{bidEdit[t.id] != null ? <span className="inline-flex items-center gap-1">€<input autoFocus type="number" step="0.01" value={bidEdit[t.id]} onChange={(e) => setBidEdit((s) => ({ ...s, [t.id]: e.target.value }))} onKeyDown={(e) => { if (e.key === 'Enter') saveBid(t); if (e.key === 'Escape') setBidEdit((s) => { const { [t.id]: _, ...r } = s; return r }) }} className="w-14 px-1 py-0.5 text-right text-xs rounded border border-blue-400 bg-white dark:bg-slate-900" disabled={busy === t.id} /><button onClick={() => saveBid(t)} className="text-blue-600"><Check size={12} /></button>{(() => { const sg = bidSug[t.id]; return sg && sg !== 'loading' && sg !== 'none' ? <span className="text-[10px] text-slate-400" title={`suggested range · basis: ${sg.basis}`}>{eur(sg.lowCents)}–{eur(sg.highCents)}</span> : null })()}</span> : <span className="inline-flex items-center gap-1"><button onClick={() => setBidEdit((s) => ({ ...s, [t.id]: (t.bidCents / 100).toFixed(2) }))} className="hover:underline decoration-dotted">{eur(t.bidCents)}</button><button onClick={() => suggestBid(t)} title="Suggest a bid from account CPC history" className="text-violet-500 hover:text-violet-600 disabled:opacity-40" disabled={bidSug[t.id] === 'loading'}>{bidSug[t.id] === 'loading' ? '…' : <Lightbulb size={11} />}</button></span>}</td><td className="px-3 py-1.5 text-right tabular-nums">{num(t.impressions)}</td><td className="px-3 py-1.5 text-right tabular-nums">{num(t.clicks)}</td><td className="px-3 py-1.5 text-right tabular-nums">{eur(t.spendCents)}</td><td className="px-3 py-1.5 text-right tabular-nums">{eur(t.salesCents)}</td><td className="px-3 py-1.5 text-right tabular-nums">{pct(a)}</td><td className="px-3 py-1.5 text-right" title="Spend, last 14 days"><Sparkline data={tgtSparks[t.id]} color="#f59e0b" /></td></tr> })}</tbody></table>
         </>)}
         {tab === 'searchterms' && (
           searchTerms == null ? <div className="p-6 text-center text-slate-400 text-sm">Loading…</div> :
-          <table className="w-full text-sm"><thead className="bg-slate-50 dark:bg-slate-900/60 text-xs text-slate-500"><tr><th className="text-left px-3 py-2">Search term</th><th className="text-left px-3 py-2">Match</th><th className="text-right px-3 py-2">Impr</th><th className="text-right px-3 py-2">Clicks</th><th className="text-right px-3 py-2">Spend</th><th className="text-right px-3 py-2">Orders</th><th className="text-right px-3 py-2">Sales</th><th className="px-3 py-2"></th></tr></thead>
-          <tbody className="divide-y divide-slate-100 dark:divide-slate-800">{searchTerms.length === 0 ? <tr><td colSpan={8} className="px-3 py-6 text-center text-slate-400 text-xs">No search-term data yet (run the search-terms report cycle).</td></tr> : searchTerms.map((s, i) => <tr key={i} className="hover:bg-slate-50 dark:hover:bg-slate-900/40"><td className="px-3 py-1.5">{String(s.query ?? '')}</td><td className="px-3 py-1.5 text-xs text-slate-500">{String(s.matchType ?? '')}</td><td className="px-3 py-1.5 text-right tabular-nums">{num(Number(s.impressions ?? 0))}</td><td className="px-3 py-1.5 text-right tabular-nums">{num(Number(s.clicks ?? 0))}</td><td className="px-3 py-1.5 text-right tabular-nums">{eur(Number(s.costMicros ?? 0) / 10000)}</td><td className="px-3 py-1.5 text-right tabular-nums">{num(Number(s.orders7d ?? 0))}</td><td className="px-3 py-1.5 text-right tabular-nums">{eur(Number(s.sales7dCents ?? 0))}</td><td className="px-3 py-1.5 text-right"><div className="inline-flex items-center gap-1 text-xs">{(['EXACT', 'PHRASE', 'BROAD'] as const).map((m) => <button key={m} disabled={stAddBusy === String(s.query ?? '') + m} onClick={() => addSearchTermAs(String(s.query ?? ''), m)} title={`Add as ${m.toLowerCase()} keyword`} className="px-1 text-blue-600 hover:underline disabled:opacity-40">{m[0]}</button>)}<button onClick={() => addSearchTermAs(String(s.query ?? ''), 'NEGATIVE')} className="px-1 text-rose-600 hover:underline">⊘</button></div></td></tr>)}</tbody></table>
+          <>
+          {selTerms.size > 0 && <div className="px-3 py-2 border-b border-slate-200 dark:border-slate-800"><BulkActionShell selectedCount={selTerms.size} noun="term" onClear={() => setSelTerms(new Set())} busy={bulkBusy} status={bulkStatus} actions={[
+            { id: 'negate', label: 'Negate', icon: Ban, tone: 'danger', onClick: () => bulkTermAction('NEGATIVE') },
+            { id: 'promote', label: 'Add as exact', icon: Plus, tone: 'primary', onClick: () => bulkTermAction('EXACT') },
+          ]} /></div>}
+          <table className="w-full text-sm"><thead className="bg-slate-50 dark:bg-slate-900/60 text-xs text-slate-500"><tr><th className="px-2 py-2 w-8"><input type="checkbox" aria-label="Select all search terms" checked={searchTerms.length > 0 && selTerms.size === searchTerms.length} onChange={(e) => setSelTerms(e.target.checked ? new Set(searchTerms.map((s) => String(s.query ?? ''))) : new Set())} /></th><th className="text-left px-3 py-2">Search term</th><th className="text-left px-3 py-2">Match</th><th className="text-right px-3 py-2">Impr</th><th className="text-right px-3 py-2">Clicks</th><th className="text-right px-3 py-2">Spend</th><th className="text-right px-3 py-2">Orders</th><th className="text-right px-3 py-2">Sales</th><th className="px-3 py-2"></th></tr></thead>
+          <tbody className="divide-y divide-slate-100 dark:divide-slate-800">{searchTerms.length === 0 ? <tr><td colSpan={9} className="px-3 py-6 text-center text-slate-400 text-xs">No search-term data yet (run the search-terms report cycle).</td></tr> : searchTerms.map((s, i) => { const qk = String(s.query ?? ''); return <tr key={i} className={`hover:bg-slate-50 dark:hover:bg-slate-900/40 ${selTerms.has(qk) ? 'bg-blue-50/50 dark:bg-blue-950/20' : ''}`}><td className="px-2 text-center"><input type="checkbox" aria-label={`Select ${qk}`} checked={selTerms.has(qk)} onChange={(e) => setSelTerms((st) => { const n = new Set(st); if (e.target.checked) n.add(qk); else n.delete(qk); return n })} /></td><td className="px-3 py-1.5">{String(s.query ?? '')}</td><td className="px-3 py-1.5 text-xs text-slate-500">{String(s.matchType ?? '')}</td><td className="px-3 py-1.5 text-right tabular-nums">{num(Number(s.impressions ?? 0))}</td><td className="px-3 py-1.5 text-right tabular-nums">{num(Number(s.clicks ?? 0))}</td><td className="px-3 py-1.5 text-right tabular-nums">{eur(Number(s.costMicros ?? 0) / 10000)}</td><td className="px-3 py-1.5 text-right tabular-nums">{num(Number(s.orders7d ?? 0))}</td><td className="px-3 py-1.5 text-right tabular-nums">{eur(Number(s.sales7dCents ?? 0))}</td><td className="px-3 py-1.5 text-right"><div className="inline-flex items-center gap-1 text-xs">{(['EXACT', 'PHRASE', 'BROAD'] as const).map((m) => <button key={m} disabled={stAddBusy === String(s.query ?? '') + m} onClick={() => addSearchTermAs(String(s.query ?? ''), m)} title={`Add as ${m.toLowerCase()} keyword`} className="px-1 text-blue-600 hover:underline disabled:opacity-40">{m[0]}</button>)}<button onClick={() => addSearchTermAs(String(s.query ?? ''), 'NEGATIVE')} className="px-1 text-rose-600 hover:underline">⊘</button></div></td></tr> })}</tbody></table></>
         )}
         {tab === 'negatives' && (<>
           <div className="border-b border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/40 px-3 py-2 flex flex-wrap items-end gap-2">
