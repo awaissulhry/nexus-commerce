@@ -28,6 +28,9 @@ export type AlertClass =
   // the operator has to come back and poll the recent-jobs strip.
   | 'imagePublishComplete'
   | 'imagePublishFailed'
+  // RX.3 — review alerts.
+  | 'reviewNegative'
+  | 'reviewSpike'
 
 interface BrowserNotificationConfig {
   enabled: boolean
@@ -51,6 +54,10 @@ export const DEFAULT_CONFIG: BrowserNotificationConfig = {
     // noisy on a busy day.
     imagePublishComplete: false,
     imagePublishFailed: true,
+    // RX.3 — negative reviews on by default (operators want to respond
+    // fast); spikes off by default to avoid noise.
+    reviewNegative: true,
+    reviewSpike: false,
   },
   highValueOrderThresholdCents: 10_000, // €100
 }
@@ -86,6 +93,14 @@ export const ALERT_CLASS_META: Record<
   imagePublishFailed: {
     label: 'Image publish — failed',
     description: 'A channel image publish failed (FATAL feed, eBay ReviseItem error, Shopify 4xx/5xx).',
+  },
+  reviewNegative: {
+    label: 'Negative review',
+    description: 'A new negative review (or ≤2★) landed on any channel — respond fast from the Desk.',
+  },
+  reviewSpike: {
+    label: 'Review spike',
+    description: 'A surge in negative reviews for a product/category vs its baseline.',
   },
 }
 

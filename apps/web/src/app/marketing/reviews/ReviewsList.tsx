@@ -1,9 +1,10 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { CheckCircle2, MinusCircle, AlertCircle, Star } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
+import { useReviewEventsRefresh } from '@/hooks/use-review-events-refresh'
 
 interface ReviewRow {
   id: string
@@ -42,7 +43,7 @@ export function ReviewsList({ initial }: { initial: ReviewRow[] }) {
   const [categoryFilter, setCategoryFilter] = useState<string>('')
   const [marketplaceFilter, setMarketplaceFilter] = useState<string>('')
 
-  useEffect(() => {
+  const loadItems = useCallback(() => {
     const url = new URL(`${getBackendUrl()}/api/reviews`)
     url.searchParams.set('sinceDays', '30')
     url.searchParams.set('limit', '100')
@@ -56,6 +57,13 @@ export function ReviewsList({ initial }: { initial: ReviewRow[] }) {
       })
       .catch(() => {})
   }, [labelFilter, categoryFilter, marketplaceFilter])
+
+  useEffect(() => {
+    loadItems()
+  }, [loadItems])
+
+  // RX.3 — live-refresh the feed when new reviews land / are answered.
+  useReviewEventsRefresh(loadItems, { debounceMs: 1500 })
 
   const marketplaces = useMemo(
     () =>

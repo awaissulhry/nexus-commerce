@@ -30,6 +30,8 @@ import {
 } from '../services/reviews/review-import.service.js'
 import { draftReviewReply } from '../services/reviews/review-reply.service.js'
 import { respondToEbayFeedback } from '../services/reviews/adapters/ebay-feedback.adapter.js'
+import { sseResponseHeaders } from '../lib/sse.js'
+import { publishReviewEvent } from '../services/review-events.service.js'
 import { runReviewRuleEvaluatorOnce } from '../jobs/review-rule-evaluator.job.js'
 import { runReviewMailerOnce } from '../jobs/review-request-mailer.job.js'
 
@@ -355,6 +357,51 @@ const reviewsRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // ── GET /reviews/events (RX.3) — SSE live stream ────────────────────
+  fastify.get('/reviews/events', async (request, reply) => {
+    reply.raw.writeHead(200, sseResponseHeaders(request.headers.origin as string | undefined))
+    reply.raw.write(`event: ping\ndata: ${JSON.stringify({ ts: Date.now(), connected: true })}\n\n`)
+
+    const { subscribeReviewEvents, replayReviewEventsSince } = await import(
+      '../services/review-events.service.js'
+    )
+    const send = (event: { type: string; ts: number }) => {
+      try {
+        reply.raw.write(`event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`)
+      } catch {
+        // connection dead — close handler cleans up
+      }
+    }
+
+    const sinceRaw = (request.query as { since?: string })?.since
+    const sinceMs = sinceRaw ? Number(sinceRaw) : NaN
+    if (Number.isFinite(sinceMs) && sinceMs > 0) {
+      const replayed = replayReviewEventsSince(sinceMs)
+      for (const event of replayed) send(event)
+      if (replayed.length > 0) {
+        reply.raw.write(
+          `event: replay.done\ndata: ${JSON.stringify({ ts: Date.now(), count: replayed.length })}\n\n`,
+        )
+      }
+    }
+
+    const unsubscribe = subscribeReviewEvents(send)
+    const heartbeat = setInterval(() => {
+      try {
+        reply.raw.write(`: heartbeat ${Date.now()}\n\n`)
+      } catch {
+        // ignore
+      }
+    }, 25_000)
+
+    request.raw.on('close', () => {
+      clearInterval(heartbeat)
+      unsubscribe()
+    })
+
+    await new Promise(() => {})
+  })
+
   // ── GET /reviews/desk/stats (RX.2) ──────────────────────────────────
   // Triage workqueue counters. null triageStatus counts as NEW.
   fastify.get('/reviews/desk/stats', async (request, reply) => {
@@ -515,6 +562,12 @@ const reviewsRoutes: FastifyPluginAsync = async (fastify) => {
       await prisma.review.update({
         where: { id },
         data: { triageStatus: 'RESPONDED', triageUpdatedAt: new Date() },
+      })
+      publishReviewEvent({
+        type: 'review.responded',
+        reviewId: id,
+        channel: review.channel,
+        ts: Date.now(),
       })
     }
 

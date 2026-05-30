@@ -10,6 +10,7 @@
 import { Inbox } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { ReviewsNav } from '../_shared/ReviewsNav'
+import { ReviewLiveChip } from '../_shared/ReviewLiveChip'
 import { DeskClient, type DeskStats, type DeskReview } from './DeskClient'
 
 export const dynamic = 'force-dynamic'
@@ -51,6 +52,7 @@ export default async function ReviewDeskPage() {
             eBay replies post for real, Amazon/Shopify are recorded when you post them on-platform.
           </p>
         </div>
+        <ReviewLiveChip />
       </div>
 
       <ReviewsNav />

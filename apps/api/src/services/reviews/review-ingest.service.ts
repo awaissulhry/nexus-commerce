@@ -34,6 +34,7 @@ import {
 import { fetchEbayFeedback } from './adapters/ebay-feedback.adapter.js'
 import { fetchAmazonVocFeed } from './adapters/amazon-voc.adapter.js'
 import type { AdapterResult } from './adapters/types.js'
+import { publishReviewEvent } from '../review-events.service.js'
 
 const FIXTURE_DIR =
   process.env.NEXUS_REVIEW_FIXTURE_DIR ??
@@ -274,6 +275,36 @@ export async function ingestRawReviews(
       await persistSentiment(extract)
       await updateCategoryRates(result.id, extract)
       summary.sentimentExtracted += 1
+
+      // RX.3 — broadcast to the live bus so the Feed/Desk auto-refresh
+      // and negative reviews fire operator alerts. Only for genuinely
+      // new rows (a forced re-classify shouldn't re-alert).
+      if (result.isNew) {
+        const now = Date.now()
+        publishReviewEvent({
+          type: 'review.created',
+          reviewId: result.id,
+          channel: raw.channel,
+          marketplace: raw.marketplace ?? null,
+          rating: raw.rating ?? null,
+          label: extract.label,
+          productId: null,
+          ts: now,
+        })
+        if (extract.label === 'NEGATIVE' || (raw.rating != null && raw.rating <= 2)) {
+          publishReviewEvent({
+            type: 'review.negative',
+            reviewId: result.id,
+            channel: raw.channel,
+            marketplace: raw.marketplace ?? null,
+            rating: raw.rating ?? null,
+            productId: null,
+            productName: null,
+            excerpt: raw.body.slice(0, 160),
+            ts: now,
+          })
+        }
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       summary.errors.push(`review ${raw.externalReviewId}: ${msg}`)

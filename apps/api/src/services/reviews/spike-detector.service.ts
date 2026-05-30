@@ -16,6 +16,7 @@
 
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
+import { publishReviewEvent } from '../review-events.service.js'
 
 const SPIKE_MULTIPLIER = Number(process.env.NEXUS_REVIEW_SPIKE_MULTIPLIER ?? 2.0)
 const MIN_NEGATIVE_7D = Number(process.env.NEXUS_REVIEW_SPIKE_MIN_7D ?? 3)
@@ -168,7 +169,7 @@ export async function runSpikeDetectorOnce(): Promise<DetectionSummary> {
         continue
       }
       const sampleTopPhrases = await collectSampleTopPhrases(row)
-      await prisma.reviewSpike.create({
+      const created = await prisma.reviewSpike.create({
         data: {
           productId: row.productId,
           marketplace: row.marketplace,
@@ -181,8 +182,19 @@ export async function runSpikeDetectorOnce(): Promise<DetectionSummary> {
           sampleTopPhrases,
           status: 'OPEN',
         },
+        select: { id: true },
       })
       summary.spikesDetected += 1
+      // RX.3 — push to the live bus for the spike banner + notification.
+      publishReviewEvent({
+        type: 'review.spike.detected',
+        spikeId: created.id,
+        productId: row.productId,
+        marketplace: row.marketplace,
+        category: row.category,
+        multiplier: typeof multiplier === 'number' ? multiplier : Number(multiplier) || null,
+        ts: Date.now(),
+      })
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       summary.errors.push(`${row.productId}/${row.marketplace}/${row.category}: ${msg}`)

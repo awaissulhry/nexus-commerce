@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
+import { useReviewEventsRefresh } from '@/hooks/use-review-events-refresh'
 import {
   Sparkles,
   Loader2,
@@ -92,6 +93,15 @@ export function DeskClient({
   useEffect(() => {
     load(status, channel)
   }, [status, channel, load])
+
+  // RX.3 — live-refresh the queue + counters as reviews land / are answered.
+  useReviewEventsRefresh(
+    useCallback(() => {
+      load(status, channel)
+      refreshStats()
+    }, [load, status, channel, refreshStats]),
+    { debounceMs: 1500 },
+  )
 
   // When a card finishes an action that changes its bucket, drop it from
   // the current list and refresh the counters.
