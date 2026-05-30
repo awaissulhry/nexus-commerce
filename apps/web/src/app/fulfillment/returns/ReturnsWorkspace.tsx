@@ -40,190 +40,22 @@ import { useInvalidationChannel } from '@/lib/sync/invalidation-channel'
 import { useInboundEvents } from '@/lib/sync/use-inbound-events'
 import { useOutboundEvents } from '@/lib/sync/use-outbound-events'
 import { useListingEvents } from '@/lib/sync/use-listing-events'
-
-// R2.2 — per-item inspection checklist. JSONB on ReturnItem.
-type ItemChecklist = {
-  packagingPresent?: boolean
-  tagsIntact?: boolean
-  visibleDamage?: boolean
-  damageNotes?: string
-  functionalTestPassed?: boolean | null
-  signsOfUse?: 'NONE' | 'LIGHT' | 'HEAVY'
-}
-
-// R2.1 — activity-log entry shown in the drawer timeline.
-type AuditEntry = {
-  id: string
-  userId: string | null
-  action: string
-  before: unknown
-  after: unknown
-  metadata: unknown
-  createdAt: string
-}
-
-const ACTION_LABEL: Record<string, { label: string; tone: 'info' | 'success' | 'warning' | 'danger' }> = {
-  'create':                { label: 'Created',                  tone: 'info' },
-  'receive':               { label: 'Marked received',          tone: 'info' },
-  'inspect':               { label: 'Inspection saved',         tone: 'warning' },
-  'restock':               { label: 'Restocked',                tone: 'success' },
-  'refund':                { label: 'Refund issued',            tone: 'success' },
-  'refund-failed':         { label: 'Refund failed',            tone: 'danger' },
-  'refund-retry-manual':   { label: 'Refund retry (manual)',    tone: 'warning' },
-  'refund-retry-auto':     { label: 'Refund retry (auto)',      tone: 'info' },
-  'scrap':                 { label: 'Scrapped',                 tone: 'danger' },
-  'attach-label':          { label: 'Label attached',           tone: 'info' },
-  'mark-label-emailed':    { label: 'Label emailed to customer', tone: 'info' },
-  'remove-label':          { label: 'Label removed',            tone: 'warning' },
-  'generate-return-label': { label: 'Sendcloud return label generated', tone: 'info' },
-  'carrier-scan':          { label: 'Carrier scan',             tone: 'info' },
-  'edit-notes':            { label: 'Notes edited',             tone: 'info' },
-  'edit-item':             { label: 'Item updated',             tone: 'info' },
-  'upload-item-photo':     { label: 'Photo uploaded',           tone: 'info' },
-  'remove-item-photo':     { label: 'Photo removed',            tone: 'warning' },
-  'bulk-approve':          { label: 'Approved (bulk)',          tone: 'info' },
-  'bulk-deny':             { label: 'Denied (bulk)',            tone: 'danger' },
-  'bulk-receive':          { label: 'Marked received (bulk)',   tone: 'info' },
-  'email-received':        { label: 'Email: received',          tone: 'info' },
-  'email-refunded':        { label: 'Email: refunded',          tone: 'info' },
-  'email-rejected':        { label: 'Email: rejected',          tone: 'warning' },
-}
-
-// R5.1 — refund history shape.
-type RefundAttempt = {
-  id: string
-  attemptedAt: string
-  outcome: string
-  channelRefundId: string | null
-  errorMessage: string | null
-  durationMs: number | null
-}
-// F1.4 — Italian nota di credito (one per Refund, lazy-assigned).
-type CreditNoteRow = {
-  id: string
-  creditNoteNumber: string
-  fiscalYear: number
-  sequenceNumber: number
-  amountCents: number
-  currencyCode: string
-  causale: string | null
-  originalInvoiceId: string | null
-  sdiStatus: string | null
-  issuedAt: string
-}
-type RefundRow = {
-  id: string
-  amountCents: number
-  currencyCode: string
-  kind: 'CASH' | 'STORE_CREDIT' | 'EXCHANGE'
-  channel: string
-  channelStatus: 'PENDING' | 'POSTED' | 'FAILED' | 'MANUAL_REQUIRED' | 'NOT_IMPLEMENTED'
-  channelRefundId: string | null
-  channelError: string | null
-  channelPostedAt: string | null
-  reason: string | null
-  actor: string | null
-  createdAt: string
-  attempts: RefundAttempt[]
-  creditNote?: CreditNoteRow | null
-}
-
-type ReturnRow = {
-  id: string
-  orderId: string | null
-  channel: string
-  marketplace: string | null
-  rmaNumber: string | null
-  status: string
-  reason: string | null
-  conditionGrade: string | null
-  refundStatus: string
-  refundCents: number | null
-  isFbaReturn: boolean
-  receivedAt: string | null
-  inspectedAt: string | null
-  refundedAt: string | null
-  restockedAt: string | null
-  // Return label tracking (operator-attached for v0; native carrier
-  // integration in a follow-up).
-  returnLabelUrl: string | null
-  returnLabelCarrier: string | null
-  returnTrackingNumber: string | null
-  returnLabelGeneratedAt: string | null
-  returnLabelEmailedAt: string | null
-  notes: string | null
-  items: Array<{
-    id: string
-    sku: string
-    productId: string | null
-    quantity: number
-    conditionGrade: string | null
-    notes: string | null
-    photoUrls: string[]
-    inspectionChecklist: ItemChecklist | null
-    disposition: string | null
-    scrapReason: string | null
-  }>
-  // R2.1 — drawer-only fields. Populated by GET /returns/:id when
-  // the route includes the order relation; absent on the list response.
-  order?: {
-    id: string
-    channel: string
-    marketplace: string | null
-    channelOrderId: string | null
-    customerName: string | null
-    customerEmail: string | null
-    shippingAddress: Record<string, unknown> | null
-    createdAt: string
-    shipments: Array<{
-      id: string
-      status: string
-      trackingNumber: string | null
-      trackingUrl: string | null
-      carrierCode: string | null
-      shippedAt: string | null
-      deliveredAt: string | null
-    }>
-  } | null
-  // UI.1 — latest POSTED refund's credit note (when present). Surfaced
-  // on the list row as a "NC-NNNNN/YYYY" badge so the operator sees
-  // fiscal-doc state at a glance without opening the drawer.
-  refunds?: Array<{
-    id: string
-    creditNote: { creditNoteNumber: string; sdiStatus: string | null } | null
-  }>
-  createdAt: string
-}
-
-const STATUS_TONE: Record<string, 'default' | 'success' | 'warning' | 'danger' | 'info'> = {
-  REQUESTED: 'default',
-  AUTHORIZED: 'info',
-  IN_TRANSIT: 'info',
-  RECEIVED: 'warning',
-  INSPECTING: 'warning',
-  RESTOCKED: 'success',
-  REFUNDED: 'success',
-  REJECTED: 'danger',
-  SCRAPPED: 'danger',
-}
-
-const CHANNEL_TONE: Record<string, string> = {
-  AMAZON: 'bg-orange-50 text-orange-700 border-orange-200',
-  EBAY: 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-900',
-  SHOPIFY: 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-900',
-  WOOCOMMERCE: 'bg-violet-50 dark:bg-violet-950/40 text-violet-700 dark:text-violet-300 border-violet-200 dark:border-violet-900',
-  ETSY: 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-900',
-}
-
-// CHANNELS retired in U.67 — now sourced from ACTIVE_CHANNELS_OPTIONS.
-const STATUSES = ['ALL', 'REQUESTED', 'AUTHORIZED', 'IN_TRANSIT', 'RECEIVED', 'INSPECTING', 'RESTOCKED', 'REFUNDED', 'REJECTED', 'SCRAPPED'] as const
-
-type SavedView = {
-  id: string
-  name: string
-  filters: Record<string, unknown>
-  isDefault: boolean
-}
+// RX.0 — domain types + tone/label constants now live in the shared
+// returns module so the command center, policies page, and analytics
+// import one canonical set (no per-surface drift).
+import {
+  ACTION_LABEL,
+  CHANNEL_TONE,
+  STATUS_TONE,
+  STATUSES,
+  type AuditEntry,
+  type ItemChecklist,
+  type RefundDeadlineView,
+  type RefundRow,
+  type ReturnFull,
+  type ReturnRow,
+  type SavedView,
+} from '@/app/_shared/returns'
 
 export default function ReturnsWorkspace() {
   const router = useRouter()
@@ -1099,23 +931,24 @@ function ReturnDrawer({ id, onClose, onChanged }: { id: string; onClose: () => v
   // context.
   const [audit, setAudit] = useState<AuditEntry[]>([])
   const [refunds, setRefunds] = useState<RefundRow[]>([])
+  // RX.0 — refund-deadline now arrives with the aggregate so the badge
+  // renders from drawer state instead of its own fetch.
+  const [deadline, setDeadline] = useState<RefundDeadlineView | null>(null)
 
   const fetchOne = useCallback(async () => {
     setLoading(true)
     try {
-      const [retRes, logRes, refundsRes] = await Promise.all([
-        fetch(`${getBackendUrl()}/api/fulfillment/returns/${id}`, { cache: 'no-store' }),
-        fetch(`${getBackendUrl()}/api/fulfillment/returns/${id}/audit-log`, { cache: 'no-store' }),
-        fetch(`${getBackendUrl()}/api/fulfillment/returns/${id}/refunds`, { cache: 'no-store' }),
-      ])
-      if (retRes.ok) setRet(await retRes.json())
-      if (logRes.ok) {
-        const data = await logRes.json()
-        setAudit((data.items ?? []) as AuditEntry[])
-      }
-      if (refundsRes.ok) {
-        const data = await refundsRes.json()
-        setRefunds((data.items ?? []) as RefundRow[])
+      // RX.0 — one aggregate round-trip (detail + audit + refunds +
+      // policy) replaces the prior four parallel fetches. The drawer
+      // paints once with full context; the warehouse's flaky link gets
+      // a single TLS handshake instead of four.
+      const res = await fetch(`${getBackendUrl()}/api/fulfillment/returns/${id}/full`, { cache: 'no-store' })
+      if (res.ok) {
+        const data = (await res.json()) as ReturnFull
+        setRet(data.return)
+        setAudit(data.audit?.items ?? [])
+        setRefunds(data.refunds?.items ?? [])
+        setDeadline(data.policy?.deadline ?? null)
       }
     } finally { setLoading(false) }
   }, [id])
@@ -1227,7 +1060,7 @@ function ReturnDrawer({ id, onClose, onChanged }: { id: string; onClose: () => v
                     refunded; the colour tracks safe/approaching/
                     overdue. Fetched from /returns/:id/policy on
                     drawer load. */}
-                <RefundDeadlineBadge returnId={ret.id} status={ret.status} refundStatus={ret.refundStatus} />
+                <RefundDeadlineBadge deadline={deadline} status={ret.status} refundStatus={ret.refundStatus} />
               </div>
 
               {/* R2.1 — RMA barcode for warehouse identification */}
@@ -2268,37 +2101,19 @@ function RefundRetryBanner({
 // the deadline), already-refunded, or pre-receipt returns —
 // nothing to count down to in those cases.
 function RefundDeadlineBadge({
-  returnId, status, refundStatus,
+  deadline, status, refundStatus,
 }: {
-  returnId: string
+  deadline: RefundDeadlineView | null
   status: string
   refundStatus: string
 }) {
-  const [data, setData] = useState<{
-    daysUntilDeadline: number | null
-    refundDeadlineDays: number
-    status: 'safe' | 'approaching' | 'overdue' | 'no_receive_date'
-  } | null>(null)
-  // Only fetch when the badge could be relevant.
+  // RX.0 — presentational. The deadline now arrives via the drawer's
+  // aggregate fetch; the badge no longer makes its own round-trip. The
+  // relevance gate (only after receipt, before refund) is unchanged.
   const relevant =
     refundStatus !== 'REFUNDED' &&
     (status === 'RECEIVED' || status === 'INSPECTING')
-  useEffect(() => {
-    if (!relevant) { setData(null); return }
-    let cancelled = false
-    void (async () => {
-      try {
-        const r = await fetch(
-          `${getBackendUrl()}/api/fulfillment/returns/${returnId}/policy`,
-          { cache: 'no-store' },
-        )
-        if (!r.ok || cancelled) return
-        const j = await r.json()
-        if (!cancelled) setData(j.deadline ?? null)
-      } catch { /* non-fatal */ }
-    })()
-    return () => { cancelled = true }
-  }, [returnId, relevant])
+  const data = relevant ? deadline : null
 
   if (!data || data.status === 'no_receive_date' || data.status === 'safe') return null
 

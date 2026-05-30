@@ -301,6 +301,102 @@ const returnsRoutes: FastifyPluginAsync = async (fastify) => {
     return ret
   })
 
+  // RX.0 — Drawer aggregate. The detail drawer used to fire four
+  // separate client round-trips on every open: detail, audit-log,
+  // refunds, and (inside RefundDeadlineBadge) policy. On a flaky
+  // warehouse connection that's four chances to stall and four TLS
+  // handshakes. This endpoint batches all four server-side into one
+  // response so the drawer paints from a single fetch. Each sub-query
+  // is identical to its standalone route, so behaviour is unchanged —
+  // only the round-trip count drops 4 → 1.
+  fastify.get('/fulfillment/returns/:id/full', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+
+      const ret = await prisma.return.findUnique({
+        where: { id },
+        include: {
+          items: true,
+          order: {
+            select: {
+              id: true,
+              channel: true,
+              marketplace: true,
+              channelOrderId: true,
+              customerName: true,
+              customerEmail: true,
+              shippingAddress: true,
+              createdAt: true,
+              deliveredAt: true,
+              purchaseDate: true,
+              shipments: {
+                select: {
+                  id: true, status: true,
+                  trackingNumber: true, trackingUrl: true,
+                  carrierCode: true, shippedAt: true, deliveredAt: true,
+                },
+                orderBy: { createdAt: 'desc' },
+                take: 1,
+              },
+            },
+          },
+        },
+      })
+      if (!ret) return reply.code(404).send({ error: 'Return not found' })
+
+      const { checkReturnWindow, checkRefundDeadline } = await import(
+        '../services/return-policies/resolver.service.js'
+      )
+
+      const [audit, refunds, window, deadline] = await Promise.all([
+        prisma.auditLog.findMany({
+          where: { entityType: 'Return', entityId: id },
+          orderBy: { createdAt: 'desc' },
+          take: 50,
+          select: {
+            id: true, userId: true, action: true,
+            before: true, after: true, metadata: true, createdAt: true,
+          },
+        }),
+        prisma.refund.findMany({
+          where: { returnId: id },
+          include: {
+            attempts: { orderBy: { attemptedAt: 'desc' } },
+            creditNote: true,
+          },
+          orderBy: { createdAt: 'desc' },
+        }),
+        checkReturnWindow({
+          channel: ret.channel,
+          marketplace: ret.marketplace,
+          deliveredAt: ret.order?.deliveredAt ?? ret.order?.purchaseDate ?? null,
+        }),
+        checkRefundDeadline({
+          channel: ret.channel,
+          marketplace: ret.marketplace,
+          receivedAt: ret.receivedAt,
+        }),
+      ])
+
+      // Strip the drawer-only order date fields that the detail route
+      // doesn't expose, so the `return` payload stays shape-compatible
+      // with GET /returns/:id consumers.
+      const { order, ...rest } = ret
+      const slimOrder = order
+        ? (() => { const { deliveredAt: _d, purchaseDate: _p, ...o } = order; return o })()
+        : null
+
+      return reply.send({
+        return: { ...rest, order: slimOrder },
+        audit: { items: audit },
+        refunds: { items: refunds },
+        policy: { window, deadline },
+      })
+    } catch (error: any) {
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
   // B7 — Idempotency. Operators on flaky mobile networks were double-
   // tapping "Create" on the new-return modal and getting two RMAs
   // for the same physical return. Pattern: client sends an
