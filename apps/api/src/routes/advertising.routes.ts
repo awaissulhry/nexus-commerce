@@ -2567,6 +2567,33 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     return { jobId: job.id, jobUpdatedAt: job.updatedAt, totalRows: records.length, negativeTrueRows: negCount, topLevelKeys: records[0] ? Object.keys(records[0]) : [], matchTypeHistogram: matchTypes, sample }
   })
 
+  // AF.1/AF.3 — DB-only target breakdown (instant, no export download). Tells
+  // us account-wide + per-campaign how many positive vs negative keyword/product
+  // targets exist, so we can see if positives are systematically missing.
+  fastify.get('/advertising/debug/target-breakdown', async (request) => {
+    const q = request.query as { campaignId?: string }
+    const where = q.campaignId ? { adGroup: { campaignId: q.campaignId } } : {}
+    const [total, negatives, byType] = await Promise.all([
+      prisma.adTarget.count({ where }),
+      prisma.adTarget.count({ where: { ...where, isNegative: true } }),
+      prisma.adTarget.groupBy({ by: ['expressionType', 'isNegative'], where, _count: { _all: true } }),
+    ])
+    // Campaigns that have negatives but ZERO positives (the reported symptom).
+    let campaignsNegOnly: number | undefined
+    if (!q.campaignId) {
+      const grps = await prisma.adGroup.findMany({ select: { campaignId: true, targets: { select: { isNegative: true } } } })
+      const byCamp = new Map<string, { pos: number; neg: number }>()
+      for (const g of grps) { const c = byCamp.get(g.campaignId) ?? { pos: 0, neg: 0 }; for (const t of g.targets) (t.isNegative ? c.neg++ : c.pos++); byCamp.set(g.campaignId, c) }
+      campaignsNegOnly = [...byCamp.values()].filter((c) => c.neg > 0 && c.pos === 0).length
+    }
+    return {
+      campaignId: q.campaignId ?? null,
+      total, positives: total - negatives, negatives,
+      campaignsWithNegativesButNoPositives: campaignsNegOnly,
+      byTypeAndNegative: byType.map((b) => ({ expressionType: b.expressionType, isNegative: b.isNegative, count: b._count._all })),
+    }
+  })
+
   fastify.post('/advertising/debug/probe-endpoints', async (request, reply) => {
     const body = request.body as { profileId?: string }
     if (!body?.profileId) return reply.code(400).send({ error: 'profileId required' })
