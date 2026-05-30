@@ -3539,6 +3539,17 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   // (a concurrent session landed a token-gated + action-logged version — kept
   // as the single source of truth to avoid a duplicate-route boot crash).
 
+  // ── AF.1b: synchronous keyword resync via the v3 list API ───────────
+  // Reliable current-state keyword sync (the async export is snapshot-dedup'd
+  // and returns empty, so it can't re-fetch existing keywords). Resyncs a
+  // campaign's positive + negative keywords with clean bids.
+  fastify.post('/advertising/keywords/resync', async (request, reply) => {
+    const b = (request.body ?? {}) as { campaignId?: string }
+    if (!b.campaignId) { reply.status(400); return { error: 'campaignId required' } }
+    const { syncCampaignKeywords } = await import('../services/advertising/ads-keyword-list-sync.service.js')
+    try { return { ok: true, ...(await syncCampaignKeywords(b.campaignId)) } } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
+  })
+
   // ── AME.15-17: campaign launcher + keyword-graduation funnel ────────
   fastify.get('/advertising/funnel/state', async (request, reply) => {
     const q = request.query as { productId?: string }
