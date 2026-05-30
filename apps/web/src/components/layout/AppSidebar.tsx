@@ -168,6 +168,28 @@ export default function AppSidebar() {
   const [amazonConnected, setAmazonConnected] = useState(false)
   const recent = useRecentlyViewed()
 
+  // Collapsible "Recently viewed" section — persisted so the operator's
+  // choice sticks across sessions. Defaults to expanded.
+  const [recentCollapsed, setRecentCollapsed] = useState(false)
+  useEffect(() => {
+    try {
+      setRecentCollapsed(localStorage.getItem('nexus.sidebar.recentCollapsed') === '1')
+    } catch {
+      /* ignore */
+    }
+  }, [])
+  const toggleRecentCollapsed = useCallback(() => {
+    setRecentCollapsed((prev) => {
+      const next = !prev
+      try {
+        localStorage.setItem('nexus.sidebar.recentCollapsed', next ? '1' : '0')
+      } catch {
+        /* ignore */
+      }
+      return next
+    })
+  }, [])
+
   // Hydrate expand state from localStorage on mount.
   useEffect(() => {
     try {
@@ -907,27 +929,42 @@ export default function AppSidebar() {
         </NavGroup>
       </nav>
 
-      {/* ── Recently viewed ──────────────────────────────────── */}
+      {/* ── Recently viewed (collapsible) ────────────────────── */}
       <div className="border-t border-slate-800 px-4 py-3 flex-shrink-0">
-        <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
-          Recently viewed
-        </div>
-        {recent.length === 0 ? (
-          <div className="text-sm text-slate-500">No recent items</div>
-        ) : (
-          <ul className="space-y-1">
-            {recent.map((item) => (
-              <li key={item.id}>
-                <Link
-                  href={item.href}
-                  className="block text-sm text-slate-400 hover:text-white truncate transition-colors"
-                  title={item.label}
-                >
-                  {item.label}
-                </Link>
-              </li>
-            ))}
-          </ul>
+        <button
+          type="button"
+          onClick={toggleRecentCollapsed}
+          aria-expanded={!recentCollapsed}
+          aria-controls="sidebar-recently-viewed"
+          className="w-full flex items-center justify-between text-xs font-semibold text-slate-500 uppercase tracking-wider hover:text-slate-300 transition-colors"
+        >
+          <span>Recently viewed</span>
+          {recentCollapsed ? (
+            <ChevronRight className="w-3.5 h-3.5" aria-hidden="true" />
+          ) : (
+            <ChevronDown className="w-3.5 h-3.5" aria-hidden="true" />
+          )}
+        </button>
+        {!recentCollapsed && (
+          <div id="sidebar-recently-viewed" className="mt-2">
+            {recent.length === 0 ? (
+              <div className="text-sm text-slate-500">No recent items</div>
+            ) : (
+              <ul className="space-y-1">
+                {recent.map((item) => (
+                  <li key={item.id}>
+                    <Link
+                      href={item.href}
+                      className="block text-sm text-slate-400 hover:text-white truncate transition-colors"
+                      title={item.label}
+                    >
+                      {item.label}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         )}
       </div>
 
