@@ -1880,6 +1880,31 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     } catch (e) { return { info, error: (e as Error).message } }
   })
 
+  // GET /api/advertising/debug/product-ad-reconcile — PCF.2 over-count diagnosis.
+  // Per-day PRODUCT_AD spend vs CAMPAIGN spend (+ row counts + a sample), to see
+  // which days are inflated and the PRODUCT_AD row structure. No writes.
+  fastify.get('/advertising/debug/product-ad-reconcile', async (request) => {
+    const q = request.query as { windowDays?: string }
+    const windowDays = Math.max(1, Math.min(90, Number(q.windowDays ?? 30)))
+    const since = new Date(); since.setUTCDate(since.getUTCDate() - windowDays); since.setUTCHours(0, 0, 0, 0)
+    const [pa, camp] = await Promise.all([
+      prisma.amazonAdsDailyPerformance.groupBy({ by: ['date'], where: { entityType: 'PRODUCT_AD', date: { gte: since } }, _sum: { costMicros: true }, _count: { _all: true } }),
+      prisma.amazonAdsDailyPerformance.groupBy({ by: ['date'], where: { entityType: 'CAMPAIGN', date: { gte: since } }, _sum: { costMicros: true } }),
+    ])
+    const campByDate = new Map(camp.map((r) => [r.date.toISOString().slice(0, 10), Math.round(Number(r._sum.costMicros ?? 0n) / 10_000)]))
+    const byDay = pa.map((r) => {
+      const d = r.date.toISOString().slice(0, 10)
+      const paCents = Math.round(Number(r._sum.costMicros ?? 0n) / 10_000)
+      const campCents = campByDate.get(d) ?? 0
+      return { date: d, productAdEur: paCents / 100, campaignEur: campCents / 100, rows: r._count._all, ratio: campCents > 0 ? Math.round((paCents / campCents) * 100) / 100 : null }
+    }).sort((a, b) => a.date.localeCompare(b.date))
+    // entityId shape sample: how many PRODUCT_AD rows are keyed by adId vs ASIN:.
+    const sample = await prisma.amazonAdsDailyPerformance.findMany({ where: { entityType: 'PRODUCT_AD', date: { gte: since } }, select: { entityId: true, localEntityId: true, date: true, costMicros: true, marketplace: true, profileId: true }, take: 8, orderBy: { costMicros: 'desc' } })
+    const asinKeyed = await prisma.amazonAdsDailyPerformance.count({ where: { entityType: 'PRODUCT_AD', date: { gte: since }, entityId: { startsWith: 'ASIN:' } } })
+    const total = await prisma.amazonAdsDailyPerformance.count({ where: { entityType: 'PRODUCT_AD', date: { gte: since } } })
+    return { windowDays, byDay, asinKeyedRows: asinKeyed, totalProductAdRows: total, sample: sample.map((s) => ({ ...s, costMicros: s.costMicros.toString() })) }
+  })
+
   // POST /api/advertising/debug/probe-endpoints — Phase A diagnostic
   //
   // Fires 12+ probes against Amazon Ads endpoints (legacy v2, v3 list,
