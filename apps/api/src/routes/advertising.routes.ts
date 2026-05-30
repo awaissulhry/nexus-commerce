@@ -171,7 +171,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
         adGroups: {
           include: {
             targets: { take: 100 },
-            productAds: { take: 50 },
+            productAds: { take: 500 }, // AME.5 — full set so ad-group share allocation matches the ad-group detail endpoint
           },
         },
       },
@@ -191,85 +191,39 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
         ...(campaign.externalCampaignId ? [{ entityId: campaign.externalCampaignId }] : []),
       ],
     }
-    const cagg = await prisma.amazonAdsDailyPerformance.aggregate({
-      where: { entityType: 'CAMPAIGN', date: { gte: since }, ...campaignWhere },
-      _sum: {
-        impressions: true, clicks: true, costMicros: true,
-        sales7dCents: true, sales14dCents: true, orders7d: true,
-      },
-      _max: { date: true }, // AME.4 — data-freshness signal for the detail UI
-    })
-    const campImpr = cagg._sum.impressions ?? 0
-    const campClicks = cagg._sum.clicks ?? 0
-    const campSpendCents = microsToCents(cagg._sum.costMicros)
-    const campSalesCents = (cagg._sum.sales7dCents ?? 0) + (cagg._sum.sales14dCents ?? 0)
-    const campOrders = cagg._sum.orders7d ?? 0
+    // Allocated metrics via the shared service (Σ ad groups == campaign).
+    const { computeCampaignDetailMetrics } = await import('../services/advertising/ads-detail-metrics.service.js')
+    const [{ campaign: campMetrics, byAdGroup }, fresh] = await Promise.all([
+      computeCampaignDetailMetrics({
+        campaignId: id,
+        externalCampaignId: campaign.externalCampaignId,
+        adGroups: campaign.adGroups.map((g) => ({ id: g.id, productAdIds: g.productAds.map((pa) => pa.id) })),
+        windowDays,
+      }),
+      prisma.amazonAdsDailyPerformance.aggregate({
+        where: { entityType: 'CAMPAIGN', date: { gte: since }, ...campaignWhere },
+        _max: { date: true }, // AME.4 — data-freshness signal for the detail UI
+      }),
+    ])
 
-    // ── Ad-group shares — sum each group's PRODUCT_AD daily rows (localEntityId
-    // = AdProductAd.id; the only per-ad-group grain). These give the RELATIVE
-    // distribution; the authoritative campaign total is then ALLOCATED across
-    // groups by share so Σ(ad groups) == campaign for every metric and no child
-    // ever exceeds its parent (PRODUCT_AD vs CAMPAIGN reports differ by ~15% +
-    // T+2 lag, so a raw rollup would be inconsistent).
-    const adIdToGroup = new Map<string, string>()
-    for (const g of campaign.adGroups) for (const pa of g.productAds) adIdToGroup.set(pa.id, g.id)
-    const allAdIds = [...adIdToGroup.keys()]
-    const share = new Map<string, { impr: number; clicks: number; micros: number; salesCents: number; orders: number }>()
-    for (const g of campaign.adGroups) share.set(g.id, { impr: 0, clicks: 0, micros: 0, salesCents: 0, orders: 0 })
-    if (allAdIds.length) {
-      const rows = await prisma.amazonAdsDailyPerformance.groupBy({
-        by: ['localEntityId'],
-        where: { entityType: 'PRODUCT_AD', localEntityId: { in: allAdIds }, date: { gte: since } },
-        _sum: { impressions: true, clicks: true, costMicros: true, sales7dCents: true, sales14dCents: true, orders7d: true },
-      })
-      for (const r of rows) {
-        const gid = r.localEntityId ? adIdToGroup.get(r.localEntityId) : undefined
-        if (!gid) continue
-        const cur = share.get(gid)!
-        cur.impr += r._sum.impressions ?? 0
-        cur.clicks += r._sum.clicks ?? 0
-        cur.micros += Number(r._sum.costMicros ?? 0n)
-        cur.salesCents += (r._sum.sales7dCents ?? 0) + (r._sum.sales14dCents ?? 0)
-        cur.orders += r._sum.orders7d ?? 0
-      }
-    }
-
-    const groups = campaign.adGroups
-    const sh = groups.map((g) => share.get(g.id)!)
-    const spendAlloc = allocate(campSpendCents, sh.map((s) => s.micros))
-    const salesAlloc = allocate(campSalesCents, sh.map((s) => s.salesCents))
-    const imprAlloc = allocate(campImpr, sh.map((s) => s.impr))
-    const clickAlloc = allocate(campClicks, sh.map((s) => s.clicks))
-    const orderAlloc = allocate(campOrders, sh.map((s) => s.orders))
-
-    const adGroups = groups.map((g, i) => {
-      const spendCents = spendAlloc[i]!
-      const salesCents = salesAlloc[i]!
-      return {
-        ...g,
-        impressions: imprAlloc[i]!,
-        clicks: clickAlloc[i]!,
-        spendCents,
-        salesCents,
-        ordersCount: orderAlloc[i]!,
-        acos: salesCents > 0 ? spendCents / salesCents : null,
-        roas: spendCents > 0 ? salesCents / spendCents : null,
-      }
+    const adGroups = campaign.adGroups.map((g) => {
+      const m = byAdGroup.get(g.id)!
+      return { ...g, impressions: m.impressions, clicks: m.clicks, spendCents: m.spendCents, salesCents: m.salesCents, ordersCount: m.orders, acos: m.acos, roas: m.roas }
     })
 
     return {
       campaign: {
         ...campaign,
-        impressions: campImpr,
-        clicks: campClicks,
-        spend: campSpendCents / 100,
-        sales: campSalesCents / 100,
-        acos: campSalesCents > 0 ? campSpendCents / campSalesCents : null,
-        roas: campSpendCents > 0 ? campSalesCents / campSpendCents : null,
+        impressions: campMetrics.impressions,
+        clicks: campMetrics.clicks,
+        spend: campMetrics.spendCents / 100,
+        sales: campMetrics.salesCents / 100,
+        acos: campMetrics.acos,
+        roas: campMetrics.roas,
         adGroups,
         metricsWindowDays: windowDays,
         metricsSource: 'daily_performance',
-        dataThrough: cagg._max.date ? cagg._max.date.toISOString().slice(0, 10) : null,
+        dataThrough: fresh._max.date ? fresh._max.date.toISOString().slice(0, 10) : null,
       },
     }
   })
@@ -296,7 +250,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     if (!adGroup) { reply.code(404); return { error: 'not_found' } }
 
     const adIds = adGroup.productAds.map((a) => a.id)
-    const [perAd, trendRows] = await Promise.all([
+    const [perAd, trendRaw, siblings] = await Promise.all([
       adIds.length ? prisma.amazonAdsDailyPerformance.groupBy({
         by: ['localEntityId'],
         where: { entityType: 'PRODUCT_AD', localEntityId: { in: adIds }, date: { gte: since } },
@@ -308,43 +262,61 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
         _sum: { costMicros: true, sales7dCents: true, sales14dCents: true, impressions: true, clicks: true, orders7d: true },
         orderBy: { date: 'asc' },
       }) : Promise.resolve([]),
+      // All sibling ad groups (id + product-ad ids) so the campaign total can be
+      // allocated to THIS ad group exactly as the campaign detail does it.
+      prisma.adGroup.findMany({ where: { campaignId: adGroup.campaign.id }, select: { id: true, productAds: { select: { id: true } } } }),
     ])
     const metByAd = new Map(perAd.map((r) => [r.localEntityId!, r]))
+
+    // Anchor on the campaign authoritative total → allocate to this ad group, so
+    // the figures match the campaign detail's ad-group row 1:1.
+    const { computeCampaignDetailMetrics, allocateMetricsAcross } = await import('../services/advertising/ads-detail-metrics.service.js')
+    const { byAdGroup } = await computeCampaignDetailMetrics({
+      campaignId: adGroup.campaign.id,
+      externalCampaignId: adGroup.campaign.externalCampaignId,
+      adGroups: siblings.map((s) => ({ id: s.id, productAdIds: s.productAds.map((p) => p.id) })),
+      windowDays,
+    })
+    const agMetrics = byAdGroup.get(adGroup.id) ?? { impressions: 0, clicks: 0, spendCents: 0, salesCents: 0, orders: 0, acos: null, roas: null }
 
     const { pickFaceImage, FACE_IMAGE_SELECT, FACE_IMAGE_ORDER_BY } = await import('../services/product-read-cache.service.js')
     const productIds = [...new Set(adGroup.productAds.map((a) => a.productId).filter((x): x is string => !!x))]
     const prods = productIds.length ? await prisma.product.findMany({ where: { id: { in: productIds } }, select: { id: true, name: true, sku: true, images: { select: FACE_IMAGE_SELECT, orderBy: FACE_IMAGE_ORDER_BY } } }) : []
     const prodById = new Map(prods.map((p) => [p.id, p]))
 
-    let tImpr = 0, tClicks = 0, tMicros = 0, tSales = 0, tOrders = 0
-    const ads = adGroup.productAds.map((a) => {
+    // Allocate the ad-group total across its ads (Σ ads == ad group).
+    const adShareOf = (a: { id: string }) => {
       const m = metByAd.get(a.id)
-      const spendCents = microsToCents(m?._sum.costMicros)
-      const salesCents = (m?._sum.sales7dCents ?? 0) + (m?._sum.sales14dCents ?? 0)
-      tImpr += m?._sum.impressions ?? 0; tClicks += m?._sum.clicks ?? 0; tMicros += Number(m?._sum.costMicros ?? 0n); tSales += salesCents; tOrders += m?._sum.orders7d ?? 0
+      return { impr: m?._sum.impressions ?? 0, clicks: m?._sum.clicks ?? 0, micros: Number(m?._sum.costMicros ?? 0n), salesCents: (m?._sum.sales7dCents ?? 0) + (m?._sum.sales14dCents ?? 0), orders: m?._sum.orders7d ?? 0 }
+    }
+    const adAlloc = allocateMetricsAcross(agMetrics, adGroup.productAds, adShareOf)
+    const ads = adGroup.productAds.map((a, i) => {
       const p = a.productId ? prodById.get(a.productId) : undefined
+      const am = adAlloc[i]!
       return {
         id: a.id, asin: a.asin, sku: a.sku ?? p?.sku ?? null, productId: a.productId, status: a.status,
         name: p?.name ?? a.asin ?? a.sku ?? '—',
         photoUrl: p ? pickFaceImage(p.images) : null,
-        impressions: m?._sum.impressions ?? 0, clicks: m?._sum.clicks ?? 0,
-        spendCents, salesCents, orders: m?._sum.orders7d ?? 0,
-        acos: salesCents > 0 ? spendCents / salesCents : null,
-        roas: spendCents > 0 ? salesCents / spendCents : null,
+        impressions: am.impressions, clicks: am.clicks, spendCents: am.spendCents, salesCents: am.salesCents, orders: am.orders,
+        acos: am.acos, roas: am.roas,
       }
     }).sort((a, b) => b.spendCents - a.spendCents)
 
-    const spendCents = microsToCents(tMicros)
+    // Allocate the ad-group total across dates (Σ trend == ad group → chart == KPI).
+    const trendShareOf = (r: { _sum: { impressions: number | null; clicks: number | null; costMicros: bigint | null; sales7dCents: number | null; sales14dCents: number | null; orders7d: number | null } }) => ({ impr: r._sum.impressions ?? 0, clicks: r._sum.clicks ?? 0, micros: Number(r._sum.costMicros ?? 0n), salesCents: (r._sum.sales7dCents ?? 0) + (r._sum.sales14dCents ?? 0), orders: r._sum.orders7d ?? 0 })
+    const trendAlloc = allocateMetricsAcross(agMetrics, trendRaw, trendShareOf)
+    const trend = trendRaw.map((r, i) => ({ date: r.date.toISOString().slice(0, 10), spendCents: trendAlloc[i]!.spendCents, salesCents: trendAlloc[i]!.salesCents, impressions: trendAlloc[i]!.impressions, clicks: trendAlloc[i]!.clicks, orders: trendAlloc[i]!.orders }))
+
     return {
       adGroup: {
         id: adGroup.id, name: adGroup.name, status: adGroup.status, defaultBidCents: adGroup.defaultBidCents,
         campaign: adGroup.campaign,
-        metrics: { impressions: tImpr, clicks: tClicks, spendCents, salesCents: tSales, orders: tOrders, acos: tSales > 0 ? spendCents / tSales : null, roas: spendCents > 0 ? tSales / spendCents : null },
+        metrics: agMetrics,
         ads,
         targets: adGroup.targets,
-        trend: trendRows.map((r) => ({ date: r.date.toISOString().slice(0, 10), spendCents: microsToCents(r._sum.costMicros), salesCents: (r._sum.sales7dCents ?? 0) + (r._sum.sales14dCents ?? 0), impressions: r._sum.impressions ?? 0, clicks: r._sum.clicks ?? 0, orders: r._sum.orders7d ?? 0 })),
+        trend,
         windowDays,
-        dataThrough: trendRows.length ? trendRows[trendRows.length - 1]!.date.toISOString().slice(0, 10) : null,
+        dataThrough: trendRaw.length ? trendRaw[trendRaw.length - 1]!.date.toISOString().slice(0, 10) : null,
       },
     }
   })
