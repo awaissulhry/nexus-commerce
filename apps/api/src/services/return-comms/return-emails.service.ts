@@ -24,7 +24,10 @@
 
 import { sendEmail } from '../email/transport.js'
 
-export type ReturnEmailKind = 'received' | 'refunded' | 'rejected'
+// RX.7 — comms journey. authorized + label_ready extend the existing
+// received / refunded / rejected stages so the buyer is kept informed
+// across the whole return lifecycle.
+export type ReturnEmailKind = 'received' | 'refunded' | 'rejected' | 'authorized' | 'label_ready'
 
 export interface ReturnEmailContext {
   to: string
@@ -64,10 +67,24 @@ export function renderReturnEmail(
       ? `€${(ctx.refundCents / 100).toFixed(2)}`
       : null
 
-  let subject: string
-  let body: string
+  let subject = ''
+  let body = ''
 
-  if (kind === 'received') {
+  if (kind === 'authorized') {
+    subject = it
+      ? `Reso approvato · Xavia${rmaSuffix}`
+      : `Return approved · Xavia${rmaSuffix}`
+    body = it
+      ? `Il tuo reso è stato approvato. Spedisci l'articolo al nostro magazzino il prima possibile. Una volta ricevuto, lo controlleremo e procederemo al rimborso entro ${ctx.refundDeadlineDays} giorni.`
+      : `Your return has been approved. Please ship the item back to our warehouse as soon as you can. Once it arrives we'll inspect it and process your refund within ${ctx.refundDeadlineDays} days.`
+  } else if (kind === 'label_ready') {
+    subject = it
+      ? `Etichetta di reso pronta · Xavia${rmaSuffix}`
+      : `Return label ready · Xavia${rmaSuffix}`
+    body = it
+      ? `La tua etichetta di reso è pronta. Applicala al pacco e consegnalo al corriere. Ti aggiorneremo non appena il pacco arriva al nostro magazzino.`
+      : `Your return label is ready. Attach it to the parcel and drop it off with the carrier. We'll let you know as soon as it reaches our warehouse.`
+  } else if (kind === 'received') {
     subject = it
       ? `Reso ricevuto · Xavia${rmaSuffix}`
       : `Return received · Xavia${rmaSuffix}`
