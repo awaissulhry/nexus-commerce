@@ -5536,6 +5536,10 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
         moq: r.moq,
         casePack: r.casePack,
         leadTimeDaysOverride: r.leadTimeDaysOverride,
+        // S2 — production + shipping time overrides.
+        productionTimeDaysOverride: r.productionTimeDaysOverride,
+        productionUnitsPerDayOverride: r.productionUnitsPerDayOverride,
+        shippingTimeDaysOverride: r.shippingTimeDaysOverride,
         isPrimary: r.isPrimary,
         // PD.1 — factory-facing naming.
         factoryName: r.factoryName,

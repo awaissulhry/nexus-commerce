@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { Search, Plus, Upload, Trash2, Star, Loader2, X, Check } from 'lucide-react'
 
@@ -21,6 +21,10 @@ interface CatalogRow {
   moq: number
   casePack: number | null
   leadTimeDaysOverride: number | null
+  // S2 — split production + shipping time overrides.
+  productionTimeDaysOverride: number | null
+  productionUnitsPerDayOverride: number | null
+  shippingTimeDaysOverride: number | null
   isPrimary: boolean
   // PD.1 — factory-facing naming (per-supplier default; auto-fills PO lines).
   factoryName: string | null
@@ -370,7 +374,7 @@ function SupplierCatalog({
                 <th className="px-2 py-2">Ccy</th>
                 <th className="px-2 py-2">MOQ</th>
                 <th className="px-2 py-2">Case</th>
-                <th className="px-2 py-2">LT override</th>
+                <th className="px-2 py-2" title="Production + shipping time → effective lead time">Lead time</th>
                 <th className="px-2 py-2 text-center">Primary</th>
                 <th className="px-2 py-2"></th>
               </tr>
@@ -792,6 +796,151 @@ function EditableText({
   )
 }
 
+// S2 — compact lead-time cell: shows the production+shipping summary and opens
+// a small editor. Production is flat days OR a units/day rate (the operator
+// picks); shipping is days. Keeps the grid narrow vs. three raw columns.
+function LeadTimeCell({
+  row,
+  onPatch,
+}: {
+  row: CatalogRow
+  onPatch: (p: Record<string, any>) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!open) return
+    const h = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', h)
+    return () => document.removeEventListener('mousedown', h)
+  }, [open])
+
+  const prodFlat = row.productionTimeDaysOverride
+  const prodRate = row.productionUnitsPerDayOverride
+  const ship = row.shippingTimeDaysOverride
+  const legacy = row.leadTimeDaysOverride
+  const hasSplit = prodFlat != null || prodRate != null || ship != null
+
+  let summary: string
+  if (hasSplit) {
+    const p = prodRate != null ? `${prodRate}/d` : prodFlat != null ? `${prodFlat}d` : '0d'
+    summary = `${p}+${ship ?? 0}d`
+  } else if (legacy != null) summary = `${legacy}d`
+  else summary = 'set'
+
+  const [mode, setMode] = useState<'flat' | 'rate'>(prodRate != null ? 'rate' : 'flat')
+  const [flat, setFlat] = useState(prodFlat?.toString() ?? '')
+  const [rate, setRate] = useState(prodRate?.toString() ?? '')
+  const [shipD, setShipD] = useState(ship?.toString() ?? '')
+  const num = (s: string) => (s.trim() === '' ? null : Number(s))
+
+  function save() {
+    onPatch({
+      productionTimeDaysOverride: mode === 'flat' ? num(flat) : null,
+      productionUnitsPerDayOverride: mode === 'rate' ? num(rate) : null,
+      shippingTimeDaysOverride: num(shipD),
+    })
+    setOpen(false)
+  }
+  function clear() {
+    onPatch({
+      productionTimeDaysOverride: null,
+      productionUnitsPerDayOverride: null,
+      shippingTimeDaysOverride: null,
+    })
+    setFlat('')
+    setRate('')
+    setShipD('')
+    setOpen(false)
+  }
+  const previewDays = (num(flat) ?? 0) + (num(shipD) ?? 0)
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        title="Production + shipping time"
+        className={`rounded px-1.5 py-0.5 hover:bg-slate-800 ${
+          hasSplit || legacy != null ? 'text-slate-200' : 'text-slate-600'
+        }`}
+      >
+        {summary}
+      </button>
+      {open && (
+        <div className="absolute left-0 top-full z-30 mt-1 w-56 space-y-2 rounded-md border border-slate-700 bg-slate-900 p-2 text-xs shadow-lg">
+          <div className="text-[10px] uppercase tracking-wide text-slate-500">Production</div>
+          <div className="flex gap-1">
+            <button
+              onClick={() => setMode('flat')}
+              className={`flex-1 rounded px-2 py-1 ${mode === 'flat' ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-300'}`}
+            >
+              Flat days
+            </button>
+            <button
+              onClick={() => setMode('rate')}
+              className={`flex-1 rounded px-2 py-1 ${mode === 'rate' ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-300'}`}
+            >
+              Units/day
+            </button>
+          </div>
+          {mode === 'flat' ? (
+            <label className="flex items-center gap-2">
+              <span className="w-16 text-slate-400">Days</span>
+              <input
+                value={flat}
+                onChange={(e) => setFlat(e.target.value)}
+                inputMode="numeric"
+                placeholder="12"
+                className="flex-1 rounded border border-slate-700 bg-slate-950 px-2 py-1 text-slate-100"
+              />
+            </label>
+          ) : (
+            <label className="flex items-center gap-2">
+              <span className="w-16 text-slate-400">Units/day</span>
+              <input
+                value={rate}
+                onChange={(e) => setRate(e.target.value)}
+                inputMode="numeric"
+                placeholder="100"
+                className="flex-1 rounded border border-slate-700 bg-slate-950 px-2 py-1 text-slate-100"
+              />
+            </label>
+          )}
+          <div className="text-[10px] uppercase tracking-wide text-slate-500">Shipping</div>
+          <label className="flex items-center gap-2">
+            <span className="w-16 text-slate-400">Days</span>
+            <input
+              value={shipD}
+              onChange={(e) => setShipD(e.target.value)}
+              inputMode="numeric"
+              placeholder="3"
+              className="flex-1 rounded border border-slate-700 bg-slate-950 px-2 py-1 text-slate-100"
+            />
+          </label>
+          <div className="text-[11px] text-slate-400">
+            {mode === 'flat'
+              ? `≈ ${previewDays} days total`
+              : 'Rate-based — production scales with order qty, + shipping'}
+          </div>
+          <div className="flex items-center justify-between pt-1">
+            <button onClick={clear} className="text-[11px] text-slate-500 hover:text-rose-400">
+              Clear
+            </button>
+            <button
+              onClick={save}
+              className="rounded bg-emerald-600 px-3 py-1 text-white hover:bg-emerald-500"
+            >
+              Save
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function CatalogRowView({
   row,
   onPatch,
@@ -863,11 +1012,7 @@ function CatalogRowView({
         />
       </td>
       <td className="px-2 py-2">
-        <EditableNum
-          value={row.leadTimeDaysOverride}
-          suffix="d"
-          onSave={(v) => onPatch({ leadTimeDaysOverride: v.trim() === '' ? null : Number(v) })}
-        />
+        <LeadTimeCell row={row} onPatch={onPatch} />
       </td>
       <td className="px-2 py-2 text-center">
         <button
@@ -903,6 +1048,9 @@ interface ParsedRow {
   moq?: string
   casePack?: string
   leadTimeDaysOverride?: string
+  productionTimeDaysOverride?: string
+  productionUnitsPerDayOverride?: string
+  shippingTimeDaysOverride?: string
   isPrimary?: boolean
 }
 
@@ -941,6 +1089,13 @@ function parseCsv(text: string): ParsedRow[] {
     casepack: 'casePack',
     leadtime: 'leadTimeDaysOverride',
     leadtimedaysoverride: 'leadTimeDaysOverride',
+    // S2 — production + shipping time columns.
+    productiontime: 'productionTimeDaysOverride',
+    productiondays: 'productionTimeDaysOverride',
+    productionrate: 'productionUnitsPerDayOverride',
+    unitsperday: 'productionUnitsPerDayOverride',
+    shippingtime: 'shippingTimeDaysOverride',
+    shippingdays: 'shippingTimeDaysOverride',
     primary: 'isPrimary',
     isprimary: 'isPrimary',
   }
