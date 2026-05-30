@@ -1087,6 +1087,25 @@ function ReturnDrawer({ id, onClose, onChanged }: { id: string; onClose: () => v
                 </div>
               )}
 
+              {/* RX.2 — Documents. The Italian withdrawal form (modulo di
+                  recesso, D.Lgs. 21/2014) PDF endpoint existed with no UI;
+                  surface it for direct/warehouse consumer returns. FBA is
+                  Amazon-managed, so the statutory form doesn't apply. */}
+              {!ret.isFbaReturn && (
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">Documents</span>
+                  <a
+                    href={`${getBackendUrl()}/api/fulfillment/returns/${ret.id}/modulo-recesso.pdf`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="h-7 px-2 text-sm border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 rounded hover:bg-slate-100 dark:hover:bg-slate-700 inline-flex items-center gap-1.5"
+                    title="Italian statutory 14-day withdrawal form (bilingual IT/EN), pre-filled from this return"
+                  >
+                    <Download size={12} /> Modulo di recesso (PDF)
+                  </a>
+                </div>
+              )}
+
               {/* R2.1 — customer + order + shipment context */}
               {ret.order && (
                 <div className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded p-3 space-y-2 text-base">
