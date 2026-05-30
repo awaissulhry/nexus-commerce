@@ -215,6 +215,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   // Campaign.dynamicBidding). Read-only; placement WRITES land in AX.8.
   fastify.get('/advertising/campaigns/:id/placements', async (request, reply) => {
     const { id } = request.params as { id: string }
+    const q = request.query as { windowDays?: string }
     const campaign = await prisma.campaign.findUnique({
       where: { id },
       select: { externalCampaignId: true, dynamicBidding: true },
@@ -231,6 +232,33 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const db = (campaign.dynamicBidding ?? {}) as { placementBidding?: Array<{ placement: string; percentage: number }> }
     const adj: Record<string, number> = {}
     for (const p of db.placementBidding ?? []) adj[p.placement] = p.percentage
+
+    // CD.7 — optional per-placement daily spend trend (windowDays). One extra
+    // groupBy over the placement report; aligned to a fixed date axis so each
+    // placement series is the same length.
+    let trend: { axis: string[]; series: Record<string, number[]> } | null = null
+    if (q.windowDays) {
+      const windowDays = Math.max(7, Math.min(90, Number(q.windowDays)))
+      const since = new Date()
+      since.setUTCDate(since.getUTCDate() - (windowDays - 1))
+      since.setUTCHours(0, 0, 0, 0)
+      const tr = await prisma.amazonAdsPlacementReport.groupBy({
+        by: ['placement', 'date'],
+        where: { campaignId: campaign.externalCampaignId, date: { gte: since } },
+        _sum: { costMicros: true },
+      })
+      const axis: string[] = []
+      for (let i = 0; i < windowDays; i++) { const d = new Date(since); d.setUTCDate(since.getUTCDate() + i); axis.push(d.toISOString().slice(0, 10)) }
+      const idx = new Map(axis.map((d, i) => [d, i]))
+      const series: Record<string, number[]> = {}
+      for (const r of tr) {
+        const k = r.date.toISOString().slice(0, 10); const i = idx.get(k); if (i == null) continue
+        if (!series[r.placement]) series[r.placement] = new Array(windowDays).fill(0)
+        series[r.placement]![i] = Math.round(Number(r._sum.costMicros ?? 0n) / 10_000) // cents
+      }
+      trend = { axis, series }
+    }
+
     reply.header('Cache-Control', 'private, max-age=60')
     return {
       placements: rows.map((r) => ({
@@ -242,6 +270,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
         orders7d: r._sum.orders7d ?? 0,
         adjustmentPct: adj[r.placement] ?? 0,
       })),
+      ...(trend ? { trend } : {}),
     }
   })
 

@@ -12,7 +12,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { ChevronLeft, Check } from 'lucide-react'
+import { ChevronLeft, Check, Lightbulb } from 'lucide-react'
 import { useMarketingEvents } from '@/lib/sync/use-marketing-events'
 import { KpiStrip, type KpiTileSpec } from '@/app/_shared/grid-lens'
 import { StatusChip } from '@/app/_shared/ads-ui'
@@ -56,6 +56,9 @@ export function CampaignDetailCockpit({ campaign, history }: { campaign: Campaig
   const [bidEdit, setBidEdit] = useState<Record<string, string>>({})
   const [searchTerms, setSearchTerms] = useState<Array<Record<string, unknown>> | null>(null)
   const [placements, setPlacements] = useState<Array<Record<string, unknown>> | null>(null)
+  const [placeTrend, setPlaceTrend] = useState<Record<string, number[]>>({})
+  // CD.7 — per-target suggested bid (data-grounded, from account CPC history).
+  const [bidSug, setBidSug] = useState<Record<string, { suggestedBidCents: number; lowCents: number; highCents: number; basis: string } | 'loading' | 'none'>>({})
   const [busy, setBusy] = useState<string | null>(null)
   const [placeAdj, setPlaceAdj] = useState<Record<string, string>>({ PLACEMENT_TOP: '0', PLACEMENT_PRODUCT_PAGE: '0', PLACEMENT_REST_OF_SEARCH: '0' })
   const [placeStrat, setPlaceStrat] = useState(campaign.biddingStrategy?.toLowerCase().includes('auto') ? 'autoForSales' : campaign.biddingStrategy?.toLowerCase().includes('manual') ? 'manual' : 'legacyForSales')
@@ -152,12 +155,28 @@ export function CampaignDetailCockpit({ campaign, history }: { campaign: Campaig
   }, [searchTerms, campaign.externalCampaignId])
   const loadPlacements = useCallback(async () => {
     if (placements != null) return
-    const r = await fetch(`${getBackendUrl()}/api/advertising/campaigns/${campaign.id}/placements`, { cache: 'no-store' }).then((x) => x.json()).catch(() => ({ placements: [] }))
+    const r = await fetch(`${getBackendUrl()}/api/advertising/campaigns/${campaign.id}/placements?windowDays=14`, { cache: 'no-store' }).then((x) => x.json()).catch(() => ({ placements: [] }))
     setPlacements(r.placements ?? [])
+    setPlaceTrend(r.trend?.series ?? {})
     const seed: Record<string, string> = {}
     for (const p of (r.placements ?? []) as Array<Record<string, unknown>>) { const k = String(p.placement ?? ''); if (k in placeAdj && Number(p.adjustmentPct) > 0) seed[k] = String(p.adjustmentPct) }
     if (Object.keys(seed).length) setPlaceAdj((a) => ({ ...a, ...seed }))
   }, [placements, campaign.id, placeAdj])
+  // CD.7 — fetch a data-grounded suggested bid for a target (uses the account's
+  // historical CPC via /advertising/bid-suggestions) and open the bid editor
+  // pre-filled with it. No fabricated elasticity; the bidding-engine dry-run
+  // path is wired once that microservice is deployed.
+  const suggestBid = useCallback(async (t: Target) => {
+    setBidSug((s) => ({ ...s, [t.id]: 'loading' }))
+    try {
+      const r = await fetch(`${getBackendUrl()}/api/advertising/bid-suggestions`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ keywords: [t.expressionValue], matchType: t.expressionType, marketplace: campaign.marketplace }) }).then((x) => x.json())
+      const sug = r?.suggestions?.[0]
+      if (sug?.suggestedBidCents) {
+        setBidSug((s) => ({ ...s, [t.id]: { suggestedBidCents: sug.suggestedBidCents, lowCents: sug.lowCents, highCents: sug.highCents, basis: sug.basis } }))
+        setBidEdit((e) => ({ ...e, [t.id]: (sug.suggestedBidCents / 100).toFixed(2) }))
+      } else setBidSug((s) => ({ ...s, [t.id]: 'none' }))
+    } catch { setBidSug((s) => ({ ...s, [t.id]: 'none' })) }
+  }, [campaign.marketplace])
   const savePlacements = async () => {
     setPlaceSaving(true); setPlaceMsg('')
     try {
@@ -321,7 +340,7 @@ export function CampaignDetailCockpit({ campaign, history }: { campaign: Campaig
             )}
           </div>
           <table className="w-full text-sm"><thead className="bg-slate-50 dark:bg-slate-900/60 text-xs text-slate-500"><tr><th className="text-left px-3 py-2">Target</th><th className="text-left px-3 py-2">Match</th><th className="text-right px-3 py-2">Bid</th><th className="text-right px-3 py-2">Impr</th><th className="text-right px-3 py-2">Clicks</th><th className="text-right px-3 py-2">Spend</th><th className="text-right px-3 py-2">Sales</th><th className="text-right px-3 py-2">ACOS</th><th className="text-right px-3 py-2">14d</th></tr></thead>
-          <tbody className="divide-y divide-slate-100 dark:divide-slate-800">{targets.map((t) => { const a = t.salesCents > 0 ? t.spendCents / t.salesCents : null; return <tr key={t.id} className="hover:bg-slate-50 dark:hover:bg-slate-900/40"><td className="px-3 py-1.5">{t.expressionValue}</td><td className="px-3 py-1.5 text-xs text-slate-500">{t.expressionType}</td><td className="px-3 py-1.5 text-right tabular-nums">{bidEdit[t.id] != null ? <span className="inline-flex items-center gap-1">€<input autoFocus type="number" step="0.01" value={bidEdit[t.id]} onChange={(e) => setBidEdit((s) => ({ ...s, [t.id]: e.target.value }))} onKeyDown={(e) => { if (e.key === 'Enter') saveBid(t); if (e.key === 'Escape') setBidEdit((s) => { const { [t.id]: _, ...r } = s; return r }) }} className="w-14 px-1 py-0.5 text-right text-xs rounded border border-blue-400 bg-white dark:bg-slate-900" disabled={busy === t.id} /><button onClick={() => saveBid(t)} className="text-blue-600"><Check size={12} /></button></span> : <button onClick={() => setBidEdit((s) => ({ ...s, [t.id]: (t.bidCents / 100).toFixed(2) }))} className="hover:underline decoration-dotted">{eur(t.bidCents)}</button>}</td><td className="px-3 py-1.5 text-right tabular-nums">{num(t.impressions)}</td><td className="px-3 py-1.5 text-right tabular-nums">{num(t.clicks)}</td><td className="px-3 py-1.5 text-right tabular-nums">{eur(t.spendCents)}</td><td className="px-3 py-1.5 text-right tabular-nums">{eur(t.salesCents)}</td><td className="px-3 py-1.5 text-right tabular-nums">{pct(a)}</td><td className="px-3 py-1.5 text-right" title="Spend, last 14 days"><Sparkline data={tgtSparks[t.id]} color="#f59e0b" /></td></tr> })}</tbody></table>
+          <tbody className="divide-y divide-slate-100 dark:divide-slate-800">{targets.map((t) => { const a = t.salesCents > 0 ? t.spendCents / t.salesCents : null; return <tr key={t.id} className="hover:bg-slate-50 dark:hover:bg-slate-900/40"><td className="px-3 py-1.5">{t.expressionValue}</td><td className="px-3 py-1.5 text-xs text-slate-500">{t.expressionType}</td><td className="px-3 py-1.5 text-right tabular-nums">{bidEdit[t.id] != null ? <span className="inline-flex items-center gap-1">€<input autoFocus type="number" step="0.01" value={bidEdit[t.id]} onChange={(e) => setBidEdit((s) => ({ ...s, [t.id]: e.target.value }))} onKeyDown={(e) => { if (e.key === 'Enter') saveBid(t); if (e.key === 'Escape') setBidEdit((s) => { const { [t.id]: _, ...r } = s; return r }) }} className="w-14 px-1 py-0.5 text-right text-xs rounded border border-blue-400 bg-white dark:bg-slate-900" disabled={busy === t.id} /><button onClick={() => saveBid(t)} className="text-blue-600"><Check size={12} /></button>{(() => { const sg = bidSug[t.id]; return sg && sg !== 'loading' && sg !== 'none' ? <span className="text-[10px] text-slate-400" title={`suggested range · basis: ${sg.basis}`}>{eur(sg.lowCents)}–{eur(sg.highCents)}</span> : null })()}</span> : <span className="inline-flex items-center gap-1"><button onClick={() => setBidEdit((s) => ({ ...s, [t.id]: (t.bidCents / 100).toFixed(2) }))} className="hover:underline decoration-dotted">{eur(t.bidCents)}</button><button onClick={() => suggestBid(t)} title="Suggest a bid from account CPC history" className="text-violet-500 hover:text-violet-600 disabled:opacity-40" disabled={bidSug[t.id] === 'loading'}>{bidSug[t.id] === 'loading' ? '…' : <Lightbulb size={11} />}</button></span>}</td><td className="px-3 py-1.5 text-right tabular-nums">{num(t.impressions)}</td><td className="px-3 py-1.5 text-right tabular-nums">{num(t.clicks)}</td><td className="px-3 py-1.5 text-right tabular-nums">{eur(t.spendCents)}</td><td className="px-3 py-1.5 text-right tabular-nums">{eur(t.salesCents)}</td><td className="px-3 py-1.5 text-right tabular-nums">{pct(a)}</td><td className="px-3 py-1.5 text-right" title="Spend, last 14 days"><Sparkline data={tgtSparks[t.id]} color="#f59e0b" /></td></tr> })}</tbody></table>
         </>)}
         {tab === 'searchterms' && (
           searchTerms == null ? <div className="p-6 text-center text-slate-400 text-sm">Loading…</div> :
@@ -384,8 +403,8 @@ export function CampaignDetailCockpit({ campaign, history }: { campaign: Campaig
               {placeMsg && <span className={`text-xs ${placeMsg.startsWith('✓') ? 'text-emerald-600' : 'text-rose-600'}`}>{placeMsg}</span>}
             </div>
           </div>
-          <table className="w-full text-sm"><thead className="bg-slate-50 dark:bg-slate-900/60 text-xs text-slate-500"><tr><th className="text-left px-3 py-2">Placement</th><th className="text-right px-3 py-2">Adjustment</th><th className="text-right px-3 py-2">Impr</th><th className="text-right px-3 py-2">Clicks</th><th className="text-right px-3 py-2">Cost</th><th className="text-right px-3 py-2">Orders</th></tr></thead>
-          <tbody className="divide-y divide-slate-100 dark:divide-slate-800">{placements.length === 0 ? <tr><td colSpan={6} className="px-3 py-6 text-center text-slate-400 text-xs">No placement data yet.</td></tr> : placements.map((p, i) => <tr key={i} className="hover:bg-slate-50 dark:hover:bg-slate-900/40"><td className="px-3 py-1.5">{String(p.placement ?? '')}</td><td className="px-3 py-1.5 text-right tabular-nums">{Number(p.adjustmentPct ?? 0)}%</td><td className="px-3 py-1.5 text-right tabular-nums">{num(Number(p.impressions ?? 0))}</td><td className="px-3 py-1.5 text-right tabular-nums">{num(Number(p.clicks ?? 0))}</td><td className="px-3 py-1.5 text-right tabular-nums">{eur(Number(p.costMicros ?? 0) / 10000)}</td><td className="px-3 py-1.5 text-right tabular-nums">{num(Number(p.orders7d ?? 0))}</td></tr>)}</tbody></table></>
+          <table className="w-full text-sm"><thead className="bg-slate-50 dark:bg-slate-900/60 text-xs text-slate-500"><tr><th className="text-left px-3 py-2">Placement</th><th className="text-right px-3 py-2">Adjustment</th><th className="text-right px-3 py-2">Impr</th><th className="text-right px-3 py-2">Clicks</th><th className="text-right px-3 py-2">Cost</th><th className="text-right px-3 py-2">Orders</th><th className="text-right px-3 py-2">14d</th></tr></thead>
+          <tbody className="divide-y divide-slate-100 dark:divide-slate-800">{placements.length === 0 ? <tr><td colSpan={7} className="px-3 py-6 text-center text-slate-400 text-xs">No placement data yet.</td></tr> : placements.map((p, i) => <tr key={i} className="hover:bg-slate-50 dark:hover:bg-slate-900/40"><td className="px-3 py-1.5">{String(p.placement ?? '')}</td><td className="px-3 py-1.5 text-right tabular-nums">{Number(p.adjustmentPct ?? 0)}%</td><td className="px-3 py-1.5 text-right tabular-nums">{num(Number(p.impressions ?? 0))}</td><td className="px-3 py-1.5 text-right tabular-nums">{num(Number(p.clicks ?? 0))}</td><td className="px-3 py-1.5 text-right tabular-nums">{eur(Number(p.costMicros ?? 0) / 10000)}</td><td className="px-3 py-1.5 text-right tabular-nums">{num(Number(p.orders7d ?? 0))}</td><td className="px-3 py-1.5 text-right" title="Spend, last 14 days"><Sparkline data={placeTrend[String(p.placement ?? '')]} color="#0ea5e9" /></td></tr>)}</tbody></table></>
         )}
         {tab === 'history' && (
           <table className="w-full text-sm"><thead className="bg-slate-50 dark:bg-slate-900/60 text-xs text-slate-500"><tr><th className="text-left px-3 py-2">Field</th><th className="text-left px-3 py-2">Change</th><th className="text-left px-3 py-2">By</th><th className="text-right px-3 py-2">When</th></tr></thead>
