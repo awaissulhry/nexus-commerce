@@ -15,7 +15,7 @@ import type { LucideIcon } from 'lucide-react'
 import {
   Activity, Target, Plus, Wand2, Sparkles, Gauge, Wallet, Clock, Sprout,
   Radar, Brain, Crosshair, PackageX, Lightbulb, BarChart2, Tv, Users,
-  Bot, Search, ClipboardList, TrendingUp, Rss, Zap, History,
+  Bot, Search, ClipboardList, TrendingUp, Rss, Zap, History, Filter,
   PanelLeftClose, PanelLeftOpen, ChevronDown, ChevronRight,
 } from 'lucide-react'
 
@@ -31,6 +31,7 @@ const GROUPS: Group[] = [
   { label: 'Create', items: [
     { href: '/marketing/advertising/goals', label: 'New goal', icon: Target },
     { href: '/marketing/advertising/architect', label: 'Auto-architect', icon: Wand2 },
+    { href: '/marketing/advertising/funnel', label: 'Launch & funnel', icon: Filter },
   ] },
   { label: 'Optimize', items: [
     { href: '/marketing/advertising/automation', label: 'Automation', icon: Bot },
