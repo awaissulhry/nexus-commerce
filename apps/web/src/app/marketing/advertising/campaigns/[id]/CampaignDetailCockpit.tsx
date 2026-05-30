@@ -21,6 +21,7 @@ import { CampaignTrendChart, type TrendRow } from './CampaignTrendChart'
 import { CampaignBudgetPace } from './CampaignBudgetPace'
 import { CampaignRecommendations } from './CampaignRecommendations'
 import { CampaignHealth, type HealthFactor } from './CampaignHealth'
+import { CampaignProfitLens } from './CampaignProfitLens'
 import { Sparkline } from './Sparkline'
 
 interface TrendSummary { impressions: number; clicks: number; orders: number; spendCents: number; salesCents: number; acos: number | null; roas: number | null; ctr: number | null }
@@ -372,6 +373,7 @@ export function CampaignDetailCockpit({ campaign, history }: { campaign: Campaig
       <KpiStrip tiles={tiles} className="mb-4" />
       <CampaignRecommendations campaignId={campaign.id} onNegate={addNegative} onGoToTab={(t) => setTab(t)} refreshKey={liveTs ?? 0} />
       <CampaignHealth score={healthScore} factors={healthFactors} marketplace={campaign.marketplace} refreshKey={liveTs ?? 0} />
+      <CampaignProfitLens trueProfitCents={campaign.trueProfitCents} trueProfitMarginPct={campaign.trueProfitMarginPct} lifetimeSpendCents={lifeSpendC} />
       <CampaignBudgetPace rows={trendRows} dailyBudget={campaign.dailyBudget} windowDays={windowDays} />
       <CampaignTrendChart rows={trendRows} windowDays={windowDays} onWindowChange={setWindowDays} loading={trendLoading} />
 
