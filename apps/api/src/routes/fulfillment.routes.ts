@@ -6042,7 +6042,7 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
       const { cid } = request.params as { id: string; cid: string }
       const body = (request.body ?? {}) as { quotedCostEur?: number; sampleStatus?: string; isSelected?: boolean; notes?: string }
       const data: Record<string, any> = {}
-      if (body.quotedCostEur !== undefined) data.quotedCostCents = body.quotedCostEur === '' || body.quotedCostEur == null ? null : Math.round(Number(body.quotedCostEur) * 100)
+      if (body.quotedCostEur !== undefined) data.quotedCostCents = body.quotedCostEur == null || !Number.isFinite(Number(body.quotedCostEur)) ? null : Math.round(Number(body.quotedCostEur) * 100)
       if (body.sampleStatus !== undefined) data.sampleStatus = body.sampleStatus || null
       if (body.isSelected !== undefined) data.isSelected = !!body.isSelected
       if (body.notes !== undefined) data.notes = body.notes?.trim() || null
