@@ -14,7 +14,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { VirtualizedGrid, KpiStrip, Thumbnail, PreferencesModal, DensityToggle, BulkActionShell, type GridLensColumn, type GridLensRow, type KpiTileSpec, type PreferencesValue } from '@/app/_shared/grid-lens'
 import { type Density, DENSITY_CELL_CLASS } from '@/lib/products/theme'
-import { StatusChip } from '@/app/_shared/ads-ui'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useMarketingEvents } from '@/lib/sync/use-marketing-events'
 import { Megaphone, ShoppingCart, Coins, Package, Search, SlidersHorizontal, Pause, Play, ChevronsUp, ChevronsDown } from 'lucide-react'
@@ -32,6 +31,7 @@ interface Row extends GridLensRow {
   marginPct?: number | null
   campaignCount?: number
   marketCount?: number
+  variantCount?: number
   units?: number
   // child (campaign) only
   marketplace?: string
@@ -125,23 +125,27 @@ export function ByProductView() {
   // PC.5 — live refresh on marketing events.
   useMarketingEvents(useCallback(() => { void load(); setLiveTs(Date.now()); setTimeout(() => setLiveTs(null), 4000) }, [load]))
 
-  const fetchChildrenFor = useCallback(async (productId: string) => {
-    if (childrenByParent[productId]) return
-    setLoadingChildren((s) => new Set(s).add(productId))
+  // PCF.1 — expand a parent product → its advertised VARIANT children (each
+  // variant's ad metrics). A variant drills through to its campaigns.
+  const fetchChildrenFor = useCallback(async (parentId: string) => {
+    if (childrenByParent[parentId]) return
+    setLoadingChildren((s) => new Set(s).add(parentId))
     try {
-      const r = await fetch(`${getBackendUrl()}/api/advertising/product-ads?productId=${productId}&windowDays=${windowDays}`, { cache: 'no-store' }).then((x) => x.json()).catch(() => ({ campaigns: [] }))
-      const kids: Row[] = (r.campaigns ?? []).map((c: Record<string, unknown>) => ({
-        id: String(c.id), parentId: productId, isParent: false,
-        name: String(c.name ?? ''), marketplace: String(c.marketplace ?? '—'), status: String(c.status ?? ''),
-        adSpendCents: Number(c.spendCents ?? 0), revenueCents: Number(c.adSalesCents ?? 0),
-        acos: c.acos == null ? null : Number(c.acos), impressions: Number(c.impressions ?? 0), clicks: Number(c.clicks ?? 0),
+      const qp = new URLSearchParams({ parentId, windowDays: String(windowDays) })
+      if (marketplace) qp.set('marketplace', marketplace)
+      const r = await fetch(`${getBackendUrl()}/api/advertising/by-product/variants?${qp}`, { cache: 'no-store' }).then((x) => x.json()).catch(() => ({ rows: [] }))
+      const kids: Row[] = (r.rows ?? []).map((v: Record<string, unknown>) => ({
+        id: String(v.id), parentId, isParent: false,
+        sku: v.sku as string, name: String(v.name ?? ''), asin: (v.asin as string) ?? null,
+        photoUrl: (v.photoUrl as string) ?? null, photoCount: Number(v.photoCount ?? 0),
+        adSpendCents: Number(v.adSpendCents ?? 0), revenueCents: Number(v.revenueCents ?? 0), profitCents: Number(v.profitCents ?? 0),
+        units: Number(v.units ?? 0), acos: v.acos == null ? null : Number(v.acos), tacos: v.tacos == null ? null : Number(v.tacos),
+        marginPct: v.marginPct == null ? null : Number(v.marginPct), impressions: Number(v.impressions ?? 0), clicks: Number(v.clicks ?? 0),
+        campaignCount: Number(v.campaignCount ?? 0), marketCount: Number(v.marketCount ?? 0),
       }))
-      // PC.4 — cluster by marketplace, then spend within each market, so a
-      // product's campaigns group visually by market in the expansion.
-      kids.sort((a, b) => (a.marketplace ?? '').localeCompare(b.marketplace ?? '') || b.adSpendCents - a.adSpendCents)
-      setChildrenByParent((m) => ({ ...m, [productId]: kids }))
+      setChildrenByParent((m) => ({ ...m, [parentId]: kids }))
     } finally {
-      setLoadingChildren((s) => { const n = new Set(s); n.delete(productId); return n })
+      setLoadingChildren((s) => { const n = new Set(s); n.delete(parentId); return n })
     }
   }, [childrenByParent, windowDays])
 
@@ -185,20 +189,26 @@ export function ByProductView() {
 
   const renderCell = useCallback((row: Row, colKey: string, isChild: boolean) => {
     if (isChild) {
+      // Variant child row — same metric columns as the parent, variant-scoped.
       switch (colKey) {
         case 'product': return (
-          <span className="pl-6 inline-flex flex-col min-w-0">
-            <a href={`/marketing/advertising/campaigns/${row.id}`} className="text-sm text-slate-700 dark:text-slate-200 truncate hover:underline" title={row.name}>{row.name}</a>
-            <span className="text-[10px] text-slate-400">{num(row.impressions)} impr · {num(row.clicks)} clk</span>
-          </span>
+          <div className="flex items-center gap-2 min-w-0 pl-6">
+            <Thumbnail src={row.photoUrl ?? null} photoCount={row.photoCount} alt={row.name} />
+            <div className="min-w-0">
+              <a href={`/products/${row.id}/edit?tab=ads`} target="_blank" rel="noopener noreferrer" className="block truncate text-sm text-slate-700 dark:text-slate-200 hover:underline" title={row.name}>{row.sku ?? row.name}</a>
+              <span className="text-[10px] text-slate-400 truncate">{row.asin ?? ''} · {num(row.impressions)} impr · {num(row.clicks)} clk</span>
+            </div>
+          </div>
         )
-        case 'campaigns': return <StatusChip status={row.status ?? ''} />
-        case 'markets': return <span className="text-xs text-slate-500">{row.marketplace}</span>
+        case 'campaigns': return <span className="tabular-nums text-slate-500">{num(row.campaignCount)}</span>
+        case 'markets': return <span className="tabular-nums text-slate-500">{num(row.marketCount)}</span>
         case 'adspend': return <span className="tabular-nums">{eur(row.adSpendCents)}</span>
         case 'revenue': return <span className="tabular-nums">{eur(row.revenueCents)}</span>
-        case 'tacos': return <span className="tabular-nums text-slate-500" title="Campaign ACOS">{pct(row.acos)} <span className="text-[9px] text-slate-400">ACOS</span></span>
-        case 'profit': return <span className="text-[11px] text-slate-300 dark:text-slate-600">—</span>
-        case 'margin': return null
+        case 'tacos': return <span className={`tabular-nums ${tacosColor(row.tacos)}`}>{pct(row.tacos)}</span>
+        case 'acos': return <span className={`tabular-nums ${tacosColor(row.acos)}`}>{pct(row.acos)}</span>
+        case 'profit': return <span className={`tabular-nums ${(row.profitCents ?? 0) >= 0 ? 'text-slate-500' : 'text-rose-600'}`}>{eur(row.profitCents)}</span>
+        case 'margin': return <span className="tabular-nums text-slate-500">{pct(row.marginPct)}</span>
+        case 'units': return <span className="tabular-nums text-slate-500">{num(row.units)}</span>
         default: return null
       }
     }
@@ -210,6 +220,7 @@ export function ByProductView() {
             <a href={`/products/${row.id}/edit?tab=ads`} target="_blank" rel="noopener noreferrer" className="block truncate text-sm font-medium text-slate-800 dark:text-slate-100 hover:underline">{row.name}</a>
             <div className="flex items-center gap-1.5 min-w-0">
               <span className="text-[11px] text-slate-400 truncate">{row.sku}{row.asin ? ` · ${row.asin}` : ''}</span>
+              {row.isParent && (row.variantCount ?? 0) > 0 && <span className="px-1 py-px text-[9px] rounded bg-slate-100 dark:bg-slate-800 text-slate-500 flex-shrink-0">{row.variantCount} variant{row.variantCount === 1 ? '' : 's'}</span>}
               {(() => { const rec = rowRec(row); return rec ? <span className={`px-1 py-px text-[9px] font-medium rounded ${rec.cls} flex-shrink-0`}>{rec.label}</span> : null })()}
             </div>
           </div>

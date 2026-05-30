@@ -955,18 +955,23 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       return { windowDays, mode, rows: [], totals: { adSpendCents: 0, revenueCents: 0, profitCents: 0, products: 0 }, unattributedSpendCents: 0, marketplaces: [] }
     }
 
-    // 2. Product identity + photo (reuse the /products face-image picker).
+    // 2. Variant identity (+ parentId) and parent identity, so we can ROLL UP
+    // each variant's ad metrics under its PARENT product (PCF.1). Standalone
+    // products (no parent) stay as their own row.
     const { pickFaceImage, FACE_IMAGE_SELECT, FACE_IMAGE_ORDER_BY } = await import('../services/product-read-cache.service.js')
-    const products = await prisma.product.findMany({
-      where: {
-        id: { in: ids }, deletedAt: null,
-        ...(q.search ? { OR: [{ name: { contains: q.search, mode: 'insensitive' } }, { sku: { contains: q.search, mode: 'insensitive' } }] } : {}),
-      },
-      select: { id: true, sku: true, name: true, images: { select: FACE_IMAGE_SELECT, orderBy: FACE_IMAGE_ORDER_BY } },
+    const variants = await prisma.product.findMany({
+      where: { id: { in: ids }, deletedAt: null },
+      select: { id: true, sku: true, name: true, parentId: true, images: { select: FACE_IMAGE_SELECT, orderBy: FACE_IMAGE_ORDER_BY } },
     })
-    const prodById = new Map(products.map((p) => [p.id, p]))
+    const variantById = new Map(variants.map((p) => [p.id, p]))
+    const parentIds = [...new Set(variants.map((v) => v.parentId).filter((x): x is string => !!x))]
+    const parents = parentIds.length ? await prisma.product.findMany({
+      where: { id: { in: parentIds } },
+      select: { id: true, sku: true, name: true, images: { select: FACE_IMAGE_SELECT, orderBy: FACE_IMAGE_ORDER_BY }, _count: { select: { children: true } } },
+    }) : []
+    const parentById = new Map(parents.map((p) => [p.id, p]))
 
-    // 3. #campaigns + #markets + asin from the ad structure (one query).
+    // 3. #campaigns + #markets + asin from the ad structure (keyed by variant).
     const ads = await prisma.adProductAd.findMany({
       where: { productId: { in: ids } },
       select: { productId: true, asin: true, adGroup: { select: { campaign: { select: { id: true, marketplace: true } } } } },
@@ -981,41 +986,61 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       if (!s.asin && a.asin) s.asin = a.asin
     }
 
-    // 4. Build rows (skip products filtered out by search).
-    const rows = ids.flatMap((pid) => {
-      const p = prodById.get(pid)
-      if (!p) return []
-      const ad = adByProduct.get(pid) // PRODUCT_AD data for this product, if any
-      const ppd = ppdByProduct.get(pid)
-      const adSpendCents = ad ? ad.spendC : (ppd?._sum.advertisingSpendCents ?? 0)
-      const adSalesCents = ad?.salesC ?? 0
-      const revenueCents = ppd?._sum.grossRevenueCents ?? 0
-      const profitCents = ppd?._sum.trueProfitCents ?? 0
+    // 4. Roll up variant metrics under the parent (groupId = parentId ?? self).
+    interface Group { groupId: string; variants: Set<string>; spend: number; salesC: number; revenue: number; profit: number; units: number; impr: number; clicks: number; campaigns: Set<string>; markets: Set<string>; asin: string | null; hasPA: boolean }
+    const groups = new Map<string, Group>()
+    for (const pid of ids) {
+      const v = variantById.get(pid)
+      if (!v) continue
+      const groupId = (v.parentId && parentById.has(v.parentId)) ? v.parentId : pid
+      let g = groups.get(groupId)
+      if (!g) { g = { groupId, variants: new Set(), spend: 0, salesC: 0, revenue: 0, profit: 0, units: 0, impr: 0, clicks: 0, campaigns: new Set(), markets: new Set(), asin: null, hasPA: false }; groups.set(groupId, g) }
+      g.variants.add(pid)
+      const ad = adByProduct.get(pid), ppd = ppdByProduct.get(pid)
+      g.spend += ad ? ad.spendC : (ppd?._sum.advertisingSpendCents ?? 0)
+      g.salesC += ad?.salesC ?? 0
+      g.revenue += ppd?._sum.grossRevenueCents ?? 0
+      g.profit += ppd?._sum.trueProfitCents ?? 0
+      g.units += ppd?._sum.unitsSold ?? 0
+      g.impr += ad?.impr ?? 0
+      g.clicks += ad?.clicks ?? 0
+      if (ad) g.hasPA = true
       const st = structByProduct.get(pid)
-      const campaignCount = st?.campaigns.size ?? 0
+      if (st) { st.campaigns.forEach((c) => g.campaigns.add(c)); st.markets.forEach((m) => g.markets.add(m)); if (!g.asin) g.asin = st.asin }
+    }
+
+    const searchLc = q.search?.toLowerCase()
+    let rows = [...groups.values()].flatMap((g) => {
+      const parent = parentById.get(g.groupId)
+      const identity = parent ?? variantById.get(g.groupId)
+      if (!identity) return []
+      if (searchLc && !identity.name.toLowerCase().includes(searchLc) && !identity.sku.toLowerCase().includes(searchLc)) return []
+      const isParentRow = !!parent
       return [{
-        id: pid,
-        sku: p.sku,
-        name: p.name,
-        asin: st?.asin ?? null,
-        photoUrl: pickFaceImage(p.images),
-        photoCount: p.images.length,
-        adSpendCents, revenueCents, profitCents,
-        units: ppd?._sum.unitsSold ?? 0,
-        // ACOS only when we have true per-product ad sales (PRODUCT_AD).
-        acos: ad && adSalesCents > 0 ? Math.round((adSpendCents / adSalesCents) * 1000) / 10 : null,
-        roas: ad && adSpendCents > 0 ? Math.round((adSalesCents / adSpendCents) * 100) / 100 : null,
-        impressions: ad?.impr ?? 0,
-        clicks: ad?.clicks ?? 0,
-        tacos: revenueCents > 0 ? Math.round((adSpendCents / revenueCents) * 1000) / 10 : null,
-        marginPct: revenueCents > 0 ? Math.round((profitCents / revenueCents) * 1000) / 10 : null,
-        campaignCount,
-        marketCount: st?.markets.size ?? 0,
-        isParent: campaignCount > 0,
-        childCount: campaignCount,
+        id: g.groupId,
+        sku: identity.sku,
+        name: identity.name,
+        asin: g.asin,
+        photoUrl: pickFaceImage(identity.images),
+        photoCount: identity.images.length,
+        adSpendCents: g.spend, revenueCents: g.revenue, profitCents: g.profit,
+        units: g.units,
+        acos: g.hasPA && g.salesC > 0 ? Math.round((g.spend / g.salesC) * 1000) / 10 : null,
+        roas: g.hasPA && g.spend > 0 ? Math.round((g.salesC / g.spend) * 100) / 100 : null,
+        impressions: g.impr, clicks: g.clicks,
+        tacos: g.revenue > 0 ? Math.round((g.spend / g.revenue) * 1000) / 10 : null,
+        marginPct: g.revenue > 0 ? Math.round((g.profit / g.revenue) * 1000) / 10 : null,
+        campaignCount: g.campaigns.size,
+        marketCount: g.markets.size,
+        variantCount: g.variants.size,
+        isParent: isParentRow,           // expandable → its advertised variants
+        childCount: isParentRow ? g.variants.size : 0,
         opportunity: mode === 'opportunity',
       }]
     })
+    // Re-sort by the requested key (rollup reorders vs the variant-level sort).
+    rows.sort((a, b) => b.adSpendCents - a.adSpendCents)
+    rows = rows.slice(0, limit)
 
     // 5. Reconciliation: account ad spend (campaign-level) vs Σ attributed.
     const acct = await prisma.amazonAdsDailyPerformance.aggregate({
@@ -1066,6 +1091,79 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       accountSpendCents,
       unattributedSpendCents: Math.max(0, accountSpendCents - attributedSpendCents),
     }
+  })
+
+  // PCF.1 — variant children of a parent product (the expansion rows). Per-
+  // variant ad spend/revenue/ACOS for one parent's advertised variants.
+  // GET /advertising/by-product/variants?parentId=&windowDays=&marketplace=
+  fastify.get('/advertising/by-product/variants', async (request, reply) => {
+    const q = request.query as { parentId?: string; windowDays?: string; marketplace?: string }
+    if (!q.parentId) { reply.status(400); return { error: 'parentId required' } }
+    const windowDays = Math.max(7, Math.min(90, Number(q.windowDays ?? 30)))
+    const since = new Date(); since.setUTCDate(since.getUTCDate() - windowDays); since.setUTCHours(0, 0, 0, 0)
+    const mkt = q.marketplace || undefined
+
+    const { pickFaceImage, FACE_IMAGE_SELECT, FACE_IMAGE_ORDER_BY } = await import('../services/product-read-cache.service.js')
+    const children = await prisma.product.findMany({
+      where: { parentId: q.parentId, deletedAt: null },
+      select: { id: true, sku: true, name: true, images: { select: FACE_IMAGE_SELECT, orderBy: FACE_IMAGE_ORDER_BY } },
+    })
+    const childIds = children.map((c) => c.id)
+    if (childIds.length === 0) { reply.header('Cache-Control', 'private, max-age=60'); return { rows: [] } }
+
+    // PRODUCT_AD per variant.
+    const ads = await prisma.adProductAd.findMany({ where: { productId: { in: childIds } }, select: { id: true, productId: true, asin: true, adGroup: { select: { campaign: { select: { id: true, marketplace: true } } } } } })
+    const adIds = ads.map((a) => a.id)
+    const perAd = adIds.length ? await prisma.amazonAdsDailyPerformance.groupBy({
+      by: ['localEntityId'],
+      where: { entityType: 'PRODUCT_AD', localEntityId: { in: adIds }, date: { gte: since }, ...(mkt ? { marketplace: mkt } : {}) },
+      _sum: { costMicros: true, sales7dCents: true, impressions: true, clicks: true, orders7d: true },
+    }) : []
+    const prodByAd = new Map(ads.map((a) => [a.id, a.productId]))
+    const adByVariant = new Map<string, { spendC: number; salesC: number; impr: number; clicks: number }>()
+    for (const r of perAd) {
+      const pid = r.localEntityId ? prodByAd.get(r.localEntityId) : null
+      if (!pid) continue
+      const cur = adByVariant.get(pid) ?? { spendC: 0, salesC: 0, impr: 0, clicks: 0 }
+      cur.spendC += Math.round(Number(r._sum.costMicros ?? 0n) / 10_000)
+      cur.salesC += r._sum.sales7dCents ?? 0
+      cur.impr += r._sum.impressions ?? 0
+      cur.clicks += r._sum.clicks ?? 0
+      adByVariant.set(pid, cur)
+    }
+    const ppd = await prisma.productProfitDaily.groupBy({
+      by: ['productId'], where: { productId: { in: childIds }, date: { gte: since }, ...(mkt ? { marketplace: mkt } : {}) },
+      _sum: { advertisingSpendCents: true, grossRevenueCents: true, trueProfitCents: true, unitsSold: true },
+    })
+    const ppdBy = new Map(ppd.map((g) => [g.productId, g]))
+    const structBy = new Map<string, { campaigns: Set<string>; markets: Set<string>; asin: string | null }>()
+    for (const a of ads) {
+      if (!a.productId) continue
+      let s = structBy.get(a.productId); if (!s) { s = { campaigns: new Set(), markets: new Set(), asin: a.asin }; structBy.set(a.productId, s) }
+      const c = a.adGroup?.campaign; if (c?.id && (!mkt || c.marketplace === mkt)) { s.campaigns.add(c.id); if (c.marketplace) s.markets.add(c.marketplace) }
+      if (!s.asin && a.asin) s.asin = a.asin
+    }
+    const rows = children.flatMap((c) => {
+      const ad = adByVariant.get(c.id), p = ppdBy.get(c.id), st = structBy.get(c.id)
+      const spend = ad ? ad.spendC : (p?._sum.advertisingSpendCents ?? 0)
+      // Only variants with ad activity or sales are interesting in the expansion.
+      if (spend === 0 && (p?._sum.grossRevenueCents ?? 0) === 0) return []
+      const rev = p?._sum.grossRevenueCents ?? 0, sales = ad?.salesC ?? 0
+      return [{
+        id: c.id, sku: c.sku, name: c.name, asin: st?.asin ?? null,
+        photoUrl: pickFaceImage(c.images), photoCount: c.images.length,
+        adSpendCents: spend, revenueCents: rev, profitCents: p?._sum.trueProfitCents ?? 0, units: p?._sum.unitsSold ?? 0,
+        acos: ad && sales > 0 ? Math.round((spend / sales) * 1000) / 10 : null,
+        tacos: rev > 0 ? Math.round((spend / rev) * 1000) / 10 : null,
+        marginPct: rev > 0 ? Math.round(((p?._sum.trueProfitCents ?? 0) / rev) * 1000) / 10 : null,
+        impressions: ad?.impr ?? 0, clicks: ad?.clicks ?? 0,
+        campaignCount: st?.campaigns.size ?? 0, marketCount: st?.markets.size ?? 0,
+        isParent: false, childCount: 0,
+      }]
+    })
+    rows.sort((a, b) => b.adSpendCents - a.adSpendCents)
+    reply.header('Cache-Control', 'private, max-age=60')
+    return { rows }
   })
 
   // PC.7 — bulk action on the campaigns behind selected products. Resolves
