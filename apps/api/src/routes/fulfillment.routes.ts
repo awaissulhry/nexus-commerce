@@ -6339,17 +6339,8 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
       if (!project) return reply.code(404).send({ error: 'Project not found' })
       const b = ((await prisma.brandSettings.findFirst()) ?? {}) as any
 
-      const isImg = (n: string) => /\.(jpe?g|png|webp|gif|bmp|tiff?)($|\?)/i.test(n)
-      const isPdf = (n: string) => /\.pdf($|\?)/i.test(n)
-      const images: Array<{ url: string; caption: string | null }> = []
-      const pdfUrls: string[] = []
-      const otherFiles: Array<{ url: string; filename: string | null }> = []
-      for (const a of project.attachments) {
-        const key = a.filename ?? a.url
-        if (isImg(key)) images.push({ url: a.url, caption: a.caption ?? null })
-        else if (isPdf(key)) pdfUrls.push(a.url)
-        else otherFiles.push({ url: a.url, filename: a.filename })
-      }
+      const { partitionPackAttachments } = await import('../services/development-pack-logic.js')
+      const { images, pdfUrls, otherFiles } = partitionPackAttachments(project.attachments)
 
       const { renderDevelopmentPackPdf } = await import('../services/development-pack-pdf.service.js')
       const buffer = await renderDevelopmentPackPdf({
@@ -6399,12 +6390,8 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
       if (!project) return reply.code(404).send({ error: 'Project not found' })
       const b = ((await prisma.brandSettings.findFirst()) ?? {}) as any
 
-      const isImg = (n: string) => /\.(jpe?g|png|webp|gif|bmp|tiff?)($|\?)/i.test(n)
-      const isPdf = (n: string) => /\.pdf($|\?)/i.test(n)
-      const images: Array<{ url: string; caption: string | null }> = []
-      const pdfUrls: string[] = []
-      const otherFiles: Array<{ url: string; filename: string | null }> = []
-      for (const a of project.attachments) { const k = a.filename ?? a.url; if (isImg(k)) images.push({ url: a.url, caption: a.caption ?? null }); else if (isPdf(k)) pdfUrls.push(a.url); else otherFiles.push({ url: a.url, filename: a.filename }) }
+      const { partitionPackAttachments } = await import('../services/development-pack-logic.js')
+      const { images, pdfUrls, otherFiles } = partitionPackAttachments(project.attachments)
 
       const { renderDevelopmentPackPdf } = await import('../services/development-pack-pdf.service.js')
       const buffer = await renderDevelopmentPackPdf({
