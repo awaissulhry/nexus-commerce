@@ -3393,6 +3393,25 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     try { return await deleteAmsSubscription(prof.profileId, prof.region, id) } catch (e) { reply.status(502); return { error: (e as Error)?.message } }
   })
 
+  // ── AME.11: Top-of-search placement optimizer ───────────────────────
+  fastify.get('/advertising/top-of-search', async (request, reply) => {
+    const q = request.query as { windowDays?: string; marketplace?: string; targetAcos?: string }
+    const { analyzeTopOfSearch } = await import('../services/advertising/ads-top-of-search.service.js')
+    reply.header('Cache-Control', 'private, max-age=60')
+    return analyzeTopOfSearch({ windowDays: q.windowDays ? Number(q.windowDays) : undefined, marketplace: q.marketplace, targetAcos: q.targetAcos ? Number(q.targetAcos) : undefined })
+  })
+  fastify.post('/advertising/top-of-search/apply', async (request, reply) => {
+    const b = (request.body ?? {}) as { campaignId?: string; percentage?: number }
+    if (!b.campaignId || b.percentage == null) { reply.status(400); return { error: 'campaignId and percentage required' } }
+    const { applyTopOfSearch } = await import('../services/advertising/ads-top-of-search.service.js')
+    try { return { ok: true, result: await applyTopOfSearch(b.campaignId, b.percentage) } } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
+  })
+  fastify.post('/advertising/top-of-search/apply-all', async (request, reply) => {
+    const b = (request.body ?? {}) as { windowDays?: number; marketplace?: string; targetAcos?: number }
+    const { applyTopOfSearchRecommendations } = await import('../services/advertising/ads-top-of-search.service.js')
+    try { return await applyTopOfSearchRecommendations(b) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
+  })
+
   // ── AX.11: Search-term n-gram analysis ──────────────────────────────
   fastify.get('/advertising/ngrams', async (request, reply) => {
     const q = request.query as Record<string, string | undefined>
