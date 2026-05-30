@@ -7756,6 +7756,7 @@ model Supplier {
   // container capacity). When present, enables landed-cost EOQ and
   // container-fill suggestions.
   shippingProfile SupplierShippingProfile?
+  contacts        SupplierContact[] // PD.2
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -12274,4 +12275,27 @@ model AdBudgetPlan {
   createdBy          String?
 
   @@index([month, marketplace])
+}
+
+// PD.2 — supplier contact persons. Factories often have several contacts
+// (sales, QC, logistics) on different channels (WhatsApp/WeChat). The
+// Supplier scalar contact* fields stay as the "primary on file"; this is
+// the multi-contact book + the target for compose-and-send (PD.3).
+model SupplierContact {
+  id         String   @id @default(cuid())
+  supplierId String
+  name       String
+  role       String?
+  email      String?
+  phone      String?
+  whatsapp   String?
+  wechat     String?
+  isPrimary  Boolean  @default(false)
+  notes      String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  supplier Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+
+  @@index([supplierId])
 }
