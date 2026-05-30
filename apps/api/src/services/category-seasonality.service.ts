@@ -164,60 +164,76 @@ export async function computeCategorySeasonalIndices(): Promise<{
   const map: SeasonalIndexMap = new Map()
 
   for (const [productType, acc] of byType) {
-    // Average units per occurrence of each calendar month.
-    const avgPerOccur = acc.unitsByMonth.map((u, i) => {
-      const occ = acc.yearsByMonth[i].size
-      return occ > 0 ? u / occ : 0
-    })
-    const monthsWithData = acc.yearsByMonth.filter((s) => s.size > 0).length
-
-    // Normalize to mean 1 over the 12 months. Months with no observation
-    // are treated as the category mean (factor 1) rather than 0 so a gap
-    // in coverage doesn't read as "zero demand that month".
-    const observed = avgPerOccur.filter((_, i) => acc.yearsByMonth[i].size > 0)
-    const mean =
-      observed.length > 0 ? observed.reduce((a, b) => a + b, 0) / observed.length : 0
-
-    const rawIndex = avgPerOccur.map((v, i) =>
-      acc.yearsByMonth[i].size > 0 && mean > 0 ? v / mean : 1,
-    )
-
-    // 3-month circular moving average smooths single-month noise.
-    const smoothed = rawIndex.map((_, i) => {
-      const a = rawIndex[(i + 11) % 12]
-      const b = rawIndex[i]
-      const c = rawIndex[(i + 1) % 12]
-      return (a + b + c) / 3
-    })
-
-    const gatePassed = acc.total >= MIN_UNITS && monthsWithData >= MIN_MONTHS_WITH_DATA
-    const shrink = gatePassed ? Math.min(1, acc.total / FULL_TRUST_UNITS) : 0
-
-    // Shrink toward 1.0, then clamp.
-    const finalIndex = smoothed.map((v) => {
-      const shrunk = 1 + shrink * (v - 1)
-      return Math.min(MAX_FACTOR, Math.max(MIN_FACTOR, shrunk))
-    })
-
-    indices.push({
-      productType,
-      monthly: finalIndex,
-      monthlyRaw: rawIndex.map((v) => Math.round(v * 1000) / 1000),
-      totalUnits: acc.total,
-      monthsWithData,
-      shrink: Math.round(shrink * 1000) / 1000,
-      applied: gatePassed && shrink > 0,
-    })
-
+    const occurByMonth = acc.yearsByMonth.map((s) => s.size)
+    const built = buildCategoryIndex(acc.unitsByMonth, occurByMonth, acc.total)
+    indices.push({ productType, ...built })
     // Only categories that cleared the gate go into the map the forecaster
     // reads — everything else implicitly gets a flat 1.0 (no change).
-    if (gatePassed && shrink > 0) {
-      map.set(productType, finalIndex)
-    }
+    if (built.applied) map.set(productType, built.monthly)
   }
 
   indices.sort((a, b) => b.totalUnits - a.totalUnits)
   return { indices, map, generatedAt: new Date().toISOString() }
+}
+
+/**
+ * Pure core of the seasonal-index computation — extracted so it can be
+ * unit-tested without a database. Given pooled units per calendar month
+ * and how many distinct years each month was observed, returns the
+ * normalized + smoothed + shrunk + clamped 12-factor index plus its
+ * provenance.
+ *
+ * @param unitsByMonth 12 entries, index 0 = January
+ * @param occurByMonth 12 entries, distinct-year count each month was seen
+ * @param total        total pooled units (drives the gate + shrink)
+ */
+export function buildCategoryIndex(
+  unitsByMonth: number[],
+  occurByMonth: number[],
+  total: number,
+): Omit<CategorySeasonalIndex, 'productType'> {
+  // Average units per occurrence of each calendar month.
+  const avgPerOccur = unitsByMonth.map((u, i) =>
+    occurByMonth[i] > 0 ? u / occurByMonth[i] : 0,
+  )
+  const monthsWithData = occurByMonth.filter((c) => c > 0).length
+
+  // Normalize to mean 1 over the OBSERVED months. Months with no
+  // observation are treated as the category mean (factor 1) rather than 0
+  // so a coverage gap doesn't read as "zero demand that month".
+  const observed = avgPerOccur.filter((_, i) => occurByMonth[i] > 0)
+  const mean =
+    observed.length > 0 ? observed.reduce((a, b) => a + b, 0) / observed.length : 0
+
+  const rawIndex = avgPerOccur.map((v, i) =>
+    occurByMonth[i] > 0 && mean > 0 ? v / mean : 1,
+  )
+
+  // 3-month circular moving average smooths single-month noise.
+  const smoothed = rawIndex.map((_, i) => {
+    const a = rawIndex[(i + 11) % 12]
+    const b = rawIndex[i]
+    const c = rawIndex[(i + 1) % 12]
+    return (a + b + c) / 3
+  })
+
+  const gatePassed = total >= MIN_UNITS && monthsWithData >= MIN_MONTHS_WITH_DATA
+  const shrink = gatePassed ? Math.min(1, total / FULL_TRUST_UNITS) : 0
+
+  // Shrink toward 1.0, then clamp.
+  const finalIndex = smoothed.map((v) => {
+    const shrunk = 1 + shrink * (v - 1)
+    return Math.min(MAX_FACTOR, Math.max(MIN_FACTOR, shrunk))
+  })
+
+  return {
+    monthly: finalIndex,
+    monthlyRaw: rawIndex.map((v) => Math.round(v * 1000) / 1000),
+    totalUnits: total,
+    monthsWithData,
+    shrink: Math.round(shrink * 1000) / 1000,
+    applied: gatePassed && shrink > 0,
+  }
 }
 
 /**

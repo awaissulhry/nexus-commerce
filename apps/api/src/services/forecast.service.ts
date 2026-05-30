@@ -40,9 +40,18 @@ import {
   resolveForecastSignals,
   type SignalsForDay,
 } from './forecast-signals.service.js'
+import {
+  computeCategorySeasonalIndices,
+  seasonalFactorFor,
+  type SeasonalIndexMap,
+} from './category-seasonality.service.js'
 
 const HORIZON_DAYS = 90
 const HISTORY_DAYS = 365
+/** Holt-Winters only learns its own seasonality past this many obs; below
+ *  it (our zero-filled history is always exactly HISTORY_DAYS) the per-SKU
+ *  model is seasonless and we layer the category prior on instead. */
+const ANNUAL_PERIOD = 365
 
 interface SeriesIdentity {
   sku: string
@@ -74,6 +83,7 @@ export interface SeriesForecastResult {
 export async function generateForecastForSeries(
   identity: SeriesIdentity,
   signalsCache?: Map<string, SignalsForDay>,
+  seasonalIndex?: SeasonalIndexMap,
 ): Promise<SeriesForecastResult> {
   const startedAt = Date.now()
 
@@ -102,16 +112,49 @@ export async function generateForecastForSeries(
   for (const row of aggregates) {
     dayMap.set(row.day.toISOString().slice(0, 10), row.unitsSold)
   }
+  // Capture each history day's calendar date alongside its value so the
+  // seasonal de/re-seasonalization can look up the right monthly factor.
   const history: number[] = []
+  const historyDates: Date[] = []
   const cursor = new Date(historyStart)
   while (cursor < today) {
     const key = cursor.toISOString().slice(0, 10)
     history.push(dayMap.get(key) ?? 0)
+    historyDates.push(new Date(cursor))
     cursor.setUTCDate(cursor.getUTCDate() + 1)
   }
 
-  // ── Run Holt-Winters ────────────────────────────────────────────
-  const baseline: ForecastResult = forecastDailyDemand(history, HORIZON_DAYS)
+  // ── RX.B1 — category seasonal prior ─────────────────────────────
+  // Per-SKU Holt-Winters seasonality is unreachable here (history is
+  // always exactly HISTORY_DAYS, and the model needs n > ANNUAL_PERIOD),
+  // so the SKU's own fit is seasonless. We layer a POOLED category curve
+  // on top: deseasonalize the history → fit trend on the deseasonalized
+  // series → reseasonalize the forecast. Doing it in this order keeps the
+  // trend and the seasonal shape from double-counting each other.
+  //
+  // Lazily resolve the index map when the caller didn't pass one (the
+  // batch orchestrator passes a shared map; the single-series endpoint
+  // doesn't). A category with no trusted signal yields factor 1.0
+  // everywhere → this whole block is a no-op for it.
+  let seasonal: SeasonalIndexMap | undefined = seasonalIndex
+  if (!seasonal && identity.productType) {
+    seasonal = (await computeCategorySeasonalIndices()).map
+  }
+  const applySeasonal =
+    !!seasonal &&
+    !!identity.productType &&
+    seasonal.has(identity.productType) &&
+    history.length <= ANNUAL_PERIOD
+
+  const fitHistory = applySeasonal
+    ? history.map((v, i) => {
+        const f = seasonalFactorFor(seasonal!, identity.productType, historyDates[i])
+        return f > 0 ? v / f : v
+      })
+    : history
+
+  // ── Run Holt-Winters (on the deseasonalized series when applicable) ─
+  const baseline: ForecastResult = forecastDailyDemand(fitHistory, HORIZON_DAYS)
 
   // ── Resolve external signals ────────────────────────────────────
   const horizonDays: Date[] = []
@@ -134,6 +177,10 @@ export async function generateForecastForSeries(
   }
 
   // ── Compose adjusted forecast + upsert rows ─────────────────────
+  // Tag carries the seasonal-prior provenance so the UI / accuracy rollups
+  // can tell a category-seasonalized forecast from a plain trend one.
+  const baseTag = regimeToTag(baseline.regime)
+  const genTag = applySeasonal ? `${baseTag ?? 'HOLT_WINTERS'}+CAT_SEASONAL` : baseTag
   let rowsWritten = 0
   for (let i = 0; i < HORIZON_DAYS; i++) {
     const horizonDay = horizonDays[i]
@@ -148,9 +195,18 @@ export async function generateForecastForSeries(
       combined: 1,
       notes: [],
     }
-    const adjusted = point.value * sig.combined
-    const lower80 = point.lower80 * sig.combined
-    const upper80 = point.upper80 * sig.combined
+    // Reseasonalize: re-apply the category monthly factor stripped before
+    // the fit, then layer the external (holiday/weather/retail) signals.
+    const season = applySeasonal
+      ? seasonalFactorFor(seasonal!, identity.productType, horizonDay)
+      : 1
+    const adjusted = point.value * season * sig.combined
+    const lower80 = point.lower80 * season * sig.combined
+    const upper80 = point.upper80 * season * sig.combined
+    // Record the seasonal factor next to the external signals for
+    // explainability (RX.C1). `combined` stays holiday×weather×retail so
+    // the existing drawer semantics don't change; `season` is additive.
+    const sigOut = { ...sig, season: Math.round(season * 1000) / 1000 }
 
     // R.16 — unique key includes model to support champion +
     // challenger dual-write. v1 still always uses HOLT_WINTERS_V1
@@ -176,16 +232,16 @@ export async function generateForecastForSeries(
         forecastUnits: clamp2(adjusted),
         lower80: clamp2(lower80),
         upper80: clamp2(upper80),
-        signals: sig as any,
-        generationTag: regimeToTag(baseline.regime),
+        signals: sigOut as any,
+        generationTag: genTag,
         model: modelId,
       },
       update: {
         forecastUnits: clamp2(adjusted),
         lower80: clamp2(lower80),
         upper80: clamp2(upper80),
-        signals: sig as any,
-        generationTag: regimeToTag(baseline.regime),
+        signals: sigOut as any,
+        generationTag: genTag,
         generatedAt: new Date(),
       },
     })
@@ -311,6 +367,10 @@ export async function generateForecastsForAll(args: {
   const errors: Array<{ identity: string; error: string }> = []
   let rowsWritten = 0
 
+  // RX.B1 — compute the category seasonal index ONCE for the whole batch
+  // and share it across every series (one pooled-demand query, not N).
+  const { map: seasonalMap } = await computeCategorySeasonalIndices()
+
   for (const series of eligible) {
     const productType = productTypeBySku.get(series.sku) ?? null
     const cacheKey = sigCacheKey(series.marketplace, series.channel, productType)
@@ -329,6 +389,7 @@ export async function generateForecastsForAll(args: {
       const result = await generateForecastForSeries(
         { ...series, productType },
         sig,
+        seasonalMap,
       )
       byRegime[result.regime]++
       rowsWritten += result.rowsWritten
