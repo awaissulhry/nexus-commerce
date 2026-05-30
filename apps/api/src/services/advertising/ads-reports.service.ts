@@ -514,8 +514,12 @@ async function ingestCampaignRows(
     const date = new Date(r.date)
     if (Number.isNaN(date.getTime())) continue
 
+    // AF.1d — resolve by externalCampaignId alone (globally unique per Amazon
+    // account). Matching on marketplace too missed the row whenever the
+    // campaign was stored under the short code (DE) but the report's profile
+    // marketplace is the Amazon id (A1PA…) → localEntityId went null.
     const local = await prisma.campaign.findFirst({
-      where: { externalCampaignId: entityId, marketplace },
+      where: { externalCampaignId: entityId },
       select: { id: true },
     })
 
@@ -671,7 +675,7 @@ async function ingestPlacementRows(
     if (Number.isNaN(date.getTime())) continue
 
     const local = await prisma.campaign.findFirst({
-      where: { externalCampaignId: campaignId, marketplace },
+      where: { externalCampaignId: campaignId }, // AF.1d — see ingestCampaignRows
       select: { id: true },
     })
 
@@ -740,7 +744,13 @@ async function ingestProductAdRows(
     if (adCache.has(key)) return adCache.get(key)!
     let local: { id: string } | null = null
     if (adId) local = await prisma.adProductAd.findFirst({ where: { externalAdId: adId }, select: { id: true } })
-    if (!local && asin) local = await prisma.adProductAd.findFirst({ where: { asin, adGroup: { campaign: { marketplace } } }, select: { id: true } })
+    if (!local && asin) {
+      // AF.1d — campaigns are normalised to the short code; the report's
+      // marketplace may be the Amazon id. Match either representation.
+      const { normalizeMarketplaceCode } = await import('../../utils/marketplace-code.js')
+      const mkts = [...new Set([marketplace, normalizeMarketplaceCode(marketplace)].filter((m): m is string => !!m))]
+      local = await prisma.adProductAd.findFirst({ where: { asin, adGroup: { campaign: { marketplace: { in: mkts } } } }, select: { id: true } })
+    }
     adCache.set(key, local)
     return local
   }

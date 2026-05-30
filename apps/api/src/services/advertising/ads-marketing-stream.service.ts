@@ -86,9 +86,10 @@ export async function ingestMarketingStream(messages: AmsMessage[]): Promise<Ams
   // reads (dayparting). Cached across the batch.
   const localIdCache = new Map<string, string | null>()
   const resolveLocalId = async (extId: string, marketplace: string): Promise<string | null> => {
-    const key = `${extId}::${marketplace}`
+    void marketplace // AF.1d — resolve by externalCampaignId alone (representation-agnostic)
+    const key = extId
     if (localIdCache.has(key)) return localIdCache.get(key)!
-    const c = await prisma.campaign.findFirst({ where: { externalCampaignId: extId, marketplace }, select: { id: true } }).catch(() => null)
+    const c = await prisma.campaign.findFirst({ where: { externalCampaignId: extId }, select: { id: true } }).catch(() => null)
     const id = c?.id ?? null
     localIdCache.set(key, id)
     return id

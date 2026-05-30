@@ -2641,6 +2641,15 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     return { indexes: idx }
   })
 
+  // AF.1d — de-duplicate campaigns split across marketplace representations
+  // (Amazon-id copy with metrics + short-code copy with keywords). dryRun by
+  // default; pass { apply: true } to execute the destructive merge.
+  fastify.post('/advertising/debug/dedupe-campaigns', async (request) => {
+    const body = (request.body ?? {}) as { apply?: boolean }
+    const { dedupeCampaigns } = await import('../services/advertising/ads-dedupe-campaigns.service.js')
+    return dedupeCampaigns({ dryRun: body.apply !== true })
+  })
+
   fastify.post('/advertising/debug/probe-endpoints', async (request, reply) => {
     const body = request.body as { profileId?: string }
     if (!body?.profileId) return reply.code(400).send({ error: 'profileId required' })

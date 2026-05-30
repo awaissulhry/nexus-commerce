@@ -112,10 +112,13 @@ async function applyCampaignMetrics(
   agg: Map<string, Aggregate>,
   marketplace: string,
 ): Promise<number> {
+  void marketplace // AF.1d — kept for signature parity; lookup is now marketplace-agnostic
   let updated = 0
   for (const [externalCampaignId, m] of agg) {
+    // AF.1d — resolve by externalCampaignId alone (unique per account), robust
+    // to short-code vs Amazon-id marketplace representation.
     const camp = await prisma.campaign.findFirst({
-      where: { externalCampaignId, marketplace },
+      where: { externalCampaignId },
       select: { id: true },
     })
     if (!camp) continue

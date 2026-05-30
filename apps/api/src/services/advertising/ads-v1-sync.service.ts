@@ -426,8 +426,12 @@ async function ingestCampaigns(profileId: string, records: V1Campaign[]): Promis
       lastSyncError: null,
     }
     try {
+      // AF.1d — find by externalCampaignId ALONE. It is globally unique per
+      // Amazon account; matching on marketplace too created a 2nd row whenever
+      // another path had already stored the campaign under its Amazon
+      // marketplace id (A1PA…) vs our short code (DE) → split-data duplicates.
       const existing = await prisma.campaign.findFirst({
-        where: { externalCampaignId: r.campaignId, marketplace },
+        where: { externalCampaignId: r.campaignId },
         select: { id: true },
       })
       if (existing) {
