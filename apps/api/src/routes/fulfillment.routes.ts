@@ -5934,6 +5934,135 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // ══ PD.5 — new-product development projects (R&D pipeline) ══════════
+  const PROJECT_STATUSES = ['CONCEPT', 'SOURCING', 'SAMPLING', 'QUOTING', 'PRE_PRODUCTION', 'APPROVED', 'LAUNCHED', 'DROPPED', 'ON_HOLD']
+  const genProjectCode = (): string => {
+    const d = new Date()
+    const yymmdd = `${String(d.getFullYear()).slice(2)}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`
+    return `PD-${yymmdd}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`
+  }
+
+  fastify.get('/fulfillment/development/projects', async (request, reply) => {
+    try {
+      const q = request.query as { status?: string }
+      const where: any = {}
+      if (q.status && PROJECT_STATUSES.includes(q.status)) where.status = q.status
+      const items = await prisma.developmentProject.findMany({
+        where,
+        orderBy: { updatedAt: 'desc' },
+        include: { _count: { select: { candidates: true } } },
+      })
+      return { items }
+    } catch (error: any) {
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  fastify.post('/fulfillment/development/projects', async (request, reply) => {
+    try {
+      const body = (request.body ?? {}) as { name?: string; productType?: string; brief?: string; targetCostEur?: number; targetLaunchDate?: string }
+      if (!body.name || !String(body.name).trim()) return reply.code(400).send({ error: 'name required' })
+      const created = await prisma.developmentProject.create({
+        data: {
+          code: genProjectCode(),
+          name: String(body.name).trim(),
+          productType: body.productType?.trim() || null,
+          brief: body.brief?.trim() || null,
+          targetCostCents: body.targetCostEur != null && Number.isFinite(Number(body.targetCostEur)) ? Math.round(Number(body.targetCostEur) * 100) : null,
+          targetLaunchDate: body.targetLaunchDate ? new Date(body.targetLaunchDate) : null,
+          ownerUserId: (request.headers['x-user-id'] as string | undefined) ?? null,
+        },
+      })
+      return created
+    } catch (error: any) {
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  fastify.get('/fulfillment/development/projects/:id', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const project = await prisma.developmentProject.findUnique({
+        where: { id },
+        include: { candidates: { include: { supplier: { select: { id: true, name: true, leadTimeDays: true, defaultCurrency: true } } }, orderBy: [{ isSelected: 'desc' }, { createdAt: 'asc' }] } },
+      })
+      if (!project) return reply.code(404).send({ error: 'Project not found' })
+      return project
+    } catch (error: any) {
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  fastify.patch('/fulfillment/development/projects/:id', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const body = (request.body ?? {}) as Record<string, any>
+      const data: Record<string, any> = {}
+      if (body.name !== undefined) data.name = String(body.name).trim()
+      if (body.status !== undefined && PROJECT_STATUSES.includes(body.status)) data.status = body.status
+      if (body.productType !== undefined) data.productType = body.productType?.trim() || null
+      if (body.brief !== undefined) data.brief = body.brief?.trim() || null
+      if (body.targetCostEur !== undefined) data.targetCostCents = body.targetCostEur == null || !Number.isFinite(Number(body.targetCostEur)) ? null : Math.round(Number(body.targetCostEur) * 100)
+      if (body.targetLaunchDate !== undefined) data.targetLaunchDate = body.targetLaunchDate ? new Date(body.targetLaunchDate) : null
+      if (body.linkedProductId !== undefined) data.linkedProductId = body.linkedProductId || null
+      const updated = await prisma.developmentProject.update({ where: { id }, data })
+      return updated
+    } catch (error: any) {
+      const msg = error instanceof Error ? error.message : String(error)
+      if (msg.includes('Record to update not found')) return reply.code(404).send({ error: 'Project not found' })
+      return reply.code(500).send({ error: msg })
+    }
+  })
+
+  fastify.delete('/fulfillment/development/projects/:id', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      await prisma.developmentProject.delete({ where: { id } })
+      return { ok: true }
+    } catch (error: any) {
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  fastify.post('/fulfillment/development/projects/:id/candidates', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const body = (request.body ?? {}) as { supplierId?: string }
+      if (!body.supplierId) return reply.code(400).send({ error: 'supplierId required' })
+      const created = await prisma.developmentProjectSupplier.create({ data: { projectId: id, supplierId: body.supplierId } })
+      return created
+    } catch (error: any) {
+      if (error?.code === 'P2002') return reply.code(409).send({ error: 'Supplier already a candidate on this project' })
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  fastify.patch('/fulfillment/development/projects/:id/candidates/:cid', async (request, reply) => {
+    try {
+      const { cid } = request.params as { id: string; cid: string }
+      const body = (request.body ?? {}) as { quotedCostEur?: number; sampleStatus?: string; isSelected?: boolean; notes?: string }
+      const data: Record<string, any> = {}
+      if (body.quotedCostEur !== undefined) data.quotedCostCents = body.quotedCostEur === '' || body.quotedCostEur == null ? null : Math.round(Number(body.quotedCostEur) * 100)
+      if (body.sampleStatus !== undefined) data.sampleStatus = body.sampleStatus || null
+      if (body.isSelected !== undefined) data.isSelected = !!body.isSelected
+      if (body.notes !== undefined) data.notes = body.notes?.trim() || null
+      const updated = await prisma.developmentProjectSupplier.update({ where: { id: cid }, data })
+      return updated
+    } catch (error: any) {
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  fastify.delete('/fulfillment/development/projects/:id/candidates/:cid', async (request, reply) => {
+    try {
+      const { cid } = request.params as { id: string; cid: string }
+      await prisma.developmentProjectSupplier.delete({ where: { id: cid } })
+      return { ok: true }
+    } catch (error: any) {
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
   // ── A4 — SupplierProduct cost & lead-time management ───────────────
   // The replenishment math (this file, ~line 9680) reads a product's unit
   // cost / MOQ / case-pack / lead-time ONLY from the SupplierProduct row of
