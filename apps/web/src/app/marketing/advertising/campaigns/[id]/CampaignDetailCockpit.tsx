@@ -9,9 +9,11 @@
  * placements fetch lazily on tab open.
  */
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { ChevronLeft, Check } from 'lucide-react'
+import { useMarketingEvents } from '@/lib/sync/use-marketing-events'
 import { KpiStrip, type KpiTileSpec } from '@/app/_shared/grid-lens'
 import { StatusChip } from '@/app/_shared/ads-ui'
 import { CampaignTrendChart, type TrendRow } from './CampaignTrendChart'
@@ -26,6 +28,7 @@ export interface CampaignDetailData {
   id: string; name: string; type: string; status: string; marketplace: string | null; externalCampaignId: string | null
   dailyBudget: string; biddingStrategy: string; impressions: number; clicks: number; spend: string; sales: string
   acos: string | null; roas: string | null; trueProfitCents: number; trueProfitMarginPct: string | null
+  lastSyncedAt?: string | null; lastSyncStatus?: string | null
   startDate?: string | null; endDate?: string | null; adGroups: AdGroup[]
 }
 export interface BidHistoryRow { id: string; entityType: string; field: string; oldValue: string | null; newValue: string | null; changedAt: string; changedBy: string; reason: string | null }
@@ -33,6 +36,14 @@ export interface BidHistoryRow { id: string; entityType: string; field: string; 
 const eur = (c: number | null | undefined) => (c == null ? '—' : new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR' }).format(c / 100))
 const num = (n: number) => new Intl.NumberFormat('en-US').format(Math.round(n))
 const pct = (v: number | null | undefined) => (v == null ? '—' : `${(v * 100).toFixed(1)}%`)
+const ago = (iso: string | null | undefined) => {
+  if (!iso) return null
+  const s = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 1000))
+  if (s < 60) return `${s}s ago`
+  if (s < 3600) return `${Math.round(s / 60)}m ago`
+  if (s < 86400) return `${Math.round(s / 3600)}h ago`
+  return `${Math.round(s / 86400)}d ago`
+}
 
 type Tab = 'adgroups' | 'targeting' | 'searchterms' | 'bidadjust' | 'negatives' | 'settings' | 'history'
 
@@ -76,6 +87,27 @@ export function CampaignDetailCockpit({ campaign, history }: { campaign: Campaig
     } finally { setTrendLoading(false) }
   }, [campaign.id, windowDays])
   useEffect(() => { void loadTrends() }, [loadTrends])
+
+  // CD.3 — live updates. The marketing-events SSE bus fires when this
+  // campaign mutates, its metrics refresh, a budget rebalances, or a rule
+  // executes. On any of those: refresh server data (campaign + history),
+  // reload the windowed trends, and invalidate the lazy tab caches (setting
+  // them null makes the open tab re-fetch via the load effect below). A
+  // "Live" badge flashes so the operator knows data is current.
+  const router = useRouter()
+  const [liveTs, setLiveTs] = useState<number | null>(null)
+  const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const onLiveEvent = useCallback(() => {
+    router.refresh()
+    void loadTrends()
+    setSearchTerms(null)
+    setPlacements(null)
+    setLiveTs(Date.now())
+    if (flashTimer.current) clearTimeout(flashTimer.current)
+    flashTimer.current = setTimeout(() => setLiveTs(null), 4000)
+  }, [router, loadTrends])
+  useMarketingEvents(onLiveEvent)
+  useEffect(() => () => { if (flashTimer.current) clearTimeout(flashTimer.current) }, [])
 
   // Lifetime fallbacks (used until the windowed summary lands).
   const lifeSpendC = Math.round(parseFloat(campaign.spend || '0') * 100), lifeSalesC = Math.round(parseFloat(campaign.sales || '0') * 100)
@@ -206,6 +238,13 @@ export function CampaignDetailCockpit({ campaign, history }: { campaign: Campaig
         <span>Budget {eur(Math.round(parseFloat(campaign.dailyBudget || '0') * 100))}/d</span><span>·</span>
         <span>{campaign.biddingStrategy}</span>
         {campaign.startDate && <><span>·</span><span>{campaign.startDate.slice(0, 10)} → {campaign.endDate?.slice(0, 10) ?? 'no end'}</span></>}
+        <span className="ml-auto inline-flex items-center gap-1.5">
+          <span className={`inline-flex h-2 w-2 rounded-full ${liveTs ? 'bg-emerald-500 animate-pulse' : 'bg-emerald-500/70'}`} />
+          <span className="text-emerald-600 dark:text-emerald-400 font-medium">{liveTs ? 'Updated just now' : 'Live'}</span>
+          {campaign.lastSyncedAt && !liveTs && (
+            <span className="text-slate-400" title={`Last sync: ${new Date(campaign.lastSyncedAt).toLocaleString()}${campaign.lastSyncStatus ? ` · ${campaign.lastSyncStatus}` : ''}`}>· synced {ago(campaign.lastSyncedAt)}</span>
+          )}
+        </span>
       </div>
       <KpiStrip tiles={tiles} className="mb-4" />
       <CampaignTrendChart rows={trendRows} windowDays={windowDays} onWindowChange={setWindowDays} loading={trendLoading} />
