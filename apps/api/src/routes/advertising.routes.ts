@@ -2606,6 +2606,16 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // AF.1 — reset rowsIngested on data-rich completed targets jobs so they
+  // re-ingest (with full instrumentation) on the next ingest pass.
+  fastify.post('/advertising/debug/reset-targets-ingested', async () => {
+    const r = await prisma.amazonAdsExportJob.updateMany({
+      where: { resource: 'targets', status: 'COMPLETED', fileSize: { gte: 100 } },
+      data: { rowsIngested: 0, url: null, urlExpiresAt: null },
+    })
+    return { reset: r.count }
+  })
+
   // AF.1 — dump AdTarget DB indexes (the unique constraint that's dropping
   // positive keywords on createMany may be db-push'd, not in schema/migrations).
   fastify.get('/advertising/debug/adtarget-indexes', async () => {
