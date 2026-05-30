@@ -7840,6 +7840,10 @@ model SupplierProduct {
 model PurchaseOrder {
   id                   String              @id @default(cuid())
   poNumber             String              @unique
+  // PD.8 — sample/development PO linkage.
+  developmentProjectId String?
+  poKind               String              @default("STANDARD") // STANDARD | SAMPLE
+  developmentProject   DevelopmentProject? @relation(fields: [developmentProjectId], references: [id], onDelete: SetNull)
   supplierId           String?
   warehouseId          String?
   status               PurchaseOrderStatus @default(DRAFT)
@@ -12365,6 +12369,7 @@ model DevelopmentProject {
 
   candidates DevelopmentProjectSupplier[]
   attachments DevelopmentAttachment[] // PD.7
+  purchaseOrders PurchaseOrder[] // PD.8
 
   @@index([status])
 }
