@@ -1171,6 +1171,64 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     return { rows }
   })
 
+  // PCG.1 — a product's CAMPAIGNS (the expansion rows). Per-campaign the
+  // PRODUCT's own spend/sales/ACOS (from PRODUCT_AD, NOT the whole-campaign
+  // total which includes other products). If productId is a parent, includes
+  // all its children. Optional status filter.
+  // GET /advertising/by-product/campaigns?productId=&windowDays=&marketplace=&status=
+  fastify.get('/advertising/by-product/campaigns', async (request, reply) => {
+    const q = request.query as { productId?: string; windowDays?: string; marketplace?: string; status?: string }
+    if (!q.productId) { reply.status(400); return { error: 'productId required' } }
+    const windowDays = Math.max(7, Math.min(90, Number(q.windowDays ?? 30)))
+    const since = new Date(); since.setUTCDate(since.getUTCDate() - windowDays); since.setUTCHours(0, 0, 0, 0)
+    const mkt = q.marketplace || undefined
+
+    // Resolve the product + its children (parent rows roll up variants).
+    const childRows = await prisma.product.findMany({ where: { parentId: q.productId }, select: { id: true } })
+    const productIds = [...new Set([q.productId, ...childRows.map((c) => c.id)])]
+
+    // Each AdProductAd = this product advertised in one campaign. Group its
+    // PRODUCT_AD perf by campaign → the product's spend/sales in that campaign.
+    const ads = await prisma.adProductAd.findMany({
+      where: { productId: { in: productIds } },
+      select: { id: true, adGroup: { select: { campaign: { select: { id: true, name: true, marketplace: true, status: true, dailyBudget: true, adProduct: true } } } } },
+    })
+    const adToCampaign = new Map<string, { id: string; name: string; marketplace: string | null; status: string; dailyBudget: unknown; adProduct: string | null }>()
+    for (const a of ads) { const c = a.adGroup?.campaign; if (c?.id) adToCampaign.set(a.id, c) }
+    const adIds = [...adToCampaign.keys()]
+    const perAd = adIds.length ? await prisma.amazonAdsDailyPerformance.groupBy({
+      by: ['localEntityId'],
+      where: { entityType: 'PRODUCT_AD', localEntityId: { in: adIds }, date: { gte: since }, ...(mkt ? { marketplace: mkt } : {}) },
+      _sum: { costMicros: true, sales7dCents: true, impressions: true, clicks: true, orders7d: true },
+    }) : []
+
+    interface CampAgg { id: string; name: string; marketplace: string | null; status: string; adProduct: string | null; dailyBudgetCents: number; spendC: number; salesC: number; impr: number; clicks: number; orders: number }
+    const byCampaign = new Map<string, CampAgg>()
+    for (const r of perAd) {
+      const c = r.localEntityId ? adToCampaign.get(r.localEntityId) : null
+      if (!c) continue
+      let g = byCampaign.get(c.id)
+      if (!g) { g = { id: c.id, name: c.name, marketplace: c.marketplace, status: c.status, adProduct: c.adProduct, dailyBudgetCents: Math.round(parseFloat(String(c.dailyBudget ?? '0')) * 100), spendC: 0, salesC: 0, impr: 0, clicks: 0, orders: 0 }; byCampaign.set(c.id, g) }
+      g.spendC += Math.round(Number(r._sum.costMicros ?? 0n) / 10_000)
+      g.salesC += r._sum.sales7dCents ?? 0
+      g.impr += r._sum.impressions ?? 0
+      g.clicks += r._sum.clicks ?? 0
+      g.orders += r._sum.orders7d ?? 0
+    }
+    let rows = [...byCampaign.values()]
+    if (q.status) rows = rows.filter((c) => c.status === q.status)
+    if (mkt) rows = rows.filter((c) => c.marketplace === mkt)
+    const out = rows.map((c) => ({
+      id: c.id, name: c.name, marketplace: c.marketplace, status: c.status, adProduct: c.adProduct,
+      dailyBudgetCents: c.dailyBudgetCents,
+      adSpendCents: c.spendC, adSalesCents: c.salesC,
+      acos: c.salesC > 0 ? Math.round((c.spendC / c.salesC) * 1000) / 10 : null,
+      impressions: c.impr, clicks: c.clicks, orders: c.orders,
+    })).sort((a, b) => b.adSpendCents - a.adSpendCents)
+    reply.header('Cache-Control', 'private, max-age=60')
+    return { rows: out }
+  })
+
   // PC.7 — bulk action on the campaigns behind selected products. Resolves
   // products → AdProductAd → distinct campaigns and applies status/budget via
   // the audited updateCampaignWithSync path (OutboundSyncQueue grace + gate).

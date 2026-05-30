@@ -15,6 +15,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { VirtualizedGrid, KpiStrip, Thumbnail, PreferencesModal, DensityToggle, BulkActionShell, type GridLensColumn, type GridLensRow, type KpiTileSpec, type PreferencesValue } from '@/app/_shared/grid-lens'
 import { type Density, DENSITY_CELL_CLASS } from '@/lib/products/theme'
 import { getBackendUrl } from '@/lib/backend-url'
+import { StatusChip } from '@/app/_shared/ads-ui'
 import { useMarketingEvents } from '@/lib/sync/use-marketing-events'
 import { Megaphone, ShoppingCart, Coins, Package, Search, SlidersHorizontal, Pause, Play, ChevronsUp, ChevronsDown } from 'lucide-react'
 
@@ -42,8 +43,12 @@ interface Row extends GridLensRow {
   clicks?: number
   opportunity?: boolean
   unmatched?: boolean
+  // child rows
+  kind?: 'campaign' | 'variant'
+  dailyBudgetCents?: number
 }
 type Mode = 'advertised' | 'opportunity' | 'unmatched'
+type ExpandMode = 'campaigns' | 'variants'
 
 const eur = (c: number | null | undefined) => (c == null ? '—' : new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR' }).format(c / 100))
 const num = (n: number | null | undefined) => (n == null ? '—' : new Intl.NumberFormat('en-US').format(Math.round(n)))
@@ -95,6 +100,7 @@ export function ByProductView() {
   const [density, setDensity] = useState<Density>('comfortable')
   const [search, setSearch] = useState('')
   const [mode, setMode] = useState<Mode>('advertised')
+  const [expandMode, setExpandMode] = useState<ExpandMode>('campaigns') // PCG.1
   const [marketplace, setMarketplace] = useState('')
   const [marketplaces, setMarketplaces] = useState<string[]>([])
   const [prefsOpen, setPrefsOpen] = useState(false)
@@ -134,29 +140,45 @@ export function ByProductView() {
   // PC.5 — live refresh on marketing events.
   useMarketingEvents(useCallback(() => { void load(); setLiveTs(Date.now()); setTimeout(() => setLiveTs(null), 4000) }, [load]))
 
-  // PCF.1 — expand a parent product → its advertised VARIANT children (each
-  // variant's ad metrics). A variant drills through to its campaigns.
+  // PCG.1 — expand a product → its CAMPAIGNS (default) or its size VARIANTS
+  // (sub-toggle). Campaign children drill to the campaign detail.
   const fetchChildrenFor = useCallback(async (parentId: string) => {
     if (childrenByParent[parentId]) return
     setLoadingChildren((s) => new Set(s).add(parentId))
     try {
-      const qp = new URLSearchParams({ parentId, windowDays: String(windowDays) })
+      const qp = new URLSearchParams({ windowDays: String(windowDays) })
       if (marketplace) qp.set('marketplace', marketplace)
-      const r = await fetch(`${getBackendUrl()}/api/advertising/by-product/variants?${qp}`, { cache: 'no-store' }).then((x) => x.json()).catch(() => ({ rows: [] }))
-      const kids: Row[] = (r.rows ?? []).map((v: Record<string, unknown>) => ({
-        id: String(v.id), parentId, isParent: false,
-        sku: v.sku as string, name: String(v.name ?? ''), asin: (v.asin as string) ?? null,
-        photoUrl: (v.photoUrl as string) ?? null, photoCount: Number(v.photoCount ?? 0),
-        adSpendCents: Number(v.adSpendCents ?? 0), adSalesCents: Number(v.adSalesCents ?? 0), revenueCents: Number(v.revenueCents ?? 0), profitCents: Number(v.profitCents ?? 0),
-        units: Number(v.units ?? 0), acos: v.acos == null ? null : Number(v.acos), tacos: v.tacos == null ? null : Number(v.tacos),
-        marginPct: v.marginPct == null ? null : Number(v.marginPct), impressions: Number(v.impressions ?? 0), clicks: Number(v.clicks ?? 0),
-        campaignCount: Number(v.campaignCount ?? 0), marketCount: Number(v.marketCount ?? 0),
-      }))
+      let kids: Row[]
+      if (expandMode === 'campaigns') {
+        qp.set('productId', parentId)
+        const r = await fetch(`${getBackendUrl()}/api/advertising/by-product/campaigns?${qp}`, { cache: 'no-store' }).then((x) => x.json()).catch(() => ({ rows: [] }))
+        kids = (r.rows ?? []).map((c: Record<string, unknown>) => ({
+          id: String(c.id), parentId, isParent: false, kind: 'campaign' as const,
+          name: String(c.name ?? ''), marketplace: (c.marketplace as string) ?? '—', status: String(c.status ?? ''),
+          dailyBudgetCents: Number(c.dailyBudgetCents ?? 0),
+          adSpendCents: Number(c.adSpendCents ?? 0), adSalesCents: Number(c.adSalesCents ?? 0),
+          acos: c.acos == null ? null : Number(c.acos), impressions: Number(c.impressions ?? 0), clicks: Number(c.clicks ?? 0), units: Number(c.orders ?? 0),
+        }))
+      } else {
+        qp.set('parentId', parentId)
+        const r = await fetch(`${getBackendUrl()}/api/advertising/by-product/variants?${qp}`, { cache: 'no-store' }).then((x) => x.json()).catch(() => ({ rows: [] }))
+        kids = (r.rows ?? []).map((v: Record<string, unknown>) => ({
+          id: String(v.id), parentId, isParent: false, kind: 'variant' as const,
+          sku: v.sku as string, name: String(v.name ?? ''), asin: (v.asin as string) ?? null,
+          photoUrl: (v.photoUrl as string) ?? null, photoCount: Number(v.photoCount ?? 0),
+          adSpendCents: Number(v.adSpendCents ?? 0), adSalesCents: Number(v.adSalesCents ?? 0), revenueCents: Number(v.revenueCents ?? 0), profitCents: Number(v.profitCents ?? 0),
+          units: Number(v.units ?? 0), acos: v.acos == null ? null : Number(v.acos), tacos: v.tacos == null ? null : Number(v.tacos),
+          marginPct: v.marginPct == null ? null : Number(v.marginPct), impressions: Number(v.impressions ?? 0), clicks: Number(v.clicks ?? 0),
+          campaignCount: Number(v.campaignCount ?? 0), marketCount: Number(v.marketCount ?? 0),
+        }))
+      }
       setChildrenByParent((m) => ({ ...m, [parentId]: kids }))
     } finally {
       setLoadingChildren((s) => { const n = new Set(s); n.delete(parentId); return n })
     }
-  }, [childrenByParent, windowDays])
+  }, [childrenByParent, windowDays, marketplace, expandMode])
+  // Switching Campaigns⇄Variants clears cached children so open rows refetch.
+  useEffect(() => { setChildrenByParent({}); setExpandedParents(new Set()) }, [expandMode])
 
   const onToggleExpand = useCallback((productId: string) => {
     setExpandedParents((prev) => {
@@ -205,6 +227,24 @@ export function ByProductView() {
   ]
 
   const renderCell = useCallback((row: Row, colKey: string, isChild: boolean) => {
+    if (isChild && row.kind === 'campaign') {
+      // Campaign child row — drills to the campaign detail.
+      switch (colKey) {
+        case 'product': return (
+          <div className="flex items-center gap-2 min-w-0 pl-6">
+            <StatusChip status={row.status ?? ''} dot />
+            <a href={`/marketing/advertising/campaigns/${row.id}`} className="block truncate text-sm text-slate-700 dark:text-slate-200 hover:underline" title={row.name}>{row.name}</a>
+          </div>
+        )
+        case 'campaigns': return <span className="text-xs text-slate-500">{row.marketplace}</span>
+        case 'markets': return <span className="text-[11px] text-slate-400">{(row.dailyBudgetCents ?? 0) > 0 ? `${eur(row.dailyBudgetCents)}/d` : '—'}</span>
+        case 'adspend': return <span className="tabular-nums">{eur(row.adSpendCents)}</span>
+        case 'adsales': return <span className="tabular-nums">{eur(row.adSalesCents)}</span>
+        case 'acos': return <span className={`tabular-nums ${tacosColor(row.acos)}`}>{pct(row.acos)}</span>
+        case 'units': return <span className="tabular-nums text-slate-500">{num(row.units)} ord</span>
+        default: return null
+      }
+    }
     if (isChild) {
       // Variant child row — same metric columns as the parent, variant-scoped.
       switch (colKey) {
@@ -314,6 +354,13 @@ export function ByProductView() {
           ))}
         </div>
         <div className="ml-auto inline-flex items-center gap-2">
+          {/* PCG.1 — what a product row expands into */}
+          <span className="inline-flex items-center rounded-md border border-slate-200 dark:border-slate-700 p-0.5 text-xs">
+            <span className="px-1.5 text-slate-400">Expand:</span>
+            {(['campaigns', 'variants'] as const).map((m) => (
+              <button key={m} onClick={() => setExpandMode(m)} className={`px-2 py-1 rounded ${expandMode === m ? 'bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-100 font-medium' : 'text-slate-500 hover:text-slate-700'}`}>{m === 'campaigns' ? 'Campaigns' : 'Variants'}</button>
+            ))}
+          </span>
           <DensityToggle density={density} onChange={setDensity} />
           <button onClick={() => setPrefsOpen(true)} aria-label="Customize columns" className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-sm rounded-md border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"><SlidersHorizontal size={14} /> Customize</button>
         </div>
