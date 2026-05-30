@@ -5850,6 +5850,90 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // ── PD.4 — supplier follow-ups / reminders ─────────────────────────
+  // Global "due" feed across all suppliers (for the hub surface). Must
+  // be declared before the parameterised :id route so it isn't shadowed.
+  fastify.get('/fulfillment/suppliers/followups/due', async (request, reply) => {
+    try {
+      const q = request.query as { withinDays?: string }
+      const within = q.withinDays ? Math.max(0, Number(q.withinDays)) : 7
+      const cutoff = new Date(Date.now() + within * 86_400_000)
+      const rows = await prisma.supplierFollowUp.findMany({
+        where: { status: 'OPEN', dueDate: { lte: cutoff } },
+        orderBy: { dueDate: 'asc' },
+        take: 200,
+        include: { supplier: { select: { id: true, name: true } } },
+      })
+      return { items: rows }
+    } catch (error: any) {
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  fastify.get('/fulfillment/suppliers/:id/followups', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const items = await prisma.supplierFollowUp.findMany({
+        where: { supplierId: id },
+        orderBy: [{ status: 'asc' }, { dueDate: 'asc' }],
+        take: 100,
+      })
+      return { items }
+    } catch (error: any) {
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  fastify.post('/fulfillment/suppliers/:id/followups', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const body = (request.body ?? {}) as { title?: string; nextAction?: string; dueDate?: string }
+      if (!body.title || !String(body.title).trim()) return reply.code(400).send({ error: 'title required' })
+      if (!body.dueDate) return reply.code(400).send({ error: 'dueDate required' })
+      const created = await prisma.supplierFollowUp.create({
+        data: {
+          supplierId: id,
+          title: String(body.title).trim(),
+          nextAction: body.nextAction?.trim() || null,
+          dueDate: new Date(body.dueDate),
+          byUserId: (request.headers['x-user-id'] as string | undefined) ?? null,
+        },
+      })
+      return created
+    } catch (error: any) {
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  fastify.patch('/fulfillment/suppliers/:id/followups/:fid', async (request, reply) => {
+    try {
+      const { fid } = request.params as { id: string; fid: string }
+      const body = (request.body ?? {}) as { status?: string; title?: string; nextAction?: string; dueDate?: string }
+      const data: Record<string, any> = {}
+      if (body.status === 'DONE') { data.status = 'DONE'; data.completedAt = new Date() }
+      if (body.status === 'OPEN') { data.status = 'OPEN'; data.completedAt = null }
+      if (body.title !== undefined) data.title = String(body.title).trim()
+      if (body.nextAction !== undefined) data.nextAction = body.nextAction?.trim() || null
+      if (body.dueDate !== undefined) data.dueDate = new Date(body.dueDate)
+      const updated = await prisma.supplierFollowUp.update({ where: { id: fid }, data })
+      return updated
+    } catch (error: any) {
+      const msg = error instanceof Error ? error.message : String(error)
+      if (msg.includes('Record to update not found')) return reply.code(404).send({ error: 'Follow-up not found' })
+      return reply.code(500).send({ error: msg })
+    }
+  })
+
+  fastify.delete('/fulfillment/suppliers/:id/followups/:fid', async (request, reply) => {
+    try {
+      const { fid } = request.params as { id: string; fid: string }
+      await prisma.supplierFollowUp.delete({ where: { id: fid } })
+      return { ok: true }
+    } catch (error: any) {
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
   // ── A4 — SupplierProduct cost & lead-time management ───────────────
   // The replenishment math (this file, ~line 9680) reads a product's unit
   // cost / MOQ / case-pack / lead-time ONLY from the SupplierProduct row of
