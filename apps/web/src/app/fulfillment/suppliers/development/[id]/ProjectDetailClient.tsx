@@ -8,7 +8,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import {
-  ArrowLeft, Rocket, Plus, Trash2, Star, Upload, FileText, ExternalLink,
+  ArrowLeft, Rocket, Plus, Trash2, Star, Upload, FileText, ExternalLink, Send,
 } from 'lucide-react'
 import PageHeader from '@/components/layout/PageHeader'
 import { Card } from '@/components/ui/Card'
@@ -49,7 +49,7 @@ const CERT_VARIANT: Record<string, 'default' | 'success' | 'warning' | 'danger' 
   PENDING: 'default', IN_PROGRESS: 'warning', APPROVED: 'success', REJECTED: 'danger',
 }
 
-const TABS = ['Overview', 'Spec', 'Sourcing', 'Files', 'Compliance'] as const
+const TABS = ['Overview', 'Spec', 'Sourcing', 'Files', 'Compliance', 'Pack'] as const
 type Tab = (typeof TABS)[number]
 
 const inputCls = 'h-9 w-full rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2.5 text-base text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-500'
@@ -147,6 +147,53 @@ export default function ProjectDetailClient() {
       {tab === 'Sourcing' && <SourcingTab p={p} suppliers={suppliers} onReload={load} onPatchCandidate={patchCandidate} />}
       {tab === 'Files' && <FilesTab p={p} onReload={load} />}
       {tab === 'Compliance' && <ComplianceTab p={p} onReload={load} />}
+      {tab === 'Pack' && <PackTab p={p} />}
+    </div>
+  )
+}
+
+function PackTab({ p }: { p: ProjectDetail }) {
+  const { toast } = useToast()
+  const [locale, setLocale] = useState<'en' | 'it' | 'zh'>('en')
+  const [to, setTo] = useState('')
+  const [subject, setSubject] = useState('')
+  const [message, setMessage] = useState('')
+  const [sending, setSending] = useState(false)
+  const pdfUrl = `${API}/api/fulfillment/development/projects/${p.id}/factory-pack.pdf?locale=${locale}`
+  const includedCount = p.attachments.filter((a) => a.includeInPack !== false).length
+  const send = async () => {
+    if (!to.trim()) return
+    setSending(true)
+    try {
+      const res = await fetch(`${API}/api/fulfillment/development/projects/${p.id}/send-pack`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ to: to.trim(), locale, subject: subject.trim() || undefined, message: message.trim() || undefined }) })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) { toast.error(d.error ?? 'Send failed'); return }
+      toast.success(d.delivery?.dryRun ? 'Pack queued (dry-run)' : 'Pack emailed to factory')
+    } finally { setSending(false) }
+  }
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+      <Card title="Factory pack" description="Cover + brief + size chart + materials + colorways + images + tech-pack appendix, in one PDF.">
+        <div className="space-y-3">
+          <label className="block"><span className={labelCls}>Language</span>
+            <select value={locale} onChange={(e) => setLocale(e.target.value as 'en' | 'it' | 'zh')} className={`${inputCls} mt-1`}>
+              <option value="en">English</option><option value="it">Italiano</option><option value="zh">中文 (Chinese)</option>
+            </select>
+          </label>
+          <p className="text-sm text-slate-500 dark:text-slate-400">
+            Rev {p.revision} · {includedCount} file{includedCount === 1 ? '' : 's'} included{p.sizeChart?.rows?.length ? ` · size chart (${p.sizeChart.rows.length} sizes)` : ''}{p.materials?.length ? ` · ${p.materials.length} materials` : ''}.
+          </p>
+          <a href={pdfUrl} target="_blank" rel="noopener noreferrer"><Button variant="primary" icon={<FileText size={14} />}>Preview / Download</Button></a>
+        </div>
+      </Card>
+      <Card title="Send to factory" description="Email the pack (PDF attached); logged to the supplier's comms timeline.">
+        <div className="space-y-2.5">
+          <input value={to} onChange={(e) => setTo(e.target.value)} placeholder="factory@example.com" className={inputCls} />
+          <input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="Subject (optional)" className={inputCls} />
+          <textarea value={message} onChange={(e) => setMessage(e.target.value)} rows={3} placeholder="Message (optional)…" className="w-full rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-base text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+          <Button variant="primary" icon={<Send size={14} />} loading={sending} disabled={!to.trim()} onClick={send}>Send pack</Button>
+        </div>
+      </Card>
     </div>
   )
 }
