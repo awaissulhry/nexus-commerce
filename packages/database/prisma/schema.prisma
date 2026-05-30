@@ -12364,6 +12364,7 @@ model DevelopmentProject {
   updatedAt        DateTime  @updatedAt
 
   candidates DevelopmentProjectSupplier[]
+  attachments DevelopmentAttachment[] // PD.7
 
   @@index([status])
 }
@@ -12384,4 +12385,22 @@ model DevelopmentProjectSupplier {
 
   @@unique([projectId, supplierId])
   @@index([supplierId])
+}
+
+// PD.7 — development attachments: tech packs, reference art, measurement
+// sheets, Pantone refs. Cloudinary-hosted; the factory-facing source of
+// truth for "make THIS".
+model DevelopmentAttachment {
+  id         String   @id @default(cuid())
+  projectId  String
+  kind       String   @default("TECH_PACK") // TECH_PACK | REFERENCE | MEASUREMENT | SAMPLE_PHOTO | OTHER
+  url        String
+  filename   String?
+  sizeBytes  Int?
+  uploadedBy String?
+  uploadedAt DateTime @default(now())
+
+  project DevelopmentProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
 }
