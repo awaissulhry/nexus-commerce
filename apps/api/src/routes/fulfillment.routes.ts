@@ -5988,6 +5988,7 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
           candidates: { include: { supplier: { select: { id: true, name: true, leadTimeDays: true, defaultCurrency: true } } }, orderBy: [{ isSelected: 'desc' }, { createdAt: 'asc' }] },
           attachments: { orderBy: { uploadedAt: 'desc' } }, // PD.7
           purchaseOrders: { orderBy: { createdAt: 'desc' }, select: { id: true, poNumber: true, status: true, poKind: true, totalCents: true } }, // PD.8
+          certifications: { orderBy: { createdAt: 'asc' } }, // PD.9
         },
       })
       if (!project) return reply.code(404).send({ error: 'Project not found' })
@@ -6003,7 +6004,19 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
       const body = (request.body ?? {}) as Record<string, any>
       const data: Record<string, any> = {}
       if (body.name !== undefined) data.name = String(body.name).trim()
-      if (body.status !== undefined && PROJECT_STATUSES.includes(body.status)) data.status = body.status
+      if (body.status !== undefined && PROJECT_STATUSES.includes(body.status)) {
+        // PD.9 — launch gate: can't LAUNCH while a required certification
+        // is unapproved (CE / ECE 22.06 / GPSR etc.).
+        if (body.status === 'LAUNCHED') {
+          const blocking = await prisma.developmentCertification.count({
+            where: { projectId: id, required: true, status: { not: 'APPROVED' } },
+          })
+          if (blocking > 0) {
+            return reply.code(409).send({ error: `Cannot launch: ${blocking} required certification(s) not yet approved` })
+          }
+        }
+        data.status = body.status
+      }
       if (body.productType !== undefined) data.productType = body.productType?.trim() || null
       if (body.brief !== undefined) data.brief = body.brief?.trim() || null
       if (body.targetCostEur !== undefined) data.targetCostCents = body.targetCostEur == null || !Number.isFinite(Number(body.targetCostEur)) ? null : Math.round(Number(body.targetCostEur) * 100)
@@ -6148,6 +6161,48 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
         include: { items: true },
       })
       return reply.send(po)
+    } catch (error: any) {
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  // ── PD.9 — development certifications (compliance) ─────────────────
+  fastify.post('/fulfillment/development/projects/:id/certifications', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const body = (request.body ?? {}) as { type?: string; required?: boolean }
+      if (!body.type || !String(body.type).trim()) return reply.code(400).send({ error: 'type required' })
+      const created = await prisma.developmentCertification.create({
+        data: { projectId: id, type: String(body.type).trim().toUpperCase(), required: body.required !== false },
+      })
+      return created
+    } catch (error: any) {
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  fastify.patch('/fulfillment/development/projects/:id/certifications/:cid', async (request, reply) => {
+    try {
+      const { cid } = request.params as { id: string; cid: string }
+      const body = (request.body ?? {}) as Record<string, any>
+      const data: Record<string, any> = {}
+      if (body.status !== undefined && ['PENDING', 'IN_PROGRESS', 'APPROVED', 'REJECTED'].includes(body.status)) data.status = body.status
+      if (body.required !== undefined) data.required = !!body.required
+      for (const k of ['certNumber', 'issuer', 'documentUrl', 'notes'] as const) if (k in body) data[k] = body[k]?.trim?.() || null
+      if (body.issuedAt !== undefined) data.issuedAt = body.issuedAt ? new Date(body.issuedAt) : null
+      if (body.expiresAt !== undefined) data.expiresAt = body.expiresAt ? new Date(body.expiresAt) : null
+      const updated = await prisma.developmentCertification.update({ where: { id: cid }, data })
+      return updated
+    } catch (error: any) {
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  fastify.delete('/fulfillment/development/projects/:id/certifications/:cid', async (request, reply) => {
+    try {
+      const { cid } = request.params as { id: string; cid: string }
+      await prisma.developmentCertification.delete({ where: { id: cid } })
+      return { ok: true }
     } catch (error: any) {
       return reply.code(500).send({ error: error?.message ?? String(error) })
     }
