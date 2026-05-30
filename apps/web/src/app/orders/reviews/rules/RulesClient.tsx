@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import {
-  Plus, Trash2, Sparkles, RefreshCw, Play, Eye, CheckCircle2,
+  Plus, Trash2, Sparkles, RefreshCw, Play, Eye, CheckCircle2, Download, Upload, Copy,
 } from 'lucide-react'
 import PageHeader from '@/components/layout/PageHeader'
 import { Card } from '@/components/ui/Card'
@@ -30,6 +30,7 @@ type Rule = {
   notes: string | null
   requestCount: number
   useSentimentDiversion?: boolean
+  fallbackOnNoResponse?: boolean
 }
 
 const SCOPES: Array<{ value: string; label: string; helpText: string }> = [
@@ -84,6 +85,7 @@ const AMAZON_MARKETPLACES = ['IT', 'DE', 'FR', 'ES', 'UK', 'NL', 'PL', 'SE', 'BE
 
 export default function RulesClient() {
   const askConfirm = useConfirm()
+  const { toast } = useToast()
   const [rules, setRules] = useState<Rule[]>([])
   const [loading, setLoading] = useState(true)
   const [editing, setEditing] = useState<Rule | null>(null)
@@ -144,6 +146,53 @@ export default function RulesClient() {
     }
   }
 
+  // RX.6 — export / import / duplicate
+  const exportRules = async () => {
+    try {
+      const res = await fetch(`${getBackendUrl()}/api/review-rules/export`)
+      const data = await res.json()
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = 'review-rules.json'
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch (e: any) {
+      toast.error(`Export failed: ${e.message}`)
+    }
+  }
+
+  const importRules = async (file: File) => {
+    try {
+      const text = await file.text()
+      const parsed = JSON.parse(text)
+      const res = await fetch(`${getBackendUrl()}/api/review-rules/import`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(parsed),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? 'Import failed')
+      toast.success(`Imported: ${data.created} new, ${data.updated} updated, ${data.skipped} skipped`)
+      refresh()
+    } catch (e: any) {
+      toast.error(`Import failed: ${e.message}`)
+    }
+  }
+
+  const duplicateRule = async (id: string) => {
+    try {
+      const res = await fetch(`${getBackendUrl()}/api/review-rules/${id}/duplicate`, { method: 'POST' })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? 'Failed')
+      toast.success('A/B variant created (inactive — tweak timing, then activate)')
+      refresh()
+    } catch (e: any) {
+      toast.error(`Couldn't duplicate: ${e.message}`)
+    }
+  }
+
   return (
     <div className="space-y-5">
       <PageHeader
@@ -159,6 +208,27 @@ export default function RulesClient() {
             >
               <Plus size={12} /> New rule
             </button>
+            {/* RX.6 — export / import rules */}
+            <button
+              type="button"
+              onClick={exportRules}
+              className="h-8 px-3 text-sm font-medium bg-white text-slate-900 border border-slate-300 rounded-md hover:bg-slate-50 dark:bg-slate-900 dark:text-slate-100 dark:border-slate-600 dark:hover:bg-slate-800 inline-flex items-center gap-1.5"
+            >
+              <Download size={12} /> Export
+            </button>
+            <label className="h-8 px-3 text-sm font-medium bg-white text-slate-900 border border-slate-300 rounded-md hover:bg-slate-50 dark:bg-slate-900 dark:text-slate-100 dark:border-slate-600 dark:hover:bg-slate-800 inline-flex items-center gap-1.5 cursor-pointer">
+              <Upload size={12} /> Import
+              <input
+                type="file"
+                accept=".json,application/json"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0]
+                  if (f) importRules(f)
+                  e.target.value = ''
+                }}
+              />
+            </label>
             <button
               type="button"
               onClick={refresh}
@@ -291,6 +361,7 @@ export default function RulesClient() {
                             <Eye size={11} /> Preview
                           </button>
                           <button onClick={() => setEditing(r)} title="Edit" className="h-6 px-2 text-sm text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-700 rounded">Edit</button>
+                          <button onClick={() => duplicateRule(r.id)} title="Duplicate as A/B variant" className="h-6 px-2 text-sm text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-700 rounded inline-flex items-center gap-1"><Copy size={11} /> A/B</button>
                           <IconButton
                             aria-label={`Delete rule ${r.name}`}
                             tone="danger"
@@ -337,7 +408,28 @@ function RuleEditor({ rule, onClose, onSaved }: { rule: Rule | null; onClose: ()
   const [minOrderTotal, setMinOrderTotal] = useState<string>(rule?.minOrderTotalCents != null ? (rule.minOrderTotalCents / 100).toFixed(2) : '')
   const [notes, setNotes] = useState(rule?.notes ?? '')
   const [useSentimentDiversion, setUseSentimentDiversion] = useState<boolean>(rule?.useSentimentDiversion ?? false)
+  const [fallbackOnNoResponse, setFallbackOnNoResponse] = useState<boolean>(rule?.fallbackOnNoResponse ?? true)
+  const [lintIssues, setLintIssues] = useState<{ severity: string; message: string; match?: string }[]>([])
   const [busy, setBusy] = useState(false)
+
+  // RX.6 — ToS-compliance lint of the notes copy (debounced).
+  useEffect(() => {
+    const t = setTimeout(() => {
+      if (!notes.trim()) {
+        setLintIssues([])
+        return
+      }
+      fetch(`${getBackendUrl()}/api/review-rules/lint`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: notes }),
+      })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((j) => setLintIssues(j?.issues ?? []))
+        .catch(() => {})
+    }, 500)
+    return () => clearTimeout(t)
+  }, [notes])
 
   const save = async () => {
     if (!name.trim()) { toast.error('Name required'); return }
@@ -354,6 +446,7 @@ function RuleEditor({ rule, onClose, onSaved }: { rule: Rule | null; onClose: ()
         minOrderTotalCents: minOrderTotal ? Math.round(Number(minOrderTotal) * 100) : null,
         notes: notes || null,
         useSentimentDiversion,
+        fallbackOnNoResponse,
       }
       const res = await fetch(`${getBackendUrl()}/api/review-rules${rule ? `/${rule.id}` : ''}`, {
         method: rule ? 'PATCH' : 'POST',
@@ -466,6 +559,23 @@ function RuleEditor({ rule, onClose, onSaved }: { rule: Rule | null; onClose: ()
           <div>
             <label className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">Notes</label>
             <textarea value={notes} onChange={(e) => setNotes(e.target.value)} className="w-full h-16 px-2 py-1.5 text-base border border-slate-200 dark:border-slate-700 rounded mt-1" />
+            {/* RX.6 — ToS-compliance lint */}
+            {lintIssues.length > 0 && (
+              <div className="mt-1.5 space-y-1">
+                {lintIssues.map((iss, i) => (
+                  <div
+                    key={i}
+                    className={`text-xs flex items-start gap-1.5 ${iss.severity === 'error' ? 'text-rose-600 dark:text-rose-400' : 'text-amber-600 dark:text-amber-400'}`}
+                  >
+                    <span className="mt-0.5">{iss.severity === 'error' ? '⛔' : '⚠️'}</span>
+                    <span>
+                      {iss.message}
+                      {iss.match && <span className="opacity-70"> (“{iss.match}”)</span>}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* RV.6.5 — Negative-feedback diversion toggle */}
@@ -488,11 +598,30 @@ function RuleEditor({ rule, onClose, onSaved }: { rule: Rule | null; onClose: ()
                 </div>
                 <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">
                   <span className="font-medium">Timing:</span> sentiment email fires at
-                  delivered + {minDays}d. If no response within 5d, fallback
-                  fires the Amazon Solicitations directly.
+                  delivered + {minDays}d. If no response within 5d, behaviour
+                  depends on the fallback toggle below.
                 </div>
               </div>
             </label>
+            {/* RX.6 — per-rule no-response fallback */}
+            {useSentimentDiversion && (
+              <label className="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-300 cursor-pointer mt-3 pt-3 border-t border-slate-200 dark:border-slate-700">
+                <input
+                  type="checkbox"
+                  checked={fallbackOnNoResponse}
+                  onChange={(e) => setFallbackOnNoResponse(e.target.checked)}
+                  className="mt-1"
+                />
+                <div>
+                  <div className="font-medium">Fall back to a direct request if no response in 5d</div>
+                  <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                    On — solicit anyway after the silent window (default). Off — skip
+                    entirely; never solicit a customer who didn&apos;t engage with the
+                    &quot;How was it?&quot; email.
+                  </div>
+                </div>
+              </label>
+            )}
           </div>
 
           <label className="flex items-center gap-2 text-base text-slate-700 dark:text-slate-300">

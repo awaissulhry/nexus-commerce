@@ -133,6 +133,8 @@ export async function runReviewMailerOnce(): Promise<MailerTickResult> {
       // RV.6.4 — pre-load any linked sentiment check so we can branch on
       // its response before firing Solicitations / writing emails.
       sentimentCheck: true,
+      // RX.6 — the rule's no-response fallback preference.
+      rule: { select: { fallbackOnNoResponse: true } },
     },
     take: 200,
   })
@@ -236,7 +238,22 @@ export async function runReviewMailerOnce(): Promise<MailerTickResult> {
             }
           }
         }
-        // Email sent ≥5d ago, no response → fallback to direct Solicitations.
+        // Email sent ≥5d ago, no response. RX.6 — honor the rule's
+        // fallback preference: default fall through to a direct
+        // Solicitation; when fallbackOnNoResponse=false, skip entirely
+        // (never solicit a customer who didn't engage).
+        if (req.rule && req.rule.fallbackOnNoResponse === false) {
+          await prisma.reviewRequest.update({
+            where: { id: req.id },
+            data: {
+              status: 'SKIPPED',
+              suppressedReason: 'No diversion response in 5d; rule fallback disabled',
+              providerResponseCode: 'NO_RESPONSE_NO_FALLBACK',
+            },
+          })
+          skipped += 1
+          continue
+        }
         // Fall through to the normal Amazon/email branch below.
       }
       // response=POSITIVE → fall through to normal Solicitations path.

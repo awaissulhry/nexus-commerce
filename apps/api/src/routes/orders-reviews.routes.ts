@@ -77,6 +77,7 @@ const ordersReviewsRoutes: FastifyPluginAsync = async (fastify) => {
           minOrderTotalCents: r.minOrderTotalCents,
           notes: r.notes,
           useSentimentDiversion: r.useSentimentDiversion,
+          fallbackOnNoResponse: r.fallbackOnNoResponse,
           requestCount: r._count.requests,
           updatedAt: r.updatedAt,
         })),
@@ -107,6 +108,7 @@ const ordersReviewsRoutes: FastifyPluginAsync = async (fastify) => {
           minOrderTotalCents: body.minOrderTotalCents ?? null,
           notes: body.notes ?? null,
           useSentimentDiversion: body.useSentimentDiversion === true,
+          fallbackOnNoResponse: body.fallbackOnNoResponse !== false,
           createdBy: 'default-user',
         },
       })
@@ -156,6 +158,7 @@ const ordersReviewsRoutes: FastifyPluginAsync = async (fastify) => {
           : null
       }
       if (body.useSentimentDiversion !== undefined) data.useSentimentDiversion = body.useSentimentDiversion === true
+      if (body.fallbackOnNoResponse !== undefined) data.fallbackOnNoResponse = body.fallbackOnNoResponse === true
       // RV.9.1 follow-up — surface the (name, scope, marketplace) unique
       // violation as a 409 with a useful message; this used to bubble up
       // as a plain 500.
@@ -183,6 +186,141 @@ const ordersReviewsRoutes: FastifyPluginAsync = async (fastify) => {
     } catch (err: any) {
       return reply.status(500).send({ error: err.message })
     }
+  })
+
+  // RX.6 — Export all rules as portable JSON (no ids / counts).
+  fastify.get('/review-rules/export', async (_request, reply) => {
+    const rules = await prisma.reviewRule.findMany({ orderBy: [{ scope: 'asc' }, { name: 'asc' }] })
+    const exported = rules.map((r) => ({
+      name: r.name,
+      scope: r.scope,
+      marketplace: r.marketplace,
+      isActive: r.isActive,
+      minDaysSinceDelivery: r.minDaysSinceDelivery,
+      maxDaysSinceDelivery: r.maxDaysSinceDelivery,
+      exclusions: r.exclusions,
+      minOrderTotalCents: r.minOrderTotalCents,
+      notes: r.notes,
+      useSentimentDiversion: r.useSentimentDiversion,
+      fallbackOnNoResponse: r.fallbackOnNoResponse,
+    }))
+    reply.header('Content-Disposition', 'attachment; filename="review-rules.json"')
+    return { version: 1, exportedAt: new Date().toISOString(), rules: exported }
+  })
+
+  // RX.6 — Import rules from JSON. Upserts on (name, scope, marketplace);
+  // existing rules are updated, new ones created. Skips invalid rows.
+  fastify.post('/review-rules/import', async (request, reply) => {
+    const body = request.body as { rules?: any[] } | any[]
+    const incoming = Array.isArray(body) ? body : body?.rules
+    if (!Array.isArray(incoming)) {
+      return reply.status(400).send({ error: 'expected { rules: [...] } or an array' })
+    }
+    let created = 0
+    let updated = 0
+    let skipped = 0
+    const errors: string[] = []
+    for (const r of incoming) {
+      try {
+        if (!r?.name?.trim() || !r?.scope) {
+          skipped += 1
+          continue
+        }
+        if (r.scope === 'AMAZON_PER_MARKETPLACE' && !r.marketplace) {
+          skipped += 1
+          errors.push(`${r.name}: per-marketplace rule needs a marketplace`)
+          continue
+        }
+        const data = {
+          name: String(r.name).trim(),
+          scope: r.scope,
+          marketplace: r.marketplace ?? null,
+          isActive: r.isActive ?? true,
+          minDaysSinceDelivery: Math.max(4, Math.floor(r.minDaysSinceDelivery ?? 7)),
+          maxDaysSinceDelivery: Math.min(30, Math.floor(r.maxDaysSinceDelivery ?? 25)),
+          exclusions: Array.isArray(r.exclusions) ? r.exclusions : [],
+          minOrderTotalCents: r.minOrderTotalCents ?? null,
+          notes: r.notes ?? null,
+          useSentimentDiversion: r.useSentimentDiversion === true,
+          fallbackOnNoResponse: r.fallbackOnNoResponse !== false,
+        }
+        const existing = await prisma.reviewRule.findFirst({
+          where: { name: data.name, scope: data.scope, marketplace: data.marketplace },
+          select: { id: true },
+        })
+        if (existing) {
+          await prisma.reviewRule.update({ where: { id: existing.id }, data })
+          updated += 1
+        } else {
+          await prisma.reviewRule.create({ data: { ...data, createdBy: 'import' } })
+          created += 1
+        }
+      } catch (err: any) {
+        skipped += 1
+        errors.push(`${r?.name ?? 'unknown'}: ${err.message}`)
+      }
+    }
+    return { ok: true, created, updated, skipped, errors }
+  })
+
+  // RX.6 — Duplicate a rule as an A/B variant (cloned with a name suffix,
+  // inactive by default so the operator tweaks timing then activates).
+  // Per-rule conversion analytics (RV.9.4) then compares the variants.
+  fastify.post('/review-rules/:id/duplicate', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const src = await prisma.reviewRule.findUnique({ where: { id } })
+    if (!src) return reply.status(404).send({ error: 'Rule not found' })
+    // Find an available "(variant N)" name.
+    let suffix = 1
+    let name = `${src.name} (variant ${suffix})`
+    // eslint-disable-next-line no-constant-condition
+    while (
+      await prisma.reviewRule.findFirst({
+        where: { name, scope: src.scope, marketplace: src.marketplace },
+        select: { id: true },
+      })
+    ) {
+      suffix += 1
+      name = `${src.name} (variant ${suffix})`
+    }
+    const clone = await prisma.reviewRule.create({
+      data: {
+        name,
+        scope: src.scope,
+        marketplace: src.marketplace,
+        isActive: false,
+        minDaysSinceDelivery: src.minDaysSinceDelivery,
+        maxDaysSinceDelivery: src.maxDaysSinceDelivery,
+        exclusions: src.exclusions,
+        minOrderTotalCents: src.minOrderTotalCents,
+        notes: src.notes,
+        useSentimentDiversion: src.useSentimentDiversion,
+        fallbackOnNoResponse: src.fallbackOnNoResponse,
+        createdBy: 'ab-variant',
+      },
+    })
+    return { ok: true, rule: clone }
+  })
+
+  // RX.6 — ToS-compliance linter for custom copy (rule notes / messages).
+  // Amazon/eBay forbid incentivising reviews, external links, and asking
+  // for positive reviews. Returns warnings (never blocks).
+  fastify.post('/review-rules/lint', async (request, reply) => {
+    const text = String((request.body as { text?: string })?.text ?? '')
+    if (!text.trim()) return { ok: true, issues: [] }
+    const issues: { severity: 'error' | 'warn'; message: string; match?: string }[] = []
+    const rules: { re: RegExp; severity: 'error' | 'warn'; message: string }[] = [
+      { re: /\b(discount|coupon|voucher|refund|free|gift|reward|incentive|cashback|rebate|sconto|buono|omaggio|gratis)\b/i, severity: 'error', message: 'Possible incentive — offering anything in exchange for a review violates marketplace policy.' },
+      { re: /\b(positive|5[- ]?star|five[- ]?star|good review|great review|recensione positiva|cinque stelle)\b/i, severity: 'error', message: 'Do not ask specifically for positive / 5-star reviews — requests must be neutral.' },
+      { re: /(https?:\/\/|www\.)[^\s]+/i, severity: 'warn', message: 'External link — Amazon prohibits links to non-Amazon sites in buyer messages.' },
+      { re: /\b(remove|change|update|edit)\b[^.]*\breview\b/i, severity: 'warn', message: 'Asking a customer to remove/change a review is against policy.' },
+    ]
+    for (const r of rules) {
+      const m = text.match(r.re)
+      if (m) issues.push({ severity: r.severity, message: r.message, match: m[0] })
+    }
+    reply.header('Cache-Control', 'no-store')
+    return { ok: true, issues, clean: issues.length === 0 }
   })
 
   // RV.9.1 — Seed Xavia recommended-default rule (idempotent).

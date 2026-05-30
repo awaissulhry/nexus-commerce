@@ -180,10 +180,10 @@ The **Sentiment funnel** tile on the dashboard shows pending / positive / negati
 
 ## 10. What's not yet supported
 
-- Per-rule `fallbackOnNoResponse` (currently hardcoded to "fire Solicitations" after 5d of no diversion-email response).
-- A/B testing different timing windows.
-- ReviewRule export/import as JSON.
 - Webhook for "review left" → automated thank-you email to repeat-customer programs.
+
+(Per-rule fallback, A/B testing, ToS linting, and rule export/import shipped
+in RX.6 — see §17.)
 
 Ask in `#orders-eng` if you need any of these prioritized.
 
@@ -372,3 +372,26 @@ The orphan-sweeper cron (always-on, every 30 min) auto-marks stuck RUNNING rows 
 | `NEXUS_CRON_ORPHAN_SWEEPER_SCHEDULE` | Cron for stale-RUNNING sweeper. | `*/30 * * * *` |
 | `NEXUS_REVIEW_ATTRIBUTION_SCHEDULE` | Cron for review→rule attribution. | `0 */6 * * *` |
 
+
+---
+
+## 17. RX.6 — Request-pipeline enhancements
+
+Closes the long-standing `/orders/reviews/rules` gaps:
+
+- **Per-rule no-response fallback** (`fallbackOnNoResponse`, default true) —
+  when a diversion "How was it?" email gets no reply in 5 days: on = fall
+  back to a direct Solicitation (prior behavior); off = skip entirely
+  (never solicit a silent customer). Toggle appears under the diversion
+  block when diversion is on. Mailer records `NO_RESPONSE_NO_FALLBACK`.
+- **A/B variants** — "A/B" on each rule clones it (inactive, name
+  suffixed) so you can tweak the timing window and compare via the
+  existing per-rule conversion analytics (§ dashboard).
+  `POST /api/review-rules/:id/duplicate`.
+- **Export / Import JSON** — header buttons. Export downloads all rules
+  (portable, id-free); import upserts on (name, scope, marketplace).
+  `GET /api/review-rules/export`, `POST /api/review-rules/import`.
+- **ToS-compliance linter** — the notes field is checked live for
+  incentive language, asking for positive/5-star reviews, external links,
+  and review-removal requests (Amazon/eBay policy). Warnings only, never
+  blocks. `POST /api/review-rules/lint`.

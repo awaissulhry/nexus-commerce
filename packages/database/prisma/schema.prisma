@@ -9983,6 +9983,12 @@ model ReviewRule {
   // default for backward compatibility.
   useSentimentDiversion Boolean @default(false)
 
+  // RX.6 — when a diversion "How was it?" email gets no response within
+  // the 5-day window: true = fall back to a direct Solicitation (default,
+  // current behavior); false = skip entirely (never solicit a silent
+  // customer). Only meaningful when useSentimentDiversion = true.
+  fallbackOnNoResponse Boolean @default(true)
+
   @@unique([name, scope, marketplace])
   @@index([scope, isActive])
 }
