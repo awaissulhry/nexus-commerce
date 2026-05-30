@@ -89,6 +89,11 @@ export default function SuppliersClient() {
 
   return (
     <div className="space-y-3">
+      {/* PD.5 — in-page tabs into the development board (no sidebar link) */}
+      <div className="flex items-center gap-1.5">
+        <span className="rounded bg-slate-700 px-2.5 py-1 text-xs font-medium text-slate-100">Catalog</span>
+        <a href="/fulfillment/suppliers/development" className="rounded px-2.5 py-1 text-xs font-medium text-slate-400 hover:bg-slate-800 hover:text-slate-200">Development →</a>
+      </div>
       {/* PD.4 — follow-ups due across all suppliers */}
       <FollowUpsDueBanner onPick={setSelectedId} />
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-[280px_1fr]">
