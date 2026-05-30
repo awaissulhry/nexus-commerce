@@ -2751,7 +2751,7 @@ model AmazonAdsDailyPerformance {
 // keyed additionally by `hour` (0-23, UTC) so dayparting (which hour×weekday
 // converts) and hourly share-of-voice become possible — the genuine edge over
 // the once-daily Seller Central reports. Written by the AMS ingest alongside
-// the daily roll-up. Add to the rolling-cleanup job before high volume.
+// the daily roll-up. 90-day rolling retention via the weekly cleanup cron.
 model AmazonAdsHourlyPerformance {
   id            String   @id @default(cuid())
   profileId     String

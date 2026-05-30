@@ -48,6 +48,7 @@ import {
   pollPendingJobs,
   ingestCompletedJob,
   cleanupOldSearchTerms,
+  cleanupOldHourlyPerformance,
 } from '../services/advertising/ads-reports.service.js'
 import {
   runFbaFeesIngest,
@@ -322,7 +323,8 @@ export function startReportIngestCron(): void {
 export async function runSearchTermCleanupCron(): Promise<void> {
   await recordCronRun('ads-search-term-cleanup', async () => {
     const result = await cleanupOldSearchTerms(90)
-    return `deleted=${result.deletedSearchTerms} cutoff=${result.cutoffDate}`
+    const hourly = await cleanupOldHourlyPerformance(90)
+    return `searchTerms=${result.deletedSearchTerms} hourly=${hourly.deletedHourlyRows} cutoff=${result.cutoffDate}`
   }).catch((err) => logger.error('ads-search-term-cleanup cron: failure', { error: String(err) }))
 }
 

@@ -872,6 +872,24 @@ export async function cleanupOldSearchTerms(
   }
 }
 
+// CD.11 follow-up — prune AmazonAdsHourlyPerformance rows older than the
+// retention window. Hourly grain is high-cardinality (≤24 rows/campaign/day);
+// dayparting only needs a trailing window, so a 90-day rolling delete keeps
+// the table bounded. Runs in the same weekly cleanup cron as search terms.
+export async function cleanupOldHourlyPerformance(
+  daysToKeep = 90,
+): Promise<{ deletedHourlyRows: number; cutoffDate: string }> {
+  const cutoff = new Date(Date.now() - daysToKeep * 24 * 60 * 60 * 1000)
+  cutoff.setUTCHours(0, 0, 0, 0)
+  const result = await prisma.amazonAdsHourlyPerformance.deleteMany({
+    where: { date: { lt: cutoff } },
+  })
+  return {
+    deletedHourlyRows: result.count,
+    cutoffDate: cutoff.toISOString().slice(0, 10),
+  }
+}
+
 // ── Phase 6: negative keyword candidates ─────────────────────────────
 // Queries that have spent $X+ in the last 30 days with zero attributed
 // orders are prime candidates for negative-keyword addition. Returns
