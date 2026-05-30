@@ -3450,6 +3450,27 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   // (a concurrent session landed a token-gated + action-logged version — kept
   // as the single source of truth to avoid a duplicate-route boot crash).
 
+  // ── AME.15-17: campaign launcher + keyword-graduation funnel ────────
+  fastify.get('/advertising/funnel/state', async (request, reply) => {
+    const q = request.query as { productId?: string }
+    if (!q.productId) { reply.status(400); return { error: 'productId required' } }
+    const { getFunnelState } = await import('../services/advertising/ads-keyword-funnel.service.js')
+    reply.header('Cache-Control', 'private, max-age=30')
+    return getFunnelState(q.productId)
+  })
+  fastify.post('/advertising/funnel/cross-match', async (request, reply) => {
+    const b = (request.body ?? {}) as { productId?: string; apply?: boolean; userId?: string }
+    if (!b.productId) { reply.status(400); return { error: 'productId required' } }
+    const { crossMatchNegations } = await import('../services/advertising/ads-keyword-funnel.service.js')
+    try { return await crossMatchNegations(b.productId, b.apply === true, b.userId) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
+  })
+  fastify.post('/advertising/funnel/launch', async (request, reply) => {
+    const b = (request.body ?? {}) as { productId?: string; marketplace?: string; dailyBudgetEur?: number; defaultBidEur?: number; keywords?: string[]; userId?: string }
+    if (!b.productId || !b.marketplace) { reply.status(400); return { error: 'productId + marketplace required' } }
+    const { launchProductFunnel } = await import('../services/advertising/ads-keyword-funnel.service.js')
+    try { return { ok: true, ...(await launchProductFunnel(b as never)) } } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
+  })
+
   // ── AX.11: Search-term n-gram analysis ──────────────────────────────
   fastify.get('/advertising/ngrams', async (request, reply) => {
     const q = request.query as Record<string, string | undefined>
