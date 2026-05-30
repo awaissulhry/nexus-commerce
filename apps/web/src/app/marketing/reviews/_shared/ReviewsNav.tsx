@@ -12,7 +12,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { List, Grid, Package, AlertTriangle, Bot, Mail, SlidersHorizontal, Upload, Inbox } from 'lucide-react'
+import { List, Grid, Package, AlertTriangle, Bot, Mail, SlidersHorizontal, Upload, Inbox, Lightbulb } from 'lucide-react'
 
 const TABS = [
   { href: '/marketing/reviews', label: 'Feed', icon: List, exact: true },
@@ -21,6 +21,13 @@ const TABS = [
     href: '/marketing/reviews/desk',
     label: 'Desk',
     icon: Inbox,
+    exact: false,
+  },
+  // RX.4 — AI Voice-of-Customer brief.
+  {
+    href: '/marketing/reviews/spotlight',
+    label: 'Spotlight',
+    icon: Lightbulb,
     exact: false,
   },
   {

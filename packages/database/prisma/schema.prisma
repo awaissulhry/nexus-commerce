@@ -9768,6 +9768,26 @@ model ReviewResponse {
   @@index([status])
 }
 
+// RX.4 — AI Voice-of-Customer brief. Synthesizes themes / complaints /
+// praises / emerging issues / actionable recommendations across a window
+// of reviews. Persisted (not recomputed per page-load) to stay efficient
+// with AI tokens; productId null = a global brief.
+model ReviewSpotlight {
+  id          String   @id @default(cuid())
+  productId   String? // null = global
+  marketplace String? // null = all markets
+  windowDays  Int      @default(30)
+  reviewCount Int      @default(0)
+  headline    String?
+  content     Json // structured brief: { sentiment, complaints[], praises[], emerging[], recommendations[] }
+  model       String?
+  usedAi      Boolean  @default(false)
+  generatedAt DateTime @default(now())
+
+  @@index([productId, generatedAt])
+  @@index([generatedAt])
+}
+
 // SR.1 — Per-review AI classification. 1:1 with Review. Categories
 // are a closed enum-ish set encoded as a string[] so a single review
 // can match multiple themes (e.g. "Fit/Sizing" + "Quality"). topPhrases

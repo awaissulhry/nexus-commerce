@@ -296,6 +296,29 @@ days. Gated by `NEXUS_ENABLE_REVIEW_DIGEST=1`; recipients via
 
 ---
 
+## 15. RX.4 — AI Review Spotlight
+
+`/marketing/reviews/spotlight` is an AI Voice-of-Customer brief over a
+window of reviews: sentiment mix, top complaint + praise themes (with
+verbatim quotes), emerging issues, and concrete recommended actions
+(fix the size chart, QA a component, reframe value…). Each
+recommendation is tagged by area (listing / content / product / ops).
+
+Briefs are **persisted** (`ReviewSpotlight` table) rather than recomputed
+per page-load, to stay efficient with AI tokens — the page reads the
+latest cached brief and offers a **Regenerate** button (7 / 30 / 90-day
+window). `productId = null` is a global brief.
+
+- `GET /api/reviews/spotlight?productId=&marketplace=` — latest cached
+- `POST /api/reviews/spotlight/generate` — regenerate
+
+Synthesis uses Anthropic (model override `NEXUS_REVIEW_SPOTLIGHT_MODEL`,
+default Haiku 4.5) and falls back to a deterministic heuristic brief
+(built from sentiment categories + top phrases) when no AI key is set,
+so a useful brief is always produced.
+
+---
+
 ## 11. RV.9 — Operational polish notes
 
 **Setup nudge (RV.9.1).** If `/orders/reviews/rules` shows no active Xavia-IT rule (the most common first-run mistake), an amber banner offers a one-click "Set up Xavia IT default" — creates a rule with the 7–25d window, returns/refunds exclusions, sentiment diversion on. Same banner repairs misconfigured rules (scope=AMAZON_PER_MARKETPLACE but marketplace=null).

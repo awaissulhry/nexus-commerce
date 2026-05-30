@@ -30,6 +30,7 @@ import {
 } from '../services/reviews/review-import.service.js'
 import { draftReviewReply } from '../services/reviews/review-reply.service.js'
 import { sendReviewDigestOnce } from '../services/reviews/review-digest.service.js'
+import { generateSpotlight, getLatestSpotlight } from '../services/reviews/review-spotlight.service.js'
 import { respondToEbayFeedback } from '../services/reviews/adapters/ebay-feedback.adapter.js'
 import { sseResponseHeaders } from '../lib/sse.js'
 import { publishReviewEvent } from '../services/review-events.service.js'
@@ -908,6 +909,36 @@ const reviewsRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post('/reviews/cron/digest/trigger', async (_request, _reply) => {
     const r = await sendReviewDigestOnce()
     return { ok: true, sent: r.sent, skipped: r.skipped, digest: r.digest }
+  })
+
+  // ── Review Spotlight (RX.4) ─────────────────────────────────────────
+  fastify.get<{
+    Querystring: { productId?: string; marketplace?: string }
+  }>('/reviews/spotlight', async (request, reply) => {
+    const q = request.query ?? {}
+    const latest = await getLatestSpotlight({
+      productId: q.productId ?? null,
+      marketplace: q.marketplace ?? null,
+    })
+    reply.header('Cache-Control', 'private, max-age=60')
+    return { spotlight: latest }
+  })
+
+  fastify.post<{
+    Body: { productId?: string | null; marketplace?: string | null; windowDays?: number }
+  }>('/reviews/spotlight/generate', async (request, reply) => {
+    const b = request.body ?? {}
+    try {
+      const spotlight = await generateSpotlight({
+        productId: b.productId ?? null,
+        marketplace: b.marketplace ?? null,
+        windowDays: b.windowDays,
+      })
+      return { ok: true, spotlight }
+    } catch (err) {
+      reply.code(500)
+      return { error: 'generate_failed', message: err instanceof Error ? err.message : String(err) }
+    }
   })
 
   fastify.post('/reviews/cron/review-rule-evaluator/trigger', async (_request, _reply) => {
