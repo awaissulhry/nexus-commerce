@@ -838,6 +838,115 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     return { windowDays, productAds: productAds.length, campaigns: campaignData, searchTerms, creatives, summary }
   })
 
+  // ── PC.1: product-centric ad roster ─────────────────────────────────
+  // One row per ADVERTISED product, aggregated from ProductProfitDaily (the
+  // true per-product windowed source: ad spend + revenue + true profit, no
+  // multi-product double-count). Headline metric is TACOS (spend÷revenue);
+  // ACOS lives in the per-campaign expand (product-ads). #campaigns/#markets
+  // come from the AdProductAd→Campaign structure. Returns a reconciliation
+  // remainder (account spend − Σ attributed) so nothing is silently dropped.
+  // GET /advertising/by-product?windowDays=&marketplace=&search=&sort=&dir=&limit=
+  fastify.get('/advertising/by-product', async (request, reply) => {
+    const q = request.query as { windowDays?: string; marketplace?: string; search?: string; sort?: string; dir?: string; limit?: string }
+    const windowDays = Math.max(7, Math.min(90, Number(q.windowDays ?? 30)))
+    const limit = Math.max(1, Math.min(1000, Number(q.limit ?? 300)))
+    const since = new Date(); since.setUTCDate(since.getUTCDate() - windowDays); since.setUTCHours(0, 0, 0, 0)
+    const mkt = q.marketplace || undefined
+
+    // 1. Per-product windowed roll-up (ad spend + revenue + profit).
+    const grouped = await prisma.productProfitDaily.groupBy({
+      by: ['productId'],
+      where: { date: { gte: since }, ...(mkt ? { marketplace: mkt } : {}) },
+      _sum: { advertisingSpendCents: true, grossRevenueCents: true, trueProfitCents: true, unitsSold: true },
+      having: { advertisingSpendCents: { _sum: { gt: 0 } } },
+      orderBy: { _sum: { advertisingSpendCents: 'desc' } },
+      take: limit,
+    })
+    const ids = grouped.map((g) => g.productId)
+    if (ids.length === 0) {
+      reply.header('Cache-Control', 'private, max-age=60')
+      return { windowDays, rows: [], totals: { adSpendCents: 0, revenueCents: 0, profitCents: 0, products: 0 }, unattributedSpendCents: 0 }
+    }
+
+    // 2. Product identity + photo (reuse the /products face-image picker).
+    const { pickFaceImage, FACE_IMAGE_SELECT, FACE_IMAGE_ORDER_BY } = await import('../services/product-read-cache.service.js')
+    const products = await prisma.product.findMany({
+      where: {
+        id: { in: ids }, deletedAt: null,
+        ...(q.search ? { OR: [{ name: { contains: q.search, mode: 'insensitive' } }, { sku: { contains: q.search, mode: 'insensitive' } }] } : {}),
+      },
+      select: { id: true, sku: true, name: true, images: { select: FACE_IMAGE_SELECT, orderBy: FACE_IMAGE_ORDER_BY } },
+    })
+    const prodById = new Map(products.map((p) => [p.id, p]))
+
+    // 3. #campaigns + #markets + asin from the ad structure (one query).
+    const ads = await prisma.adProductAd.findMany({
+      where: { productId: { in: ids } },
+      select: { productId: true, asin: true, adGroup: { select: { campaign: { select: { id: true, marketplace: true } } } } },
+    })
+    const structByProduct = new Map<string, { campaigns: Set<string>; markets: Set<string>; asin: string | null }>()
+    for (const a of ads) {
+      if (!a.productId) continue
+      let s = structByProduct.get(a.productId)
+      if (!s) { s = { campaigns: new Set(), markets: new Set(), asin: a.asin }; structByProduct.set(a.productId, s) }
+      const c = a.adGroup?.campaign
+      if (c?.id && (!mkt || c.marketplace === mkt)) { s.campaigns.add(c.id); if (c.marketplace) s.markets.add(c.marketplace) }
+      if (!s.asin && a.asin) s.asin = a.asin
+    }
+
+    // 4. Build rows (skip products filtered out by search).
+    const rows = grouped.flatMap((g) => {
+      const p = prodById.get(g.productId)
+      if (!p) return []
+      const adSpendCents = g._sum.advertisingSpendCents ?? 0
+      const revenueCents = g._sum.grossRevenueCents ?? 0
+      const profitCents = g._sum.trueProfitCents ?? 0
+      const st = structByProduct.get(g.productId)
+      const campaignCount = st?.campaigns.size ?? 0
+      return [{
+        id: g.productId,
+        sku: p.sku,
+        name: p.name,
+        asin: st?.asin ?? null,
+        photoUrl: pickFaceImage(p.images),
+        photoCount: p.images.length,
+        adSpendCents, revenueCents, profitCents,
+        units: g._sum.unitsSold ?? 0,
+        tacos: revenueCents > 0 ? Math.round((adSpendCents / revenueCents) * 1000) / 10 : null,
+        marginPct: revenueCents > 0 ? Math.round((profitCents / revenueCents) * 1000) / 10 : null,
+        campaignCount,
+        marketCount: st?.markets.size ?? 0,
+        isParent: campaignCount > 0,
+        childCount: campaignCount,
+      }]
+    })
+
+    // 5. Reconciliation: account ad spend (campaign-level) vs Σ attributed.
+    const acct = await prisma.amazonAdsDailyPerformance.aggregate({
+      where: { entityType: 'CAMPAIGN', date: { gte: since }, ...(mkt ? { marketplace: mkt } : {}) },
+      _sum: { costMicros: true },
+    })
+    const accountSpendCents = Math.round(Number(acct._sum.costMicros ?? 0n) / 10_000)
+    const attributedSpendCents = rows.reduce((s, r) => s + r.adSpendCents, 0)
+
+    // Optional client-driven re-sort (default already spend desc).
+    const dir = q.dir === 'asc' ? 1 : -1
+    if (q.sort && q.sort !== 'spend') {
+      const key = q.sort as 'revenue' | 'profit' | 'tacos' | 'margin' | 'campaigns'
+      const val = (r: typeof rows[number]) => key === 'revenue' ? r.revenueCents : key === 'profit' ? r.profitCents : key === 'tacos' ? (r.tacos ?? -1) : key === 'margin' ? (r.marginPct ?? -999) : r.campaignCount
+      rows.sort((a, b) => (val(a) - val(b)) * dir)
+    }
+
+    reply.header('Cache-Control', 'private, max-age=60')
+    return {
+      windowDays,
+      rows,
+      totals: { adSpendCents: attributedSpendCents, revenueCents: rows.reduce((s, r) => s + r.revenueCents, 0), profitCents: rows.reduce((s, r) => s + r.profitCents, 0), products: rows.length },
+      accountSpendCents,
+      unattributedSpendCents: Math.max(0, accountSpendCents - attributedSpendCents),
+    }
+  })
+
   //   STALE_CAMPAIGN  — ENABLED campaigns with 0 impressions in windowDays
   //
   // Each insight has a severity (critical | warning | info), a title,

@@ -15,7 +15,7 @@
 import type { Metadata } from 'next'
 import { Suspense } from 'react'
 import { AdvertisingNav } from '../_shared/AdvertisingNav'
-import { AdCampaignsCockpit } from './AdCampaignsCockpit'
+import { CampaignsViewSwitch } from './CampaignsViewSwitch'
 import { getBackendUrl } from '@/lib/backend-url'
 
 export const metadata: Metadata = { title: 'Amazon Ads · Campaigns' }
@@ -129,19 +129,13 @@ export default async function AdvertisingCampaignsPage() {
           Campaigns
         </h1>
         <p className="text-sm text-slate-500 dark:text-slate-400">
-          Inline edit of budget + status. Writes are queued to Amazon Ads via
-          OutboundSyncQueue (5-min undo window).
+          Manage advertising by product or by campaign. Writes are queued to
+          Amazon Ads via OutboundSyncQueue (5-min undo window).
         </p>
-        {v1.count > 0 && (
-          <p className="text-xs text-emerald-700 dark:text-emerald-300 mt-1">
-            Showing {v1.count} campaign{v1.count === 1 ? '' : 's'} with live
-            performance from last {v1.windowDays} days (Reports API).
-          </p>
-        )}
       </div>
       <AdvertisingNav />
       <Suspense fallback={<div className="text-sm text-slate-500">Loading…</div>}>
-        <AdCampaignsCockpit initial={initial} />
+        <CampaignsViewSwitch initial={initial} />
       </Suspense>
     </div>
   )
