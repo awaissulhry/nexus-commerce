@@ -8,7 +8,7 @@
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { ChevronLeft, Megaphone, ShoppingCart, TrendingUp, Package } from 'lucide-react'
+import { ChevronLeft, Megaphone, ShoppingCart, TrendingUp, Package, Search, Download } from 'lucide-react'
 import { KpiStrip, Thumbnail, type KpiTileSpec } from '@/app/_shared/grid-lens'
 import { StatusChip } from '@/app/_shared/ads-ui'
 import { marketplaceCode, marketplaceCountryName } from '@/lib/marketplace-code'
@@ -60,6 +60,33 @@ export function AdGroupDetailCockpit({ adGroup }: { adGroup: AdGroupDetail }) {
     return () => { alive = false }
   }, [windowDays, adGroup.id, adGroup.windowDays])
   const m = data.metrics
+
+  // AME.7 — Amazon-style toolbar state for the Ads table.
+  const [adSearch, setAdSearch] = useState('')
+  const [adStatus, setAdStatus] = useState('')
+  const [sortKey, setSortKey] = useState<'spendCents' | 'salesCents' | 'acos' | 'roas' | 'orders' | 'name'>('spendCents')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
+  const toggleSort = (k: typeof sortKey) => { if (sortKey === k) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc')); else { setSortKey(k); setSortDir(k === 'name' ? 'asc' : 'desc') } }
+  const visibleAds = useMemo(() => {
+    const q = adSearch.trim().toLowerCase()
+    let r = data.ads.filter((a) => (!q || a.name.toLowerCase().includes(q) || (a.sku ?? '').toLowerCase().includes(q) || (a.asin ?? '').toLowerCase().includes(q)) && (!adStatus || a.status === adStatus))
+    const dir = sortDir === 'asc' ? 1 : -1
+    r = [...r].sort((a, b) => {
+      const va = sortKey === 'name' ? a.name.toLowerCase() : (a[sortKey] ?? -1)
+      const vb = sortKey === 'name' ? b.name.toLowerCase() : (b[sortKey] ?? -1)
+      return va < vb ? -1 * dir : va > vb ? 1 * dir : 0
+    })
+    return r
+  }, [data.ads, adSearch, adStatus, sortKey, sortDir])
+  const adStatuses = useMemo(() => [...new Set(data.ads.map((a) => a.status))].sort(), [data.ads])
+  const exportAdsCsv = useCallback(() => {
+    const head = ['Ad', 'Status', 'SKU', 'ASIN', 'TotalCost', 'Purchases', 'Sales', 'ACOS', 'ROAS']
+    const rows = visibleAds.map((a) => [a.name, a.status, a.sku ?? '', a.asin ?? '', (a.spendCents / 100).toFixed(2), a.orders, (a.salesCents / 100).toFixed(2), a.acos != null ? (a.acos * 100).toFixed(1) : '', a.roas != null ? a.roas.toFixed(2) : ''])
+    const csv = [head, ...rows].map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n')
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }))
+    const a = document.createElement('a'); a.href = url; a.download = `adgroup-${data.id}-ads.csv`; a.click(); URL.revokeObjectURL(url)
+  }, [visibleAds, data.id])
+  const sortIcon = (k: typeof sortKey) => (sortKey === k ? (sortDir === 'asc' ? ' ↑' : ' ↓') : '')
 
   const tiles: KpiTileSpec[] = [
     { icon: Megaphone, label: 'Total cost', value: eur(m.spendCents), tone: 'amber', detail: `${num(m.clicks)} clicks` },
@@ -118,14 +145,25 @@ export function AdGroupDetailCockpit({ adGroup }: { adGroup: AdGroupDetail }) {
           <CampaignTrendChart rows={trendRows} windowDays={windowDays} onWindowChange={setWindowDays} loading={false} />
 
           <div className="rounded-lg border border-slate-200 dark:border-slate-800 mt-3">
-            {tab === 'ads' && (
+            {tab === 'ads' && (<>
+              <div className="flex flex-wrap items-center gap-2 px-3 py-2 border-b border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/40">
+                <div className="relative">
+                  <Search size={13} className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input value={adSearch} onChange={(e) => setAdSearch(e.target.value)} placeholder="Find a product" aria-label="Find a product" className="pl-7 pr-2 py-1 text-sm rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 w-52" />
+                </div>
+                <select value={adStatus} onChange={(e) => setAdStatus(e.target.value)} aria-label="Filter by status" className="py-1 px-2 text-sm rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
+                  <option value="">All statuses</option>{adStatuses.map((s) => <option key={s} value={s}>{s}</option>)}
+                </select>
+                <span className="ml-auto text-xs text-slate-400 tabular-nums">{visibleAds.length} of {data.ads.length}</span>
+                <button onClick={exportAdsCsv} className="inline-flex items-center gap-1 px-2.5 py-1 text-sm rounded-md border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800"><Download size={13} /> Export</button>
+              </div>
               <table className="w-full text-sm">
                 <thead className="bg-slate-50 dark:bg-slate-900/60 text-xs text-slate-500"><tr>
-                  <th className="text-left px-3 py-2">Ad</th><th className="text-left px-3 py-2">Status</th><th className="text-left px-3 py-2">SKU / ASIN</th>
-                  <th className="text-right px-3 py-2">Total cost</th><th className="text-right px-3 py-2">Purchases</th><th className="text-right px-3 py-2">Sales</th><th className="text-right px-3 py-2">ACOS</th><th className="text-right px-3 py-2">ROAS</th>
+                  <th className="text-left px-3 py-2"><button onClick={() => toggleSort('name')} className="hover:text-slate-700">Ad{sortIcon('name')}</button></th><th className="text-left px-3 py-2">Status</th><th className="text-left px-3 py-2">SKU / ASIN</th>
+                  <th className="text-right px-3 py-2"><button onClick={() => toggleSort('spendCents')} className="hover:text-slate-700">Total cost{sortIcon('spendCents')}</button></th><th className="text-right px-3 py-2"><button onClick={() => toggleSort('orders')} className="hover:text-slate-700">Purchases{sortIcon('orders')}</button></th><th className="text-right px-3 py-2"><button onClick={() => toggleSort('salesCents')} className="hover:text-slate-700">Sales{sortIcon('salesCents')}</button></th><th className="text-right px-3 py-2"><button onClick={() => toggleSort('acos')} className="hover:text-slate-700">ACOS{sortIcon('acos')}</button></th><th className="text-right px-3 py-2"><button onClick={() => toggleSort('roas')} className="hover:text-slate-700">ROAS{sortIcon('roas')}</button></th>
                 </tr></thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {data.ads.length === 0 ? <tr><td colSpan={8} className="px-3 py-8 text-center text-slate-400 text-xs">No ads in this ad group.</td></tr> : data.ads.map((a) => (
+                  {visibleAds.length === 0 ? <tr><td colSpan={8} className="px-3 py-8 text-center text-slate-400 text-xs">{data.ads.length === 0 ? 'No ads in this ad group.' : 'No ads match your filters.'}</td></tr> : visibleAds.map((a) => (
                     <tr key={a.id} className="hover:bg-slate-50 dark:hover:bg-slate-900/40">
                       <td className="px-3 py-1.5">
                         <div className="flex items-center gap-2 min-w-0">
@@ -146,7 +184,7 @@ export function AdGroupDetailCockpit({ adGroup }: { adGroup: AdGroupDetail }) {
                   ))}
                 </tbody>
               </table>
-            )}
+            </>)}
             {tab === 'targeting' && (
               <table className="w-full text-sm">
                 <thead className="bg-slate-50 dark:bg-slate-900/60 text-xs text-slate-500"><tr><th className="text-left px-3 py-2">Target</th><th className="text-left px-3 py-2">Match</th><th className="text-right px-3 py-2">Bid</th><th className="text-left px-3 py-2">Status</th></tr></thead>

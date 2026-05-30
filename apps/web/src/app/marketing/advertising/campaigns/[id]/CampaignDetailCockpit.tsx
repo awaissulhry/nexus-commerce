@@ -9,13 +9,13 @@
  * placements fetch lazily on tab open.
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { ChevronLeft, Check, Lightbulb, Copy } from 'lucide-react'
 import { useMarketingEvents } from '@/lib/sync/use-marketing-events'
 import { KpiStrip, type KpiTileSpec, BulkActionShell } from '@/app/_shared/grid-lens'
-import { Pause, Play, ChevronsUp, ChevronsDown, Ban, Plus } from 'lucide-react'
+import { Pause, Play, ChevronsUp, ChevronsDown, Ban, Plus, Search, Download } from 'lucide-react'
 import { StatusChip } from '@/app/_shared/ads-ui'
 import { CampaignTrendChart, type TrendRow } from './CampaignTrendChart'
 import { CampaignBudgetPace } from './CampaignBudgetPace'
@@ -115,6 +115,19 @@ export function CampaignDetailCockpit({ campaign, history }: { campaign: Campaig
   // with the KPI chart. Seeded from the server prop (windowDays 30 default);
   // refetched live from the daily-derived detail endpoint when the window changes.
   const [adGroups, setAdGroups] = useState(campaign.adGroups)
+  // AME.7 — ad-groups table toolbar (search + export).
+  const [agSearch, setAgSearch] = useState('')
+  const visibleAgs = useMemo(() => {
+    const q = agSearch.trim().toLowerCase()
+    return q ? adGroups.filter((g) => g.name.toLowerCase().includes(q)) : adGroups
+  }, [adGroups, agSearch])
+  const exportAgsCsv = useCallback(() => {
+    const head = ['Ad group', 'Status', 'DefaultBid', 'Targets', 'Impr', 'Clicks', 'Spend', 'Sales']
+    const rows = visibleAgs.map((g) => [g.name, g.status, (g.defaultBidCents / 100).toFixed(2), g.targets.length, g.impressions, g.clicks, (g.spendCents / 100).toFixed(2), (g.salesCents / 100).toFixed(2)])
+    const csv = [head, ...rows].map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n')
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }))
+    const a = document.createElement('a'); a.href = url; a.download = `campaign-${campaign.id}-adgroups.csv`; a.click(); URL.revokeObjectURL(url)
+  }, [visibleAgs, campaign.id])
   const firstWindowRef = useRef(true)
   useEffect(() => {
     if (firstWindowRef.current) { firstWindowRef.current = false; return }
@@ -455,10 +468,18 @@ export function CampaignDetailCockpit({ campaign, history }: { campaign: Campaig
 
           {clampMsg && <div className="my-2 px-3 py-1.5 text-xs rounded-md text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900">{clampMsg}</div>}
           <div className="rounded-lg border border-slate-200 dark:border-slate-800 mt-3">
-        {tab === 'adgroups' && (
+        {tab === 'adgroups' && (<>
+          <div className="flex flex-wrap items-center gap-2 px-3 py-2 border-b border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/40">
+            <div className="relative">
+              <Search size={13} className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input value={agSearch} onChange={(e) => setAgSearch(e.target.value)} placeholder="Find an ad group" aria-label="Find an ad group" className="pl-7 pr-2 py-1 text-sm rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 w-52" />
+            </div>
+            <span className="ml-auto text-xs text-slate-400 tabular-nums">{visibleAgs.length} of {adGroups.length}</span>
+            <button onClick={exportAgsCsv} className="inline-flex items-center gap-1 px-2.5 py-1 text-sm rounded-md border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800"><Download size={13} /> Export</button>
+          </div>
           <table className="w-full text-sm"><thead className="bg-slate-50 dark:bg-slate-900/60 text-xs text-slate-500"><tr><th className="text-left px-3 py-2">Ad group</th><th className="text-left px-3 py-2">Status</th><th className="text-right px-3 py-2">Default bid</th><th className="text-right px-3 py-2">Targets</th><th className="text-right px-3 py-2">Impr</th><th className="text-right px-3 py-2">Clicks</th><th className="text-right px-3 py-2">Spend</th><th className="text-right px-3 py-2">Sales</th><th className="text-right px-3 py-2">14d</th></tr></thead>
-          <tbody className="divide-y divide-slate-100 dark:divide-slate-800">{adGroups.map((g) => <tr key={g.id} className="hover:bg-slate-50 dark:hover:bg-slate-900/40"><td className="px-3 py-1.5 font-medium"><Link href={`/marketing/advertising/campaigns/${campaign.id}/ad-groups/${g.id}`} className="text-blue-600 dark:text-blue-400 hover:underline">{g.name}</Link></td><td className="px-3 py-1.5 text-xs">{g.status}</td><td className="px-3 py-1.5 text-right tabular-nums">{eur(g.defaultBidCents)}</td><td className="px-3 py-1.5 text-right tabular-nums">{g.targets.length}</td><td className="px-3 py-1.5 text-right tabular-nums">{num(g.impressions)}</td><td className="px-3 py-1.5 text-right tabular-nums">{num(g.clicks)}</td><td className="px-3 py-1.5 text-right tabular-nums">{eur(g.spendCents)}</td><td className="px-3 py-1.5 text-right tabular-nums">{eur(g.salesCents)}</td><td className="px-3 py-1.5 text-right" title="Spend, last 14 days"><Sparkline data={agSparks[g.id]} color="#f59e0b" /></td></tr>)}</tbody></table>
-        )}
+          <tbody className="divide-y divide-slate-100 dark:divide-slate-800">{visibleAgs.length === 0 ? <tr><td colSpan={9} className="px-3 py-8 text-center text-slate-400 text-xs">No ad groups match.</td></tr> : visibleAgs.map((g) => <tr key={g.id} className="hover:bg-slate-50 dark:hover:bg-slate-900/40"><td className="px-3 py-1.5 font-medium"><Link href={`/marketing/advertising/campaigns/${campaign.id}/ad-groups/${g.id}`} className="text-blue-600 dark:text-blue-400 hover:underline">{g.name}</Link></td><td className="px-3 py-1.5"><StatusChip status={g.status} dot /></td><td className="px-3 py-1.5 text-right tabular-nums">{eur(g.defaultBidCents)}</td><td className="px-3 py-1.5 text-right tabular-nums">{g.targets.length}</td><td className="px-3 py-1.5 text-right tabular-nums">{num(g.impressions)}</td><td className="px-3 py-1.5 text-right tabular-nums">{num(g.clicks)}</td><td className="px-3 py-1.5 text-right tabular-nums">{eur(g.spendCents)}</td><td className="px-3 py-1.5 text-right tabular-nums">{eur(g.salesCents)}</td><td className="px-3 py-1.5 text-right" title="Spend, last 14 days"><Sparkline data={agSparks[g.id]} color="#f59e0b" /></td></tr>)}</tbody></table>
+        </>)}
         {tab === 'targeting' && (<>
           <div className="border-b border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/40 px-3 py-2">
             {!tForm.open ? (
