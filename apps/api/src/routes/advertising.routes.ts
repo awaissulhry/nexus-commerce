@@ -144,9 +144,10 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get('/advertising/campaigns/:id', async (request, reply) => {
     const { id } = request.params as { id: string }
     const q = request.query as { windowDays?: string }
-    const windowDays = Math.max(1, Math.min(90, Number(q.windowDays) || 30))
+    const windowDays = Math.max(1, Math.min(180, Number(q.windowDays) || 30))
+    // Mirror /advertising/trends EXACTLY so the detail KPIs == the chart total.
     const since = new Date()
-    since.setUTCDate(since.getUTCDate() - (windowDays - 1))
+    since.setUTCDate(since.getUTCDate() - windowDays)
     since.setUTCHours(0, 0, 0, 0)
 
     const campaign = await prisma.campaign.findUnique({
@@ -168,24 +169,40 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const microsToCents = (micros: bigint | number | null | undefined) =>
       Math.round(Number(micros ?? 0n) / 10_000)
 
-    // Campaign totals — chart-consistent (CAMPAIGN daily rows for this id).
+    // ── Campaign totals — authoritative + chart-consistent. CAMPAIGN daily
+    // rows are Amazon's billed campaign spend; match localEntityId OR entityId
+    // exactly like /trends. A single campaign = one marketplace/currency, so
+    // summing here is currency-safe by construction.
+    const campaignWhere = {
+      OR: [
+        { localEntityId: id },
+        ...(campaign.externalCampaignId ? [{ entityId: campaign.externalCampaignId }] : []),
+      ],
+    }
     const cagg = await prisma.amazonAdsDailyPerformance.aggregate({
-      where: { entityType: 'CAMPAIGN', localEntityId: id, date: { gte: since } },
+      where: { entityType: 'CAMPAIGN', date: { gte: since }, ...campaignWhere },
       _sum: {
         impressions: true, clicks: true, costMicros: true,
         sales7dCents: true, sales14dCents: true, orders7d: true,
       },
     })
+    const campImpr = cagg._sum.impressions ?? 0
+    const campClicks = cagg._sum.clicks ?? 0
     const campSpendCents = microsToCents(cagg._sum.costMicros)
     const campSalesCents = (cagg._sum.sales7dCents ?? 0) + (cagg._sum.sales14dCents ?? 0)
+    const campOrders = cagg._sum.orders7d ?? 0
 
-    // Ad-group rollup — sum each ad group's PRODUCT_AD daily rows (localEntityId
-    // = AdProductAd.id). The only per-ad-group grain available, and consistent
-    // with the by-product grid.
+    // ── Ad-group shares — sum each group's PRODUCT_AD daily rows (localEntityId
+    // = AdProductAd.id; the only per-ad-group grain). These give the RELATIVE
+    // distribution; the authoritative campaign total is then ALLOCATED across
+    // groups by share so Σ(ad groups) == campaign for every metric and no child
+    // ever exceeds its parent (PRODUCT_AD vs CAMPAIGN reports differ by ~15% +
+    // T+2 lag, so a raw rollup would be inconsistent).
     const adIdToGroup = new Map<string, string>()
     for (const g of campaign.adGroups) for (const pa of g.productAds) adIdToGroup.set(pa.id, g.id)
     const allAdIds = [...adIdToGroup.keys()]
-    const perGroup = new Map<string, { impressions: number; clicks: number; micros: bigint; salesCents: number; orders: number }>()
+    const share = new Map<string, { impr: number; clicks: number; micros: number; salesCents: number; orders: number }>()
+    for (const g of campaign.adGroups) share.set(g.id, { impr: 0, clicks: 0, micros: 0, salesCents: 0, orders: 0 })
     if (allAdIds.length) {
       const rows = await prisma.amazonAdsDailyPerformance.groupBy({
         by: ['localEntityId'],
@@ -195,27 +212,54 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       for (const r of rows) {
         const gid = r.localEntityId ? adIdToGroup.get(r.localEntityId) : undefined
         if (!gid) continue
-        const cur = perGroup.get(gid) ?? { impressions: 0, clicks: 0, micros: 0n, salesCents: 0, orders: 0 }
-        cur.impressions += r._sum.impressions ?? 0
+        const cur = share.get(gid)!
+        cur.impr += r._sum.impressions ?? 0
         cur.clicks += r._sum.clicks ?? 0
-        cur.micros += BigInt(r._sum.costMicros ?? 0n)
+        cur.micros += Number(r._sum.costMicros ?? 0n)
         cur.salesCents += (r._sum.sales7dCents ?? 0) + (r._sum.sales14dCents ?? 0)
         cur.orders += r._sum.orders7d ?? 0
-        perGroup.set(gid, cur)
       }
     }
 
-    const adGroups = campaign.adGroups.map((g) => {
-      const m = perGroup.get(g.id)
-      const spendCents = m ? microsToCents(m.micros) : 0
-      const salesCents = m?.salesCents ?? 0
+    // Largest-remainder allocation: distribute an integer `total` across rows by
+    // `shares`, guaranteeing the parts sum exactly to `total`.
+    const allocate = (total: number, shares: number[]): number[] => {
+      const n = shares.length
+      if (n === 0) return []
+      if (total <= 0) return shares.map(() => 0)
+      const sum = shares.reduce((a, b) => a + b, 0)
+      if (sum <= 0) {
+        const base = Math.floor(total / n)
+        const out = shares.map(() => base)
+        for (let i = 0; i < total - base * n; i++) out[i] += 1
+        return out
+      }
+      const raw = shares.map((s) => (total * s) / sum)
+      const out = raw.map((v) => Math.floor(v))
+      let rem = total - out.reduce((a, b) => a + b, 0)
+      const order = raw.map((v, i) => ({ i, f: v - Math.floor(v) })).sort((a, b) => b.f - a.f)
+      for (let k = 0; k < rem; k++) out[order[k % n]!.i] += 1
+      return out
+    }
+
+    const groups = campaign.adGroups
+    const sh = groups.map((g) => share.get(g.id)!)
+    const spendAlloc = allocate(campSpendCents, sh.map((s) => s.micros))
+    const salesAlloc = allocate(campSalesCents, sh.map((s) => s.salesCents))
+    const imprAlloc = allocate(campImpr, sh.map((s) => s.impr))
+    const clickAlloc = allocate(campClicks, sh.map((s) => s.clicks))
+    const orderAlloc = allocate(campOrders, sh.map((s) => s.orders))
+
+    const adGroups = groups.map((g, i) => {
+      const spendCents = spendAlloc[i]!
+      const salesCents = salesAlloc[i]!
       return {
         ...g,
-        impressions: m?.impressions ?? 0,
-        clicks: m?.clicks ?? 0,
+        impressions: imprAlloc[i]!,
+        clicks: clickAlloc[i]!,
         spendCents,
         salesCents,
-        ordersCount: m?.orders ?? 0,
+        ordersCount: orderAlloc[i]!,
         acos: salesCents > 0 ? spendCents / salesCents : null,
         roas: spendCents > 0 ? salesCents / spendCents : null,
       }
@@ -224,8 +268,8 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     return {
       campaign: {
         ...campaign,
-        impressions: cagg._sum.impressions ?? 0,
-        clicks: cagg._sum.clicks ?? 0,
+        impressions: campImpr,
+        clicks: campClicks,
         spend: campSpendCents / 100,
         sales: campSalesCents / 100,
         acos: campSalesCents > 0 ? campSpendCents / campSalesCents : null,
