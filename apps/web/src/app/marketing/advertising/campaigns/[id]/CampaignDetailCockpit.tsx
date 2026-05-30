@@ -17,6 +17,7 @@ import { useMarketingEvents } from '@/lib/sync/use-marketing-events'
 import { KpiStrip, type KpiTileSpec } from '@/app/_shared/grid-lens'
 import { StatusChip } from '@/app/_shared/ads-ui'
 import { CampaignTrendChart, type TrendRow } from './CampaignTrendChart'
+import { CampaignBudgetPace } from './CampaignBudgetPace'
 
 interface TrendSummary { impressions: number; clicks: number; orders: number; spendCents: number; salesCents: number; acos: number | null; roas: number | null; ctr: number | null }
 import { getBackendUrl } from '@/lib/backend-url'
@@ -247,6 +248,7 @@ export function CampaignDetailCockpit({ campaign, history }: { campaign: Campaig
         </span>
       </div>
       <KpiStrip tiles={tiles} className="mb-4" />
+      <CampaignBudgetPace rows={trendRows} dailyBudget={campaign.dailyBudget} windowDays={windowDays} />
       <CampaignTrendChart rows={trendRows} windowDays={windowDays} onWindowChange={setWindowDays} loading={trendLoading} />
 
       <nav className="border-b border-slate-200 dark:border-slate-800 mb-3 flex gap-1">
