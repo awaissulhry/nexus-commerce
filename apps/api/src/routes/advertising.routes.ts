@@ -1180,9 +1180,14 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     if (!Array.isArray(b?.productIds) || b.productIds.length === 0) { reply.status(400); return { error: 'productIds[] required' } }
     const action = b.action
     if (!['pause', 'enable', 'budgetPct'].includes(String(action))) { reply.status(400); return { error: 'action must be pause|enable|budgetPct' } }
+    // Rows are PARENT products (PCF.1) but ads live on the VARIANTS — expand
+    // each selected parent to its children so bulk fans out to all variant
+    // campaigns. (Standalone/variant ids pass through unchanged.)
+    const childRows = await prisma.product.findMany({ where: { parentId: { in: b.productIds } }, select: { id: true } })
+    const allProductIds = [...new Set([...b.productIds, ...childRows.map((c) => c.id)])]
     // Resolve distinct campaigns advertising any of these products.
     const ads = await prisma.adProductAd.findMany({
-      where: { productId: { in: b.productIds } },
+      where: { productId: { in: allProductIds } },
       select: { adGroup: { select: { campaign: { select: { id: true, dailyBudget: true } } } } },
     })
     const campaigns = new Map<string, { id: string; dailyBudget: unknown }>()

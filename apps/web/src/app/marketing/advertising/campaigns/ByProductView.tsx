@@ -50,12 +50,13 @@ const num = (n: number | null | undefined) => (n == null ? '—' : new Intl.Numb
 const pct = (v: number | null | undefined) => (v == null ? '—' : `${v.toFixed(1)}%`)
 const tacosColor = (v: number | null | undefined) => (v == null ? '' : v <= 10 ? 'text-emerald-600 dark:text-emerald-400' : v <= 25 ? 'text-amber-600 dark:text-amber-400' : 'text-rose-600 dark:text-rose-400')
 
-// PC.7b — derived per-product recommendation (data-efficient, no extra call).
-function rowRec(row: { profitCents?: number; tacos?: number | null; revenueCents?: number; opportunity?: boolean }): { label: string; cls: string } | null {
+// PC.7b — derived per-product recommendation from the RELIABLE ACOS (PPD-based
+// TACOS/profit under-report, so we don't use them here).
+function rowRec(row: { acos?: number | null; adSalesCents?: number; adSpendCents?: number; opportunity?: boolean }): { label: string; cls: string } | null {
   if (row.opportunity) return { label: 'Launch ads', cls: 'bg-blue-100 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300' }
-  if ((row.profitCents ?? 0) < 0) return { label: 'Unprofitable', cls: 'bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300' }
-  if (row.tacos != null && row.tacos > 25) return { label: 'High TACOS', cls: 'bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300' }
-  if (row.tacos != null && row.tacos < 8 && (row.revenueCents ?? 0) > 0) return { label: 'Scale', cls: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300' }
+  if ((row.adSpendCents ?? 0) > 0 && (row.adSalesCents ?? 0) === 0) return { label: 'No ad sales', cls: 'bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300' }
+  if (row.acos != null && row.acos > 35) return { label: 'High ACOS', cls: 'bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300' }
+  if (row.acos != null && row.acos < 15 && (row.adSalesCents ?? 0) > 0) return { label: 'Scale', cls: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300' }
   return null
 }
 
