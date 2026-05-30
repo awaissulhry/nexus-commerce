@@ -195,7 +195,7 @@ model Product {
   // price + strategy + schedule. The repricing engine (W4.7+) reads
   // these to decide what price to push. Decisions are logged in
   // RepricingDecision rows for the audit trail.
-  repricingRules RepricingRule[]
+  repricingRules    RepricingRule[]
   // PH.1 — unified price-change timeline (one row per live price change).
   priceChangeEvents PriceChangeEvent[]
 
@@ -7721,6 +7721,15 @@ model Supplier {
   paymentTerms           String? // e.g. "Net 30" / "30gg DF"
   defaultCurrency        String?   @default("EUR")
   leadTimeDays           Int       @default(14)
+  // S2 — production + shipping time split (supplier-level defaults; per-
+  // product override lives on SupplierProduct). leadTimeDays stays as the
+  // legacy combined fallback so existing data is unchanged. Effective lead
+  // time = productionDays(qty) + shippingTimeDays when set, else leadTimeDays.
+  // productionTimeDays = flat days; productionUnitsPerDay = rate (production
+  // days = ceil(qty / rate)). Operator sets whichever fits; rate wins.
+  productionTimeDays     Int?
+  productionUnitsPerDay  Int?
+  shippingTimeDays       Int?
   // R.11 — observed lead-time variance, computed nightly by
   // lead-time-stats.job from PO createdAt → InboundShipment.arrivedAt.
   // Feeds the second term of the textbook safety-stock formula:
@@ -7757,7 +7766,7 @@ model Supplier {
   // container-fill suggestions.
   shippingProfile SupplierShippingProfile?
   contacts        SupplierContact[] // PD.2
-  comms           SupplierComm[]    // PD.3
+  comms           SupplierComm[] // PD.3
   followUps       SupplierFollowUp[] // PD.4
   devCandidates   DevelopmentProjectSupplier[] // PD.5
 
@@ -7797,16 +7806,21 @@ model SupplierShippingProfile {
 }
 
 model SupplierProduct {
-  id                   String  @id @default(cuid())
-  supplierId           String
-  productId            String
-  supplierSku          String?
-  costCents            Int? // cost per unit in supplier's default currency
-  currencyCode         String? @default("EUR")
-  moq                  Int     @default(1) // minimum order quantity
-  casePack             Int? // R.4 — units per carton (orders rounded up to multiples)
-  leadTimeDaysOverride Int?
-  isPrimary            Boolean @default(false)
+  id                            String  @id @default(cuid())
+  supplierId                    String
+  productId                     String
+  supplierSku                   String?
+  costCents                     Int? // cost per unit in supplier's default currency
+  currencyCode                  String? @default("EUR")
+  moq                           Int     @default(1) // minimum order quantity
+  casePack                      Int? // R.4 — units per carton (orders rounded up to multiples)
+  leadTimeDaysOverride          Int?
+  // S2 — per-product production + shipping time overrides (fall back to the
+  // Supplier-level defaults, then to leadTimeDaysOverride/leadTimeDays).
+  productionTimeDaysOverride    Int?
+  productionUnitsPerDayOverride Int?
+  shippingTimeDaysOverride      Int?
+  isPrimary                     Boolean @default(false)
 
   // PD.1 — factory-facing naming (per-supplier default). Factories often
   // can't read our master SKU/name (different language); these give the
@@ -9755,11 +9769,11 @@ model Review {
 
   // RX.2 — Response Desk triage workflow. triageStatus null is treated
   // as NEW by the app so existing rows need no backfill.
-  triageStatus     String? // NEW | IN_PROGRESS | RESPONDED | RESOLVED | IGNORED
-  assignee         String?
-  triageTags       String[]  @default([])
-  triageNote       String?
-  triageUpdatedAt  DateTime?
+  triageStatus    String? // NEW | IN_PROGRESS | RESPONDED | RESOLVED | IGNORED
+  assignee        String?
+  triageTags      String[]  @default([])
+  triageNote      String?
+  triageUpdatedAt DateTime?
 
   sentiment ReviewSentiment?
   responses ReviewResponse[]
@@ -12314,7 +12328,7 @@ model SupplierComm {
   id         String   @id @default(cuid())
   supplierId String
   contactId  String?
-  channel    String   // EMAIL | CALL | WHATSAPP | NOTE
+  channel    String // EMAIL | CALL | WHATSAPP | NOTE
   direction  String   @default("OUT") // OUT | IN
   subject    String?
   body       String
@@ -12367,8 +12381,8 @@ model DevelopmentProject {
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
-  candidates DevelopmentProjectSupplier[]
-  attachments DevelopmentAttachment[] // PD.7
+  candidates     DevelopmentProjectSupplier[]
+  attachments    DevelopmentAttachment[] // PD.7
   purchaseOrders PurchaseOrder[] // PD.8
   certifications DevelopmentCertification[] // PD.9
 
@@ -12381,7 +12395,7 @@ model DevelopmentProjectSupplier {
   projectId       String
   supplierId      String
   quotedCostCents Int?
-  sampleStatus    String?  // NONE|REQUESTED|RECEIVED|APPROVED|REJECTED
+  sampleStatus    String? // NONE|REQUESTED|RECEIVED|APPROVED|REJECTED
   isSelected      Boolean  @default(false)
   notes           String?
   createdAt       DateTime @default(now())
@@ -12418,7 +12432,7 @@ model DevelopmentAttachment {
 model DevelopmentCertification {
   id          String    @id @default(cuid())
   projectId   String
-  type        String    // CE | ECE_22_06 | EN_13594 | EN_1621 | GPSR | OTHER
+  type        String // CE | ECE_22_06 | EN_13594 | EN_1621 | GPSR | OTHER
   status      String    @default("PENDING") // PENDING | IN_PROGRESS | APPROVED | REJECTED
   required    Boolean   @default(true)
   certNumber  String?
