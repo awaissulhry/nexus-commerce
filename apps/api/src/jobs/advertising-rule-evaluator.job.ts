@@ -442,6 +442,13 @@ async function buildCampaignBudgetContexts(): Promise<CampaignBudgetContext[]> {
 
 export async function runAdvertisingRuleEvaluatorOnce(): Promise<TickSummary> {
   const startedAt = Date.now()
+  // AME.14 — global kill-switch. When set, NO advertising rule auto-applies
+  // (the ultimate safety; per-rule enabled/dryRun guardrails are the finer
+  // controls). Operable from Railway env or flipped via /autonomy/pause-all.
+  if (process.env.NEXUS_ADS_AUTOMATION_KILL === '1') {
+    logger.warn('[ads-rule-evaluator] global kill-switch active — skipping all rule evaluation')
+    return { fbaAgeContexts: 0, profitabilityContexts: 0, cacSpikeContexts: 0, underperformContexts: 0, campaignBudgetContexts: 0, totalEvaluations: 0, totalMatches: 0, durationMs: Date.now() - startedAt }
+  }
   const [fbaAge, profitability, cacSpike, underperform, campaignBudget] = await Promise.all([
     buildFbaAgeContexts(),
     buildProfitabilityContexts(),

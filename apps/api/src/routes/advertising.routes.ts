@@ -3300,6 +3300,40 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const { createProductAdLocal } = await import('../services/advertising/ads-create.service.js')
     try { return await createProductAdLocal(b as never) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
   })
+  // ── AME.14: autonomy & guardrails control center ────────────────────
+  // Single pane: global kill state, rule posture (enabled / dry-run / off),
+  // total daily-spend-cap exposure, recent auto-actions + rollback window.
+  // pause-all is the one-click UI kill (disables every advertising rule);
+  // resume re-enables the ids it returned. NEXUS_ADS_AUTOMATION_KILL is the
+  // hard env-level stop that even blocks the evaluator.
+  fastify.get('/advertising/autonomy/status', async (_request, reply) => {
+    const rules = await prisma.automationRule.findMany({ where: { domain: 'advertising' }, select: { id: true, name: true, enabled: true, dryRun: true, trigger: true, maxDailyAdSpendCentsEur: true } })
+    const enabled = rules.filter((r) => r.enabled)
+    const live = enabled.filter((r) => !r.dryRun)
+    const dailyCapExposureCents = enabled.reduce((s, r) => s + (r.maxDailyAdSpendCentsEur ?? 0), 0)
+    const recent = await prisma.automationRuleExecution.findMany({ orderBy: { startedAt: 'desc' }, take: 20, select: { id: true, ruleId: true, status: true, startedAt: true, errorMessage: true } }).catch(() => [])
+    const now = Date.now()
+    reply.header('Cache-Control', 'private, max-age=15')
+    return {
+      killSwitch: process.env.NEXUS_ADS_AUTOMATION_KILL === '1',
+      rules: { total: rules.length, enabled: enabled.length, live: live.length, dryRun: enabled.length - live.length, disabled: rules.length - enabled.length },
+      dailyCapExposureCents,
+      recentExecutions: recent.map((e) => ({ ...e, rollbackAvailable: now - new Date(e.startedAt).getTime() < 24 * 3600 * 1000 })),
+    }
+  })
+  fastify.post('/advertising/autonomy/pause-all', async (_request) => {
+    const enabled = await prisma.automationRule.findMany({ where: { domain: 'advertising', enabled: true }, select: { id: true } })
+    const ids = enabled.map((r) => r.id)
+    if (ids.length) await prisma.automationRule.updateMany({ where: { id: { in: ids } }, data: { enabled: false } })
+    return { ok: true, pausedRuleIds: ids }
+  })
+  fastify.post('/advertising/autonomy/resume', async (request, reply) => {
+    const b = (request.body ?? {}) as { ruleIds?: string[] }
+    if (!Array.isArray(b.ruleIds) || b.ruleIds.length === 0) { reply.status(400); return { error: 'ruleIds[] required' } }
+    await prisma.automationRule.updateMany({ where: { id: { in: b.ruleIds }, domain: 'advertising' }, data: { enabled: true } })
+    return { ok: true, resumed: b.ruleIds.length }
+  })
+
   // ── AX2.1: Product / ASIN / category / auto targeting ───────────────
   fastify.post('/advertising/targets/create', async (request, reply) => {
     const b = request.body as Record<string, unknown>
