@@ -88,7 +88,10 @@ export default function SuppliersClient() {
   }
 
   return (
-    <div className="grid grid-cols-1 gap-3 lg:grid-cols-[280px_1fr]">
+    <div className="space-y-3">
+      {/* PD.4 — follow-ups due across all suppliers */}
+      <FollowUpsDueBanner onPick={setSelectedId} />
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-[280px_1fr]">
       {/* Supplier list */}
       <div className="rounded-lg border border-slate-700 bg-slate-900/40">
         <div className="flex items-center gap-2 border-b border-slate-700 p-2">
@@ -153,6 +156,38 @@ export default function SuppliersClient() {
             {error ?? 'Select a supplier to manage its product costs and lead times.'}
           </div>
         )}
+      </div>
+      </div>
+    </div>
+  )
+}
+
+// PD.4 — global "follow-ups due" banner across all suppliers.
+function FollowUpsDueBanner({ onPick }: { onPick: (id: string) => void }) {
+  const [items, setItems] = useState<Array<{ id: string; title: string; dueDate: string; supplier: { id: string; name: string } }>>([])
+  useEffect(() => {
+    void (async () => {
+      const res = await fetch(`${API}/api/fulfillment/suppliers/followups/due?withinDays=7`, { cache: 'no-store' })
+      if (res.ok) setItems((await res.json()).items ?? [])
+    })()
+  }, [])
+  if (items.length === 0) return null
+  const today = new Date(); today.setHours(0, 0, 0, 0)
+  const overdue = items.filter((f) => new Date(f.dueDate) < today).length
+  return (
+    <div className="rounded-lg border border-amber-800/60 bg-amber-950/20 p-2">
+      <div className="mb-1 text-[11px] font-semibold text-amber-300">
+        {items.length} follow-up{items.length === 1 ? '' : 's'} due{overdue > 0 ? ` · ${overdue} overdue` : ''}
+      </div>
+      <div className="flex flex-wrap gap-1.5">
+        {items.slice(0, 12).map((f) => {
+          const od = new Date(f.dueDate) < today
+          return (
+            <button key={f.id} onClick={() => onPick(f.supplier.id)} className={`rounded border px-1.5 py-0.5 text-[11px] ${od ? 'border-rose-800 bg-rose-950/30 text-rose-300' : 'border-slate-700 bg-slate-900 text-slate-300'} hover:bg-slate-800`}>
+              <span className="font-medium">{f.supplier.name}</span> · {f.title} · {new Date(f.dueDate).toLocaleDateString()}
+            </button>
+          )
+        })}
       </div>
     </div>
   )
@@ -463,10 +498,62 @@ function SupplierDetailPanel({ supplierId }: { supplierId: string }) {
               <ContactRow contact={null} onSave={saveContact} />
             </div>
           </div>
+          {/* PD.4 — follow-ups / reminders */}
+          <SupplierFollowUpsSection supplierId={supplierId} />
           {/* PD.3 — comms log + compose-and-send */}
           <SupplierCommsSection supplierId={supplierId} contacts={data.contacts} />
         </div>
       )}
+    </div>
+  )
+}
+
+// PD.4 — per-supplier follow-ups / reminders.
+type FollowUp = { id: string; title: string; nextAction: string | null; dueDate: string; status: string; completedAt: string | null }
+
+function SupplierFollowUpsSection({ supplierId }: { supplierId: string }) {
+  const [items, setItems] = useState<FollowUp[]>([])
+  const [title, setTitle] = useState('')
+  const [nextAction, setNextAction] = useState('')
+  const [due, setDue] = useState('')
+  const load = useCallback(async () => {
+    const res = await fetch(`${API}/api/fulfillment/suppliers/${supplierId}/followups`, { cache: 'no-store' })
+    if (res.ok) setItems((await res.json()).items ?? [])
+  }, [supplierId])
+  useEffect(() => { void load() }, [load])
+  const add = async () => {
+    if (!title.trim() || !due) return
+    const res = await fetch(`${API}/api/fulfillment/suppliers/${supplierId}/followups`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: title.trim(), nextAction: nextAction.trim() || undefined, dueDate: due }) })
+    if (res.ok) { setTitle(''); setNextAction(''); setDue(''); void load() }
+  }
+  const patch = async (id: string, b: Record<string, unknown>) => { await fetch(`${API}/api/fulfillment/suppliers/${supplierId}/followups/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(b) }); void load() }
+  const del = async (id: string) => { await fetch(`${API}/api/fulfillment/suppliers/${supplierId}/followups/${id}`, { method: 'DELETE' }); void load() }
+  const today = new Date(); today.setHours(0, 0, 0, 0)
+  return (
+    <div>
+      <div className="mb-1 text-[10px] uppercase tracking-wide text-slate-500">Follow-ups</div>
+      <div className="space-y-1">
+        {items.map((f) => {
+          const overdue = f.status === 'OPEN' && new Date(f.dueDate) < today
+          return (
+            <div key={f.id} className={`flex items-center gap-2 rounded border px-2 py-1 text-[11px] ${f.status === 'DONE' ? 'border-slate-800 opacity-50' : overdue ? 'border-rose-800 bg-rose-950/20' : 'border-slate-800'}`}>
+              <input type="checkbox" checked={f.status === 'DONE'} onChange={() => patch(f.id, { status: f.status === 'DONE' ? 'OPEN' : 'DONE' })} />
+              <div className="min-w-0 flex-1">
+                <div className={`truncate ${f.status === 'DONE' ? 'text-slate-500 line-through' : 'text-slate-200'}`}>{f.title}</div>
+                {f.nextAction && <div className="truncate text-slate-500">{f.nextAction}</div>}
+              </div>
+              <span className={overdue ? 'text-rose-400' : 'text-slate-500'}>{new Date(f.dueDate).toLocaleDateString()}</span>
+              <button onClick={() => del(f.id)} className="text-slate-600 hover:text-rose-400">✕</button>
+            </div>
+          )
+        })}
+        <div className="flex flex-wrap items-center gap-1.5">
+          <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Follow-up (e.g. chase sample)" className="w-44 rounded border border-slate-700 bg-slate-950 px-1.5 py-0.5 text-xs text-slate-100 focus:outline-none" />
+          <input value={nextAction} onChange={(e) => setNextAction(e.target.value)} placeholder="Next action" className="w-32 rounded border border-slate-700 bg-slate-950 px-1.5 py-0.5 text-xs text-slate-100 focus:outline-none" />
+          <input type="date" value={due} onChange={(e) => setDue(e.target.value)} className="rounded border border-slate-700 bg-slate-950 px-1.5 py-0.5 text-xs text-slate-100 focus:outline-none" />
+          <button onClick={add} disabled={!title.trim() || !due} className="rounded border border-emerald-700 bg-emerald-900/40 px-2 py-0.5 text-xs text-emerald-300 hover:bg-emerald-900/60 disabled:opacity-50">Add</button>
+        </div>
+      </div>
     </div>
   )
 }
