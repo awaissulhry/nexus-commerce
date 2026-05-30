@@ -2558,53 +2558,6 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
-  // AF.1 — dump raw v1 'targets' export rows to see how Amazon represents
-  // negative keywords (the negative flag / matchType). Finds the latest
-  // COMPLETED targets export job, re-downloads it, returns counts + samples.
-  // Read-only diagnostic.
-  fastify.get('/advertising/debug/v1-target-sample', async (request, reply) => {
-    const q = request.query as { match?: string; limit?: string }
-    const job = await prisma.amazonAdsExportJob.findFirst({
-      where: { resource: 'targets', status: 'COMPLETED', url: { not: null } },
-      orderBy: { updatedAt: 'desc' },
-      select: { id: true, url: true, updatedAt: true },
-    })
-    if (!job?.url) { reply.status(404); return { error: 'no completed targets export job' } }
-    let records: Array<Record<string, unknown>> = []
-    try {
-      const res = await fetch(job.url)
-      if (!res.ok) { reply.status(502); return { error: `download_${res.status} (presigned url likely expired — re-run a targets export)`, jobId: job.id } }
-      const buf = Buffer.from(await res.arrayBuffer())
-      const isGzip = buf.length >= 2 && buf[0] === 0x1f && buf[1] === 0x8b
-      const { gunzipSync } = await import('node:zlib')
-      const text = (isGzip ? gunzipSync(buf) : buf).toString('utf-8')
-      const parsed = JSON.parse(text)
-      records = Array.isArray(parsed) ? parsed : []
-    } catch (e) { reply.status(500); return { error: (e as Error).message, jobId: job.id } }
-    const negCount = records.filter((r) => (r as { negative?: unknown }).negative === true).length
-    const matchTypes: Record<string, number> = {}
-    for (const r of records) { const mt = String((r as { targetDetails?: { matchType?: string } }).targetDetails?.matchType ?? '∅'); matchTypes[mt] = (matchTypes[mt] ?? 0) + 1 }
-    const matchStr = (q.match || '').toLowerCase()
-    const sample = (matchStr ? records.filter((r) => JSON.stringify(r).toLowerCase().includes(matchStr)) : records).slice(0, Number(q.limit) || 6)
-    return { jobId: job.id, jobUpdatedAt: job.updatedAt, totalRows: records.length, negativeTrueRows: negCount, topLevelKeys: records[0] ? Object.keys(records[0]) : [], matchTypeHistogram: matchTypes, sample }
-  })
-
-  // AF.1c — inspect duplicate ad groups (same externalAdGroupId across campaign
-  // rows, from the A1PA…/DE marketplace mismatch) splitting targets.
-  fastify.get('/advertising/debug/adgroup-dupes', async (request) => {
-    const q = request.query as { ext?: string }
-    if (!q.ext) return { error: 'ext (externalAdGroupId) required' }
-    const ags = await prisma.adGroup.findMany({
-      where: { externalAdGroupId: q.ext },
-      select: { id: true, campaignId: true, campaign: { select: { name: true, marketplace: true, externalCampaignId: true } }, targets: { select: { isNegative: true } } },
-    })
-    return {
-      externalAdGroupId: q.ext,
-      count: ags.length,
-      adGroups: ags.map((g) => ({ localId: g.id, campaignId: g.campaignId, campaignName: g.campaign?.name, marketplace: g.campaign?.marketplace, externalCampaignId: g.campaign?.externalCampaignId, positives: g.targets.filter((t) => !t.isNegative).length, negatives: g.targets.filter((t) => t.isNegative).length })),
-    }
-  })
-
   // AF.1/AF.3 — DB-only target breakdown (instant, no export download). Tells
   // us account-wide + per-campaign how many positive vs negative keyword/product
   // targets exist, so we can see if positives are systematically missing.
@@ -2630,25 +2583,6 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       campaignsWithNegativesButNoPositives: campaignsNegOnly,
       byTypeAndNegative: byType.map((b) => ({ expressionType: b.expressionType, isNegative: b.isNegative, count: b._count._all })),
     }
-  })
-
-  // AF.1 — reset rowsIngested on data-rich completed targets jobs so they
-  // re-ingest (with full instrumentation) on the next ingest pass.
-  fastify.post('/advertising/debug/reset-targets-ingested', async () => {
-    const r = await prisma.amazonAdsExportJob.updateMany({
-      where: { resource: 'targets', status: 'COMPLETED', fileSize: { gte: 100 } },
-      data: { rowsIngested: 0, url: null, urlExpiresAt: null },
-    })
-    return { reset: r.count }
-  })
-
-  // AF.1 — dump AdTarget DB indexes (the unique constraint that's dropping
-  // positive keywords on createMany may be db-push'd, not in schema/migrations).
-  fastify.get('/advertising/debug/adtarget-indexes', async () => {
-    const idx = await prisma.$queryRawUnsafe<Array<{ indexname: string; indexdef: string }>>(
-      `SELECT indexname::text AS indexname, indexdef::text AS indexdef FROM pg_indexes WHERE tablename = 'AdTarget'`,
-    ).catch((e) => [{ indexname: 'error', indexdef: String(e).slice(0, 200) }])
-    return { indexes: idx }
   })
 
   // AF.1d — de-duplicate campaigns split across marketplace representations
