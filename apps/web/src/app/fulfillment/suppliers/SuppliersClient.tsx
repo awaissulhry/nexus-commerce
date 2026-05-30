@@ -269,6 +269,9 @@ function SupplierCatalog({
         </button>
       </div>
 
+      {/* PD.2 — supplier details + contacts */}
+      <SupplierDetailPanel supplierId={supplier.id} />
+
       {/* Add row */}
       <div className="flex flex-wrap items-end gap-2 border-b border-slate-800 bg-slate-900/60 p-3">
         <div>
@@ -355,6 +358,146 @@ function SupplierCatalog({
             onChanged()
           }}
         />
+      )}
+    </div>
+  )
+}
+
+// PD.2 — supplier details (editable) + contact persons.
+type SupplierContact = {
+  id: string
+  name: string
+  role: string | null
+  email: string | null
+  phone: string | null
+  whatsapp: string | null
+  wechat: string | null
+  isPrimary: boolean
+  notes: string | null
+}
+type SupplierFull = {
+  id: string
+  name: string
+  email: string | null
+  phone: string | null
+  taxId: string | null
+  paymentTerms: string | null
+  addressLine1: string | null
+  city: string | null
+  postalCode: string | null
+  country: string | null
+  leadTimeDays: number
+  notes: string | null
+  contacts: SupplierContact[]
+}
+
+const SUPPLIER_FIELDS: Array<{ key: keyof SupplierFull; label: string }> = [
+  { key: 'email', label: 'Email' },
+  { key: 'phone', label: 'Phone' },
+  { key: 'taxId', label: 'VAT / Tax ID' },
+  { key: 'paymentTerms', label: 'Payment terms' },
+  { key: 'addressLine1', label: 'Address' },
+  { key: 'city', label: 'City' },
+  { key: 'postalCode', label: 'Postal code' },
+  { key: 'country', label: 'Country' },
+]
+
+function SupplierDetailPanel({ supplierId }: { supplierId: string }) {
+  const [open, setOpen] = useState(false)
+  const [data, setData] = useState<SupplierFull | null>(null)
+  const load = useCallback(async () => {
+    const res = await fetch(`${API}/api/fulfillment/suppliers/${supplierId}`, { cache: 'no-store' })
+    if (res.ok) setData(await res.json())
+  }, [supplierId])
+  useEffect(() => { setData(null) }, [supplierId])
+  useEffect(() => { if (open && !data) void load() }, [open, data, load])
+
+  const patchSupplier = async (patch: Record<string, unknown>) => {
+    await fetch(`${API}/api/fulfillment/suppliers/${supplierId}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch),
+    })
+    void load()
+  }
+  const saveContact = async (c: Partial<SupplierContact> & { id?: string }) => {
+    const url = c.id
+      ? `${API}/api/fulfillment/suppliers/${supplierId}/contacts/${c.id}`
+      : `${API}/api/fulfillment/suppliers/${supplierId}/contacts`
+    const res = await fetch(url, { method: c.id ? 'PATCH' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(c) })
+    if (res.ok) void load()
+    return res.ok
+  }
+  const deleteContact = async (id: string) => {
+    if (!window.confirm('Delete this contact?')) return
+    await fetch(`${API}/api/fulfillment/suppliers/${supplierId}/contacts/${id}`, { method: 'DELETE' })
+    void load()
+  }
+
+  return (
+    <div className="border-b border-slate-800">
+      <button onClick={() => setOpen((o) => !o)} className="flex w-full items-center gap-2 px-3 py-1.5 text-[11px] font-medium text-slate-300 hover:bg-slate-800/50">
+        <span>{open ? '▾' : '▸'}</span> Details &amp; contacts{data ? ` (${data.contacts.length})` : ''}
+      </button>
+      {open && data && (
+        <div className="space-y-3 bg-slate-900/40 p-3">
+          <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 sm:grid-cols-4">
+            {SUPPLIER_FIELDS.map(({ key, label }) => (
+              <label key={String(key)} className="block">
+                <span className="text-[10px] uppercase tracking-wide text-slate-500">{label}</span>
+                <input
+                  defaultValue={(data[key] as string | null) ?? ''}
+                  onBlur={(e) => {
+                    const v = e.target.value.trim()
+                    if (v !== (((data[key] as string | null) ?? ''))) void patchSupplier({ [key]: v })
+                  }}
+                  className="mt-0.5 w-full rounded border border-slate-700 bg-slate-950 px-1.5 py-1 text-xs text-slate-100 focus:border-slate-500 focus:outline-none"
+                />
+              </label>
+            ))}
+          </div>
+          <div>
+            <div className="mb-1 text-[10px] uppercase tracking-wide text-slate-500">Contact persons</div>
+            <div className="space-y-1">
+              {data.contacts.map((c) => (
+                <ContactRow key={c.id} contact={c} onSave={saveContact} onDelete={() => deleteContact(c.id)} />
+              ))}
+              <ContactRow contact={null} onSave={saveContact} />
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function ContactRow({
+  contact, onSave, onDelete,
+}: {
+  contact: SupplierContact | null
+  onSave: (c: Partial<SupplierContact> & { id?: string }) => Promise<boolean>
+  onDelete?: () => void
+}) {
+  const [name, setName] = useState(contact?.name ?? '')
+  const [role, setRole] = useState(contact?.role ?? '')
+  const [email, setEmail] = useState(contact?.email ?? '')
+  const [phone, setPhone] = useState(contact?.phone ?? '')
+  const [whatsapp, setWhatsapp] = useState(contact?.whatsapp ?? '')
+  const isNew = !contact
+  const submit = async () => {
+    if (!name.trim()) return
+    const ok = await onSave({ id: contact?.id, name: name.trim(), role: role.trim() || null, email: email.trim() || null, phone: phone.trim() || null, whatsapp: whatsapp.trim() || null })
+    if (ok && isNew) { setName(''); setRole(''); setEmail(''); setPhone(''); setWhatsapp('') }
+  }
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      <input value={name} onChange={(e) => setName(e.target.value)} onBlur={isNew ? undefined : submit} placeholder="Name" className="w-28 rounded border border-slate-700 bg-slate-950 px-1.5 py-0.5 text-xs text-slate-100 focus:outline-none" />
+      <input value={role} onChange={(e) => setRole(e.target.value)} onBlur={isNew ? undefined : submit} placeholder="Role" className="w-20 rounded border border-slate-700 bg-slate-950 px-1.5 py-0.5 text-xs text-slate-100 focus:outline-none" />
+      <input value={email} onChange={(e) => setEmail(e.target.value)} onBlur={isNew ? undefined : submit} placeholder="Email" className="w-40 rounded border border-slate-700 bg-slate-950 px-1.5 py-0.5 text-xs text-slate-100 focus:outline-none" />
+      <input value={phone} onChange={(e) => setPhone(e.target.value)} onBlur={isNew ? undefined : submit} placeholder="Phone" className="w-28 rounded border border-slate-700 bg-slate-950 px-1.5 py-0.5 text-xs text-slate-100 focus:outline-none" />
+      <input value={whatsapp} onChange={(e) => setWhatsapp(e.target.value)} onBlur={isNew ? undefined : submit} placeholder="WhatsApp/WeChat" className="w-32 rounded border border-slate-700 bg-slate-950 px-1.5 py-0.5 text-xs text-slate-100 focus:outline-none" />
+      {isNew ? (
+        <button onClick={submit} className="rounded border border-emerald-700 bg-emerald-900/40 px-2 py-0.5 text-xs text-emerald-300 hover:bg-emerald-900/60">Add</button>
+      ) : (
+        <button onClick={onDelete} className="rounded px-1.5 py-0.5 text-xs text-rose-400 hover:bg-rose-900/30">✕</button>
       )}
     </div>
   )
