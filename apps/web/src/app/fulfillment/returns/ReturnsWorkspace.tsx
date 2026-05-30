@@ -1101,7 +1101,15 @@ function ReturnDrawer({ id, onClose, onChanged }: { id: string; onClose: () => v
                     overdue. Fetched from /returns/:id/policy on
                     drawer load. */}
                 <RefundDeadlineBadge deadline={deadline} status={ret.status} refundStatus={ret.refundStatus} />
+                {ret.returnType && ret.returnType !== 'STANDARD' && (
+                  <span className="inline-block text-xs font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded bg-violet-50 dark:bg-violet-950/40 text-violet-700 dark:text-violet-300 border-violet-200 dark:border-violet-900">{ret.returnType}</span>
+                )}
               </div>
+
+              {/* RX.6b — warranty/defect claim track (diagnosis → routing). */}
+              {!ret.isFbaReturn && (ret.returnType === 'WARRANTY' || ret.returnType === 'DEFECT') && (
+                <WarrantyTrack ret={ret} onUpdated={async () => { await fetchOne(); onChanged() }} />
+              )}
 
               {/* R2.1 — RMA barcode for warehouse identification */}
               {ret.rmaNumber && (
@@ -1362,6 +1370,7 @@ function CreateReturnModal({
   const [orderId, setOrderId] = useState(initialOrderId ?? '')
   const [channel, setChannel] = useState('AMAZON')
   const [reason, setReason] = useState('')
+  const [returnType, setReturnType] = useState('STANDARD') // RX.6b
   const [items, setItems] = useState<Array<{ sku: string; quantity: number }>>([{ sku: '', quantity: 1 }])
   const [busy, setBusy] = useState(false)
   const [orderLoading, setOrderLoading] = useState(false)
@@ -1404,7 +1413,7 @@ function CreateReturnModal({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          orderId: orderId || null, channel, reason,
+          orderId: orderId || null, channel, reason, returnType,
           items: items.filter((i) => i.sku.trim()),
         }),
       })
@@ -1449,6 +1458,21 @@ function CreateReturnModal({
           <div>
             <div className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1">Reason</div>
             <input type="text" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. Wrong size, defective, …" className="h-8 w-full px-2 text-md border border-slate-200 dark:border-slate-700 rounded" />
+          </div>
+          {/* RX.6b — return type. WARRANTY/DEFECT open a diagnosis track. */}
+          <div>
+            <div className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1">Type</div>
+            <div className="inline-flex rounded-md border border-slate-200 dark:border-slate-700 overflow-hidden">
+              {(['STANDARD', 'WARRANTY', 'DEFECT'] as const).map((t) => (
+                <button
+                  key={t}
+                  onClick={() => setReturnType(t)}
+                  className={`h-8 px-3 text-sm ${returnType === t ? 'bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900' : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
+                >
+                  {t.charAt(0) + t.slice(1).toLowerCase()}
+                </button>
+              ))}
+            </div>
           </div>
           <div>
             <div className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1">Items</div>
@@ -2154,6 +2178,86 @@ function RefundRetryBanner({
           Auto-retry runs hourly via cron (when enabled)
         </span>
       </div>
+    </div>
+  )
+}
+
+// RX.6b — warranty / defect claim track. Renders for WARRANTY/DEFECT
+// returns: a diagnosis status + repair/replace/refund/reject routing +
+// manufacturer claim ref. Recording REFUND here does NOT move money —
+// the operator still issues the refund via the normal composer.
+const WARRANTY_RESOLUTIONS = ['REPAIR', 'REPLACE', 'REFUND', 'REJECTED'] as const
+
+function WarrantyTrack({ ret, onUpdated }: { ret: ReturnRow; onUpdated: () => void }) {
+  const { toast } = useToast()
+  const [busy, setBusy] = useState<string | null>(null)
+  const [mfrRef, setMfrRef] = useState(ret.manufacturerRef ?? '')
+
+  const patch = async (body: Record<string, unknown>, key: string) => {
+    setBusy(key)
+    try {
+      const res = await fetch(`${getBackendUrl()}/api/fulfillment/returns/${ret.id}/warranty`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      if (!res.ok) { const d = await res.json().catch(() => ({})); toast.error(d.error ?? 'Update failed'); return }
+      toast.success('Warranty updated')
+      onUpdated()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Update failed')
+    } finally { setBusy(null) }
+  }
+
+  return (
+    <div className="rounded-lg border border-violet-200 dark:border-violet-900 bg-violet-50/40 dark:bg-violet-950/20 p-3 space-y-2.5">
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-semibold uppercase tracking-wider text-violet-700 dark:text-violet-300 inline-flex items-center gap-1.5">
+          <Activity size={12} /> {ret.returnType === 'DEFECT' ? 'Defect' : 'Warranty'} claim
+        </span>
+        {ret.warrantyStatus && <Badge variant="info" size="sm">{ret.warrantyStatus.replace(/_/g, ' ')}</Badge>}
+      </div>
+
+      <div>
+        <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">Resolution</div>
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {WARRANTY_RESOLUTIONS.map((r) => (
+            <button
+              key={r}
+              onClick={() => patch({ warrantyResolution: r, warrantyStatus: r === 'REJECTED' ? 'REJECTED' : r }, r)}
+              disabled={!!busy}
+              className={`h-7 px-2.5 text-xs border rounded disabled:opacity-50 ${ret.warrantyResolution === r ? 'bg-violet-600 text-white border-violet-600' : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-violet-50 dark:hover:bg-violet-950/40'}`}
+            >
+              {busy === r ? '…' : r === 'REJECTED' ? 'Reject' : r.charAt(0) + r.slice(1).toLowerCase()}
+            </button>
+          ))}
+        </div>
+        {ret.warrantyResolution === 'REFUND' && (
+          <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">Issue the refund below as usual — recording it here doesn't move money.</p>
+        )}
+      </div>
+
+      <div className="flex items-end gap-2">
+        <label className="flex-1">
+          <span className="text-xs text-slate-500 dark:text-slate-400">Manufacturer ref</span>
+          <input
+            value={mfrRef}
+            onChange={(e) => setMfrRef(e.target.value)}
+            placeholder="claim #"
+            className="mt-0.5 w-full h-7 px-2 text-sm border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900"
+          />
+        </label>
+        <button
+          onClick={() => patch({ manufacturerRef: mfrRef.trim() || null }, 'mfr')}
+          disabled={busy === 'mfr'}
+          className="h-7 px-2.5 text-xs border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50"
+        >
+          {busy === 'mfr' ? '…' : 'Save'}
+        </button>
+      </div>
+      {ret.defectReportedAt && (
+        <div className="text-xs text-slate-400">Reported {new Date(ret.defectReportedAt).toLocaleDateString()}</div>
+      )}
     </div>
   )
 }

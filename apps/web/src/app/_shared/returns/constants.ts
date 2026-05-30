@@ -47,6 +47,7 @@ export const ACTION_LABEL: Record<string, { label: string; tone: 'info' | 'succe
   'upload-item-photo':     { label: 'Photo uploaded',           tone: 'info' },
   'remove-item-photo':     { label: 'Photo removed',            tone: 'warning' },
   'auto-approve':          { label: 'Auto-approved',            tone: 'info' },
+  'warranty-update':       { label: 'Warranty updated',         tone: 'info' },
   'bulk-approve':          { label: 'Approved (bulk)',          tone: 'info' },
   'bulk-deny':             { label: 'Denied (bulk)',            tone: 'danger' },
   'bulk-receive':          { label: 'Marked received (bulk)',   tone: 'info' },

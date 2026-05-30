@@ -80,6 +80,12 @@ export type ReturnRow = {
   refundStatus: string
   refundCents: number | null
   isFbaReturn: boolean
+  // RX.6b — warranty / defect / recall track.
+  returnType?: string // STANDARD | WARRANTY | DEFECT
+  warrantyStatus?: string | null
+  warrantyResolution?: string | null
+  defectReportedAt?: string | null
+  manufacturerRef?: string | null
   receivedAt: string | null
   inspectedAt: string | null
   refundedAt: string | null
@@ -103,6 +109,7 @@ export type ReturnRow = {
     inspectionChecklist: ItemChecklist | null
     disposition: string | null
     scrapReason: string | null
+    lotId?: string | null
   }>
   // R2.1 — drawer-only fields. Populated by GET /returns/:id when
   // the route includes the order relation; absent on the list response.
