@@ -12,12 +12,12 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { VirtualizedGrid, KpiStrip, Thumbnail, type GridLensColumn, type GridLensRow, type KpiTileSpec } from '@/app/_shared/grid-lens'
+import { VirtualizedGrid, KpiStrip, Thumbnail, PreferencesModal, DensityToggle, type GridLensColumn, type GridLensRow, type KpiTileSpec, type PreferencesValue } from '@/app/_shared/grid-lens'
 import { type Density, DENSITY_CELL_CLASS } from '@/lib/products/theme'
 import { StatusChip } from '@/app/_shared/ads-ui'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useMarketingEvents } from '@/lib/sync/use-marketing-events'
-import { Megaphone, ShoppingCart, Coins, Package } from 'lucide-react'
+import { Megaphone, ShoppingCart, Coins, Package, Search, SlidersHorizontal } from 'lucide-react'
 
 interface Row extends GridLensRow {
   name: string
@@ -48,7 +48,7 @@ const tacosColor = (v: number | null | undefined) => (v == null ? '' : v <= 10 ?
 
 const DATE_PRESETS = [{ label: '7d', days: 7 }, { label: '14d', days: 14 }, { label: '30d', days: 30 }, { label: '60d', days: 60 }, { label: '90d', days: 90 }]
 
-const COLUMNS: GridLensColumn[] = [
+const ALL_COLUMNS: GridLensColumn[] = [
   { key: 'product', label: 'Product', width: 320, locked: true },
   { key: 'campaigns', label: 'Campaigns', width: 96 },
   { key: 'markets', label: 'Markets', width: 84 },
@@ -57,8 +57,12 @@ const COLUMNS: GridLensColumn[] = [
   { key: 'tacos', label: 'TACOS', width: 90 },
   { key: 'profit', label: 'True profit', width: 120 },
   { key: 'margin', label: 'Margin', width: 90 },
+  { key: 'units', label: 'Units', width: 80 },
 ]
+const DEFAULT_VISIBLE = ALL_COLUMNS.map((c) => c.key)
+const PREFS_KEY = 'ax.byproduct.prefs.v1'
 const SORT_KEYS: Record<string, string> = { adspend: 'spend', revenue: 'revenue', tacos: 'tacos', profit: 'profit', margin: 'margin', campaigns: 'campaigns' }
+const CHANNELS = [{ key: 'AMAZON', label: 'Amazon', enabled: true }, { key: 'EBAY', label: 'eBay', enabled: false }, { key: 'SHOPIFY', label: 'Shopify', enabled: false }]
 
 export function ByProductView() {
   const [rows, setRows] = useState<Row[]>([])
@@ -68,7 +72,16 @@ export function ByProductView() {
   const [liveTs, setLiveTs] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
   const [windowDays, setWindowDays] = useState(30)
-  const [density] = useState<Density>('comfortable')
+  const [density, setDensity] = useState<Density>('comfortable')
+  const [search, setSearch] = useState('')
+  const [marketplace, setMarketplace] = useState('')
+  const [marketplaces, setMarketplaces] = useState<string[]>([])
+  const [prefsOpen, setPrefsOpen] = useState(false)
+  const [prefs, setPrefs] = useState<PreferencesValue>(() => {
+    try { const s = localStorage.getItem(PREFS_KEY); if (s) return JSON.parse(s) } catch { /* default */ }
+    return { pageSize: 100, visibleColumns: DEFAULT_VISIBLE.slice(), stickyFirstColumn: true, stickyLastColumn: false, sortBy: 'spend', sortDir: 'desc' }
+  })
+  useEffect(() => { try { localStorage.setItem(PREFS_KEY, JSON.stringify(prefs)) } catch { /* ignore */ } }, [prefs])
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [sortBy, setSortBy] = useState('adspend')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
@@ -80,14 +93,18 @@ export function ByProductView() {
     setLoading(true)
     try {
       const sortParam = SORT_KEYS[sortBy] ?? 'spend'
-      const r = await fetch(`${getBackendUrl()}/api/advertising/by-product?windowDays=${windowDays}&sort=${sortParam}&dir=${sortDir}&limit=500&compare=true`, { cache: 'no-store' }).then((x) => x.json()).catch(() => ({ rows: [] }))
+      const qs = new URLSearchParams({ windowDays: String(windowDays), sort: sortParam, dir: sortDir, limit: '500', compare: 'true' })
+      if (search.trim()) qs.set('search', search.trim())
+      if (marketplace) qs.set('marketplace', marketplace)
+      const r = await fetch(`${getBackendUrl()}/api/advertising/by-product?${qs}`, { cache: 'no-store' }).then((x) => x.json()).catch(() => ({ rows: [] }))
       setRows((r.rows ?? []) as Row[])
       setTotals(r.totals ?? { adSpendCents: 0, revenueCents: 0, profitCents: 0, products: 0 })
       setPrevTotals(r.previousTotals ?? null)
       setUnattributed(r.unattributedSpendCents ?? 0)
+      if (Array.isArray(r.marketplaces)) setMarketplaces(r.marketplaces)
     } finally { setLoading(false) }
-  }, [windowDays, sortBy, sortDir])
-  useEffect(() => { void load() }, [load])
+  }, [windowDays, sortBy, sortDir, search, marketplace])
+  useEffect(() => { const t = setTimeout(() => void load(), search ? 300 : 0); return () => clearTimeout(t) }, [load, search])
 
   // PC.5 — live refresh on marketing events.
   useMarketingEvents(useCallback(() => { void load(); setLiveTs(Date.now()); setTimeout(() => setLiveTs(null), 4000) }, [load]))
@@ -172,9 +189,18 @@ export function ByProductView() {
       case 'tacos': return <span className={`tabular-nums font-medium ${tacosColor(row.tacos)}`}>{pct(row.tacos)}</span>
       case 'profit': return <span className={`tabular-nums ${(row.profitCents ?? 0) >= 0 ? '' : 'text-rose-600'}`}>{eur(row.profitCents)}</span>
       case 'margin': return <span className="tabular-nums">{pct(row.marginPct)}</span>
+      case 'units': return <span className="tabular-nums">{num(row.units)}</span>
       default: return null
     }
   }, [])
+
+  // Derive visible columns from prefs (locked 'product' always first).
+  const visible = useMemo(() => {
+    const byKey = new Map(ALL_COLUMNS.map((c) => [c.key, c]))
+    const ordered = prefs.visibleColumns.map((k) => byKey.get(k)).filter(Boolean) as GridLensColumn[]
+    if (!ordered.some((c) => c.key === 'product')) ordered.unshift(byKey.get('product')!)
+    return ordered
+  }, [prefs.visibleColumns])
 
   const cellPad = DENSITY_CELL_CLASS[density] ?? DENSITY_CELL_CLASS.comfortable
   const emptySet = useMemo(() => new Set<string>(), [])
@@ -194,6 +220,38 @@ export function ByProductView() {
         </span>
       </div>
       <KpiStrip tiles={tiles} className="mb-4" />
+
+      {/* Toolbar: search · market · channel · density · customize */}
+      <div className="flex flex-wrap items-center gap-2 mb-3">
+        <div className="relative">
+          <Search size={14} className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search product / SKU / ASIN" className="pl-7 pr-2 py-1.5 text-sm rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 w-60" />
+        </div>
+        <select value={marketplace} onChange={(e) => setMarketplace(e.target.value)} className="px-2 py-1.5 text-sm rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950">
+          <option value="">All markets</option>
+          {marketplaces.map((m) => <option key={m} value={m}>{m}</option>)}
+        </select>
+        <div className="inline-flex items-center rounded-md border border-slate-200 dark:border-slate-700 p-0.5">
+          {CHANNELS.map((c) => (
+            <span key={c.key} title={c.enabled ? c.label : `${c.label} — no keyword PPC yet`}
+              className={`px-2 py-1 text-xs rounded ${c.enabled ? 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-medium' : 'text-slate-300 dark:text-slate-600 cursor-not-allowed'}`}>{c.label}</span>
+          ))}
+        </div>
+        <div className="ml-auto inline-flex items-center gap-2">
+          <DensityToggle density={density} onChange={setDensity} />
+          <button onClick={() => setPrefsOpen(true)} className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-sm rounded-md border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"><SlidersHorizontal size={14} /> Customize</button>
+        </div>
+      </div>
+      <PreferencesModal
+        open={prefsOpen}
+        onClose={() => setPrefsOpen(false)}
+        value={prefs}
+        onConfirm={(next) => { setPrefs(next); setPrefsOpen(false) }}
+        allColumns={ALL_COLUMNS}
+        defaultVisible={DEFAULT_VISIBLE}
+        sortFieldOptions={[]}
+        title="Customize product grid"
+      />
       {rows.length === 0 && !loading ? (
         <div className="rounded-lg border border-slate-200 dark:border-slate-800 p-10 text-center text-sm text-slate-400">
           No advertised products with spend in the last {windowDays} days.
@@ -201,7 +259,7 @@ export function ByProductView() {
       ) : (
         <VirtualizedGrid<Row>
           rows={rows}
-          visible={COLUMNS}
+          visible={visible}
           density={density}
           cellPad={cellPad}
           selected={selected}
@@ -220,6 +278,8 @@ export function ByProductView() {
           riskFlaggedSkus={emptySet}
           storageKey="ax.byproduct"
           renderCell={renderCell}
+          stickyLeft={prefs.stickyFirstColumn}
+          stickyRight={prefs.stickyLastColumn}
         />
       )}
     </div>

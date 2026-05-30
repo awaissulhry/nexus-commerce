@@ -952,10 +952,18 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       rows.sort((a, b) => (val(a) - val(b)) * dir)
     }
 
+    // Distinct markets with ad spend in window — drives the filter dropdown.
+    const mktRows = await prisma.productProfitDaily.groupBy({
+      by: ['marketplace'],
+      where: { date: { gte: since }, advertisingSpendCents: { gt: 0 } },
+    })
+    const marketplaces = mktRows.map((m) => m.marketplace).filter(Boolean).sort()
+
     reply.header('Cache-Control', 'private, max-age=60')
     return {
       windowDays,
       rows,
+      marketplaces,
       totals: { adSpendCents: attributedSpendCents, revenueCents: rows.reduce((s, r) => s + r.revenueCents, 0), profitCents: rows.reduce((s, r) => s + r.profitCents, 0), products: rows.length },
       previousTotals,
       accountSpendCents,
