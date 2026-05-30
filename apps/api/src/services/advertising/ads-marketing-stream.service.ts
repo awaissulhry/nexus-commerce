@@ -27,28 +27,56 @@ export interface AmsIngestResult { received: number; upserted: number; skipped: 
  *  (profile, adProduct=SP, CAMPAIGN, campaign_id, day) daily row. */
 export async function ingestMarketingStream(messages: AmsMessage[]): Promise<AmsIngestResult> {
   const result: AmsIngestResult = { received: messages.length, upserted: 0, skipped: 0 }
+  // CD.11 — resolve local Campaign.id per (externalCampaignId, marketplace)
+  // once so hourly rows carry localEntityId for cheap indexed campaign-scoped
+  // reads (dayparting). Cached across the batch.
+  const localIdCache = new Map<string, string | null>()
+  const resolveLocalId = async (extId: string, marketplace: string): Promise<string | null> => {
+    const key = `${extId}::${marketplace}`
+    if (localIdCache.has(key)) return localIdCache.get(key)!
+    const c = await prisma.campaign.findFirst({ where: { externalCampaignId: extId, marketplace }, select: { id: true } }).catch(() => null)
+    const id = c?.id ?? null
+    localIdCache.set(key, id)
+    return id
+  }
   for (const m of messages) {
     const campaignId = m.campaign_id
     const profileId = m.profileId ?? 'ams'
     const tw = m.time_window_start ? new Date(m.time_window_start) : new Date()
     if (!campaignId || Number.isNaN(tw.getTime())) { result.skipped++; continue }
     const date = new Date(Date.UTC(tw.getUTCFullYear(), tw.getUTCMonth(), tw.getUTCDate()))
+    const hour = tw.getUTCHours()
     const marketplace = m.marketplace ?? m.marketplace_id ?? 'IT'
     const isTraffic = m.impressions != null || m.clicks != null || m.cost != null
     const costMicros = m.cost != null ? BigInt(Math.round(m.cost * 1_000_000)) : 0n
+    const salesCents = m.attributed_sales_1d != null ? Math.round(m.attributed_sales_1d * 100) : 0
     try {
       await prisma.amazonAdsDailyPerformance.upsert({
         where: { profileId_adProduct_entityType_entityId_date: { profileId, adProduct: 'SPONSORED_PRODUCTS', entityType: 'CAMPAIGN', entityId: campaignId, date } },
         create: {
           profileId, marketplace, adProduct: 'SPONSORED_PRODUCTS', date, entityType: 'CAMPAIGN', entityId: campaignId,
           impressions: m.impressions ?? 0, clicks: m.clicks ?? 0, costMicros, currencyCode: m.currency ?? 'EUR',
-          sales7dCents: m.attributed_sales_1d != null ? Math.round(m.attributed_sales_1d * 100) : 0,
+          sales7dCents: salesCents,
           orders7d: m.attributed_conversions_1d ?? 0, units7d: m.attributed_units_ordered_1d ?? 0,
           reportRunId: 'ams-stream', reportedAt: new Date(),
         },
         update: isTraffic
           ? { impressions: { increment: m.impressions ?? 0 }, clicks: { increment: m.clicks ?? 0 }, costMicros: { increment: costMicros }, reportedAt: new Date() }
-          : { sales7dCents: { increment: m.attributed_sales_1d != null ? Math.round(m.attributed_sales_1d * 100) : 0 }, orders7d: { increment: m.attributed_conversions_1d ?? 0 }, units7d: { increment: m.attributed_units_ordered_1d ?? 0 }, reportedAt: new Date() },
+          : { sales7dCents: { increment: salesCents }, orders7d: { increment: m.attributed_conversions_1d ?? 0 }, units7d: { increment: m.attributed_units_ordered_1d ?? 0 }, reportedAt: new Date() },
+      })
+      // CD.11 — also write the hourly row (the genuine AMS edge: hour grain).
+      const localEntityId = await resolveLocalId(campaignId, marketplace)
+      await prisma.amazonAdsHourlyPerformance.upsert({
+        where: { profileId_adProduct_entityType_entityId_date_hour: { profileId, adProduct: 'SPONSORED_PRODUCTS', entityType: 'CAMPAIGN', entityId: campaignId, date, hour } },
+        create: {
+          profileId, marketplace, adProduct: 'SPONSORED_PRODUCTS', date, hour, entityType: 'CAMPAIGN', entityId: campaignId, localEntityId,
+          impressions: m.impressions ?? 0, clicks: m.clicks ?? 0, costMicros, currencyCode: m.currency ?? 'EUR',
+          sales7dCents: salesCents, orders7d: m.attributed_conversions_1d ?? 0, units7d: m.attributed_units_ordered_1d ?? 0,
+          reportRunId: 'ams-stream', reportedAt: new Date(),
+        },
+        update: isTraffic
+          ? { impressions: { increment: m.impressions ?? 0 }, clicks: { increment: m.clicks ?? 0 }, costMicros: { increment: costMicros }, reportedAt: new Date(), ...(localEntityId ? { localEntityId } : {}) }
+          : { sales7dCents: { increment: salesCents }, orders7d: { increment: m.attributed_conversions_1d ?? 0 }, units7d: { increment: m.attributed_units_ordered_1d ?? 0 }, reportedAt: new Date(), ...(localEntityId ? { localEntityId } : {}) },
       })
       result.upserted++
     } catch (e) { logger.warn('[AX.12] AMS ingest row failed', { campaignId, error: (e as Error).message }); result.skipped++ }
