@@ -155,6 +155,7 @@ import {
   computeCategorySeasonalIndices,
   resolveEffectiveProductTypes,
 } from '../services/category-seasonality.service.js'
+import { forecastDailyDemand } from '../services/holt-winters.service.js'
 import {
   getAccuracyForSku,
   getAccuracyAggregate,
@@ -11354,6 +11355,103 @@ Return ONLY valid JSON, no prose:
   // for every series in the catalog. With { sku, channel, marketplace }
   // body, regenerates a single series (useful for debugging a specific
   // SKU's forecast in dev / after a manual data correction).
+  // RX.B-validate — holdout backtest of the BASE forecaster (Croston/Holt +
+  // floor; no seasonal multiplier). Hides the last `holdout` days, forecasts
+  // them from the prior history, and compares to what actually sold. Gives
+  // real accuracy/bias numbers instead of eyeballing forecast-vs-last-month.
+  fastify.get('/fulfillment/replenishment/forecast-backtest', async (request, reply) => {
+    try {
+      const q = request.query as {
+        holdout?: string
+        channel?: string
+        marketplace?: string
+        limit?: string
+      }
+      const holdout = Math.min(60, Math.max(7, Math.round(Number(q.holdout) || 30)))
+      const channel = (q.channel ?? 'AMAZON').toUpperCase()
+      const marketplace = (q.marketplace ?? 'IT').toUpperCase()
+      const limit = Math.min(800, Math.max(1, Math.round(Number(q.limit) || 400)))
+      const today = new Date()
+      today.setUTCHours(0, 0, 0, 0)
+      const historyStart = new Date(today)
+      historyStart.setUTCDate(historyStart.getUTCDate() - 365)
+
+      const distinct = await prisma.dailySalesAggregate.groupBy({
+        by: ['sku'],
+        where: { channel, marketplace, day: { gte: historyStart } },
+        _sum: { unitsSold: true },
+      })
+      const skus = distinct
+        .filter((d) => (d._sum.unitsSold ?? 0) > 0)
+        .slice(0, limit)
+        .map((d) => d.sku)
+
+      const rows = await prisma.dailySalesAggregate.findMany({
+        where: { sku: { in: skus }, channel, marketplace, day: { gte: historyStart, lt: today } },
+        select: { sku: true, day: true, unitsSold: true },
+      })
+      const bySku = new Map<string, Map<string, number>>()
+      for (const r of rows) {
+        let m = bySku.get(r.sku)
+        if (!m) {
+          m = new Map()
+          bySku.set(r.sku, m)
+        }
+        m.set(r.day.toISOString().slice(0, 10), r.unitsSold)
+      }
+
+      const results: Array<{ sku: string; regime: string; forecast: number; actual: number }> = []
+      let totalF = 0
+      let totalA = 0
+      const ape: number[] = []
+      for (const sku of skus) {
+        const m = bySku.get(sku) ?? new Map<string, number>()
+        const hist: number[] = []
+        const cur = new Date(historyStart)
+        while (cur < today) {
+          hist.push(m.get(cur.toISOString().slice(0, 10)) ?? 0)
+          cur.setUTCDate(cur.getUTCDate() + 1)
+        }
+        const train = hist.slice(0, hist.length - holdout)
+        const test = hist.slice(hist.length - holdout)
+        const fc = forecastDailyDemand(train, holdout)
+        const fSum = fc.points.reduce((a, p) => a + p.value, 0)
+        const aSum = test.reduce((a, b) => a + b, 0)
+        totalF += fSum
+        totalA += aSum
+        if (aSum > 0) ape.push(Math.abs(fSum - aSum) / aSum)
+        results.push({ sku, regime: fc.regime, forecast: Math.round(fSum * 10) / 10, actual: aSum })
+      }
+      const withSales = results.filter((r) => r.actual > 0)
+      const mape = ape.length ? ape.reduce((a, b) => a + b, 0) / ape.length : null
+      // Bucket by volume so we separate high-volume accuracy from low-volume noise.
+      const high = withSales.filter((r) => r.actual >= 10)
+      const highBias =
+        high.reduce((a, r) => a + r.actual, 0) > 0
+          ? high.reduce((a, r) => a + r.forecast, 0) / high.reduce((a, r) => a + r.actual, 0)
+          : null
+      return {
+        ok: true,
+        holdout,
+        channel,
+        marketplace,
+        skusEvaluated: results.length,
+        skusWithSales: withSales.length,
+        overallBias: totalA > 0 ? Math.round((totalF / totalA) * 1000) / 1000 : null,
+        highVolumeBias: highBias != null ? Math.round(highBias * 1000) / 1000 : null,
+        highVolumeCount: high.length,
+        totalForecast: Math.round(totalF),
+        totalActual: totalA,
+        mape: mape != null ? Math.round(mape * 1000) / 1000 : null,
+        underHalf: withSales.filter((r) => r.forecast < 0.5 * r.actual).length,
+        topByActual: withSales.sort((a, b) => b.actual - a.actual).slice(0, 12),
+      }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[forecast-backtest] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
   // RX.S1 — lean per-SKU sales over an operator-chosen timeframe. Kept
   // SEPARATE from the heavy /fulfillment/replenishment payload so changing
   // the timeframe re-runs only ONE small DailySalesAggregate groupBy — not
