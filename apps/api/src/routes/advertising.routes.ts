@@ -971,6 +971,38 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // PC.7 — bulk action on the campaigns behind selected products. Resolves
+  // products → AdProductAd → distinct campaigns and applies status/budget via
+  // the audited updateCampaignWithSync path (OutboundSyncQueue grace + gate).
+  // POST /advertising/by-product/bulk { productIds[], action, value? }
+  fastify.post('/advertising/by-product/bulk', async (request, reply) => {
+    const b = request.body as { productIds?: string[]; action?: string; value?: number }
+    if (!Array.isArray(b?.productIds) || b.productIds.length === 0) { reply.status(400); return { error: 'productIds[] required' } }
+    const action = b.action
+    if (!['pause', 'enable', 'budgetPct'].includes(String(action))) { reply.status(400); return { error: 'action must be pause|enable|budgetPct' } }
+    // Resolve distinct campaigns advertising any of these products.
+    const ads = await prisma.adProductAd.findMany({
+      where: { productId: { in: b.productIds } },
+      select: { adGroup: { select: { campaign: { select: { id: true, dailyBudget: true } } } } },
+    })
+    const campaigns = new Map<string, { id: string; dailyBudget: unknown }>()
+    for (const a of ads) { const c = a.adGroup?.campaign; if (c?.id) campaigns.set(c.id, c) }
+    const actor = actorFromHeaders(request.headers as Record<string, unknown>)
+    let ok = 0, failed = 0
+    for (const c of campaigns.values()) {
+      const patch: Parameters<typeof updateCampaignWithSync>[0]['patch'] = {}
+      if (action === 'pause') patch.status = 'PAUSED'
+      else if (action === 'enable') patch.status = 'ENABLED'
+      else if (action === 'budgetPct') {
+        const cur = parseFloat(String(c.dailyBudget ?? '0')) || 0
+        patch.dailyBudget = Math.max(1, Math.round(cur * (1 + (b.value ?? 0) / 100) * 100) / 100)
+      }
+      const r = await updateCampaignWithSync({ campaignId: c.id, patch, actor, reason: `by-product bulk ${action}`, applyImmediately: false }).catch(() => ({ ok: false }))
+      if ((r as { ok?: boolean }).ok === false) failed++; else ok++
+    }
+    return { ok: true, campaignsAffected: campaigns.size, succeeded: ok, failed }
+  })
+
   //   STALE_CAMPAIGN  — ENABLED campaigns with 0 impressions in windowDays
   //
   // Each insight has a severity (critical | warning | info), a title,

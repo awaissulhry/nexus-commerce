@@ -12,12 +12,12 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { VirtualizedGrid, KpiStrip, Thumbnail, PreferencesModal, DensityToggle, type GridLensColumn, type GridLensRow, type KpiTileSpec, type PreferencesValue } from '@/app/_shared/grid-lens'
+import { VirtualizedGrid, KpiStrip, Thumbnail, PreferencesModal, DensityToggle, BulkActionShell, type GridLensColumn, type GridLensRow, type KpiTileSpec, type PreferencesValue } from '@/app/_shared/grid-lens'
 import { type Density, DENSITY_CELL_CLASS } from '@/lib/products/theme'
 import { StatusChip } from '@/app/_shared/ads-ui'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useMarketingEvents } from '@/lib/sync/use-marketing-events'
-import { Megaphone, ShoppingCart, Coins, Package, Search, SlidersHorizontal } from 'lucide-react'
+import { Megaphone, ShoppingCart, Coins, Package, Search, SlidersHorizontal, Pause, Play, ChevronsUp, ChevronsDown } from 'lucide-react'
 
 interface Row extends GridLensRow {
   name: string
@@ -83,6 +83,8 @@ export function ByProductView() {
   })
   useEffect(() => { try { localStorage.setItem(PREFS_KEY, JSON.stringify(prefs)) } catch { /* ignore */ } }, [prefs])
   const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [bulkBusy, setBulkBusy] = useState(false)
+  const [bulkStatus, setBulkStatus] = useState<string | null>(null)
   const [sortBy, setSortBy] = useState('adspend')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
   const [expandedParents, setExpandedParents] = useState<Set<string>>(new Set())
@@ -144,6 +146,19 @@ export function ByProductView() {
 
   const toggleSelect = useCallback((id: string) => setSelected((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n }), [])
   const toggleSelectAll = useCallback(() => setSelected((s) => (s.size === rows.length ? new Set() : new Set(rows.map((r) => r.id)))), [rows])
+
+  // PC.7 — bulk action fans out to the campaigns behind selected products.
+  const bulkAction = useCallback(async (action: 'pause' | 'enable' | 'budgetPct', value?: number) => {
+    const ids = [...selected]; if (!ids.length) return
+    setBulkBusy(true); setBulkStatus(null)
+    try {
+      const r = await fetch(`${getBackendUrl()}/api/advertising/by-product/bulk`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ productIds: ids, action, value }) }).then((x) => x.json())
+      if (r?.error) throw new Error(r.error)
+      setBulkStatus(`✓ ${r.succeeded}/${r.campaignsAffected} campaigns updated${r.failed ? ` · ${r.failed} failed` : ''}`)
+      setSelected(new Set())
+      void load()
+    } catch (e) { setBulkStatus((e as Error).message) } finally { setBulkBusy(false) }
+  }, [selected, load])
 
   const dPct = (cur: number, prev: number | undefined | null) => (prev != null && prev > 0 ? Math.round(((cur - prev) / prev) * 1000) / 10 : null)
   const tiles: KpiTileSpec[] = [
@@ -252,6 +267,14 @@ export function ByProductView() {
         sortFieldOptions={[]}
         title="Customize product grid"
       />
+      {selected.size > 0 && (
+        <div className="mb-2"><BulkActionShell selectedCount={selected.size} noun="product" onClear={() => setSelected(new Set())} busy={bulkBusy} status={bulkStatus} actions={[
+          { id: 'enable', label: 'Enable campaigns', icon: Play, onClick: () => bulkAction('enable') },
+          { id: 'pause', label: 'Pause campaigns', icon: Pause, onClick: () => bulkAction('pause') },
+          { id: 'budgetup', label: 'Budget +10%', icon: ChevronsUp, tone: 'primary', onClick: () => bulkAction('budgetPct', 10) },
+          { id: 'budgetdown', label: 'Budget −10%', icon: ChevronsDown, onClick: () => bulkAction('budgetPct', -10) },
+        ]} /></div>
+      )}
       {rows.length === 0 && !loading ? (
         <div className="rounded-lg border border-slate-200 dark:border-slate-800 p-10 text-center text-sm text-slate-400">
           No advertised products with spend in the last {windowDays} days.
