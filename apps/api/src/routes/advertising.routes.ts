@@ -310,6 +310,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     return {
       adGroup: {
         id: adGroup.id, name: adGroup.name, status: adGroup.status, defaultBidCents: adGroup.defaultBidCents,
+        externalAdGroupId: adGroup.externalAdGroupId,
         campaign: adGroup.campaign,
         metrics: agMetrics,
         ads,
@@ -2833,6 +2834,8 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       profileId?: string
       marketplace?: string
       adProduct?: string
+      campaignId?: string
+      adGroupId?: string
       minSpend?: string
       minImpressions?: string
       hasOrders?: 'any' | 'none' | 'some'
@@ -2870,6 +2873,12 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
         ...(query.profileId ? { profileId: query.profileId } : {}),
         ...(query.marketplace ? { marketplace: query.marketplace } : {}),
         ...(query.adProduct ? { adProduct: query.adProduct } : {}),
+        // AF.1e — scope to the campaign / ad group being viewed. The search-term
+        // table stores EXTERNAL Amazon ids; the detail cockpits pass
+        // externalCampaignId / externalAdGroupId. Without these the detail pages
+        // showed every campaign's search terms (account-wide), not their own.
+        ...(query.campaignId ? { campaignId: query.campaignId } : {}),
+        ...(query.adGroupId ? { adGroupId: query.adGroupId } : {}),
       },
       select: {
         query: true, matchType: true, campaignId: true, adGroupId: true,

@@ -19,6 +19,7 @@ interface Ad { id: string; asin: string | null; sku: string | null; productId: s
 interface AgTarget { id: string; kind: string; expressionType: string; expressionValue: string; bidCents: number; status: string; impressions: number; clicks: number; spendCents: number; salesCents: number; ordersCount?: number; isNegative?: boolean }
 export interface AdGroupDetail {
   id: string; name: string; status: string; defaultBidCents: number
+  externalAdGroupId: string | null
   campaign: { id: string; name: string; marketplace: string | null; type: string; status: string; externalCampaignId: string | null; dailyBudget?: string }
   metrics: { impressions: number; clicks: number; spendCents: number; salesCents: number; orders: number; acos: number | null; roas: number | null }
   ads: Ad[]
@@ -105,9 +106,11 @@ export function AdGroupDetailCockpit({ adGroup }: { adGroup: AdGroupDetail }) {
 
   const loadSearchTerms = useCallback(async () => {
     if (!adGroup.campaign.externalCampaignId) { setSearchTerms([]); return }
-    const r = await fetch(`${getBackendUrl()}/api/advertising/reports/search-terms?campaignId=${adGroup.campaign.externalCampaignId}`, { cache: 'no-store' }).then((x) => x.json()).catch(() => ({ rows: [] }))
-    setSearchTerms((r.rows ?? r.searchTerms ?? []) as Array<Record<string, unknown>>)
-  }, [adGroup.campaign.externalCampaignId])
+    // AF.1e — scope to THIS ad group (by external id), not the whole campaign.
+    const agScope = adGroup.externalAdGroupId ? `&adGroupId=${adGroup.externalAdGroupId}` : ''
+    const r = await fetch(`${getBackendUrl()}/api/advertising/reports/search-terms?campaignId=${adGroup.campaign.externalCampaignId}${agScope}&limit=200`, { cache: 'no-store' }).then((x) => x.json()).catch(() => ({ items: [] }))
+    setSearchTerms((r.items ?? r.rows ?? r.searchTerms ?? []) as Array<Record<string, unknown>>)
+  }, [adGroup.campaign.externalCampaignId, adGroup.externalAdGroupId])
   const loadHistory = useCallback(async () => {
     const r = await fetch(`${getBackendUrl()}/api/advertising/bid-history?entityType=AD_GROUP&entityId=${adGroup.id}&limit=100`, { cache: 'no-store' }).then((x) => x.json()).catch(() => ({ items: [] }))
     setHistory((r.items ?? []) as Array<Record<string, unknown>>)
