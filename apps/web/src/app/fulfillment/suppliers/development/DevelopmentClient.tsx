@@ -49,6 +49,7 @@ export default function DevelopmentClient() {
   const [name, setName] = useState('')
   const [productType, setProductType] = useState('')
   const [openId, setOpenId] = useState<string | null>(null)
+  const [statusFilter, setStatusFilter] = useState<string | null>(null) // PD.11
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -92,6 +93,21 @@ export default function DevelopmentClient() {
         <button onClick={create} disabled={creating || !name.trim()} className="rounded bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-500 disabled:opacity-50">New project</button>
       </div>
 
+      {/* PD.11 — pipeline funnel (click a stage to filter) */}
+      {projects.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          <button onClick={() => setStatusFilter(null)} className={`rounded px-2 py-1 text-[11px] ${statusFilter === null ? 'bg-slate-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}`}>All {projects.length}</button>
+          {STATUSES.filter((s) => projects.some((p) => p.status === s)).map((s) => {
+            const n = projects.filter((p) => p.status === s).length
+            return (
+              <button key={s} onClick={() => setStatusFilter(statusFilter === s ? null : s)} className={`rounded px-2 py-1 text-[11px] font-medium ${statusFilter === s ? 'ring-2 ring-white/40 ' : ''}${STATUS_TONE[s] ?? 'bg-slate-700'}`}>
+                {s.replace(/_/g, ' ')} {n}
+              </button>
+            )
+          })}
+        </div>
+      )}
+
       {/* List */}
       <div className="overflow-x-auto rounded-lg border border-slate-700 bg-slate-900/40">
         <table className="w-full text-xs">
@@ -111,7 +127,7 @@ export default function DevelopmentClient() {
               <tr><td colSpan={7} className="px-3 py-8 text-center text-slate-500">Loading…</td></tr>
             ) : projects.length === 0 ? (
               <tr><td colSpan={7} className="px-3 py-8 text-center text-slate-500">No projects yet. Start one above.</td></tr>
-            ) : projects.map((p) => (
+            ) : (statusFilter ? projects.filter((p) => p.status === statusFilter) : projects).map((p) => (
               <tr key={p.id} className="border-b border-slate-800 hover:bg-slate-800/40">
                 <td className="px-3 py-2">
                   <button onClick={() => setOpenId(p.id)} className="text-left">
