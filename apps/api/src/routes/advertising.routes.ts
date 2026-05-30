@@ -2246,7 +2246,9 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
         ],
       },
       select: { id: true },
-      orderBy: { completedAt: 'asc' },
+      // AF.1 — newest first so fresh presigned URLs ingest before they expire
+      // (oldest-first let large/late exports' URLs lapse → rows silently lost).
+      orderBy: { completedAt: 'desc' },
       take: 10,
     })
     const results = await Promise.all(jobs.map((j) => ingestCompletedExport(j.id)))

@@ -477,11 +477,14 @@ async function ingestTargets(records: V1Target[]): Promise<number> {
   const agMap = new Map(adGroups.map((g) => [g.externalAdGroupId ?? '', g.id]))
 
   let upserted = 0
+  // AF.1 — instrument where rows go (positives were missing fleet-wide).
+  const bd = { seen: records.length, noTargetId: 0, noAdGroupId: 0, noLocalAdGroup: 0, positives: 0, negatives: 0, kwPositives: 0 }
   for (const r of records) {
-    if (!r.targetId) continue
-    if (!r.adGroupId) continue // skip campaign-level negatives for now
+    if (!r.targetId) { bd.noTargetId++; continue }
+    if (!r.adGroupId) { bd.noAdGroupId++; continue } // campaign-level negatives
     const localAdGroupId = agMap.get(r.adGroupId)
-    if (!localAdGroupId) continue
+    if (!localAdGroupId) { bd.noLocalAdGroup++; continue }
+    if (r.negative === true) bd.negatives++; else { bd.positives++; if ((r.targetType ?? 'KEYWORD') === 'KEYWORD') bd.kwPositives++ }
     const stateLower = normalizeStateV1(r.state)
     const kind = (r.targetType ?? 'KEYWORD') as 'KEYWORD' | 'PRODUCT' | 'CATEGORY' | 'AUDIENCE'
     const expressionType = r.targetDetails?.matchType?.toUpperCase()
@@ -524,6 +527,7 @@ async function ingestTargets(records: V1Target[]): Promise<number> {
       })
     }
   }
+  logger.info('[ads-v1-sync] targets ingest breakdown', { ...bd, upserted })
   return upserted
 }
 
