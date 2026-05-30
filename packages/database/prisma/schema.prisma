@@ -7057,6 +7057,7 @@ model Lot {
   costLayers     StockCostLayer[]  @relation("LotCostLayers")
   recalls        LotRecall[]
   serials        SerialNumber[]    @relation("LotSerials")
+  returnItems    ReturnItem[] // RX.6b — defect returns traced to this lot
 
   @@unique([productId, lotNumber])
   @@index([productId, receivedAt])
@@ -8396,6 +8397,15 @@ model Return {
   // Restock policy snapshot at receipt time
   restockChannel     String?
   restockWarehouseId String?
+  // RX.6b — warranty / defect / recall track. returnType splits the
+  // standard change-of-mind flow from warranty/defect claims, which run
+  // a diagnosis → repair/replace/refund routing instead of straight
+  // refund. Nullable/defaulted so existing rows are untouched.
+  returnType         String                @default("STANDARD") // STANDARD | WARRANTY | DEFECT
+  warrantyStatus     String? // PENDING_DIAGNOSIS | DIAGNOSED | REPAIR | REPLACE | REFUND | REJECTED
+  warrantyResolution String? // REPAIR | REPLACE | REFUND | REJECTED
+  defectReportedAt   DateTime?
+  manufacturerRef    String? // claim ref to the manufacturer / distributor
   // Lifecycle
   receivedAt         DateTime?
   inspectedAt        DateTime?
@@ -8491,11 +8501,17 @@ model ReturnItem {
   // contaminated, expired, missing parts, etc.).
   scrapReason String?
 
+  // RX.6b — defect item traces back to the batch it came from, so a
+  // cluster of defect returns can pinpoint a recall lot (L-series).
+  lotId String?
+
   return Return @relation(fields: [returnId], references: [id], onDelete: Cascade)
+  lot    Lot?   @relation(fields: [lotId], references: [id], onDelete: SetNull)
 
   @@index([returnId])
   @@index([productId])
   @@index([disposition])
+  @@index([lotId])
 }
 
 // ── R0.1 — Refund domain ──────────────────────────────────────────────
