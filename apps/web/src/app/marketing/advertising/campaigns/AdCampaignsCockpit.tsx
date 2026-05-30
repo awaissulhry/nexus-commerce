@@ -21,6 +21,7 @@ import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianG
 import { Search, RefreshCw, SlidersHorizontal, Play, Pause, Download, FileDown, Rows, AlignJustify } from 'lucide-react'
 import { KpiStrip, PreferencesModal, type KpiTileSpec, type PreferencesValue, type PreferencesColumnSpec } from '@/app/_shared/grid-lens'
 import { StatusChip } from '@/app/_shared/ads-ui'
+import { marketplaceCode, marketplaceCountryName } from '@/lib/marketplace-code'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useMarketingEvents } from '@/lib/sync/use-marketing-events'
 
@@ -253,7 +254,7 @@ export function AdCampaignsCockpit({ initial }: { initial: { items: CampaignBase
     const headers = ['Campaign', 'Status', 'Type', 'Market', 'Budget/d', 'Impressions', 'Clicks', 'CTR%', 'Spend', 'CPC', 'Orders', 'CVR%', 'Sales', 'ACOS%', 'ROAS', 'Margin%']
     const lines = [headers.join(',')]
     for (const r of filtered) {
-      const v = [r.base.name, r.base.status, r.base.type, r.base.marketplace ?? '', (r.budgetC / 100).toFixed(2), r.impressions, r.clicks, r.ctr != null ? (r.ctr * 100).toFixed(2) : '', (r.spendC / 100).toFixed(2), r.cpc != null ? (r.cpc / 100).toFixed(2) : '', r.orders, r.cvr != null ? (r.cvr * 100).toFixed(2) : '', (r.salesC / 100).toFixed(2), r.acos != null ? (r.acos * 100).toFixed(1) : '', r.roas != null ? r.roas.toFixed(2) : '', r.marginPct != null ? (r.marginPct * 100).toFixed(1) : '']
+      const v = [r.base.name, r.base.status, r.base.type, marketplaceCode(r.base.marketplace), (r.budgetC / 100).toFixed(2), r.impressions, r.clicks, r.ctr != null ? (r.ctr * 100).toFixed(2) : '', (r.spendC / 100).toFixed(2), r.cpc != null ? (r.cpc / 100).toFixed(2) : '', r.orders, r.cvr != null ? (r.cvr * 100).toFixed(2) : '', (r.salesC / 100).toFixed(2), r.acos != null ? (r.acos * 100).toFixed(1) : '', r.roas != null ? r.roas.toFixed(2) : '', r.marginPct != null ? (r.marginPct * 100).toFixed(1) : '']
       lines.push(v.map((x) => `"${String(x).replace(/"/g, '""')}"`).join(','))
     }
     const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' })
@@ -317,7 +318,7 @@ export function AdCampaignsCockpit({ initial }: { initial: { items: CampaignBase
       <div className="flex flex-wrap items-center gap-2 mb-2">
         <div className="relative"><Search size={14} className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400" /><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Find a campaign…" className="pl-7 pr-2 py-1.5 text-sm rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 w-56" /></div>
         <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label="Filter by status" className="py-1.5 px-2 text-sm rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"><option value="">All status</option>{['ENABLED', 'PAUSED', 'ARCHIVED', 'DRAFT'].map((s) => <option key={s}>{s}</option>)}</select>
-        <select value={marketplaceFilter} onChange={(e) => setMarketplaceFilter(e.target.value)} aria-label="Filter by marketplace" className="py-1.5 px-2 text-sm rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"><option value="">All markets</option>{markets.map((m) => <option key={m} value={m}>{m}</option>)}</select>
+        <select value={marketplaceFilter} onChange={(e) => setMarketplaceFilter(e.target.value)} aria-label="Filter by marketplace" className="py-1.5 px-2 text-sm rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"><option value="">All markets</option>{markets.map((m) => <option key={m} value={m}>{marketplaceCode(m)}</option>)}</select>
         <div className="inline-flex rounded-md border border-slate-200 dark:border-slate-700 overflow-hidden">
           {[['', 'All'], ['SP', 'SP'], ['SB', 'SB'], ['SD', 'SD']].map(([v, label]) => (
             <button key={v} onClick={() => setTypeFilter(v)} className={`px-2.5 py-1.5 text-xs border-l first:border-l-0 border-slate-200 dark:border-slate-700 ${typeFilter === v ? 'bg-blue-600 text-white' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>{label}</button>
@@ -386,7 +387,7 @@ export function AdCampaignsCockpit({ initial }: { initial: { items: CampaignBase
                   <Link href={`/marketing/advertising/campaigns/${b.id}`} className="font-medium text-sm text-slate-800 dark:text-slate-100 hover:underline truncate max-w-[26rem]" title={b.name}>{b.name}</Link>
                   <StatusChip status={b.status} dot />
                   <span className={`px-1.5 py-px text-[10px] font-medium rounded flex-shrink-0 ${TYPE_TONE[b.type] ?? 'bg-slate-100 text-slate-600'}`}>{b.type}</span>
-                  <span className="text-xs text-slate-400 flex-shrink-0">{b.marketplace ?? '—'}</span>
+                  <span className="text-xs text-slate-400 flex-shrink-0" title={marketplaceCountryName(b.marketplace)}>{marketplaceCode(b.marketplace)}</span>
                   {editing ? (
                     <span className="inline-flex items-center gap-1 flex-shrink-0">€<input autoFocus type="number" step="0.01" value={budgetEdits[b.id]} onChange={(e) => setBudgetEdits((s) => ({ ...s, [b.id]: e.target.value }))} onKeyDown={(e) => { if (e.key === 'Enter') saveBudget(b); if (e.key === 'Escape') setBudgetEdits((s) => { const { [b.id]: _, ...rest } = s; return rest }) }} onBlur={() => saveBudget(b)} className="w-16 px-1 py-0.5 text-xs text-right rounded border border-blue-400 bg-white dark:bg-slate-900" disabled={busy === b.id} />/d</span>
                   ) : (
@@ -457,7 +458,7 @@ function COLUMN_DEFS(
     { key: 'status', label: 'Status', width: 100, render: (r) => <StatusChip status={r.base.status} /> },
     { key: 'type', label: 'Type', width: 60, render: (r) => <span className="text-xs text-slate-500">{r.base.type}</span> },
     { key: 'adProduct', label: 'Ad product', width: 150, render: (r) => <span className="text-xs text-slate-500">{r.base.adProduct ?? '—'}</span> },
-    { key: 'marketplace', label: 'Market', width: 70, render: (r) => <span className="text-xs">{r.base.marketplace ?? '—'}</span> },
+    { key: 'marketplace', label: 'Market', width: 70, render: (r) => <span className="text-xs" title={marketplaceCountryName(r.base.marketplace)}>{marketplaceCode(r.base.marketplace)}</span> },
     { key: 'portfolio', label: 'Portfolio', width: 120, render: (r) => <span className="text-xs text-slate-500">{r.base.portfolioName ?? '—'}</span> },
     { key: 'biddingStrategy', label: 'Bid strategy', width: 130, render: (r) => <span className="text-xs text-slate-500">{r.base.biddingStrategy}</span> },
     { key: 'budget', label: 'Budget', width: 110, align: 'right', num: true, render: (r) => {

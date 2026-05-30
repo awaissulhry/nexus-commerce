@@ -16,6 +16,7 @@ import { VirtualizedGrid, KpiStrip, Thumbnail, PreferencesModal, DensityToggle, 
 import { type Density, DENSITY_CELL_CLASS } from '@/lib/products/theme'
 import { getBackendUrl } from '@/lib/backend-url'
 import { StatusChip } from '@/app/_shared/ads-ui'
+import { marketplaceCode, marketplaceCountryName } from '@/lib/marketplace-code'
 import { useMarketingEvents } from '@/lib/sync/use-marketing-events'
 import { Megaphone, ShoppingCart, Coins, Package, Search, SlidersHorizontal, Pause, Play, ChevronsUp, ChevronsDown } from 'lucide-react'
 
@@ -238,7 +239,7 @@ export function ByProductView() {
             <a href={`/marketing/advertising/campaigns/${row.id}`} className="block truncate text-sm text-slate-700 dark:text-slate-200 hover:underline" title={row.name}>{row.name}</a>
           </div>
         )
-        case 'campaigns': return <span className="text-xs text-slate-500">{row.marketplace}</span>
+        case 'campaigns': return <span className="text-xs text-slate-500" title={marketplaceCountryName(row.marketplace)}>{marketplaceCode(row.marketplace)}</span>
         case 'markets': return <span className="text-[11px] text-slate-400">{(row.dailyBudgetCents ?? 0) > 0 ? `${eur(row.dailyBudgetCents)}/d` : '—'}</span>
         case 'adspend': return <span className="tabular-nums">{eur(row.adSpendCents)}</span>
         case 'adsales': return <span className="tabular-nums">{eur(row.adSalesCents)}</span>
@@ -347,7 +348,7 @@ export function ByProductView() {
         </div>
         <select value={marketplace} onChange={(e) => setMarketplace(e.target.value)} aria-label="Filter by marketplace" className="px-2 py-1.5 text-sm rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950">
           <option value="">All markets</option>
-          {marketplaces.map((m) => <option key={m} value={m}>{m}</option>)}
+          {marketplaces.map((m) => <option key={m} value={m}>{marketplaceCode(m)}</option>)}
         </select>
         <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label="Filter campaigns by status" title="Filters the campaigns shown when you expand a product" className="px-2 py-1.5 text-sm rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950">
           <option value="">All statuses</option>
