@@ -983,6 +983,26 @@ function ReturnDrawer({ id, onClose, onChanged }: { id: string; onClose: () => v
     channelRefundId?: string
   } | null>(null)
   const [refundBusy, setRefundBusy] = useState(false)
+  // RX.7 — comms. Tracks which stage email is currently sending so the
+  // row can disable while in flight. Surfaces the send-email endpoint
+  // (which had no UI) with the new authorized / label_ready stages.
+  const [emailBusy, setEmailBusy] = useState<string | null>(null)
+  const sendEmail = async (kind: string) => {
+    setEmailBusy(kind)
+    try {
+      const res = await fetch(`${getBackendUrl()}/api/fulfillment/returns/${id}/send-email`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ kind, locale: 'it' }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) { toast.error(data.error ?? 'Email failed'); return }
+      toast.success(data.dryRun ? `Email queued (dry-run): ${kind}` : `Email sent: ${kind}`)
+      await fetchOne()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Email failed')
+    } finally { setEmailBusy(null) }
+  }
 
   const action = async (path: string, body?: any) => {
     const res = await fetch(`${getBackendUrl()}/api/fulfillment/returns/${id}/${path}`, {
@@ -1221,6 +1241,27 @@ function ReturnDrawer({ id, onClose, onChanged }: { id: string; onClose: () => v
                         <button onClick={() => action('scrap')} className="h-8 px-3 text-base bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-900 rounded hover:bg-rose-100 dark:hover:bg-rose-900/60">Scrap</button>
                       </>
                     )}
+                  </div>
+
+                  {/* RX.7 — customer comms journey. Stage-aware buttons
+                      surface the send-email endpoint (previously UI-less)
+                      across the whole return lifecycle. Sends Italian
+                      (buyer-facing); errors if no customer email on file. */}
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold inline-flex items-center gap-1"><Mail size={11} /> Notify</span>
+                    {(ret.status === 'REQUESTED' || ret.status === 'AUTHORIZED') && (
+                      <>
+                        <CommsBtn label="Approved" busy={emailBusy === 'authorized'} disabled={!!emailBusy} onClick={() => sendEmail('authorized')} />
+                        <CommsBtn label="Label ready" busy={emailBusy === 'label_ready'} disabled={!!emailBusy} onClick={() => sendEmail('label_ready')} />
+                      </>
+                    )}
+                    {(ret.status === 'IN_TRANSIT' || ret.status === 'RECEIVED' || ret.status === 'INSPECTING') && (
+                      <CommsBtn label="Received" busy={emailBusy === 'received'} disabled={!!emailBusy} onClick={() => sendEmail('received')} />
+                    )}
+                    {ret.status === 'REFUNDED' && (
+                      <CommsBtn label="Refunded" busy={emailBusy === 'refunded'} disabled={!!emailBusy} onClick={() => sendEmail('refunded')} />
+                    )}
+                    <CommsBtn label="Rejected" busy={emailBusy === 'rejected'} disabled={!!emailBusy} onClick={() => sendEmail('rejected')} muted />
                   </div>
 
                   {/* R5.3 — failed-refund retry surface. Renders
@@ -2114,6 +2155,31 @@ function RefundRetryBanner({
         </span>
       </div>
     </div>
+  )
+}
+
+// RX.7 — compact stage-email button for the drawer comms row.
+function CommsBtn({
+  label, onClick, busy, disabled, muted,
+}: {
+  label: string
+  onClick: () => void
+  busy: boolean
+  disabled: boolean
+  muted?: boolean
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className={`h-7 px-2 text-xs border rounded disabled:opacity-50 inline-flex items-center gap-1 ${
+        muted
+          ? 'border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'
+          : 'border-blue-200 dark:border-blue-900 text-blue-700 dark:text-blue-300 bg-blue-50/60 dark:bg-blue-950/30 hover:bg-blue-100 dark:hover:bg-blue-900/50'
+      }`}
+    >
+      {busy ? '…' : label}
+    </button>
   )
 }
 
