@@ -151,7 +151,14 @@ type Candidate = {
 }
 type DevAttachment = { id: string; kind: string; url: string; filename: string | null; uploadedAt: string }
 type DevPo = { id: string; poNumber: string; status: string; poKind: string; totalCents: number }
-type ProjectDetail = Project & { candidates: Candidate[]; attachments: DevAttachment[]; purchaseOrders: DevPo[] }
+type DevCert = { id: string; type: string; status: string; required: boolean; certNumber: string | null; expiresAt: string | null }
+type ProjectDetail = Project & { candidates: Candidate[]; attachments: DevAttachment[]; purchaseOrders: DevPo[]; certifications: DevCert[] }
+
+const CERT_TYPES = ['CE', 'ECE_22_06', 'EN_13594', 'EN_1621', 'GPSR', 'OTHER'] as const
+const CERT_STATUS_TONE: Record<string, string> = {
+  PENDING: 'bg-slate-700 text-slate-300', IN_PROGRESS: 'bg-amber-900/60 text-amber-200',
+  APPROVED: 'bg-emerald-900/60 text-emerald-200', REJECTED: 'bg-rose-950/60 text-rose-300',
+}
 
 function ProjectDrawer({ id, onClose }: { id: string; onClose: () => void }) {
   const [p, setP] = useState<ProjectDetail | null>(null)
@@ -302,6 +309,32 @@ function ProjectDrawer({ id, onClose }: { id: string; onClose: () => void }) {
                     <span className="text-slate-500">{po.status}</span>
                     <span className="ml-auto tabular-nums text-slate-400">{eur(po.totalCents)}</span>
                   </a>
+                ))}
+              </div>
+            </div>
+
+            {/* PD.9 — compliance / certifications (required ones gate launch) */}
+            <div>
+              <div className="mb-1 flex items-center justify-between">
+                <span className="text-[10px] uppercase tracking-wide text-slate-500">Compliance / certifications</span>
+                <select defaultValue="" onChange={async (e) => { const t = e.target.value; if (!t) return; e.target.value = ''; await fetch(`${API}/api/fulfillment/development/projects/${id}/certifications`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: t }) }); void load() }} className="rounded border border-slate-700 bg-slate-950 px-1.5 py-0.5 text-[11px] text-slate-100">
+                  <option value="">+ add cert…</option>
+                  {CERT_TYPES.map((t) => <option key={t} value={t}>{t.replace(/_/g, ' ')}</option>)}
+                </select>
+              </div>
+              <div className="space-y-1">
+                {p.certifications.length === 0 && <div className="text-[11px] text-slate-500">No certifications tracked. Required ones gate launch.</div>}
+                {p.certifications.map((cert) => (
+                  <div key={cert.id} className="flex flex-wrap items-center gap-2 rounded border border-slate-800 px-2 py-1 text-[11px]">
+                    <span className="font-medium text-slate-200">{cert.type.replace(/_/g, ' ')}</span>
+                    {cert.required && <span className="rounded bg-slate-800 px-1 text-[9px] text-slate-400">required</span>}
+                    <select defaultValue={cert.status} onChange={async (e) => { await fetch(`${API}/api/fulfillment/development/projects/${id}/certifications/${cert.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: e.target.value }) }); void load() }} className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${CERT_STATUS_TONE[cert.status] ?? 'bg-slate-700'}`}>
+                      {['PENDING', 'IN_PROGRESS', 'APPROVED', 'REJECTED'].map((s) => <option key={s} value={s} className="bg-slate-900 text-slate-200">{s.replace(/_/g, ' ')}</option>)}
+                    </select>
+                    <input defaultValue={cert.certNumber ?? ''} onBlur={async (e) => { await fetch(`${API}/api/fulfillment/development/projects/${id}/certifications/${cert.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ certNumber: e.target.value }) }); void load() }} placeholder="cert #" className="w-24 rounded border border-slate-700 bg-slate-950 px-1 py-0.5 text-slate-100" />
+                    <input type="date" defaultValue={cert.expiresAt ? cert.expiresAt.slice(0, 10) : ''} onBlur={async (e) => { await fetch(`${API}/api/fulfillment/development/projects/${id}/certifications/${cert.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ expiresAt: e.target.value }) }); void load() }} className="rounded border border-slate-700 bg-slate-950 px-1 py-0.5 text-slate-100" />
+                    <button onClick={async () => { await fetch(`${API}/api/fulfillment/development/projects/${id}/certifications/${cert.id}`, { method: 'DELETE' }); void load() }} className="text-slate-600 hover:text-rose-400">✕</button>
+                  </div>
                 ))}
               </div>
             </div>
