@@ -5987,7 +5987,7 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
         where: { id },
         include: {
           candidates: { include: { supplier: { select: { id: true, name: true, leadTimeDays: true, defaultCurrency: true } } }, orderBy: [{ isSelected: 'desc' }, { createdAt: 'asc' }] },
-          attachments: { orderBy: { uploadedAt: 'desc' } }, // PD.7
+          attachments: { orderBy: [{ sortOrder: 'asc' }, { uploadedAt: 'desc' }] }, // PD.7 / FP.5
           purchaseOrders: { orderBy: { createdAt: 'desc' }, select: { id: true, poNumber: true, status: true, poKind: true, totalCents: true } }, // PD.8
           certifications: { orderBy: { createdAt: 'asc' } }, // PD.9
         },
@@ -6023,6 +6023,12 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
       if (body.targetCostEur !== undefined) data.targetCostCents = body.targetCostEur == null || !Number.isFinite(Number(body.targetCostEur)) ? null : Math.round(Number(body.targetCostEur) * 100)
       if (body.targetLaunchDate !== undefined) data.targetLaunchDate = body.targetLaunchDate ? new Date(body.targetLaunchDate) : null
       if (body.linkedProductId !== undefined) data.linkedProductId = body.linkedProductId || null
+      // FP.2 — factory-pack content (Json passthrough + specNotes).
+      if (body.sizeChart !== undefined) data.sizeChart = body.sizeChart ?? null
+      if (body.materials !== undefined) data.materials = body.materials ?? null
+      if (body.colorways !== undefined) data.colorways = body.colorways ?? null
+      if (body.specNotes !== undefined) data.specNotes = body.specNotes?.trim() || null
+      if (body.revision !== undefined) { const r = Number(body.revision); if (Number.isInteger(r) && r >= 1) data.revision = r }
       const updated = await prisma.developmentProject.update({ where: { id }, data })
       return updated
     } catch (error: any) {
@@ -6104,6 +6110,23 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
         },
       })
       return created
+    } catch (error: any) {
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  // FP.5 — edit attachment pack metadata (order / caption / include).
+  fastify.patch('/fulfillment/development/projects/:id/attachments/:aid', async (request, reply) => {
+    try {
+      const { aid } = request.params as { id: string; aid: string }
+      const body = (request.body ?? {}) as { sortOrder?: number; caption?: string | null; includeInPack?: boolean; kind?: string }
+      const data: Record<string, any> = {}
+      if (body.sortOrder !== undefined) data.sortOrder = Math.max(0, Number(body.sortOrder) || 0)
+      if ('caption' in body) data.caption = body.caption?.trim() || null
+      if (body.includeInPack !== undefined) data.includeInPack = !!body.includeInPack
+      if (body.kind !== undefined && ['TECH_PACK', 'REFERENCE', 'MEASUREMENT', 'SAMPLE_PHOTO', 'OTHER'].includes(body.kind.toUpperCase())) data.kind = body.kind.toUpperCase()
+      const updated = await prisma.developmentAttachment.update({ where: { id: aid }, data })
+      return updated
     } catch (error: any) {
       return reply.code(500).send({ error: error?.message ?? String(error) })
     }
