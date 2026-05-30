@@ -20,6 +20,7 @@ import { StatusChip } from '@/app/_shared/ads-ui'
 import { CampaignTrendChart, type TrendRow } from './CampaignTrendChart'
 import { CampaignBudgetPace } from './CampaignBudgetPace'
 import { CampaignRecommendations } from './CampaignRecommendations'
+import { CampaignHealth, type HealthFactor } from './CampaignHealth'
 import { Sparkline } from './Sparkline'
 
 interface TrendSummary { impressions: number; clicks: number; orders: number; spendCents: number; salesCents: number; acos: number | null; roas: number | null; ctr: number | null }
@@ -153,6 +154,45 @@ export function CampaignDetailCockpit({ campaign, history }: { campaign: Campaig
     { icon: ShoppingCart, label: 'Spend', value: eur(spendC), tone: 'amber', detail: `ACOS ${pct(acos)}`, ...(trendPrev ? { delta: { pct: dPct(spendC, trendPrev.spendCents), good: (dPct(spendC, trendPrev.spendCents) ?? 0) <= 0 } } : {}) },
     { icon: TrendingUp, label: 'Sales', value: eur(salesC), tone: 'violet', detail: `ROAS ${roas != null ? roas.toFixed(2) + '×' : '—'}`, ...(trendPrev ? { delta: { pct: dPct(salesC, trendPrev.salesCents), good: (dPct(salesC, trendPrev.salesCents) ?? 0) >= 0 } } : {}) },
   ]
+
+  // CD.9 — health score from signals already on hand. Transparent, weighted
+  // penalties; each factor surfaces as a chip with its detail.
+  const { healthScore, healthFactors } = (() => {
+    const factors: HealthFactor[] = []
+    let s = 100
+    const acosPct = sm?.acos ?? null
+    if (acosPct == null) {
+      if (spendC > 0) { s -= 45; factors.push({ label: 'ACOS', status: 'bad', detail: 'spend, no sales' }) }
+      else factors.push({ label: 'ACOS', status: 'warn', detail: 'no spend yet' })
+    } else if (acosPct <= 15) factors.push({ label: 'ACOS', status: 'good', detail: `${acosPct.toFixed(0)}%` })
+    else if (acosPct <= 25) { s -= 5; factors.push({ label: 'ACOS', status: 'good', detail: `${acosPct.toFixed(0)}%` }) }
+    else if (acosPct <= 35) { s -= 15; factors.push({ label: 'ACOS', status: 'warn', detail: `${acosPct.toFixed(0)}%` }) }
+    else if (acosPct <= 50) { s -= 30; factors.push({ label: 'ACOS', status: 'warn', detail: `${acosPct.toFixed(0)}%` }) }
+    else { s -= 45; factors.push({ label: 'ACOS', status: 'bad', detail: `${acosPct.toFixed(0)}%` }) }
+
+    const pm = campaign.trueProfitMarginPct != null ? parseFloat(campaign.trueProfitMarginPct) : null
+    if (pm != null) {
+      if (pm < 0) { s -= 20; factors.push({ label: 'Profit', status: 'bad', detail: `${pm.toFixed(0)}% margin` }) }
+      else factors.push({ label: 'Profit', status: 'good', detail: `${pm.toFixed(0)}% margin` })
+    }
+
+    if (campaign.lastSyncedAt) {
+      const days = (Date.now() - new Date(campaign.lastSyncedAt).getTime()) / 86_400_000
+      if (days > 2) { s -= 12; factors.push({ label: 'Sync', status: 'warn', detail: `${Math.round(days)}d ago` }) }
+      else factors.push({ label: 'Sync', status: 'good', detail: 'fresh' })
+    } else { s -= 8; factors.push({ label: 'Sync', status: 'warn', detail: 'never synced' }) }
+
+    const ctrPct = sm?.ctr ?? null
+    if (ctrPct != null && ctrPct < 0.15 && impr > 500) { s -= 8; factors.push({ label: 'CTR', status: 'warn', detail: `${ctrPct.toFixed(2)}%` }) }
+    else if (ctrPct != null) factors.push({ label: 'CTR', status: 'good', detail: `${ctrPct.toFixed(2)}%` })
+
+    const budgetCents = Math.round(parseFloat(campaign.dailyBudget || '0') * 100)
+    if (budgetCents > 0 && trendRows && trendRows.length > 0) {
+      const constrained = trendRows.filter((r) => r.adSpendCents >= budgetCents * 0.95).length
+      if (constrained >= Math.max(2, Math.ceil(trendRows.length * 0.3))) { s -= 10; factors.push({ label: 'Budget', status: 'warn', detail: `capped ${constrained}/${trendRows.length}d` }) }
+    }
+    return { healthScore: Math.max(0, Math.min(100, s)), healthFactors: factors }
+  })()
 
   const loadSearchTerms = useCallback(async () => {
     if (searchTerms != null) return
@@ -331,6 +371,7 @@ export function CampaignDetailCockpit({ campaign, history }: { campaign: Campaig
       </div>
       <KpiStrip tiles={tiles} className="mb-4" />
       <CampaignRecommendations campaignId={campaign.id} onNegate={addNegative} onGoToTab={(t) => setTab(t)} refreshKey={liveTs ?? 0} />
+      <CampaignHealth score={healthScore} factors={healthFactors} marketplace={campaign.marketplace} refreshKey={liveTs ?? 0} />
       <CampaignBudgetPace rows={trendRows} dailyBudget={campaign.dailyBudget} windowDays={windowDays} />
       <CampaignTrendChart rows={trendRows} windowDays={windowDays} onWindowChange={setWindowDays} loading={trendLoading} />
 
