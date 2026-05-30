@@ -193,7 +193,25 @@ function ProjectDrawer({ id, onClose }: { id: string; onClose: () => void }) {
                 <div className="text-lg font-semibold">{p.name}</div>
                 <div className="font-mono text-[11px] text-slate-500">{p.code}</div>
               </div>
-              <button onClick={onClose} className="text-slate-400 hover:text-slate-200">✕</button>
+              <div className="flex items-center gap-2">
+                {/* PD.10 — launch → create product */}
+                {p.linkedProductId ? (
+                  <a href={`/products/${p.linkedProductId}/edit`} target="_blank" rel="noopener noreferrer" className="rounded border border-emerald-700 bg-emerald-900/40 px-2 py-0.5 text-[11px] text-emerald-200 hover:bg-emerald-900/60">Launched → product ↗</a>
+                ) : (
+                  <button
+                    onClick={async () => {
+                      if (!window.confirm('Launch this project? This creates a real Product and (if a supplier is selected) seeds its catalog with the factory name.')) return
+                      const res = await fetch(`${API}/api/fulfillment/development/projects/${id}/launch`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
+                      const d = await res.json().catch(() => ({}))
+                      if (!res.ok) { alert(d.error ?? 'Launch failed'); return }
+                      void load()
+                      if (d.linkedProductId) window.open(`/products/${d.linkedProductId}/edit`, '_blank')
+                    }}
+                    className="rounded border border-emerald-700 bg-emerald-900/40 px-2 py-0.5 text-[11px] text-emerald-200 hover:bg-emerald-900/60"
+                  >Launch → product</button>
+                )}
+                <button onClick={onClose} className="text-slate-400 hover:text-slate-200">✕</button>
+              </div>
             </div>
 
             <div className="grid grid-cols-2 gap-3 text-xs">
