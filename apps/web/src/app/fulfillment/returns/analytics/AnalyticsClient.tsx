@@ -80,27 +80,42 @@ const CHANNEL_TONE: Record<string, string> = {
   ETSY: 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-900',
 }
 
+// RX.6a — defect → recall candidates from /returns/defect-recall.
+type DefectRecall = {
+  windowDays: number
+  minDefectCount: number
+  candidates: Array<{
+    productId: string; sku: string | null; name: string | null
+    defectReturnCount: number; totalReturnCount: number; defectRatePct: number | null
+    lots: Array<{ id: string; lotNumber: string; unitsRemaining: number; hasOpenRecall: boolean }>
+    flagged: boolean
+  }>
+}
+
 export default function AnalyticsClient() {
   const [data, setData] = useState<Analytics | null>(null)
   const [risk, setRisk] = useState<RiskScoreResponse | null>(null)
   const [intel, setIntel] = useState<Intelligence | null>(null)
+  const [recall, setRecall] = useState<DefectRecall | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   const fetchAnalytics = useCallback(async () => {
     setLoading(true)
     try {
-      const [analyticsRes, riskRes, intelRes] = await Promise.all([
+      const [analyticsRes, riskRes, intelRes, recallRes] = await Promise.all([
         fetch(`${getBackendUrl()}/api/fulfillment/returns/analytics`, { cache: 'no-store' }),
         fetch(`${getBackendUrl()}/api/fulfillment/returns/risk-scores`, { cache: 'no-store' }),
         fetch(`${getBackendUrl()}/api/fulfillment/returns/intelligence`, { cache: 'no-store' }),
+        fetch(`${getBackendUrl()}/api/fulfillment/returns/defect-recall`, { cache: 'no-store' }),
       ])
       if (analyticsRes.ok) setData((await analyticsRes.json()) as Analytics)
       else setError(`HTTP ${analyticsRes.status}`)
-      // Risk + intelligence failures are non-fatal — page still renders
-      // the rest. Surface as empty cards.
+      // Risk + intelligence + recall failures are non-fatal — page
+      // still renders the rest. Surface as empty cards.
       if (riskRes.ok) setRisk((await riskRes.json()) as RiskScoreResponse)
       if (intelRes.ok) setIntel((await intelRes.json()) as Intelligence)
+      if (recallRes.ok) setRecall((await recallRes.json()) as DefectRecall)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Load failed')
     } finally {
@@ -496,6 +511,67 @@ export default function AnalyticsClient() {
             )}
           </Card>
         </>
+      )}
+
+      {/* RX.6a — defect → recall candidates (migration-free). Products
+          coming back damaged/unusable, with their active lots, for
+          hand-off to the L-series recall workflow. */}
+      {recall && recall.candidates.some((c) => c.flagged) && (
+        <Card>
+          <div className="text-sm font-semibold text-slate-700 dark:text-slate-300 inline-flex items-center gap-2 mb-2">
+            <AlertTriangle size={14} className="text-rose-600 dark:text-rose-400" /> Defect → recall candidates
+            <span className="text-xs text-slate-400 font-normal">(≥{recall.minDefectCount} defect returns · last {recall.windowDays}d)</span>
+          </div>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">
+            Products returning damaged/unusable. Review the active lots and open a recall on the implicated batch.
+          </p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-slate-200 dark:border-slate-700 text-left text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                  <th className="px-2 py-1.5 font-semibold">Product</th>
+                  <th className="px-2 py-1.5 font-semibold text-right">Defect / total</th>
+                  <th className="px-2 py-1.5 font-semibold text-right">Defect rate</th>
+                  <th className="px-2 py-1.5 font-semibold">Active lots</th>
+                  <th className="px-2 py-1.5"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {recall.candidates.filter((c) => c.flagged).map((c) => (
+                  <tr key={c.productId} className="border-b border-slate-100 dark:border-slate-800">
+                    <td className="px-2 py-1.5">
+                      <div className="text-slate-900 dark:text-slate-100 truncate max-w-[220px]">{c.name ?? c.sku ?? c.productId.slice(-6)}</div>
+                      {c.sku && <div className="font-mono text-xs text-slate-400 truncate max-w-[220px]">{c.sku}</div>}
+                    </td>
+                    <td className="px-2 py-1.5 text-right tabular-nums font-semibold text-rose-700 dark:text-rose-300">
+                      {c.defectReturnCount}<span className="text-slate-400 font-normal"> / {c.totalReturnCount}</span>
+                    </td>
+                    <td className="px-2 py-1.5 text-right tabular-nums">{c.defectRatePct != null ? `${c.defectRatePct.toFixed(0)}%` : '—'}</td>
+                    <td className="px-2 py-1.5">
+                      {c.lots.length === 0 ? <span className="text-xs text-slate-400">no active lots</span> : (
+                        <div className="flex flex-wrap gap-1">
+                          {c.lots.slice(0, 4).map((l) => (
+                            <span
+                              key={l.id}
+                              title={l.hasOpenRecall ? 'Recall already open' : `${l.unitsRemaining} units remaining`}
+                              className={`text-[10px] font-mono px-1 py-0.5 border rounded ${l.hasOpenRecall ? 'border-rose-300 dark:border-rose-800 text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/30' : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300'}`}
+                            >
+                              {l.lotNumber}{l.hasOpenRecall ? ' ⚠' : ` ·${l.unitsRemaining}`}
+                            </span>
+                          ))}
+                          {c.lots.length > 4 && <span className="text-[10px] text-slate-400">+{c.lots.length - 4}</span>}
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-2 py-1.5 text-right">
+                      <Link href="/fulfillment/stock/recalls" className="text-xs text-blue-700 dark:text-blue-300 hover:underline">Recalls →</Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
       )}
     </div>
   )
