@@ -12,7 +12,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { ChevronLeft, Check, Lightbulb } from 'lucide-react'
+import { ChevronLeft, Check, Lightbulb, Copy } from 'lucide-react'
 import { useMarketingEvents } from '@/lib/sync/use-marketing-events'
 import { KpiStrip, type KpiTileSpec, BulkActionShell } from '@/app/_shared/grid-lens'
 import { Pause, Play, ChevronsUp, ChevronsDown, Ban, Plus } from 'lucide-react'
@@ -22,6 +22,7 @@ import { CampaignBudgetPace } from './CampaignBudgetPace'
 import { CampaignRecommendations } from './CampaignRecommendations'
 import { CampaignHealth, type HealthFactor } from './CampaignHealth'
 import { CampaignProfitLens } from './CampaignProfitLens'
+import { CampaignCopyModal } from './CampaignCopyModal'
 import { Sparkline } from './Sparkline'
 
 interface TrendSummary { impressions: number; clicks: number; orders: number; spendCents: number; salesCents: number; acos: number | null; roas: number | null; ctr: number | null }
@@ -80,6 +81,8 @@ export function CampaignDetailCockpit({ campaign, history }: { campaign: Campaig
   const [selTerms, setSelTerms] = useState<Set<string>>(new Set())
   const [bulkBusy, setBulkBusy] = useState(false)
   const [bulkStatus, setBulkStatus] = useState<string | null>(null)
+  const [copyOpen, setCopyOpen] = useState(false) // CD.10b
+  const normStrategy = campaign.biddingStrategy?.toLowerCase().includes('auto') ? 'autoForSales' : campaign.biddingStrategy?.toLowerCase().includes('manual') ? 'manual' : 'legacyForSales'
 
   // CD.1/CD.2 — campaign-scoped windowed trends + period-over-period compare.
   // The single fetch powers both the chart (rows) and the windowed KPI tiles
@@ -355,7 +358,11 @@ export function CampaignDetailCockpit({ campaign, history }: { campaign: Campaig
   return (
     <div className="px-4 py-4">
       <Link href="/marketing/advertising/campaigns" className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700 mb-2"><ChevronLeft size={14} /> All campaigns</Link>
-      <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100">{campaign.name}</h1>
+      <div className="flex items-start justify-between gap-3">
+        <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100">{campaign.name}</h1>
+        <button onClick={() => setCopyOpen(true)} className="inline-flex items-center gap-1 px-2.5 py-1 text-sm rounded-md border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-900 flex-shrink-0"><Copy size={13} /> Copy settings to…</button>
+      </div>
+      {copyOpen && <CampaignCopyModal sourceId={campaign.id} sourceName={campaign.name} marketplace={campaign.marketplace} biddingStrategy={normStrategy} dailyBudget={parseFloat(campaign.dailyBudget || '0')} onClose={() => setCopyOpen(false)} />}
       <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 mt-1 mb-3">
         <StatusChip status={campaign.status} />
         <span>{campaign.type}</span><span>·</span><span>{campaign.marketplace ?? '—'}</span><span>·</span>
