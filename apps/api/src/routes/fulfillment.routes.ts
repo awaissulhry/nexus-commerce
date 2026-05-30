@@ -5773,6 +5773,83 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // ── PD.3 — supplier comms log (timeline + compose-and-send) ────────
+  fastify.get('/fulfillment/suppliers/:id/comms', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const items = await prisma.supplierComm.findMany({
+        where: { supplierId: id },
+        orderBy: { createdAt: 'desc' },
+        take: 100,
+      })
+      return { items }
+    } catch (error: any) {
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  // Log a manual touch-point (call / WhatsApp / note). No send.
+  fastify.post('/fulfillment/suppliers/:id/comms', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const body = (request.body ?? {}) as { channel?: string; direction?: string; subject?: string; body?: string; contactId?: string }
+      const channel = String(body.channel ?? 'NOTE').toUpperCase()
+      if (!['CALL', 'WHATSAPP', 'NOTE'].includes(channel)) {
+        return reply.code(400).send({ error: 'channel must be CALL | WHATSAPP | NOTE' })
+      }
+      if (!body.body || !String(body.body).trim()) return reply.code(400).send({ error: 'body required' })
+      const created = await prisma.supplierComm.create({
+        data: {
+          supplierId: id,
+          contactId: body.contactId ?? null,
+          channel,
+          direction: body.direction === 'IN' ? 'IN' : 'OUT',
+          subject: body.subject?.trim() || null,
+          body: String(body.body).trim(),
+          byUserId: (request.headers['x-user-id'] as string | undefined) ?? null,
+        },
+      })
+      return created
+    } catch (error: any) {
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  // Compose-and-send an email to a supplier contact; logs the outcome.
+  // Reuses the shared dryRun-gated transport (NEXUS_ENABLE_OUTBOUND_EMAILS).
+  fastify.post('/fulfillment/suppliers/:id/comms/email', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const body = (request.body ?? {}) as { to?: string; subject?: string; body?: string; contactId?: string }
+      const to = body.to?.trim()
+      const text = body.body?.trim()
+      const subject = body.subject?.trim() || 'Message from Xavia'
+      if (!to || !/.+@.+\..+/.test(to)) return reply.code(400).send({ error: 'valid recipient email required' })
+      if (!text) return reply.code(400).send({ error: 'body required' })
+
+      const { sendEmail } = await import('../services/email/transport.js')
+      const html = `<div style="font-family:Inter,-apple-system,sans-serif;font-size:14px;color:#0f172a;white-space:pre-wrap;">${text.replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c] as string))}</div>`
+      const result = await sendEmail({ to, subject, html, text, tag: `supplier-comms:${id}` })
+
+      const created = await prisma.supplierComm.create({
+        data: {
+          supplierId: id,
+          contactId: body.contactId ?? null,
+          channel: 'EMAIL',
+          direction: 'OUT',
+          subject,
+          body: text,
+          emailTo: to,
+          emailOk: result.ok,
+          byUserId: (request.headers['x-user-id'] as string | undefined) ?? null,
+        },
+      })
+      return reply.send({ comm: created, delivery: result })
+    } catch (error: any) {
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
   // ── A4 — SupplierProduct cost & lead-time management ───────────────
   // The replenishment math (this file, ~line 9680) reads a product's unit
   // cost / MOQ / case-pack / lead-time ONLY from the SupplierProduct row of
