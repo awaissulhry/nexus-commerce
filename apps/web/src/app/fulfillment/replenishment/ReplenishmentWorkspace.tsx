@@ -77,7 +77,7 @@ import { useListingEvents } from '@/lib/sync/use-listing-events'
 import { useInboundEvents } from '@/lib/sync/use-inbound-events'
 import { DENSITY_CELL_CLASS } from '@/lib/products/theme'
 import { CommandCenterKpis } from './_shared/CommandCenterKpis'
-import { ReplenishmentWidgets, WidgetLauncher, useWidgetStore } from './_shared/FloatingWidgetSystem'
+import { ReplenishmentSidebar } from './_shared/ReplenishmentSidebar'
 
 // W9.6c — Suggestion + Urgency + OpenShipmentRef moved to
 // _shared/types.ts so the extracted shared cards pull the same shape.
@@ -349,7 +349,7 @@ export default function ReplenishmentWorkspace() {
   // call signature so existing call-sites keep working unchanged;
   // tone 'ok' maps to 'success', 'error' stays.
   const { toast } = useToast()
-  const { store: widgetStore, toggle: toggleWidget, close: closeWidget, move: moveWidget, focus: focusWidget } = useWidgetStore()
+  // RX.UI — floating widgets replaced by the collapsible ReplenishmentSidebar.
   const pushToast = useCallback(
     (tone: 'ok' | 'error', msg: string) => {
       if (tone === 'ok') toast.success(msg)
@@ -1284,7 +1284,10 @@ export default function ReplenishmentWorkspace() {
   ])
 
   return (
-    <div className="space-y-5">
+    <div className="flex gap-3">
+      {/* RX.UI — collapsible panel sidebar replaces the floating widgets */}
+      <ReplenishmentSidebar onRefreshPageData={fetchData} containerFill={data?.containerFill} />
+      <div className="flex-1 min-w-0 space-y-5">
       <PageHeader
         title={t('replenishment.title')}
         description={t('replenishment.description')}
@@ -1522,7 +1525,6 @@ export default function ReplenishmentWorkspace() {
             >
               Export CSV
             </Button>
-            <WidgetLauncher store={widgetStore} onToggle={toggleWidget} />
           </>
         }
       />
@@ -1706,16 +1708,7 @@ export default function ReplenishmentWorkspace() {
         />
       )}
 
-      {/* Floating widgets — rendered outside the scroll container so they
-          can be dragged freely across the viewport */}
-      <ReplenishmentWidgets
-        store={widgetStore}
-        onClose={closeWidget}
-        onMove={moveWidget}
-        onFocus={focusWidget}
-        onRefreshPageData={fetchData}
-        containerFill={data?.containerFill}
-      />
+      </div>
     </div>
   )
 }
