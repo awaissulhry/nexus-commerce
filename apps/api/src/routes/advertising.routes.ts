@@ -925,24 +925,30 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       })
       ids = grouped.map((g) => g.productId)
       ppdByProduct = new Map(grouped.map((g) => [g.productId, g]))
-    } else {
-      const ppdAdv = await prisma.productProfitDaily.groupBy({
-        by: ['productId'],
-        where: { date: { gte: since }, ...(mkt ? { marketplace: mkt } : {}) },
-        _sum: { advertisingSpendCents: true },
-        having: { advertisingSpendCents: { _sum: { gt: 0 } } },
-      })
-      const spendRank = new Map<string, number>()
-      for (const [pid, ag] of adByProduct) spendRank.set(pid, ag.spendC)
-      for (const g of ppdAdv) if (!spendRank.has(g.productId)) spendRank.set(g.productId, g._sum.advertisingSpendCents ?? 0)
-      ids = [...spendRank.entries()].sort((a, b) => b[1] - a[1]).slice(0, limit).map(([pid]) => pid)
-      const ppd = ids.length ? await prisma.productProfitDaily.groupBy({
+    } else if (adByProduct.size > 0) {
+      // PRODUCT_AD data exists → use ONLY that set (true per-product spend/ACOS,
+      // no double-count). Coverage grows daily as the advertised-product cron
+      // accumulates; products without PRODUCT_AD rows yet appear as they ingest.
+      ids = [...adByProduct.entries()].sort((a, b) => b[1].spendC - a[1].spendC).slice(0, limit).map(([pid]) => pid)
+      const ppd = await prisma.productProfitDaily.groupBy({
         by: ['productId'],
         where: { productId: { in: ids }, date: { gte: since }, ...(mkt ? { marketplace: mkt } : {}) },
         _sum: { advertisingSpendCents: true, grossRevenueCents: true, trueProfitCents: true, unitsSold: true },
         orderBy: { _sum: { grossRevenueCents: 'desc' } },
-      }) : []
+      })
       ppdByProduct = new Map(ppd.map((g) => [g.productId, g]))
+    } else {
+      // Fallback (no PRODUCT_AD yet): ProductProfitDaily.advertisingSpendCents.
+      const grouped = await prisma.productProfitDaily.groupBy({
+        by: ['productId'],
+        where: { date: { gte: since }, ...(mkt ? { marketplace: mkt } : {}) },
+        _sum: { advertisingSpendCents: true, grossRevenueCents: true, trueProfitCents: true, unitsSold: true },
+        having: { advertisingSpendCents: { _sum: { gt: 0 } } },
+        orderBy: { _sum: { advertisingSpendCents: 'desc' } },
+        take: limit,
+      })
+      ids = grouped.map((g) => g.productId)
+      ppdByProduct = new Map(grouped.map((g) => [g.productId, g]))
     }
     if (ids.length === 0) {
       reply.header('Cache-Control', 'private, max-age=60')
