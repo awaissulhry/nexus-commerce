@@ -30,11 +30,16 @@ const Z_80 = 1.282 // 80% prediction interval z-score (standard normal)
 // coefficient of variation of non-zero demand sizes.
 const ADI_INTERMITTENT = 1.32 // ≥ → demand is intermittent (use Croston/SBA)
 const CV2_LUMPY = 0.49 // ≥ (with high ADI) → lumpy, prefer SBA's bias correction
-const CROSTON_ALPHA = 0.1 // smoothing for Croston size + interval
-// Run-rate floor: the point forecast may not fall below this fraction of the
-// recent average daily demand — stops a decaying fit zeroing a live SKU.
-const FLOOR_FRACTION = 0.5
-const FLOOR_WINDOW = 90
+const CROSTON_ALPHA = 0.2 // smoothing for Croston size + interval (responsive to ramps)
+// Run-rate floor: the point forecast is anchored at this fraction of the
+// RECENT average daily demand. Tuned via holdout backtest — Croston's rate
+// over the full 365d history was diluted by the long pre-ramp zero stretch
+// and systematically under-forecast high-volume SKUs (highVolumeBias 0.53).
+// A short, strong floor anchors the forecast to recent demand; seasonality
+// modulates above it. For a stockout-prone catalog a slight upward bias is
+// the safe error. A genuinely dead SKU (recent run-rate 0) still floors at 0.
+const FLOOR_FRACTION = 0.8
+const FLOOR_WINDOW = 30
 
 export type ForecastRegime =
   | 'COLD_START'
