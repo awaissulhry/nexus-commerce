@@ -67,6 +67,11 @@ import {
 } from '@/app/_shared/grid-lens'
 import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
 import type { GridLensColumn, GridLensRow } from '@/app/_shared/grid-lens/types'
+import {
+  TimeframePicker,
+  timeframeLabel,
+  type TimeframeValue,
+} from '@/app/_shared/date-range/TimeframePicker'
 import { useInvalidationChannel } from '@/lib/sync/invalidation-channel'
 import { useListingEvents } from '@/lib/sync/use-listing-events'
 import { useInboundEvents } from '@/lib/sync/use-inbound-events'
@@ -140,7 +145,7 @@ const URGENCY_TONE: Record<Urgency, string> = {
   LOW:      'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700',
 }
 
-type RepColumnKey = 'product' | 'urgency' | 'stock' | 'daysLeft' | 'velocity' | 'demand' | 'reorderQty' | 'actions'
+type RepColumnKey = 'product' | 'urgency' | 'stock' | 'daysLeft' | 'velocity' | 'salesPeriod' | 'demand' | 'reorderQty' | 'actions'
 
 const REP_COLUMNS_CATALOG: ReadonlyArray<GridLensColumn & { alwaysOn?: boolean }> = [
   { key: 'product',    label: 'Product',     width: 340, locked: true, alwaysOn: true },
@@ -148,6 +153,9 @@ const REP_COLUMNS_CATALOG: ReadonlyArray<GridLensColumn & { alwaysOn?: boolean }
   { key: 'stock',      label: 'On hand',     width: 160 },
   { key: 'daysLeft',   label: 'Days left',   width: 90 },
   { key: 'velocity',   label: 'Vel/day',     width: 80 },
+  // RX.S1 — actual units sold over the operator-chosen timeframe (the
+  // toolbar TimeframePicker drives it). Toggleable + sortable like the rest.
+  { key: 'salesPeriod', label: 'Sales',      width: 90 },
   { key: 'demand',     label: 'Demand (LT)', width: 100 },
   { key: 'reorderQty', label: 'Suggest qty', width: 100 },
   // XG.4 — locked-trailing so the shared PreferencesModal renders it
@@ -157,7 +165,7 @@ const REP_COLUMNS_CATALOG: ReadonlyArray<GridLensColumn & { alwaysOn?: boolean }
   { key: 'actions',    label: '',            width: 160, locked: true, alwaysOn: true },
 ]
 const REP_DEFAULT_VISIBLE: ReadonlyArray<RepColumnKey> = [
-  'product', 'urgency', 'stock', 'daysLeft', 'velocity', 'demand', 'reorderQty', 'actions',
+  'product', 'urgency', 'stock', 'daysLeft', 'velocity', 'salesPeriod', 'demand', 'reorderQty', 'actions',
 ]
 const REP_SORT_FIELDS: ReadonlyArray<SortFieldOption> = [
   { value: 'sku',         label: 'SKU' },
@@ -420,6 +428,69 @@ export default function ReplenishmentWorkspace() {
   useEffect(() => {
     fetchData()
   }, [fetchData])
+
+  // RX.S1 — operator-chosen sales timeframe + per-SKU units. Fetched from the
+  // lean sales-by-sku endpoint so changing the timeframe re-runs only one
+  // small query, never the heavy recommendation pipeline.
+  const [salesTf, setSalesTf] = useState<TimeframeValue>(() => {
+    if (typeof window === 'undefined') return { preset: '30' }
+    try {
+      const raw = window.localStorage.getItem('nexus-replenishment-sales-tf')
+      if (raw) return JSON.parse(raw) as TimeframeValue
+    } catch {
+      /* fall through to default */
+    }
+    return { preset: '30' }
+  })
+  const [salesBySku, setSalesBySku] = useState<
+    Record<string, { units: number; revenueCents: number }>
+  >({})
+  useEffect(() => {
+    try {
+      window.localStorage.setItem('nexus-replenishment-sales-tf', JSON.stringify(salesTf))
+    } catch {
+      /* localStorage unavailable — non-fatal */
+    }
+  }, [salesTf])
+  useEffect(() => {
+    const params = new URLSearchParams()
+    if (salesTf.from && salesTf.to) {
+      params.set('from', salesTf.from)
+      params.set('to', salesTf.to)
+    } else {
+      params.set('preset', salesTf.preset || '30')
+    }
+    if (channelFilter) params.set('channel', channelFilter)
+    if (marketplaceFilter) params.set('marketplace', marketplaceFilter)
+    let cancelled = false
+    fetch(
+      `${getBackendUrl()}/api/fulfillment/replenishment/sales-by-sku?${params.toString()}`,
+      { cache: 'no-store' },
+    )
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!cancelled && d?.items) setSalesBySku(d.items)
+      })
+      .catch(() => {
+        /* non-fatal: the column simply shows 0 */
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [salesTf, channelFilter, marketplaceFilter])
+
+  // RX.S1 — roll child sales up to parent + grandparent rows so a grouping
+  // row never shows 0 while its variants actually sold.
+  const parentSalesById = useMemo(() => {
+    const m: Record<string, number> = {}
+    for (const s of data?.suggestions ?? []) {
+      const u = salesBySku[s.sku]?.units ?? 0
+      if (u <= 0) continue
+      if (s.parentId) m[s.parentId] = (m[s.parentId] ?? 0) + u
+      if (s.grandparentId) m[s.grandparentId] = (m[s.grandparentId] ?? 0) + u
+    }
+    return m
+  }, [data, salesBySku])
 
   // Real-time sync — refresh when stock or product data changes elsewhere
   // F-RT.1+2 — open SSE pipes for direct landings. Replenishment
@@ -754,7 +825,12 @@ export default function ReplenishmentWorkspace() {
     return visibleColumns
       .map((key) => REP_COLUMNS_CATALOG.find((c) => c.key === key))
       .filter((c): c is GridLensColumn & { alwaysOn?: boolean } => !!c)
-  }, [visibleColumns])
+      // RX.S1 — surface the chosen period in the Sales column header so the
+      // number is never ambiguous (e.g. "Sales · Last 30 days").
+      .map((c) =>
+        c.key === 'salesPeriod' ? { ...c, label: `Sales · ${timeframeLabel(salesTf)}`, width: 150 } : c,
+      )
+  }, [visibleColumns, salesTf])
 
   // Whenever filters/search/sort shift the underlying data, jump back
   // to page 1 so the operator isn't stuck on an empty tail page.
@@ -945,6 +1021,14 @@ export default function ReplenishmentWorkspace() {
       }
       case 'velocity':
         return <span className="tabular-nums text-slate-600 dark:text-slate-400">{row.velocity.toFixed(1)}</span>
+      case 'salesPeriod': {
+        // RX.S1 — units sold in the operator-chosen timeframe (toolbar picker).
+        const units = row.isParent
+          ? parentSalesById[row.id] ?? 0
+          : salesBySku[row.sku]?.units ?? 0
+        if (units <= 0) return <span className="text-slate-300 dark:text-slate-600">—</span>
+        return <span className="tabular-nums font-medium text-slate-700 dark:text-slate-300">{units}</span>
+      }
       case 'demand': {
         const s = row.suggestion
         if (!s) {
@@ -1341,6 +1425,8 @@ export default function ReplenishmentWorkspace() {
                 </option>
               ))}
             </select>
+            {/* RX.S1 — sales timeframe for the "Sales" column. */}
+            <TimeframePicker value={salesTf} onChange={setSalesTf} labelPrefix="Sales" />
           </>
         }
         filter={
