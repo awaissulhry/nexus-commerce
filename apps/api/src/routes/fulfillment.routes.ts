@@ -5690,6 +5690,281 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // ── A4 — SupplierProduct cost & lead-time management ───────────────
+  // The replenishment math (this file, ~line 9680) reads a product's unit
+  // cost / MOQ / case-pack / lead-time ONLY from the SupplierProduct row of
+  // its ReplenishmentRule.preferredSupplierId. So whenever we set a primary
+  // cost we ALSO point preferredSupplierId at that supplier — otherwise the
+  // cost is orphaned and EOQ / working-capital / landed-cost stay €0.
+
+  // Whitelist + validate a SupplierProduct payload. Accepts cost as either
+  // costCents (int) or costEur (human-friendly decimal). Returns the
+  // sanitized partial or an { error } string.
+  function sanitizeSupplierProductInput(
+    body: any,
+  ): { data: Record<string, any> } | { error: string } {
+    const data: Record<string, any> = {}
+    if (body.supplierSku !== undefined)
+      data.supplierSku = body.supplierSku ? String(body.supplierSku).trim() : null
+    if (body.costEur !== undefined && body.costEur !== null && body.costEur !== '') {
+      const eur = Number(body.costEur)
+      if (!Number.isFinite(eur) || eur < 0) return { error: 'costEur must be a non-negative number' }
+      data.costCents = Math.round(eur * 100)
+    } else if (body.costCents !== undefined) {
+      if (body.costCents === null) data.costCents = null
+      else {
+        const c = Number(body.costCents)
+        if (!Number.isInteger(c) || c < 0) return { error: 'costCents must be a non-negative integer' }
+        data.costCents = c
+      }
+    }
+    if (body.currencyCode !== undefined) {
+      const cc = String(body.currencyCode || 'EUR').trim().toUpperCase()
+      if (!/^[A-Z]{3}$/.test(cc)) return { error: 'currencyCode must be a 3-letter ISO code' }
+      data.currencyCode = cc
+    }
+    if (body.moq !== undefined) {
+      const m = Number(body.moq)
+      if (!Number.isInteger(m) || m < 1) return { error: 'moq must be an integer >= 1' }
+      data.moq = m
+    }
+    if (body.casePack !== undefined) {
+      if (body.casePack === null || body.casePack === '') data.casePack = null
+      else {
+        const cp = Number(body.casePack)
+        if (!Number.isInteger(cp) || cp < 1) return { error: 'casePack must be an integer >= 1' }
+        data.casePack = cp
+      }
+    }
+    if (body.leadTimeDaysOverride !== undefined) {
+      if (body.leadTimeDaysOverride === null || body.leadTimeDaysOverride === '')
+        data.leadTimeDaysOverride = null
+      else {
+        const lt = Number(body.leadTimeDaysOverride)
+        if (!Number.isInteger(lt) || lt < 0) return { error: 'leadTimeDaysOverride must be an integer >= 0' }
+        data.leadTimeDaysOverride = lt
+      }
+    }
+    if (body.isPrimary !== undefined) data.isPrimary = !!body.isPrimary
+    return { data }
+  }
+
+  // When a supplier becomes a product's primary: clear other primaries for
+  // that product and point the ReplenishmentRule.preferredSupplierId at it
+  // so the cost flows into the replenishment math. Runs inside the caller's
+  // transaction client.
+  async function wirePrimarySupplier(
+    tx: any,
+    productId: string,
+    supplierId: string,
+  ): Promise<void> {
+    await tx.supplierProduct.updateMany({
+      where: { productId, supplierId: { not: supplierId }, isPrimary: true },
+      data: { isPrimary: false },
+    })
+    await tx.replenishmentRule.upsert({
+      where: { productId },
+      create: { productId, preferredSupplierId: supplierId },
+      update: { preferredSupplierId: supplierId },
+    })
+  }
+
+  // POST — add/replace a product in a supplier's catalog (idempotent upsert
+  // on the [supplierId, productId] unique). Accepts productId or sku.
+  fastify.post('/fulfillment/suppliers/:supplierId/products', async (request, reply) => {
+    try {
+      const { supplierId } = request.params as { supplierId: string }
+      const body = request.body as any
+      const supplier = await prisma.supplier.findUnique({ where: { id: supplierId } })
+      if (!supplier) return reply.code(404).send({ error: 'supplier not found' })
+
+      let productId: string | undefined = body.productId
+      if (!productId && body.sku) {
+        const prod = await prisma.product.findFirst({
+          where: { sku: String(body.sku).trim() },
+          select: { id: true },
+        })
+        if (!prod) return reply.code(404).send({ error: `product not found for sku ${body.sku}` })
+        productId = prod.id
+      }
+      if (!productId) return reply.code(400).send({ error: 'productId or sku required' })
+
+      const sanitized = sanitizeSupplierProductInput(body)
+      if ('error' in sanitized) return reply.code(400).send({ error: sanitized.error })
+
+      const result = await prisma.$transaction(async (tx) => {
+        const row = await tx.supplierProduct.upsert({
+          where: { supplierId_productId: { supplierId, productId: productId! } },
+          create: { supplierId, productId: productId!, ...sanitized.data },
+          update: sanitized.data,
+        })
+        if (row.isPrimary) await wirePrimarySupplier(tx, productId!, supplierId)
+        return row
+      })
+      return { ok: true, supplierProduct: result }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[supplier-product create] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  // PATCH — update cost / moq / case-pack / lead-time / primary for an
+  // existing supplier-product.
+  fastify.patch(
+    '/fulfillment/suppliers/:supplierId/products/:productId',
+    async (request, reply) => {
+      try {
+        const { supplierId, productId } = request.params as {
+          supplierId: string
+          productId: string
+        }
+        const sanitized = sanitizeSupplierProductInput(request.body)
+        if ('error' in sanitized) return reply.code(400).send({ error: sanitized.error })
+
+        const result = await prisma.$transaction(async (tx) => {
+          const row = await tx.supplierProduct.update({
+            where: { supplierId_productId: { supplierId, productId } },
+            data: sanitized.data,
+          })
+          if (row.isPrimary) await wirePrimarySupplier(tx, productId, supplierId)
+          return row
+        })
+        return { ok: true, supplierProduct: result }
+      } catch (error: any) {
+        if (error?.code === 'P2025')
+          return reply.code(404).send({ error: 'supplier-product not found' })
+        fastify.log.error({ err: error }, '[supplier-product update] failed')
+        return reply.code(500).send({ error: error?.message ?? String(error) })
+      }
+    },
+  )
+
+  // DELETE — remove a product from a supplier's catalog. If it was the
+  // product's preferred supplier, clear the stale pointer too.
+  fastify.delete(
+    '/fulfillment/suppliers/:supplierId/products/:productId',
+    async (request, reply) => {
+      try {
+        const { supplierId, productId } = request.params as {
+          supplierId: string
+          productId: string
+        }
+        await prisma.$transaction(async (tx) => {
+          await tx.supplierProduct
+            .delete({ where: { supplierId_productId: { supplierId, productId } } })
+            .catch((e: any) => {
+              if (e?.code !== 'P2025') throw e
+            })
+          await tx.replenishmentRule.updateMany({
+            where: { productId, preferredSupplierId: supplierId },
+            data: { preferredSupplierId: null },
+          })
+        })
+        return { ok: true }
+      } catch (error: any) {
+        fastify.log.error({ err: error }, '[supplier-product delete] failed')
+        return reply.code(500).send({ error: error?.message ?? String(error) })
+      }
+    },
+  )
+
+  // POST — bulk upsert supplier-product costs/lead-times. The client parses
+  // the CSV and posts { rows: [...] }; we resolve, validate, and upsert each
+  // row, returning a per-row outcome so the UI can show exactly what landed.
+  fastify.post('/fulfillment/suppliers/bulk-import', async (request, reply) => {
+    try {
+      const body = request.body as { rows?: any[]; defaultSupplierId?: string }
+      const rows = Array.isArray(body?.rows) ? body.rows : []
+      if (rows.length === 0) return reply.code(400).send({ error: 'rows[] required' })
+      if (rows.length > 5000) return reply.code(400).send({ error: 'max 5000 rows per import' })
+
+      // Pre-resolve suppliers (by id or name) and products (by sku) in two
+      // batched queries rather than per-row round-trips.
+      const allSuppliers = await prisma.supplier.findMany({
+        select: { id: true, name: true },
+      })
+      const supplierById = new Map(allSuppliers.map((s) => [s.id, s]))
+      const supplierByName = new Map(
+        allSuppliers.map((s) => [s.name.trim().toLowerCase(), s]),
+      )
+      const skus = [
+        ...new Set(rows.map((r) => (r.sku ? String(r.sku).trim() : '')).filter(Boolean)),
+      ]
+      const products = await prisma.product.findMany({
+        where: { sku: { in: skus } },
+        select: { id: true, sku: true },
+      })
+      const productBySku = new Map(products.map((p) => [p.sku, p.id]))
+
+      const results: Array<{ row: number; status: string; reason?: string }> = []
+      let created = 0
+      let updated = 0
+      let failed = 0
+
+      for (let i = 0; i < rows.length; i++) {
+        const r = rows[i]
+        try {
+          // Resolve supplier.
+          let supplierId: string | undefined = r.supplierId || body.defaultSupplierId
+          if (!supplierId && r.supplierName) {
+            const s = supplierByName.get(String(r.supplierName).trim().toLowerCase())
+            supplierId = s?.id
+          }
+          if (!supplierId || !supplierById.has(supplierId)) {
+            results.push({ row: i, status: 'error', reason: `unknown supplier (${r.supplierName ?? r.supplierId ?? '—'})` })
+            failed++
+            continue
+          }
+          // Resolve product.
+          const sku = r.sku ? String(r.sku).trim() : ''
+          const productId = productBySku.get(sku)
+          if (!productId) {
+            results.push({ row: i, status: 'error', reason: `unknown sku (${sku || '—'})` })
+            failed++
+            continue
+          }
+          const sanitized = sanitizeSupplierProductInput(r)
+          if ('error' in sanitized) {
+            results.push({ row: i, status: 'error', reason: sanitized.error })
+            failed++
+            continue
+          }
+          const existing = await prisma.supplierProduct.findUnique({
+            where: { supplierId_productId: { supplierId, productId } },
+            select: { id: true },
+          })
+          await prisma.$transaction(async (tx) => {
+            const sp = await tx.supplierProduct.upsert({
+              where: { supplierId_productId: { supplierId: supplierId!, productId } },
+              create: { supplierId: supplierId!, productId, ...sanitized.data },
+              update: sanitized.data,
+            })
+            if (sp.isPrimary) await wirePrimarySupplier(tx, productId, supplierId!)
+          })
+          if (existing) {
+            updated++
+            results.push({ row: i, status: 'updated' })
+          } else {
+            created++
+            results.push({ row: i, status: 'created' })
+          }
+        } catch (e: any) {
+          failed++
+          results.push({ row: i, status: 'error', reason: e?.message ?? String(e) })
+        }
+      }
+
+      return {
+        ok: true,
+        summary: { total: rows.length, created, updated, failed },
+        results,
+      }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[supplier bulk-import] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
   fastify.get('/fulfillment/purchase-orders', async (request, reply) => {
     try {
       const q = request.query as any
