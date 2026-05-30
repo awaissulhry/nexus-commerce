@@ -847,7 +847,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   // remainder (account spend − Σ attributed) so nothing is silently dropped.
   // GET /advertising/by-product?windowDays=&marketplace=&search=&sort=&dir=&limit=
   fastify.get('/advertising/by-product', async (request, reply) => {
-    const q = request.query as { windowDays?: string; marketplace?: string; search?: string; sort?: string; dir?: string; limit?: string }
+    const q = request.query as { windowDays?: string; marketplace?: string; search?: string; sort?: string; dir?: string; limit?: string; compare?: string }
     const windowDays = Math.max(7, Math.min(90, Number(q.windowDays ?? 30)))
     const limit = Math.max(1, Math.min(1000, Number(q.limit ?? 300)))
     const since = new Date(); since.setUTCDate(since.getUTCDate() - windowDays); since.setUTCHours(0, 0, 0, 0)
@@ -929,6 +929,21 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const accountSpendCents = Math.round(Number(acct._sum.costMicros ?? 0n) / 10_000)
     const attributedSpendCents = rows.reduce((s, r) => s + r.adSpendCents, 0)
 
+    // PC.5 — prior equal-length window totals for vs-period deltas.
+    let previousTotals: { adSpendCents: number; revenueCents: number; profitCents: number } | null = null
+    if (q.compare === 'true' || q.compare === '1') {
+      const prevSince = new Date(since); prevSince.setUTCDate(prevSince.getUTCDate() - windowDays)
+      const prev = await prisma.productProfitDaily.aggregate({
+        where: { date: { gte: prevSince, lt: since }, ...(mkt ? { marketplace: mkt } : {}) },
+        _sum: { advertisingSpendCents: true, grossRevenueCents: true, trueProfitCents: true },
+      })
+      previousTotals = {
+        adSpendCents: prev._sum.advertisingSpendCents ?? 0,
+        revenueCents: prev._sum.grossRevenueCents ?? 0,
+        profitCents: prev._sum.trueProfitCents ?? 0,
+      }
+    }
+
     // Optional client-driven re-sort (default already spend desc).
     const dir = q.dir === 'asc' ? 1 : -1
     if (q.sort && q.sort !== 'spend') {
@@ -942,6 +957,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       windowDays,
       rows,
       totals: { adSpendCents: attributedSpendCents, revenueCents: rows.reduce((s, r) => s + r.revenueCents, 0), profitCents: rows.reduce((s, r) => s + r.profitCents, 0), products: rows.length },
+      previousTotals,
       accountSpendCents,
       unattributedSpendCents: Math.max(0, accountSpendCents - attributedSpendCents),
     }

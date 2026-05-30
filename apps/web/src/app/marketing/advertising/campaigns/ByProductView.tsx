@@ -16,6 +16,7 @@ import { VirtualizedGrid, KpiStrip, Thumbnail, type GridLensColumn, type GridLen
 import { type Density, DENSITY_CELL_CLASS } from '@/lib/products/theme'
 import { StatusChip } from '@/app/_shared/ads-ui'
 import { getBackendUrl } from '@/lib/backend-url'
+import { useMarketingEvents } from '@/lib/sync/use-marketing-events'
 import { Megaphone, ShoppingCart, Coins, Package } from 'lucide-react'
 
 interface Row extends GridLensRow {
@@ -62,7 +63,9 @@ const SORT_KEYS: Record<string, string> = { adspend: 'spend', revenue: 'revenue'
 export function ByProductView() {
   const [rows, setRows] = useState<Row[]>([])
   const [totals, setTotals] = useState<{ adSpendCents: number; revenueCents: number; profitCents: number; products: number }>({ adSpendCents: 0, revenueCents: 0, profitCents: 0, products: 0 })
+  const [prevTotals, setPrevTotals] = useState<{ adSpendCents: number; revenueCents: number; profitCents: number } | null>(null)
   const [unattributed, setUnattributed] = useState(0)
+  const [liveTs, setLiveTs] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
   const [windowDays, setWindowDays] = useState(30)
   const [density] = useState<Density>('comfortable')
@@ -77,13 +80,17 @@ export function ByProductView() {
     setLoading(true)
     try {
       const sortParam = SORT_KEYS[sortBy] ?? 'spend'
-      const r = await fetch(`${getBackendUrl()}/api/advertising/by-product?windowDays=${windowDays}&sort=${sortParam}&dir=${sortDir}&limit=500`, { cache: 'no-store' }).then((x) => x.json()).catch(() => ({ rows: [] }))
+      const r = await fetch(`${getBackendUrl()}/api/advertising/by-product?windowDays=${windowDays}&sort=${sortParam}&dir=${sortDir}&limit=500&compare=true`, { cache: 'no-store' }).then((x) => x.json()).catch(() => ({ rows: [] }))
       setRows((r.rows ?? []) as Row[])
       setTotals(r.totals ?? { adSpendCents: 0, revenueCents: 0, profitCents: 0, products: 0 })
+      setPrevTotals(r.previousTotals ?? null)
       setUnattributed(r.unattributedSpendCents ?? 0)
     } finally { setLoading(false) }
   }, [windowDays, sortBy, sortDir])
   useEffect(() => { void load() }, [load])
+
+  // PC.5 — live refresh on marketing events.
+  useMarketingEvents(useCallback(() => { void load(); setLiveTs(Date.now()); setTimeout(() => setLiveTs(null), 4000) }, [load]))
 
   const fetchChildrenFor = useCallback(async (productId: string) => {
     if (childrenByParent[productId]) return
@@ -121,10 +128,11 @@ export function ByProductView() {
   const toggleSelect = useCallback((id: string) => setSelected((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n }), [])
   const toggleSelectAll = useCallback(() => setSelected((s) => (s.size === rows.length ? new Set() : new Set(rows.map((r) => r.id)))), [rows])
 
+  const dPct = (cur: number, prev: number | undefined | null) => (prev != null && prev > 0 ? Math.round(((cur - prev) / prev) * 1000) / 10 : null)
   const tiles: KpiTileSpec[] = [
-    { icon: Megaphone, label: 'Ad spend', value: eur(totals.adSpendCents), tone: 'amber', detail: `${totals.products} advertised products` },
-    { icon: ShoppingCart, label: 'Revenue', value: eur(totals.revenueCents), tone: 'violet', detail: `TACOS ${pct(totals.revenueCents > 0 ? (totals.adSpendCents / totals.revenueCents) * 100 : null)}` },
-    { icon: Coins, label: 'True profit', value: eur(totals.profitCents), tone: 'emerald', detail: `Margin ${pct(totals.revenueCents > 0 ? (totals.profitCents / totals.revenueCents) * 100 : null)}` },
+    { icon: Megaphone, label: 'Ad spend', value: eur(totals.adSpendCents), tone: 'amber', detail: `${totals.products} advertised products`, ...(prevTotals ? { delta: { pct: dPct(totals.adSpendCents, prevTotals.adSpendCents), good: (dPct(totals.adSpendCents, prevTotals.adSpendCents) ?? 0) <= 0 } } : {}) },
+    { icon: ShoppingCart, label: 'Revenue', value: eur(totals.revenueCents), tone: 'violet', detail: `TACOS ${pct(totals.revenueCents > 0 ? (totals.adSpendCents / totals.revenueCents) * 100 : null)}`, ...(prevTotals ? { delta: { pct: dPct(totals.revenueCents, prevTotals.revenueCents), good: (dPct(totals.revenueCents, prevTotals.revenueCents) ?? 0) >= 0 } } : {}) },
+    { icon: Coins, label: 'True profit', value: eur(totals.profitCents), tone: 'emerald', detail: `Margin ${pct(totals.revenueCents > 0 ? (totals.profitCents / totals.revenueCents) * 100 : null)}`, ...(prevTotals ? { delta: { pct: dPct(totals.profitCents, prevTotals.profitCents), good: (dPct(totals.profitCents, prevTotals.profitCents) ?? 0) >= 0 } } : {}) },
     { icon: Package, label: 'Unattributed spend', value: eur(unattributed), tone: unattributed > totals.adSpendCents * 0.15 ? 'rose' : 'slate', detail: 'account − product-attributed' },
   ]
 
@@ -179,7 +187,11 @@ export function ByProductView() {
             <button key={p.days} onClick={() => setWindowDays(p.days)} className={`px-2.5 py-1 text-xs rounded-md border ${windowDays === p.days ? 'bg-blue-600 text-white border-blue-600' : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>{p.label}</button>
           ))}
         </div>
-        {loading && <span className="text-xs text-slate-400">updating…</span>}
+        <span className="inline-flex items-center gap-1.5 text-xs">
+          {loading && <span className="text-slate-400">updating…</span>}
+          <span className={`inline-flex h-2 w-2 rounded-full ${liveTs ? 'bg-emerald-500 animate-pulse' : 'bg-emerald-500/70'}`} />
+          <span className="text-emerald-600 dark:text-emerald-400 font-medium">{liveTs ? 'Updated just now' : 'Live'}</span>
+        </span>
       </div>
       <KpiStrip tiles={tiles} className="mb-4" />
       {rows.length === 0 && !loading ? (
