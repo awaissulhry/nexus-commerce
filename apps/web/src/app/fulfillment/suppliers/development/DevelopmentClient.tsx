@@ -150,7 +150,8 @@ type Candidate = {
   supplier: { id: string; name: string; leadTimeDays: number; defaultCurrency: string | null }
 }
 type DevAttachment = { id: string; kind: string; url: string; filename: string | null; uploadedAt: string }
-type ProjectDetail = Project & { candidates: Candidate[]; attachments: DevAttachment[] }
+type DevPo = { id: string; poNumber: string; status: string; poKind: string; totalCents: number }
+type ProjectDetail = Project & { candidates: Candidate[]; attachments: DevAttachment[]; purchaseOrders: DevPo[] }
 
 function ProjectDrawer({ id, onClose }: { id: string; onClose: () => void }) {
   const [p, setP] = useState<ProjectDetail | null>(null)
@@ -275,6 +276,32 @@ function ProjectDrawer({ id, onClose }: { id: string; onClose: () => void }) {
                     <a href={a.url} target="_blank" rel="noopener noreferrer" className="min-w-0 flex-1 truncate text-blue-400 hover:underline">{a.filename ?? 'file'}</a>
                     <button onClick={async () => { await fetch(`${API}/api/fulfillment/development/projects/${id}/attachments/${a.id}`, { method: 'DELETE' }); void load() }} className="text-slate-600 hover:text-rose-400">✕</button>
                   </div>
+                ))}
+              </div>
+            </div>
+
+            {/* PD.8 — sample purchase orders spun from this project */}
+            <div>
+              <div className="mb-1 flex items-center justify-between">
+                <span className="text-[10px] uppercase tracking-wide text-slate-500">Sample purchase orders</span>
+                <button
+                  onClick={async () => {
+                    const res = await fetch(`${API}/api/fulfillment/development/projects/${id}/sample-po`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
+                    if (res.ok) { const po = await res.json(); void load(); window.open(`/fulfillment/purchase-orders/${po.id}`, '_blank') }
+                    else { const d = await res.json().catch(() => ({})); alert(d.error ?? 'Failed to create sample PO') }
+                  }}
+                  className="rounded border border-blue-700 bg-blue-900/40 px-2 py-0.5 text-[11px] text-blue-200 hover:bg-blue-900/60"
+                >+ Sample PO</button>
+              </div>
+              <div className="space-y-1">
+                {p.purchaseOrders.length === 0 && <div className="text-[11px] text-slate-500">No sample POs yet. Select a candidate supplier (★), then create one.</div>}
+                {p.purchaseOrders.map((po) => (
+                  <a key={po.id} href={`/fulfillment/purchase-orders/${po.id}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 rounded border border-slate-800 px-2 py-1 text-[11px] hover:bg-slate-800/50">
+                    <span className="rounded bg-blue-900/40 px-1 text-[9px] text-blue-300">{po.poKind}</span>
+                    <span className="font-mono text-slate-300">{po.poNumber}</span>
+                    <span className="text-slate-500">{po.status}</span>
+                    <span className="ml-auto tabular-nums text-slate-400">{eur(po.totalCents)}</span>
+                  </a>
                 ))}
               </div>
             </div>
