@@ -19,9 +19,14 @@ import {
   runSpikeDetectorOnce,
   summarizeSpikeDetector,
 } from '../services/reviews/spike-detector.service.js'
+import {
+  sendReviewDigestOnce,
+  summarizeReviewDigest,
+} from '../services/reviews/review-digest.service.js'
 
 let ingestTask: ReturnType<typeof cron.schedule> | null = null
 let spikeTask: ReturnType<typeof cron.schedule> | null = null
+let digestTask: ReturnType<typeof cron.schedule> | null = null
 
 export async function runReviewIngestCron(): Promise<void> {
   try {
@@ -87,9 +92,42 @@ export function startReviewSpikeDetectorCron(): void {
   logger.info('review-spike-detector cron: scheduled', { schedule })
 }
 
+export async function runReviewDigestCron(): Promise<void> {
+  try {
+    await recordCronRun('review-digest', async () => {
+      const r = await sendReviewDigestOnce()
+      const summary = summarizeReviewDigest(r)
+      logger.info('review-digest cron: completed', { summary })
+      return summary
+    })
+  } catch (err) {
+    logger.error('review-digest cron: failure', {
+      error: err instanceof Error ? err.message : String(err),
+    })
+  }
+}
+
+export function startReviewDigestCron(): void {
+  if (digestTask) {
+    logger.warn('review-digest cron already started')
+    return
+  }
+  // Daily at 08:00 UTC by default (≈09:00 Rome). Override via env.
+  const schedule = process.env.NEXUS_REVIEW_DIGEST_SCHEDULE ?? '0 8 * * *'
+  if (!cron.validate(schedule)) {
+    logger.error('review-digest cron: invalid schedule', { schedule })
+    return
+  }
+  digestTask = cron.schedule(schedule, () => {
+    void runReviewDigestCron()
+  })
+  logger.info('review-digest cron: scheduled', { schedule })
+}
+
 export function startAllReviewCrons(): void {
   startReviewIngestCron()
   startReviewSpikeDetectorCron()
+  startReviewDigestCron()
 }
 
 export function stopAllReviewCrons(): void {
@@ -100,5 +138,9 @@ export function stopAllReviewCrons(): void {
   if (spikeTask) {
     spikeTask.stop()
     spikeTask = null
+  }
+  if (digestTask) {
+    digestTask.stop()
+    digestTask = null
   }
 }

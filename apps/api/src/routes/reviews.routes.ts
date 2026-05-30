@@ -29,6 +29,7 @@ import {
   type CanonicalField,
 } from '../services/reviews/review-import.service.js'
 import { draftReviewReply } from '../services/reviews/review-reply.service.js'
+import { sendReviewDigestOnce } from '../services/reviews/review-digest.service.js'
 import { respondToEbayFeedback } from '../services/reviews/adapters/ebay-feedback.adapter.js'
 import { sseResponseHeaders } from '../lib/sse.js'
 import { publishReviewEvent } from '../services/review-events.service.js'
@@ -901,6 +902,12 @@ const reviewsRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post('/reviews/cron/spike-detector/trigger', async (_request, _reply) => {
     const s = await runSpikeDetectorOnce()
     return { ok: true, summary: summarizeSpikeDetector(s), detail: s }
+  })
+
+  // RX.3 — manual digest trigger (also previews the digest payload).
+  fastify.post('/reviews/cron/digest/trigger', async (_request, _reply) => {
+    const r = await sendReviewDigestOnce()
+    return { ok: true, sent: r.sent, skipped: r.skipped, digest: r.digest }
   })
 
   fastify.post('/reviews/cron/review-rule-evaluator/trigger', async (_request, _reply) => {

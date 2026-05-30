@@ -268,6 +268,34 @@ FAILED) for an auditable reply history.
 
 ---
 
+## 14. RX.3 — Real-time + alerts
+
+**Live bus.** `review-events.service.ts` is an in-process event bus
+(mirrors order-events) with a 100-event/5-min replay buffer. Events:
+`review.created`, `review.negative`, `review.spike.detected`,
+`review.responded`. Published from the ingest service (new rows),
+spike detector, and reply-send. Clients connect to
+`GET /api/reviews/events?since=<ts>`.
+
+**Auto-refresh.** The Feed and Response Desk subscribe via
+`useReviewEventsRefresh` and re-fetch (debounced) as reviews land / are
+answered. A pulsing **Live** chip sits on both headers.
+
+**Alerts.** `ReviewLiveChip` raises a toast + (opt-in) browser
+notification on `review.negative` and `review.spike.detected`, with
+quick links into the Desk / spikes. Two new notification classes —
+`reviewNegative` (on by default) and `reviewSpike` — appear on
+`/settings/notifications`.
+
+**Daily digest.** `review-digest` cron (default 08:00 UTC, or
+`POST /api/reviews/cron/digest/trigger`) emails an operator summary:
+new reviews by sentiment, average rating, top complaint categories,
+negatives awaiting a reply, open Desk items, open spikes. Skips quiet
+days. Gated by `NEXUS_ENABLE_REVIEW_DIGEST=1`; recipients via
+`NEXUS_REVIEW_DIGEST_TO` (falls back to `NEXUS_SUPPORT_INBOX`).
+
+---
+
 ## 11. RV.9 — Operational polish notes
 
 **Setup nudge (RV.9.1).** If `/orders/reviews/rules` shows no active Xavia-IT rule (the most common first-run mistake), an amber banner offers a one-click "Set up Xavia IT default" — creates a rule with the 7–25d window, returns/refunds exclusions, sentiment diversion on. Same banner repairs misconfigured rules (scope=AMAZON_PER_MARKETPLACE but marketplace=null).
