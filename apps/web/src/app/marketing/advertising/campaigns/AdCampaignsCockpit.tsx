@@ -68,6 +68,10 @@ const eur = (c: number | null | undefined) => (c == null ? '—' : new Intl.Numb
 const num = (n: number | null | undefined) => (n == null ? '—' : new Intl.NumberFormat('en-US').format(Math.round(n)))
 const pct = (v: number | null | undefined, dp = 1) => (v == null ? '—' : `${(v * 100).toFixed(dp)}%`)
 const x2 = (v: number | null | undefined) => (v == null ? '—' : `${v.toFixed(2)}×`)
+// ACOS colour (fraction 0-1): green low, amber mid, rose high.
+const acosTone = (v: number | null | undefined) => (v == null ? 'bg-slate-300' : v <= 0.2 ? 'bg-emerald-500' : v <= 0.35 ? 'bg-amber-500' : 'bg-rose-500')
+const acosText = (v: number | null | undefined) => (v == null ? 'text-slate-400' : v <= 0.2 ? 'text-emerald-600 dark:text-emerald-400' : v <= 0.35 ? 'text-amber-600 dark:text-amber-400' : 'text-rose-600 dark:text-rose-400')
+const TYPE_TONE: Record<string, string> = { SP: 'bg-blue-100 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300', SB: 'bg-violet-100 text-violet-700 dark:bg-violet-950/50 dark:text-violet-300', SD: 'bg-teal-100 text-teal-700 dark:bg-teal-950/50 dark:text-teal-300' }
 
 // ── Column registry (Amazon-grade) ───────────────────────────────────────
 interface ColDef extends PreferencesColumnSpec { render: (r: Row) => React.ReactNode; align?: 'right' | 'left'; num?: boolean }
@@ -91,6 +95,7 @@ export function AdCampaignsCockpit({ initial }: { initial: { items: CampaignBase
   const [busy, setBusy] = useState<string | null>(null)
   const [prefsOpen, setPrefsOpen] = useState(false)
   const [density, setDensity] = useState<'comfortable' | 'compact'>('comfortable')
+  const [layout, setLayout] = useState<'cards' | 'table'>('cards') // PCG.3 — polished 2-line rows vs flat table
   const [chartMetrics, setChartMetrics] = useState<Set<string>>(() => new Set(['clicks', 'cost', 'sales']))
   const [bulkBudgetVal, setBulkBudgetVal] = useState('')
   const [importMsg, setImportMsg] = useState('')
@@ -327,6 +332,20 @@ export function AdCampaignsCockpit({ initial }: { initial: { items: CampaignBase
         <div className="ml-auto flex items-center gap-2">
           {importMsg && <span className={`text-xs ${importMsg.startsWith('✓') ? 'text-emerald-600' : 'text-slate-400'}`}>{importMsg}</span>}
           <span className="text-xs text-slate-400">{filtered.length} campaigns</span>
+          {layout === 'cards' && (
+            <select value={`${sortKey}:${sortDir}`} onChange={(e) => { const [k, d] = e.target.value.split(':'); setSortKey(k); setSortDir(d as 'asc' | 'desc') }} aria-label="Sort" className="py-1.5 px-2 text-xs rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
+              {[['spendC', 'Spend'], ['salesC', 'Sales'], ['acos', 'ACOS'], ['roas', 'ROAS'], ['impressions', 'Impressions'], ['clicks', 'Clicks'], ['orders', 'Orders'], ['name', 'Name']].map(([k, label]) => (
+                <optgroup key={k} label={label}>
+                  <option value={`${k}:desc`}>{label} ↓</option>
+                  <option value={`${k}:asc`}>{label} ↑</option>
+                </optgroup>
+              ))}
+            </select>
+          )}
+          <div className="inline-flex rounded-md border border-slate-200 dark:border-slate-700 overflow-hidden" title="Layout">
+            <button onClick={() => setLayout('cards')} className={`px-1.5 py-1.5 ${layout === 'cards' ? 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200' : 'text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`} title="Polished rows"><Rows size={14} /></button>
+            <button onClick={() => setLayout('table')} className={`px-1.5 py-1.5 border-l border-slate-200 dark:border-slate-700 ${layout === 'table' ? 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200' : 'text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`} title="Dense table"><SlidersHorizontal size={14} /></button>
+          </div>
           <div className="inline-flex rounded-md border border-slate-200 dark:border-slate-700 overflow-hidden" title="Row density">
             <button onClick={() => setDensity('comfortable')} className={`px-1.5 py-1.5 ${density === 'comfortable' ? 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200' : 'text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}><Rows size={14} /></button>
             <button onClick={() => setDensity('compact')} className={`px-1.5 py-1.5 border-l border-slate-200 dark:border-slate-700 ${density === 'compact' ? 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200' : 'text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}><AlignJustify size={14} /></button>
@@ -353,7 +372,42 @@ export function AdCampaignsCockpit({ initial }: { initial: { items: CampaignBase
         </div>
       )}
 
-      {/* Grid */}
+      {/* PCG.3 — polished 2-line rows (default) */}
+      {layout === 'cards' ? (
+        <div className="rounded-lg border border-slate-200 dark:border-slate-800 divide-y divide-slate-100 dark:divide-slate-800 overflow-hidden">
+          {filtered.length === 0 && <div className="px-3 py-10 text-center text-slate-400">No campaigns. Run the Amazon Ads sync to import.</div>}
+          {filtered.map((r) => {
+            const b = r.base
+            const editing = budgetEdits[b.id] != null
+            return (
+              <div key={b.id} className={`group px-3 ${density === 'compact' ? 'py-1.5' : 'py-2.5'} hover:bg-slate-50 dark:hover:bg-slate-900/40 ${selected.has(b.id) ? 'bg-blue-50/50 dark:bg-blue-950/20' : ''}`}>
+                <div className="flex items-center gap-2 min-w-0">
+                  <input type="checkbox" checked={selected.has(b.id)} onChange={(e) => setSelected((s) => { const n = new Set(s); e.target.checked ? n.add(b.id) : n.delete(b.id); return n })} className="flex-shrink-0" />
+                  <Link href={`/marketing/advertising/campaigns/${b.id}`} className="font-medium text-sm text-slate-800 dark:text-slate-100 hover:underline truncate max-w-[26rem]" title={b.name}>{b.name}</Link>
+                  <StatusChip status={b.status} dot />
+                  <span className={`px-1.5 py-px text-[10px] font-medium rounded flex-shrink-0 ${TYPE_TONE[b.type] ?? 'bg-slate-100 text-slate-600'}`}>{b.type}</span>
+                  <span className="text-xs text-slate-400 flex-shrink-0">{b.marketplace ?? '—'}</span>
+                  {editing ? (
+                    <span className="inline-flex items-center gap-1 flex-shrink-0">€<input autoFocus type="number" step="0.01" value={budgetEdits[b.id]} onChange={(e) => setBudgetEdits((s) => ({ ...s, [b.id]: e.target.value }))} onKeyDown={(e) => { if (e.key === 'Enter') saveBudget(b); if (e.key === 'Escape') setBudgetEdits((s) => { const { [b.id]: _, ...rest } = s; return rest }) }} onBlur={() => saveBudget(b)} className="w-16 px-1 py-0.5 text-xs text-right rounded border border-blue-400 bg-white dark:bg-slate-900" disabled={busy === b.id} />/d</span>
+                  ) : (
+                    <button onClick={() => setBudgetEdits((s) => ({ ...s, [b.id]: (r.budgetC / 100).toFixed(2) }))} className="text-xs text-slate-500 hover:text-slate-700 hover:underline decoration-dotted flex-shrink-0" title="Edit daily budget">{eur(r.budgetC)}/d</button>
+                  )}
+                  <div className="ml-auto flex items-center gap-1 flex-shrink-0 md:opacity-0 md:group-hover:opacity-100 transition">
+                    <button onClick={() => void toggleStatus(b)} disabled={busy === b.id} className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-50">{b.status === 'ENABLED' ? <><Pause size={11} /> Pause</> : <><Play size={11} /> Enable</>}</button>
+                  </div>
+                </div>
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-0.5 mt-1 pl-6 text-xs">
+                  {([['Impr', num(r.impressions)], ['CTR', pct(r.ctr, 2)], ['Spend', eur(r.spendC)], ['Sales', eur(r.salesC)], ['ROAS', x2(r.roas)], ['Orders', num(r.orders)]] as const).map(([label, val]) => (
+                    <span key={label} className="inline-flex items-center gap-1"><span className="text-slate-400">{label}</span><span className="tabular-nums text-slate-700 dark:text-slate-200">{val}</span></span>
+                  ))}
+                  <span className="inline-flex items-center gap-1"><span className={`h-1.5 w-1.5 rounded-full ${acosTone(r.acos)}`} /><span className="text-slate-400">ACOS</span><span className={`tabular-nums font-medium ${acosText(r.acos)}`}>{pct(r.acos)}</span></span>
+                  {r.marginPct != null && <span className="inline-flex items-center gap-1"><span className="text-slate-400">Margin</span><span className={`tabular-nums ${r.marginPct >= 0 ? 'text-slate-600 dark:text-slate-300' : 'text-rose-600'}`}>{pct(r.marginPct)}</span></span>}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      ) : (
       <div className="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800">
         <table className="text-sm border-collapse" style={{ minWidth: 'max-content' }}>
           <thead className="bg-slate-50 dark:bg-slate-900/60 text-slate-500 text-xs">
@@ -379,6 +433,7 @@ export function AdCampaignsCockpit({ initial }: { initial: { items: CampaignBase
           </tbody>
         </table>
       </div>
+      )}
 
       <PreferencesModal
         open={prefsOpen} onClose={() => setPrefsOpen(false)} value={prefs} onConfirm={(v) => { setPrefs(v); setPrefsOpen(false) }}
