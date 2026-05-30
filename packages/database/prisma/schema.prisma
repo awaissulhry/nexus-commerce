@@ -7757,6 +7757,7 @@ model Supplier {
   // container-fill suggestions.
   shippingProfile SupplierShippingProfile?
   contacts        SupplierContact[] // PD.2
+  comms           SupplierComm[]    // PD.3
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -12298,4 +12299,25 @@ model SupplierContact {
   supplier Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
 
   @@index([supplierId])
+}
+
+// PD.3 — supplier communication log. Every email sent from the app
+// (compose-and-send), plus manually-logged calls / WhatsApp / notes, in
+// one timeline per supplier. Email rows record the send outcome.
+model SupplierComm {
+  id         String   @id @default(cuid())
+  supplierId String
+  contactId  String?
+  channel    String   // EMAIL | CALL | WHATSAPP | NOTE
+  direction  String   @default("OUT") // OUT | IN
+  subject    String?
+  body       String
+  byUserId   String?
+  emailTo    String?
+  emailOk    Boolean?
+  createdAt  DateTime @default(now())
+
+  supplier Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+
+  @@index([supplierId, createdAt])
 }
