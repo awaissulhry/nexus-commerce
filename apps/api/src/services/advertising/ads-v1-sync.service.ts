@@ -555,19 +555,23 @@ async function ingestTargets(records: V1Target[]): Promise<{ upserted: number; b
   const toCreate: Array<Record<string, unknown>> = []
   const toUpdate: Array<{ id: string; data: Record<string, unknown> }> = []
   for (const x of rows) { const id = existKey.get(x.key); if (id) toUpdate.push({ id, data: x.data }); else toCreate.push(x.data) }
+  ;(bd as Record<string, unknown>).toCreate = toCreate.length
+  ;(bd as Record<string, unknown>).toUpdate = toUpdate.length
   let upserted = 0
+  let createdCount = 0
   if (toCreate.length) {
     try {
       const c = await prisma.adTarget.createMany({ data: toCreate as never, skipDuplicates: true })
+      createdCount = c.count
       upserted += c.count
     } catch (err) {
-      // Resilient fallback: a single bad row shouldn't drop the whole batch.
-      logger.warn('[ads-v1-sync] createMany failed, per-row fallback', { error: String(err).slice(0, 160), n: toCreate.length })
+      ;(bd as Record<string, unknown>).createManyErr = String(err).slice(0, 140)
       for (const d of toCreate) {
-        try { await prisma.adTarget.create({ data: d as never }); upserted++ } catch { /* skip bad row */ }
+        try { await prisma.adTarget.create({ data: d as never }); createdCount++; upserted++ } catch (e2) { if (!(bd as Record<string, unknown>).firstRowErr) (bd as Record<string, unknown>).firstRowErr = String(e2).slice(0, 140) }
       }
     }
   }
+  ;(bd as Record<string, unknown>).created = createdCount
   for (let i = 0; i < toUpdate.length; i += 25) {
     const chunk = toUpdate.slice(i, i + 25)
     await Promise.all(chunk.map((u) => prisma.adTarget.update({ where: { id: u.id }, data: u.data }).then(() => { upserted++ }).catch((err) => logger.warn('[ads-v1-sync] target update failed', { id: u.id, error: String(err).slice(0, 120) }))))
