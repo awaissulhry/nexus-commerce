@@ -1745,6 +1745,29 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     return { ok: true, totalUpdated, byType: results }
   })
 
+  // GET /api/advertising/debug/advertised-product-report — PC.0 diagnostic.
+  // Downloads + dumps the latest COMPLETED spAdvertisedProduct report so we can
+  // see Amazon's actual field names + whether the report is empty (ingest wrote
+  // 0 rows). No DB writes.
+  fastify.get('/advertising/debug/advertised-product-report', async (request) => {
+    const q = request.query as { jobId?: string }
+    const job = q.jobId
+      ? await prisma.amazonAdsReportJob.findUnique({ where: { id: q.jobId } })
+      : await prisma.amazonAdsReportJob.findFirst({ where: { reportTypeId: 'spAdvertisedProduct', status: 'COMPLETED' }, orderBy: { createdAt: 'desc' } })
+    if (!job) return { error: 'no spAdvertisedProduct job found' }
+    const info = { jobId: job.id, status: job.status, rowsIngested: job.rowsIngested, errorMessage: job.errorMessage, hasLocation: !!job.location, configuration: job.configuration }
+    if (!job.location) return { info, note: 'no download location' }
+    try {
+      const { gunzipSync } = await import('node:zlib')
+      const dl = await fetch(job.location)
+      const buf = Buffer.from(await dl.arrayBuffer())
+      let parsed: unknown
+      try { parsed = JSON.parse(gunzipSync(buf).toString('utf8')) } catch { parsed = JSON.parse(buf.toString('utf8')) }
+      const arr = Array.isArray(parsed) ? parsed : []
+      return { info, rowCount: arr.length, firstKeys: arr[0] ? Object.keys(arr[0] as object) : [], sample: arr.slice(0, 3) }
+    } catch (e) { return { info, error: (e as Error).message } }
+  })
+
   // POST /api/advertising/debug/probe-endpoints — Phase A diagnostic
   //
   // Fires 12+ probes against Amazon Ads endpoints (legacy v2, v3 list,
