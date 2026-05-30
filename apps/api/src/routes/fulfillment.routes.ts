@@ -151,7 +151,10 @@ import {
   generateForecastForSeries,
   generateForecastsForAll,
 } from '../services/forecast.service.js'
-import { computeCategorySeasonalIndices } from '../services/category-seasonality.service.js'
+import {
+  computeCategorySeasonalIndices,
+  resolveEffectiveProductTypes,
+} from '../services/category-seasonality.service.js'
 import {
   getAccuracyForSku,
   getAccuracyAggregate,
@@ -11285,18 +11288,11 @@ Return ONLY valid JSON, no prose:
         includeColdStart?: boolean
       }
       if (body.sku && body.channel && body.marketplace) {
-        // Resolve productType for category-aware weather elasticity.
-        const product = await prisma.product.findFirst({
-          where: { sku: body.sku },
-          select: { productType: true },
-        })
-        const variant = !product
-          ? await prisma.productVariation.findFirst({
-              where: { sku: body.sku },
-              select: { product: { select: { productType: true } } },
-            })
-          : null
-        const productType = product?.productType ?? variant?.product.productType ?? null
+        // Resolve EFFECTIVE productType (own → parent → grandparent). Child
+        // SKUs carry null on their own row; without the parent walk the
+        // category seasonal prior never engages (RX.B1 fix).
+        const ptMap = await resolveEffectiveProductTypes([body.sku])
+        const productType = ptMap.get(body.sku) ?? null
 
         const result = await generateForecastForSeries({
           sku: body.sku,

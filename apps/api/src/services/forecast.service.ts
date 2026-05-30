@@ -43,6 +43,7 @@ import {
 import {
   computeCategorySeasonalIndices,
   seasonalFactorFor,
+  resolveEffectiveProductTypes,
   type SeasonalIndexMap,
 } from './category-seasonality.service.js'
 
@@ -322,24 +323,10 @@ export async function generateForecastsForAll(args: {
   // Resolve product types for category-aware weather elasticity. Single
   // batched query — looks up the Product / ProductVariation row whose
   // sku matches each series.
+  // Effective productType (own → parent → grandparent) so child SKUs get
+  // the master's category and thus the category seasonal prior.
   const skus = [...new Set(eligible.map((s) => s.sku))]
-  const [products, variants] = await Promise.all([
-    prisma.product.findMany({
-      where: { sku: { in: skus } },
-      select: { sku: true, productType: true },
-    }),
-    prisma.productVariation.findMany({
-      where: { sku: { in: skus } },
-      select: { sku: true, product: { select: { productType: true } } },
-    }),
-  ])
-  const productTypeBySku = new Map<string, string | null>()
-  for (const p of products) productTypeBySku.set(p.sku, p.productType)
-  for (const v of variants) {
-    if (!productTypeBySku.has(v.sku)) {
-      productTypeBySku.set(v.sku, v.product.productType)
-    }
-  }
+  const productTypeBySku = await resolveEffectiveProductTypes(skus)
 
   // Build the per-marketplace signals cache — one fetch per
   // (channel, marketplace) shared across every SKU on that marketplace.

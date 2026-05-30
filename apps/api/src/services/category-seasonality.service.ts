@@ -80,6 +80,68 @@ interface RawRow {
 }
 
 /**
+ * Resolve each SKU's EFFECTIVE productType. Category lives on the master,
+ * and child/variation SKUs carry null on their own row, so we walk
+ * own → parent → grandparent (mirrors the replenishment endpoint's
+ * parent/grandparent fallback). Without this, every child SKU resolves to
+ * null and seasonality never applies. Two batched queries (Product, then
+ * ProductVariation for any SKUs not found as Products).
+ */
+export async function resolveEffectiveProductTypes(
+  skus: string[],
+): Promise<Map<string, string | null>> {
+  const out = new Map<string, string | null>()
+  if (skus.length === 0) return out
+  const products = await prisma.product.findMany({
+    where: { sku: { in: skus } },
+    select: {
+      sku: true,
+      productType: true,
+      parent: {
+        select: {
+          productType: true,
+          parent: { select: { productType: true } },
+        },
+      },
+    },
+  })
+  for (const p of products) {
+    const eff =
+      p.productType ?? p.parent?.productType ?? p.parent?.parent?.productType ?? null
+    if (!out.has(p.sku)) out.set(p.sku, eff)
+  }
+  const missing = skus.filter((s) => !out.has(s))
+  if (missing.length > 0) {
+    const variants = await prisma.productVariation.findMany({
+      where: { sku: { in: missing } },
+      select: {
+        sku: true,
+        product: {
+          select: {
+            productType: true,
+            parent: {
+              select: {
+                productType: true,
+                parent: { select: { productType: true } },
+              },
+            },
+          },
+        },
+      },
+    })
+    for (const v of variants) {
+      const eff =
+        v.product?.productType ??
+        v.product?.parent?.productType ??
+        v.product?.parent?.parent?.productType ??
+        null
+      if (!out.has(v.sku)) out.set(v.sku, eff)
+    }
+  }
+  return out
+}
+
+/**
  * Build per-category monthly seasonal indices from pooled DailySalesAggregate
  * demand. Returns both the detailed per-category diagnostics and a lean
  * Map<productType, number[12]> for the forecaster to consume.
@@ -114,23 +176,10 @@ export async function computeCategorySeasonalIndices(): Promise<{
     return { indices: [], map: new Map(), generatedAt: new Date().toISOString() }
   }
 
-  // Resolve sku → productType (Product first, then ProductVariation).
+  // Resolve sku → EFFECTIVE productType (own → parent → grandparent), so
+  // child SKUs' demand is attributed to the master's category.
   const skus = [...new Set(rows.map((r) => r.sku))]
-  const [products, variants] = await Promise.all([
-    prisma.product.findMany({
-      where: { sku: { in: skus } },
-      select: { sku: true, productType: true },
-    }),
-    prisma.productVariation.findMany({
-      where: { sku: { in: skus } },
-      select: { sku: true, product: { select: { productType: true } } },
-    }),
-  ])
-  const ptBySku = new Map<string, string | null>()
-  for (const p of products) ptBySku.set(p.sku, p.productType)
-  for (const v of variants) {
-    if (!ptBySku.has(v.sku)) ptBySku.set(v.sku, v.product.productType)
-  }
+  const ptBySku = await resolveEffectiveProductTypes(skus)
 
   // Accumulate per (productType, calendarMonth): summed units + the set of
   // distinct years observed.
