@@ -950,8 +950,21 @@ export async function runPlacementReportCycle(
   return result
 }
 
-// PC.0 — advertised-product creation cycle (SP-only). Mirrors the placement
-// cycle: one job per active profile, groupBy ['advertiser'].
+// PC.0 — advertised-product creation cycle (SP-only). Amazon's spAdvertised-
+// Product report returns EMPTY for multi-day ranges but data for SINGLE days,
+// so we create one report PER DAY per profile (the daily cron passes a single
+// day; a backfill passes a range that we split). Capped at 31 days.
+function enumerateDays(startDate: string, endDate: string): string[] {
+  const out: string[] = []
+  const s = new Date(`${startDate}T00:00:00.000Z`)
+  const e = new Date(`${endDate}T00:00:00.000Z`)
+  if (Number.isNaN(s.getTime()) || Number.isNaN(e.getTime()) || s > e) return [startDate]
+  for (let d = new Date(s), n = 0; d <= e && n < 31; d.setUTCDate(d.getUTCDate() + 1), n++) {
+    out.push(d.toISOString().slice(0, 10))
+  }
+  return out
+}
+
 export async function runAdvertisedProductReportCycle(
   args: { startDate: string; endDate: string },
 ): Promise<CreationCycleResult> {
@@ -960,6 +973,7 @@ export async function runAdvertisedProductReportCycle(
     where: { isActive: true },
     select: { profileId: true, region: true, marketplace: true },
   })
+  const days = enumerateDays(args.startDate, args.endDate)
   for (const profile of profiles) {
     const region: AdsRegion = (profile.region === 'NA' || profile.region === 'FE')
       ? (profile.region as AdsRegion) : 'EU'
@@ -968,25 +982,27 @@ export async function runAdvertisedProductReportCycle(
       select: { currencyCode: true },
     })
     const currencyCode = meta?.currencyCode ?? 'EUR'
-    try {
-      const out = await createReportJob({
-        profileId: profile.profileId,
-        region,
-        marketplace: profile.marketplace,
-        currencyCode,
-        adProduct: 'SPONSORED_PRODUCTS',
-        reportTypeId: ADVERTISED_PRODUCT_REPORT_TYPE_ID,
-        startDate: args.startDate,
-        endDate: args.endDate,
-        groupBy: ['advertiser'],
-        columns: ADVERTISED_PRODUCT_COLUMNS,
-        timeUnit: 'DAILY',
-      })
-      if (out.alreadyExisted) result.jobsSkipped += 1
-      else result.jobsCreated += 1
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err)
-      result.errors.push(`${profile.profileId} advertised-product: ${msg.slice(0, 800)}`)
+    for (const day of days) {
+      try {
+        const out = await createReportJob({
+          profileId: profile.profileId,
+          region,
+          marketplace: profile.marketplace,
+          currencyCode,
+          adProduct: 'SPONSORED_PRODUCTS',
+          reportTypeId: ADVERTISED_PRODUCT_REPORT_TYPE_ID,
+          startDate: day,
+          endDate: day,
+          groupBy: ['advertiser'],
+          columns: ADVERTISED_PRODUCT_COLUMNS,
+          timeUnit: 'DAILY',
+        })
+        if (out.alreadyExisted) result.jobsSkipped += 1
+        else result.jobsCreated += 1
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        result.errors.push(`${profile.profileId} ${day} advertised-product: ${msg.slice(0, 400)}`)
+      }
     }
   }
   return result
