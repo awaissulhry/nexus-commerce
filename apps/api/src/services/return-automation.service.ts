@@ -44,6 +44,35 @@ export interface AutomationPreview {
   generatedAt: string
 }
 
+// RX.8 — the auto-approve decision as a pure, exhaustively-tested
+// function. Single source of truth for eligibility so the gate ordering
+// (FBA → policy → delivery → window → high-value) can't silently drift.
+export type AutoApproveDecision =
+  | 'eligible'
+  | 'skip-fba'
+  | 'skip-policy-manual'
+  | 'skip-no-delivery'
+  | 'skip-out-of-window'
+  | 'skip-high-value'
+
+export function classifyAutoApprove(input: {
+  isFbaReturn: boolean
+  policyAutoApprove: boolean
+  hasDeliveryDate: boolean
+  inWindow: boolean
+  refundCents: number | null
+  highValueThresholdCents: number | null
+}): AutoApproveDecision {
+  if (input.isFbaReturn) return 'skip-fba'
+  if (!input.policyAutoApprove) return 'skip-policy-manual'
+  if (!input.hasDeliveryDate) return 'skip-no-delivery'
+  if (!input.inWindow) return 'skip-out-of-window'
+  if (input.highValueThresholdCents != null && (input.refundCents ?? 0) >= input.highValueThresholdCents) {
+    return 'skip-high-value'
+  }
+  return 'eligible'
+}
+
 export async function previewReturnAutomation(): Promise<AutomationPreview> {
   const RETURNLESS_MAX = Math.max(0, Number(process.env.NEXUS_RETURNS_RETURNLESS_MAX_CENTS) || 1500)
 
@@ -63,38 +92,41 @@ export async function previewReturnAutomation(): Promise<AutomationPreview> {
   const skipped = { highValue: 0, outOfWindow: 0, policyManual: 0, fba: 0, noDeliveryDate: 0 }
 
   for (const r of requested) {
-    // Amazon owns FBA returns end-to-end; never auto-action them.
-    if (r.isFbaReturn) { skipped.fba++; continue }
-
-    const policy = await resolveReturnPolicy({ channel: r.channel, marketplace: r.marketplace })
-    if (!policy.autoApprove) { skipped.policyManual++; continue }
-
+    // Resolve cheaply first; only pay for the window check once the
+    // FBA / policy / delivery gates have passed.
+    const policy = r.isFbaReturn
+      ? null
+      : await resolveReturnPolicy({ channel: r.channel, marketplace: r.marketplace })
     const delivered = r.order?.deliveredAt ?? r.order?.purchaseDate ?? null
-    if (!delivered) { skipped.noDeliveryDate++; continue }
+    const win = !r.isFbaReturn && policy?.autoApprove && delivered
+      ? await checkReturnWindow({ channel: r.channel, marketplace: r.marketplace, deliveredAt: delivered })
+      : null
 
-    const win = await checkReturnWindow({
-      channel: r.channel,
-      marketplace: r.marketplace,
-      deliveredAt: delivered,
+    const decision = classifyAutoApprove({
+      isFbaReturn: r.isFbaReturn,
+      policyAutoApprove: !!policy?.autoApprove,
+      hasDeliveryDate: !!delivered,
+      inWindow: !!win?.inWindow,
+      refundCents: r.refundCents,
+      highValueThresholdCents: policy?.highValueThresholdCents ?? null,
     })
-    if (!win.inWindow) { skipped.outOfWindow++; continue }
 
-    // High-value gate: a policy can require a human eye above a euro
-    // threshold even when auto-approve is on.
-    if (policy.highValueThresholdCents != null && (r.refundCents ?? 0) >= policy.highValueThresholdCents) {
-      skipped.highValue++
-      continue
-    }
+    if (decision === 'skip-fba') { skipped.fba++; continue }
+    if (decision === 'skip-policy-manual') { skipped.policyManual++; continue }
+    if (decision === 'skip-no-delivery') { skipped.noDeliveryDate++; continue }
+    if (decision === 'skip-out-of-window') { skipped.outOfWindow++; continue }
+    if (decision === 'skip-high-value') { skipped.highValue++; continue }
 
+    // decision === 'eligible' — policy is guaranteed non-null here.
     autoApprove.push({
       id: r.id,
       rmaNumber: r.rmaNumber,
       channel: r.channel,
       marketplace: r.marketplace,
       refundCents: r.refundCents,
-      daysSinceDelivery: win.daysSinceDelivery ?? null,
-      windowDays: policy.windowDays,
-      reason: `policy auto-approve · ${win.daysSinceDelivery ?? 0}d of ${policy.windowDays}d window`,
+      daysSinceDelivery: win?.daysSinceDelivery ?? null,
+      windowDays: policy!.windowDays,
+      reason: `policy auto-approve · ${win?.daysSinceDelivery ?? 0}d of ${policy!.windowDays}d window`,
     })
 
     // Returnless suggestion is independent of approval — flag low-value
