@@ -38,8 +38,8 @@ const CROSTON_ALPHA = 0.2 // smoothing for Croston size + interval (responsive t
 // A short, strong floor anchors the forecast to recent demand; seasonality
 // modulates above it. For a stockout-prone catalog a slight upward bias is
 // the safe error. A genuinely dead SKU (recent run-rate 0) still floors at 0.
-const FLOOR_FRACTION = 0.8
-const FLOOR_WINDOW = 30
+const FLOOR_FRACTION = 0.65
+const FLOOR_WINDOW = 35
 
 export type ForecastRegime =
   | 'COLD_START'
