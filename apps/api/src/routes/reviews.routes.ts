@@ -145,6 +145,57 @@ const reviewsRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // ── GET /reviews/ratings (RX.0) ─────────────────────────────────────
+  // Star-rating distribution (1–5) + period average + daily average
+  // trend. The one basic analytics surface the SR dashboards lacked —
+  // every review tool leads with average rating + a 1–5 histogram.
+  fastify.get('/reviews/ratings', async (request, reply) => {
+    const q = request.query as { sinceDays?: string; marketplace?: string }
+    const sinceDays = Math.min(Math.max(Number(q.sinceDays) || 30, 7), 365)
+    const since = new Date(Date.now() - sinceDays * 24 * 60 * 60 * 1000)
+    const where: Record<string, unknown> = {
+      postedAt: { gte: since },
+      rating: { not: null },
+    }
+    if (q.marketplace) where.marketplace = q.marketplace
+
+    const rows = await prisma.review.findMany({
+      where,
+      select: { rating: true, postedAt: true },
+      orderBy: { postedAt: 'asc' },
+    })
+
+    const distribution: Record<number, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }
+    let sum = 0
+    let count = 0
+    const dayMap = new Map<string, { sum: number; count: number }>()
+    for (const r of rows) {
+      if (r.rating == null) continue
+      const star = Math.min(5, Math.max(1, Math.round(r.rating)))
+      distribution[star] = (distribution[star] ?? 0) + 1
+      sum += r.rating
+      count += 1
+      const day = r.postedAt.toISOString().slice(0, 10)
+      const d = dayMap.get(day) ?? { sum: 0, count: 0 }
+      d.sum += r.rating
+      d.count += 1
+      dayMap.set(day, d)
+    }
+    const trend = Array.from(dayMap.entries())
+      .map(([date, v]) => ({ date, avg: v.count > 0 ? v.sum / v.count : null, count: v.count }))
+      .sort((a, b) => a.date.localeCompare(b.date))
+
+    reply.header('Cache-Control', 'private, max-age=60')
+    return {
+      sinceDays,
+      marketplace: q.marketplace ?? null,
+      average: count > 0 ? sum / count : null,
+      count,
+      distribution,
+      trend,
+    }
+  })
+
   // ── GET /reviews/spikes ─────────────────────────────────────────────
   fastify.get('/reviews/spikes', async (request, reply) => {
     const q = request.query as {

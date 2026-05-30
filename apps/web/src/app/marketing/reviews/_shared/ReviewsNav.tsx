@@ -12,7 +12,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { List, Grid, Package, AlertTriangle, Bot, Mail } from 'lucide-react'
+import { List, Grid, Package, AlertTriangle, Bot, Mail, SlidersHorizontal } from 'lucide-react'
 
 const TABS = [
   { href: '/marketing/reviews', label: 'Feed', icon: List, exact: true },
@@ -44,6 +44,14 @@ const TABS = [
     href: '/marketing/reviews/requests',
     label: 'Requests',
     icon: Mail,
+    exact: false,
+  },
+  // RX.0 — bridge the Orders/Marketing split: review rules CRUD lives
+  // under /orders/reviews/rules but is part of the same workspace.
+  {
+    href: '/orders/reviews/rules',
+    label: 'Rules',
+    icon: SlidersHorizontal,
     exact: false,
   },
 ]

@@ -10,10 +10,11 @@
  * Salesforce density.
  */
 
-import { Star, AlertTriangle, Sparkles } from 'lucide-react'
+import { Star, AlertTriangle } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { ReviewsList } from './ReviewsList'
 import { SpikeFeed } from './SpikeFeed'
+import { RatingPanel, type RatingsPayload } from './RatingPanel'
 import { ReviewsNav } from './_shared/ReviewsNav'
 
 export const dynamic = 'force-dynamic'
@@ -88,7 +89,7 @@ const CATEGORY_LABEL: Record<string, string> = {
 
 export default async function ReviewsPage() {
   const backend = getBackendUrl()
-  const [summary, reviews, spikes] = await Promise.all([
+  const [summary, reviews, spikes, ratings] = await Promise.all([
     fetchJson<SummaryPayload>(`${backend}/api/reviews/summary?sinceDays=30`, {
       sinceDays: 30,
       marketplace: null,
@@ -104,6 +105,14 @@ export default async function ReviewsPage() {
     }),
     fetchJson<{ items: SpikeRow[] }>(`${backend}/api/reviews/spikes?status=OPEN&limit=20`, {
       items: [],
+    }),
+    fetchJson<RatingsPayload>(`${backend}/api/reviews/ratings?sinceDays=30`, {
+      sinceDays: 30,
+      marketplace: null,
+      average: null,
+      count: 0,
+      distribution: { '1': 0, '2': 0, '3': 0, '4': 0, '5': 0 },
+      trend: [],
     }),
   ])
 
@@ -129,10 +138,23 @@ export default async function ReviewsPage() {
       <ReviewsNav />
 
       {/* KPI strip */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
+      <div className="grid grid-cols-2 md:grid-cols-6 gap-3 mb-4">
         <Stat
           label="Reviews 30d"
           value={summary.totalReviews}
+        />
+        <Stat
+          label="Avg rating"
+          value={ratings.average != null ? `${ratings.average.toFixed(2)}★` : '—'}
+          tone={
+            ratings.average == null
+              ? null
+              : ratings.average >= 4.3
+                ? 'emerald'
+                : ratings.average < 3.5
+                  ? 'rose'
+                  : 'amber'
+          }
         />
         <Stat
           label="Positive"
@@ -203,22 +225,7 @@ export default async function ReviewsPage() {
             </div>
             <SpikeFeed initial={spikes.items} />
           </div>
-          <div className="bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900 rounded-md px-3 py-2">
-            <div className="flex items-center gap-2 mb-1">
-              <Sparkles className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-              <div className="text-xs font-medium text-blue-900 dark:text-blue-200">
-                Coming up
-              </div>
-            </div>
-            <ul className="text-[11px] text-blue-800 dark:text-blue-200 space-y-1 list-disc pl-4">
-              <li>SR.2 — dashboard heatmap (day × category)</li>
-              <li>
-                SR.3 — REVIEW_SPIKE_DETECTED actions → create_aplus_module_from_review +
-                update_product_bullets_from_review
-              </li>
-              <li>SR.4 — post-purchase email + optimal send time per productType</li>
-            </ul>
-          </div>
+          <RatingPanel ratings={ratings} />
         </aside>
       </div>
     </div>

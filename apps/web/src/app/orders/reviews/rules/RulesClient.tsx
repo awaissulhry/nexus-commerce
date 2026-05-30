@@ -15,6 +15,7 @@ import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
 import { COUNTRY_NAMES } from '@/lib/country-names'
 import { getBackendUrl } from '@/lib/backend-url'
+import { ReviewsNav } from '../../../marketing/reviews/_shared/ReviewsNav'
 
 type Rule = {
   id: string
@@ -148,7 +149,7 @@ export default function RulesClient() {
       <PageHeader
         title="Review request rules"
         description="Per-channel and per-marketplace rules that drive automatic Amazon Solicitations. Excluded orders never get a request."
-        breadcrumbs={[{ label: 'Orders', href: '/orders' }, { label: 'Reviews', href: '/orders?lens=reviews' }, { label: 'Rules' }]}
+        breadcrumbs={[{ label: 'Marketing', href: '/marketing/reviews' }, { label: 'Reviews', href: '/marketing/reviews' }, { label: 'Rules' }]}
         actions={
           <div className="flex items-center gap-2">
             <button
@@ -168,6 +169,9 @@ export default function RulesClient() {
           </div>
         }
       />
+
+      {/* RX.0 — bridge into the shared reviews workspace nav */}
+      <ReviewsNav />
 
       {/* RV.9.1 — setup nudge banner */}
       {!loading && showSetupBanner && (
