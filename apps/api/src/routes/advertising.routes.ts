@@ -133,8 +133,22 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   })
 
   // ── GET /advertising/campaigns/:id ──────────────────────────────────
+  // AME.1 — metrics are derived LIVE from AmazonAdsDailyPerformance (the same
+  // source the trends chart + by-product grid read) rather than the stale
+  // stored columns (Campaign.spend / AdGroup.spendCents were last-write 0 in
+  // prod → the detail page showed €0 while the chart showed real spend). A
+  // single campaign belongs to one marketplace/currency, so summing within it
+  // is currency-safe by construction. Sales = SP(sales7dCents)+SB(sales14dCents),
+  // disjoint per row. Campaign totals come from CAMPAIGN daily rows; ad-group
+  // totals roll up PRODUCT_AD daily rows by ad group (no AD_GROUP daily grain).
   fastify.get('/advertising/campaigns/:id', async (request, reply) => {
     const { id } = request.params as { id: string }
+    const q = request.query as { windowDays?: string }
+    const windowDays = Math.max(1, Math.min(90, Number(q.windowDays) || 30))
+    const since = new Date()
+    since.setUTCDate(since.getUTCDate() - (windowDays - 1))
+    since.setUTCHours(0, 0, 0, 0)
+
     const campaign = await prisma.campaign.findUnique({
       where: { id },
       include: {
@@ -150,7 +164,77 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       reply.code(404)
       return { error: 'not_found' }
     }
-    return { campaign }
+
+    const microsToCents = (micros: bigint | number | null | undefined) =>
+      Math.round(Number(micros ?? 0n) / 10_000)
+
+    // Campaign totals — chart-consistent (CAMPAIGN daily rows for this id).
+    const cagg = await prisma.amazonAdsDailyPerformance.aggregate({
+      where: { entityType: 'CAMPAIGN', localEntityId: id, date: { gte: since } },
+      _sum: {
+        impressions: true, clicks: true, costMicros: true,
+        sales7dCents: true, sales14dCents: true, orders7d: true,
+      },
+    })
+    const campSpendCents = microsToCents(cagg._sum.costMicros)
+    const campSalesCents = (cagg._sum.sales7dCents ?? 0) + (cagg._sum.sales14dCents ?? 0)
+
+    // Ad-group rollup — sum each ad group's PRODUCT_AD daily rows (localEntityId
+    // = AdProductAd.id). The only per-ad-group grain available, and consistent
+    // with the by-product grid.
+    const adIdToGroup = new Map<string, string>()
+    for (const g of campaign.adGroups) for (const pa of g.productAds) adIdToGroup.set(pa.id, g.id)
+    const allAdIds = [...adIdToGroup.keys()]
+    const perGroup = new Map<string, { impressions: number; clicks: number; micros: bigint; salesCents: number; orders: number }>()
+    if (allAdIds.length) {
+      const rows = await prisma.amazonAdsDailyPerformance.groupBy({
+        by: ['localEntityId'],
+        where: { entityType: 'PRODUCT_AD', localEntityId: { in: allAdIds }, date: { gte: since } },
+        _sum: { impressions: true, clicks: true, costMicros: true, sales7dCents: true, sales14dCents: true, orders7d: true },
+      })
+      for (const r of rows) {
+        const gid = r.localEntityId ? adIdToGroup.get(r.localEntityId) : undefined
+        if (!gid) continue
+        const cur = perGroup.get(gid) ?? { impressions: 0, clicks: 0, micros: 0n, salesCents: 0, orders: 0 }
+        cur.impressions += r._sum.impressions ?? 0
+        cur.clicks += r._sum.clicks ?? 0
+        cur.micros += BigInt(r._sum.costMicros ?? 0n)
+        cur.salesCents += (r._sum.sales7dCents ?? 0) + (r._sum.sales14dCents ?? 0)
+        cur.orders += r._sum.orders7d ?? 0
+        perGroup.set(gid, cur)
+      }
+    }
+
+    const adGroups = campaign.adGroups.map((g) => {
+      const m = perGroup.get(g.id)
+      const spendCents = m ? microsToCents(m.micros) : 0
+      const salesCents = m?.salesCents ?? 0
+      return {
+        ...g,
+        impressions: m?.impressions ?? 0,
+        clicks: m?.clicks ?? 0,
+        spendCents,
+        salesCents,
+        ordersCount: m?.orders ?? 0,
+        acos: salesCents > 0 ? spendCents / salesCents : null,
+        roas: spendCents > 0 ? salesCents / spendCents : null,
+      }
+    })
+
+    return {
+      campaign: {
+        ...campaign,
+        impressions: cagg._sum.impressions ?? 0,
+        clicks: cagg._sum.clicks ?? 0,
+        spend: campSpendCents / 100,
+        sales: campSalesCents / 100,
+        acos: campSalesCents > 0 ? campSpendCents / campSalesCents : null,
+        roas: campSpendCents > 0 ? campSalesCents / campSpendCents : null,
+        adGroups,
+        metricsWindowDays: windowDays,
+        metricsSource: 'daily_performance',
+      },
+    }
   })
 
   // ── GET /advertising/fba-storage-age ────────────────────────────────
