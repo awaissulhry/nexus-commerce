@@ -463,7 +463,109 @@ function SupplierDetailPanel({ supplierId }: { supplierId: string }) {
               <ContactRow contact={null} onSave={saveContact} />
             </div>
           </div>
+          {/* PD.3 — comms log + compose-and-send */}
+          <SupplierCommsSection supplierId={supplierId} contacts={data.contacts} />
         </div>
+      )}
+    </div>
+  )
+}
+
+// PD.3 — supplier comms timeline + compose-and-send email + log note/call.
+type SupplierCommRow = {
+  id: string
+  channel: string
+  direction: string
+  subject: string | null
+  body: string
+  emailTo: string | null
+  emailOk: boolean | null
+  createdAt: string
+}
+
+function SupplierCommsSection({ supplierId, contacts }: { supplierId: string; contacts: SupplierContact[] }) {
+  const [items, setItems] = useState<SupplierCommRow[]>([])
+  const [mode, setMode] = useState<'email' | 'note'>('email')
+  const [to, setTo] = useState('')
+  const [subject, setSubject] = useState('')
+  const [body, setBody] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState<string | null>(null)
+
+  const load = useCallback(async () => {
+    const res = await fetch(`${API}/api/fulfillment/suppliers/${supplierId}/comms`, { cache: 'no-store' })
+    if (res.ok) setItems((await res.json()).items ?? [])
+  }, [supplierId])
+  useEffect(() => { void load() }, [load])
+
+  const send = async () => {
+    if (!body.trim()) return
+    setBusy(true); setMsg(null)
+    try {
+      if (mode === 'email') {
+        const res = await fetch(`${API}/api/fulfillment/suppliers/${supplierId}/comms/email`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ to: to.trim(), subject: subject.trim(), body: body.trim() }),
+        })
+        const d = await res.json().catch(() => ({}))
+        if (!res.ok) { setMsg(d.error ?? 'Send failed'); return }
+        setMsg(d.delivery?.dryRun ? 'Email queued (dry-run)' : 'Email sent')
+      } else {
+        const res = await fetch(`${API}/api/fulfillment/suppliers/${supplierId}/comms`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ channel: 'NOTE', body: body.trim(), subject: subject.trim() || undefined }),
+        })
+        if (!res.ok) { const d = await res.json().catch(() => ({})); setMsg(d.error ?? 'Save failed'); return }
+        setMsg('Logged')
+      }
+      setBody(''); setSubject('')
+      void load()
+    } finally { setBusy(false) }
+  }
+
+  return (
+    <div>
+      <div className="mb-1 flex items-center gap-2">
+        <span className="text-[10px] uppercase tracking-wide text-slate-500">Communication</span>
+        <div className="inline-flex overflow-hidden rounded border border-slate-700">
+          {(['email', 'note'] as const).map((m) => (
+            <button key={m} onClick={() => setMode(m)} className={`px-2 py-0.5 text-[11px] ${mode === m ? 'bg-slate-700 text-slate-100' : 'bg-slate-900 text-slate-400 hover:bg-slate-800'}`}>{m === 'email' ? 'Email' : 'Log note'}</button>
+          ))}
+        </div>
+        {msg && <span className="text-[11px] text-emerald-400">{msg}</span>}
+      </div>
+      <div className="space-y-1.5 rounded border border-slate-800 bg-slate-950/40 p-2">
+        {mode === 'email' && (
+          <div className="flex flex-wrap gap-1.5">
+            <input value={to} onChange={(e) => setTo(e.target.value)} placeholder="recipient@factory.com" list="supplier-emails" className="w-56 rounded border border-slate-700 bg-slate-950 px-1.5 py-1 text-xs text-slate-100 focus:outline-none" />
+            <datalist id="supplier-emails">
+              {contacts.filter((c) => c.email).map((c) => <option key={c.id} value={c.email!}>{c.name}</option>)}
+            </datalist>
+            <input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="Subject" className="flex-1 rounded border border-slate-700 bg-slate-950 px-1.5 py-1 text-xs text-slate-100 focus:outline-none" />
+          </div>
+        )}
+        <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={2} placeholder={mode === 'email' ? 'Message to the factory…' : 'Call summary / note…'} className="w-full rounded border border-slate-700 bg-slate-950 px-1.5 py-1 text-xs text-slate-100 focus:outline-none" />
+        <div className="flex justify-end">
+          <button onClick={send} disabled={busy || !body.trim()} className="rounded bg-blue-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-blue-500 disabled:opacity-50">
+            {busy ? '…' : mode === 'email' ? 'Send email' : 'Log'}
+          </button>
+        </div>
+      </div>
+      {items.length > 0 && (
+        <ul className="mt-2 max-h-48 space-y-1 overflow-y-auto">
+          {items.map((c) => (
+            <li key={c.id} className="rounded border border-slate-800 bg-slate-900/40 px-2 py-1 text-[11px]">
+              <div className="flex items-center justify-between">
+                <span className="font-medium text-slate-300">
+                  {c.channel}{c.emailTo ? ` → ${c.emailTo}` : ''}{c.channel === 'EMAIL' ? (c.emailOk ? ' ✓' : ' ⚠') : ''}
+                </span>
+                <span className="text-slate-600">{new Date(c.createdAt).toLocaleString()}</span>
+              </div>
+              {c.subject && <div className="text-slate-400">{c.subject}</div>}
+              <div className="truncate text-slate-500">{c.body}</div>
+            </li>
+          ))}
+        </ul>
       )}
     </div>
   )
