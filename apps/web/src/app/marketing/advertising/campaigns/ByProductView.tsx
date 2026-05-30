@@ -39,7 +39,10 @@ interface Row extends GridLensRow {
   acos?: number | null
   impressions?: number
   clicks?: number
+  opportunity?: boolean
+  unmatched?: boolean
 }
+type Mode = 'advertised' | 'opportunity' | 'unmatched'
 
 const eur = (c: number | null | undefined) => (c == null ? '—' : new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR' }).format(c / 100))
 const num = (n: number | null | undefined) => (n == null ? '—' : new Intl.NumberFormat('en-US').format(Math.round(n)))
@@ -74,6 +77,7 @@ export function ByProductView() {
   const [windowDays, setWindowDays] = useState(30)
   const [density, setDensity] = useState<Density>('comfortable')
   const [search, setSearch] = useState('')
+  const [mode, setMode] = useState<Mode>('advertised')
   const [marketplace, setMarketplace] = useState('')
   const [marketplaces, setMarketplaces] = useState<string[]>([])
   const [prefsOpen, setPrefsOpen] = useState(false)
@@ -95,7 +99,7 @@ export function ByProductView() {
     setLoading(true)
     try {
       const sortParam = SORT_KEYS[sortBy] ?? 'spend'
-      const qs = new URLSearchParams({ windowDays: String(windowDays), sort: sortParam, dir: sortDir, limit: '500', compare: 'true' })
+      const qs = new URLSearchParams({ windowDays: String(windowDays), sort: sortParam, dir: sortDir, limit: '500', compare: 'true', mode })
       if (search.trim()) qs.set('search', search.trim())
       if (marketplace) qs.set('marketplace', marketplace)
       const r = await fetch(`${getBackendUrl()}/api/advertising/by-product?${qs}`, { cache: 'no-store' }).then((x) => x.json()).catch(() => ({ rows: [] }))
@@ -105,7 +109,7 @@ export function ByProductView() {
       setUnattributed(r.unattributedSpendCents ?? 0)
       if (Array.isArray(r.marketplaces)) setMarketplaces(r.marketplaces)
     } finally { setLoading(false) }
-  }, [windowDays, sortBy, sortDir, search, marketplace])
+  }, [windowDays, sortBy, sortDir, search, marketplace, mode])
   useEffect(() => { const t = setTimeout(() => void load(), search ? 300 : 0); return () => clearTimeout(t) }, [load, search])
 
   // PC.5 — live refresh on marketing events.
@@ -197,7 +201,11 @@ export function ByProductView() {
           </div>
         </div>
       )
-      case 'campaigns': return <span className="tabular-nums">{num(row.campaignCount)}</span>
+      case 'campaigns': return row.opportunity
+        ? <a href={`/products/${row.id}/edit?tab=ads`} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline">+ Create campaign</a>
+        : row.unmatched
+        ? <span className="text-[11px] text-amber-600 dark:text-amber-400">unmatched</span>
+        : <span className="tabular-nums">{num(row.campaignCount)}</span>
       case 'markets': return <span className="tabular-nums">{num(row.marketCount)}</span>
       case 'adspend': return <span className="tabular-nums font-medium">{eur(row.adSpendCents)}</span>
       case 'revenue': return <span className="tabular-nums">{eur(row.revenueCents)}</span>
@@ -235,6 +243,14 @@ export function ByProductView() {
         </span>
       </div>
       <KpiStrip tiles={tiles} className="mb-4" />
+
+      {/* Mode chips: advertised · opportunity · unmatched */}
+      <div className="inline-flex items-center rounded-lg border border-slate-200 dark:border-slate-700 p-0.5 mb-3 bg-slate-50 dark:bg-slate-900">
+        {([['advertised', 'Advertised'], ['opportunity', 'Not advertised (opportunity)'], ['unmatched', 'Unmatched ASINs']] as const).map(([m, label]) => (
+          <button key={m} onClick={() => { setMode(m); setSelected(new Set()) }}
+            className={`px-3 py-1 text-xs rounded-md transition ${mode === m ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 shadow-sm font-medium' : 'text-slate-500 hover:text-slate-700'}`}>{label}</button>
+        ))}
+      </div>
 
       {/* Toolbar: search · market · channel · density · customize */}
       <div className="flex flex-wrap items-center gap-2 mb-3">
@@ -277,7 +293,9 @@ export function ByProductView() {
       )}
       {rows.length === 0 && !loading ? (
         <div className="rounded-lg border border-slate-200 dark:border-slate-800 p-10 text-center text-sm text-slate-400">
-          No advertised products with spend in the last {windowDays} days.
+          {mode === 'opportunity' ? `No un-advertised products with sales in the last ${windowDays} days.`
+            : mode === 'unmatched' ? 'No unmatched advertised ASINs (every ad maps to a product).'
+            : `No advertised products with spend in the last ${windowDays} days.`}
         </div>
       ) : (
         <VirtualizedGrid<Row>

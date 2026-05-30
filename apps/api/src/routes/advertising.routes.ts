@@ -847,19 +847,47 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   // remainder (account spend − Σ attributed) so nothing is silently dropped.
   // GET /advertising/by-product?windowDays=&marketplace=&search=&sort=&dir=&limit=
   fastify.get('/advertising/by-product', async (request, reply) => {
-    const q = request.query as { windowDays?: string; marketplace?: string; search?: string; sort?: string; dir?: string; limit?: string; compare?: string }
+    const q = request.query as { windowDays?: string; marketplace?: string; search?: string; sort?: string; dir?: string; limit?: string; compare?: string; mode?: string }
     const windowDays = Math.max(7, Math.min(90, Number(q.windowDays ?? 30)))
     const limit = Math.max(1, Math.min(1000, Number(q.limit ?? 300)))
     const since = new Date(); since.setUTCDate(since.getUTCDate() - windowDays); since.setUTCHours(0, 0, 0, 0)
     const mkt = q.marketplace || undefined
+    // PC.8 — mode: advertised (default) | opportunity (selling but NOT
+    // advertised) | unmatched (handled separately below).
+    const mode = q.mode === 'opportunity' ? 'opportunity' : q.mode === 'unmatched' ? 'unmatched' : 'advertised'
+
+    // PC.8 — Unmatched ASINs: PRODUCT_AD rows with no local AdProductAd link.
+    if (mode === 'unmatched') {
+      const um = await prisma.amazonAdsDailyPerformance.groupBy({
+        by: ['entityId'],
+        where: { entityType: 'PRODUCT_AD', localEntityId: null, date: { gte: since }, ...(mkt ? { marketplace: mkt } : {}) },
+        _sum: { costMicros: true, sales7dCents: true, impressions: true, clicks: true, orders7d: true },
+        orderBy: { _sum: { costMicros: 'desc' } },
+        take: limit,
+      })
+      const rows = um.map((r) => {
+        const adSpendCents = Math.round(Number(r._sum.costMicros ?? 0n) / 10_000)
+        const salesC = r._sum.sales7dCents ?? 0
+        return {
+          id: r.entityId, sku: undefined, name: r.entityId.replace(/^ASIN:/, ''), asin: r.entityId.replace(/^ASIN:/, ''),
+          photoUrl: null, photoCount: 0, adSpendCents, revenueCents: salesC, profitCents: 0,
+          units: r._sum.orders7d ?? 0, tacos: salesC > 0 ? Math.round((adSpendCents / salesC) * 1000) / 10 : null, marginPct: null,
+          campaignCount: 0, marketCount: 0, isParent: false, childCount: 0, unmatched: true,
+        }
+      })
+      reply.header('Cache-Control', 'private, max-age=60')
+      return { windowDays, mode, rows, totals: { adSpendCents: rows.reduce((s, r) => s + r.adSpendCents, 0), revenueCents: 0, profitCents: 0, products: rows.length }, marketplaces: [] }
+    }
 
     // 1. Per-product windowed roll-up (ad spend + revenue + profit).
     const grouped = await prisma.productProfitDaily.groupBy({
       by: ['productId'],
       where: { date: { gte: since }, ...(mkt ? { marketplace: mkt } : {}) },
       _sum: { advertisingSpendCents: true, grossRevenueCents: true, trueProfitCents: true, unitsSold: true },
-      having: { advertisingSpendCents: { _sum: { gt: 0 } } },
-      orderBy: { _sum: { advertisingSpendCents: 'desc' } },
+      having: mode === 'opportunity'
+        ? { advertisingSpendCents: { _sum: { equals: 0 } }, grossRevenueCents: { _sum: { gt: 0 } } }
+        : { advertisingSpendCents: { _sum: { gt: 0 } } },
+      orderBy: mode === 'opportunity' ? { _sum: { grossRevenueCents: 'desc' } } : { _sum: { advertisingSpendCents: 'desc' } },
       take: limit,
     })
     const ids = grouped.map((g) => g.productId)
@@ -918,6 +946,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
         marketCount: st?.markets.size ?? 0,
         isParent: campaignCount > 0,
         childCount: campaignCount,
+        opportunity: mode === 'opportunity',
       }]
     })
 
@@ -962,6 +991,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     reply.header('Cache-Control', 'private, max-age=60')
     return {
       windowDays,
+      mode,
       rows,
       marketplaces,
       totals: { adSpendCents: attributedSpendCents, revenueCents: rows.reduce((s, r) => s + r.revenueCents, 0), profitCents: rows.reduce((s, r) => s + r.profitCents, 0), products: rows.length },
