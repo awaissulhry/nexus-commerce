@@ -6208,6 +6208,58 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // PD.10 — launch: convert a development project into a real Product.
+  // Carries the factory-facing name into the SupplierProduct catalog
+  // (PD.1) so the very first production PO already speaks the factory's
+  // language. Gated on required certs (PD.9).
+  fastify.post('/fulfillment/development/projects/:id/launch', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const body = (request.body ?? {}) as { sku?: string; basePrice?: number }
+      const project = await prisma.developmentProject.findUnique({
+        where: { id },
+        include: { candidates: { where: { isSelected: true }, take: 1 } },
+      })
+      if (!project) return reply.code(404).send({ error: 'Project not found' })
+      if (project.linkedProductId) return reply.code(409).send({ error: 'Project already launched (product linked)' })
+
+      const blocking = await prisma.developmentCertification.count({
+        where: { projectId: id, required: true, status: { not: 'APPROVED' } },
+      })
+      if (blocking > 0) return reply.code(409).send({ error: `Cannot launch: ${blocking} required certification(s) not yet approved` })
+
+      const sku = (body.sku?.trim() || project.code).toUpperCase()
+      const basePrice = body.basePrice != null && Number.isFinite(Number(body.basePrice))
+        ? Number(body.basePrice)
+        : project.targetCostCents != null ? project.targetCostCents / 100 : 0
+
+      let product
+      try {
+        product = await prisma.product.create({
+          data: { sku, name: project.name, productType: project.productType ?? undefined, basePrice },
+        })
+      } catch (err: any) {
+        if (err?.code === 'P2002') return reply.code(409).send({ error: `SKU "${sku}" already exists — pass a unique sku` })
+        throw err
+      }
+
+      // Carry the factory naming into the selected supplier's catalog.
+      const selected = project.candidates[0]
+      if (selected) {
+        await prisma.supplierProduct.upsert({
+          where: { supplierId_productId: { supplierId: selected.supplierId, productId: product.id } },
+          update: { costCents: selected.quotedCostCents ?? undefined, factoryName: project.name },
+          create: { supplierId: selected.supplierId, productId: product.id, costCents: selected.quotedCostCents ?? null, factoryName: project.name, isPrimary: true },
+        })
+      }
+
+      await prisma.developmentProject.update({ where: { id }, data: { linkedProductId: product.id, status: 'LAUNCHED' } })
+      return reply.send({ product, linkedProductId: product.id })
+    } catch (error: any) {
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
   // ── A4 — SupplierProduct cost & lead-time management ───────────────
   // The replenishment math (this file, ~line 9680) reads a product's unit
   // cost / MOQ / case-pack / lead-time ONLY from the SupplierProduct row of
