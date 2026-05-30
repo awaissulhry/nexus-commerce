@@ -38,6 +38,44 @@ const STATE_MAP = (s: string | undefined): 'ENABLED' | 'PAUSED' | 'ARCHIVED' => 
 
 export interface KeywordSyncResult { positives: number; negatives: number; upserted: number; adGroups: number; mode: string }
 
+interface V3TargetingClause { targetId?: string; adGroupId?: string; bid?: number; state?: string }
+
+/**
+ * AF.7b — sync PRODUCT / AUTO targeting-clause bids via v3 /sp/targets/list.
+ * Keywords come from /sp/keywords; product & auto targets (ASIN, category,
+ * close/loose match, substitutes/complements) live here and carry their own
+ * bid — the v1 export left these at €0. Updates bidCents in place by targetId;
+ * when a clause inherits the ad-group default (no explicit bid), stamps the
+ * ad-group default so the UI shows the real effective bid, not €0.
+ */
+export async function syncTargetsForAdGroups(opts: { profileId: string; region: AdsRegion; externalAdGroupIds: string[] }): Promise<{ updated: number; clauses: number }> {
+  const { profileId, region, externalAdGroupIds } = opts
+  if (adsMode() === 'sandbox' || externalAdGroupIds.length === 0) return { updated: 0, clauses: 0 }
+  const clauses = await listAll(profileId, region, '/sp/targets/list', 'application/vnd.spTargetingClause.v3+json', 'targetingClauses', { adGroupIdFilter: { include: externalAdGroupIds } })
+    .catch((e) => { logger.warn('[target-list-sync] list failed', { error: String(e).slice(0, 160) }); return [] }) as V3TargetingClause[]
+  if (clauses.length === 0) return { updated: 0, clauses: 0 }
+
+  const ags = await prisma.adGroup.findMany({ where: { externalAdGroupId: { in: externalAdGroupIds } }, select: { id: true, externalAdGroupId: true, defaultBidCents: true } })
+  const agByExt = new Map(ags.map((g) => [g.externalAdGroupId ?? '', g]))
+  let updated = 0
+  for (const c of clauses) {
+    if (!c.targetId || !c.adGroupId) continue
+    const ag = agByExt.get(c.adGroupId)
+    if (!ag) continue
+    const bidNum = Number(c.bid)
+    const bidCents = Number.isFinite(bidNum) && bidNum > 0 ? Math.round(bidNum * 100) : ag.defaultBidCents
+    try {
+      const r = await prisma.adTarget.updateMany({
+        where: { externalTargetId: c.targetId, adGroupId: ag.id, isNegative: false },
+        data: { bidCents, status: STATE_MAP(c.state), lastSyncedAt: new Date(), lastSyncStatus: 'SUCCESS', lastSyncError: null },
+      })
+      updated += r.count
+    } catch (e) { logger.warn('[target-list-sync] update failed', { targetId: c.targetId, error: String(e).slice(0, 120) }) }
+  }
+  logger.info('[target-list-sync] done', { clauses: clauses.length, updated, adGroups: externalAdGroupIds.length })
+  return { updated, clauses: clauses.length }
+}
+
 /** Sync positive + negative keywords for the given external ad-group ids. */
 export async function syncKeywordsForAdGroups(opts: { profileId: string; region: AdsRegion; externalAdGroupIds: string[] }): Promise<KeywordSyncResult> {
   const { profileId, region, externalAdGroupIds } = opts
@@ -87,10 +125,10 @@ export async function syncKeywordsForAdGroups(opts: { profileId: string; region:
  * positives left by the v1 export (whose nested bid coerced to 0). Groups ad
  * groups by connection profile/region and chunks the list filter.
  */
-export async function resyncAllCampaignKeywords(opts: { chunk?: number } = {}): Promise<{ profiles: number; adGroups: number; positives: number; negatives: number; upserted: number; mode: string }> {
+export async function resyncAllCampaignKeywords(opts: { chunk?: number } = {}): Promise<{ profiles: number; adGroups: number; positives: number; negatives: number; upserted: number; targetsUpdated: number; mode: string }> {
   const chunk = opts.chunk ?? 40
   const mode = adsMode()
-  if (mode === 'sandbox') return { profiles: 0, adGroups: 0, positives: 0, negatives: 0, upserted: 0, mode }
+  if (mode === 'sandbox') return { profiles: 0, adGroups: 0, positives: 0, negatives: 0, upserted: 0, targetsUpdated: 0, mode }
 
   const { normalizeMarketplaceCode } = await import('../../utils/marketplace-code.js')
   const conns = await prisma.amazonAdsConnection.findMany({ where: { isActive: true }, select: { profileId: true, region: true, marketplace: true } })
@@ -110,18 +148,22 @@ export async function resyncAllCampaignKeywords(opts: { chunk?: number } = {}): 
     agsByProfile.set(conn.profileId, bucket)
   }
 
-  let adGroups = 0, positives = 0, negatives = 0, upserted = 0
+  let adGroups = 0, positives = 0, negatives = 0, upserted = 0, targetsUpdated = 0
   for (const [profileId, { region, ids }] of agsByProfile) {
     const all = [...ids]
     adGroups += all.length
     for (let i = 0; i < all.length; i += chunk) {
       const slice = all.slice(i, i + chunk)
-      const r = await syncKeywordsForAdGroups({ profileId, region, externalAdGroupIds: slice }).catch((e) => { logger.warn('[kw-resync-all] chunk failed', { profileId, error: String(e).slice(0, 160) }); return null })
-      if (r) { positives += r.positives; negatives += r.negatives; upserted += r.upserted }
+      const [kw, tg] = await Promise.all([
+        syncKeywordsForAdGroups({ profileId, region, externalAdGroupIds: slice }).catch((e) => { logger.warn('[kw-resync-all] kw chunk failed', { profileId, error: String(e).slice(0, 160) }); return null }),
+        syncTargetsForAdGroups({ profileId, region, externalAdGroupIds: slice }).catch((e) => { logger.warn('[kw-resync-all] target chunk failed', { profileId, error: String(e).slice(0, 160) }); return null }),
+      ])
+      if (kw) { positives += kw.positives; negatives += kw.negatives; upserted += kw.upserted }
+      if (tg) { targetsUpdated += tg.updated }
     }
   }
-  logger.info('[kw-resync-all] done', { profiles: agsByProfile.size, adGroups, positives, negatives, upserted })
-  return { profiles: agsByProfile.size, adGroups, positives, negatives, upserted, mode }
+  logger.info('[kw-resync-all] done', { profiles: agsByProfile.size, adGroups, positives, negatives, upserted, targetsUpdated })
+  return { profiles: agsByProfile.size, adGroups, positives, negatives, upserted, targetsUpdated, mode }
 }
 
 /** Resolve a campaign's profile + ad groups, then sync its keywords via the list API. */
