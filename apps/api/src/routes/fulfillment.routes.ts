@@ -7702,6 +7702,10 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
           // PO.5 — per-line note, persisted via the PO.1 column added
           // to PurchaseOrderItem. Surfaces in the factory PDF in PO.12.
           note?: string
+          // PD.1 — factory-facing naming (per-line override).
+          factoryName?: string
+          factorySize?: string
+          factorySpec?: string
         }>
       }
       const items = Array.isArray(body.items) ? body.items : []
@@ -7732,6 +7736,10 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
               unitCostCents: it.unitCostCents ?? 0,
               note: it.note ?? null,
               lineOrder: idx,
+              // PD.1 — factory-facing naming on the new line.
+              factoryName: it.factoryName ?? null,
+              factorySize: it.factorySize ?? null,
+              factorySpec: it.factorySpec ?? null,
             })),
           },
         },

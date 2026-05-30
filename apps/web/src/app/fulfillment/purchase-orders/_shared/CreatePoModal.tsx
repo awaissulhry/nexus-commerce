@@ -76,6 +76,9 @@ interface CatalogItem {
   casePack: number | null
   leadTimeDaysOverride: number | null
   isPrimary: boolean
+  // PD.1 — per-supplier factory naming default.
+  factoryName?: string | null
+  factorySize?: string | null
   product: {
     id: string
     sku: string
@@ -98,6 +101,9 @@ interface DraftLine {
   quantityOrdered: string
   unitCostCents: string
   note: string
+  // PD.1 — factory-facing naming (auto-filled from catalog; overridable).
+  factoryName: string
+  factorySize: string
   // UI state
   noteEditing: boolean
 }
@@ -113,6 +119,8 @@ const newLine = (): DraftLine => ({
   quantityOrdered: '',
   unitCostCents: '',
   note: '',
+  factoryName: '',
+  factorySize: '',
   noteEditing: false,
 })
 
@@ -311,6 +319,10 @@ export function CreatePoModal({
         // per-line conversion — that's PO.15's job).
         unitCostCents:
           picked.costCents != null ? (picked.costCents / 100).toFixed(2) : '',
+        // PD.1 — auto-fill the factory-facing name/size from the catalog
+        // default so the factory PDF speaks the factory's language.
+        factoryName: picked.factoryName ?? '',
+        factorySize: picked.factorySize ?? '',
       })
     },
     [updateLine],
@@ -428,6 +440,9 @@ export function CreatePoModal({
             quantityOrdered: parseInt(l.quantityOrdered, 10),
             unitCostCents: parseCentsField(l.unitCostCents),
             note: l.note.trim() || undefined,
+            // PD.1 — factory-facing naming carried onto the PO line.
+            factoryName: l.factoryName.trim() || undefined,
+            factorySize: l.factorySize.trim() || undefined,
           })),
         }),
       })
