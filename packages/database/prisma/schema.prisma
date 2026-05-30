@@ -7758,6 +7758,7 @@ model Supplier {
   shippingProfile SupplierShippingProfile?
   contacts        SupplierContact[] // PD.2
   comms           SupplierComm[]    // PD.3
+  followUps       SupplierFollowUp[] // PD.4
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -12320,4 +12321,25 @@ model SupplierComm {
   supplier Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
 
   @@index([supplierId, createdAt])
+}
+
+// PD.4 — supplier follow-ups / reminders. A due-dated 'next action' per
+// supplier so nothing slips (sample chase, quote chase, payment). In-app
+// reminders (no autonomous nudges per scope); one-click send via PD.3.
+model SupplierFollowUp {
+  id          String    @id @default(cuid())
+  supplierId  String
+  title       String
+  nextAction  String?
+  dueDate     DateTime
+  status      String    @default("OPEN") // OPEN | DONE
+  completedAt DateTime?
+  byUserId    String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  supplier Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+
+  @@index([supplierId])
+  @@index([status, dueDate])
 }
