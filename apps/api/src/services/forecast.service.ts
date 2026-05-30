@@ -272,6 +272,10 @@ function regimeToTag(regime: ForecastRegime): string | null {
       return 'TRAILING_MEAN_FALLBACK'
     case 'HOLT_LINEAR':
       return 'HOLT_LINEAR'
+    case 'CROSTON':
+      return 'CROSTON'
+    case 'SBA':
+      return 'SBA'
     case 'HOLT_WINTERS':
       return null // canonical / no special tag
     default:
@@ -353,6 +357,8 @@ export async function generateForecastsForAll(args: {
     TRAILING_MEAN: 0,
     HOLT_LINEAR: 0,
     HOLT_WINTERS: 0,
+    CROSTON: 0,
+    SBA: 0,
   }
   const errors: Array<{ identity: string; error: string }> = []
   let rowsWritten = 0

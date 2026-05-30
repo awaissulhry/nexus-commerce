@@ -25,8 +25,24 @@
 const ANNUAL_PERIOD = 365
 const MIN_HISTORY_FOR_TREND = 30
 const Z_80 = 1.282 // 80% prediction interval z-score (standard normal)
+// RX.B2 — Syntetos-Boylan demand-classification thresholds. ADI = average
+// inter-demand interval (days between non-zero sales); CV² = squared
+// coefficient of variation of non-zero demand sizes.
+const ADI_INTERMITTENT = 1.32 // ≥ → demand is intermittent (use Croston/SBA)
+const CV2_LUMPY = 0.49 // ≥ (with high ADI) → lumpy, prefer SBA's bias correction
+const CROSTON_ALPHA = 0.1 // smoothing for Croston size + interval
+// Run-rate floor: the point forecast may not fall below this fraction of the
+// recent average daily demand — stops a decaying fit zeroing a live SKU.
+const FLOOR_FRACTION = 0.5
+const FLOOR_WINDOW = 90
 
-export type ForecastRegime = 'COLD_START' | 'TRAILING_MEAN' | 'HOLT_LINEAR' | 'HOLT_WINTERS'
+export type ForecastRegime =
+  | 'COLD_START'
+  | 'TRAILING_MEAN'
+  | 'HOLT_LINEAR'
+  | 'HOLT_WINTERS'
+  | 'CROSTON'
+  | 'SBA'
 
 export interface HwParams {
   alpha?: number
@@ -116,11 +132,128 @@ export function forecastDailyDemand(
   // level/trend get smoothed at least a few times. Strict-greater guards
   // against the degenerate n === period case where the loop body never
   // executes (initial cycle alone, no fitting iterations).
-  const useSeasonality = n > ANNUAL_PERIOD
-  if (!useSeasonality) {
-    return holtLinearForecast(safe, horizon, alpha, beta)
+  // RX.B2 — route by demand pattern. Holt's linear trend collapses toward
+  // zero on sparse/lumpy demand (most days have no sales), which describes
+  // the bulk of this catalog and made the point forecast under-shoot real
+  // sales for ~2/3 of selling SKUs. Classify (Syntetos-Boylan) and use
+  // Croston/SBA — a stable demand-RATE estimate that does not decay — for
+  // intermittent or lumpy series; keep Holt linear for smooth ones and
+  // Holt-Winters when there's a full extra annual cycle.
+  const pattern = demandPattern(safe)
+  let result: ForecastResult
+  if (n > ANNUAL_PERIOD) {
+    result = holtWintersForecast(safe, horizon, alpha, beta, gamma, ANNUAL_PERIOD)
+  } else if (pattern.nonZero >= 2 && pattern.adi >= ADI_INTERMITTENT) {
+    result = crostonForecast(safe, horizon, pattern.cv2 >= CV2_LUMPY)
+  } else {
+    result = holtLinearForecast(safe, horizon, alpha, beta)
   }
-  return holtWintersForecast(safe, horizon, alpha, beta, gamma, ANNUAL_PERIOD)
+  return applyRunRateFloor(result, safe)
+}
+
+/* ───────────────────────────────────────────────────────────────────
+ * RX.B2 — intermittent-demand support (Croston / SBA + classification)
+ * ─────────────────────────────────────────────────────────────────── */
+
+/** Average inter-demand interval (ADI) + CV² of non-zero demand sizes. */
+function demandPattern(series: number[]): { adi: number; cv2: number; nonZero: number } {
+  const sizes: number[] = []
+  const intervals: number[] = []
+  let gap = 0
+  let seenFirst = false
+  for (const v of series) {
+    if (v > 0) {
+      sizes.push(v)
+      if (seenFirst) intervals.push(gap + 1)
+      gap = 0
+      seenFirst = true
+    } else {
+      gap++
+    }
+  }
+  const nonZero = sizes.length
+  if (nonZero === 0) return { adi: Infinity, cv2: 0, nonZero: 0 }
+  const adi =
+    intervals.length > 0
+      ? intervals.reduce((a, b) => a + b, 0) / intervals.length
+      : series.length / nonZero
+  const mean = sizes.reduce((a, b) => a + b, 0) / nonZero
+  const variance = sizes.reduce((a, b) => a + (b - mean) * (b - mean), 0) / nonZero
+  const cv2 = mean > 0 ? variance / (mean * mean) : 0
+  return { adi, cv2, nonZero }
+}
+
+/**
+ * Croston's method (optionally Syntetos-Boylan Approximation). Separately
+ * exponentially-smooths the demand SIZE and the INTERVAL between demands;
+ * the forecast is the constant rate size/interval (SBA scales it by
+ * (1 − α/2) to remove Croston's known upward bias). Unlike Holt it never
+ * decays to zero while demand keeps occurring.
+ */
+function crostonForecast(series: number[], horizon: number, sba: boolean): ForecastResult {
+  const regime: ForecastRegime = sba ? 'SBA' : 'CROSTON'
+  let z: number | null = null // smoothed size
+  let p: number | null = null // smoothed interval
+  let interval = 0
+  const sizes: number[] = []
+  for (let t = 0; t < series.length; t++) {
+    interval++
+    if (series[t] > 0) {
+      sizes.push(series[t])
+      if (z === null) {
+        z = series[t]
+        p = interval
+      } else {
+        z = CROSTON_ALPHA * series[t] + (1 - CROSTON_ALPHA) * z
+        p = CROSTON_ALPHA * interval + (1 - CROSTON_ALPHA) * (p as number)
+      }
+      interval = 0
+    }
+  }
+  if (z === null || p === null || p <= 0) {
+    const flat: ForecastPoint[] = Array.from({ length: horizon }, (_, i) => ({
+      step: i + 1,
+      value: 0,
+      lower80: 0,
+      upper80: 0,
+    }))
+    return { regime, points: flat, residualStdDev: 0 }
+  }
+  let rate = z / p
+  if (sba) rate *= 1 - CROSTON_ALPHA / 2
+  rate = Math.max(0, rate)
+  const meanSize = sizes.reduce((a, b) => a + b, 0) / sizes.length
+  const sizeSd = stdDev(sizes, meanSize)
+  const perPeriodSd = sizeSd / p || rate * 0.5
+  const points: ForecastPoint[] = []
+  for (let h = 1; h <= horizon; h++) {
+    const intervalSd = perPeriodSd * Math.sqrt(h)
+    points.push({
+      step: h,
+      value: rate,
+      lower80: Math.max(0, rate - Z_80 * intervalSd),
+      upper80: rate + Z_80 * intervalSd,
+    })
+  }
+  return { regime, points, residualStdDev: perPeriodSd }
+}
+
+/**
+ * Floor every point forecast at FLOOR_FRACTION × the recent average daily
+ * demand, so a decaying fit can't drive a still-selling SKU to zero. A
+ * genuinely dead SKU (no recent sales) has a 0 floor and stays at 0.
+ */
+function applyRunRateFloor(result: ForecastResult, history: number[]): ForecastResult {
+  const w = Math.min(history.length, FLOOR_WINDOW)
+  if (w === 0) return result
+  const recent = history.slice(history.length - w)
+  const runRate = recent.reduce((a, b) => a + b, 0) / w
+  const floor = FLOOR_FRACTION * runRate
+  if (floor <= 0) return result
+  const points = result.points.map((pt) =>
+    pt.value < floor ? { ...pt, value: floor, upper80: Math.max(pt.upper80, floor) } : pt,
+  )
+  return { ...result, points }
 }
 
 /* ───────────────────────────────────────────────────────────────────
