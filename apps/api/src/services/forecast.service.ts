@@ -256,7 +256,10 @@ export async function generateForecastForSeries(
     marketplace: identity.marketplace,
     regime: baseline.regime,
     rowsWritten,
-    generationTag: regimeToTag(baseline.regime),
+    // Report the SAME tag the rows were written with (genTag carries the
+    // +CAT_SEASONAL provenance) — not the bare regime, which silently hid
+    // that seasonality was in fact applied.
+    generationTag: genTag,
     durationMs,
   }
 }
