@@ -22,6 +22,10 @@ interface CatalogRow {
   casePack: number | null
   leadTimeDaysOverride: number | null
   isPrimary: boolean
+  // PD.1 — factory-facing naming (per-supplier default; auto-fills PO lines).
+  factoryName: string | null
+  factorySize: string | null
+  factorySpec: string | null
   product: { id: string; sku: string; name: string; basePrice: number | null } | null
 }
 
@@ -317,6 +321,8 @@ function SupplierCatalog({
               <tr className="border-b border-slate-700 text-left text-[10px] uppercase tracking-wide text-slate-500">
                 <th className="px-3 py-2">SKU / Product</th>
                 <th className="px-2 py-2">Supplier SKU</th>
+                <th className="px-2 py-2" title="Name the factory understands — auto-fills PO lines">Factory name</th>
+                <th className="px-2 py-2">Factory size</th>
                 <th className="px-2 py-2">Unit cost</th>
                 <th className="px-2 py-2">Ccy</th>
                 <th className="px-2 py-2">MOQ</th>
@@ -410,6 +416,45 @@ function EditableNum({
   )
 }
 
+// PD.1 — inline editable text cell (string), used for factory name/size.
+function EditableText({
+  value,
+  onSave,
+  placeholder = '—',
+  width = 'w-28',
+}: {
+  value: string | null
+  onSave: (v: string) => void
+  placeholder?: string
+  width?: string
+}) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState('')
+  if (editing) {
+    return (
+      <input
+        autoFocus
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') { onSave(draft.trim()); setEditing(false) }
+          if (e.key === 'Escape') setEditing(false)
+        }}
+        onBlur={() => { onSave(draft.trim()); setEditing(false) }}
+        className={`${width} rounded border border-slate-500 bg-slate-950 px-1.5 py-0.5 text-xs text-slate-100 focus:outline-none`}
+      />
+    )
+  }
+  return (
+    <button
+      onClick={() => { setDraft(value ?? ''); setEditing(true) }}
+      className="rounded px-1 py-0.5 text-left text-slate-200 hover:bg-slate-800"
+    >
+      {value ? value : <span className="text-slate-600">{placeholder}</span>}
+    </button>
+  )
+}
+
 function CatalogRowView({
   row,
   onPatch,
@@ -430,6 +475,12 @@ function CatalogRowView({
         </div>
       </td>
       <td className="px-2 py-2 text-slate-400">{row.supplierSku ?? '—'}</td>
+      <td className="px-2 py-2">
+        <EditableText value={row.factoryName} onSave={(v) => onPatch({ factoryName: v })} placeholder="factory name" />
+      </td>
+      <td className="px-2 py-2">
+        <EditableText value={row.factorySize} onSave={(v) => onPatch({ factorySize: v })} placeholder="size" width="w-16" />
+      </td>
       <td className="px-2 py-2">
         {costEditing ? (
           <input
