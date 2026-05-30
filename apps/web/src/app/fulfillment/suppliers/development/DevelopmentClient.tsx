@@ -230,7 +230,13 @@ function ProjectDrawer({ id, onClose }: { id: string; onClose: () => void }) {
                 {p.candidates.map((c) => (
                   <div key={c.id} className={`flex flex-wrap items-center gap-2 rounded border px-2 py-1 text-[11px] ${c.isSelected ? 'border-emerald-700 bg-emerald-950/20' : 'border-slate-800'}`}>
                     <button onClick={() => patchCandidate(c.id, { isSelected: !c.isSelected })} title="Select supplier" className={c.isSelected ? 'text-emerald-400' : 'text-slate-600 hover:text-slate-300'}>{c.isSelected ? '★' : '☆'}</button>
-                    <span className="min-w-0 flex-1 truncate font-medium text-slate-200">{c.supplier.name} <span className="text-slate-500">· LT {c.supplier.leadTimeDays}d</span></span>
+                    <span className="min-w-0 flex-1 truncate font-medium text-slate-200">
+                      {c.supplier.name} <span className="text-slate-500">· LT {c.supplier.leadTimeDays}d</span>
+                      {/* PD.6 — sourcing comparison badges */}
+                      {c.quotedCostCents != null && p.candidates.filter((x) => x.quotedCostCents != null).every((x) => c.quotedCostCents! <= x.quotedCostCents!) && <span className="ml-1 rounded bg-emerald-900/60 px-1 text-[9px] text-emerald-300">cheapest</span>}
+                      {p.candidates.every((x) => c.supplier.leadTimeDays <= x.supplier.leadTimeDays) && <span className="ml-1 rounded bg-blue-900/60 px-1 text-[9px] text-blue-300">fastest</span>}
+                      {p.targetCostCents != null && c.quotedCostCents != null && c.quotedCostCents > p.targetCostCents && <span className="ml-1 rounded bg-rose-950/60 px-1 text-[9px] text-rose-300">over target</span>}
+                    </span>
                     <span className="inline-flex items-center gap-1">
                       <span className="text-slate-500">quote €</span>
                       <input type="number" step="0.01" defaultValue={c.quotedCostCents != null ? (c.quotedCostCents / 100).toFixed(2) : ''} onBlur={(e) => patchCandidate(c.id, { quotedCostEur: e.target.value })} className="w-16 rounded border border-slate-700 bg-slate-950 px-1 py-0.5 text-right text-slate-100" />
