@@ -39,6 +39,7 @@ import {
 import {
   computeRecommendation,
   dailyDemandStdDev,
+  effectiveLeadTimeDays,
   type ConstraintCode,
 } from '../services/replenishment-math.service.js'
 import {
@@ -10366,12 +10367,39 @@ Return ONLY valid JSON, no prose:
               supplierId: { in: supplierIds },
               productId: { in: products.map((p) => p.id) },
             },
-            select: { productId: true, supplierId: true, costCents: true, currencyCode: true, moq: true, casePack: true },
+            select: {
+              productId: true,
+              supplierId: true,
+              costCents: true,
+              currencyCode: true,
+              moq: true,
+              casePack: true,
+              // S2 — per-product production/shipping overrides.
+              productionTimeDaysOverride: true,
+              productionUnitsPerDayOverride: true,
+              shippingTimeDaysOverride: true,
+            },
           })
         : []
       const supplierProductByKey = new Map(
         supplierProducts.map((sp) => [`${sp.supplierId}:${sp.productId}`, sp]),
       )
+      // S2 — supplier-level production/shipping defaults (used when a product
+      // has no per-product override). Effective lead time = production +
+      // shipping, falling back to the legacy combined leadTimeDays.
+      const supplierDefaults =
+        supplierIds.length > 0
+          ? await prisma.supplier.findMany({
+              where: { id: { in: supplierIds } },
+              select: {
+                id: true,
+                productionTimeDays: true,
+                productionUnitsPerDay: true,
+                shippingTimeDays: true,
+              },
+            })
+          : []
+      const supplierDefaultsById = new Map(supplierDefaults.map((s) => [s.id, s]))
 
       // R.15 — load FX rates for any non-EUR supplier currency in
       // this cohort. One indexed query per currency, small N.
@@ -10471,7 +10499,34 @@ Return ONLY valid JSON, no prose:
         const unitsSold = soldBySku.get(p.sku) ?? 0
         const trailingVelocity = unitsSold / window // units per day, trailing
         const safetyDays = rule?.safetyStockDays ?? 7
-        const leadTimeDays = atp?.leadTimeDays ?? DEFAULT_LEAD_TIME_DAYS
+        // S2 — effective lead time from split production + shipping (per-product
+        // override → supplier default → legacy combined leadTimeDays). Rate-based
+        // production is scaled by ~one month of demand as the representative
+        // order size; the precise reorder-qty timing is surfaced for S3.
+        const legacyLeadTimeDays = atp?.leadTimeDays ?? DEFAULT_LEAD_TIME_DAYS
+        const spForLeadTime = rule?.preferredSupplierId
+          ? supplierProductByKey.get(`${rule.preferredSupplierId}:${p.id}`)
+          : undefined
+        const supDefaults = rule?.preferredSupplierId
+          ? supplierDefaultsById.get(rule.preferredSupplierId)
+          : undefined
+        const leadTimeParts = effectiveLeadTimeDays({
+          productionTimeDays:
+            (spForLeadTime as any)?.productionTimeDaysOverride ??
+            supDefaults?.productionTimeDays ??
+            null,
+          productionUnitsPerDay:
+            (spForLeadTime as any)?.productionUnitsPerDayOverride ??
+            supDefaults?.productionUnitsPerDay ??
+            null,
+          shippingTimeDays:
+            (spForLeadTime as any)?.shippingTimeDaysOverride ??
+            supDefaults?.shippingTimeDays ??
+            null,
+          expectedQty: Math.max(1, Math.ceil(trailingVelocity * 30)),
+          legacyLeadTimeDays,
+        })
+        const leadTimeDays = leadTimeParts.leadTimeDays
         const inboundWithinLeadTime = atp?.inboundWithinLeadTime ?? 0
         const totalOpenInbound = atp?.totalOpenInbound ?? 0
         // R.18 — reservation-aware ATP. Pre-R.18 the math used
@@ -10774,6 +10829,12 @@ Return ONLY valid JSON, no prose:
           // "from supplier override" vs "from supplier default" vs "fallback".
           leadTimeDays,
           leadTimeSource: atp?.leadTimeSource ?? 'FALLBACK',
+          // S2 — production + shipping breakdown of the effective lead time
+          // ("12d production + 3d shipping"). leadTimeMode tells the UI whether
+          // it came from the split inputs or the legacy combined value.
+          productionDays: leadTimeParts.productionDays,
+          shippingDays: leadTimeParts.shippingDays,
+          leadTimeMode: leadTimeParts.source,
           isManufactured: !!rule?.isManufactured,
           preferredSupplierId: rule?.preferredSupplierId ?? null,
           fulfillmentChannel: p.fulfillmentChannel,
