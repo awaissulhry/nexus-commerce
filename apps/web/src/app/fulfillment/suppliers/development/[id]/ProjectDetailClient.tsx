@@ -29,14 +29,20 @@ type Candidate = {
 type DevAttachment = { id: string; kind: string; url: string; filename: string | null; uploadedAt: string }
 type DevPo = { id: string; poNumber: string; status: string; poKind: string; totalCents: number }
 type DevCert = { id: string; type: string; status: string; required: boolean; certNumber: string | null; expiresAt: string | null }
-type ProjectDetail = Project & { candidates: Candidate[]; attachments: DevAttachment[]; purchaseOrders: DevPo[]; certifications: DevCert[] }
+type SizeChart = { columns: string[]; rows: Array<{ size: string; values: string[] }>; tolerance?: string }
+type BomRow = { component: string; material: string; spec: string }
+type Colorway = { name: string; pantone?: string; hex?: string }
+type ProjectDetail = Project & {
+  candidates: Candidate[]; attachments: DevAttachment[]; purchaseOrders: DevPo[]; certifications: DevCert[]
+  sizeChart: SizeChart | null; materials: BomRow[] | null; colorways: Colorway[] | null; specNotes: string | null; revision: number
+}
 
 const CERT_TYPES = ['CE', 'ECE_22_06', 'EN_13594', 'EN_1621', 'GPSR', 'OTHER'] as const
 const CERT_VARIANT: Record<string, 'default' | 'success' | 'warning' | 'danger' | 'info'> = {
   PENDING: 'default', IN_PROGRESS: 'warning', APPROVED: 'success', REJECTED: 'danger',
 }
 
-const TABS = ['Overview', 'Sourcing', 'Files', 'Compliance'] as const
+const TABS = ['Overview', 'Spec', 'Sourcing', 'Files', 'Compliance'] as const
 type Tab = (typeof TABS)[number]
 
 const inputCls = 'h-9 w-full rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2.5 text-base text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-500'
@@ -130,6 +136,7 @@ export default function ProjectDetailClient() {
       </div>
 
       {tab === 'Overview' && <OverviewTab p={p} onPatch={patchProject} onReload={load} />}
+      {tab === 'Spec' && <SpecTab p={p} onPatch={patchProject} />}
       {tab === 'Sourcing' && <SourcingTab p={p} suppliers={suppliers} onReload={load} onPatchCandidate={patchCandidate} />}
       {tab === 'Files' && <FilesTab p={p} onReload={load} />}
       {tab === 'Compliance' && <ComplianceTab p={p} onReload={load} />}
@@ -291,6 +298,85 @@ function FilesTab({ p, onReload }: { p: ProjectDetail; onReload: () => void }) {
         </div>
       )}
     </Card>
+  )
+}
+
+const SIZE_PRESETS: Record<string, string[]> = {
+  'Helmet (XS–XXL)': ['XS', 'S', 'M', 'L', 'XL', 'XXL'],
+  'Jacket EU (44–60)': ['44', '46', '48', '50', '52', '54', '56', '58', '60'],
+  'Apparel (S–XXL)': ['S', 'M', 'L', 'XL', 'XXL'],
+}
+
+function SpecTab({ p, onPatch }: { p: ProjectDetail; onPatch: (b: Record<string, unknown>) => void }) {
+  return (
+    <div className="space-y-5">
+      <Card title="Size chart" description="Measurements the factory cuts to. Rows = sizes, columns = measurements (cm).">
+        <SizeChartEditor value={p.sizeChart} onSave={(sizeChart) => onPatch({ sizeChart })} />
+      </Card>
+      <Card title="Construction & special instructions">
+        <textarea defaultValue={p.specNotes ?? ''} rows={5} onBlur={(e) => onPatch({ specNotes: e.target.value })} placeholder="Stitching, seams, reinforcement, tolerances, packaging…" className="w-full rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-base text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+      </Card>
+    </div>
+  )
+}
+
+function SizeChartEditor({ value, onSave }: { value: SizeChart | null; onSave: (c: SizeChart) => void }) {
+  const [chart, setChart] = useState<SizeChart>(value ?? { columns: ['Chest', 'Length'], rows: [], tolerance: '' })
+  const [structVer, setStructVer] = useState(0)
+  const save = (next: SizeChart, structural = false) => { setChart(next); onSave(next); if (structural) setStructVer((v) => v + 1) }
+
+  const addColumn = () => { const name = window.prompt('Measurement name (e.g. Chest, Sleeve)'); if (!name?.trim()) return; save({ ...chart, columns: [...chart.columns, name.trim()], rows: chart.rows.map((r) => ({ ...r, values: [...r.values, ''] })) }, true) }
+  const removeColumn = (ci: number) => save({ ...chart, columns: chart.columns.filter((_, i) => i !== ci), rows: chart.rows.map((r) => ({ ...r, values: r.values.filter((_, i) => i !== ci) })) }, true)
+  const addRow = () => { const size = window.prompt('Size label (e.g. M, 52)'); if (!size?.trim()) return; save({ ...chart, rows: [...chart.rows, { size: size.trim(), values: chart.columns.map(() => '') }] }, true) }
+  const removeRow = (ri: number) => save({ ...chart, rows: chart.rows.filter((_, i) => i !== ri) }, true)
+  const setCell = (ri: number, ci: number, v: string) => { const rows = chart.rows.map((r, i) => i === ri ? { ...r, values: r.values.map((x, j) => j === ci ? v : x) } : r); save({ ...chart, rows }) }
+  const applyPreset = (sizes: string[]) => save({ ...chart, rows: sizes.map((s) => ({ size: s, values: chart.columns.map(() => '') })) }, true)
+
+  const cellCls = 'h-8 w-20 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-1.5 text-right text-base text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-500'
+  return (
+    <div className="space-y-3" key={structVer}>
+      {chart.rows.length === 0 && chart.columns.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5 text-sm text-slate-500">
+          <span>Quick start:</span>
+          {Object.entries(SIZE_PRESETS).map(([k, sizes]) => <Button key={k} variant="ghost" size="sm" onClick={() => applyPreset(sizes)}>{k}</Button>)}
+        </div>
+      )}
+      <div className="overflow-x-auto">
+        <table className="text-base">
+          <thead>
+            <tr>
+              <th className="px-2 py-1 text-left text-xs uppercase tracking-wider text-slate-500">Size</th>
+              {chart.columns.map((c, ci) => (
+                <th key={ci} className="px-2 py-1 text-left">
+                  <span className="inline-flex items-center gap-1">
+                    <input defaultValue={c} onBlur={(e) => { const cols = chart.columns.map((x, i) => i === ci ? e.target.value : x); save({ ...chart, columns: cols }) }} className="h-7 w-20 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-1 text-sm font-medium text-slate-700 dark:text-slate-200 focus:outline-none" />
+                    <button onClick={() => removeColumn(ci)} className="text-slate-300 hover:text-rose-500"><Trash2 size={12} /></button>
+                  </span>
+                </th>
+              ))}
+              <th className="px-2"><Button variant="ghost" size="sm" icon={<Plus size={13} />} onClick={addColumn}>Col</Button></th>
+            </tr>
+          </thead>
+          <tbody>
+            {chart.rows.map((r, ri) => (
+              <tr key={ri} className="border-t border-slate-100 dark:border-slate-800">
+                <td className="px-2 py-1"><input defaultValue={r.size} onBlur={(e) => { const rows = chart.rows.map((x, i) => i === ri ? { ...x, size: e.target.value } : x); save({ ...chart, rows }) }} className="h-8 w-16 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-1.5 text-base font-medium text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-500" /></td>
+                {chart.columns.map((_, ci) => (
+                  <td key={ci} className="px-2 py-1"><input defaultValue={r.values[ci] ?? ''} onBlur={(e) => setCell(ri, ci, e.target.value)} className={cellCls} /></td>
+                ))}
+                <td><button onClick={() => removeRow(ri)} className="text-slate-300 hover:text-rose-500"><Trash2 size={14} /></button></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div className="flex items-center gap-3">
+        <Button variant="secondary" size="sm" icon={<Plus size={13} />} onClick={addRow}>Add size</Button>
+        <label className="inline-flex items-center gap-1.5 text-sm text-slate-500">Tolerance
+          <input defaultValue={chart.tolerance ?? ''} onBlur={(e) => save({ ...chart, tolerance: e.target.value })} placeholder="± 1cm" className="h-8 w-24 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-1.5 text-base text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+        </label>
+      </div>
+    </div>
   )
 }
 
