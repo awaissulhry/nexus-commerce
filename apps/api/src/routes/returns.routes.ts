@@ -181,6 +181,23 @@ const returnsRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // RX.5 — returns intelligence: customer-level serial-returner risk
+  // (who, not what — complements the SKU-level risk-scores) plus the
+  // refund leakage / retention ratio and a cost-of-returns estimate.
+  // Read-only; window configurable.
+  fastify.get('/fulfillment/returns/intelligence', async (request, reply) => {
+    try {
+      const q = request.query as { windowDays?: string }
+      const windowDays = q.windowDays ? Number(q.windowDays) : 90
+      const { computeReturnsIntelligence } = await import(
+        '../services/returns-intelligence.service.js'
+      )
+      return reply.send(await computeReturnsIntelligence({ windowDays }))
+    } catch (error: any) {
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
   // R1.1 — list endpoint upgrades:
   //   q       — case-insensitive search across rmaNumber, reason,
   //             notes, returnTrackingNumber, channelReturnId, and

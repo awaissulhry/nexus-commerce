@@ -53,6 +53,25 @@ type RiskScoreResponse = {
   summary: { skusScored: number; bucketsAnalyzed: number; flaggedCount: number }
 }
 
+// RX.5 — returns intelligence (customer-level risk + financial lens).
+type Intelligence = {
+  windowDays: number
+  serialReturners: Array<{
+    email: string; customerName: string | null
+    returnCount: number; orderCount: number; returnRatePct: number | null
+    refundCents: number; flagged: boolean; reason: string
+  }>
+  retention: {
+    cash: number; storeCredit: number; exchange: number
+    cashCents: number; storeCreditCents: number; exchangeCents: number
+    retentionPct: number | null
+  }
+  costOfReturns: {
+    cashRefundCents: number; handlingCents: number; totalCents: number
+    returnCount: number; perReturnHandlingCents: number
+  }
+}
+
 const CHANNEL_TONE: Record<string, string> = {
   AMAZON: 'bg-orange-50 text-orange-700 border-orange-200',
   EBAY: 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-900',
@@ -64,21 +83,24 @@ const CHANNEL_TONE: Record<string, string> = {
 export default function AnalyticsClient() {
   const [data, setData] = useState<Analytics | null>(null)
   const [risk, setRisk] = useState<RiskScoreResponse | null>(null)
+  const [intel, setIntel] = useState<Intelligence | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   const fetchAnalytics = useCallback(async () => {
     setLoading(true)
     try {
-      const [analyticsRes, riskRes] = await Promise.all([
+      const [analyticsRes, riskRes, intelRes] = await Promise.all([
         fetch(`${getBackendUrl()}/api/fulfillment/returns/analytics`, { cache: 'no-store' }),
         fetch(`${getBackendUrl()}/api/fulfillment/returns/risk-scores`, { cache: 'no-store' }),
+        fetch(`${getBackendUrl()}/api/fulfillment/returns/intelligence`, { cache: 'no-store' }),
       ])
       if (analyticsRes.ok) setData((await analyticsRes.json()) as Analytics)
       else setError(`HTTP ${analyticsRes.status}`)
-      // Risk endpoint failure is non-fatal — page still renders the
-      // rest. Surface as an empty card.
+      // Risk + intelligence failures are non-fatal — page still renders
+      // the rest. Surface as empty cards.
       if (riskRes.ok) setRisk((await riskRes.json()) as RiskScoreResponse)
+      if (intelRes.ok) setIntel((await intelRes.json()) as Intelligence)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Load failed')
     } finally {
@@ -388,6 +410,103 @@ export default function AnalyticsClient() {
           )}
         </div>
       </Card>
+
+      {/* RX.5 — Returns intelligence: financial lens + serial returners. */}
+      {intel && (
+        <>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {/* Refund leakage / retention ratio. */}
+            <Card>
+              <div className="text-sm font-semibold text-slate-700 dark:text-slate-300 inline-flex items-center gap-2 mb-3">
+                <TrendingDown size={14} className="text-violet-500" /> Refund mix & retention
+                <span className="text-xs text-slate-400 font-normal">(last {intel.windowDays}d)</span>
+              </div>
+              <div className="grid grid-cols-3 gap-2 text-center mb-3">
+                <IntelStat label="Cash" n={intel.retention.cash} cents={intel.retention.cashCents} tone="rose" />
+                <IntelStat label="Store credit" n={intel.retention.storeCredit} cents={intel.retention.storeCreditCents} tone="emerald" />
+                <IntelStat label="Exchange" n={intel.retention.exchange} cents={intel.retention.exchangeCents} tone="emerald" />
+              </div>
+              <div className="text-sm text-slate-600 dark:text-slate-300">
+                Value retained as credit/exchange:{' '}
+                <span className="font-bold tabular-nums">
+                  {intel.retention.retentionPct != null ? `${intel.retention.retentionPct.toFixed(0)}%` : '—'}
+                </span>
+                <span className="text-xs text-slate-400 ml-1">(vs cash out the door)</span>
+              </div>
+            </Card>
+
+            {/* Cost of returns estimate. */}
+            <Card>
+              <div className="text-sm font-semibold text-slate-700 dark:text-slate-300 inline-flex items-center gap-2 mb-3">
+                <Clock size={14} className="text-amber-500" /> Cost of returns
+                <span className="text-xs text-slate-400 font-normal">(last {intel.windowDays}d, est.)</span>
+              </div>
+              <div className="space-y-1.5 text-sm">
+                <div className="flex justify-between"><span className="text-slate-500 dark:text-slate-400">Cash refunds</span><span className="tabular-nums">€{(intel.costOfReturns.cashRefundCents / 100).toLocaleString()}</span></div>
+                <div className="flex justify-between"><span className="text-slate-500 dark:text-slate-400">Handling ({intel.costOfReturns.returnCount} × €{(intel.costOfReturns.perReturnHandlingCents / 100).toFixed(2)})</span><span className="tabular-nums">€{(intel.costOfReturns.handlingCents / 100).toLocaleString()}</span></div>
+                <div className="flex justify-between border-t border-slate-200 dark:border-slate-700 pt-1.5 font-semibold"><span>Total</span><span className="tabular-nums">€{(intel.costOfReturns.totalCents / 100).toLocaleString()}</span></div>
+              </div>
+            </Card>
+          </div>
+
+          {/* Serial returners — customer-level risk. */}
+          <Card>
+            <div className="text-sm font-semibold text-slate-700 dark:text-slate-300 inline-flex items-center gap-2 mb-2">
+              <AlertTriangle size={14} className="text-rose-600 dark:text-rose-400" /> Serial returners
+              <span className="text-xs text-slate-400 font-normal">
+                ({intel.serialReturners.filter((s) => s.flagged).length} flagged · last {intel.windowDays}d)
+              </span>
+            </div>
+            {intel.serialReturners.length === 0 ? (
+              <div className="text-sm text-slate-500 dark:text-slate-400 py-4 text-center">No returns with customer identity in this window.</div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-slate-200 dark:border-slate-700 text-left text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                      <th className="px-2 py-1.5 font-semibold">Customer</th>
+                      <th className="px-2 py-1.5 font-semibold text-right">Returns</th>
+                      <th className="px-2 py-1.5 font-semibold text-right">Orders</th>
+                      <th className="px-2 py-1.5 font-semibold text-right">Return rate</th>
+                      <th className="px-2 py-1.5 font-semibold text-right">Refunded</th>
+                      <th className="px-2 py-1.5 font-semibold">Signal</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {intel.serialReturners.map((s) => (
+                      <tr key={s.email} className={`border-b border-slate-100 dark:border-slate-800 ${s.flagged ? 'bg-rose-50/40 dark:bg-rose-950/20' : ''}`}>
+                        <td className="px-2 py-1.5">
+                          <div className="text-slate-900 dark:text-slate-100 truncate max-w-[200px]">{s.customerName ?? s.email}</div>
+                          {s.customerName && <div className="text-xs text-slate-400 truncate max-w-[200px]">{s.email}</div>}
+                        </td>
+                        <td className="px-2 py-1.5 text-right tabular-nums font-semibold">{s.returnCount}</td>
+                        <td className="px-2 py-1.5 text-right tabular-nums text-slate-500 dark:text-slate-400">{s.orderCount}</td>
+                        <td className="px-2 py-1.5 text-right tabular-nums">{s.returnRatePct != null ? `${s.returnRatePct.toFixed(0)}%` : '—'}</td>
+                        <td className="px-2 py-1.5 text-right tabular-nums">€{(s.refundCents / 100).toLocaleString()}</td>
+                        <td className="px-2 py-1.5">
+                          {s.flagged
+                            ? <span className="text-xs font-semibold text-rose-700 dark:text-rose-300">{s.reason}</span>
+                            : <span className="text-xs text-slate-400">{s.reason}</span>}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </Card>
+        </>
+      )}
+    </div>
+  )
+}
+
+function IntelStat({ label, n, cents, tone }: { label: string; n: number; cents: number; tone: 'rose' | 'emerald' }) {
+  return (
+    <div className={`rounded border px-2 py-1.5 ${tone === 'rose' ? 'border-rose-200 dark:border-rose-900 bg-rose-50/50 dark:bg-rose-950/20' : 'border-emerald-200 dark:border-emerald-900 bg-emerald-50/50 dark:bg-emerald-950/20'}`}>
+      <div className="text-xs text-slate-500 dark:text-slate-400">{label}</div>
+      <div className="text-lg font-bold tabular-nums text-slate-900 dark:text-slate-100">{n}</div>
+      <div className="text-xs text-slate-400 tabular-nums">€{(cents / 100).toLocaleString()}</div>
     </div>
   )
 }
