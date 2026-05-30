@@ -290,6 +290,7 @@ export interface IngestResult {
   resource: V1Resource
   rowsIngested: number
   error?: string
+  breakdown?: Record<string, number> // AF.1 — targets ingest diagnostics
 }
 
 export async function ingestCompletedExport(jobId: string): Promise<IngestResult> {
@@ -321,6 +322,7 @@ export async function ingestCompletedExport(jobId: string): Promise<IngestResult
 
   // Dispatch per resource
   let rowsIngested = 0
+  let breakdown: Record<string, number> | undefined
   const resource = job.resource as V1Resource
   try {
     if (resource === 'campaigns') {
@@ -328,7 +330,9 @@ export async function ingestCompletedExport(jobId: string): Promise<IngestResult
     } else if (resource === 'adGroups') {
       rowsIngested = await ingestAdGroups(job.profileId, records as V1AdGroup[])
     } else if (resource === 'targets') {
-      rowsIngested = await ingestTargets(records as V1Target[])
+      const tr = await ingestTargets(records as V1Target[])
+      rowsIngested = tr.upserted
+      breakdown = tr.breakdown
     } else if (resource === 'ads') {
       rowsIngested = await ingestAds(records as V1Ad[])
     }
@@ -347,7 +351,7 @@ export async function ingestCompletedExport(jobId: string): Promise<IngestResult
     // run succeeded, so the record is now clean.
     data: { rowsIngested, errorMessage: null },
   })
-  return { jobId, resource, rowsIngested }
+  return { jobId, resource, rowsIngested, breakdown }
 }
 
 // ── Resource-level ingest functions ───────────────────────────────────
@@ -464,7 +468,7 @@ async function ingestAdGroups(profileId: string, records: V1AdGroup[]): Promise<
   return upserted
 }
 
-async function ingestTargets(records: V1Target[]): Promise<number> {
+async function ingestTargets(records: V1Target[]): Promise<{ upserted: number; breakdown: Record<string, number> }> {
   // Build adGroupId → local AdGroup.id map. Some targets are CAMPAIGN-level
   // negatives (no adGroupId); we skip those for the AdTarget table since
   // it requires an adGroupId FK. Campaign-level negatives could go in a
@@ -528,7 +532,7 @@ async function ingestTargets(records: V1Target[]): Promise<number> {
     }
   }
   logger.info('[ads-v1-sync] targets ingest breakdown', { ...bd, upserted })
-  return upserted
+  return { upserted, breakdown: { ...bd, upserted } }
 }
 
 async function ingestAds(records: V1Ad[]): Promise<number> {
