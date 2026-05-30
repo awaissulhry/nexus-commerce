@@ -67,6 +67,7 @@ const ALL_COLUMNS: GridLensColumn[] = [
   { key: 'adspend', label: 'Ad spend', width: 110 },
   { key: 'revenue', label: 'Revenue', width: 120 },
   { key: 'tacos', label: 'TACOS', width: 90 },
+  { key: 'acos', label: 'ACOS', width: 90 },
   { key: 'profit', label: 'True profit', width: 120 },
   { key: 'margin', label: 'Margin', width: 90 },
   { key: 'units', label: 'Units', width: 80 },
@@ -222,6 +223,7 @@ export function ByProductView() {
       case 'adspend': return <span className="tabular-nums font-medium">{eur(row.adSpendCents)}</span>
       case 'revenue': return <span className="tabular-nums">{eur(row.revenueCents)}</span>
       case 'tacos': return <span className={`tabular-nums font-medium ${tacosColor(row.tacos)}`}>{pct(row.tacos)}</span>
+      case 'acos': return <span className={`tabular-nums ${tacosColor(row.acos)}`}>{pct(row.acos)}</span>
       case 'profit': return <span className={`tabular-nums ${(row.profitCents ?? 0) >= 0 ? '' : 'text-rose-600'}`}>{eur(row.profitCents)}</span>
       case 'margin': return <span className="tabular-nums">{pct(row.marginPct)}</span>
       case 'units': return <span className="tabular-nums">{num(row.units)}</span>
