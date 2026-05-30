@@ -131,14 +131,19 @@ export function ByProductView() {
   const renderCell = useCallback((row: Row, colKey: string, isChild: boolean) => {
     if (isChild) {
       switch (colKey) {
-        case 'product': return <span className="pl-6 text-sm text-slate-700 dark:text-slate-200 truncate">{row.name}</span>
+        case 'product': return (
+          <span className="pl-6 inline-flex flex-col min-w-0">
+            <a href={`/marketing/advertising/campaigns/${row.id}`} className="text-sm text-slate-700 dark:text-slate-200 truncate hover:underline" title={row.name}>{row.name}</a>
+            <span className="text-[10px] text-slate-400">{num(row.impressions)} impr · {num(row.clicks)} clk</span>
+          </span>
+        )
         case 'campaigns': return <StatusChip status={row.status ?? ''} />
         case 'markets': return <span className="text-xs text-slate-500">{row.marketplace}</span>
         case 'adspend': return <span className="tabular-nums">{eur(row.adSpendCents)}</span>
         case 'revenue': return <span className="tabular-nums">{eur(row.revenueCents)}</span>
-        case 'tacos': return <span className="tabular-nums text-slate-400" title="ACOS (campaign)">{pct(row.acos)}<span className="text-[9px] ml-0.5">ACOS</span></span>
-        case 'profit': return <span className="text-xs text-slate-400">{num(row.impressions)} impr</span>
-        case 'margin': return <span className="text-xs text-slate-400">{num(row.clicks)} clk</span>
+        case 'tacos': return <span className="tabular-nums text-slate-500" title="Campaign ACOS">{pct(row.acos)} <span className="text-[9px] text-slate-400">ACOS</span></span>
+        case 'profit': return <span className="text-[11px] text-slate-300 dark:text-slate-600">—</span>
+        case 'margin': return null
         default: return null
       }
     }
