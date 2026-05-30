@@ -62,6 +62,11 @@ export function CampaignDetailCockpit({ campaign, history }: { campaign: Campaig
   const [searchTerms, setSearchTerms] = useState<Array<Record<string, unknown>> | null>(null)
   const [placements, setPlacements] = useState<Array<Record<string, unknown>> | null>(null)
   const [placeTrend, setPlaceTrend] = useState<Record<string, number[]>>({})
+  // CPC-ceiling guardrail (loaded with placements, saved via /cpc-ceiling).
+  const [cpcCeiling, setCpcCeiling] = useState<{ enabled: boolean; multiple: number }>({ enabled: false, multiple: 1.5 })
+  const [cpcSaving, setCpcSaving] = useState(false)
+  const [cpcMsg, setCpcMsg] = useState('')
+  const [clampMsg, setClampMsg] = useState('')
   // CD.7 — per-target suggested bid (data-grounded, from account CPC history).
   const [bidSug, setBidSug] = useState<Record<string, { suggestedBidCents: number; lowCents: number; highCents: number; basis: string } | 'loading' | 'none'>>({})
   const [busy, setBusy] = useState<string | null>(null)
@@ -209,6 +214,7 @@ export function CampaignDetailCockpit({ campaign, history }: { campaign: Campaig
     const r = await fetch(`${getBackendUrl()}/api/advertising/campaigns/${campaign.id}/placements?windowDays=14`, { cache: 'no-store' }).then((x) => x.json()).catch(() => ({ placements: [] }))
     setPlacements(r.placements ?? [])
     setPlaceTrend(r.trend?.series ?? {})
+    if (r.cpcCeiling) setCpcCeiling({ enabled: !!r.cpcCeiling.enabled, multiple: Number(r.cpcCeiling.multiple) || 1.5 })
     const seed: Record<string, string> = {}
     for (const p of (r.placements ?? []) as Array<Record<string, unknown>>) { const k = String(p.placement ?? ''); if (k in placeAdj && Number(p.adjustmentPct) > 0) seed[k] = String(p.adjustmentPct) }
     if (Object.keys(seed).length) setPlaceAdj((a) => ({ ...a, ...seed }))
@@ -238,6 +244,14 @@ export function CampaignDetailCockpit({ campaign, history }: { campaign: Campaig
     } catch (e) { setPlaceMsg((e as Error).message) } finally { setPlaceSaving(false) }
   }
   useEffect(() => { if (tab === 'searchterms') void loadSearchTerms(); if (tab === 'bidadjust') void loadPlacements() }, [tab, loadSearchTerms, loadPlacements])
+  const saveCpcCeiling = async () => {
+    setCpcSaving(true); setCpcMsg('')
+    try {
+      const r = await fetch(`${getBackendUrl()}/api/advertising/campaigns/${campaign.id}/cpc-ceiling`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled: cpcCeiling.enabled, multiple: cpcCeiling.multiple }) }).then((x) => x.json())
+      if (r?.error) throw new Error(r.error)
+      setCpcMsg('✓ saved')
+    } catch (e) { setCpcMsg((e as Error).message) } finally { setCpcSaving(false) }
+  }
 
   const saveBid = async (t: Target) => {
     const v = bidEdit[t.id]; if (v == null) return
@@ -245,10 +259,13 @@ export function CampaignDetailCockpit({ campaign, history }: { campaign: Campaig
     setBusy(t.id)
     try {
       // Canonical audited route is /ad-targets/:id (the old /targets/:id PATCH
-      // was a 404 — pre-existing AX.3 bug fixed in CD.8).
-      await fetch(`${getBackendUrl()}/api/advertising/ad-targets/${t.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ bidCents: cents }) })
-      setTargets((ts) => ts.map((x) => (x.id === t.id ? { ...x, bidCents: cents } : x)))
+      // was a 404 — pre-existing AX.3 bug fixed in CD.8). The route may clamp
+      // the bid to the campaign's CPC ceiling and return cpcClamp.
+      const r = await fetch(`${getBackendUrl()}/api/advertising/ad-targets/${t.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ bidCents: cents }) }).then((x) => x.json()).catch(() => ({}))
+      const effective = r?.cpcClamp?.to ?? cents
+      setTargets((ts) => ts.map((x) => (x.id === t.id ? { ...x, bidCents: effective } : x)))
       setBidEdit((e) => { const { [t.id]: _, ...rest } = e; return rest })
+      if (r?.cpcClamp) { setClampMsg(`Bid capped at ${eur(effective)} by CPC ceiling`); setTimeout(() => setClampMsg(''), 5000) }
     } finally { setBusy(null) }
   }
   const submitTarget = async () => {
@@ -306,8 +323,10 @@ export function CampaignDetailCockpit({ campaign, history }: { campaign: Campaig
     try {
       const r = await fetch(`${getBackendUrl()}/api/advertising/ad-targets/bulk-bid`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ entries, reason: `bulk ${factor > 1 ? '+' : '−'}${Math.abs(Math.round((factor - 1) * 100))}%` }) }).then((x) => x.json())
       if (r?.ok === false) throw new Error(r.error)
-      setTargets((ts) => ts.map((x) => { const e = entries.find((n) => n.adTargetId === x.id); return e ? { ...x, bidCents: e.bidCents } : x }))
-      setBulkStatus(`✓ ${entries.length} bids updated`)
+      const clamps: Array<{ adTargetId: string; to: number }> = r?.cpcClamps ?? []
+      const clampTo = new Map(clamps.map((c) => [c.adTargetId, c.to]))
+      setTargets((ts) => ts.map((x) => { const e = entries.find((n) => n.adTargetId === x.id); return e ? { ...x, bidCents: clampTo.get(x.id) ?? e.bidCents } : x }))
+      setBulkStatus(`✓ ${entries.length} bids updated${clamps.length ? ` · ${clamps.length} capped by CPC ceiling` : ''}`)
     } catch (e) { setBulkStatus((e as Error).message) } finally { setBulkBusy(false); setSelTargets(new Set()) }
   }
   // CD.8 — bulk search-term actions (reuse the single-row handlers).
@@ -392,6 +411,7 @@ export function CampaignDetailCockpit({ campaign, history }: { campaign: Campaig
         ))}
       </nav>
 
+      {clampMsg && <div className="mb-2 px-3 py-1.5 text-xs rounded-md text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900">{clampMsg}</div>}
       <div className="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800">
         {tab === 'adgroups' && (
           <table className="w-full text-sm"><thead className="bg-slate-50 dark:bg-slate-900/60 text-xs text-slate-500"><tr><th className="text-left px-3 py-2">Ad group</th><th className="text-left px-3 py-2">Status</th><th className="text-right px-3 py-2">Default bid</th><th className="text-right px-3 py-2">Targets</th><th className="text-right px-3 py-2">Impr</th><th className="text-right px-3 py-2">Clicks</th><th className="text-right px-3 py-2">Spend</th><th className="text-right px-3 py-2">Sales</th><th className="text-right px-3 py-2">14d</th></tr></thead>
@@ -509,6 +529,18 @@ export function CampaignDetailCockpit({ campaign, history }: { campaign: Campaig
                 </select></label>
               <button onClick={savePlacements} disabled={placeSaving} className="px-3 py-1 text-sm rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50">{placeSaving ? 'Saving…' : 'Save adjustments'}</button>
               {placeMsg && <span className={`text-xs ${placeMsg.startsWith('✓') ? 'text-emerald-600' : 'text-rose-600'}`}>{placeMsg}</span>}
+            </div>
+            {/* CPC-ceiling guardrail — caps how high a bid can be set vs the target's own CPC history. */}
+            <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-800 flex flex-wrap items-center gap-3">
+              <label className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-600 dark:text-slate-300">
+                <input type="checkbox" checked={cpcCeiling.enabled} onChange={(e) => setCpcCeiling((c) => ({ ...c, enabled: e.target.checked }))} /> CPC ceiling
+              </label>
+              <label className="inline-flex items-center gap-1 text-[11px] text-slate-500">cap at
+                <input type="number" min="1" max="10" step="0.1" value={cpcCeiling.multiple} disabled={!cpcCeiling.enabled} onChange={(e) => setCpcCeiling((c) => ({ ...c, multiple: parseFloat(e.target.value) || 1.5 }))} className="w-16 px-2 py-1 text-sm rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-right disabled:opacity-50" />× the target's CPC
+              </label>
+              <button onClick={saveCpcCeiling} disabled={cpcSaving} className="px-3 py-1 text-sm rounded bg-slate-700 text-white hover:bg-slate-800 disabled:opacity-50">{cpcSaving ? 'Saving…' : 'Save ceiling'}</button>
+              {cpcMsg && <span className={`text-xs ${cpcMsg.startsWith('✓') ? 'text-emerald-600' : 'text-rose-600'}`}>{cpcMsg}</span>}
+              <span className="text-[11px] text-slate-400">Bids above the cap are clamped on save (targets with click history).</span>
             </div>
           </div>
           <table className="w-full text-sm"><thead className="bg-slate-50 dark:bg-slate-900/60 text-xs text-slate-500"><tr><th className="text-left px-3 py-2">Placement</th><th className="text-right px-3 py-2">Adjustment</th><th className="text-right px-3 py-2">Impr</th><th className="text-right px-3 py-2">Clicks</th><th className="text-right px-3 py-2">Cost</th><th className="text-right px-3 py-2">Orders</th><th className="text-right px-3 py-2">14d</th></tr></thead>

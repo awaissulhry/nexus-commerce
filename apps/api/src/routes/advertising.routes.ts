@@ -229,9 +229,12 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       where: { campaignId: campaign.externalCampaignId },
       _sum: { impressions: true, clicks: true, costMicros: true, sales7dCents: true, orders7d: true },
     })
-    const db = (campaign.dynamicBidding ?? {}) as { placementBidding?: Array<{ placement: string; percentage: number }> }
+    const db = (campaign.dynamicBidding ?? {}) as { placementBidding?: Array<{ placement: string; percentage: number }>; cpcCeiling?: { enabled?: boolean; multiple?: number } }
     const adj: Record<string, number> = {}
     for (const p of db.placementBidding ?? []) adj[p.placement] = p.percentage
+    // CD/CPC — surface the CPC-ceiling guardrail config (read-modify-written by
+    // PATCH /campaigns/:id/cpc-ceiling; enforced on ad-target bid writes).
+    const cpcCeiling = { enabled: db.cpcCeiling?.enabled ?? false, multiple: db.cpcCeiling?.multiple ?? 1.5 }
 
     // CD.7 — optional per-placement daily spend trend (windowDays). One extra
     // groupBy over the placement report; aligned to a fixed date axis so each
@@ -270,6 +273,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
         orders7d: r._sum.orders7d ?? 0,
         adjustmentPct: adj[r.placement] ?? 0,
       })),
+      cpcCeiling,
       ...(trend ? { trend } : {}),
     }
   })
@@ -281,6 +285,23 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     if (!Array.isArray(b?.adjustments)) { reply.status(400); return { error: 'adjustments[] required' } }
     const { updatePlacementBidding } = await import('../services/advertising/ads-create.service.js')
     try { return await updatePlacementBidding({ campaignId: id, adjustments: b.adjustments, biddingStrategy: b.biddingStrategy as never }) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
+  })
+
+  // ── CPC-ceiling guardrail config (Pacvue-parity) ────────────────────
+  // Read-modify-writes Campaign.dynamicBidding.cpcCeiling. Enforced at the
+  // ad-target bid-write routes below: a requested bid is clamped to
+  // `multiple × the target's historical CPC`. Caps Amazon's dynamic bidding
+  // from running effective CPCs far above the seller's norm.
+  fastify.patch('/advertising/campaigns/:id/cpc-ceiling', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const b = request.body as { enabled?: boolean; multiple?: number }
+    const c = await prisma.campaign.findUnique({ where: { id }, select: { dynamicBidding: true } })
+    if (!c) { reply.status(404); return { error: 'campaign not found' } }
+    const db = (c.dynamicBidding ?? {}) as Record<string, unknown>
+    const multiple = b.multiple != null ? Math.max(1, Math.min(10, Number(b.multiple))) : 1.5
+    db.cpcCeiling = { enabled: !!b.enabled, multiple }
+    await prisma.campaign.update({ where: { id }, data: { dynamicBidding: db as never } })
+    return { ok: true, cpcCeiling: db.cpcCeiling }
   })
 
   // ── GET /advertising/fba-storage-age/:productId ─────────────────────
@@ -3016,6 +3037,37 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     return result
   })
 
+  // CPC-ceiling enforcement (route layer, before the audited mutation service).
+  // For each requested bid, if the target's campaign has cpcCeiling enabled and
+  // the target has historical clicks, clamp the bid to `multiple × its CPC`
+  // (never below the 5-cent floor). Targets with no click history have no basis
+  // → left unclamped. Returns the effective entries + a clamp log. One findMany.
+  const clampBidsByCeiling = async (
+    entries: Array<{ adTargetId: string; bidCents: number }>,
+  ): Promise<{ entries: Array<{ adTargetId: string; bidCents: number }>; clamps: Array<{ adTargetId: string; from: number; to: number; ceilingCents: number }> }> => {
+    const ids = entries.map((e) => e.adTargetId)
+    const targets = await prisma.adTarget.findMany({
+      where: { id: { in: ids } },
+      select: { id: true, clicks: true, spendCents: true, adGroup: { select: { campaign: { select: { dynamicBidding: true } } } } },
+    })
+    const byId = new Map(targets.map((t) => [t.id, t]))
+    const clamps: Array<{ adTargetId: string; from: number; to: number; ceilingCents: number }> = []
+    const out = entries.map((e) => {
+      const t = byId.get(e.adTargetId)
+      const db = (t?.adGroup?.campaign?.dynamicBidding ?? {}) as { cpcCeiling?: { enabled?: boolean; multiple?: number } }
+      const ceil = db.cpcCeiling
+      if (!t || !ceil?.enabled || !t.clicks || t.clicks <= 0) return e
+      const avgCpc = t.spendCents / t.clicks
+      const ceilingCents = Math.max(5, Math.round((ceil.multiple ?? 1.5) * avgCpc))
+      if (e.bidCents > ceilingCents) {
+        clamps.push({ adTargetId: e.adTargetId, from: e.bidCents, to: ceilingCents, ceilingCents })
+        return { ...e, bidCents: ceilingCents }
+      }
+      return e
+    })
+    return { entries: out, clamps }
+  }
+
   fastify.patch('/advertising/ad-targets/:id', async (request, reply) => {
     const { id } = request.params as { id: string }
     const body = request.body as {
@@ -3023,6 +3075,13 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       status?: 'ENABLED' | 'PAUSED' | 'ARCHIVED'
       reason?: string
       applyImmediately?: boolean
+    }
+    // CPC ceiling: clamp the requested bid before the audited write.
+    let cpcClamp: { from: number; to: number; ceilingCents: number } | null = null
+    if (body.bidCents != null) {
+      const { entries, clamps } = await clampBidsByCeiling([{ adTargetId: id, bidCents: body.bidCents }])
+      body.bidCents = entries[0]!.bidCents
+      if (clamps[0]) cpcClamp = { from: clamps[0].from, to: clamps[0].to, ceilingCents: clamps[0].ceilingCents }
     }
     const result = await updateAdTargetWithSync({
       adTargetId: id,
@@ -3039,7 +3098,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       reply.code(400)
       return result
     }
-    return result
+    return cpcClamp ? { ...result, cpcClamp } : result
   })
 
   fastify.post('/advertising/ad-targets/bulk-bid', async (request, reply) => {
@@ -3058,13 +3117,15 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       reply.code(400)
       return { ok: false, error: 'too_many_entries' }
     }
+    // CPC ceiling: clamp each requested bid before the audited bulk write.
+    const { entries: clampedEntries, clamps } = await clampBidsByCeiling(body.entries)
     const result = await bulkUpdateAdTargetBids({
-      entries: body.entries,
+      entries: clampedEntries,
       actor: actorFromHeaders(request.headers as Record<string, unknown>),
       reason: body.reason ?? null,
       applyImmediately: body.applyImmediately ?? false,
     })
-    return { ok: true, ...result }
+    return { ok: true, ...result, cpcClamps: clamps }
   })
 
   fastify.delete('/advertising/mutations/:outboundQueueId', async (request, reply) => {
