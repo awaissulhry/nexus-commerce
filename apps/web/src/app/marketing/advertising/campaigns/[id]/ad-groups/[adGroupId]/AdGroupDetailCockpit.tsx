@@ -118,18 +118,86 @@ export function AdGroupDetailCockpit({ adGroup }: { adGroup: AdGroupDetail }) {
   useEffect(() => { if (tab === 'searchterms' && searchTerms == null) void loadSearchTerms() }, [tab, searchTerms, loadSearchTerms])
   useEffect(() => { if (tab === 'history' && history == null) void loadHistory() }, [tab, history, loadHistory])
 
+  // AF.5/AF.6 — inline bid editing + enable/pause toggles. Reuses the existing
+  // audited mutation endpoints (PATCH ad-targets/:id, ad-groups/:id,
+  // product-ads/:id); applyImmediately pushes to Amazon when live.
+  const [busy, setBusy] = useState<string | null>(null)
+  const [editBidId, setEditBidId] = useState<string | null>(null)
+  const [bidDraft, setBidDraft] = useState('')
+  const [defBidDraft, setDefBidDraft] = useState('')
+  const [editDefBid, setEditDefBid] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+  const patch = useCallback(async (url: string, body: Record<string, unknown>): Promise<Record<string, unknown> | null> => {
+    setErr(null)
+    const r = await fetch(`${getBackendUrl()}${url}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ applyImmediately: true, ...body }) })
+      .then((x) => x.json()).catch(() => null)
+    if (!r || r.ok === false) { setErr(r?.error ? String(r.error) : 'Update failed'); return null }
+    return r
+  }, [])
+  const nextStatus = (s: string) => (s === 'ENABLED' ? 'PAUSED' : 'ENABLED')
+  const toggleTargetStatus = useCallback(async (t: AgTarget) => {
+    setBusy(t.id); const s = nextStatus(t.status)
+    const ok = await patch(`/api/advertising/ad-targets/${t.id}`, { status: s, reason: 'ad-group cockpit toggle' })
+    if (ok) setData((d) => ({ ...d, targets: d.targets.map((x) => (x.id === t.id ? { ...x, status: s } : x)) }))
+    setBusy(null)
+  }, [patch])
+  const saveBid = useCallback(async (t: AgTarget) => {
+    const eur2 = Number(bidDraft.replace(',', '.')); const cents = Math.round(eur2 * 100)
+    setEditBidId(null)
+    if (!Number.isFinite(cents) || cents < 5 || cents === t.bidCents) return
+    setBusy(t.id)
+    const ok = await patch(`/api/advertising/ad-targets/${t.id}`, { bidCents: cents, reason: 'ad-group cockpit bid edit' })
+    if (ok) { const eff = typeof ok.cpcClamp === 'object' && ok.cpcClamp ? Number((ok.cpcClamp as { to: number }).to) : cents; setData((d) => ({ ...d, targets: d.targets.map((x) => (x.id === t.id ? { ...x, bidCents: eff } : x)) })) }
+    setBusy(null)
+  }, [bidDraft, patch])
+  const toggleAdGroupStatus = useCallback(async () => {
+    setBusy('adgroup'); const s = nextStatus(data.status)
+    const ok = await patch(`/api/advertising/ad-groups/${data.id}`, { status: s, reason: 'ad-group cockpit toggle' })
+    if (ok) setData((d) => ({ ...d, status: s }))
+    setBusy(null)
+  }, [data.status, data.id, patch])
+  const saveDefaultBid = useCallback(async () => {
+    const cents = Math.round(Number(defBidDraft.replace(',', '.')) * 100)
+    setEditDefBid(false)
+    if (!Number.isFinite(cents) || cents < 5 || cents === data.defaultBidCents) return
+    setBusy('defbid')
+    const ok = await patch(`/api/advertising/ad-groups/${data.id}`, { defaultBidCents: cents, reason: 'ad-group cockpit default-bid edit' })
+    if (ok) setData((d) => ({ ...d, defaultBidCents: cents }))
+    setBusy(null)
+  }, [defBidDraft, data.defaultBidCents, data.id, patch])
+  const toggleAdStatus = useCallback(async (a: Ad) => {
+    setBusy(a.id); const s = nextStatus(a.status)
+    const ok = await patch(`/api/advertising/product-ads/${a.id}`, { status: s, reason: 'ad-group cockpit toggle' })
+    if (ok) setData((d) => ({ ...d, ads: d.ads.map((x) => (x.id === a.id ? { ...x, status: s } : x)) }))
+    setBusy(null)
+  }, [patch])
+  const StatusToggle = ({ status, onToggle, busy: b }: { status: string; onToggle: () => void; busy: boolean }) => (
+    <button onClick={onToggle} disabled={b || status === 'ARCHIVED'} title={status === 'ARCHIVED' ? 'Archived' : `Click to ${status === 'ENABLED' ? 'pause' : 'enable'}`}
+      className={`relative inline-flex h-4 w-7 items-center rounded-full transition disabled:opacity-40 ${status === 'ENABLED' ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'}`} aria-label={`${status === 'ENABLED' ? 'Pause' : 'Enable'}`} role="switch" aria-checked={status === 'ENABLED'}>
+      <span className={`inline-block h-3 w-3 transform rounded-full bg-white transition ${status === 'ENABLED' ? 'translate-x-3.5' : 'translate-x-0.5'}`} />
+    </button>
+  )
+
   return (
     <div className="px-4 py-4">
       <Link href={`/marketing/advertising/campaigns/${adGroup.campaign.id}`} className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700 mb-2"><ChevronLeft size={14} /> {adGroup.campaign.name}</Link>
       <div className="flex items-center gap-2 flex-wrap">
         <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100">Ad group: {adGroup.name}</h1>
-        <StatusChip status={adGroup.status} dot />
+        <StatusChip status={data.status} dot />
+        <StatusToggle status={data.status} onToggle={toggleAdGroupStatus} busy={busy === 'adgroup'} />
       </div>
       <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 mt-1 mb-3">
         <span title={marketplaceCountryName(adGroup.campaign.marketplace)}>{marketplaceCode(adGroup.campaign.marketplace)}</span><span>·</span>
         <span>{adGroup.campaign.type}</span><span>·</span>
-        <span>Default bid {eur(adGroup.defaultBidCents)}</span>
+        <span className="inline-flex items-center gap-1">Default bid{' '}
+          {editDefBid ? (
+            <input autoFocus type="number" step="0.01" min="0.05" defaultValue={(data.defaultBidCents / 100).toFixed(2)} onChange={(e) => setDefBidDraft(e.target.value)} onBlur={saveDefaultBid} onKeyDown={(e) => { if (e.key === 'Enter') saveDefaultBid(); if (e.key === 'Escape') setEditDefBid(false) }} aria-label="Default bid (EUR)" className="w-16 px-1 py-0.5 rounded border border-blue-400 bg-white dark:bg-slate-900 tabular-nums" />
+          ) : (
+            <button onClick={() => { setDefBidDraft(''); setEditDefBid(true) }} className="font-medium text-slate-700 dark:text-slate-200 hover:text-blue-600 hover:underline tabular-nums disabled:opacity-40" disabled={busy === 'defbid'} title="Edit default bid">{eur(data.defaultBidCents)}</button>
+          )}
+        </span>
         {data.dataThrough && <><span>·</span><span className="text-slate-400">data through {data.dataThrough}</span></>}
+        {err && <><span>·</span><span className="text-rose-600 dark:text-rose-400">{err}</span></>}
       </div>
 
       <div className="flex gap-5 items-start mt-1">
@@ -178,7 +246,7 @@ export function AdGroupDetailCockpit({ adGroup }: { adGroup: AdGroupDetail }) {
                             : <span className="truncate max-w-[22rem]">{a.name}</span>}
                         </div>
                       </td>
-                      <td className="px-3 py-1.5"><StatusChip status={a.status} dot /></td>
+                      <td className="px-3 py-1.5"><span className="inline-flex items-center gap-1.5"><StatusToggle status={a.status} onToggle={() => toggleAdStatus(a)} busy={busy === a.id} /><StatusChip status={a.status} dot /></span></td>
                       <td className="px-3 py-1.5 text-xs text-slate-500">{a.sku ?? '—'}{a.asin ? <span className="block text-slate-400">{a.asin}</span> : null}</td>
                       <td className="px-3 py-1.5 text-right tabular-nums">{eur(a.spendCents)}</td>
                       <td className="px-3 py-1.5 text-right tabular-nums">{num(a.orders)}</td>
@@ -195,7 +263,18 @@ export function AdGroupDetailCockpit({ adGroup }: { adGroup: AdGroupDetail }) {
                 <thead className="bg-slate-50 dark:bg-slate-900/60 text-xs text-slate-500"><tr><th className="text-left px-3 py-2">Target</th><th className="text-left px-3 py-2">Match</th><th className="text-right px-3 py-2">Bid</th><th className="text-left px-3 py-2">Status</th></tr></thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                   {data.targets.filter((t) => !t.isNegative).length === 0 ? <tr><td colSpan={4} className="px-3 py-8 text-center text-slate-400 text-xs">No keyword/product targets. Auto-targeting ad groups discover terms automatically.</td></tr> : data.targets.filter((t) => !t.isNegative).map((t) => (
-                    <tr key={t.id} className="hover:bg-slate-50 dark:hover:bg-slate-900/40"><td className="px-3 py-1.5">{t.expressionValue}</td><td className="px-3 py-1.5 text-xs text-slate-500">{t.expressionType}</td><td className="px-3 py-1.5 text-right tabular-nums">{eur(t.bidCents)}</td><td className="px-3 py-1.5"><StatusChip status={t.status} dot /></td></tr>
+                    <tr key={t.id} className="hover:bg-slate-50 dark:hover:bg-slate-900/40">
+                      <td className="px-3 py-1.5">{t.expressionValue}</td>
+                      <td className="px-3 py-1.5 text-xs text-slate-500">{t.expressionType}</td>
+                      <td className="px-3 py-1.5 text-right tabular-nums">
+                        {editBidId === t.id ? (
+                          <input autoFocus type="number" step="0.01" min="0.05" defaultValue={(t.bidCents / 100).toFixed(2)} onChange={(e) => setBidDraft(e.target.value)} onBlur={() => saveBid(t)} onKeyDown={(e) => { if (e.key === 'Enter') saveBid(t); if (e.key === 'Escape') setEditBidId(null) }} aria-label={`Bid for ${t.expressionValue}`} className="w-20 px-1 py-0.5 rounded border border-blue-400 bg-white dark:bg-slate-900 text-right tabular-nums" />
+                        ) : (
+                          <button onClick={() => { setBidDraft(''); setEditBidId(t.id) }} disabled={busy === t.id} className="hover:text-blue-600 hover:underline disabled:opacity-40" title="Edit bid">{eur(t.bidCents)}</button>
+                        )}
+                      </td>
+                      <td className="px-3 py-1.5"><span className="inline-flex items-center gap-1.5"><StatusToggle status={t.status} onToggle={() => toggleTargetStatus(t)} busy={busy === t.id} /><StatusChip status={t.status} dot /></span></td>
+                    </tr>
                   ))}
                 </tbody>
               </table>

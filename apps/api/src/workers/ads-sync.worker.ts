@@ -23,6 +23,7 @@ import {
   updateCampaign,
   updateAdGroup,
   updateTarget,
+  updateProductAd,
   adsMode,
   type ClientContext,
   type AdsRegion,
@@ -39,7 +40,7 @@ interface AdsJobData {
 }
 
 interface AdMutationPayload {
-  entityType: 'CAMPAIGN' | 'AD_GROUP' | 'AD_TARGET'
+  entityType: 'CAMPAIGN' | 'AD_GROUP' | 'AD_TARGET' | 'PRODUCT_AD'
   entityId: string
   externalId: string | null
   marketplace: string | null
@@ -140,6 +141,10 @@ async function dispatchToAmazon(
     }
     if (payload.entityType === 'AD_TARGET') {
       const res = await updateTarget(ctx, payload.externalId, patch)
+      return { ok: res.ok, rawResponse: res.rawResponse, error: null }
+    }
+    if (payload.entityType === 'PRODUCT_AD') {
+      const res = await updateProductAd(ctx, payload.externalId, { state: patch.state })
       return { ok: res.ok, rawResponse: res.rawResponse, error: null }
     }
     return { ok: false, rawResponse: null, error: `unknown_entity_type:${payload.entityType}` }

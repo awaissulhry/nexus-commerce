@@ -41,6 +41,7 @@ import {
   updateCampaignWithSync,
   updateAdGroupWithSync,
   updateAdTargetWithSync,
+  updateProductAdWithSync,
   bulkUpdateAdTargetBids,
   cancelPendingMutation,
   type AdsActor,
@@ -4074,6 +4075,22 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       applyImmediately: body.applyImmediately ?? false,
     })
     return { ok: true, ...result, cpcClamps: clamps }
+  })
+
+  // AF.5 — product ad enable/pause toggle.
+  fastify.patch('/advertising/product-ads/:id', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const body = request.body as { status?: 'ENABLED' | 'PAUSED' | 'ARCHIVED'; reason?: string; applyImmediately?: boolean }
+    if (!body.status) { reply.code(400); return { ok: false, error: 'status_required' } }
+    const result = await updateProductAdWithSync({
+      productAdId: id,
+      status: body.status,
+      actor: actorFromHeaders(request.headers as Record<string, unknown>),
+      reason: body.reason ?? null,
+      applyImmediately: body.applyImmediately ?? false,
+    })
+    if (!result.ok && result.error === 'not_found') { reply.code(404); return result }
+    return result
   })
 
   fastify.delete('/advertising/mutations/:outboundQueueId', async (request, reply) => {

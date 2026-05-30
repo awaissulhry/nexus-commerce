@@ -408,6 +408,33 @@ export async function updateAdGroup(
   return { ok: true, mode: 'live', rawResponse: response }
 }
 
+export interface ProductAdPatch {
+  state?: 'enabled' | 'paused' | 'archived'
+}
+
+// AF.5 — toggle a product ad's state (enable/pause). v3: PUT /sp/productAds.
+export async function updateProductAd(
+  ctx: ClientContext,
+  externalAdId: string,
+  patch: ProductAdPatch,
+): Promise<{ ok: boolean; mode: AdsMode; rawResponse: unknown }> {
+  if (adsMode() === 'sandbox') {
+    logger.info('[ADS-SANDBOX] updateProductAd', { profileId: ctx.profileId, externalAdId, patch })
+    return { ok: true, mode: 'sandbox', rawResponse: { sandbox: true, patch } }
+  }
+  const v3: Record<string, unknown> = { adId: externalAdId }
+  if (patch.state) v3.state = patch.state.toUpperCase()
+  const response = await liveCall<unknown>({
+    ...ctx,
+    method: 'PUT',
+    path: '/sp/productAds',
+    body: { productAds: [v3] },
+    contentType: 'application/vnd.spProductAd.v3+json',
+    acceptHeader: 'application/vnd.spProductAd.v3+json',
+  })
+  return { ok: true, mode: 'live', rawResponse: response }
+}
+
 export interface TargetPatch {
   state?: 'enabled' | 'paused' | 'archived'
   bid?: number

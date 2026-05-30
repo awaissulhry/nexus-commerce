@@ -30,7 +30,7 @@ const GRACE_PERIOD_MS = Number(process.env.NEXUS_ADS_GRACE_MS ?? 5 * 60 * 1000)
 
 export type AdsActor = `user:${string}` | `automation:${string}`
 
-export type AdEntityType = 'CAMPAIGN' | 'AD_GROUP' | 'AD_TARGET'
+export type AdEntityType = 'CAMPAIGN' | 'AD_GROUP' | 'AD_TARGET' | 'PRODUCT_AD'
 
 export type AdSyncType =
   | 'AD_BID_UPDATE'
@@ -63,7 +63,7 @@ export interface MutationOutcome {
 async function writeAdvertisingActionLog(args: {
   actor: AdsActor
   actionType: string
-  entityType: 'CAMPAIGN' | 'AD_GROUP' | 'AD_TARGET' | 'RETAIL_EVENT'
+  entityType: 'CAMPAIGN' | 'AD_GROUP' | 'AD_TARGET' | 'RETAIL_EVENT' | 'PRODUCT_AD'
   entityId: string
   payloadBefore: object
   payloadAfter: object
@@ -428,6 +428,48 @@ export async function updateAdGroupWithSync(args: {
 
   await enqueueBullMQJob(outboundQueueId, syncType)
   return { ok: true, outboundQueueId, bidHistoryIds, actionLogId, error: null }
+}
+
+// AF.5 — product ad enable/pause. Status-only (product ads carry no bid).
+export async function updateProductAdWithSync(args: {
+  productAdId: string
+  status: 'ENABLED' | 'PAUSED' | 'ARCHIVED'
+  actor: AdsActor
+  reason?: string | null
+  applyImmediately?: boolean
+}): Promise<MutationOutcome> {
+  const existing = await prisma.adProductAd.findUnique({
+    where: { id: args.productAdId },
+    select: { id: true, externalAdId: true, status: true, adGroup: { select: { campaign: { select: { id: true, marketplace: true } } } } },
+  })
+  if (!existing) return { ok: false, outboundQueueId: null, bidHistoryIds: [], actionLogId: null, error: 'not_found' }
+  if (args.status === existing.status) return { ok: true, outboundQueueId: null, bidHistoryIds: [], actionLogId: null, error: 'no_changes' }
+
+  const changes: FieldChange[] = [{ field: 'status', oldValue: existing.status, newValue: args.status }]
+  await prisma.adProductAd.update({ where: { id: args.productAdId }, data: { status: args.status } })
+
+  const outboundQueueId = await enqueueOutbound({
+    entityType: 'PRODUCT_AD',
+    entityId: args.productAdId,
+    externalId: existing.externalAdId,
+    syncType: 'AD_ENTITY_STATE_UPDATE',
+    marketplace: existing.adGroup?.campaign?.marketplace ?? null,
+    fieldChanges: changes,
+    actor: args.actor,
+    reason: args.reason ?? null,
+    applyImmediately: args.applyImmediately ?? false,
+  })
+  const actionLogId = await writeAdvertisingActionLog({
+    actor: args.actor,
+    actionType: 'AD_ENTITY_STATE_UPDATE',
+    entityType: 'PRODUCT_AD',
+    entityId: args.productAdId,
+    payloadBefore: { status: existing.status },
+    payloadAfter: { status: args.status },
+    outboundQueueId,
+  })
+  await enqueueBullMQJob(outboundQueueId, 'AD_ENTITY_STATE_UPDATE')
+  return { ok: true, outboundQueueId, bidHistoryIds: [], actionLogId, error: null }
 }
 
 export interface AdTargetPatch {
