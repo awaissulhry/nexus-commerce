@@ -136,8 +136,9 @@ export function ByProductView() {
         adSpendCents: Number(c.spendCents ?? 0), revenueCents: Number(c.adSalesCents ?? 0),
         acos: c.acos == null ? null : Number(c.acos), impressions: Number(c.impressions ?? 0), clicks: Number(c.clicks ?? 0),
       }))
-      // Highest-spend campaigns first.
-      kids.sort((a, b) => b.adSpendCents - a.adSpendCents)
+      // PC.4 — cluster by marketplace, then spend within each market, so a
+      // product's campaigns group visually by market in the expansion.
+      kids.sort((a, b) => (a.marketplace ?? '').localeCompare(b.marketplace ?? '') || b.adSpendCents - a.adSpendCents)
       setChildrenByParent((m) => ({ ...m, [productId]: kids }))
     } finally {
       setLoadingChildren((s) => { const n = new Set(s); n.delete(productId); return n })
@@ -270,9 +271,9 @@ export function ByProductView() {
       <div className="flex flex-wrap items-center gap-2 mb-3">
         <div className="relative">
           <Search size={14} className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search product / SKU / ASIN" className="pl-7 pr-2 py-1.5 text-sm rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 w-60" />
+          <input value={search} onChange={(e) => setSearch(e.target.value)} aria-label="Search products" placeholder="Search product / SKU / ASIN" className="pl-7 pr-2 py-1.5 text-sm rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 w-60" />
         </div>
-        <select value={marketplace} onChange={(e) => setMarketplace(e.target.value)} className="px-2 py-1.5 text-sm rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950">
+        <select value={marketplace} onChange={(e) => setMarketplace(e.target.value)} aria-label="Filter by marketplace" className="px-2 py-1.5 text-sm rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950">
           <option value="">All markets</option>
           {marketplaces.map((m) => <option key={m} value={m}>{m}</option>)}
         </select>
@@ -284,7 +285,7 @@ export function ByProductView() {
         </div>
         <div className="ml-auto inline-flex items-center gap-2">
           <DensityToggle density={density} onChange={setDensity} />
-          <button onClick={() => setPrefsOpen(true)} className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-sm rounded-md border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"><SlidersHorizontal size={14} /> Customize</button>
+          <button onClick={() => setPrefsOpen(true)} aria-label="Customize columns" className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-sm rounded-md border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"><SlidersHorizontal size={14} /> Customize</button>
         </div>
       </div>
       <PreferencesModal
