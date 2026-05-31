@@ -449,6 +449,15 @@ export async function runAdvertisingRuleEvaluatorOnce(): Promise<TickSummary> {
     logger.warn('[ads-rule-evaluator] global kill-switch active — skipping all rule evaluation')
     return { fbaAgeContexts: 0, profitabilityContexts: 0, cacSpikeContexts: 0, underperformContexts: 0, campaignBudgetContexts: 0, totalEvaluations: 0, totalMatches: 0, durationMs: Date.now() - startedAt }
   }
+  // TD.0 — runtime halt (circuit-breaker / operator) + OFF autonomy dial, set
+  // via AdsAutomationState without a redeploy. Same effect as the env kill.
+  try {
+    const { isAutomationHalted } = await import('../services/advertising/ads-automation-state.service.js')
+    if (await isAutomationHalted()) {
+      logger.warn('[ads-rule-evaluator] automation halted (AdsAutomationState) — skipping all rule evaluation')
+      return { fbaAgeContexts: 0, profitabilityContexts: 0, cacSpikeContexts: 0, underperformContexts: 0, campaignBudgetContexts: 0, totalEvaluations: 0, totalMatches: 0, durationMs: Date.now() - startedAt }
+    }
+  } catch { /* state unavailable → fall through (env kill remains the backstop) */ }
   const [fbaAge, profitability, cacSpike, underperform, campaignBudget] = await Promise.all([
     buildFbaAgeContexts(),
     buildProfitabilityContexts(),

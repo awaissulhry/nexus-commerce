@@ -3765,6 +3765,40 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const { amsDebugSnapshot } = await import('../services/advertising/ads-marketing-stream.service.js')
     return amsDebugSnapshot()
   })
+
+  // ── TD.0: Trading Desk automation safety spine (autonomy + circuit-breaker) ──
+  fastify.get('/advertising/automation/state', async () => {
+    const { getAutomationState } = await import('../services/advertising/ads-automation-state.service.js')
+    return getAutomationState()
+  })
+  fastify.post('/advertising/automation/autonomy', async (request, reply) => {
+    const b = (request.body ?? {}) as { level?: string }
+    if (!b.level || !['OFF', 'SUGGEST', 'AUTO'].includes(b.level)) { reply.status(400); return { error: 'level must be OFF|SUGGEST|AUTO' } }
+    const { setAutonomy, getAutomationState } = await import('../services/advertising/ads-automation-state.service.js')
+    await setAutonomy(b.level as 'OFF' | 'SUGGEST' | 'AUTO', actorFromHeaders(request.headers as Record<string, unknown>))
+    return getAutomationState()
+  })
+  fastify.post('/advertising/automation/halt', async (request, reply) => {
+    const b = (request.body ?? {}) as { reason?: string }
+    const { haltAutomation, getAutomationState } = await import('../services/advertising/ads-automation-state.service.js')
+    await haltAutomation(b.reason || 'Operator halt', actorFromHeaders(request.headers as Record<string, unknown>))
+    reply.status(200); return getAutomationState()
+  })
+  fastify.post('/advertising/automation/resume', async (request) => {
+    const { resumeAutomation, getAutomationState } = await import('../services/advertising/ads-automation-state.service.js')
+    await resumeAutomation(actorFromHeaders(request.headers as Record<string, unknown>))
+    return getAutomationState()
+  })
+  fastify.post('/advertising/automation/thresholds', async (request) => {
+    const b = (request.body ?? {}) as { maxHourlySpendCentsEur?: number | null; maxActionsPerHour?: number | null }
+    const { setGuardThresholds, getAutomationState } = await import('../services/advertising/ads-automation-state.service.js')
+    await setGuardThresholds(b)
+    return getAutomationState()
+  })
+  fastify.post('/advertising/automation/guard/run', async () => {
+    const { runAnomalyGuardOnce } = await import('../services/advertising/ads-anomaly-guard.service.js')
+    return runAnomalyGuardOnce()
+  })
   fastify.get('/advertising/marketing-stream/subscriptions', async (request, reply) => {
     const prof = await firstActiveAdsProfile()
     if (!prof) { reply.status(400); return { error: 'no active Amazon Ads connection' } }

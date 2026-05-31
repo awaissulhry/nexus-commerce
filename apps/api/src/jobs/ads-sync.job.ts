@@ -79,6 +79,7 @@ let v1ExportCreateTask: ReturnType<typeof cron.schedule> | null = null
 let v1ExportPollTask: ReturnType<typeof cron.schedule> | null = null
 let v1ExportIngestTask: ReturnType<typeof cron.schedule> | null = null
 let keywordBidResyncTask: ReturnType<typeof cron.schedule> | null = null
+let anomalyGuardTask: ReturnType<typeof cron.schedule> | null = null
 
 // ── fba-storage-age-ingest ────────────────────────────────────────────
 
@@ -505,6 +506,25 @@ export function startKeywordBidResyncCron(): void {
   logger.info('ads-keyword-bid-resync cron: scheduled', { schedule })
 }
 
+// TD.0 — anomaly circuit-breaker. Every 10 min: if automation actions/hour or
+// account ad-spend/hour spike past thresholds, trip a global halt + notify. The
+// safety net above the per-rule caps.
+export async function runAnomalyGuardCron(): Promise<void> {
+  await recordCronRun('ads-anomaly-guard', async () => {
+    const { runAnomalyGuardOnce } = await import('../services/advertising/ads-anomaly-guard.service.js')
+    const r = await runAnomalyGuardOnce()
+    return `tripped=${r.tripped} actions/h=${r.actionsLastHour} spend/h=${r.spendLastHourCents}c${r.reason ? ' reason=' + r.reason : ''}`
+  }).catch((err) => logger.error('ads-anomaly-guard cron: failure', { error: String(err) }))
+}
+
+export function startAnomalyGuardCron(): void {
+  if (anomalyGuardTask) { logger.warn('ads-anomaly-guard already started'); return }
+  const schedule = process.env.NEXUS_ADS_ANOMALY_GUARD_SCHEDULE ?? '*/10 * * * *'
+  if (!cron.validate(schedule)) { logger.error('ads-anomaly-guard: invalid schedule', { schedule }); return }
+  anomalyGuardTask = cron.schedule(schedule, () => { void runAnomalyGuardCron() })
+  logger.info('ads-anomaly-guard cron: scheduled', { schedule })
+}
+
 export function startV1ExportIngestCron(): void {
   if (v1ExportIngestTask) { logger.warn('ads-v1-export-ingest already started'); return }
   const schedule = process.env.NEXUS_ADS_V1_EXPORT_INGEST_SCHEDULE ?? '2,7,12,17,22,27,32,37,42,47,52,57 * * * *'
@@ -543,6 +563,8 @@ export function startAllAdvertisingCrons(): void {
   startV1ExportIngestCron()
   // AF.7 — keep real bids after each structural sync.
   startKeywordBidResyncCron()
+  // TD.0 — automation anomaly circuit-breaker.
+  startAnomalyGuardCron()
 }
 
 export function stopAllAdvertisingCrons(): void {
@@ -571,11 +593,12 @@ export function stopAllAdvertisingCrons(): void {
     ['v1ExportPollTask',    v1ExportPollTask]    as const,
     ['v1ExportIngestTask',  v1ExportIngestTask]  as const,
     ['keywordBidResyncTask', keywordBidResyncTask] as const,
+    ['anomalyGuardTask', anomalyGuardTask] as const,
   ]) {
     if (task) { task.stop(); logger.debug(`${key} stopped`) }
   }
   reportCreateTask = null; reportCreateStTask = null; reportCreatePlTask = null; reportCreateApTask = null
   reportPollTask = null; reportIngestTask = null; searchTermCleanupTask = null
   v1ExportCreateTask = null; v1ExportPollTask = null; v1ExportIngestTask = null
-  keywordBidResyncTask = null
+  keywordBidResyncTask = null; anomalyGuardTask = null
 }
