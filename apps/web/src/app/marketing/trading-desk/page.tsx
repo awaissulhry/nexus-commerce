@@ -42,7 +42,7 @@ interface Area { title: string; desc: string; href: string; icon: LucideIcon; ph
 const AREAS: Area[] = [
   { title: 'Campaigns', desc: 'Dense omni-channel grid — by campaign or by product, inline bids & budgets, bulk actions.', href: '/marketing/trading-desk/campaigns', icon: Megaphone, native: true },
   { title: 'Suggestions', desc: 'One inbox for every bid, keyword graduation, negative, budget & retail-pause proposal.', href: '/marketing/trading-desk/suggestions', icon: ListChecks, native: true },
-  { title: 'Automation', desc: 'Rules, goals, dayparting, budget pacing & retail-aware guards — each with auto-apply.', href: '/marketing/advertising/automation', icon: Wand2, phase: 'P4–9' },
+  { title: 'Automation', desc: 'Rules, goals, dayparting, budget pacing & retail-aware guards — each with auto-apply.', href: '/marketing/trading-desk/automation', icon: Wand2, native: true },
   { title: 'Competitive', desc: 'Share of Voice, SQP & competitor moves feeding top-of-search defense.', href: '/marketing/advertising/share-of-voice', icon: Crosshair, phase: 'P9' },
   { title: 'Analytics', desc: 'Trends, true profit, search terms & reports — profit-native by default.', href: '/marketing/advertising/analytics', icon: BarChart3, phase: 'P11' },
   { title: 'Settings', desc: 'Connections, live-write gates, budget caps & tags.', href: '/marketing/advertising/debug', icon: Settings },

@@ -28,7 +28,7 @@ const GROUPS: Group[] = [
     { label: 'Suggestions', href: `${BASE}/suggestions`, icon: ListChecks, native: true },
   ] },
   { label: 'Automate', items: [
-    { label: 'Automation', href: '/marketing/advertising/automation', icon: Wand2, phase: 'P4–9' },
+    { label: 'Automation', href: `${BASE}/automation`, icon: Wand2, native: true },
   ] },
   { label: 'Intelligence', items: [
     { label: 'Competitive', href: '/marketing/advertising/share-of-voice', icon: Crosshair, phase: 'P9' },

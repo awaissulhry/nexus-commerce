@@ -276,3 +276,14 @@
 .td-root .placecard .pv input { width: 64px; font: inherit; font-size: 17px; font-weight: 750; border: 1px solid var(--brand); border-radius: 7px; padding: 2px 7px; text-align: right; }
 .td-root .placecard .pr { color: var(--ink3); font-size: 11.5px; margin-top: 7px; line-height: 1.5; }
 .td-root .placecard .ed { color: var(--brand); font-size: 11px; font-weight: 700; cursor: pointer; background: transparent; border: 0; padding: 0; margin-top: 8px; }
+
+/* ── AUTOMATION ────────────────────────────────────────────── */
+.td-root .statrow { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 16px; }
+.td-root .stat { border: 1px solid var(--line); border-radius: 10px; padding: 10px 16px; background: #fff; min-width: 110px; }
+.td-root .stat .sv { font-size: 20px; font-weight: 750; font-variant-numeric: tabular-nums; }
+.td-root .stat .sl { color: var(--ink3); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .3px; margin-top: 2px; }
+.td-root .trg { font-size: 10.5px; font-weight: 700; border-radius: 6px; padding: 2px 8px; background: #eef2ff; color: #4338ca; white-space: nowrap; }
+.td-root .modepill { font-weight: 700; font-size: 11px; border-radius: 6px; padding: 2px 8px; }
+.td-root .modepill.live { background: var(--green-soft); color: var(--green); }
+.td-root .modepill.dry { background: var(--amber-soft); color: var(--amber); }
+.td-root .modepill.off { background: #f1f5f9; color: var(--slate); }
