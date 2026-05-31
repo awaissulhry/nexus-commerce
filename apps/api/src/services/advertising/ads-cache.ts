@@ -32,24 +32,40 @@ function withTimeout<R>(p: Promise<R>, ms: number): Promise<R> {
   })
 }
 
+// Circuit breaker — if Redis is persistently unreachable, paying the 150ms
+// timeout on every request is worse than no cache. After 3 consecutive
+// failures, bypass Redis entirely for 30s, then probe again.
+let consecutiveFailures = 0
+let skipUntil = 0
+function redisDisabled(): boolean { return Date.now() < skipUntil }
+function noteRedisResult(ok: boolean): void {
+  if (ok) { consecutiveFailures = 0; skipUntil = 0; return }
+  consecutiveFailures += 1
+  if (consecutiveFailures >= 3) { skipUntil = Date.now() + 30_000; logger.warn('[ads-cache] Redis circuit OPEN — bypassing cache 30s') }
+}
+
 export async function cached<T>(key: string, ttlSec: number, fn: () => Promise<T>): Promise<T> {
+  if (redisDisabled()) return fn()
   const k = PREFIX + key
   try {
     const hit = await withTimeout(redis.connection.get(k), REDIS_OP_TIMEOUT_MS)
+    noteRedisResult(true)
     if (hit != null) return JSON.parse(hit) as T
   } catch (e) {
+    noteRedisResult(false)
     logger.debug('[ads-cache] read miss/err', { error: String(e).slice(0, 100) })
   }
   const val = await fn()
   // Fire-and-forget the write so a slow Redis never delays the response.
   withTimeout(redis.connection.set(k, JSON.stringify(val), 'EX', ttlSec), REDIS_OP_TIMEOUT_MS)
-    .catch((e) => logger.debug('[ads-cache] write err', { error: String(e).slice(0, 100) }))
+    .then(() => noteRedisResult(true))
+    .catch((e) => { noteRedisResult(false); logger.debug('[ads-cache] write err', { error: String(e).slice(0, 100) }) })
   return val
 }
 
 let flushing = false
 export async function flushAdsCache(): Promise<void> {
-  if (flushing) return
+  if (flushing || redisDisabled()) return
   flushing = true
   try {
     // Small keyspace (a few dozen ad keys); scan+del is cheap and avoids KEYS
