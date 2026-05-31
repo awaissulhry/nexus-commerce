@@ -236,6 +236,7 @@ import { initializeSearchIndexWorker } from "./workers/search-index.worker.js";
 import { initializeQueue, closeQueue } from "./lib/queue.js";
 import { logger } from "./utils/logger.js";
 import { envEnabled } from "./utils/env-flag.js";
+import { markCronStep } from "./jobs/cron-startup-state.js";
 import prisma from "./db.js";
 
 let queueWorkersStarted = false;
@@ -1082,38 +1083,56 @@ async function start() {
       rawValue: JSON.stringify(process.env.NEXUS_ENABLE_AMAZON_ADS_CRON ?? null),
     })
     if (adsCronOn) {
+      // Apex diagnostic + resilience: each step marks progress (visible via the
+      // cron-status probe) so a hanging `await import` is locatable, and the
+      // Redis-dependent worker init is deferred to the very end + made
+      // non-blocking so it can never freeze cron registration (Redis may be
+      // unreachable on prod). markCronStep BEFORE each await = the last marker
+      // shown is the line that hung.
+      markCronStep('ads:start');
+      markCronStep('ads:import ads-sync.job');
       const { startAllAdvertisingCrons } = await import('./jobs/ads-sync.job.js');
-      const { initializeAdsSyncWorker } = await import('./workers/ads-sync.worker.js');
-      // AD.3 — advertising-domain AutomationRule evaluator (every 15 min).
+      markCronStep('ads:import advertising-rule-evaluator.job');
       const { startAdvertisingRuleEvaluatorCron } = await import('./jobs/advertising-rule-evaluator.job.js');
-      // AD.5 — BudgetPool rebalancer (every 15 min; pool cooldown is the real gate).
+      markCronStep('ads:import budget-pool-rebalance.job');
       const { startBudgetPoolRebalanceCron } = await import('./jobs/budget-pool-rebalance.job.js');
-      // Side-effect: registers the 8 action handlers into ACTION_HANDLERS.
+      markCronStep('ads:import automation-action-handlers');
       await import('./services/advertising/automation-action-handlers.js');
-      // AX.8 — registers bid_to_target_acos handler.
+      markCronStep('ads:import ads-bid-optimizer');
       await import('./services/advertising/ads-bid-optimizer.service.js');
-      // AX.9 — dayparting cron (every 15 min, applies schedule windows).
+      markCronStep('ads:import ad-dayparting.job');
       const { startDaypartingCron } = await import('./jobs/ad-dayparting.job.js');
-      startDaypartingCron();
-      // AX.10 — registers pace_budget handler.
+      markCronStep('ads:import ads-budget-pacing');
       await import('./services/advertising/ads-budget-pacing.service.js');
+      markCronStep('ads:import marketing-action-handlers');
+      await import('./services/marketing/marketing-action-handlers.js');
+      markCronStep('ads:import marketing-rule-evaluator.job');
+      const { startMarketingRuleEvaluatorCron } = await import('./jobs/marketing-rule-evaluator.job.js');
+      markCronStep('ads:import marketing-sync-drain.job');
+      const { startMarketingSyncDrainCron } = await import('./jobs/marketing-sync-drain.job.js');
+      markCronStep('ads:import ads-sync-drain.job');
+      const { startAdsSyncDrainCron } = await import('./jobs/ads-sync-drain.job.js');
+      // Register all schedules (these are synchronous node-cron registrations).
+      markCronStep('ads:register schedules');
+      startDaypartingCron();
       startAllAdvertisingCrons();
       startAdvertisingRuleEvaluatorCron();
       startBudgetPoolRebalanceCron();
-      initializeAdsSyncWorker();
-      // UM.6 — marketing-domain rule evaluator (cross-channel campaign
-      // automation). Side-effect import registers the mkt_* handlers.
-      await import('./services/marketing/marketing-action-handlers.js');
-      const { startMarketingRuleEvaluatorCron } = await import('./jobs/marketing-rule-evaluator.job.js');
       startMarketingRuleEvaluatorCron();
-      // UM.5 follow-up — auto-drain queued MKT_* mutations once their grace
-      // window elapses (finalizes CampaignAction; sandbox or live-dispatch).
-      const { startMarketingSyncDrainCron } = await import('./jobs/marketing-sync-drain.job.js');
       startMarketingSyncDrainCron();
-      // Apex A.2c — Redis-free autonomous drain of queued ad mutations, so live
-      // bid writes flow without a manual trigger even when BullMQ/Redis is down.
-      const { startAdsSyncDrainCron } = await import('./jobs/ads-sync-drain.job.js');
       startAdsSyncDrainCron();
+      markCronStep('ads:schedules registered');
+      // Redis-dependent BullMQ worker LAST + non-blocking: a hung/failed Redis
+      // connect must not freeze the crons above (which is what happened — the
+      // worker init blocked the whole block). Fire-and-forget with its own guard.
+      markCronStep('ads:import ads-sync.worker (deferred)');
+      void import('./workers/ads-sync.worker.js')
+        .then(({ initializeAdsSyncWorker }) => {
+          try { initializeAdsSyncWorker(); markCronStep('ads:worker initialized'); }
+          catch (e) { logger.error('[startup] ads-sync worker init failed (crons unaffected)', { error: e instanceof Error ? e.message : String(e) }); }
+        })
+        .catch((e) => logger.error('[startup] ads-sync.worker import failed (crons unaffected)', { error: e instanceof Error ? e.message : String(e) }));
+      markCronStep('ads:block complete');
     }
 
     // SR.1 — Sentient Review Loop. Default-OFF — opt in via

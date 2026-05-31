@@ -10,6 +10,7 @@
 import type { FastifyPluginAsync } from 'fastify'
 import { computeProductTargetAcos, computeFleetTargetAcos, type AcosMode } from '../services/advertising/ads-target-acos.service.js'
 import { envEnabled } from '../utils/env-flag.js'
+import { cronStartupState } from '../jobs/cron-startup-state.js'
 
 const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
   // Apex — diagnostic probe for the ads-cron gate. Reads the SAME process.env
@@ -22,6 +23,8 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
     return {
       adsCronEnabled: envEnabled('NEXUS_ENABLE_AMAZON_ADS_CRON'),
       adsCronRaw: process.env.NEXUS_ENABLE_AMAZON_ADS_CRON ?? null,
+      cronStartupStep: cronStartupState.step,
+      cronStartupAt: cronStartupState.updatedAt,
       adsMode: process.env.NEXUS_AMAZON_ADS_MODE ?? null,
       queueWorkersRaw: process.env.ENABLE_QUEUE_WORKERS ?? null,
       hasRedisUrl: !!process.env.REDIS_URL,
