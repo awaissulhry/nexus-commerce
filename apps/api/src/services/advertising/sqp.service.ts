@@ -205,8 +205,11 @@ export async function ingestSqp(args: { marketplaceCode: string; period?: SqpPer
       continue
     }
     const rows = parseSqp(payload)
+    // Capture the report shape for diagnostics; keep overwriting with empty
+    // reports until we hit a POPULATED one, then lock (so /sqp/debug shows real
+    // per-row field keys to finalise the parser against).
     if (!loggedSample) {
-      loggedSample = true
+      if (rows.length > 0) loggedSample = true
       const root = (payload ?? {}) as Record<string, unknown>
       const arr = (root.dataByAsin ?? root.dataByDepartmentAndSearchQuery ?? root.searchQueryPerformanceData ?? root.records) as unknown[] | undefined
       const firstRow = Array.isArray(arr) && arr[0] && typeof arr[0] === 'object' ? (arr[0] as Record<string, unknown>) : null
