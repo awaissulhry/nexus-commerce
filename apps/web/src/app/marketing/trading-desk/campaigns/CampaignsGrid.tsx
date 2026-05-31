@@ -12,6 +12,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import Link from 'next/link'
 import { Search, Plus, RefreshCw, Play, Pause, ArrowUpRight } from 'lucide-react'
 import { marketplaceCode, marketplaceCountryName } from '@/lib/marketplace-code'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -150,7 +151,7 @@ export function CampaignsGrid({ initial }: { initial: CampaignBase[] }) {
           </>)}
           <select className="flt" value={market} onChange={(e) => setMarket(e.target.value)} aria-label="Filter by market"><option value="">All markets</option>{markets.map((m) => <option key={m} value={m}>{marketplaceCode(m)}</option>)}</select>
           <span className="spacer" />
-          <a className="ctl" href={OLD} target="_blank" rel="noopener noreferrer" title="Launch a campaign (opens the current tool in a new tab)"><Plus size={14} /><span>Launch</span></a>
+          <Link className="ctl" href="/marketing/trading-desk/launch" title="Launch a product"><Plus size={14} /><span>Launch</span></Link>
           <button className="ctl" onClick={() => void refetch()} title="Refresh"><RefreshCw size={14} className={loading ? 'spin' : ''} /></button>
         </div>
 
