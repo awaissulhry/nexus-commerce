@@ -2,29 +2,31 @@ import { describe, it, expect } from 'vitest'
 import { parseSqp, share, periodWindow } from './sqp.service.js'
 
 describe('periodWindow', () => {
-  it('WEEK: most recent completed Sunday→Sunday (exclusive end)', () => {
+  it('WEEK: completed Sunday→Saturday, end is the Saturday (SQP requirement)', () => {
     // Wed 2026-05-27. Current week's Sunday = 2026-05-24; previous completed
-    // week = 2026-05-17 (Sun) .. 2026-05-24 (exclusive).
+    // week = 2026-05-17 (Sun) .. 2026-05-23 (Sat, inclusive).
     const w = periodWindow('WEEK', new Date('2026-05-27T10:00:00Z'))
     expect(w.start.toISOString().slice(0, 10)).toBe('2026-05-17')
-    expect(w.end.toISOString().slice(0, 10)).toBe('2026-05-24')
+    expect(w.end.toISOString().slice(0, 10)).toBe('2026-05-23')
     expect(w.start.getUTCDay()).toBe(0) // Sunday
+    expect(w.end.getUTCDay()).toBe(6) // Saturday
   })
-  it('WEEK lookback=2 steps back another full week', () => {
+  it('WEEK lookback=2 steps back another full week (Sun→Sat)', () => {
     const w = periodWindow('WEEK', new Date('2026-05-27T10:00:00Z'), 2)
     expect(w.start.toISOString().slice(0, 10)).toBe('2026-05-10')
-    expect(w.end.toISOString().slice(0, 10)).toBe('2026-05-17')
+    expect(w.end.toISOString().slice(0, 10)).toBe('2026-05-16')
+    expect(w.end.getUTCDay()).toBe(6)
   })
-  it('MONTH: previous full calendar month', () => {
+  it('MONTH: previous full calendar month, end = month-end', () => {
     const w = periodWindow('MONTH', new Date('2026-05-15T10:00:00Z'))
     expect(w.start.toISOString().slice(0, 10)).toBe('2026-04-01')
-    expect(w.end.toISOString().slice(0, 10)).toBe('2026-05-01')
+    expect(w.end.toISOString().slice(0, 10)).toBe('2026-04-30')
   })
-  it('QUARTER: previous full quarter', () => {
+  it('QUARTER: previous full quarter, end = quarter-end', () => {
     const w = periodWindow('QUARTER', new Date('2026-05-15T10:00:00Z'))
     // Q2 in progress → previous completed = Q1 (Jan–Mar)
     expect(w.start.toISOString().slice(0, 10)).toBe('2026-01-01')
-    expect(w.end.toISOString().slice(0, 10)).toBe('2026-04-01')
+    expect(w.end.toISOString().slice(0, 10)).toBe('2026-03-31')
   })
 })
 

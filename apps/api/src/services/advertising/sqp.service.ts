@@ -38,27 +38,29 @@ function num(v: unknown): number { const n = Number(v); return Number.isFinite(n
  * SQP requires the data window to align to a COMPLETED reporting period —
  * Amazon weeks are Sunday→Saturday; an arbitrary range yields a FATAL report.
  * Returns the most recently completed period (offset full periods back via
- * `lookback`, default 1 = the latest finished one), as [start, endExclusive)
- * UTC day boundaries. Pure + unit-tested.
+ * `lookback`, default 1 = the latest finished one). `end` is the INCLUSIVE last
+ * day of the period — SQP requires dataEndTime to be the period's last day
+ * (a Saturday for WEEK; month-end / quarter-end otherwise), not the next
+ * period's start. Pure + unit-tested.
  */
 export function periodWindow(period: SqpPeriod, now: Date, lookback = 1): { start: Date; end: Date } {
   const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
   if (period === 'WEEK') {
-    // Start of the current (in-progress) week's Sunday, then step back `lookback` weeks.
+    // Current (in-progress) week's Sunday, then step back `lookback` weeks.
     const sunday = new Date(d); sunday.setUTCDate(d.getUTCDate() - d.getUTCDay())
     const start = new Date(sunday); start.setUTCDate(sunday.getUTCDate() - 7 * lookback)
-    const end = new Date(start); end.setUTCDate(start.getUTCDate() + 7)
+    const end = new Date(start); end.setUTCDate(start.getUTCDate() + 6) // Saturday (inclusive)
     return { start, end }
   }
   if (period === 'MONTH') {
     const start = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() - lookback, 1))
-    const end = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + 1, 1))
+    const end = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + 1, 0)) // last day of month
     return { start, end }
   }
   // QUARTER
   const q = Math.floor(d.getUTCMonth() / 3) - lookback
   const start = new Date(Date.UTC(d.getUTCFullYear(), q * 3, 1))
-  const end = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + 3, 1))
+  const end = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + 3, 0)) // last day of quarter
   return { start, end }
 }
 /** Brand share of a funnel stage, clamped to [0,1]. Pure. */
