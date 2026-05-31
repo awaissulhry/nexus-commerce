@@ -24,7 +24,17 @@ function median(xs: number[]): number | null {
   return s[Math.floor(s.length / 2)]
 }
 
-export interface BidSuggestion { keyword: string; suggestedBidCents: number; lowCents: number; highCents: number; basis: 'token-match' | 'account-median' | 'default'; samples: number }
+export interface BidSuggestion {
+  keyword: string
+  suggestedBidCents: number
+  lowCents: number
+  highCents: number
+  basis: 'token-match' | 'account-median' | 'default'
+  samples: number
+  // Apex C.1 — Amazon's own theme-based recommendation for this keyword, when
+  // the ad-group context resolves and the call succeeds. Absent = own-CPC only.
+  amazon?: { suggestedBidCents: number; theme: string; rangeLowCents: number | null; rangeHighCents: number | null }
+}
 export interface BidSuggestResult { suggestions: BidSuggestion[]; accountMedianCpcCents: number | null; defaultBidCents: number }
 
 export async function suggestBids(opts: { keywords: string[]; matchType?: string; marketplace?: string }): Promise<BidSuggestResult> {

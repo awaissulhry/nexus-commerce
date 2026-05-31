@@ -302,6 +302,121 @@ export async function listProfiles(): Promise<AdsProfileDTO[]> {
   })
 }
 
+// ── Apex C.1 — Amazon theme-based bid recommendations ──────────────────────
+// POST /sp/targets/bid/recommendations returns themed bid candidates per
+// targeting expression (theme = CONVERSION_OPPORTUNITIES | SPECIAL_DAYS …),
+// each with a suggested bid + a low/high range. This is Amazon's OWN
+// recommendation — we surface it alongside the operator's own-CPC suggestion
+// (ads-bid-suggest) so they can compare. Read-only (no write-gate).
+//
+// The exact v5 response field names are not yet pinned to the live spec, so the
+// live parse is defensive and the raw payload is logged for refinement; any
+// error degrades to an empty result (caller falls back to own-CPC). Sandbox
+// returns [] rather than a fabricated number — honest by construction.
+export type AdsBidTheme = 'CONVERSION_OPPORTUNITIES' | 'SPECIAL_DAYS' | string
+
+export interface ThemeBidRecommendation {
+  expression: string  // keyword text or ASIN
+  matchType: string   // caller's match type, echoed back for join
+  theme: AdsBidTheme
+  suggestedBidCents: number
+  rangeLowCents: number | null
+  rangeHighCents: number | null
+}
+
+function amazonExprType(matchType: string): string {
+  const m = (matchType || '').toUpperCase()
+  if (m.includes('EXACT')) return 'KEYWORD_EXACT_MATCH'
+  if (m.includes('PHRASE')) return 'KEYWORD_PHRASE_MATCH'
+  if (m.includes('BROAD')) return 'KEYWORD_BROAD_MATCH'
+  if (m.includes('ASIN') || m.includes('PRODUCT')) return 'ASIN_SAME_AS'
+  return 'KEYWORD_BROAD_MATCH'
+}
+
+export async function getThemeBidRecommendations(
+  ctx: ClientContext,
+  input: {
+    externalCampaignId: string
+    externalAdGroupId: string
+    targets: Array<{ expression: string; matchType: string }>
+    biddingStrategy?: string
+  },
+): Promise<ThemeBidRecommendation[]> {
+  if (input.targets.length === 0) return []
+  if (adsMode() === 'sandbox') {
+    logger.debug('[ADS-SANDBOX] getThemeBidRecommendations', { adGroupId: input.externalAdGroupId, n: input.targets.length })
+    return [] // honest: no synthetic Amazon number in sandbox
+  }
+  const body = {
+    campaignId: input.externalCampaignId,
+    adGroupId: input.externalAdGroupId,
+    recommendationType: 'BIDS_FOR_EXISTING_AD_GROUP',
+    targetingExpressions: input.targets.map((t) => ({ type: amazonExprType(t.matchType), value: t.expression })),
+    ...(input.biddingStrategy ? { bidding: { strategy: input.biddingStrategy } } : {}),
+  }
+  try {
+    const res = await liveCall<unknown>({
+      ...ctx,
+      method: 'POST',
+      path: '/sp/targets/bid/recommendations',
+      body,
+      contentType: 'application/vnd.spthemebasedbidrecommendation.v4+json',
+      acceptHeader: 'application/vnd.spthemebasedbidrecommendation.v4+json',
+    })
+    return parseThemeBidRecommendations(res, input.targets)
+  } catch (err) {
+    logger.warn('[ads-api] getThemeBidRecommendations failed — degrading to own-CPC', {
+      adGroupId: input.externalAdGroupId,
+      error: err instanceof Error ? err.message : String(err),
+    })
+    return []
+  }
+}
+
+// Defensive parser — tolerates shape drift. Amazon returns bid amounts in the
+// marketplace currency (decimal units); we convert to integer cents. Joins each
+// recommendation back to the requested target by expression value (order-
+// preserving fallback when values are absent). Logs the raw payload once so the
+// exact live shape can be confirmed and this tightened.
+function parseThemeBidRecommendations(
+  res: unknown,
+  requested: Array<{ expression: string; matchType: string }>,
+): ThemeBidRecommendation[] {
+  const eurToCents = (n: unknown): number | null => {
+    const v = Number(n)
+    return Number.isFinite(v) && v > 0 ? Math.round(v * 100) : null
+  }
+  const out: ThemeBidRecommendation[] = []
+  const root = res as { bidRecommendations?: unknown[] } | undefined
+  const rows = Array.isArray(root?.bidRecommendations) ? root!.bidRecommendations! : Array.isArray(res) ? (res as unknown[]) : []
+  if (rows.length === 0) {
+    logger.info('[ads-api] theme bid rec: empty/unrecognised payload', { sample: JSON.stringify(res)?.slice(0, 500) })
+    return []
+  }
+  rows.forEach((raw, i) => {
+    const r = raw as Record<string, unknown>
+    const expr = (r.value as string) ?? (r.expressionValue as string) ?? requested[i]?.expression
+    if (!expr) return
+    // Amazon nests themed suggestions a few ways across versions — try the common ones.
+    const suggestions = (r.bidRecommendationsForTargetingExpressions ?? r.suggestedBids ?? r.bidValues ?? [r]) as unknown[]
+    for (const s of Array.isArray(suggestions) ? suggestions : [suggestions]) {
+      const sv = s as Record<string, unknown>
+      const mid = eurToCents(sv.suggestedBid ?? sv.recommendedBid ?? (sv.bidValue as Record<string, unknown>)?.suggested ?? sv.value)
+      if (mid == null) continue
+      out.push({
+        expression: expr,
+        matchType: requested[i]?.matchType ?? '',
+        theme: (sv.theme as string) ?? (r.theme as string) ?? 'CONVERSION_OPPORTUNITIES',
+        suggestedBidCents: mid,
+        rangeLowCents: eurToCents(sv.rangeStart ?? sv.lowerBound ?? (sv.bidValue as Record<string, unknown>)?.rangeStart),
+        rangeHighCents: eurToCents(sv.rangeEnd ?? sv.upperBound ?? (sv.bidValue as Record<string, unknown>)?.rangeEnd),
+      })
+      break // one (preferred-theme) suggestion per expression is enough for the UI
+    }
+  })
+  return out
+}
+
 export interface CampaignPatch {
   state?: 'enabled' | 'paused' | 'archived'
   dailyBudget?: number
