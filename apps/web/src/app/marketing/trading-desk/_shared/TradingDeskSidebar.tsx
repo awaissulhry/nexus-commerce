@@ -31,7 +31,7 @@ const GROUPS: Group[] = [
     { label: 'Automation', href: `${BASE}/automation`, icon: Wand2, native: true },
   ] },
   { label: 'Intelligence', items: [
-    { label: 'Competitive', href: '/marketing/advertising/share-of-voice', icon: Crosshair, phase: 'P9' },
+    { label: 'Competitive', href: `${BASE}/competitive`, icon: Crosshair, native: true },
     { label: 'Analytics', href: '/marketing/advertising/analytics', icon: BarChart3, phase: 'P11' },
   ] },
   { label: 'Setup', items: [
