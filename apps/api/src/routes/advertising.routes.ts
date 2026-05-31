@@ -172,7 +172,11 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
         adGroups: {
           include: {
             targets: { take: 100 },
-            productAds: { take: 500 }, // AME.5 — full set so ad-group share allocation matches the ad-group detail endpoint
+            // PERF — the cockpit never renders per-ad-group product ads; we only
+            // need their ids to allocate the campaign total across ad groups.
+            // Selecting full rows (creativeJson, deliveryReasons…) for up to 500
+            // ads × every ad group was the bulk of the detail-endpoint payload.
+            productAds: { take: 500, select: { id: true } },
           },
         },
       },

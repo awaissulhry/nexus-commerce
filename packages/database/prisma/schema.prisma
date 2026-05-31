@@ -2745,6 +2745,11 @@ model AmazonAdsDailyPerformance {
   @@index([profileId, adProduct, date])
   @@index([localEntityId, date])
   @@index([marketplace, date, adProduct])
+  // PERF — campaign/ad-group detail aggregates by (entityType, entityId, date).
+  // The unique key buries entityId behind profileId+adProduct, so the
+  // entityId-only branch in computeCampaignDetailMetrics seq-scanned. This
+  // index makes the detail-page aggregation an index range scan.
+  @@index([entityType, entityId, date])
 }
 
 // CD.11 — hourly grain (Amazon Marketing Stream). Mirrors the daily table but
