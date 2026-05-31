@@ -13,7 +13,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { Search, Plus, RefreshCw, Play, Pause, ArrowUpRight } from 'lucide-react'
+import { Search, Plus, RefreshCw, Play, Pause } from 'lucide-react'
 import { marketplaceCode, marketplaceCountryName } from '@/lib/marketplace-code'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useMarketingEvents } from '@/lib/sync/use-marketing-events'
@@ -30,7 +30,6 @@ interface CampaignBase {
 interface V1Metric { impressions?: number; clicks?: number; costUnits?: number; salesCents?: number; orders?: number; acos?: number | null; roas?: number | null }
 interface Row { base: CampaignBase; spendC: number; salesC: number; orders: number; acos: number | null; budgetC: number }
 
-const OLD = '/marketing/advertising/campaigns'
 const eur = (c: number | null | undefined) => (c == null ? '—' : new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR' }).format(c / 100))
 const eur0 = (c: number | null | undefined) => (c == null ? '—' : new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(c / 100))
 const pct = (v: number | null | undefined) => (v == null ? '—' : `${(v * 100).toFixed(1)}%`)
@@ -191,7 +190,7 @@ export function CampaignsGrid({ initial }: { initial: CampaignBase[] }) {
                   return (
                     <tr key={b.id} className={sel.has(b.id) ? 'sel' : ''}>
                       <td className="l"><input type="checkbox" checked={sel.has(b.id)} onChange={(e) => setSel((s) => { const n = new Set(s); if (e.target.checked) n.add(b.id); else n.delete(b.id); return n })} aria-label={`Select ${b.name}`} /></td>
-                      <td className="l"><a className="cname" href={`${OLD}/${b.id}`} target="_blank" rel="noopener noreferrer" title={b.name}><span>{b.name}</span><ArrowUpRight className="ext" size={11} /></a></td>
+                      <td className="l"><Link className="cname" href={`/marketing/trading-desk/campaigns/${b.id}`} title={b.name}><span>{b.name}</span></Link></td>
                       <td className="l">{b.status === 'ENABLED' ? <span className="pill g">Enabled</span> : <span className="pill n">{b.status === 'PAUSED' ? 'Paused' : b.status}</span>}</td>
                       <td className="l"><span className="cc az"><span className="dot" style={{ background: 'var(--az)' }} />{b.type}</span></td>
                       <td className="l" title={marketplaceCountryName(b.marketplace)}>{marketplaceCode(b.marketplace)}</td>
