@@ -113,9 +113,9 @@ function FragmentRow({
     <>
       <tr>
         <td className="l">
-          <div className="pname">
+          <div className="pname" style={{ cursor: hasCampaigns ? 'pointer' : 'default' }} onClick={hasCampaigns ? onToggle : undefined}>
             {hasCampaigns
-              ? <span className="expander" onClick={onToggle} role="button" aria-label={open ? 'Collapse' : 'Expand'}>{open ? <ChevronDown size={13} /> : <ChevronRight size={13} />}</span>
+              ? <span className="expander" role="button" aria-label={open ? 'Collapse' : 'Expand'}>{open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}</span>
               : <span className="expander" />}
             <span className="thumb">{thumb}</span>
             <span style={{ minWidth: 0 }}>
@@ -132,35 +132,27 @@ function FragmentRow({
         <td className="num">{r.units}</td>
         <td>{hasCampaigns ? <span className="pill b">{r.campaignCount}</span> : <span className="pill n">0</span>}</td>
       </tr>
-      {open && (
-        <tr className="subrow">
-          <td colSpan={8}>
-            <div className="subwrap">
-              {sub === 'loading' ? (
-                <span className="sub">Loading campaigns…</span>
-              ) : sub && sub.length > 0 ? (
-                <>
-                  <div className="subhead"><span>Campaign</span><span>Spend</span><span>Ad sales</span><span>ACOS</span></div>
-                  {sub.map((c) => (
-                    <div className="subitem" key={c.id}>
-                      <span className="subname">
-                        <span className="cc az"><span className="dot" style={{ background: 'var(--az)' }} />{marketplaceCode(c.marketplace)}</span>
-                        <span className="nm">{c.name}</span>
-                        {c.status !== 'ENABLED' && <span className="pill n">{c.status === 'PAUSED' ? 'Paused' : c.status}</span>}
-                      </span>
-                      <span className="subnum">{eur(c.adSpendCents)}</span>
-                      <span className="subnum">{eur(c.adSalesCents)}</span>
-                      <span className="subacos"><span className={acosClsPct(c.acos)}>{pctN(c.acos)}</span></span>
-                    </div>
-                  ))}
-                </>
-              ) : (
-                <span className="sub">No campaign-attributed spend in this window.</span>
-              )}
+      {open && sub === 'loading' && (
+        <tr className="childrow"><td className="l"><div className="childname"><span className="sub">Loading campaigns…</span></div></td><td /><td /><td /><td /><td /><td /><td /></tr>
+      )}
+      {open && Array.isArray(sub) && sub.length === 0 && (
+        <tr className="childrow"><td className="l"><div className="childname"><span className="sub">No campaign-attributed spend in this window.</span></div></td><td /><td /><td /><td /><td /><td /><td /></tr>
+      )}
+      {open && Array.isArray(sub) && sub.map((c) => (
+        <tr className="childrow" key={c.id}>
+          <td className="l">
+            <div className="childname">
+              <span className="cc az"><span className="dot" style={{ background: 'var(--az)' }} />{marketplaceCode(c.marketplace)}</span>
+              <span className="nm">{c.name}</span>
+              {c.status !== 'ENABLED' && <span className="pill n">{c.status === 'PAUSED' ? 'Paused' : c.status}</span>}
             </div>
           </td>
+          <td className="num">{eur(c.adSpendCents)}</td>
+          <td className="num">{eur(c.adSalesCents)}</td>
+          <td><span className={acosClsPct(c.acos)}>{pctN(c.acos)}</span></td>
+          <td /><td /><td /><td />
         </tr>
-      )}
+      ))}
     </>
   )
 }

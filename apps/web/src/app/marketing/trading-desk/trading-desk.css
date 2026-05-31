@@ -172,17 +172,14 @@
 .td-root .thumb { width: 44px; height: 44px; border-radius: 8px; flex: none; background: #e2e8f0; display: grid; place-items: center; overflow: hidden; color: var(--ink3); }
 .td-root .thumb img { width: 44px; height: 44px; object-fit: cover; display: block; }
 .td-root .sub { color: var(--ink3); font-size: 11px; }
-.td-root .subrow > td { background: #fafbfd; padding: 0; }
-.td-root .subwrap { padding: 4px 16px 12px 64px; }
-.td-root .subhead, .td-root .subitem { display: grid; grid-template-columns: minmax(0,1fr) 120px 120px 90px; gap: 12px; align-items: center; }
-.td-root .subhead { color: var(--ink3); font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .3px; padding: 6px 0; border-bottom: 1px solid var(--line); }
-.td-root .subhead span:not(:first-child) { text-align: right; }
-.td-root .subitem { padding: 8px 0; border-bottom: 1px solid var(--line2); font-size: 12px; }
-.td-root .subitem:last-child { border-bottom: 0; }
-.td-root .subnum { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
-.td-root .subacos { text-align: right; }
-.td-root .subname { display: flex; align-items: center; gap: 8px; min-width: 0; }
-.td-root .subname .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+/* Expandable child rows (Cloudscape pattern): same columns as the parent,
+   indented with a tree guide — NOT a separate table. */
+.td-root tr.childrow td { background: #fafbfd; animation: td-fade .14s ease; }
+.td-root tr.childrow:hover td { background: #f3f5fb; }
+.td-root .childname { display: flex; align-items: center; gap: 8px; min-width: 0; padding-left: 30px; position: relative; }
+.td-root .childname::before { content: ''; position: absolute; left: 17px; top: 0; bottom: 0; width: 1px; background: var(--line); }
+.td-root .childname .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; color: var(--ink2); }
+@keyframes td-fade { from { opacity: 0 } to { opacity: 1 } }
 
 /* ── SUGGESTIONS INBOX ─────────────────────────────────────── */
 .td-root .ai-banner { display: flex; align-items: center; gap: 11px; background: linear-gradient(90deg,#eef2ff,#faf5ff); border: 1px solid #e0e7ff; border-radius: 10px; padding: 12px 15px; margin-bottom: 14px; }
