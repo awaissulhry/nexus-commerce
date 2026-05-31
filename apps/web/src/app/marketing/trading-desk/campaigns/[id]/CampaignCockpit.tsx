@@ -16,7 +16,8 @@ import { marketplaceCode } from '@/lib/marketplace-code'
 import { getBackendUrl } from '@/lib/backend-url'
 
 interface AdTarget { id: string; kind: string; expressionType: string; expressionValue: string; bidCents: number; status: string; impressions: number; clicks: number; spendCents: number; salesCents: number; ordersCount: number; isNegative: boolean }
-interface AdGroup { id: string; name: string; status: string; defaultBidCents?: number | null; impressions: number; clicks: number; spendCents: number; salesCents: number; ordersCount: number; acos: number | null; roas: number | null; targets: AdTarget[] }
+interface AdGroup { id: string; externalAdGroupId?: string | null; name: string; status: string; defaultBidCents?: number | null; impressions: number; clicks: number; spendCents: number; salesCents: number; ordersCount: number; acos: number | null; roas: number | null; targets: AdTarget[] }
+interface STItem { query: string; matchType: string | null; campaignId: string; adGroupId: string; marketplace: string; impressions: number; clicks: number; costUnits: number; salesCents: number; orders: number; acos: number | null; isCandidate?: boolean }
 export interface CockpitCampaign { id: string; name: string; type: string; status: string; marketplace: string | null; externalCampaignId: string | null; spend: number; sales: number; acos: number | null; roas: number | null; trueProfitCents: number; impressions: number; clicks: number; dailyBudget?: string; biddingStrategy?: string; adGroups: AdGroup[]; dataThrough?: string | null }
 interface Placement { placement: string; impressions: number; clicks: number; costMicros: string; sales7dCents: number; orders7d: number; adjustmentPct: number }
 
@@ -30,7 +31,10 @@ const placeLabel = (k: string) => { const l = k.toLowerCase(); if (l.includes('t
 
 export function CampaignCockpit({ campaign }: { campaign: CockpitCampaign }) {
   const [c, setC] = useState<CockpitCampaign>(campaign)
-  const [tab, setTab] = useState<'placements' | 'targets' | 'adgroups'>('placements')
+  const [tab, setTab] = useState<'placements' | 'targets' | 'searchterms' | 'adgroups'>('placements')
+  const [searchTerms, setSearchTerms] = useState<STItem[] | null>(null)
+  const [stBusy, setStBusy] = useState<string | null>(null)
+  const [stDone, setStDone] = useState<Record<string, string>>({})
   const [placements, setPlacements] = useState<Placement[] | null>(null)
   const [edit, setEdit] = useState<Record<string, string>>({})
   const [busy, setBusy] = useState(false)
@@ -52,11 +56,36 @@ export function CampaignCockpit({ campaign }: { campaign: CockpitCampaign }) {
     } finally { setBidBusy(null) }
   }
 
+  const agByExt = useMemo(() => { const m = new Map<string, { id: string; defaultBidCents?: number | null }>(); for (const g of c.adGroups) if (g.externalAdGroupId) m.set(g.externalAdGroupId, { id: g.id, defaultBidCents: g.defaultBidCents }); return m }, [c.adGroups])
+  const loadSearchTerms = useCallback(async () => {
+    if (!campaign.externalCampaignId) { setSearchTerms([]); return }
+    const d = await fetch(`${getBackendUrl()}/api/advertising/reports/search-terms?campaignId=${encodeURIComponent(campaign.externalCampaignId)}&lookbackDays=30&limit=300&sortBy=spend`, { cache: 'no-store' }).then((r) => r.json()).catch(() => ({ items: [] }))
+    setSearchTerms((d.items ?? []) as STItem[])
+  }, [campaign.externalCampaignId])
+  const graduate = async (r: STItem, mt: 'EXACT' | 'PHRASE') => {
+    const local = agByExt.get(r.adGroupId)
+    if (!local) { setStDone((s) => ({ ...s, [r.query]: 'ad group not tracked' })); return }
+    setStBusy(r.query)
+    try {
+      const bidEur = local.defaultBidCents != null ? local.defaultBidCents / 100 : 0.5
+      const res = await fetch(`${getBackendUrl()}/api/advertising/keywords/create`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adGroupId: local.id, keywordText: r.query, matchType: mt, bidEur }) }).then((x) => x.json()).catch(() => null)
+      setStDone((s) => ({ ...s, [r.query]: res && !res.error ? `→ ${mt.toLowerCase()}` : 'failed' }))
+    } finally { setStBusy(null) }
+  }
+  const negate = async (r: STItem) => {
+    setStBusy(r.query)
+    try {
+      const res = await fetch(`${getBackendUrl()}/api/advertising/negative-keywords`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ externalCampaignId: r.campaignId, externalAdGroupId: r.adGroupId, keywordText: r.query, matchType: 'NEGATIVE_EXACT', scope: 'AD_GROUP', marketplace: r.marketplace }) }).then((x) => x.json()).catch(() => null)
+      setStDone((s) => ({ ...s, [r.query]: res && !res.error ? 'negated' : 'failed' }))
+    } finally { setStBusy(null) }
+  }
+
   const loadPlacements = useCallback(async () => {
     const d = await fetch(`${getBackendUrl()}/api/advertising/campaigns/${c.id}/placements`, { cache: 'no-store' }).then((r) => r.json()).catch(() => ({ placements: [] }))
     setPlacements((d.placements ?? []) as Placement[])
   }, [c.id])
   useEffect(() => { if (tab === 'placements' && placements === null) void loadPlacements() }, [tab, placements, loadPlacements])
+  useEffect(() => { if (tab === 'searchterms' && searchTerms === null) void loadSearchTerms() }, [tab, searchTerms, loadSearchTerms])
 
   const spendC = Math.round(c.spend * 100), salesC = Math.round(c.sales * 100)
   const targets = useMemo(() => c.adGroups.flatMap((g) => g.targets.filter((t) => !t.isNegative)), [c.adGroups])
@@ -100,6 +129,7 @@ export function CampaignCockpit({ campaign }: { campaign: CockpitCampaign }) {
         <div className="cocktabs">
           <button className={tab === 'placements' ? 'on' : ''} onClick={() => setTab('placements')}>Placements</button>
           <button className={tab === 'targets' ? 'on' : ''} onClick={() => setTab('targets')}>Targets ({targets.length})</button>
+          <button className={tab === 'searchterms' ? 'on' : ''} onClick={() => setTab('searchterms')}>Search terms</button>
           <button className={tab === 'adgroups' ? 'on' : ''} onClick={() => setTab('adgroups')}>Ad groups ({c.adGroups.length})</button>
         </div>
 
@@ -150,6 +180,39 @@ export function CampaignCockpit({ campaign }: { campaign: CockpitCampaign }) {
               ) })}
             </tbody>
           </table></div></div>
+        )}
+
+        {tab === 'searchterms' && (
+          <div className="card"><div className="tablewrap"><table>
+            <thead><tr><th className="l">Search term</th><th>Match</th><th>Impr.</th><th>Clicks</th><th>Spend</th><th>Orders</th><th>ACOS</th><th className="l">Harvest</th></tr></thead>
+            <tbody>
+              {searchTerms === null && <tr><td colSpan={8} className="empty">Loading…</td></tr>}
+              {searchTerms && searchTerms.length === 0 && <tr><td colSpan={8} className="empty">No search-term data for this campaign in the last 30 days.</td></tr>}
+              {searchTerms?.map((r) => {
+                const done = stDone[r.query]
+                return (
+                  <tr key={`${r.query}-${r.adGroupId}`} style={r.isCandidate ? { background: 'var(--red-soft)' } : undefined}>
+                    <td className="l">{r.query}{r.isCandidate && <span className="pill r" style={{ marginLeft: 6 }}>wasteful</span>}</td>
+                    <td>{r.matchType ? <span className={`matchbadge ${matchCls(r.matchType)}`}>{r.matchType}</span> : <span className="sub">—</span>}</td>
+                    <td className="num">{num(r.impressions)}</td>
+                    <td className="num">{num(r.clicks)}</td>
+                    <td className="num">{eur(Math.round(r.costUnits * 100))}</td>
+                    <td className="num">{num(r.orders)}</td>
+                    <td><span className={acosClsFrac(r.acos != null ? r.acos / 100 : null)}>{r.acos != null ? `${r.acos.toFixed(1)}%` : '—'}</span></td>
+                    <td className="l">{done
+                      ? <span className="pill g">{done}</span>
+                      : <div style={{ display: 'flex', gap: 6 }}>
+                          <button className="iact" disabled={stBusy === r.query} onClick={() => void graduate(r, 'EXACT')} title="Add as exact-match keyword">→ Exact</button>
+                          <button className="iact" disabled={stBusy === r.query} onClick={() => void graduate(r, 'PHRASE')} title="Add as phrase-match keyword">→ Phrase</button>
+                          <button className="iact" disabled={stBusy === r.query} onClick={() => void negate(r)} title="Add as negative-exact">Negate</button>
+                        </div>}</td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table></div>
+          <div className="legend" style={{ padding: '12px 14px' }}><span><b>Harvest:</b> graduate converting terms to a managed Exact/Phrase keyword, or negate wasteful ones (≥€2 spend, 0 orders → flagged). Writes route through the gated path.</span></div>
+          </div>
         )}
 
         {tab === 'adgroups' && (
