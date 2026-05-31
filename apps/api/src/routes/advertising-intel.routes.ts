@@ -9,7 +9,7 @@
 
 import type { FastifyPluginAsync } from 'fastify'
 import { computeProductTargetAcos, computeFleetTargetAcos, type AcosMode } from '../services/advertising/ads-target-acos.service.js'
-import { simulateAutopilot } from '../services/advertising/ads-autopilot.service.js'
+import { simulateAutopilot, applyAutopilot } from '../services/advertising/ads-autopilot.service.js'
 import { envEnabled } from '../utils/env-flag.js'
 import { cronStartupState } from '../jobs/cron-startup-state.js'
 
@@ -62,6 +62,27 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
     })
     reply.header('Cache-Control', 'private, max-age=30')
     return plan
+  })
+
+  // Apex F.2 — apply the autopilot plan (operator-triggered). Allowlist-gated end
+  // to end: bid changes filtered to liveBidWritesEnabled campaigns before write;
+  // ToS pass allowlistedOnly. Returns applied vs skipped counts.
+  fastify.post('/advertising/autopilot/apply', async (request, reply) => {
+    const b = (request.body ?? {}) as { campaignId?: string; marketplace?: string; mode?: string; bayesian?: boolean; targetAcos?: number }
+    try {
+      const result = await applyAutopilot({
+        campaignId: b.campaignId,
+        marketplace: b.marketplace,
+        mode: b.mode === 'profit' || b.mode === 'balanced' || b.mode === 'growth' ? b.mode : undefined,
+        bayesian: b.bayesian !== false,
+        targetAcos: typeof b.targetAcos === 'number' ? b.targetAcos : undefined,
+        actor: (() => { const a = (request.headers as Record<string, unknown>)['x-actor-id']; return typeof a === 'string' && a ? `user:${a}` : 'autopilot' })(),
+      })
+      return { ok: true, ...result }
+    } catch (e) {
+      reply.status(500)
+      return { ok: false, error: (e as Error)?.message }
+    }
   })
 
   // Fleet view — every advertised product's target ACOS, revenue-ranked.

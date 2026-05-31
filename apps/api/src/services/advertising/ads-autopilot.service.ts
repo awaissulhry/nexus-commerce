@@ -13,7 +13,8 @@
  * dry-run results from the existing services.
  */
 
-import { previewBidOptimization, type BidProposal } from './ads-bid-optimizer.service.js'
+import prisma from '../../db.js'
+import { previewBidOptimization, applyBidOptimization, type BidProposal } from './ads-bid-optimizer.service.js'
 import { defendTopOfSearch, type DefendTosResult } from './ads-top-of-search.service.js'
 import type { AcosMode } from './ads-target-acos.service.js'
 
@@ -104,4 +105,54 @@ export async function simulateAutopilot(opts: {
   ])
   // Cap the action list so the plan stays readable for a beginner.
   return summarizeAutopilotPlan(mode, bid.proposals.slice(0, 50), tos)
+}
+
+export interface AutopilotApplyResult {
+  mode: AcosMode
+  bid: { applied: number; skippedNotAllowlisted: number }
+  topOfSearch: { applied: number; skippedNotAllowlisted: number; evaluated: number }
+}
+
+/**
+ * F.2 — apply the autopilot plan. Allowlist-gated end to end: bid changes are
+ * filtered to campaigns with liveBidWritesEnabled BEFORE applying (so a non-
+ * allowlisted campaign never even gets a local bid change → no local-vs-Amazon
+ * drift), and the ToS pass uses allowlistedOnly. The bid writes still flow
+ * through the audited mutation path + the global write-gate. Operator-triggered.
+ */
+export async function applyAutopilot(opts: {
+  campaignId?: string
+  marketplace?: string
+  mode?: AcosMode
+  bayesian?: boolean
+  targetAcos?: number
+  actor?: string
+} = {}): Promise<AutopilotApplyResult> {
+  const mode = opts.mode ?? 'profit'
+  const { proposals } = await previewBidOptimization({ campaignId: opts.campaignId, profitMode: true, bayesian: opts.bayesian ?? true, mode, targetAcos: opts.targetAcos })
+
+  // Keep only proposals whose campaign is on the live-write allowlist.
+  let bidApplied = 0
+  let bidSkipped = 0
+  if (proposals.length > 0) {
+    const targetIds = proposals.map((p) => p.targetId)
+    const rows = await prisma.adTarget.findMany({
+      where: { id: { in: targetIds }, adGroup: { campaign: { liveBidWritesEnabled: true } } },
+      select: { id: true },
+    })
+    const allowed = new Set(rows.map((r) => r.id))
+    const changes = proposals.filter((p) => allowed.has(p.targetId)).map((p) => ({ targetId: p.targetId, proposedBidCents: p.proposedBidCents }))
+    bidApplied = changes.length
+    bidSkipped = proposals.length - changes.length
+    if (changes.length > 0) {
+      await applyBidOptimization({ changes, actor: opts.actor ?? 'autopilot' })
+    }
+  }
+
+  const tos = await defendTopOfSearch({ marketplace: opts.marketplace, allowlistedOnly: true, dryRun: false })
+  return {
+    mode,
+    bid: { applied: bidApplied, skippedNotAllowlisted: bidSkipped },
+    topOfSearch: { applied: tos.applied, skippedNotAllowlisted: tos.skippedNotAllowlisted, evaluated: tos.evaluated },
+  }
 }
