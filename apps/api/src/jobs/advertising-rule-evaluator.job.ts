@@ -356,6 +356,7 @@ async function buildUnderperformContexts(): Promise<UnderperformContext[]> {
 async function applyMarketplaceScope<C extends { marketplace: string | null }>(
   trigger: string,
   contexts: C[],
+  forceDryRun = false,
 ): Promise<{ evaluations: number; matches: number }> {
   let evaluations = 0
   let matches = 0
@@ -377,6 +378,7 @@ async function applyMarketplaceScope<C extends { marketplace: string | null }>(
       domain: 'advertising',
       trigger,
       context: ctx,
+      forceDryRun,
     })
     evaluations += results.length
     matches += results.filter((r) => r.matched).length
@@ -451,12 +453,16 @@ export async function runAdvertisingRuleEvaluatorOnce(): Promise<TickSummary> {
   }
   // TD.0 — runtime halt (circuit-breaker / operator) + OFF autonomy dial, set
   // via AdsAutomationState without a redeploy. Same effect as the env kill.
+  // TD.0 — SUGGEST autonomy forces every rule to dry-run (propose only) this
+  // tick, regardless of each rule's own dryRun flag.
+  let forceDryRun = false
   try {
-    const { isAutomationHalted } = await import('../services/advertising/ads-automation-state.service.js')
+    const { isAutomationHalted, shouldForceDryRun } = await import('../services/advertising/ads-automation-state.service.js')
     if (await isAutomationHalted()) {
       logger.warn('[ads-rule-evaluator] automation halted (AdsAutomationState) — skipping all rule evaluation')
       return { fbaAgeContexts: 0, profitabilityContexts: 0, cacSpikeContexts: 0, underperformContexts: 0, campaignBudgetContexts: 0, totalEvaluations: 0, totalMatches: 0, durationMs: Date.now() - startedAt }
     }
+    forceDryRun = await shouldForceDryRun()
   } catch { /* state unavailable → fall through (env kill remains the backstop) */ }
   const [fbaAge, profitability, cacSpike, underperform, campaignBudget] = await Promise.all([
     buildFbaAgeContexts(),
@@ -476,7 +482,7 @@ export async function runAdvertisingRuleEvaluatorOnce(): Promise<TickSummary> {
     ['CAMPAIGN_PERFORMANCE_BUDGET', campaignBudget],
   ]
   for (const [trigger, contexts] of passes) {
-    const r = await applyMarketplaceScope(trigger, contexts)
+    const r = await applyMarketplaceScope(trigger, contexts, forceDryRun)
     totalEvaluations += r.evaluations
     totalMatches += r.matches
   }
