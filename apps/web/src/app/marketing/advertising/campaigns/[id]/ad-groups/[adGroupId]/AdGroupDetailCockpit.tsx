@@ -15,6 +15,8 @@ import { StatusChip } from '@/app/_shared/ads-ui'
 import { marketplaceCode, marketplaceCountryName } from '@/lib/marketplace-code'
 import { getBackendUrl } from '@/lib/backend-url'
 import { CampaignTrendChart, type TrendRow } from '../../CampaignTrendChart'
+import { DateRangePicker, useAdRange, rangeQuery } from '../../../../_shared/DateRangePicker'
+import { useRef } from 'react'
 
 interface Ad { id: string; asin: string | null; sku: string | null; productId: string | null; status: string; name: string; photoUrl: string | null; impressions: number; clicks: number; spendCents: number; salesCents: number; orders: number; acos: number | null; roas: number | null }
 interface AgTarget { id: string; kind: string; expressionType: string; expressionValue: string; bidCents: number; status: string; impressions: number; clicks: number; spendCents: number; salesCents: number; ordersCount?: number; isNegative?: boolean }
@@ -54,13 +56,17 @@ export function AdGroupDetailCockpit({ adGroup }: { adGroup: AdGroupDetail }) {
   // AME.6 — metrics/trend/ads track the chart window; identity is stable.
   const [data, setData] = useState<AdGroupDetail>(adGroup)
   const [windowDays, setWindowDays] = useState(adGroup.windowDays)
+  // DR.2 — range picker drives the window; SSR seeded the default range.
+  const { range, setRange } = useAdRange()
+  const rq = rangeQuery(range)
+  const firstRangeRef = useRef(true)
   useEffect(() => {
-    if (windowDays === adGroup.windowDays) return
+    if (firstRangeRef.current) { firstRangeRef.current = false; return }
     let alive = true
-    void fetch(`${getBackendUrl()}/api/advertising/ad-groups/${adGroup.id}?windowDays=${windowDays}`, { cache: 'no-store' })
+    void fetch(`${getBackendUrl()}/api/advertising/ad-groups/${adGroup.id}?${rq}`, { cache: 'no-store' })
       .then((x) => x.json()).then((d) => { if (alive && d?.adGroup) setData(d.adGroup) }).catch(() => {})
     return () => { alive = false }
-  }, [windowDays, adGroup.id, adGroup.windowDays])
+  }, [rq, adGroup.id])
   const m = data.metrics
 
   // AME.7 — Amazon-style toolbar state for the Ads table.
@@ -208,6 +214,7 @@ export function AdGroupDetailCockpit({ adGroup }: { adGroup: AdGroupDetail }) {
         <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100">Ad group: {adGroup.name}</h1>
         <StatusChip status={data.status} dot />
         <StatusToggle status={data.status} onToggle={toggleAdGroupStatus} busy={busy === 'adgroup'} />
+        <div className="ml-auto"><DateRangePicker value={range} onChange={setRange} dataThrough={data.dataThrough} /></div>
       </div>
       <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 mt-1 mb-3">
         <span title={marketplaceCountryName(adGroup.campaign.marketplace)}>{marketplaceCode(adGroup.campaign.marketplace)}</span><span>·</span>
@@ -237,7 +244,7 @@ export function AdGroupDetailCockpit({ adGroup }: { adGroup: AdGroupDetail }) {
 
         <div className="flex-1 min-w-0">
           <KpiStrip tiles={tiles} className="mb-3" />
-          <CampaignTrendChart rows={trendRows} windowDays={windowDays} onWindowChange={setWindowDays} loading={false} />
+          <CampaignTrendChart rows={trendRows} windowDays={windowDays} onWindowChange={setWindowDays} loading={false} hideWindow />
 
           {/* AF.4 — contain wide tables to this box (page no longer scrolls). */}
           <div className="rounded-lg border border-slate-200 dark:border-slate-800 mt-3 overflow-x-auto">
