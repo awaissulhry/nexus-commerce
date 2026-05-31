@@ -503,6 +503,142 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     return { ok: true, cpcCeiling: db.cpcCeiling }
   })
 
+  // ── Apex A.2a: per-campaign bid guardrails (max-change-% + writes/day) ──
+  // Stored in dynamicBidding JSON alongside cpcCeiling. maxBidChangePct clamps
+  // how far any single bid move (manual/bulk/automation) can swing from the
+  // current bid; maxWritesPerDay caps live writes per UTC day (gate-enforced).
+  // Pass 0/null to clear a cap.
+  fastify.patch('/advertising/campaigns/:id/guardrails', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const b = request.body as { maxBidChangePct?: number | null; maxWritesPerDay?: number | null }
+    const c = await prisma.campaign.findUnique({ where: { id }, select: { dynamicBidding: true } })
+    if (!c) { reply.status(404); return { error: 'campaign not found' } }
+    const db = (c.dynamicBidding ?? {}) as Record<string, unknown>
+    if (b.maxBidChangePct !== undefined) {
+      const pct = b.maxBidChangePct == null ? 0 : Math.max(0, Math.min(500, Number(b.maxBidChangePct)))
+      if (pct > 0) db.maxBidChangePct = pct
+      else delete db.maxBidChangePct
+    }
+    if (b.maxWritesPerDay !== undefined) {
+      const n = b.maxWritesPerDay == null ? 0 : Math.max(0, Math.min(10000, Math.round(Number(b.maxWritesPerDay))))
+      if (n > 0) db.maxWritesPerDay = n
+      else delete db.maxWritesPerDay
+    }
+    await prisma.campaign.update({ where: { id }, data: { dynamicBidding: db as never } })
+    return { ok: true, maxBidChangePct: db.maxBidChangePct ?? null, maxWritesPerDay: db.maxWritesPerDay ?? null }
+  })
+
+  // ── Apex A.2a: per-campaign live-write allowlist toggle ─────────────────
+  // DEFAULT-DENY containment for the cautious cutover. Even with the deploy
+  // flag + connection writes enabled, the write-gate refuses live bid/state
+  // mutations to this campaign until enabled here. Toggling OFF stops future
+  // live writes immediately (in-flight grace-window rows still re-check on run).
+  fastify.patch('/advertising/campaigns/:id/live-writes', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const b = request.body as { enabled?: boolean }
+    const c = await prisma.campaign.findUnique({ where: { id }, select: { id: true, name: true } })
+    if (!c) { reply.status(404); return { error: 'campaign not found' } }
+    const enabled = !!b.enabled
+    await prisma.campaign.update({ where: { id }, data: { liveBidWritesEnabled: enabled } })
+    logger.warn('[ADS-LIVE-ALLOWLIST]', {
+      campaignId: id,
+      name: c.name,
+      enabled,
+      actor: actorFromHeaders(request.headers as Record<string, unknown>),
+    })
+    return { ok: true, campaignId: id, liveBidWritesEnabled: enabled }
+  })
+
+  // ── Apex A.2a: preview pending live writes for a campaign ───────────────
+  // Shows exactly what would hit Amazon before the grace window expires: each
+  // queued mutation's resolved external id + field changes + a request sketch,
+  // plus a live gate-decision dry-run so the operator can see allow/deny and
+  // why. Read-only — does not send anything.
+  fastify.get('/advertising/campaigns/:id/pending-writes', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const campaign = await prisma.campaign.findUnique({
+      where: { id },
+      select: {
+        id: true, name: true, marketplace: true, liveBidWritesEnabled: true,
+        liveBidWritesToday: true, liveBidWritesDay: true, dynamicBidding: true,
+      },
+    })
+    if (!campaign) { reply.status(404); return { error: 'campaign not found' } }
+
+    // Collect this campaign's local entity ids (campaign + ad groups + targets + ads).
+    const adGroups = await prisma.adGroup.findMany({
+      where: { campaignId: id },
+      select: { id: true, targets: { select: { id: true } }, productAds: { select: { id: true } } },
+    })
+    const entityIds = new Set<string>([id])
+    for (const g of adGroups) {
+      entityIds.add(g.id)
+      for (const t of g.targets) entityIds.add(t.id)
+      for (const a of g.productAds) entityIds.add(a.id)
+    }
+
+    // Pending Amazon-bound queue rows whose payload targets one of those entities.
+    const rows = await prisma.outboundSyncQueue.findMany({
+      where: { targetChannel: 'AMAZON', syncStatus: 'PENDING' },
+      select: { id: true, syncType: true, payload: true, holdUntil: true, externalListingId: true, createdAt: true },
+      orderBy: { createdAt: 'desc' },
+      take: 500,
+    })
+    const endpointFor = (entityType: string): string =>
+      entityType === 'CAMPAIGN' ? 'PUT /sp/campaigns'
+        : entityType === 'AD_GROUP' ? 'PUT /sp/adGroups'
+          : entityType === 'PRODUCT_AD' ? 'PUT /sp/productAds'
+            : 'PUT /sp/keywords'
+    const pending = rows
+      .map((r) => {
+        const p = (r.payload ?? {}) as { entityType?: string; entityId?: string; externalId?: string | null; fieldChanges?: Array<{ field: string; oldValue: string | null; newValue: string | null }> }
+        if (!p.entityId || !entityIds.has(p.entityId)) return null
+        return {
+          queueId: r.id,
+          syncType: r.syncType,
+          entityType: p.entityType ?? null,
+          entityId: p.entityId,
+          externalId: p.externalId ?? r.externalListingId ?? null,
+          fieldChanges: p.fieldChanges ?? [],
+          holdUntil: r.holdUntil,
+          graceExpired: r.holdUntil ? r.holdUntil <= new Date() : true,
+          requestPreview: {
+            endpoint: endpointFor(p.entityType ?? ''),
+            externalId: p.externalId ?? r.externalListingId ?? null,
+            changes: Object.fromEntries((p.fieldChanges ?? []).map((c) => [c.field, c.newValue])),
+          },
+        }
+      })
+      .filter((x): x is NonNullable<typeof x> => x != null)
+
+    // Live gate dry-run for this campaign (representative small bid write).
+    const { checkAdsWriteGate } = await import('../services/advertising/ads-write-gate.js')
+    const gate = await checkAdsWriteGate({ marketplace: campaign.marketplace, payloadValueCents: 50, campaignId: id })
+    const gateInfo = gate.allowed === false
+      ? { allowed: false as const, reason: gate.reason, deniedAt: gate.deniedAt }
+      : { allowed: true as const, mode: gate.mode }
+    const guards = (campaign.dynamicBidding ?? {}) as { maxBidChangePct?: number; maxWritesPerDay?: number; cpcCeiling?: { enabled?: boolean; multiple?: number } }
+
+    return {
+      campaign: {
+        id: campaign.id,
+        name: campaign.name,
+        marketplace: campaign.marketplace,
+        liveBidWritesEnabled: campaign.liveBidWritesEnabled,
+        writesToday: campaign.liveBidWritesDay === new Date().toISOString().slice(0, 10) ? campaign.liveBidWritesToday : 0,
+      },
+      adsMode: adsMode(),
+      gate: gateInfo,
+      guardrails: {
+        cpcCeiling: guards.cpcCeiling ?? { enabled: false, multiple: 1.5 },
+        maxBidChangePct: guards.maxBidChangePct ?? null,
+        maxWritesPerDay: guards.maxWritesPerDay ?? null,
+      },
+      pending,
+      pendingCount: pending.length,
+    }
+  })
+
   // ── GET /advertising/fba-storage-age/:productId ─────────────────────
   fastify.get('/advertising/fba-storage-age/:productId', async (request, _reply) => {
     const { productId } = request.params as { productId: string }
@@ -3643,11 +3779,19 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     if (!internalAuthed(request as never)) { reply.status(401); return { error: 'unauthorized' } }
     const q = request.query as Record<string, string | undefined>
     const limit = Math.min(q.limit ? Number(q.limit) : 500, 2000)
+    // Apex A.2a — in live mode the bidding engine only ever sees targets whose
+    // campaign is on the live-write allowlist (default-deny), so the engine path
+    // is contained exactly like the audited worker path. Sandbox returns all.
+    const enforceAllowlist = adsMode() === 'live'
+    const campaignWhere = {
+      ...(q.marketplace ? { marketplace: q.marketplace } : {}),
+      ...(enforceAllowlist ? { liveBidWritesEnabled: true } : {}),
+    }
     const targets = await prisma.adTarget.findMany({
       where: {
         kind: 'KEYWORD', status: 'ENABLED', isNegative: false,
         externalTargetId: { not: null }, clicks: { gt: 0 },
-        ...(q.marketplace ? { adGroup: { campaign: { marketplace: q.marketplace } } } : {}),
+        ...(Object.keys(campaignWhere).length ? { adGroup: { campaign: campaignWhere } } : {}),
       },
       take: limit,
       select: {
@@ -3664,13 +3808,21 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       const accountRef = mkt ? profileByMkt.get(mkt) : undefined
       if (!accountRef || !t.externalTargetId) return []
       const cr = t.clicks > 0 ? (t.ordersCount ?? 0) / t.clicks : 0
-      const acosTargetBps = Math.round(((t.adGroup?.campaign?.dynamicBidding as { targetAcos?: number })?.targetAcos ?? 0.3) * 10000)
+      const db = (t.adGroup?.campaign?.dynamicBidding ?? {}) as { targetAcos?: number; maxBidChangePct?: number }
+      const acosTargetBps = Math.round((db.targetAcos ?? 0.3) * 10000)
+      // Apex A.2a — bound the engine's per-cycle move by the campaign's
+      // max-change-% guardrail (when set), so the engine respects the same cap
+      // as the audited path. Default keeps the original [5, max(bid×3,300)] band.
+      const pct = Number(db.maxBidChangePct)
+      const bounded = Number.isFinite(pct) && pct > 0
+      const bidMinMinor = bounded ? Math.max(5, Math.round(t.bidCents * (1 - pct / 100))) : 5
+      const bidMaxMinor = bounded ? Math.round(t.bidCents * (1 + pct / 100)) : Math.max(t.bidCents * 3, 300)
       return [{
         bridgeId: t.id, externalId: t.externalTargetId, accountRef,
         currentBidMinor: t.bidCents,
         aovMinor: (t.ordersCount ?? 0) > 0 ? Math.round(t.salesCents / (t.ordersCount ?? 1)) : 5000,
         cr7d: cr, cr30d: cr, acosTargetBps, acos1hBps: null, daysOfSupply: null,
-        bidMinMinor: 5, bidMaxMinor: Math.max(t.bidCents * 3, 300),
+        bidMinMinor, bidMaxMinor,
       }]
     })
     reply.header('Cache-Control', 'no-store')

@@ -2482,6 +2482,20 @@ model Campaign {
   deliveryStatus  String? // DELIVERING | NOT_DELIVERING
   deliveryReasons String[] @default([])
 
+  // ── Apex A.2a: per-campaign live-write allowlist + safety counters ──
+  // liveBidWritesEnabled is a DEFAULT-DENY containment key: even when the
+  // deploy-wide NEXUS_AMAZON_ADS_MODE=live flag and the per-connection
+  // writesEnabledAt are both set, the write-gate still refuses any live
+  // bid/state mutation to this campaign's entities unless this is true.
+  // Lets a cautious cutover canary exactly one campaign. Bid-change-% and
+  // writes-per-day caps live in dynamicBidding JSON (alongside cpcCeiling).
+  liveBidWritesEnabled Boolean   @default(false)
+  // Rolling daily counter for the maxWritesPerDay guardrail. liveBidWritesDay
+  // is the UTC 'YYYY-MM-DD' the counter belongs to; a date mismatch means the
+  // count is stale and treated as 0.
+  liveBidWritesToday   Int       @default(0)
+  liveBidWritesDay     String?
+
   adGroups   AdGroup[]
   bidHistory CampaignBidHistory[]
 

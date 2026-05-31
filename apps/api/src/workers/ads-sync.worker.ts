@@ -32,6 +32,7 @@ import {
   checkAdsWriteGate,
   logGateDeny,
   recordSuccessfulWrite,
+  recordCampaignLiveWrite,
 } from '../services/advertising/ads-write-gate.js'
 
 interface AdsJobData {
@@ -70,6 +71,50 @@ function estimatePayloadValueCents(payload: AdMutationPayload): number {
     }
   }
   return maxCents
+}
+
+/**
+ * Apex A.2a — resolve the owning campaign id for a queued mutation so the
+ * write-gate can enforce the per-campaign live-write allowlist. Returns null
+ * when the entity (or its parent chain) can't be found — the gate treats null
+ * as a deny in live mode, so an unattributable write is never allowed through.
+ */
+async function resolveCampaignId(payload: AdMutationPayload): Promise<string | null> {
+  try {
+    switch (payload.entityType) {
+      case 'CAMPAIGN': {
+        const c = await prisma.campaign.findUnique({ where: { id: payload.entityId }, select: { id: true } })
+        return c?.id ?? null
+      }
+      case 'AD_GROUP': {
+        const g = await prisma.adGroup.findUnique({ where: { id: payload.entityId }, select: { campaignId: true } })
+        return g?.campaignId ?? null
+      }
+      case 'AD_TARGET': {
+        const t = await prisma.adTarget.findUnique({
+          where: { id: payload.entityId },
+          select: { adGroup: { select: { campaignId: true } } },
+        })
+        return t?.adGroup?.campaignId ?? null
+      }
+      case 'PRODUCT_AD': {
+        const a = await prisma.adProductAd.findUnique({
+          where: { id: payload.entityId },
+          select: { adGroup: { select: { campaignId: true } } },
+        })
+        return a?.adGroup?.campaignId ?? null
+      }
+      default:
+        return null
+    }
+  } catch {
+    return null
+  }
+}
+
+/** True when a payload changes a bid — used to scope the daily-write counter. */
+function isBidChange(payload: AdMutationPayload): boolean {
+  return payload.fieldChanges.some((c) => c.field === 'bid')
 }
 
 function regionFor(marketplace: string | null): AdsRegion {
@@ -189,7 +234,8 @@ async function processAdsSyncJob(job: Job<AdsJobData>): Promise<{ status: string
   // through; in live mode it enforces env flag + per-connection
   // writesEnabledAt + value-cap.
   const payloadValueCents = estimatePayloadValueCents(payload)
-  const gate = await checkAdsWriteGate({ marketplace, payloadValueCents })
+  const campaignId = await resolveCampaignId(payload)
+  const gate = await checkAdsWriteGate({ marketplace, payloadValueCents, campaignId })
   if (gate.allowed === false) {
     logGateDeny({ queueId, marketplace, payloadValueCents }, gate.reason, gate.deniedAt)
     await prisma.outboundSyncQueue.update({
@@ -249,6 +295,10 @@ async function processAdsSyncJob(job: Job<AdsJobData>): Promise<{ status: string
       })
     if (gate.mode === 'live') {
       await recordSuccessfulWrite(marketplace)
+      // Apex A.2a — count this against the campaign's daily live-write cap.
+      if (isBidChange(payload)) {
+        await recordCampaignLiveWrite(campaignId)
+      }
     }
     return { status: 'SUCCESS', queueId }
   }

@@ -25,6 +25,7 @@ import { CampaignHealth, type HealthFactor } from './CampaignHealth'
 import { CampaignProfitLens } from './CampaignProfitLens'
 import { CampaignCopyModal } from './CampaignCopyModal'
 import { CampaignDayparting } from './CampaignDayparting'
+import { LiveWritesPanel } from './LiveWritesPanel'
 import { Sparkline } from './Sparkline'
 
 interface TrendSummary { impressions: number; clicks: number; orders: number; spendCents: number; salesCents: number; acos: number | null; roas: number | null; ctr: number | null }
@@ -593,6 +594,7 @@ export function CampaignDetailCockpit({ campaign, history }: { campaign: Campaig
               <button onClick={saveSettings} disabled={settings.saving} className="px-3 py-1.5 text-sm rounded-md bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50">{settings.saving ? 'Saving…' : 'Save settings'}</button>
               {settings.msg && <span className={`text-sm ${settings.msg.startsWith('✓') ? 'text-emerald-700 dark:text-emerald-300' : 'text-rose-600'}`}>{settings.msg}</span>}
             </div>
+            <LiveWritesPanel campaignId={campaign.id} />
           </div>
         )}
         {tab === 'bidadjust' && (

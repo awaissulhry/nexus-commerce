@@ -20,20 +20,40 @@ import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import { adsMode } from './ads-api-client.js'
 
+export type GateDeniedAt =
+  | 'env'
+  | 'connection'
+  | 'connection_writes'
+  | 'value_cap'
+  | 'campaign_allowlist'
+  | 'daily_cap'
+
 export type GateDecision =
   | { allowed: true; mode: 'sandbox' }
   | { allowed: true; mode: 'live'; profileId: string }
-  | { allowed: false; reason: string; deniedAt: 'env' | 'connection' | 'connection_writes' | 'value_cap' }
+  | { allowed: false; reason: string; deniedAt: GateDeniedAt }
 
 export interface GateContext {
   marketplace: string | null
   payloadValueCents: number
+  // Apex A.2a — when provided, the gate enforces the per-campaign live-write
+  // allowlist (default-deny) + the maxWritesPerDay guardrail. The worker
+  // resolves this from the mutated entity; campaign *creation* flows omit it
+  // (there's no campaign to allowlist yet). `null` means the worker tried to
+  // resolve a campaign for an existing-entity mutation and failed → deny in
+  // live mode, so an unattributable write can never slip through.
+  campaignId?: string | null
 }
 
 function maxWriteValueCents(): number {
   const v = Number(process.env.NEXUS_AMAZON_ADS_MAX_WRITE_VALUE_CENTS)
   if (Number.isFinite(v) && v > 0) return v
   return 50_000 // €500 default
+}
+
+/** UTC calendar day as 'YYYY-MM-DD' — the bucket key for the daily-write cap. */
+export function utcDayKey(d: Date = new Date()): string {
+  return d.toISOString().slice(0, 10)
 }
 
 /**
@@ -83,6 +103,46 @@ export async function checkAdsWriteGate(ctx: GateContext): Promise<GateDecision>
     }
   }
 
+  // Apex A.2a — per-campaign allowlist (default-deny). When the worker passes a
+  // campaignId (every existing-entity bid/state mutation), the campaign must be
+  // explicitly on the allowlist. `undefined` = a creation flow with no campaign
+  // to gate → skip this check. `null` = resolution failed → deny.
+  if (ctx.campaignId !== undefined) {
+    if (!ctx.campaignId) {
+      return {
+        allowed: false,
+        reason: 'could not resolve a campaign for this live mutation — refusing unattributable write',
+        deniedAt: 'campaign_allowlist',
+      }
+    }
+    const campaign = await prisma.campaign.findUnique({
+      where: { id: ctx.campaignId },
+      select: { liveBidWritesEnabled: true, dynamicBidding: true, liveBidWritesToday: true, liveBidWritesDay: true },
+    })
+    if (!campaign?.liveBidWritesEnabled) {
+      return {
+        allowed: false,
+        reason: `campaign ${ctx.campaignId} is not on the live-write allowlist (Campaign.liveBidWritesEnabled=false)`,
+        deniedAt: 'campaign_allowlist',
+      }
+    }
+    // maxWritesPerDay guardrail — caps how many live writes automation may apply
+    // to this campaign per UTC day. Stale-day counters read as 0.
+    const guards = (campaign.dynamicBidding ?? {}) as { maxWritesPerDay?: number }
+    const cap = Number(guards.maxWritesPerDay)
+    if (Number.isFinite(cap) && cap > 0) {
+      const today = utcDayKey()
+      const used = campaign.liveBidWritesDay === today ? campaign.liveBidWritesToday : 0
+      if (used >= cap) {
+        return {
+          allowed: false,
+          reason: `campaign ${ctx.campaignId} hit its daily live-write cap (${used}/${cap} for ${today})`,
+          deniedAt: 'daily_cap',
+        }
+      }
+    }
+  }
+
   // Value cap: blast-radius limit per write. Composite actions are
   // chunked into individual OutboundSyncQueue rows so each pass
   // through the gate sees only its slice.
@@ -105,7 +165,7 @@ export async function checkAdsWriteGate(ctx: GateContext): Promise<GateDecision>
 export function logGateDeny(
   context: { queueId: string; marketplace: string | null; payloadValueCents: number },
   reason: string,
-  deniedAt: 'env' | 'connection' | 'connection_writes' | 'value_cap',
+  deniedAt: GateDeniedAt,
 ): void {
   logger.warn('[ADS-WRITE-GATE-DENY]', {
     queueId: context.queueId,
@@ -134,4 +194,36 @@ export async function recordSuccessfulWrite(marketplace: string | null): Promise
         error: err instanceof Error ? err.message : String(err),
       })
     })
+}
+
+/**
+ * Apex A.2a — bump a campaign's rolling daily live-write counter after a
+ * successful live bid write. Resets the count when the stored day rolls over.
+ * Only called on the live path so sandbox/dry-run never consumes the cap.
+ */
+export async function recordCampaignLiveWrite(campaignId: string | null): Promise<void> {
+  if (!campaignId) return
+  const today = utcDayKey()
+  try {
+    const c = await prisma.campaign.findUnique({
+      where: { id: campaignId },
+      select: { liveBidWritesDay: true },
+    })
+    if (c?.liveBidWritesDay === today) {
+      await prisma.campaign.update({
+        where: { id: campaignId },
+        data: { liveBidWritesToday: { increment: 1 } },
+      })
+    } else {
+      await prisma.campaign.update({
+        where: { id: campaignId },
+        data: { liveBidWritesToday: 1, liveBidWritesDay: today },
+      })
+    }
+  } catch (err) {
+    logger.warn('[ads-write-gate] failed to bump campaign live-write counter', {
+      campaignId,
+      error: err instanceof Error ? err.message : String(err),
+    })
+  }
 }

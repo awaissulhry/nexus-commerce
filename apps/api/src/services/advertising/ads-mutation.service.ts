@@ -492,13 +492,28 @@ export async function updateAdTargetWithSync(args: {
       bidCents: true,
       status: true,
       adGroup: {
-        select: { id: true, campaign: { select: { id: true, marketplace: true } } },
+        select: { id: true, campaign: { select: { id: true, marketplace: true, dynamicBidding: true } } },
       },
     },
   })
   if (!existing) {
     return { ok: false, outboundQueueId: null, bidHistoryIds: [], actionLogId: null, error: 'not_found' }
   }
+
+  // Apex A.2a — clamp the requested bid to the campaign's max-change-% guardrail
+  // (when set). Caps how far a single bid move (manual, bulk, or automation) can
+  // swing from the current bid, so a runaway rule can't 10× a bid in one step.
+  // Applied before the diff so the audit trail records the clamped value.
+  if (args.patch.bidCents != null && existing.bidCents > 0) {
+    const guards = (existing.adGroup?.campaign?.dynamicBidding ?? {}) as { maxBidChangePct?: number }
+    const pct = Number(guards.maxBidChangePct)
+    if (Number.isFinite(pct) && pct > 0) {
+      const maxUp = Math.round(existing.bidCents * (1 + pct / 100))
+      const maxDown = Math.round(existing.bidCents * (1 - pct / 100))
+      args.patch.bidCents = Math.max(5, Math.min(maxUp, Math.max(maxDown, args.patch.bidCents)))
+    }
+  }
+
   const changes: FieldChange[] = []
   let syncType: AdSyncType = 'AD_BID_UPDATE'
   if (args.patch.bidCents != null && args.patch.bidCents !== existing.bidCents) {
