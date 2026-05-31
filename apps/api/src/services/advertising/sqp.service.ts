@@ -37,6 +37,11 @@ export interface SqpRow {
 
 function num(v: unknown): number { const n = Number(v); return Number.isFinite(n) ? n : 0 }
 
+// Diagnostic: the last report's real shape, surfaced via GET /advertising/sqp/debug
+// so the parser can be finalised against Amazon's actual fields without Railway
+// log access. Captured on each ingest (first report).
+export const sqpDebugState: { last: { at: string; asin: string; topKeys: string[]; firstRowKeys: string[]; rowCountParsed: number; sample: string } | null } = { last: null }
+
 /**
  * SQP requires the data window to align to a COMPLETED reporting period —
  * Amazon weeks are Sunday→Saturday; an arbitrary range yields a FATAL report.
@@ -200,9 +205,20 @@ export async function ingestSqp(args: { marketplaceCode: string; period?: SqpPer
       continue
     }
     const rows = parseSqp(payload)
-    if (rows.length === 0 && !loggedSample) {
+    if (!loggedSample) {
       loggedSample = true
-      logger.info('[sqp] empty/unrecognised payload — sample logged for parser tuning', { marketplace: args.marketplaceCode, asin, sample: JSON.stringify(payload)?.slice(0, 800) })
+      const root = (payload ?? {}) as Record<string, unknown>
+      const arr = (root.dataByAsin ?? root.dataByDepartmentAndSearchQuery ?? root.searchQueryPerformanceData ?? root.records) as unknown[] | undefined
+      const firstRow = Array.isArray(arr) && arr[0] && typeof arr[0] === 'object' ? (arr[0] as Record<string, unknown>) : null
+      sqpDebugState.last = {
+        at: new Date().toISOString(),
+        asin,
+        topKeys: Object.keys(root),
+        firstRowKeys: firstRow ? Object.keys(firstRow) : [],
+        rowCountParsed: rows.length,
+        sample: JSON.stringify(payload)?.slice(0, 1800) ?? '',
+      }
+      if (rows.length === 0) logger.info('[sqp] parser yielded 0 rows — see sqpDebugState', { marketplace: args.marketplaceCode, asin, topKeys: sqpDebugState.last.topKeys })
     }
     totalRows += rows.length
     for (const row of rows) {

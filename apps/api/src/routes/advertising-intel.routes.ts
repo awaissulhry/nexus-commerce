@@ -119,6 +119,15 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
     return { items: rows, count: rows.length }
   })
 
+  // Diagnostic: the last SQP report's real shape (top-level + first-row keys +
+  // a raw sample), captured during ingest — lets us finalise the parser against
+  // Amazon's actual fields without Railway log access.
+  fastify.get('/advertising/sqp/debug', async (_request, reply) => {
+    const { sqpDebugState } = await import('../services/advertising/sqp.service.js')
+    reply.header('Cache-Control', 'no-store')
+    return sqpDebugState.last ?? { note: 'no SQP report ingested yet this process' }
+  })
+
   // Probe whether the account has Brand Analytics SQP access (resolves the
   // gating dependency without committing to ingestion).
   fastify.post('/advertising/sqp/probe', async (request, reply) => {
