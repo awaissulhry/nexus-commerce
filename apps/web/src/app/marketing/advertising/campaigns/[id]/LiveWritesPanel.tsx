@@ -38,6 +38,7 @@ interface PreviewResponse {
   }
   pending: PendingWrite[]
   pendingCount: number
+  recent?: Array<{ queueId: string; syncType: string; status: string; errorCode: string | null; errorMessage: string | null; changes: Record<string, string | null>; at: string | null }>
 }
 
 export function LiveWritesPanel({ campaignId }: { campaignId: string }) {
@@ -207,6 +208,35 @@ export function LiveWritesPanel({ campaignId }: { campaignId: string }) {
           </div>
         )}
       </div>
+
+      {/* Recent write outcomes */}
+      {data.recent && data.recent.length > 0 && (
+        <div>
+          <h4 className="text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5">Recent writes</h4>
+          <div className="overflow-x-auto rounded border border-slate-200 dark:border-slate-700">
+            <table className="w-full text-xs">
+              <thead className="bg-slate-50 dark:bg-slate-900/50 text-slate-500">
+                <tr>
+                  <th className="text-left px-2 py-1.5 font-medium">Status</th>
+                  <th className="text-left px-2 py-1.5 font-medium">Changes</th>
+                  <th className="text-left px-2 py-1.5 font-medium">Detail</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.recent.map((r) => (
+                  <tr key={r.queueId} className="border-t border-slate-100 dark:border-slate-800">
+                    <td className="px-2 py-1.5">
+                      <span className={`font-medium ${r.status === 'SUCCESS' ? 'text-emerald-600' : r.status === 'FAILED' ? 'text-rose-600' : 'text-slate-500'}`}>{r.status}</span>
+                    </td>
+                    <td className="px-2 py-1.5 text-slate-600 dark:text-slate-300">{Object.entries(r.changes).map(([k, v]) => `${k}=${v}`).join(', ') || '—'}</td>
+                    <td className="px-2 py-1.5 text-slate-500 max-w-[420px] truncate" title={r.errorMessage ?? ''}>{r.errorMessage ?? '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

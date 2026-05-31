@@ -619,6 +619,32 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       : { allowed: true as const, mode: gate.mode }
     const guards = (campaign.dynamicBidding ?? {}) as { maxBidChangePct?: number; maxWritesPerDay?: number; cpcCeiling?: { enabled?: boolean; multiple?: number } }
 
+    // Recent terminal-state writes (SUCCESS/FAILED/SKIPPED/CANCELLED) for this
+    // campaign's entities — so the operator (and the canary) can see what
+    // actually hit Amazon, including the error message on a failure.
+    const recentRows = await prisma.outboundSyncQueue.findMany({
+      where: { targetChannel: 'AMAZON', syncStatus: { in: ['SUCCESS', 'FAILED', 'SKIPPED', 'CANCELLED'] } },
+      select: { id: true, syncType: true, syncStatus: true, errorMessage: true, errorCode: true, payload: true, syncedAt: true, updatedAt: true },
+      orderBy: { updatedAt: 'desc' },
+      take: 300,
+    })
+    const recent = recentRows
+      .map((r) => {
+        const p = (r.payload ?? {}) as { entityType?: string; entityId?: string; fieldChanges?: Array<{ field: string; newValue: string | null }> }
+        if (!p.entityId || !entityIds.has(p.entityId)) return null
+        return {
+          queueId: r.id,
+          syncType: r.syncType,
+          status: r.syncStatus,
+          errorCode: r.errorCode ?? null,
+          errorMessage: r.errorMessage ?? null,
+          changes: Object.fromEntries((p.fieldChanges ?? []).map((c) => [c.field, c.newValue])),
+          at: r.syncedAt ?? r.updatedAt,
+        }
+      })
+      .filter((x): x is NonNullable<typeof x> => x != null)
+      .slice(0, 15)
+
     return {
       campaign: {
         id: campaign.id,
@@ -636,6 +662,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       },
       pending,
       pendingCount: pending.length,
+      recent,
     }
   })
 
