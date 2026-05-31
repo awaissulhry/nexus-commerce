@@ -234,6 +234,7 @@ import { initializeReadCacheWorker } from "./workers/read-cache.worker.js";
 import { initializeSearchIndexWorker } from "./workers/search-index.worker.js";
 import { initializeQueue, closeQueue } from "./lib/queue.js";
 import { logger } from "./utils/logger.js";
+import { envEnabled } from "./utils/env-flag.js";
 import prisma from "./db.js";
 
 let queueWorkersStarted = false;
@@ -1069,8 +1070,16 @@ async function start() {
     //   true-profit-rollup     nightly 03:00 UTC — yesterday's P&L
     //   ads-metrics-ingest     hourly — Amazon Ads Reports API
     // Plus the BullMQ ads-sync worker (consumes AD_* mutations).
-    // Default-OFF — opt in via NEXUS_ENABLE_AMAZON_ADS_CRON=1.
-    if (process.env.NEXUS_ENABLE_AMAZON_ADS_CRON === '1') {
+    // Default-OFF — opt in via NEXUS_ENABLE_AMAZON_ADS_CRON (1/true/yes/on).
+    // Tolerant parse: a strict === '1' previously froze this whole block when
+    // the flag was set to "true"/with whitespace. Log the resolved decision so
+    // it's visible in Railway logs at boot.
+    const adsCronOn = envEnabled('NEXUS_ENABLE_AMAZON_ADS_CRON')
+    logger.info('[startup] ads-cron block', {
+      enabled: adsCronOn,
+      rawValue: JSON.stringify(process.env.NEXUS_ENABLE_AMAZON_ADS_CRON ?? null),
+    })
+    if (adsCronOn) {
       const { startAllAdvertisingCrons } = await import('./jobs/ads-sync.job.js');
       const { initializeAdsSyncWorker } = await import('./workers/ads-sync.worker.js');
       // AD.3 — advertising-domain AutomationRule evaluator (every 15 min).
