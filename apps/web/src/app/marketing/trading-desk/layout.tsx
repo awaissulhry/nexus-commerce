@@ -1,18 +1,18 @@
 /**
- * Trading Desk shell — the rebuilt advertising hub.
- *
- * Separate from the legacy /marketing/advertising section (which stays live
- * and untouched). Tight 7-item rail + content. Surfaces are migrated in here
- * phase-by-phase; until then their rail items open the existing tool in a new tab.
+ * Trading Desk shell — STANDALONE (no Nexus app chrome; see AppShell in the
+ * root layout, which renders this route full-screen). Light content canvas +
+ * dark navy rail, exactly like the approved spike. Scoped styles in
+ * ./trading-desk.css (everything under .td-root, so nothing leaks app-wide).
  */
+import './trading-desk.css'
 import type { ReactNode } from 'react'
 import { TradingDeskSidebar } from './_shared/TradingDeskSidebar'
 
 export default function TradingDeskLayout({ children }: { children: ReactNode }) {
   return (
-    <div className="flex">
+    <div className="td-root">
       <TradingDeskSidebar />
-      <div className="flex-1 min-w-0">{children}</div>
+      <div className="main">{children}</div>
     </div>
   )
 }

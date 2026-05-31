@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import AppSidebar from "@/components/layout/AppSidebar";
+import AppShell from "@/components/layout/AppShell";
 import CommandPalette from "@/components/CommandPalette";
 import CommandMatrixPanel from "@/components/CommandMatrixPanel";
 import NotificationsBell from "@/components/NotificationsBell";
@@ -51,40 +52,32 @@ export default async function RootLayout({
         </a>
         <ToastProvider>
           <ConfirmProvider>
-            <div className="flex h-[100dvh] bg-slate-50 dark:bg-slate-950 overflow-hidden">
-              <AppSidebar />
-              <div className="flex-1 flex flex-col overflow-hidden">
-                <div data-print-hide>
-                  <MobileTopBar />
-                </div>
-                <main
-                  id="main-content"
-                  className="flex-1 overflow-auto"
-                  tabIndex={-1}
-                >
-                  {/* RT.16 — account-health banner FIRST (top of stack)
-                      because account-level outages take priority over
-                      everything else. */}
-                  <div data-print-hide>
-                    <GlobalAccountHealthBanner />
-                  </div>
-                  {/* RT.2 — global DLQ alert. Hidden when depth=0;
-                      sticks to top of main when a breach is active. */}
-                  <div data-print-hide>
-                    <GlobalDlqBanner />
-                  </div>
-                  <div className="p-3 md:p-6">{children}</div>
-                </main>
-              </div>
-            </div>
-            <div data-print-hide>
-              <CommandPalette />
-              <CommandMatrixPanel />
-              <NotificationsBell />
-              {/* RT.13 — Buy Box loss alert listener (no visual UI;
-                  fires browser notification + console.info per alert). */}
-              <CompetitiveAlertWatcher />
-            </div>
+            {/* AppShell renders the full Nexus chrome for normal routes and a
+                bare full-screen surface for standalone routes (Trading Desk).
+                Slots are server components rendered identically to before. */}
+            <AppShell
+              sidebar={<AppSidebar />}
+              topBar={<MobileTopBar />}
+              banners={
+                <>
+                  {/* RT.16 — account-health banner FIRST (top of stack). */}
+                  <GlobalAccountHealthBanner />
+                  {/* RT.2 — global DLQ alert (hidden when depth=0). */}
+                  <GlobalDlqBanner />
+                </>
+              }
+              overlays={
+                <>
+                  <CommandPalette />
+                  <CommandMatrixPanel />
+                  <NotificationsBell />
+                  {/* RT.13 — Buy Box loss alert listener (no visual UI). */}
+                  <CompetitiveAlertWatcher />
+                </>
+              }
+            >
+              {children}
+            </AppShell>
           </ConfirmProvider>
         </ToastProvider>
       </body>

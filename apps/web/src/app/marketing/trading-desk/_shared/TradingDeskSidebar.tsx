@@ -1,138 +1,100 @@
 'use client'
 
 /**
- * Trading Desk — the rebuilt advertising hub's left rail.
+ * Trading Desk rail — the spike's dark navy sidebar, in React.
  *
- * Deliberately tight: 7 primary surfaces grouped Operate / Automate /
- * Intelligence / Setup (vs the 30-entry sprawl of the legacy
- * /marketing/advertising sidebar, which stays live and untouched).
- *
- * Surfaces not yet rebuilt natively here link out to their existing
- * /marketing/advertising/* page and open in a NEW TAB (↗) — the same
- * pattern the product editor uses for Datasheet/Flat File. As each surface
- * is rebuilt natively in this hub (P2 Campaigns, P3 Suggestions, …) its
- * item flips to in-hub navigation (no new tab) and the phase tag drops.
+ * Tight 7-item nav (vs the 30-entry legacy /marketing/advertising rail, which
+ * stays live & untouched). Only Dashboard is rebuilt natively here so far; the
+ * rest open the existing tool in a NEW TAB (↗) with a phase tag showing when it
+ * gets rebuilt in this hub. Flips to in-hub navigation as each lands.
  */
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { useEffect, useState } from 'react'
 import type { LucideIcon } from 'lucide-react'
 import {
-  LayoutDashboard, Megaphone, ListChecks, Wand2, Crosshair, BarChart3, Settings,
-  ArrowUpRight, PanelLeftClose, PanelLeftOpen,
+  LayoutDashboard, Megaphone, ListChecks, Wand2, Crosshair, BarChart3, Settings, ArrowUpRight,
 } from 'lucide-react'
 
 const BASE = '/marketing/trading-desk'
 
-interface Item {
-  label: string
-  icon: LucideIcon
-  href: string
-  /** Rebuilt natively in this hub → in-hub <Link>. Otherwise opens legacy page in a new tab. */
-  native?: boolean
-  /** Phase in which this surface gets rebuilt natively (shown as a faint tag). */
-  phase?: string
-}
+interface Item { label: string; href: string; icon: LucideIcon; native?: boolean; phase?: string }
 interface Group { label: string; items: Item[] }
 
 const GROUPS: Group[] = [
   { label: 'Operate', items: [
-    { label: 'Dashboard', icon: LayoutDashboard, href: BASE, native: true },
-    { label: 'Campaigns', icon: Megaphone, href: '/marketing/advertising/campaigns', phase: 'P2' },
-    { label: 'Suggestions', icon: ListChecks, href: '/marketing/advertising/recommendations', phase: 'P3' },
+    { label: 'Dashboard', href: BASE, icon: LayoutDashboard, native: true },
+    { label: 'Campaigns', href: '/marketing/advertising/campaigns', icon: Megaphone, phase: 'P2' },
+    { label: 'Suggestions', href: '/marketing/advertising/recommendations', icon: ListChecks, phase: 'P3' },
   ] },
   { label: 'Automate', items: [
-    { label: 'Automation', icon: Wand2, href: '/marketing/advertising/automation', phase: 'P4–9' },
+    { label: 'Automation', href: '/marketing/advertising/automation', icon: Wand2, phase: 'P4–9' },
   ] },
   { label: 'Intelligence', items: [
-    { label: 'Competitive', icon: Crosshair, href: '/marketing/advertising/share-of-voice', phase: 'P9' },
-    { label: 'Analytics', icon: BarChart3, href: '/marketing/advertising/analytics', phase: 'P11' },
+    { label: 'Competitive', href: '/marketing/advertising/share-of-voice', icon: Crosshair, phase: 'P9' },
+    { label: 'Analytics', href: '/marketing/advertising/analytics', icon: BarChart3, phase: 'P11' },
   ] },
   { label: 'Setup', items: [
-    { label: 'Settings', icon: Settings, href: '/marketing/advertising/debug' },
+    { label: 'Settings', href: '/marketing/advertising/debug', icon: Settings },
   ] },
 ]
 
 export function TradingDeskSidebar() {
-  const pathname = usePathname()
-  const [collapsed, setCollapsed] = useState(false)
-  useEffect(() => {
-    try { setCollapsed(localStorage.getItem('td.sidebar.collapsed') === '1') } catch {}
-  }, [])
-  const toggle = () => setCollapsed((c) => {
-    const n = !c
-    try { localStorage.setItem('td.sidebar.collapsed', n ? '1' : '0') } catch {}
-    return n
-  })
-
-  const renderItem = (it: Item) => {
-    const Icon = it.icon
-    const active = it.native && pathname === it.href
-    const cls = `flex items-center gap-2.5 rounded-md px-2 py-1.5 text-sm ${collapsed ? 'justify-center' : ''} ${
-      active
-        ? 'bg-blue-600 text-white'
-        : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
-    }`
-    const inner = (
-      <>
-        <Icon size={16} className="shrink-0" />
-        {!collapsed && <span className="truncate flex-1">{it.label}</span>}
-        {!collapsed && !it.native && (
-          <span className="flex items-center gap-1 shrink-0">
-            {it.phase && <span className="text-[9px] font-semibold text-slate-400 bg-slate-100 dark:bg-slate-800 rounded px-1 py-px">{it.phase}</span>}
-            <ArrowUpRight size={12} className="text-slate-400" />
-          </span>
-        )}
-      </>
-    )
-    if (it.native) {
-      return (
-        <Link key={it.href} href={it.href} title={collapsed ? it.label : undefined} aria-current={active ? 'page' : undefined} className={cls}>
-          {inner}
-        </Link>
-      )
-    }
-    return (
-      <a key={it.href} href={it.href} target="_blank" rel="noopener noreferrer"
-        title={collapsed ? `${it.label} (opens current tool in a new tab)` : 'Opens the current tool in a new tab'} className={cls}>
-        {inner}
-      </a>
-    )
-  }
-
+  const pathname = usePathname() || ''
   return (
-    <aside className={`shrink-0 border-r border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/30 ${collapsed ? 'w-14' : 'w-56'} transition-[width] duration-150 sticky top-0 self-start h-[calc(100vh-3.5rem)] overflow-y-auto`}>
-      <div className={`flex items-center ${collapsed ? 'justify-center' : 'justify-between'} px-2 py-2 sticky top-0 bg-slate-50/80 dark:bg-slate-900/60 backdrop-blur z-10`}>
-        {!collapsed && (
-          <div className="px-2 leading-tight">
-            <div className="text-sm font-semibold text-slate-800 dark:text-slate-100">Trading Desk</div>
-            <div className="text-[10px] font-medium uppercase tracking-wider text-blue-500">Preview · rebuild</div>
-          </div>
-        )}
-        <button onClick={toggle} title={collapsed ? 'Expand' : 'Collapse'} className="p-1.5 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800">
-          {collapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
-        </button>
+    <aside className="side">
+      <div className="brand">
+        <div className="logo">◎</div>
+        <div>Nexus Ads<small>Trading Desk</small></div>
       </div>
 
-      <nav className="px-2 pb-4 space-y-3">
+      <nav className="nav">
         {GROUPS.map((g) => (
           <div key={g.label}>
-            {!collapsed && <div className="text-[10px] font-medium uppercase tracking-wider text-slate-400 px-2 mb-1">{g.label}</div>}
-            <ul className="space-y-0.5">{g.items.map((it) => <li key={it.href}>{renderItem(it)}</li>)}</ul>
+            <div className="grp">{g.label}</div>
+            {g.items.map((it) => {
+              const Icon = it.icon
+              const active = !!it.native && pathname === it.href
+              const body = (
+                <>
+                  <Icon size={17} />
+                  <span className="label">{it.label}</span>
+                  {!it.native && (
+                    <>
+                      {it.phase && <span className="ph">{it.phase}</span>}
+                      <ArrowUpRight className="ext" size={12} />
+                    </>
+                  )}
+                </>
+              )
+              return it.native ? (
+                <Link key={it.href} href={it.href} className={active ? 'on' : undefined} aria-current={active ? 'page' : undefined}>
+                  {body}
+                </Link>
+              ) : (
+                <a key={it.href} href={it.href} target="_blank" rel="noopener noreferrer" title="Opens the current tool in a new tab">
+                  {body}
+                </a>
+              )
+            })}
           </div>
         ))}
       </nav>
 
-      {!collapsed && (
-        <div className="px-3 pb-6 mt-2 border-t border-slate-200/70 dark:border-slate-800 pt-3">
-          <a href="/marketing/advertising" target="_blank" rel="noopener noreferrer"
-            className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-700 dark:hover:text-slate-300">
-            <ArrowUpRight size={12} /> Classic Advertising (all tools)
-          </a>
-          <p className="text-[10px] text-slate-400 mt-1.5 leading-relaxed">↗ items open the current tool in a new tab until rebuilt here.</p>
+      <div className="foot">
+        <a className="classic" href="/marketing/advertising" target="_blank" rel="noopener noreferrer">
+          <ArrowUpRight size={12} /> Classic Advertising
+        </a>
+        <div className="hint">↗ items open the current tool in a new tab until rebuilt here.</div>
+      </div>
+
+      <div className="acct">
+        <div className="av">XV</div>
+        <div>
+          <div style={{ color: '#e2e8f0', fontWeight: 600 }}>Xavia</div>
+          <div style={{ fontSize: '10.5px' }}>Amazon · eBay · Shopify</div>
         </div>
-      )}
+      </div>
     </aside>
   )
 }
