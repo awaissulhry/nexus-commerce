@@ -11,7 +11,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState, Fragment, type ReactNode } from 'react'
-import { Search, ChevronDown, MoreVertical, RefreshCw, Settings, Download, Filter, Info, X, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react'
+import { Search, ChevronDown, MoreVertical, RefreshCw, Settings, Download, Filter, Info, X, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Pencil, Pause, Play, Copy, Archive } from 'lucide-react'
 import { marketplaceCountryName } from '@/lib/marketplace-code'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useMarketingEvents } from '@/lib/sync/use-marketing-events'
@@ -53,6 +53,8 @@ const bidLabel = (s: string | null | undefined) => (s ? BID_STRATEGY[s] ?? s.rep
 const titlecase = (s: string) => s.charAt(0) + s.slice(1).toLowerCase()
 const TD = '/marketing/trading-desk/campaigns'
 const RANGES = [{ d: 1, label: 'Today' }, { d: 7, label: 'Last 7 days' }, { d: 14, label: 'Last 14 days' }, { d: 30, label: 'Last 30 days' }, { d: 60, label: 'Last 60 days' }, { d: 90, label: 'Last 90 days' }]
+const DENSITIES = [{ k: 'compact', label: 'Compact' }, { k: 'comfortable', label: 'Comfortable' }, { k: 'spacious', label: 'Spacious' }] as const
+type Density = typeof DENSITIES[number]['k']
 
 // delivery-state bucket used by the Filter panel's "Delivery status" section
 const deliveryCategory = (b: Base): string => {
@@ -100,7 +102,11 @@ export function CampaignsTable({ initial }: { initial: Base[] }) {
   const [page, setPage] = useState(1)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [groups, setGroups] = useState<Record<string, AdGroup[] | 'loading' | 'error'>>({})
+  const [density, setDensity] = useState<Density>('compact')
+  const [showView, setShowView] = useState(false)
+  const [menu, setMenu] = useState<{ id: string; x: number; y: number } | null>(null)
   const rangeLabel = RANGES.find((r) => r.d === days)?.label ?? `Last ${days} days`
+  const densityLabel = DENSITIES.find((d) => d.k === density)?.label ?? 'Compact'
 
   // hydrate column prefs from localStorage (client-only → no SSR mismatch)
   useEffect(() => {
@@ -142,6 +148,7 @@ export function CampaignsTable({ initial }: { initial: Base[] }) {
   useEffect(() => { for (const id of expanded) { if (!groups[`${id}:${days}`]) void fetchGroups(id) } }, [expanded, days, groups, fetchGroups])
   const toggleExpand = (id: string) => setExpanded((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n })
   const patchAdGroup = async (g: AdGroup, parentId: string) => { setBusy(g.id); try { await fetch(`${getBackendUrl()}/api/advertising/ad-groups/${g.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: g.status === 'ENABLED' ? 'PAUSED' : 'ENABLED' }) }); await fetchGroups(parentId) } finally { setBusy(null) } }
+  useEffect(() => { if (!menu) return; const close = () => setMenu(null); window.addEventListener('scroll', close, true); window.addEventListener('resize', close); return () => { window.removeEventListener('scroll', close, true); window.removeEventListener('resize', close) } }, [menu])
 
   const rows: Row[] = useMemo(() => raw.map((b) => {
     const m = (b.externalCampaignId && metrics[b.externalCampaignId]) || {}
@@ -244,6 +251,8 @@ export function CampaignsTable({ initial }: { initial: Base[] }) {
   const toggleActive = async (b: Base) => { setBusy(b.id); try { await patch(b.id, { status: b.status === 'ENABLED' ? 'PAUSED' : 'ENABLED' }); void refetch() } finally { setBusy(null) } }
   const saveBudget = async (b: Base) => { const v = edit[b.id]; if (v == null) return; const n = parseFloat(v); if (!Number.isFinite(n) || n < 0) { setEdit((e) => { const x = { ...e }; delete x[b.id]; return x }); return } setBusy(b.id); try { await patch(b.id, { dailyBudget: n }); setEdit((e) => { const x = { ...e }; delete x[b.id]; return x }); void refetch() } finally { setBusy(null) } }
   const bulkStatus = async (s: string) => { await Promise.all([...sel].map((id) => patch(id, { status: s }))); setSel(new Set()); void refetch() }
+  const openMenu = (e: { currentTarget: HTMLElement; stopPropagation: () => void }, id: string) => { e.stopPropagation(); const r = e.currentTarget.getBoundingClientRect(); setMenu({ id, x: Math.min(r.left, window.innerWidth - 232), y: r.bottom + 4 }) }
+  const archive = async (b: Base) => { setMenu(null); if (typeof window !== 'undefined' && !window.confirm(`Archive “${b.name}”? It will stop delivering — find it again with the Archived filter.`)) return; setBusy(b.id); try { await patch(b.id, { status: 'ARCHIVED' }); void refetch() } finally { setBusy(null) } }
 
   const statusBadge = (b: Base) => {
     if (b.status === 'PAUSED') return <span className="az-badge paused">Paused</span>
@@ -257,7 +266,7 @@ export function CampaignsTable({ initial }: { initial: Base[] }) {
     const b = r.b
     switch (key) {
       case 'active': return <button className={`az-toggle ${b.status === 'ENABLED' ? 'on' : ''}`} disabled={busy === b.id} onClick={() => void toggleActive(b)} aria-label="Toggle active"><i /></button>
-      case 'name': return <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><button className={`az-expand ${expanded.has(b.id) ? 'open' : ''}`} onClick={() => toggleExpand(b.id)} aria-label={expanded.has(b.id) ? 'Collapse ad groups' : 'Expand ad groups'} aria-expanded={expanded.has(b.id)}><ChevronRight size={15} /></button><a className="cn" href={`${TD}/${b.id}`} target="_blank" rel="noopener noreferrer">{b.name}</a><button className="az-kebab" title="Actions"><MoreVertical size={15} /></button></span>
+      case 'name': return <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><button className={`az-expand ${expanded.has(b.id) ? 'open' : ''}`} onClick={() => toggleExpand(b.id)} aria-label={expanded.has(b.id) ? 'Collapse ad groups' : 'Expand ad groups'} aria-expanded={expanded.has(b.id)}><ChevronRight size={15} /></button><a className="cn" href={`${TD}/${b.id}`} target="_blank" rel="noopener noreferrer">{b.name}</a><button className="az-kebab" title="Actions" aria-label="Row actions" onClick={(e) => openMenu(e, b.id)}><MoreVertical size={15} /></button></span>
       case 'country': return marketplaceCountryName(b.marketplace) || '—'
       case 'status': return statusBadge(b)
       case 'type': return TYPE_LABEL[b.type] ?? b.type
@@ -378,7 +387,15 @@ export function CampaignsTable({ initial }: { initial: Base[] }) {
       <PerformancePanel adProduct={tab} days={days} />
 
       <div className="az-tbar2">
-        <span className="ctl">View: Compact <ChevronDown size={14} /></span>
+        <span className="az-menuwrap">
+          <span className="ctl" onClick={() => setShowView((v) => !v)}>View: {densityLabel} <ChevronDown size={14} /></span>
+          {showView && <>
+            <div style={{ position: 'fixed', inset: 0, zIndex: 29 }} onClick={() => setShowView(false)} />
+            <div className="az-menu">
+              {DENSITIES.map((d) => <button key={d.k} className={density === d.k ? 'on' : ''} onClick={() => { setDensity(d.k); setShowView(false) }}>{d.label}{density === d.k && <span>✔</span>}</button>)}
+            </div>
+          </>}
+        </span>
         <span className="ctl" onClick={() => setShowCols(true)} title="Customise columns">Columns <ChevronDown size={14} /></span>
         <span className="az-menuwrap">
           <span className="ctl" onClick={() => setShowRange((v) => !v)}>{rangeLabel} <ChevronDown size={14} /></span>
@@ -403,7 +420,7 @@ export function CampaignsTable({ initial }: { initial: Base[] }) {
       </div>
 
       <div className="az-tablewrap">
-        <table className="az-table">
+        <table className={`az-table ${density}`}>
           <thead>
             <tr>
               <th className="l az-cellsticky" style={{ width: 36 }}><input className="az-check" type="checkbox" checked={allChecked} onChange={(e) => setSel((s) => { const n = new Set(s); paged.forEach((r) => { if (e.target.checked) n.add(r.b.id); else n.delete(r.b.id) }); return n })} /></th>
@@ -460,6 +477,21 @@ export function CampaignsTable({ initial }: { initial: Base[] }) {
           <button onClick={() => setPage(totalPages)} disabled={curPage >= totalPages} aria-label="Last page"><ChevronsRight size={16} /></button>
         </span>
       </div>
+
+      {menu && (() => {
+        const b = raw.find((x) => x.id === menu.id); if (!b) return null
+        return <>
+          <div style={{ position: 'fixed', inset: 0, zIndex: 59 }} onClick={() => setMenu(null)} />
+          <div className="az-rowmenu" style={{ left: menu.x, top: menu.y }} role="menu">
+            <button onClick={() => { window.open(`${TD}/${b.id}`, '_blank', 'noopener'); setMenu(null) }}><Pencil size={15} />Edit in cockpit</button>
+            <button onClick={() => { toggleExpand(b.id); setMenu(null) }}><ChevronRight size={15} />{expanded.has(b.id) ? 'Collapse' : 'View'} ad groups</button>
+            <button onClick={() => { void toggleActive(b); setMenu(null) }}>{b.status === 'ENABLED' ? <><Pause size={15} />Pause campaign</> : <><Play size={15} />Enable campaign</>}</button>
+            <button onClick={() => { window.open('/marketing/advertising/create', '_blank', 'noopener'); setMenu(null) }}><Copy size={15} />Duplicate…</button>
+            <div className="sep" />
+            <button className="danger" onClick={() => void archive(b)}><Archive size={15} />Archive</button>
+          </div>
+        </>
+      })()}
 
       {showCols && <CustomiseColumns visible={visible} onClose={() => setShowCols(false)} onApply={applyCols} />}
     </div>

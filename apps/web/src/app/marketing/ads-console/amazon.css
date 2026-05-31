@@ -265,3 +265,16 @@
 .az-toggle.sm { width: 34px; height: 18px; }
 .az-toggle.sm i { width: 14px; height: 14px; top: 2px; }
 .az-toggle.sm.on i { left: 18px; }
+
+/* ── ROW ACTION MENU (kebab) + density ─────────────────────── */
+.az-rowmenu { position: fixed; z-index: 60; background: #fff; border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 8px 28px rgba(0,0,0,.2); padding: 6px; min-width: 216px; }
+.az-rowmenu button { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; border: 0; background: none; font: inherit; color: var(--ink); padding: 8px 12px; border-radius: 6px; cursor: pointer; }
+.az-rowmenu button:hover { background: var(--bg3); }
+.az-rowmenu button svg { color: var(--ink2); }
+.az-rowmenu button.danger { color: #cc1100; }
+.az-rowmenu button.danger svg { color: #cc1100; }
+.az-rowmenu button.danger:hover { background: #fdeceb; }
+.az-rowmenu .sep { height: 1px; background: var(--divider); margin: 5px 4px; }
+
+.az-table.comfortable tbody td { padding-top: 14px; padding-bottom: 14px; }
+.az-table.spacious tbody td { padding-top: 19px; padding-bottom: 19px; }
