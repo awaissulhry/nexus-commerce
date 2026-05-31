@@ -247,6 +247,7 @@ export function CampaignsTable({ initial }: { initial: Base[] }) {
 
   const toggleSort = (k: string) => { if (sortKey === k) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc')); else { setSortKey(k); setSortDir('desc') } }
   const arrow = (k: string) => (sortKey === k ? (sortDir === 'asc' ? ' ▲' : ' ▼') : '')
+  const stickClass = (k: string) => (k === 'active' ? ' az-stick1' : k === 'name' ? ' az-stick2' : '')
   const patch = (id: string, body: Record<string, unknown>) => fetch(`${getBackendUrl()}/api/advertising/campaigns/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
   const toggleActive = async (b: Base) => { setBusy(b.id); try { await patch(b.id, { status: b.status === 'ENABLED' ? 'PAUSED' : 'ENABLED' }); void refetch() } finally { setBusy(null) } }
   const saveBudget = async (b: Base) => { const v = edit[b.id]; if (v == null) return; const n = parseFloat(v); if (!Number.isFinite(n) || n < 0) { setEdit((e) => { const x = { ...e }; delete x[b.id]; return x }); return } setBusy(b.id); try { await patch(b.id, { dailyBudget: n }); setEdit((e) => { const x = { ...e }; delete x[b.id]; return x }); void refetch() } finally { setBusy(null) } }
@@ -423,11 +424,11 @@ export function CampaignsTable({ initial }: { initial: Base[] }) {
         <table className={`az-table ${density}`}>
           <thead>
             <tr>
-              <th className="l az-cellsticky" style={{ width: 36 }}><input className="az-check" type="checkbox" checked={allChecked} onChange={(e) => setSel((s) => { const n = new Set(s); paged.forEach((r) => { if (e.target.checked) n.add(r.b.id); else n.delete(r.b.id) }); return n })} /></th>
+              <th className="l az-cellsticky"><input className="az-check" type="checkbox" checked={allChecked} onChange={(e) => setSel((s) => { const n = new Set(s); paged.forEach((r) => { if (e.target.checked) n.add(r.b.id); else n.delete(r.b.id) }); return n })} /></th>
               {order.map((k) => {
                 const m = META_BY_KEY[k]; const label = k === 'active' ? 'Active' : m?.label ?? k
                 return (
-                  <th key={k} className={`${m?.numeric ? '' : 'l '}${sortKey === k ? 'sorted' : ''}`} onClick={() => toggleSort(k)} title={m?.desc}>
+                  <th key={k} className={`${m?.numeric ? '' : 'l '}${sortKey === k ? 'sorted' : ''}${stickClass(k)}`} onClick={() => toggleSort(k)} title={m?.desc}>
                     {label}{m?.info && <Info className="info" size={12} />}{arrow(k)}
                   </th>
                 )
@@ -444,7 +445,7 @@ export function CampaignsTable({ initial }: { initial: Base[] }) {
                 <Fragment key={b.id}>
                   <tr className={sel.has(b.id) ? 'sel' : ''}>
                     <td className="l az-cellsticky"><input className="az-check" type="checkbox" checked={sel.has(b.id)} onChange={(e) => setSel((s) => { const n = new Set(s); if (e.target.checked) n.add(b.id); else n.delete(b.id); return n })} /></td>
-                    {order.map((k) => <td key={k} className={META_BY_KEY[k]?.numeric ? 'num' : 'l'}>{cell(k, r)}</td>)}
+                    {order.map((k) => <td key={k} className={`${META_BY_KEY[k]?.numeric ? 'num' : 'l'}${stickClass(k)}`}>{cell(k, r)}</td>)}
                   </tr>
                   {isOpen && (data === undefined || data === 'loading') && <tr className="childrow"><td className="l az-cellsticky" /><td className="l" colSpan={order.length}><span className="childmsg">Loading ad groups…</span></td></tr>}
                   {isOpen && data === 'error' && <tr className="childrow"><td className="l az-cellsticky" /><td className="l" colSpan={order.length}><span className="childmsg">Couldn’t load ad groups.</span></td></tr>}
@@ -452,7 +453,7 @@ export function CampaignsTable({ initial }: { initial: Base[] }) {
                   {isOpen && Array.isArray(data) && data.map((g) => (
                     <tr key={g.id} className="childrow">
                       <td className="l az-cellsticky" />
-                      {order.map((k) => <td key={k} className={META_BY_KEY[k]?.numeric ? 'num' : 'l'}>{childCell(k, g, b.id)}</td>)}
+                      {order.map((k) => <td key={k} className={`${META_BY_KEY[k]?.numeric ? 'num' : 'l'}${stickClass(k)}`}>{childCell(k, g, b.id)}</td>)}
                     </tr>
                   ))}
                 </Fragment>

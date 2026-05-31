@@ -278,3 +278,15 @@
 
 .az-table.comfortable tbody td { padding-top: 14px; padding-bottom: 14px; }
 .az-table.spacious tbody td { padding-top: 19px; padding-bottom: 19px; }
+
+/* ── PINNED-LEFT COLUMNS (checkbox + Active + Campaign name) ── */
+/* These stay put on horizontal scroll so the campaign name never leaves view. */
+.az-cellsticky { width: 46px; min-width: 46px; }
+.az-table .az-stick1 { position: sticky; left: 46px; background: #fff; z-index: 1; width: 78px; min-width: 78px; }
+.az-table .az-stick2 { position: sticky; left: 124px; background: #fff; z-index: 1; box-shadow: 6px 0 8px -6px rgba(0,0,0,.18); }
+.az-table .az-stick2 .cn { display: inline-block; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: middle; }
+.az-table thead th.az-cellsticky, .az-table thead th.az-stick1, .az-table thead th.az-stick2 { z-index: 3; }
+.az-table tbody tr:hover .az-stick1, .az-table tbody tr:hover .az-stick2 { background: #f7fafa; }
+.az-table tbody tr.sel .az-stick1, .az-table tbody tr.sel .az-stick2 { background: #e3f3ff; }
+.az-table tbody tr.childrow .az-stick1, .az-table tbody tr.childrow .az-stick2 { background: #fbfcfc; }
+.az-table tbody tr.childrow:hover .az-stick1, .az-table tbody tr.childrow:hover .az-stick2 { background: #f3f6f6; }
