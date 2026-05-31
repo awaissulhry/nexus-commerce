@@ -32,7 +32,7 @@ const GROUPS: Group[] = [
   ] },
   { label: 'Intelligence', items: [
     { label: 'Competitive', href: `${BASE}/competitive`, icon: Crosshair, native: true },
-    { label: 'Analytics', href: '/marketing/advertising/analytics', icon: BarChart3, phase: 'P11' },
+    { label: 'Analytics', href: `${BASE}/analytics`, icon: BarChart3, native: true },
   ] },
   { label: 'Setup', items: [
     { label: 'Settings', href: '/marketing/advertising/debug', icon: Settings },
