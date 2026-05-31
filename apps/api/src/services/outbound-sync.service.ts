@@ -24,6 +24,20 @@ import {
 } from "./channel-publish-audit.service.js";
 import { ebayAuthService } from "./ebay-auth.service.js";
 
+// Advertising mutations (bids/budgets/state) ride the same OutboundSyncQueue
+// table but are owned exclusively by the dedicated ads-sync worker
+// (ads-sync.worker.ts → dispatchToAmazon, gated by checkAdsWriteGate). This
+// generic listings processor must NOT pick them up — routing an AD_BID_UPDATE
+// through syncToAmazon (the listings PATCH path) fails it at the listings
+// publish gate and starves the real ads dispatcher. Exclude them from both the
+// pending and retry selections.
+const AD_SYNC_TYPES = [
+  "AD_BID_UPDATE",
+  "AD_BUDGET_UPDATE",
+  "AD_ENTITY_STATE_UPDATE",
+  "AD_BIDDING_STRATEGY_UPDATE",
+] as const;
+
 // ── Data Structures ──────────────────────────────────────────────────────
 
 interface SyncPayload {
@@ -145,6 +159,7 @@ export class OutboundSyncService {
       const pendingItems = await prisma.outboundSyncQueue.findMany({
         where: {
           syncStatus: "PENDING",
+          syncType: { notIn: [...AD_SYNC_TYPES] },
           OR: [{ holdUntil: null }, { holdUntil: { lte: now } }],
         },
         include: {
@@ -217,6 +232,7 @@ export class OutboundSyncService {
       const retryItems = await prisma.outboundSyncQueue.findMany({
         where: {
           syncStatus: "FAILED",
+          syncType: { notIn: [...AD_SYNC_TYPES] },
           nextRetryAt: {
             lte: new Date(),
           },
