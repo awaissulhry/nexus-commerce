@@ -3748,11 +3748,18 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const { createAmsSubscription, AMS_DATASETS } = await import('../services/advertising/ads-marketing-stream.service.js')
     const datasets = b.allDatasets ? [...AMS_DATASETS] : b.dataSetId ? [b.dataSetId] : []
     if (datasets.length === 0) { reply.status(400); return { error: 'dataSetId or allDatasets:true required' } }
-    try {
-      const results = []
-      for (const ds of datasets) results.push({ dataSetId: ds, result: await createAmsSubscription({ profileId: prof.profileId, region: prof.region, dataSetId: ds, destinationArn: b.destinationArn, notes: b.notes }) })
-      return { created: results }
-    } catch (e) { reply.status(502); return { error: (e as Error)?.message } }
+    // Per-dataset try/catch so an already-subscribed dataset (duplicate 400)
+    // doesn't abort the rest — allDatasets must be idempotent + resilient.
+    const results: Array<{ dataSetId: string; ok: boolean; result?: unknown; error?: string }> = []
+    for (const ds of datasets) {
+      try {
+        const result = await createAmsSubscription({ profileId: prof.profileId, region: prof.region, dataSetId: ds, destinationArn: b.destinationArn, notes: b.notes })
+        results.push({ dataSetId: ds, ok: true, result })
+      } catch (e) {
+        results.push({ dataSetId: ds, ok: false, error: (e as Error)?.message })
+      }
+    }
+    return { created: results }
   })
   fastify.delete('/advertising/marketing-stream/subscriptions/:id', async (request, reply) => {
     const { id } = request.params as { id: string }
