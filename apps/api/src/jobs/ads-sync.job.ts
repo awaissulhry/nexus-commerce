@@ -496,8 +496,10 @@ export async function runKeywordBidResyncCron(): Promise<void> {
 
 export function startKeywordBidResyncCron(): void {
   if (keywordBidResyncTask) { logger.warn('ads-keyword-bid-resync already started'); return }
-  // Hourly at :45 — after the v1 ingest ticks (every 5 min) have settled the structure.
-  const schedule = process.env.NEXUS_ADS_KEYWORD_BID_RESYNC_SCHEDULE ?? '45 * * * *'
+  // Every 6h at :45. The v1 ingest no longer clobbers good bids with €0 (it
+  // preserves the existing bid on update), so this is just a backstop to pull
+  // any newly-changed bids — no need to hammer Amazon + the container hourly.
+  const schedule = process.env.NEXUS_ADS_KEYWORD_BID_RESYNC_SCHEDULE ?? '45 */6 * * *'
   if (!cron.validate(schedule)) { logger.error('ads-keyword-bid-resync: invalid schedule', { schedule }); return }
   keywordBidResyncTask = cron.schedule(schedule, () => { void runKeywordBidResyncCron() })
   logger.info('ads-keyword-bid-resync cron: scheduled', { schedule })

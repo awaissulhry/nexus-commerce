@@ -567,7 +567,19 @@ async function ingestTargets(records: V1Target[]): Promise<{ upserted: number; b
   const existKey = new Map(existing.map((e) => [`${e.adGroupId}|${e.externalTargetId}`, e.id]))
   const toCreate: Array<Record<string, unknown>> = []
   const toUpdate: Array<{ id: string; data: Record<string, unknown> }> = []
-  for (const x of rows) { const id = existKey.get(x.key); if (id) toUpdate.push({ id, data: x.data }); else toCreate.push(x.data) }
+  for (const x of rows) {
+    const id = existKey.get(x.key)
+    if (id) {
+      // PERF/accuracy — the v1 export's bid is unreliable (nested → often 0),
+      // and re-zeroing good bids every 5-min ingest was what forced a heavy
+      // hourly resync. On UPDATE, never clobber an existing bid with 0; the v3
+      // list sync owns real bids. Only write bidCents when the export has a
+      // genuine positive value.
+      const data = { ...x.data }
+      if (!data.bidCents || (data.bidCents as number) <= 0) delete data.bidCents
+      toUpdate.push({ id, data })
+    } else { toCreate.push(x.data) }
+  }
   ;(bd as Record<string, unknown>).toCreate = toCreate.length
   ;(bd as Record<string, unknown>).toUpdate = toUpdate.length
   let upserted = 0
