@@ -276,6 +276,28 @@ ACTION_HANDLERS.pause_campaign = async (action, context, meta): Promise<ActionRe
   }
 }
 
+// ── notify (TD.0) ─────────────────────────────────────────────────────
+// Alert-only action: fans a notification to every operator's bell. Fires even
+// in dry-run (an alert isn't an Amazon write — suppressing it would defeat the
+// purpose). Lets rules like "negative ad margin" actually reach a human.
+ACTION_HANDLERS.notify = async (action, context, meta): Promise<ActionResult> => {
+  const title = (action.title as string) || (action.message as string) || 'Advertising automation alert'
+  const severity = ((action.severity as string) === 'danger' || (action.severity as string) === 'info' || (action.severity as string) === 'success')
+    ? (action.severity as 'danger' | 'info' | 'success') : 'warn'
+  const bits: string[] = []
+  const cName = getFieldPath(context, 'campaign.name'); if (cName) bits.push(`Campaign: ${String(cName)}`)
+  const tgt = getFieldPath(context, 'adTarget.expressionValue'); if (tgt) bits.push(`Target: ${String(tgt)}`)
+  const mkt = getFieldPath(context, 'marketplace'); if (mkt) bits.push(`Market: ${String(mkt)}`)
+  const body = [action.body as string | undefined, bits.join(' · ') || undefined].filter(Boolean).join(' — ') || undefined
+  try {
+    const { notifyAutomation } = await import('./ads-automation-notify.service.js')
+    const notified = await notifyAutomation({ type: 'ads-automation-rule', severity, title, body, meta: { ruleId: meta.ruleId, dryRun: meta.dryRun } })
+    return { type: action.type, ok: true, output: { notified, title, dryRun: meta.dryRun } }
+  } catch (e) {
+    return { type: action.type, ok: false, error: (e as Error).message }
+  }
+}
+
 // ── adjust_ad_budget ──────────────────────────────────────────────────
 
 ACTION_HANDLERS.adjust_ad_budget = async (action, context, meta): Promise<ActionResult> => {
