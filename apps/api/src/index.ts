@@ -1112,6 +1112,9 @@ async function start() {
       const { startDaypartingCron } = await import('./jobs/ad-dayparting.job.js');
       markCronStep('ads:import ads-budget-pacing');
       await import('./services/advertising/ads-budget-pacing.service.js');
+      // Apex D.2 — registers the defend_top_of_search handler.
+      markCronStep('ads:import ads-top-of-search');
+      await import('./services/advertising/ads-top-of-search.service.js');
       markCronStep('ads:import marketing-action-handlers');
       await import('./services/marketing/marketing-action-handlers.js');
       markCronStep('ads:import marketing-rule-evaluator.job');
@@ -1120,6 +1123,9 @@ async function start() {
       const { startMarketingSyncDrainCron } = await import('./jobs/marketing-sync-drain.job.js');
       markCronStep('ads:import ads-sync-drain.job');
       const { startAdsSyncDrainCron } = await import('./jobs/ads-sync-drain.job.js');
+      // Apex D.2 — Top-of-Search defense (self-gated: only schedules when
+      // NEXUS_ENABLE_TOS_DEFENSE_CRON is on, since it writes live placement bids).
+      const { startTosDefenseCron } = await import('./jobs/ads-tos-defense.job.js');
       // Register all schedules (these are synchronous node-cron registrations).
       markCronStep('ads:register schedules');
       startDaypartingCron();
@@ -1129,6 +1135,7 @@ async function start() {
       startMarketingRuleEvaluatorCron();
       startMarketingSyncDrainCron();
       startAdsSyncDrainCron();
+      startTosDefenseCron();
       markCronStep('ads:schedules registered');
       // Redis-dependent BullMQ worker LAST + non-blocking: a hung/failed Redis
       // connect must not freeze the crons above (which is what happened — the

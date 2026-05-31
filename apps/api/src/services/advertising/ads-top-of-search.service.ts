@@ -13,6 +13,8 @@
  */
 import prisma from '../../db.js'
 import { microsToCents } from './ads-metrics-math.js'
+import { ACTION_HANDLERS, type ActionResult } from '../automation-rule.service.js'
+import { logger } from '../../utils/logger.js'
 
 const TOP_REPORT_PLACEMENT = 'Top of Search on-Amazon'
 const TOP_BID_KEY = 'PLACEMENT_TOP'
@@ -97,3 +99,64 @@ export async function applyTopOfSearchRecommendations(opts: { windowDays?: numbe
   }
   return { applied, rows }
 }
+
+// ── Apex D.2 — autonomous Top-of-Search defense ───────────────────────────
+// Tune the PLACEMENT_TOP multiplier toward the target so a campaign holds the
+// top slot when ROAS allows and eases off when it doesn't. Shared by the
+// scheduled cron (top-of-search-defense) and the defend_top_of_search rule
+// action. Live writes are clipped (±STEP_PCT, ≤MAX_PCT) AND restricted to
+// allowlisted campaigns when allowlistedOnly — placement writes go through
+// updatePlacementBidding which hits the write-gate WITHOUT a campaignId, so the
+// A.2a per-campaign allowlist (Campaign.liveBidWritesEnabled) is enforced here.
+export interface DefendTosResult {
+  evaluated: number
+  changed: number
+  applied: number
+  skippedNotAllowlisted: number
+  dryRun: boolean
+  sample: Array<{ campaign: string; fromPct: number; toPct: number; action: string; reason: string }>
+}
+
+export async function defendTopOfSearch(opts: {
+  targetAcos?: number
+  marketplace?: string
+  windowDays?: number
+  allowlistedOnly?: boolean
+  dryRun?: boolean
+} = {}): Promise<DefendTosResult> {
+  const { rows } = await analyzeTopOfSearch({ targetAcos: opts.targetAcos, marketplace: opts.marketplace, windowDays: opts.windowDays })
+  const actionable = rows.filter((r) => r.action !== 'keep' && r.recommendedPct !== r.currentPct)
+  const sample = actionable.slice(0, 8).map((r) => ({ campaign: r.name, fromPct: r.currentPct, toPct: r.recommendedPct, action: r.action, reason: r.reason }))
+  if (opts.dryRun) {
+    return { evaluated: rows.length, changed: actionable.length, applied: 0, skippedNotAllowlisted: 0, dryRun: true, sample }
+  }
+  let allowed: Set<string> | null = null
+  if (opts.allowlistedOnly) {
+    const ids = actionable.map((r) => r.campaignId)
+    allowed = new Set(
+      (await prisma.campaign.findMany({ where: { id: { in: ids }, liveBidWritesEnabled: true }, select: { id: true } })).map((c) => c.id),
+    )
+  }
+  let applied = 0
+  let skippedNotAllowlisted = 0
+  for (const r of actionable) {
+    if (allowed && !allowed.has(r.campaignId)) { skippedNotAllowlisted += 1; continue }
+    await applyTopOfSearch(r.campaignId, r.recommendedPct)
+    applied += 1
+  }
+  return { evaluated: rows.length, changed: actionable.length, applied, skippedNotAllowlisted, dryRun: false, sample }
+}
+
+// Rule action — same engine, allowlist-enforced, dry-run honored from rule meta.
+ACTION_HANDLERS.defend_top_of_search = async (action, _context, meta): Promise<ActionResult> => {
+  const r = await defendTopOfSearch({
+    targetAcos: typeof action.targetAcos === 'number' ? (action.targetAcos as number) : undefined,
+    marketplace: typeof action.marketplace === 'string' ? (action.marketplace as string) : undefined,
+    windowDays: typeof action.windowDays === 'number' ? (action.windowDays as number) : undefined,
+    allowlistedOnly: true,
+    dryRun: meta.dryRun,
+  })
+  return { type: action.type, ok: true, output: r }
+}
+
+logger.debug('[D.2] defend_top_of_search handler registered')
