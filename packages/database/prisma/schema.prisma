@@ -12517,3 +12517,32 @@ model DevelopmentCertification {
 
   @@index([projectId])
 }
+
+// ── Trading Desk automation safety spine (TD.0) ─────────────────────────────
+// Single-row runtime state for the ad-automation engine: the global autonomy
+// dial + the circuit-breaker halt. The env kill-switch (NEXUS_ADS_AUTOMATION_KILL)
+// stays as a deploy-level backstop; THIS row lets an operator (or the anomaly
+// guard) halt/resume + change posture at runtime without a deploy.
+model AdsAutomationState {
+  id String @id @default("singleton")
+
+  // Global posture override. OFF = nothing runs; SUGGEST = force every rule to
+  // dry-run (propose only); AUTO = respect each rule's own enabled/dryRun.
+  autonomy String @default("AUTO") // OFF | SUGGEST | AUTO
+
+  // Circuit-breaker. When halted, the evaluator + write-gate refuse automation
+  // writes until an operator (or auto-cooldown) resumes.
+  halted     Boolean   @default(false)
+  haltedAt   DateTime?
+  haltReason String?
+  haltedBy   String? // 'operator:<id>' | 'auto:anomaly-guard'
+
+  // Anomaly-guard thresholds (null = use service defaults). Trips a halt when
+  // account ad spend in the trailing hour, or automation actions/hour, exceed.
+  maxHourlySpendCentsEur Int?
+  maxActionsPerHour      Int?
+
+  // Last anomaly-guard evaluation, for observability.
+  lastCheckedAt DateTime?
+  updatedAt     DateTime @updatedAt
+}
