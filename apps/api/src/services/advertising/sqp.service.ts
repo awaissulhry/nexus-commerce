@@ -33,6 +33,34 @@ export interface SqpRow {
 }
 
 function num(v: unknown): number { const n = Number(v); return Number.isFinite(n) ? n : 0 }
+
+/**
+ * SQP requires the data window to align to a COMPLETED reporting period —
+ * Amazon weeks are Sunday→Saturday; an arbitrary range yields a FATAL report.
+ * Returns the most recently completed period (offset full periods back via
+ * `lookback`, default 1 = the latest finished one), as [start, endExclusive)
+ * UTC day boundaries. Pure + unit-tested.
+ */
+export function periodWindow(period: SqpPeriod, now: Date, lookback = 1): { start: Date; end: Date } {
+  const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
+  if (period === 'WEEK') {
+    // Start of the current (in-progress) week's Sunday, then step back `lookback` weeks.
+    const sunday = new Date(d); sunday.setUTCDate(d.getUTCDate() - d.getUTCDay())
+    const start = new Date(sunday); start.setUTCDate(sunday.getUTCDate() - 7 * lookback)
+    const end = new Date(start); end.setUTCDate(start.getUTCDate() + 7)
+    return { start, end }
+  }
+  if (period === 'MONTH') {
+    const start = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() - lookback, 1))
+    const end = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + 1, 1))
+    return { start, end }
+  }
+  // QUARTER
+  const q = Math.floor(d.getUTCMonth() / 3) - lookback
+  const start = new Date(Date.UTC(d.getUTCFullYear(), q * 3, 1))
+  const end = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + 3, 1))
+  return { start, end }
+}
 /** Brand share of a funnel stage, clamped to [0,1]. Pure. */
 export function share(brand: number, total: number): number { return total > 0 ? Math.max(0, Math.min(1, brand / total)) : 0 }
 
@@ -94,8 +122,7 @@ export interface SqpProbeResult { available: boolean; reportType: string; market
 export async function probeSqpAccess(marketplaceCode: string, period: SqpPeriod = 'WEEK'): Promise<SqpProbeResult> {
   const marketplaceId = await resolveMarketplaceId(marketplaceCode)
   if (!marketplaceId) return { available: false, reportType: SQP_REPORT_TYPE, marketplace: marketplaceCode, detail: `no Marketplace row for AMAZON:${marketplaceCode}` }
-  const end = new Date(); end.setUTCHours(0, 0, 0, 0)
-  const start = new Date(end); start.setUTCDate(start.getUTCDate() - 8)
+  const { start, end } = periodWindow(period, new Date())
   try {
     await fetchSpApiJsonReport({ reportType: SQP_REPORT_TYPE, marketplaceId, dataStartTime: start, dataEndTime: end, reportOptions: { reportPeriod: period } })
     return { available: true, reportType: SQP_REPORT_TYPE, marketplace: marketplaceCode, detail: 'report request accepted' }
@@ -112,8 +139,10 @@ export async function ingestSqp(args: { marketplaceCode: string; period?: SqpPer
   const period = args.period ?? 'WEEK'
   const marketplaceId = await resolveMarketplaceId(args.marketplaceCode)
   if (!marketplaceId) throw new Error(`ingestSqp: no Marketplace row for AMAZON:${args.marketplaceCode}`)
-  const end = args.endDate ?? (() => { const d = new Date(); d.setUTCHours(0, 0, 0, 0); return d })()
-  const start = args.startDate ?? (() => { const d = new Date(end); d.setUTCDate(d.getUTCDate() - (period === 'MONTH' ? 31 : period === 'QUARTER' ? 92 : 8)); return d })()
+  // Align to a completed period boundary unless the caller pins explicit dates.
+  const win = periodWindow(period, new Date())
+  const start = args.startDate ?? win.start
+  const end = args.endDate ?? win.end
 
   const { payload, reportId } = await fetchSpApiJsonReport<object>({ reportType: SQP_REPORT_TYPE, marketplaceId, dataStartTime: start, dataEndTime: end, reportOptions: { reportPeriod: period } })
     .then((r) => ({ payload: r.payload, reportId: r.reportId }))

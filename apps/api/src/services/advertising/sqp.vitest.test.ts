@@ -1,5 +1,32 @@
 import { describe, it, expect } from 'vitest'
-import { parseSqp, share } from './sqp.service.js'
+import { parseSqp, share, periodWindow } from './sqp.service.js'
+
+describe('periodWindow', () => {
+  it('WEEK: most recent completed Sunday→Sunday (exclusive end)', () => {
+    // Wed 2026-05-27. Current week's Sunday = 2026-05-24; previous completed
+    // week = 2026-05-17 (Sun) .. 2026-05-24 (exclusive).
+    const w = periodWindow('WEEK', new Date('2026-05-27T10:00:00Z'))
+    expect(w.start.toISOString().slice(0, 10)).toBe('2026-05-17')
+    expect(w.end.toISOString().slice(0, 10)).toBe('2026-05-24')
+    expect(w.start.getUTCDay()).toBe(0) // Sunday
+  })
+  it('WEEK lookback=2 steps back another full week', () => {
+    const w = periodWindow('WEEK', new Date('2026-05-27T10:00:00Z'), 2)
+    expect(w.start.toISOString().slice(0, 10)).toBe('2026-05-10')
+    expect(w.end.toISOString().slice(0, 10)).toBe('2026-05-17')
+  })
+  it('MONTH: previous full calendar month', () => {
+    const w = periodWindow('MONTH', new Date('2026-05-15T10:00:00Z'))
+    expect(w.start.toISOString().slice(0, 10)).toBe('2026-04-01')
+    expect(w.end.toISOString().slice(0, 10)).toBe('2026-05-01')
+  })
+  it('QUARTER: previous full quarter', () => {
+    const w = periodWindow('QUARTER', new Date('2026-05-15T10:00:00Z'))
+    // Q2 in progress → previous completed = Q1 (Jan–Mar)
+    expect(w.start.toISOString().slice(0, 10)).toBe('2026-01-01')
+    expect(w.end.toISOString().slice(0, 10)).toBe('2026-04-01')
+  })
+})
 
 describe('share', () => {
   it('brand / total, clamped to [0,1]', () => {
