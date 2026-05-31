@@ -37,6 +37,14 @@ export const RANGE_PRESETS: Array<{ key: string; label: string; group?: string }
 const STORAGE_KEY = 'ads.range.v1'
 const DEFAULT: AdRange = { preset: 'last7' }
 
+// DR.3 — which presets' windows extend to "now" (today). yesterday / last
+// month / last year end before today and are fully settled.
+const SETTLED_PRESETS = new Set(['yesterday', 'last_month', 'last_year'])
+export function rangeIncludesToday(r: AdRange): boolean {
+  if (r.preset === 'custom') return !!r.endDate && r.endDate >= new Date().toISOString().slice(0, 10)
+  return !SETTLED_PRESETS.has(r.preset)
+}
+
 export function labelFor(r: AdRange): string {
   if (r.preset === 'custom' && r.startDate && r.endDate) {
     const fmt = (s: string) => new Date(s + 'T00:00:00Z').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })
@@ -81,7 +89,7 @@ export function useAdRange(): { range: AdRange; setRange: (r: AdRange) => void }
   return { range, setRange }
 }
 
-export function DateRangePicker({ value, onChange, dataThrough }: { value: AdRange; onChange: (r: AdRange) => void; dataThrough?: string | null }) {
+export function DateRangePicker({ value, onChange, dataThrough, livePartial }: { value: AdRange; onChange: (r: AdRange) => void; dataThrough?: string | null; livePartial?: boolean }) {
   const [open, setOpen] = useState(false)
   const [customStart, setCustomStart] = useState(value.startDate ?? '')
   const [customEnd, setCustomEnd] = useState(value.endDate ?? '')
@@ -94,9 +102,17 @@ export function DateRangePicker({ value, onChange, dataThrough }: { value: AdRan
   }, [open])
   const today = useMemo(() => new Date().toISOString().slice(0, 10), [])
   const applyCustom = () => { if (customStart && customEnd) { onChange({ preset: 'custom', startDate: customStart, endDate: customEnd }); setOpen(false) } }
+  const showLive = livePartial ?? rangeIncludesToday(value)
 
   return (
-    <div className="relative" ref={ref}>
+    <div className="relative inline-flex items-center gap-1.5" ref={ref}>
+      {/* DR.3 — the selected range includes today, whose data is live + still
+          firming up (intraday Marketing Stream; daily settles T+1). */}
+      {showLive && (
+        <span title="Includes today — live, still updating (intraday). Earlier days are settled." className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[11px] bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
+          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" /> live · partial
+        </span>
+      )}
       <button onClick={() => setOpen((o) => !o)} aria-haspopup="listbox" aria-expanded={open}
         className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-sm rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800">
         <Calendar size={14} className="text-slate-400" />
