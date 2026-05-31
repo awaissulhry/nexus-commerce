@@ -10,7 +10,7 @@
  * multi-metric Performance chart land in Phase C.
  */
 
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useState, Fragment, type ReactNode } from 'react'
 import { Search, ChevronDown, MoreVertical, RefreshCw, Settings, Download, Filter, Info, X, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react'
 import { marketplaceCountryName } from '@/lib/marketplace-code'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -29,6 +29,7 @@ interface Base {
   startDate?: string | null; endDate?: string | null; portfolioId?: string | null; placements?: Placements
 }
 interface V1 { impressions?: number; clicks?: number; costUnits?: number; salesCents?: number; orders?: number; acos?: number | null; roas?: number | null }
+interface AdGroup { id: string; name: string; status: string; impressions?: number; clicks?: number; spendCents?: number; salesCents?: number; ordersCount?: number }
 interface Row {
   b: Base; impr: number; clicks: number; spendC: number; salesC: number; orders: number
   ctr: number | null; cpc: number | null; cpm: number | null; cvr: number | null; aov: number | null
@@ -97,6 +98,8 @@ export function CampaignsTable({ initial }: { initial: Base[] }) {
   const [showFilter, setShowFilter] = useState(false)
   const [pageSize, setPageSize] = useState(50)
   const [page, setPage] = useState(1)
+  const [expanded, setExpanded] = useState<Set<string>>(new Set())
+  const [groups, setGroups] = useState<Record<string, AdGroup[] | 'loading' | 'error'>>({})
   const rangeLabel = RANGES.find((r) => r.d === days)?.label ?? `Last ${days} days`
 
   // hydrate column prefs from localStorage (client-only → no SSR mismatch)
@@ -124,6 +127,21 @@ export function CampaignsTable({ initial }: { initial: Base[] }) {
   }, [days])
   useEffect(() => { void refetch() }, [refetch])
   useMarketingEvents(useCallback(() => { void refetch() }, [refetch]))
+
+  // expandable rows → ad groups (Cloudscape pattern). Cache keyed by id+window;
+  // a campaign's groups are fetched the first time it's expanded and refreshed
+  // when the date range changes (new cache key) or after a child mutation.
+  const fetchGroups = useCallback(async (id: string) => {
+    const k = `${id}:${days}`
+    setGroups((g) => ({ ...g, [k]: 'loading' }))
+    try {
+      const r = await fetch(`${getBackendUrl()}/api/advertising/campaigns/${id}?windowDays=${days}`, { cache: 'no-store' }).then((x) => x.json())
+      setGroups((g) => ({ ...g, [k]: (r?.campaign?.adGroups ?? []) as AdGroup[] }))
+    } catch { setGroups((g) => ({ ...g, [k]: 'error' })) }
+  }, [days])
+  useEffect(() => { for (const id of expanded) { if (!groups[`${id}:${days}`]) void fetchGroups(id) } }, [expanded, days, groups, fetchGroups])
+  const toggleExpand = (id: string) => setExpanded((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n })
+  const patchAdGroup = async (g: AdGroup, parentId: string) => { setBusy(g.id); try { await fetch(`${getBackendUrl()}/api/advertising/ad-groups/${g.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: g.status === 'ENABLED' ? 'PAUSED' : 'ENABLED' }) }); await fetchGroups(parentId) } finally { setBusy(null) } }
 
   const rows: Row[] = useMemo(() => raw.map((b) => {
     const m = (b.externalCampaignId && metrics[b.externalCampaignId]) || {}
@@ -239,7 +257,7 @@ export function CampaignsTable({ initial }: { initial: Base[] }) {
     const b = r.b
     switch (key) {
       case 'active': return <button className={`az-toggle ${b.status === 'ENABLED' ? 'on' : ''}`} disabled={busy === b.id} onClick={() => void toggleActive(b)} aria-label="Toggle active"><i /></button>
-      case 'name': return <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><a className="cn" href={`${TD}/${b.id}`} target="_blank" rel="noopener noreferrer">{b.name}</a><button className="az-kebab" title="Actions"><MoreVertical size={15} /></button></span>
+      case 'name': return <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><button className={`az-expand ${expanded.has(b.id) ? 'open' : ''}`} onClick={() => toggleExpand(b.id)} aria-label={expanded.has(b.id) ? 'Collapse ad groups' : 'Expand ad groups'} aria-expanded={expanded.has(b.id)}><ChevronRight size={15} /></button><a className="cn" href={`${TD}/${b.id}`} target="_blank" rel="noopener noreferrer">{b.name}</a><button className="az-kebab" title="Actions"><MoreVertical size={15} /></button></span>
       case 'country': return marketplaceCountryName(b.marketplace) || '—'
       case 'status': return statusBadge(b)
       case 'type': return TYPE_LABEL[b.type] ?? b.type
@@ -267,6 +285,31 @@ export function CampaignsTable({ initial }: { initial: Base[] }) {
       case 'trueProfit': return <span style={{ color: r.trueProfitC < 0 ? '#cc1100' : r.trueProfitC > 0 ? 'var(--green)' : undefined, fontWeight: 500 }}>{eur(r.trueProfitC)}</span>
       case 'marginPct': return <span style={{ color: r.marginPct != null && r.marginPct < 0 ? '#cc1100' : undefined }}>{pct(r.marginPct, 1)}</span>
       default: return <span className="sub">—</span>   // viewableImpr, dpv, units, ntb*, tacos (no data yet)
+    }
+  }
+
+  // child (ad-group) cell — renders into the SAME columns as the parent row.
+  // Metrics derive deterministically from the group totals; campaign-only
+  // columns (country/type/portfolio/dates/budget/profit) stay blank.
+  const childCell = (key: string, g: AdGroup, parentId: string): ReactNode => {
+    const impr = g.impressions ?? 0, clicks = g.clicks ?? 0, spendC = g.spendCents ?? 0, salesC = g.salesCents ?? 0, orders = g.ordersCount ?? 0
+    switch (key) {
+      case 'active': return <button className={`az-toggle sm ${g.status === 'ENABLED' ? 'on' : ''}`} disabled={busy === g.id} onClick={() => void patchAdGroup(g, parentId)} aria-label="Toggle ad group"><i /></button>
+      case 'name': return <span className="childname"><span className="gname">{g.name}</span><span className="sub">Ad group</span></span>
+      case 'status': return g.status === 'ENABLED' ? <span className="az-badge deliver">Delivering</span> : <span className="az-badge paused">{titlecase(g.status || 'Paused')}</span>
+      case 'impressions': return num(impr)
+      case 'clicks': return num(clicks)
+      case 'ctr': return pct(impr > 0 ? clicks / impr : null)
+      case 'spend': return eur(spendC)
+      case 'cpc': return eur(clicks > 0 ? spendC / clicks : null)
+      case 'cpm': return eur(impr > 0 ? (spendC / impr) * 1000 : null)
+      case 'orders': return num(orders)
+      case 'cvr': return pct(clicks > 0 ? orders / clicks : null)
+      case 'sales': return eur(salesC)
+      case 'acos': return pct(salesC > 0 ? spendC / salesC : null, 1)
+      case 'roas': return x2(spendC > 0 ? salesC / spendC : null)
+      case 'aov': return eur(orders > 0 ? salesC / orders : null)
+      default: return ''
     }
   }
 
@@ -378,11 +421,24 @@ export function CampaignsTable({ initial }: { initial: Base[] }) {
             {filtered.length === 0 && <tr><td className="az-empty" colSpan={1 + order.length}>{loading ? 'Loading…' : 'No campaigns match your filters.'}</td></tr>}
             {paged.map((r) => {
               const b = r.b
+              const isOpen = expanded.has(b.id)
+              const data = isOpen ? groups[`${b.id}:${days}`] : undefined
               return (
-                <tr key={b.id} className={sel.has(b.id) ? 'sel' : ''}>
-                  <td className="l az-cellsticky"><input className="az-check" type="checkbox" checked={sel.has(b.id)} onChange={(e) => setSel((s) => { const n = new Set(s); if (e.target.checked) n.add(b.id); else n.delete(b.id); return n })} /></td>
-                  {order.map((k) => <td key={k} className={META_BY_KEY[k]?.numeric ? 'num' : 'l'}>{cell(k, r)}</td>)}
-                </tr>
+                <Fragment key={b.id}>
+                  <tr className={sel.has(b.id) ? 'sel' : ''}>
+                    <td className="l az-cellsticky"><input className="az-check" type="checkbox" checked={sel.has(b.id)} onChange={(e) => setSel((s) => { const n = new Set(s); if (e.target.checked) n.add(b.id); else n.delete(b.id); return n })} /></td>
+                    {order.map((k) => <td key={k} className={META_BY_KEY[k]?.numeric ? 'num' : 'l'}>{cell(k, r)}</td>)}
+                  </tr>
+                  {isOpen && (data === undefined || data === 'loading') && <tr className="childrow"><td className="l az-cellsticky" /><td className="l" colSpan={order.length}><span className="childmsg">Loading ad groups…</span></td></tr>}
+                  {isOpen && data === 'error' && <tr className="childrow"><td className="l az-cellsticky" /><td className="l" colSpan={order.length}><span className="childmsg">Couldn’t load ad groups.</span></td></tr>}
+                  {isOpen && Array.isArray(data) && data.length === 0 && <tr className="childrow"><td className="l az-cellsticky" /><td className="l" colSpan={order.length}><span className="childmsg">No ad groups in this campaign.</span></td></tr>}
+                  {isOpen && Array.isArray(data) && data.map((g) => (
+                    <tr key={g.id} className="childrow">
+                      <td className="l az-cellsticky" />
+                      {order.map((k) => <td key={k} className={META_BY_KEY[k]?.numeric ? 'num' : 'l'}>{childCell(k, g, b.id)}</td>)}
+                    </tr>
+                  ))}
+                </Fragment>
               )
             })}
           </tbody>

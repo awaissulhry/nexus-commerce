@@ -249,3 +249,19 @@
 .az-pager .nav button:hover:not(:disabled) { background: var(--bg3); }
 .az-pager .nav button:disabled { opacity: .4; cursor: default; }
 .az-pager .pg { padding: 0 10px; font-variant-numeric: tabular-nums; font-weight: 500; }
+
+/* ── EXPANDABLE ROWS → ad groups (Cloudscape tree pattern) ──── */
+.az-expand { background: none; border: 0; color: var(--ink2); cursor: pointer; padding: 2px; margin-right: 2px; display: inline-grid; place-items: center; border-radius: 4px; transition: transform .12s; flex: none; }
+.az-expand:hover { background: var(--bg2); color: var(--ink); }
+.az-expand.open { transform: rotate(90deg); }
+.az-table tbody tr.childrow td { background: #fbfcfc; border-bottom: 1px solid var(--divider); padding-top: 9px; padding-bottom: 9px; }
+.az-table tbody tr.childrow:hover td { background: #f3f6f6; }
+.az-table tbody tr.childrow .az-cellsticky { background: #fbfcfc; }
+.az-table tbody tr.childrow:hover .az-cellsticky { background: #f3f6f6; }
+.childname { display: inline-flex; align-items: center; gap: 7px; padding-left: 32px; position: relative; font-weight: 500; }
+.childname::before { content: ''; position: absolute; left: 15px; top: 50%; width: 11px; height: 1px; background: var(--border); }
+.childname::after { content: ''; position: absolute; left: 15px; top: -10px; bottom: 50%; width: 1px; background: var(--border); }
+.childmsg { padding-left: 32px; color: var(--ink2); }
+.az-toggle.sm { width: 34px; height: 18px; }
+.az-toggle.sm i { width: 14px; height: 14px; top: 2px; }
+.az-toggle.sm.on i { left: 18px; }
