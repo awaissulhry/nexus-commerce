@@ -1,76 +1,96 @@
 /**
- * Phase 4 — Redis read-through cache for the hot advertising aggregations.
+ * Phase 4 — two-tier read cache for the hot advertising aggregations.
  *
- * The campaign/ad-group surfaces aggregate AmazonAdsDailyPerformance on every
- * request. Those queries are indexed but the DB compute is contended, so the
- * SAME query swings 1–4s. Caching the response in Redis (co-located in EU,
- * <5ms reads) makes loads fast AND consistent, and absorbs the DB variance.
+ * The campaign/ad-group surfaces re-aggregate AmazonAdsDailyPerformance (and,
+ * for ad groups, the whole campaign's siblings) on every request. Those queries
+ * are indexed but the DB compute is contended, so the SAME query swings 1–4s+.
  *
- * - cached(): read-through with a short TTL. JSON-serialisable values only
- *   (the ad endpoints already stringify BigInt costMicros before returning).
- * - flushAdsCache(): wipe all ads keys — called after any successful mutation
- *   so an operator never sees a stale number right after an edit.
+ * - L1 = in-process memory cache (Map). Always available, instant (no network),
+ *   works even when Redis is down. This is the primary speed layer for a single
+ *   API instance — and it's what actually makes the ad-group page fast when
+ *   Redis is unreachable on prod.
+ * - L2 = Redis. Shared across instances when reachable; every op is time-boxed
+ *   (ioredis offline-queues commands, so a bare await PENDS forever when Redis
+ *   is down — that hung the endpoints) + a circuit breaker bypasses it after
+ *   repeated failures.
  *
- * Every Redis op is wrapped so a Redis hiccup degrades to a direct DB read
- * rather than an error.
+ * flushAdsCache() clears BOTH tiers after any successful mutation so an operator
+ * never sees a stale number right after an edit.
  */
 import { redis } from '../../lib/queue.js'
 import { logger } from '../../utils/logger.js'
 
 const PREFIX = 'adscache:'
 
-// HARD timeout for every Redis op. ioredis offline-queues commands when the
-// server is unreachable, so a bare `await get()` PENDS forever (never throws) —
-// which hung the cached endpoints. Race every op against a short timer so a
-// Redis hiccup degrades to a direct DB read in <150ms instead of hanging.
-const REDIS_OP_TIMEOUT_MS = 150
+// ── L1 in-memory cache ────────────────────────────────────────────────────
+interface MemEntry { val: unknown; exp: number }
+const mem = new Map<string, MemEntry>()
+const MEM_MAX = 1000
+function memGet(key: string): unknown | undefined {
+  const e = mem.get(key)
+  if (!e) return undefined
+  if (Date.now() > e.exp) { mem.delete(key); return undefined }
+  // refresh LRU position
+  mem.delete(key); mem.set(key, e)
+  return e.val
+}
+function memSet(key: string, val: unknown, ttlSec: number): void {
+  if (mem.size >= MEM_MAX) { const oldest = mem.keys().next().value; if (oldest) mem.delete(oldest) }
+  mem.set(key, { val, exp: Date.now() + ttlSec * 1000 })
+}
 
+// ── L2 Redis (time-boxed + circuit breaker) ────────────────────────────────
+const REDIS_OP_TIMEOUT_MS = 150
 function withTimeout<R>(p: Promise<R>, ms: number): Promise<R> {
   return new Promise<R>((resolve, reject) => {
     const t = setTimeout(() => reject(new Error('redis_timeout')), ms)
     p.then((v) => { clearTimeout(t); resolve(v) }, (e) => { clearTimeout(t); reject(e) })
   })
 }
-
-// Circuit breaker — if Redis is persistently unreachable, paying the 150ms
-// timeout on every request is worse than no cache. After 3 consecutive
-// failures, bypass Redis entirely for 30s, then probe again.
 let consecutiveFailures = 0
 let skipUntil = 0
 function redisDisabled(): boolean { return Date.now() < skipUntil }
 function noteRedisResult(ok: boolean): void {
   if (ok) { consecutiveFailures = 0; skipUntil = 0; return }
   consecutiveFailures += 1
-  if (consecutiveFailures >= 3) { skipUntil = Date.now() + 30_000; logger.warn('[ads-cache] Redis circuit OPEN — bypassing cache 30s') }
+  if (consecutiveFailures >= 3) { skipUntil = Date.now() + 30_000; logger.warn('[ads-cache] Redis circuit OPEN — bypassing L2 30s (L1 memory still active)') }
 }
 
 export async function cached<T>(key: string, ttlSec: number, fn: () => Promise<T>): Promise<T> {
-  if (redisDisabled()) return fn()
   const k = PREFIX + key
-  try {
-    const hit = await withTimeout(redis.connection.get(k), REDIS_OP_TIMEOUT_MS)
-    noteRedisResult(true)
-    if (hit != null) return JSON.parse(hit) as T
-  } catch (e) {
-    noteRedisResult(false)
-    logger.debug('[ads-cache] read miss/err', { error: String(e).slice(0, 100) })
+  // L1 — instant, always available.
+  const m = memGet(k)
+  if (m !== undefined) return m as T
+
+  // L2 — Redis, if reachable.
+  if (!redisDisabled()) {
+    try {
+      const hit = await withTimeout(redis.connection.get(k), REDIS_OP_TIMEOUT_MS)
+      noteRedisResult(true)
+      if (hit != null) { const v = JSON.parse(hit) as T; memSet(k, v, ttlSec); return v }
+    } catch (e) {
+      noteRedisResult(false)
+      logger.debug('[ads-cache] L2 read miss/err', { error: String(e).slice(0, 100) })
+    }
   }
+
   const val = await fn()
-  // Fire-and-forget the write so a slow Redis never delays the response.
-  withTimeout(redis.connection.set(k, JSON.stringify(val), 'EX', ttlSec), REDIS_OP_TIMEOUT_MS)
-    .then(() => noteRedisResult(true))
-    .catch((e) => { noteRedisResult(false); logger.debug('[ads-cache] write err', { error: String(e).slice(0, 100) }) })
+  memSet(k, val, ttlSec)
+  if (!redisDisabled()) {
+    // Fire-and-forget the L2 write so a slow Redis never delays the response.
+    withTimeout(redis.connection.set(k, JSON.stringify(val), 'EX', ttlSec), REDIS_OP_TIMEOUT_MS)
+      .then(() => noteRedisResult(true))
+      .catch((e) => { noteRedisResult(false); logger.debug('[ads-cache] L2 write err', { error: String(e).slice(0, 100) }) })
+  }
   return val
 }
 
 let flushing = false
 export async function flushAdsCache(): Promise<void> {
+  mem.clear() // L1 always cleared, synchronously.
   if (flushing || redisDisabled()) return
   flushing = true
   try {
-    // Small keyspace (a few dozen ad keys); scan+del is cheap and avoids KEYS
-    // blocking. SCAN with the prefix, delete in batches. Each op is time-boxed
-    // so an unreachable Redis can't hang the flush (and an unbounded loop).
     let cursor = '0'
     let guard = 0
     do {
@@ -79,7 +99,7 @@ export async function flushAdsCache(): Promise<void> {
       if (keys.length) await withTimeout(redis.connection.del(...keys), REDIS_OP_TIMEOUT_MS)
     } while (cursor !== '0' && ++guard < 100)
   } catch (e) {
-    logger.debug('[ads-cache] flush err', { error: String(e).slice(0, 100) })
+    logger.debug('[ads-cache] L2 flush err', { error: String(e).slice(0, 100) })
   } finally {
     flushing = false
   }
