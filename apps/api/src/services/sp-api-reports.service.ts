@@ -164,8 +164,20 @@ export async function fetchSpApiReport<T = unknown>(
       break
     }
     if (status === 'CANCELLED' || status === 'FATAL') {
+      // FATAL reports often attach an error document explaining WHY (bad
+      // reportOptions, no data for the period, brand not enrolled, …). Surface
+      // it so callers don't have to guess. Best-effort — never mask the original.
+      let detail = ''
+      const errDocId: string | undefined = statusRes?.reportDocumentId
+      if (errDocId) {
+        try {
+          const d: any = await (sp as any).callAPI({ operation: 'getReportDocument', endpoint: 'reports', path: { reportDocumentId: errDocId } })
+          const txt: string = typeof d === 'string' ? d : await (sp as any).download(d)
+          if (txt) detail = ` — ${String(txt).slice(0, 500)}`
+        } catch { /* no error document available */ }
+      }
       throw new Error(
-        `sp-api-reports: report ${reportId} ended with terminal status ${status}`,
+        `sp-api-reports: report ${reportId} ended with terminal status ${status}${detail}`,
       )
     }
     // IN_QUEUE / IN_PROGRESS → keep polling
