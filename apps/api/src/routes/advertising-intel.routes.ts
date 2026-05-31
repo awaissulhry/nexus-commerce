@@ -12,6 +12,7 @@ import { computeProductTargetAcos, computeFleetTargetAcos, type AcosMode } from 
 import { simulateAutopilot, applyAutopilot } from '../services/advertising/ads-autopilot.service.js'
 import { envEnabled } from '../utils/env-flag.js'
 import { cronStartupState } from '../jobs/cron-startup-state.js'
+import { amsQueueUrl, isAmsSqsConfigured, sqsUrlFromArn } from '../services/ams-sqs.service.js'
 
 const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
   // Apex — diagnostic probe for the ads-cron gate. Reads the SAME process.env
@@ -29,6 +30,18 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
       adsMode: process.env.NEXUS_AMAZON_ADS_MODE ?? null,
       queueWorkersRaw: process.env.ENABLE_QUEUE_WORKERS ?? null,
       hasRedisUrl: !!process.env.REDIS_URL,
+      // Apex B.1 — why the AMS poller is/ isn't active. amsQueueUrlResolved=true
+      // means we derived a pollable SQS URL (from NEXUS_AMS_SQS_QUEUE_URL or an
+      // SQS NEXUS_AMS_DESTINATION_ARN). pollerActive requires that + AWS creds.
+      ams: {
+        destinationArnSet: !!process.env.NEXUS_AMS_DESTINATION_ARN,
+        destinationArnIsSqs: process.env.NEXUS_AMS_DESTINATION_ARN ? !!sqsUrlFromArn(process.env.NEXUS_AMS_DESTINATION_ARN) : false,
+        explicitQueueUrlSet: !!process.env.NEXUS_AMS_SQS_QUEUE_URL,
+        queueUrlResolved: !!amsQueueUrl(),
+        hasAwsAccessKey: !!process.env.AWS_ACCESS_KEY_ID,
+        hasAwsSecret: !!process.env.AWS_SECRET_ACCESS_KEY,
+        pollerActive: isAmsSqsConfigured(),
+      },
       processUptimeSec: Math.round(process.uptime()),
       nowUtc: new Date().toISOString(),
     }
