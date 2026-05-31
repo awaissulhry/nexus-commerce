@@ -19,20 +19,31 @@ import { logger } from '../../utils/logger.js'
 
 const PREFIX = 'adscache:'
 
+// HARD timeout for every Redis op. ioredis offline-queues commands when the
+// server is unreachable, so a bare `await get()` PENDS forever (never throws) —
+// which hung the cached endpoints. Race every op against a short timer so a
+// Redis hiccup degrades to a direct DB read in <150ms instead of hanging.
+const REDIS_OP_TIMEOUT_MS = 150
+
+function withTimeout<R>(p: Promise<R>, ms: number): Promise<R> {
+  return new Promise<R>((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error('redis_timeout')), ms)
+    p.then((v) => { clearTimeout(t); resolve(v) }, (e) => { clearTimeout(t); reject(e) })
+  })
+}
+
 export async function cached<T>(key: string, ttlSec: number, fn: () => Promise<T>): Promise<T> {
   const k = PREFIX + key
   try {
-    const hit = await redis.connection.get(k)
+    const hit = await withTimeout(redis.connection.get(k), REDIS_OP_TIMEOUT_MS)
     if (hit != null) return JSON.parse(hit) as T
   } catch (e) {
     logger.debug('[ads-cache] read miss/err', { error: String(e).slice(0, 100) })
   }
   const val = await fn()
-  try {
-    await redis.connection.set(k, JSON.stringify(val), 'EX', ttlSec)
-  } catch (e) {
-    logger.debug('[ads-cache] write err', { error: String(e).slice(0, 100) })
-  }
+  // Fire-and-forget the write so a slow Redis never delays the response.
+  withTimeout(redis.connection.set(k, JSON.stringify(val), 'EX', ttlSec), REDIS_OP_TIMEOUT_MS)
+    .catch((e) => logger.debug('[ads-cache] write err', { error: String(e).slice(0, 100) }))
   return val
 }
 
@@ -42,13 +53,15 @@ export async function flushAdsCache(): Promise<void> {
   flushing = true
   try {
     // Small keyspace (a few dozen ad keys); scan+del is cheap and avoids KEYS
-    // blocking. SCAN with the prefix, delete in batches.
+    // blocking. SCAN with the prefix, delete in batches. Each op is time-boxed
+    // so an unreachable Redis can't hang the flush (and an unbounded loop).
     let cursor = '0'
+    let guard = 0
     do {
-      const [next, keys] = await redis.connection.scan(cursor, 'MATCH', `${PREFIX}*`, 'COUNT', 200)
+      const [next, keys] = await withTimeout(redis.connection.scan(cursor, 'MATCH', `${PREFIX}*`, 'COUNT', 200), REDIS_OP_TIMEOUT_MS)
       cursor = next
-      if (keys.length) await redis.connection.del(...keys)
-    } while (cursor !== '0')
+      if (keys.length) await withTimeout(redis.connection.del(...keys), REDIS_OP_TIMEOUT_MS)
+    } while (cursor !== '0' && ++guard < 100)
   } catch (e) {
     logger.debug('[ads-cache] flush err', { error: String(e).slice(0, 100) })
   } finally {
