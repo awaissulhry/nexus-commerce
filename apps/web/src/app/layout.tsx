@@ -17,6 +17,13 @@ export const metadata: Metadata = {
   description: "Master catalog and multi-channel listing platform",
 };
 
+// PERF (Phase 1) — pin SSR functions to Frankfurt (EU), co-located with the
+// Railway API + DB in europe-west4. Default was US-East (iad1), so every server
+// render did a transatlantic round trip to the API on each fetch. Operators are
+// EU-based, so this speeds up the whole app, not just advertising. Cascades to
+// all nested routes.
+export const preferredRegion = "fra1";
+
 export default async function RootLayout({
   children,
 }: {
