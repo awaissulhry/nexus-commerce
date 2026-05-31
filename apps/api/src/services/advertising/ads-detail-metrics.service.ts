@@ -45,13 +45,17 @@ export async function computeCampaignDetailMetrics(opts: {
   externalCampaignId: string | null
   adGroups: Array<{ id: string; productAdIds: string[] }>
   windowDays: number
+  // DR.1 — explicit Rome-anchored range overrides windowDays when provided.
+  since?: Date
+  until?: Date
 }): Promise<{ campaign: AllocatedMetrics; byAdGroup: Map<string, AllocatedMetrics> }> {
-  const since = windowStart(opts.windowDays)
+  const since = opts.since ?? windowStart(opts.windowDays)
+  const dateFilter = opts.until ? { gte: since, lte: opts.until } : { gte: since }
 
   const cagg = await prisma.amazonAdsDailyPerformance.aggregate({
     where: {
       entityType: 'CAMPAIGN',
-      date: { gte: since },
+      date: dateFilter,
       OR: [
         { localEntityId: opts.campaignId },
         ...(opts.externalCampaignId ? [{ entityId: opts.externalCampaignId }] : []),
@@ -73,7 +77,7 @@ export async function computeCampaignDetailMetrics(opts: {
   if (allAdIds.length) {
     const rows = await prisma.amazonAdsDailyPerformance.groupBy({
       by: ['localEntityId'],
-      where: { entityType: 'PRODUCT_AD', localEntityId: { in: allAdIds }, date: { gte: since } },
+      where: { entityType: 'PRODUCT_AD', localEntityId: { in: allAdIds }, date: dateFilter },
       _sum: { impressions: true, clicks: true, costMicros: true, sales7dCents: true, sales14dCents: true, orders7d: true },
     })
     for (const r of rows) {

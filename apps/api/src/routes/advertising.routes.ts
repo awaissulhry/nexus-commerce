@@ -175,15 +175,15 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   // totals roll up PRODUCT_AD daily rows by ad group (no AD_GROUP daily grain).
   fastify.get('/advertising/campaigns/:id', async (request, reply) => {
     const { id } = request.params as { id: string }
-    const q = request.query as { windowDays?: string }
-    const windowDays = Math.max(1, Math.min(180, Number(q.windowDays) || 30))
-    // Mirror /advertising/trends EXACTLY so the detail KPIs == the chart total.
-    const since = new Date()
-    since.setUTCDate(since.getUTCDate() - windowDays)
-    since.setUTCHours(0, 0, 0, 0)
+    const q = request.query as { windowDays?: string; preset?: string; startDate?: string; endDate?: string }
+    // DR.1 — Rome-anchored range (preset/custom) with windowDays back-compat.
+    const { resolveRange } = await import('../services/advertising/ads-date-range.js')
+    const range = resolveRange(q)
+    const since = range.since
+    const windowDays = range.days
 
     const { cached } = await import('../services/advertising/ads-cache.js')
-    const payload = await cached(`detail:${id}:${windowDays}`, 300, async () => {
+    const payload = await cached(`detail:${id}:${range.sinceStr}:${range.untilStr}`, 300, async () => {
       const campaign = await prisma.campaign.findUnique({
         where: { id },
         include: {
@@ -219,9 +219,11 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
           externalCampaignId: campaign.externalCampaignId,
           adGroups: campaign.adGroups.map((g) => ({ id: g.id, productAdIds: g.productAds.map((pa) => pa.id) })),
           windowDays,
+          since: range.since,
+          until: range.until,
         }),
         prisma.amazonAdsDailyPerformance.aggregate({
-          where: { entityType: 'CAMPAIGN', date: { gte: since }, ...campaignWhere },
+          where: { entityType: 'CAMPAIGN', date: { gte: since, lte: range.until }, ...campaignWhere },
           _max: { date: true }, // AME.4 — data-freshness signal for the detail UI
         }),
       ])
@@ -244,6 +246,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
           metricsWindowDays: windowDays,
           metricsSource: 'daily_performance',
           dataThrough: fresh._max.date ? fresh._max.date.toISOString().slice(0, 10) : null,
+          range: { preset: range.preset, startDate: range.sinceStr, endDate: range.untilStr, includesToday: range.includesToday },
         },
       }
     })
@@ -259,12 +262,14 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   // and campaign context. Search-terms/negatives/history load lazily.
   fastify.get('/advertising/ad-groups/:id', async (request, reply) => {
     const { id } = request.params as { id: string }
-    const q = request.query as { windowDays?: string }
-    const windowDays = Math.max(1, Math.min(180, Number(q.windowDays) || 30))
-    const since = new Date(); since.setUTCDate(since.getUTCDate() - windowDays); since.setUTCHours(0, 0, 0, 0)
+    const q = request.query as { windowDays?: string; preset?: string; startDate?: string; endDate?: string }
+    const { resolveRange } = await import('../services/advertising/ads-date-range.js')
+    const range = resolveRange(q)
+    const since = range.since
+    const windowDays = range.days
 
     const { cached: cachedAg } = await import('../services/advertising/ads-cache.js')
-    const agPayload = await cachedAg(`adgroup:${id}:${windowDays}`, 300, async () => {
+    const agPayload = await cachedAg(`adgroup:${id}:${range.sinceStr}:${range.untilStr}`, 300, async () => {
     const adGroup = await prisma.adGroup.findUnique({
       where: { id },
       include: {
@@ -276,15 +281,16 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     if (!adGroup) return null
 
     const adIds = adGroup.productAds.map((a) => a.id)
+    const agDateFilter = { gte: since, lte: range.until }
     const [perAd, trendRaw, siblings] = await Promise.all([
       adIds.length ? prisma.amazonAdsDailyPerformance.groupBy({
         by: ['localEntityId'],
-        where: { entityType: 'PRODUCT_AD', localEntityId: { in: adIds }, date: { gte: since } },
+        where: { entityType: 'PRODUCT_AD', localEntityId: { in: adIds }, date: agDateFilter },
         _sum: { costMicros: true, sales7dCents: true, sales14dCents: true, impressions: true, clicks: true, orders7d: true },
       }) : Promise.resolve([]),
       adIds.length ? prisma.amazonAdsDailyPerformance.groupBy({
         by: ['date'],
-        where: { entityType: 'PRODUCT_AD', localEntityId: { in: adIds }, date: { gte: since } },
+        where: { entityType: 'PRODUCT_AD', localEntityId: { in: adIds }, date: agDateFilter },
         _sum: { costMicros: true, sales7dCents: true, sales14dCents: true, impressions: true, clicks: true, orders7d: true },
         orderBy: { date: 'asc' },
       }) : Promise.resolve([]),
@@ -302,6 +308,8 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       externalCampaignId: adGroup.campaign.externalCampaignId,
       adGroups: siblings.map((s) => ({ id: s.id, productAdIds: s.productAds.map((p) => p.id) })),
       windowDays,
+      since: range.since,
+      until: range.until,
     })
     const agMetrics = byAdGroup.get(adGroup.id) ?? { impressions: 0, clicks: 0, spendCents: 0, salesCents: 0, orders: 0, acos: null, roas: null }
 
@@ -343,6 +351,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
         targets: adGroup.targets,
         trend,
         windowDays,
+        range: { preset: range.preset, startDate: range.sinceStr, endDate: range.untilStr, includesToday: range.includesToday },
         dataThrough: trendRaw.length ? trendRaw[trendRaw.length - 1]!.date.toISOString().slice(0, 10) : null,
       },
     }
@@ -871,21 +880,18 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   // the requested window. Keyed by externalCampaignId so the campaigns
   // page server component can merge into its existing campaign list.
   fastify.get('/advertising/campaigns/v1-metrics', async (request, reply) => {
-    const query = request.query as { windowDays?: string; marketplace?: string }
-    const windowDays = query.windowDays
-      ? Math.max(1, Math.min(180, Number(query.windowDays)))
-      : 7
-
-    const since = new Date()
-    since.setUTCDate(since.getUTCDate() - windowDays)
-    since.setUTCHours(0, 0, 0, 0)
+    const query = request.query as { windowDays?: string; marketplace?: string; preset?: string; startDate?: string; endDate?: string }
+    const { resolveRange } = await import('../services/advertising/ads-date-range.js')
+    const range = resolveRange(query)
+    const since = range.since
+    const windowDays = range.days
 
     const { cached } = await import('../services/advertising/ads-cache.js')
-    const payload = await cached(`v1metrics:${windowDays}:${query.marketplace ?? ''}`, 300, async () => {
+    const payload = await cached(`v1metrics:${range.sinceStr}:${range.untilStr}:${query.marketplace ?? ''}`, 300, async () => {
     const rows = await prisma.amazonAdsDailyPerformance.groupBy({
       by: ['entityId', 'adProduct', 'marketplace', 'currencyCode'],
       where: {
-        date: { gte: since },
+        date: { gte: since, lte: range.until },
         entityType: 'CAMPAIGN',
         ...(query.marketplace ? { marketplace: query.marketplace } : {}),
       },
@@ -1856,11 +1862,15 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       currencyCode?: string
       campaignId?: string
       compare?: string
+      preset?: string
+      startDate?: string
+      endDate?: string
     }
-    const windowDays = Math.max(7, Math.min(180, Number(query.windowDays ?? 30)))
-    const since = new Date()
-    since.setUTCDate(since.getUTCDate() - windowDays)
-    since.setUTCHours(0, 0, 0, 0)
+    const { resolveRange } = await import('../services/advertising/ads-date-range.js')
+    const range = resolveRange(query)
+    const windowDays = range.days
+    const since = range.since
+    const until = range.until
 
     // CD.1 — optional per-campaign scope. Resolve the campaign so we can
     // filter the daily-perf rows to it (localEntityId is the indexed FK to
@@ -1885,13 +1895,13 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       : {}
 
     const { cached: cachedTrends } = await import('../services/advertising/ads-cache.js')
-    const trendsKey = `trends:${query.campaignId ?? ''}:${windowDays}:${query.marketplace ?? ''}:${query.adProduct ?? ''}:${query.currencyCode ?? ''}:${query.compare ?? ''}`
+    const trendsKey = `trends:${query.campaignId ?? ''}:${range.sinceStr}:${range.untilStr}:${query.marketplace ?? ''}:${query.adProduct ?? ''}:${query.currencyCode ?? ''}:${query.compare ?? ''}`
     const result = await cachedTrends(trendsKey, 300, async () => {
     // ── Ad performance per day ──────────────────────────────────────────
     const perfByDay = await prisma.amazonAdsDailyPerformance.groupBy({
       by: ['date'],
       where: {
-        date: { gte: since },
+        date: { gte: since, lte: until },
         entityType: 'CAMPAIGN',
         ...campaignWhere,
         ...(query.marketplace ? { marketplace: query.marketplace } : {}),
@@ -1914,7 +1924,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const salesByDay = campaignScope ? [] : await prisma.dailySalesAggregate.groupBy({
       by: ['day'],
       where: {
-        day:     { gte: since },
+        day:     { gte: since, lte: until },
         channel: 'AMAZON',
         ...(query.marketplace ? { marketplace: query.marketplace } : {}),
       },
@@ -2005,7 +2015,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       )
     }
 
-    return { windowDays, count: rows.length, rows, summary: curSummary, previous }
+    return { windowDays, count: rows.length, rows, summary: curSummary, previous, range: { preset: range.preset, startDate: range.sinceStr, endDate: range.untilStr, includesToday: range.includesToday } }
     })
     reply.header('Cache-Control', 'private, max-age=60')
     return result
