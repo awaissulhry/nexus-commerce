@@ -1,6 +1,6 @@
 Apex advertising — force Vercel production rebuild of main.
-Deploys the web app with all changes through Track C + D.2
+Deploys the web app with all changes through Track C + D.2 + F.3
 (LiveWritesPanel, Amazon bid-rec chip, profit/Bayesian optimizer surfaces,
-date-range pickers). Bump this file to force a fresh Vercel deploy.
+date-range pickers, Autopilot cockpit + sidebar entry).
 
-marker: 2026-05-31 apex-D.2
+marker: 2026-05-31 apex-F3-autopilot
