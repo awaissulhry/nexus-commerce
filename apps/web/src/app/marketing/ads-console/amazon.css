@@ -1,0 +1,127 @@
+/**
+ * Amazon-Ads-faithful console styling. Tokens + components extracted from the
+ * real Amazon Ads Campaigns page (Amazon Ember font, their palette, Balham-style
+ * grid). Everything scoped under .az-root so it can't leak into the rest of the
+ * app. @font-face is global (just registers "Amazon Ember"; only used here).
+ */
+
+/* Real Amazon Ember from Amazon's font CDN (graceful fallback to Helvetica). */
+@font-face { font-family: 'Amazon Ember'; font-weight: 400; font-display: swap; src: url(https://m.media-amazon.com/images/S/sash/pDxWAF1pBB0dzGB.woff2) format('woff2'); }
+@font-face { font-family: 'Amazon Ember'; font-weight: 500; font-display: swap; src: url(https://m.media-amazon.com/images/S/sash/VjTR4RqBzY0mUYx.woff2) format('woff2'); }
+@font-face { font-family: 'Amazon Ember'; font-weight: 700; font-display: swap; src: url(https://m.media-amazon.com/images/S/sash/KFPk-9IF4FqAqY-.woff2) format('woff2'); }
+
+.az-root {
+  --ink: #0f1111; --ink2: #565959; --ink3: #6f7373;
+  --border: #d5d9d9; --divider: #e7e7e7; --bg: #ffffff; --bg2: #f0f2f2; --bg3: #f7f8f8;
+  --link: #0a7cd1; --link-hover: #c45500; --navy: #232f3e; --navy2: #37475a;
+  --green: #067d62; --green-bg: #e8f3ee; --amber: #b46f00; --orange: #ff9900;
+  --blue: #1c89e3; --focus: #e77600;
+  --radius: 8px;
+  height: 100vh; overflow: hidden; display: flex; flex-direction: column;
+  background: var(--bg); color: var(--ink);
+  font-family: 'Amazon Ember', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  font-size: 13px; line-height: 1.45; -webkit-font-smoothing: antialiased;
+}
+.az-root * { box-sizing: border-box; }
+.az-root a { color: var(--link); text-decoration: none; }
+.az-root a:hover { color: var(--link-hover); text-decoration: underline; }
+.az-root svg { vertical-align: middle; }
+
+/* ── TOP BAR ───────────────────────────────────────────────── */
+.az-top { height: 48px; flex: none; background: var(--navy); color: #fff; display: flex; align-items: center; gap: 0; padding: 0 14px; }
+.az-top .brand { font-weight: 700; font-size: 16px; letter-spacing: .2px; display: flex; align-items: center; gap: 8px; color: #fff; }
+.az-top .brand .mk { color: var(--orange); }
+.az-top .crumb { margin-left: 18px; font-weight: 700; font-size: 14px; color: #fff; }
+.az-top .home { margin-left: 10px; opacity: .85; display: inline-flex; }
+.az-top .sp { flex: 1; }
+.az-top .acct { text-align: right; line-height: 1.2; margin-right: 14px; }
+.az-top .acct .n { font-weight: 700; font-size: 12.5px; }
+.az-top .acct .s { font-size: 11px; color: #c9d1d9; }
+.az-top .ti { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; color: #fff; opacity: .9; cursor: pointer; }
+.az-top .ti:hover { background: rgba(255,255,255,.12); }
+
+/* ── BODY: icon rail + nav + content ───────────────────────── */
+.az-body { flex: 1; display: flex; min-height: 0; }
+.az-rail { width: 56px; flex: none; background: #fff; border-right: 1px solid var(--divider); display: flex; flex-direction: column; align-items: center; padding-top: 10px; gap: 4px; }
+.az-rail .ri { width: 40px; height: 40px; border-radius: 8px; display: grid; place-items: center; color: var(--ink2); cursor: pointer; }
+.az-rail .ri:hover { background: var(--bg2); }
+.az-rail .ri.on { color: var(--orange); }
+.az-nav { width: 208px; flex: none; background: #fff; border-right: 1px solid var(--divider); padding: 10px 8px; overflow-y: auto; }
+.az-nav .collapse { display: flex; justify-content: flex-end; color: var(--ink2); padding: 2px 6px 8px; }
+.az-nav a { display: block; padding: 9px 12px; border-radius: 8px; color: var(--ink); font-weight: 500; font-size: 13.5px; cursor: pointer; }
+.az-nav a:hover { background: var(--bg3); text-decoration: none; }
+.az-nav a.on { background: var(--bg2); font-weight: 700; }
+.az-content { flex: 1; overflow: auto; background: #fff; min-width: 0; }
+.az-wrap { padding: 16px 20px 60px; }
+
+/* ── AD-TYPE TABS ──────────────────────────────────────────── */
+.az-tabs { display: flex; gap: 10px; padding: 6px 0 16px; }
+.az-tab { display: inline-flex; align-items: center; gap: 7px; border: 1px solid var(--border); background: #fff; border-radius: 18px; padding: 7px 16px; font-weight: 500; font-size: 13px; color: var(--ink); cursor: pointer; }
+.az-tab:hover { background: var(--bg3); }
+.az-tab.on { border: 1.5px solid var(--ink); font-weight: 700; }
+.az-tab .ck { color: var(--ink); display: inline-flex; }
+
+/* ── BUTTONS / CONTROLS ────────────────────────────────────── */
+.az-btn { display: inline-flex; align-items: center; gap: 7px; border: 1px solid var(--border); background: #fff; border-radius: 18px; padding: 7px 14px; font-weight: 500; font-size: 13px; color: var(--ink); cursor: pointer; font-family: inherit; white-space: nowrap; }
+.az-btn:hover { background: var(--bg3); }
+.az-btn.dark { background: var(--ink); color: #fff; border-color: var(--ink); border-radius: 20px; padding: 8px 18px; font-weight: 500; }
+.az-btn.dark:hover { background: #000; }
+.az-btn svg { width: 15px; height: 15px; }
+.az-link { color: var(--link); font-weight: 500; cursor: pointer; background: none; border: 0; font: inherit; }
+.az-link:hover { color: var(--link-hover); text-decoration: underline; }
+.az-search { display: flex; align-items: center; gap: 8px; border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; background: #fff; min-width: 280px; color: var(--ink2); }
+.az-search:focus-within { border-color: var(--focus); box-shadow: 0 0 0 2px rgba(231,118,0,.25); }
+.az-search input { border: 0; outline: 0; font: inherit; flex: 1; color: var(--ink); background: transparent; }
+.az-iconbtn { width: 34px; height: 34px; border: 1px solid var(--border); border-radius: 8px; background: #fff; display: grid; place-items: center; color: var(--ink2); cursor: pointer; }
+.az-iconbtn:hover { background: var(--bg3); }
+
+/* ── TABLE TOOLBAR ─────────────────────────────────────────── */
+.az-listhead { display: flex; align-items: center; gap: 12px; padding: 8px 0 12px; flex-wrap: wrap; }
+.az-listhead .title { font-size: 19px; font-weight: 700; display: inline-flex; align-items: center; gap: 6px; }
+.az-tbar2 { display: flex; align-items: center; gap: 14px; justify-content: flex-end; padding: 0 0 10px; color: var(--ink); flex-wrap: wrap; }
+.az-tbar2 .ctl { display: inline-flex; align-items: center; gap: 6px; font-weight: 500; cursor: pointer; }
+.az-tbar2 .ctl:hover { color: var(--link-hover); }
+
+/* ── TABLE (Balham-faithful) ───────────────────────────────── */
+.az-tablewrap { border: 1px solid var(--divider); border-radius: 2px; overflow-x: auto; }
+.az-table { width: 100%; border-collapse: collapse; font-size: 13px; white-space: nowrap; min-width: max-content; }
+.az-table thead th { position: sticky; top: 0; z-index: 2; background: #fff; text-align: right; color: var(--ink); font-weight: 700; font-size: 12px; padding: 12px 14px; border-bottom: 2px solid var(--border); cursor: pointer; user-select: none; vertical-align: bottom; }
+.az-table thead th.l { text-align: left; }
+.az-table thead th .info { color: var(--ink3); margin-left: 4px; }
+.az-table thead th.sorted { color: var(--ink); }
+.az-table tbody td { padding: 11px 14px; border-bottom: 1px solid var(--divider); text-align: right; vertical-align: middle; color: var(--ink); }
+.az-table tbody td.l { text-align: left; }
+.az-table tbody tr:hover { background: #f7fafa; }
+.az-table tbody tr.sel { background: #e3f3ff; }
+.az-table .num { font-variant-numeric: tabular-nums; }
+.az-table .cn { color: var(--link); font-weight: 500; cursor: pointer; }
+.az-table .cn:hover { color: var(--link-hover); text-decoration: underline; }
+.az-table .sub { color: var(--ink2); font-size: 11.5px; }
+.az-cellsticky { position: sticky; left: 0; background: #fff; z-index: 1; }
+.az-table tbody tr:hover .az-cellsticky { background: #f7fafa; }
+.az-check { width: 16px; height: 16px; accent-color: var(--blue); cursor: pointer; }
+.az-kebab { color: var(--ink2); cursor: pointer; padding: 2px; border-radius: 4px; background: none; border: 0; }
+.az-kebab:hover { background: var(--bg2); }
+
+/* status badge */
+.az-badge { display: inline-flex; align-items: center; gap: 5px; border-radius: 4px; padding: 3px 9px; font-weight: 500; font-size: 12px; }
+.az-badge.deliver { background: var(--green-bg); color: var(--green); }
+.az-badge.paused { background: var(--bg2); color: var(--ink2); }
+.az-badge.warn { background: #fdf3e7; color: var(--amber); }
+.az-badge .i { color: inherit; opacity: .7; }
+
+/* Amazon-style on/off toggle */
+.az-toggle { position: relative; width: 38px; height: 20px; border-radius: 12px; background: #687070; border: 0; cursor: pointer; padding: 0; transition: background .15s; flex: none; }
+.az-toggle i { position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: left .15s; box-shadow: 0 1px 2px rgba(0,0,0,.3); }
+.az-toggle.on { background: var(--blue); }
+.az-toggle.on i { left: 20px; }
+.az-toggle:disabled { opacity: .5; cursor: default; }
+
+/* inline editable cell (budget) */
+.az-edit { width: 88px; border: 1px solid var(--focus); border-radius: 6px; padding: 4px 7px; font: inherit; text-align: right; box-shadow: 0 0 0 2px rgba(231,118,0,.2); }
+.az-editbtn { background: none; border: 0; font: inherit; color: var(--ink); cursor: pointer; border: 1px solid transparent; border-radius: 6px; padding: 3px 7px; }
+.az-editbtn:hover { border-color: var(--border); background: var(--bg3); }
+
+.az-empty { padding: 48px; text-align: center; color: var(--ink2); }
+.az-spin { animation: az-spin 1s linear infinite; }
+@keyframes az-spin { to { transform: rotate(360deg); } }

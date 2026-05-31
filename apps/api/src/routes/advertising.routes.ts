@@ -156,6 +156,10 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
           // operators to see *why* a campaign isn't serving.
           deliveryStatus: true,
           deliveryReasons: true,
+          // Ads-console table columns (image #6 defaults).
+          startDate: true,
+          endDate: true,
+          portfolioId: true,
           // P2 (Trading Desk Ad Manager): placement multipliers live here.
           dynamicBidding: true,
         },
