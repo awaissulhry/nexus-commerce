@@ -16,6 +16,7 @@ import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import { bulkUpdateAdTargetBids } from './ads-mutation.service.js'
 import { ACTION_HANDLERS, type ActionResult } from '../automation-rule.service.js'
+import { computeAdGroupTargetAcos, type AcosMode } from './ads-target-acos.service.js'
 
 const FLOOR_CENTS = 5
 const MAX_DOWN = 0.5 // never cut a bid by more than 50% in one pass
@@ -26,17 +27,45 @@ export interface BidProposal {
   targetId: string; expression: string; matchType: string
   currentBidCents: number; proposedBidCents: number; deltaCents: number
   acos: number | null; spendCents: number; salesCents: number; clicks: number; reason: string
+  // Apex C.2 — the target ACOS actually used for this target + where it came from.
+  targetAcosUsed: number; targetBasis: 'flat' | 'profit'
 }
 
-export async function previewBidOptimization(opts: { targetAcos?: number; campaignId?: string } = {}): Promise<{ targetAcos: number; proposals: BidProposal[] }> {
-  const targetAcos = opts.targetAcos ?? 0.3 // 30% default
+export async function previewBidOptimization(
+  opts: { targetAcos?: number; campaignId?: string; profitMode?: boolean; mode?: AcosMode } = {},
+): Promise<{ targetAcos: number; profitMode: boolean; proposals: BidProposal[] }> {
+  const flatTargetAcos = opts.targetAcos ?? 0.3 // 30% default fallback
+  const profitMode = opts.profitMode ?? false
   const where: Record<string, unknown> = { status: 'ENABLED', isNegative: false, spendCents: { gt: 0 } }
   if (opts.campaignId) where.adGroup = { campaignId: opts.campaignId }
-  const targets = await prisma.adTarget.findMany({ where, take: 2000, select: { id: true, expressionValue: true, expressionType: true, bidCents: true, spendCents: true, salesCents: true, clicks: true, ordersCount: true } })
+  const targets = await prisma.adTarget.findMany({
+    where, take: 2000,
+    select: {
+      id: true, expressionValue: true, expressionType: true, bidCents: true, spendCents: true,
+      salesCents: true, clicks: true, ordersCount: true, adGroupId: true,
+      adGroup: { select: { campaign: { select: { marketplace: true } } } },
+    },
+  })
+
+  // Apex C.2 — when profitMode, resolve each ad group's profit-derived target
+  // ACOS once (revenue-weighted across its advertised products) and use it
+  // instead of the flat 30%. Falls back to flat per ad group with no profit data.
+  const acosByAdGroup = new Map<string, number>()
+  if (profitMode) {
+    const adGroupIds = [...new Set(targets.map((t) => t.adGroupId))]
+    for (const agId of adGroupIds) {
+      const mkt = targets.find((t) => t.adGroupId === agId)?.adGroup?.campaign?.marketplace ?? null
+      const r = await computeAdGroupTargetAcos(agId, { marketplace: mkt, mode: opts.mode })
+      if (r.targetAcos != null) acosByAdGroup.set(agId, r.targetAcos)
+    }
+  }
 
   const proposals: BidProposal[] = []
   for (const t of targets) {
     if (t.clicks < MIN_CLICKS) continue
+    const fromProfit = profitMode && acosByAdGroup.has(t.adGroupId)
+    const targetAcos = fromProfit ? acosByAdGroup.get(t.adGroupId)! : flatTargetAcos
+    const targetBasis: 'flat' | 'profit' = fromProfit ? 'profit' : 'flat'
     const acos = t.salesCents > 0 ? t.spendCents / t.salesCents : null
     let proposed = t.bidCents
     let reason = ''
@@ -47,17 +76,17 @@ export async function previewBidOptimization(opts: { targetAcos?: number; campai
     } else if (acos != null && acos > targetAcos) {
       const ratio = Math.max(1 - MAX_DOWN, targetAcos / acos)
       proposed = Math.max(FLOOR_CENTS, Math.round(t.bidCents * ratio))
-      reason = `ACOS ${(acos * 100).toFixed(0)}% > target ${(targetAcos * 100).toFixed(0)}% — lower`
+      reason = `ACOS ${(acos * 100).toFixed(0)}% > target ${(targetAcos * 100).toFixed(0)}%${fromProfit ? ' (profit-derived)' : ''} — lower`
     } else if (acos != null && acos < targetAcos && t.ordersCount >= 1) {
       const ratio = Math.min(1 + MAX_UP, targetAcos / acos)
       proposed = Math.round(t.bidCents * ratio)
-      reason = `ACOS ${(acos * 100).toFixed(0)}% < target — raise to capture volume`
+      reason = `ACOS ${(acos * 100).toFixed(0)}% < target ${(targetAcos * 100).toFixed(0)}%${fromProfit ? ' (profit-derived)' : ''} — raise to capture volume`
     } else continue
     if (proposed === t.bidCents) continue
-    proposals.push({ targetId: t.id, expression: t.expressionValue, matchType: t.expressionType, currentBidCents: t.bidCents, proposedBidCents: proposed, deltaCents: proposed - t.bidCents, acos, spendCents: t.spendCents, salesCents: t.salesCents, clicks: t.clicks, reason })
+    proposals.push({ targetId: t.id, expression: t.expressionValue, matchType: t.expressionType, currentBidCents: t.bidCents, proposedBidCents: proposed, deltaCents: proposed - t.bidCents, acos, spendCents: t.spendCents, salesCents: t.salesCents, clicks: t.clicks, reason, targetAcosUsed: targetAcos, targetBasis })
   }
   proposals.sort((a, b) => Math.abs(b.deltaCents) - Math.abs(a.deltaCents))
-  return { targetAcos, proposals }
+  return { targetAcos: flatTargetAcos, profitMode, proposals }
 }
 
 export async function applyBidOptimization(args: { changes: Array<{ targetId: string; proposedBidCents: number }>; actor?: string; dryRun?: boolean }): Promise<{ applied: number; dryRun: boolean }> {
@@ -73,7 +102,10 @@ export async function applyBidOptimization(args: { changes: Array<{ targetId: st
 ACTION_HANDLERS.bid_to_target_acos = async (action, _context, meta): Promise<ActionResult> => {
   const targetAcos = typeof action.targetAcos === 'number' ? (action.targetAcos as number) : 0.3
   const campaignId = typeof action.campaignId === 'string' ? (action.campaignId as string) : undefined
-  const { proposals } = await previewBidOptimization({ targetAcos, campaignId })
+  // Apex C.2 — a rule can opt into profit-native per-SKU target ACOS.
+  const profitMode = action.profitMode === true || action.profitMode === 'true'
+  const mode = typeof action.acosMode === 'string' ? (action.acosMode as AcosMode) : undefined
+  const { proposals } = await previewBidOptimization({ targetAcos, campaignId, profitMode, mode })
   if (meta.dryRun) return { type: action.type, ok: true, output: { dryRun: true, wouldChange: proposals.length, sample: proposals.slice(0, 5) } }
   const r = await applyBidOptimization({ changes: proposals.map((p) => ({ targetId: p.targetId, proposedBidCents: p.proposedBidCents })), actor: `automation:${meta.ruleId}` })
   return { type: action.type, ok: true, output: { applied: r.applied } }
