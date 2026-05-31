@@ -35,7 +35,7 @@ const GROUPS: Group[] = [
     { label: 'Analytics', href: `${BASE}/analytics`, icon: BarChart3, native: true },
   ] },
   { label: 'Setup', items: [
-    { label: 'Settings', href: '/marketing/advertising/debug', icon: Settings },
+    { label: 'Settings', href: `${BASE}/settings`, icon: Settings, native: true },
   ] },
 ]
 
@@ -86,7 +86,7 @@ export function TradingDeskSidebar() {
         <a className="classic" href="/marketing/advertising" target="_blank" rel="noopener noreferrer">
           <ArrowUpRight size={12} /> Classic Advertising
         </a>
-        <div className="hint">↗ items open the current tool in a new tab until rebuilt here.</div>
+        <div className="hint">Every surface is native now. Classic Advertising stays for anything not yet ported.</div>
       </div>
 
       <div className="acct">

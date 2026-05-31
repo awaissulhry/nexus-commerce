@@ -45,7 +45,7 @@ const AREAS: Area[] = [
   { title: 'Automation', desc: 'Rules, goals, dayparting, budget pacing & retail-aware guards — each with auto-apply.', href: '/marketing/trading-desk/automation', icon: Wand2, native: true },
   { title: 'Competitive', desc: 'Share of Voice, SQP & competitor moves feeding top-of-search defense.', href: '/marketing/trading-desk/competitive', icon: Crosshair, native: true },
   { title: 'Analytics', desc: 'Trends, true profit, search terms & reports — profit-native by default.', href: '/marketing/trading-desk/analytics', icon: BarChart3, native: true },
-  { title: 'Settings', desc: 'Connections, live-write gates, budget caps & tags.', href: '/marketing/advertising/debug', icon: Settings },
+  { title: 'Settings', desc: 'Connections, live-write gates, budget caps & tags.', href: '/marketing/trading-desk/settings', icon: Settings, native: true },
 ]
 
 export default async function TradingDeskDashboard() {
