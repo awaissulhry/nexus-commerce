@@ -49,12 +49,15 @@ const fmt = (unit: string, v: number | null) => {
 }
 
 export function CampaignTrendChart({
-  rows, windowDays, onWindowChange, loading,
+  rows, windowDays, onWindowChange, loading, hideWindow = false,
 }: {
   rows: TrendRow[] | null
   windowDays: number
   onWindowChange: (w: number) => void
   loading: boolean
+  // DR.2 — hide the built-in 7/14/30/60/90 buttons when an external
+  // DateRangePicker is the single source of truth for the window.
+  hideWindow?: boolean
 }) {
   const [active, setActive] = useState<Set<MetricKey>>(() => new Set<MetricKey>(['spend', 'sales', 'clicks']))
 
@@ -93,7 +96,7 @@ export function CampaignTrendChart({
             </button>
           ))}
         </div>
-        <div className="inline-flex items-center gap-1">
+        <div className="inline-flex items-center gap-1" hidden={hideWindow}>
           {TREND_WINDOWS.map((w) => (
             <button key={w} onClick={() => onWindowChange(w)}
               className={`px-2 py-0.5 text-xs rounded border ${windowDays === w ? 'border-blue-500 text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/40' : 'border-slate-200 dark:border-slate-700 text-slate-500 hover:text-slate-700'}`}>{w}d</button>

@@ -19,6 +19,7 @@ import { useColumnResize } from '@/app/_shared/useColumnResize'
 import { Pause, Play, ChevronsUp, ChevronsDown, Ban, Plus, Search, Download } from 'lucide-react'
 import { StatusChip } from '@/app/_shared/ads-ui'
 import { CampaignTrendChart, type TrendRow } from './CampaignTrendChart'
+import { DateRangePicker, useAdRange, rangeQuery } from '../../_shared/DateRangePicker'
 import { CampaignBudgetPace } from './CampaignBudgetPace'
 import { CampaignRecommendations } from './CampaignRecommendations'
 import { CampaignHealth, type HealthFactor } from './CampaignHealth'
@@ -109,6 +110,9 @@ export function CampaignDetailCockpit({ campaign, history }: { campaign: Campaig
   // (summary + previous → ▲/▼ deltas). Defaults to 30d; window selector lives
   // on the chart and is shared here.
   const [windowDays, setWindowDays] = useState(30)
+  // DR.2 — date-range picker is the single window control (presets + custom).
+  const { range, setRange } = useAdRange()
+  const rq = rangeQuery(range)
   const [trendRows, setTrendRows] = useState<TrendRow[] | null>(null)
   const [trendSummary, setTrendSummary] = useState<TrendSummary | null>(null)
   const [trendPrev, setTrendPrev] = useState<TrendSummary | null>(null)
@@ -116,13 +120,13 @@ export function CampaignDetailCockpit({ campaign, history }: { campaign: Campaig
   const loadTrends = useCallback(async () => {
     setTrendLoading(true)
     try {
-      const r = await fetch(`${getBackendUrl()}/api/advertising/trends?campaignId=${campaign.id}&windowDays=${windowDays}&compare=true`, { cache: 'no-store' })
+      const r = await fetch(`${getBackendUrl()}/api/advertising/trends?campaignId=${campaign.id}&${rq}&compare=true`, { cache: 'no-store' })
         .then((x) => x.json()).catch(() => ({ rows: [] }))
       setTrendRows(r.rows ?? [])
       setTrendSummary(r.summary ?? null)
       setTrendPrev(r.previous ?? null)
     } finally { setTrendLoading(false) }
-  }, [campaign.id, windowDays])
+  }, [campaign.id, rq])
   useEffect(() => { void loadTrends() }, [loadTrends])
 
   // AME.5 — ad-group rows track the chart window so the table never disagrees
@@ -146,10 +150,11 @@ export function CampaignDetailCockpit({ campaign, history }: { campaign: Campaig
   useEffect(() => {
     if (firstWindowRef.current) { firstWindowRef.current = false; return }
     let alive = true
-    void fetch(`${getBackendUrl()}/api/advertising/campaigns/${campaign.id}?windowDays=${windowDays}`, { cache: 'no-store' })
+    // DR.2 — re-pull ad-group rows for the selected range so their metrics match.
+    void fetch(`${getBackendUrl()}/api/advertising/campaigns/${campaign.id}?${rq}`, { cache: 'no-store' })
       .then((x) => x.json()).then((d) => { if (alive && d?.campaign?.adGroups) setAdGroups(d.campaign.adGroups) }).catch(() => {})
     return () => { alive = false }
-  }, [campaign.id, windowDays])
+  }, [campaign.id, rq])
 
   // CD.6 — per-entity sparklines (trailing 14d spend) for the ad-group + target
   // tables, fetched in two batched round-trips and refreshed on live events.
@@ -430,7 +435,10 @@ export function CampaignDetailCockpit({ campaign, history }: { campaign: Campaig
       <Link href="/marketing/advertising/campaigns" className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700 mb-2"><ChevronLeft size={14} /> All campaigns</Link>
       <div className="flex items-start justify-between gap-3">
         <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100">{campaign.name}</h1>
-        <button onClick={() => setCopyOpen(true)} className="inline-flex items-center gap-1 px-2.5 py-1 text-sm rounded-md border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-900 flex-shrink-0"><Copy size={13} /> Copy settings to…</button>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <DateRangePicker value={range} onChange={setRange} dataThrough={trendRows && trendRows.length ? trendRows[trendRows.length - 1]?.date : null} />
+          <button onClick={() => setCopyOpen(true)} className="inline-flex items-center gap-1 px-2.5 py-1 text-sm rounded-md border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-900"><Copy size={13} /> Copy settings to…</button>
+        </div>
       </div>
       {copyOpen && <CampaignCopyModal sourceId={campaign.id} sourceName={campaign.name} marketplace={campaign.marketplace} biddingStrategy={normStrategy} dailyBudget={parseFloat(campaign.dailyBudget || '0')} onClose={() => setCopyOpen(false)} />}
       <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 mt-1 mb-3">
@@ -473,7 +481,7 @@ export function CampaignDetailCockpit({ campaign, history }: { campaign: Campaig
         <div className="flex-1 min-w-0">
           {/* KPI chart header — Amazon-style (metric tiles + windowed line chart). */}
           <KpiStrip tiles={tiles} className="mb-3" />
-          <CampaignTrendChart rows={trendRows} windowDays={windowDays} onWindowChange={setWindowDays} loading={trendLoading} />
+          <CampaignTrendChart rows={trendRows} windowDays={windowDays} onWindowChange={setWindowDays} loading={trendLoading} hideWindow />
           {tab === 'adgroups' && (<>
             <CampaignRecommendations campaignId={campaign.id} onNegate={addNegative} onGoToTab={(t) => setTab(t)} refreshKey={liveTs ?? 0} />
             <CampaignHealth score={healthScore} factors={healthFactors} marketplace={campaign.marketplace} refreshKey={liveTs ?? 0} />
