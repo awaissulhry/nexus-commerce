@@ -17,6 +17,7 @@ import { logger } from '../../utils/logger.js'
 import { bulkUpdateAdTargetBids } from './ads-mutation.service.js'
 import { ACTION_HANDLERS, type ActionResult } from '../automation-rule.service.js'
 import { computeAdGroupTargetAcos, type AcosMode } from './ads-target-acos.service.js'
+import { fitBetaPrior, shrunkConversionRate, dataConfidence } from './ads-bayesian-bidding.service.js'
 
 const FLOOR_CENTS = 5
 const MAX_DOWN = 0.5 // never cut a bid by more than 50% in one pass
@@ -28,14 +29,16 @@ export interface BidProposal {
   currentBidCents: number; proposedBidCents: number; deltaCents: number
   acos: number | null; spendCents: number; salesCents: number; clicks: number; reason: string
   // Apex C.2 — the target ACOS actually used for this target + where it came from.
-  targetAcosUsed: number; targetBasis: 'flat' | 'profit'
+  // Apex C.3 adds 'bayesian' when the decision used a shrunk CR (sparse-data path).
+  targetAcosUsed: number; targetBasis: 'flat' | 'profit' | 'bayesian'
 }
 
 export async function previewBidOptimization(
-  opts: { targetAcos?: number; campaignId?: string; profitMode?: boolean; mode?: AcosMode } = {},
-): Promise<{ targetAcos: number; profitMode: boolean; proposals: BidProposal[] }> {
+  opts: { targetAcos?: number; campaignId?: string; profitMode?: boolean; mode?: AcosMode; bayesian?: boolean } = {},
+): Promise<{ targetAcos: number; profitMode: boolean; bayesian: boolean; proposals: BidProposal[] }> {
   const flatTargetAcos = opts.targetAcos ?? 0.3 // 30% default fallback
   const profitMode = opts.profitMode ?? false
+  const bayesian = opts.bayesian ?? false
   const where: Record<string, unknown> = { status: 'ENABLED', isNegative: false, spendCents: { gt: 0 } }
   if (opts.campaignId) where.adGroup = { campaignId: opts.campaignId }
   const targets = await prisma.adTarget.findMany({
@@ -46,6 +49,21 @@ export async function previewBidOptimization(
       adGroup: { select: { campaign: { select: { marketplace: true } } } },
     },
   })
+
+  // Apex C.3 — Bayesian sparse-data path: fit a pooled CR prior + pool AOV from
+  // the corpus, so we can make a principled (gentle) decision on low-click
+  // targets the flat path skips, using a shrunk CR → expected ACOS instead of
+  // the noisy observed ACOS.
+  const prior = bayesian ? fitBetaPrior(targets.map((t) => ({ orders: t.ordersCount ?? 0, clicks: t.clicks }))) : null
+  let poolAovCents = 5000
+  if (bayesian) {
+    const totOrders = targets.reduce((s, t) => s + (t.ordersCount ?? 0), 0)
+    const totSales = targets.reduce((s, t) => s + t.salesCents, 0)
+    if (totOrders > 0) poolAovCents = Math.round(totSales / totOrders)
+  }
+  // In Bayesian mode a lower click floor still yields a principled estimate (the
+  // prior carries the rest); the flat path needs MIN_CLICKS of its own signal.
+  const clickFloor = bayesian ? 1 : MIN_CLICKS
 
   // Apex C.2 — when profitMode, resolve each ad group's profit-derived target
   // ACOS once (revenue-weighted across its advertised products) and use it
@@ -62,31 +80,55 @@ export async function previewBidOptimization(
 
   const proposals: BidProposal[] = []
   for (const t of targets) {
-    if (t.clicks < MIN_CLICKS) continue
+    if (t.clicks < clickFloor) continue
     const fromProfit = profitMode && acosByAdGroup.has(t.adGroupId)
     const targetAcos = fromProfit ? acosByAdGroup.get(t.adGroupId)! : flatTargetAcos
-    const targetBasis: 'flat' | 'profit' = fromProfit ? 'profit' : 'flat'
-    const acos = t.salesCents > 0 ? t.spendCents / t.salesCents : null
+    const observedAcos = t.salesCents > 0 ? t.spendCents / t.salesCents : null
     let proposed = t.bidCents
     let reason = ''
-    if (t.salesCents === 0) {
+    let targetBasis: 'flat' | 'profit' | 'bayesian' = fromProfit ? 'profit' : 'flat'
+
+    if (bayesian && prior) {
+      // Shrink CR toward the pool, derive an EXPECTED ACOS, and move toward
+      // target. Works even at 0 observed sales (the prior gives a non-zero CR),
+      // so sparse keywords get a gentle, principled bid instead of being skipped
+      // or hard-cut on noise.
+      const crS = shrunkConversionRate(t.ordersCount ?? 0, t.clicks, prior)
+      const aovCents = (t.ordersCount ?? 0) > 0 ? t.salesCents / (t.ordersCount ?? 1) : poolAovCents
+      const expectedSalesCents = t.clicks * crS * aovCents
+      const expAcos = expectedSalesCents > 0 ? t.spendCents / expectedSalesCents : null
+      if (expAcos == null) continue
+      const conf = dataConfidence(t.clicks, prior)
+      targetBasis = 'bayesian'
+      const tag = `Bayesian CR ${(crS * 100).toFixed(1)}% · ${(conf * 100).toFixed(0)}% data-confidence`
+      if (expAcos > targetAcos) {
+        const ratio = Math.max(1 - MAX_DOWN, targetAcos / expAcos)
+        proposed = Math.max(FLOOR_CENTS, Math.round(t.bidCents * ratio))
+        reason = `exp.ACOS ${(expAcos * 100).toFixed(0)}% > target ${(targetAcos * 100).toFixed(0)}% — lower (${tag})`
+      } else if (expAcos < targetAcos) {
+        const ratio = Math.min(1 + MAX_UP, targetAcos / expAcos)
+        proposed = Math.round(t.bidCents * ratio)
+        reason = `exp.ACOS ${(expAcos * 100).toFixed(0)}% < target ${(targetAcos * 100).toFixed(0)}% — raise (${tag})`
+      } else continue
+    } else if (t.salesCents === 0) {
       // Spending with no sales → cut hard toward the floor.
       proposed = Math.max(FLOOR_CENTS, Math.round(t.bidCents * (1 - MAX_DOWN)))
       reason = `${t.clicks} clicks, 0 sales — cut ${Math.round(MAX_DOWN * 100)}%`
-    } else if (acos != null && acos > targetAcos) {
-      const ratio = Math.max(1 - MAX_DOWN, targetAcos / acos)
+    } else if (observedAcos != null && observedAcos > targetAcos) {
+      const ratio = Math.max(1 - MAX_DOWN, targetAcos / observedAcos)
       proposed = Math.max(FLOOR_CENTS, Math.round(t.bidCents * ratio))
-      reason = `ACOS ${(acos * 100).toFixed(0)}% > target ${(targetAcos * 100).toFixed(0)}%${fromProfit ? ' (profit-derived)' : ''} — lower`
-    } else if (acos != null && acos < targetAcos && t.ordersCount >= 1) {
-      const ratio = Math.min(1 + MAX_UP, targetAcos / acos)
+      reason = `ACOS ${(observedAcos * 100).toFixed(0)}% > target ${(targetAcos * 100).toFixed(0)}%${fromProfit ? ' (profit-derived)' : ''} — lower`
+    } else if (observedAcos != null && observedAcos < targetAcos && t.ordersCount >= 1) {
+      const ratio = Math.min(1 + MAX_UP, targetAcos / observedAcos)
       proposed = Math.round(t.bidCents * ratio)
-      reason = `ACOS ${(acos * 100).toFixed(0)}% < target ${(targetAcos * 100).toFixed(0)}%${fromProfit ? ' (profit-derived)' : ''} — raise to capture volume`
+      reason = `ACOS ${(observedAcos * 100).toFixed(0)}% < target ${(targetAcos * 100).toFixed(0)}%${fromProfit ? ' (profit-derived)' : ''} — raise to capture volume`
     } else continue
+    const acos = observedAcos
     if (proposed === t.bidCents) continue
     proposals.push({ targetId: t.id, expression: t.expressionValue, matchType: t.expressionType, currentBidCents: t.bidCents, proposedBidCents: proposed, deltaCents: proposed - t.bidCents, acos, spendCents: t.spendCents, salesCents: t.salesCents, clicks: t.clicks, reason, targetAcosUsed: targetAcos, targetBasis })
   }
   proposals.sort((a, b) => Math.abs(b.deltaCents) - Math.abs(a.deltaCents))
-  return { targetAcos: flatTargetAcos, profitMode, proposals }
+  return { targetAcos: flatTargetAcos, profitMode, bayesian, proposals }
 }
 
 export async function applyBidOptimization(args: { changes: Array<{ targetId: string; proposedBidCents: number }>; actor?: string; dryRun?: boolean }): Promise<{ applied: number; dryRun: boolean }> {
@@ -105,7 +147,9 @@ ACTION_HANDLERS.bid_to_target_acos = async (action, _context, meta): Promise<Act
   // Apex C.2 — a rule can opt into profit-native per-SKU target ACOS.
   const profitMode = action.profitMode === true || action.profitMode === 'true'
   const mode = typeof action.acosMode === 'string' ? (action.acosMode as AcosMode) : undefined
-  const { proposals } = await previewBidOptimization({ targetAcos, campaignId, profitMode, mode })
+  // Apex C.3 — a rule can opt into Bayesian sparse-data handling.
+  const bayesian = action.bayesian === true || action.bayesian === 'true'
+  const { proposals } = await previewBidOptimization({ targetAcos, campaignId, profitMode, mode, bayesian })
   if (meta.dryRun) return { type: action.type, ok: true, output: { dryRun: true, wouldChange: proposals.length, sample: proposals.slice(0, 5) } }
   const r = await applyBidOptimization({ changes: proposals.map((p) => ({ targetId: p.targetId, proposedBidCents: p.proposedBidCents })), actor: `automation:${meta.ruleId}` })
   return { type: action.type, ok: true, output: { applied: r.applied } }

@@ -4131,7 +4131,14 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const q = request.query as Record<string, string | undefined>
     const { previewBidOptimization } = await import('../services/advertising/ads-bid-optimizer.service.js')
     reply.header('Cache-Control', 'private, max-age=30')
-    return previewBidOptimization({ targetAcos: q.targetAcos ? Number(q.targetAcos) : undefined, campaignId: q.campaignId })
+    return previewBidOptimization({
+      targetAcos: q.targetAcos ? Number(q.targetAcos) : undefined,
+      campaignId: q.campaignId,
+      // Apex C.2/C.3 — opt into profit-derived target ACOS and/or Bayesian sparse-data handling.
+      profitMode: q.profitMode === '1' || q.profitMode === 'true',
+      bayesian: q.bayesian === '1' || q.bayesian === 'true',
+      mode: q.mode === 'profit' || q.mode === 'balanced' || q.mode === 'growth' ? q.mode : undefined,
+    })
   })
   fastify.post('/advertising/bid-optimizer/apply', async (request, reply) => {
     const { applyBidOptimization } = await import('../services/advertising/ads-bid-optimizer.service.js')
