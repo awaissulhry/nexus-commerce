@@ -210,3 +210,30 @@
 .az-menu button:hover { background: var(--bg3); }
 .az-menu button.on { background: var(--bg2); font-weight: 700; }
 .az-menu .sep { height: 1px; background: var(--divider); margin: 5px 4px; }
+
+/* ── FILTERS (Filter by panel + active chips + quick chips) ── */
+.az-chips { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 0 0 12px; }
+.az-chips .ql { color: var(--ink3); font-size: 11.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .4px; margin-right: 2px; }
+.az-chip { display: inline-flex; align-items: center; gap: 6px; background: var(--bg2); border: 1px solid var(--border); border-radius: 16px; padding: 4px 6px 4px 12px; font-size: 12.5px; font-weight: 500; color: var(--ink); }
+.az-chip .k { color: var(--ink2); }
+.az-chip .rm { background: none; border: 0; color: var(--ink2); cursor: pointer; display: grid; place-items: center; border-radius: 50%; width: 18px; height: 18px; }
+.az-chip .rm:hover { background: var(--border); color: var(--ink); }
+.az-chip.quick { background: #fff; cursor: pointer; padding: 5px 13px; }
+.az-chip.quick:hover { background: var(--bg3); }
+.az-chip.quick.on { background: var(--navy); color: #fff; border-color: var(--navy); }
+.az-chip .clear { color: var(--link); cursor: pointer; font-weight: 500; }
+
+.az-filterpanel { position: absolute; top: calc(100% + 8px); left: 0; z-index: 30; background: #fff; border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 10px 36px rgba(0,0,0,.2); width: 392px; max-height: 72vh; overflow-y: auto; padding: 6px 16px 14px; }
+.az-fp-sec { padding: 11px 0; border-bottom: 1px solid var(--divider); }
+.az-fp-sec:last-child { border-bottom: 0; }
+.az-fp-sec h4 { font-size: 12px; font-weight: 700; margin: 0 0 6px; color: var(--ink); }
+.az-fp-opt { display: flex; align-items: center; gap: 9px; padding: 5px 2px; cursor: pointer; font-weight: 500; }
+.az-fp-opt:hover { color: var(--link-hover); }
+.az-fp-opt .ct { margin-left: auto; color: var(--ink3); font-weight: 500; }
+.az-fp-row { display: flex; gap: 6px; align-items: center; margin-top: 8px; }
+.az-fp-row select, .az-fp-row input { border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; font: inherit; background: #fff; color: var(--ink); }
+.az-fp-row select { cursor: pointer; }
+.az-fp-row input { width: 84px; }
+.az-fp-mf { display: flex; align-items: center; gap: 6px; background: var(--bg3); border-radius: 6px; padding: 5px 6px 5px 10px; margin-bottom: 5px; font-weight: 500; }
+.az-fp-mf .rm { margin-left: auto; background: none; border: 0; color: var(--ink2); cursor: pointer; display: grid; place-items: center; }
+.az-fp-foot { display: flex; justify-content: space-between; align-items: center; padding-top: 12px; }

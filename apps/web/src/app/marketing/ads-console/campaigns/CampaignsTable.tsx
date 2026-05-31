@@ -11,12 +11,13 @@
  */
 
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
-import { Search, ChevronDown, MoreVertical, RefreshCw, Settings, Download, Filter, Info } from 'lucide-react'
+import { Search, ChevronDown, MoreVertical, RefreshCw, Settings, Download, Filter, Info, X } from 'lucide-react'
 import { marketplaceCountryName } from '@/lib/marketplace-code'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useMarketingEvents } from '@/lib/sync/use-marketing-events'
 import { CustomiseColumns } from './CustomiseColumns'
 import { PerformancePanel } from './PerformancePanel'
+import { FilterPanel, EMPTY_FILTERS, countFilters, STATUS_LABEL, TARGETING_LABEL, METRIC_LABEL, METRIC_UNIT, opSym, type Filters } from './FilterPanel'
 import { META_BY_KEY, DEFAULT_VISIBLE, STORAGE_KEY } from './columns'
 
 interface Placements { tos: number | null; pdp: number | null; ros: number | null }
@@ -52,6 +53,31 @@ const titlecase = (s: string) => s.charAt(0) + s.slice(1).toLowerCase()
 const TD = '/marketing/trading-desk/campaigns'
 const RANGES = [{ d: 1, label: 'Today' }, { d: 7, label: 'Last 7 days' }, { d: 14, label: 'Last 14 days' }, { d: 30, label: 'Last 30 days' }, { d: 60, label: 'Last 60 days' }, { d: 90, label: 'Last 90 days' }]
 
+// delivery-state bucket used by the Filter panel's "Delivery status" section
+const deliveryCategory = (b: Base): string => {
+  if (b.status === 'PAUSED') return 'paused'
+  if (b.status === 'ARCHIVED') return 'archived'
+  if (b.deliveryReasons?.length) return b.deliveryReasons.some((r) => /budget/i.test(r)) ? 'outOfBudget' : 'other'
+  if (b.status === 'DRAFT') return 'other'
+  return 'delivering'
+}
+// metric value in the unit the Filter panel compares against (€ / % / count)
+const metricValue = (x: Row, metric: string): number | null => {
+  switch (metric) {
+    case 'spend': return x.spendC / 100
+    case 'sales': return x.salesC / 100
+    case 'acos': return x.acos != null ? x.acos * 100 : null
+    case 'roas': return x.roas
+    case 'cpc': return x.cpc != null ? x.cpc / 100 : null
+    case 'ctr': return x.ctr != null ? x.ctr * 100 : null
+    case 'clicks': return x.clicks
+    case 'orders': return x.orders
+    case 'impressions': return x.impr
+    case 'budget': return x.budgetC / 100
+    default: return null
+  }
+}
+
 export function CampaignsTable({ initial }: { initial: Base[] }) {
   const [raw, setRaw] = useState<Base[]>(initial)
   const [metrics, setMetrics] = useState<Record<string, V1>>({})
@@ -67,6 +93,8 @@ export function CampaignsTable({ initial }: { initial: Base[] }) {
   const [showCols, setShowCols] = useState(false)
   const [days, setDays] = useState(30)
   const [showRange, setShowRange] = useState(false)
+  const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS)
+  const [showFilter, setShowFilter] = useState(false)
   const rangeLabel = RANGES.find((r) => r.d === days)?.label ?? `Last ${days} days`
 
   // hydrate column prefs from localStorage (client-only → no SSR mismatch)
@@ -146,13 +174,39 @@ export function CampaignsTable({ initial }: { initial: Base[] }) {
     }
   }, [])
 
+  const portfolios = useMemo(() => {
+    const m = new Map<string, number>()
+    for (const b of raw) { const id = b.portfolioId ?? '__none__'; m.set(id, (m.get(id) ?? 0) + 1) }
+    return [...m.entries()].map(([id, count]) => ({ id, label: id === '__none__' ? 'No portfolio' : id, count })).sort((a, b) => b.count - a.count)
+  }, [raw])
+
   const filtered = useMemo(() => {
     let r = rows
     if (tab) r = r.filter((x) => x.b.type === tab)
     if (search.trim()) { const q = search.toLowerCase(); r = r.filter((x) => x.b.name.toLowerCase().includes(q)) }
+    if (filters.statuses.length) r = r.filter((x) => filters.statuses.includes(deliveryCategory(x.b)))
+    if (filters.targeting.length) r = r.filter((x) => filters.targeting.includes(isAuto(x.b.name) ? 'auto' : 'manual'))
+    if (filters.portfolios.length) r = r.filter((x) => filters.portfolios.includes(x.b.portfolioId ?? '__none__'))
+    for (const mf of filters.metrics) r = r.filter((x) => { const v = metricValue(x, mf.metric); if (v == null) return false; return mf.op === 'gte' ? v >= mf.value : v <= mf.value })
     const dir = sortDir === 'asc' ? 1 : -1
     return [...r].sort((a, b) => { const av = sortVal(sortKey, a), bv = sortVal(sortKey, b); return typeof av === 'string' && typeof bv === 'string' ? av.localeCompare(bv) * dir : ((av as number) - (bv as number)) * dir })
-  }, [rows, tab, search, sortKey, sortDir, sortVal])
+  }, [rows, tab, search, filters, sortKey, sortDir, sortVal])
+
+  // active-filter chips (removable) + one-click quick filters
+  const chips: Array<{ id: string; label: string; remove: () => void }> = []
+  filters.statuses.forEach((s) => chips.push({ id: `st:${s}`, label: `Status: ${STATUS_LABEL[s] ?? s}`, remove: () => setFilters({ ...filters, statuses: filters.statuses.filter((x) => x !== s) }) }))
+  filters.targeting.forEach((t) => chips.push({ id: `tg:${t}`, label: `Targeting: ${TARGETING_LABEL[t] ?? t}`, remove: () => setFilters({ ...filters, targeting: filters.targeting.filter((x) => x !== t) }) }))
+  filters.portfolios.forEach((p) => chips.push({ id: `pf:${p}`, label: `Portfolio: ${p === '__none__' ? 'None' : p}`, remove: () => setFilters({ ...filters, portfolios: filters.portfolios.filter((x) => x !== p) }) }))
+  filters.metrics.forEach((mf) => chips.push({ id: `mf:${mf.id}`, label: `${METRIC_LABEL[mf.metric]} ${opSym(mf.op)} ${mf.value}${METRIC_UNIT[mf.metric]}`, remove: () => setFilters({ ...filters, metrics: filters.metrics.filter((x) => x.id !== mf.id) }) }))
+  const toggleArr = (arr: string[], k: string) => (arr.includes(k) ? arr.filter((x) => x !== k) : [...arr, k])
+  const toggleMetricQuick = (metric: string, op: 'gte' | 'lte', value: number) => { const id = `${metric}:${op}:${value}`; setFilters((f) => (f.metrics.some((x) => x.id === id) ? { ...f, metrics: f.metrics.filter((x) => x.id !== id) } : { ...f, metrics: [...f.metrics, { id, metric, op, value }] })) }
+  const QUICK = [
+    { label: 'Enabled', on: filters.statuses.includes('delivering'), toggle: () => setFilters((f) => ({ ...f, statuses: toggleArr(f.statuses, 'delivering') })) },
+    { label: 'Paused', on: filters.statuses.includes('paused'), toggle: () => setFilters((f) => ({ ...f, statuses: toggleArr(f.statuses, 'paused') })) },
+    { label: 'Out of budget', on: filters.statuses.includes('outOfBudget'), toggle: () => setFilters((f) => ({ ...f, statuses: toggleArr(f.statuses, 'outOfBudget') })) },
+    { label: 'ACOS ≥ 40%', on: filters.metrics.some((x) => x.id === 'acos:gte:40'), toggle: () => toggleMetricQuick('acos', 'gte', 40) },
+    { label: 'ROAS ≥ 5×', on: filters.metrics.some((x) => x.id === 'roas:gte:5'), toggle: () => toggleMetricQuick('roas', 'gte', 5) },
+  ]
 
   const order = useMemo(() => ['active', 'name', ...visible.filter((k) => META_BY_KEY[k] && !META_BY_KEY[k].locked)], [visible])
 
@@ -258,7 +312,10 @@ export function CampaignsTable({ initial }: { initial: Base[] }) {
         <span className="title">Campaigns <ChevronDown size={18} /></span>
         <a className="az-btn dark" href="/marketing/advertising/create" target="_blank" rel="noopener noreferrer">Create campaign</a>
         <div className="az-search" style={{ minWidth: 300 }}><Search size={15} /><input placeholder="Find a campaign" value={search} onChange={(e) => setSearch(e.target.value)} /></div>
-        <span className="az-link" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><Filter size={14} />Filter by <ChevronDown size={14} /></span>
+        <span className="az-menuwrap">
+          <span className="az-link" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }} onClick={() => setShowFilter((v) => !v)}><Filter size={14} />Filter by{countFilters(filters) > 0 ? ` (${countFilters(filters)})` : ''} <ChevronDown size={14} /></span>
+          {showFilter && <FilterPanel filters={filters} setFilters={setFilters} portfolios={portfolios} onClose={() => setShowFilter(false)} />}
+        </span>
         {sel.size > 0
           ? <span style={{ display: 'inline-flex', gap: 8, alignItems: 'center' }}><b>{sel.size} selected</b><button className="az-btn" onClick={() => void bulkStatus('ENABLED')}>Enable</button><button className="az-btn" onClick={() => void bulkStatus('PAUSED')}>Pause</button><button className="az-link" onClick={() => setSel(new Set())}>Clear</button></span>
           : <span className="az-link" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, opacity: .6 }}>Bulk actions <ChevronDown size={14} /></span>}
@@ -282,6 +339,14 @@ export function CampaignsTable({ initial }: { initial: Base[] }) {
         <button className="az-iconbtn" onClick={() => void refetch()} title="Refresh"><RefreshCw size={15} className={loading ? 'az-spin' : ''} /></button>
         <span className="az-iconbtn" style={{ border: 0 }} onClick={() => setShowCols(true)} title="Settings"><Settings size={16} /></span>
         <span className="ctl" onClick={exportCsv}><Download size={14} /> Export <ChevronDown size={14} /></span>
+      </div>
+
+      <div className="az-chips">
+        <span className="ql">Quick filters</span>
+        {QUICK.map((q) => <button key={q.label} className={`az-chip quick ${q.on ? 'on' : ''}`} onClick={q.toggle}>{q.label}</button>)}
+        {chips.length > 0 && <span style={{ width: 1, height: 18, background: 'var(--divider)', margin: '0 4px' }} />}
+        {chips.map((c) => <span key={c.id} className="az-chip">{c.label}<button className="rm" onClick={c.remove} aria-label="Remove filter"><X size={13} /></button></span>)}
+        {chips.length > 0 && <span className="clear" onClick={() => setFilters(EMPTY_FILTERS)}>Clear all</span>}
       </div>
 
       <div className="az-tablewrap">
