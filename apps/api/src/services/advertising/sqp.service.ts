@@ -112,6 +112,30 @@ async function resolveMarketplaceId(code: string): Promise<string | null> {
   return row?.marketplaceId ?? null
 }
 
+/**
+ * Our Amazon ASINs for a marketplace — SQP is requested per ASIN. Prefers PARENT
+ * ASINs (family-level, fewer reports) and falls back to the child/listing ASIN.
+ * Active listings first; capped.
+ */
+export async function ourAsinsForMarketplace(marketplace: string, limit = 25): Promise<string[]> {
+  const listings = await prisma.channelListing.findMany({
+    where: { channel: 'AMAZON', OR: [{ marketplace }, { region: marketplace }] },
+    select: { externalParentId: true, externalListingId: true, listingStatus: true },
+    orderBy: { listingStatus: 'asc' }, // ACTIVE sorts before others alphabetically? keep stable; we de-dup below
+    take: 1000,
+  })
+  const asins: string[] = []
+  const seen = new Set<string>()
+  // Active listings first so a small limit covers what's actually selling.
+  const ordered = [...listings].sort((a, b) => (a.listingStatus === 'ACTIVE' ? -1 : 1) - (b.listingStatus === 'ACTIVE' ? -1 : 1))
+  for (const l of ordered) {
+    const asin = l.externalParentId || l.externalListingId
+    if (asin && !seen.has(asin)) { seen.add(asin); asins.push(asin) }
+    if (asins.length >= limit) break
+  }
+  return asins
+}
+
 export interface SqpProbeResult { available: boolean; reportType: string; marketplace: string; detail: string }
 
 /**
@@ -122,9 +146,12 @@ export interface SqpProbeResult { available: boolean; reportType: string; market
 export async function probeSqpAccess(marketplaceCode: string, period: SqpPeriod = 'WEEK'): Promise<SqpProbeResult> {
   const marketplaceId = await resolveMarketplaceId(marketplaceCode)
   if (!marketplaceId) return { available: false, reportType: SQP_REPORT_TYPE, marketplace: marketplaceCode, detail: `no Marketplace row for AMAZON:${marketplaceCode}` }
+  // SQP is ASIN-level — pick one of our ASINs to test against.
+  const asin = (await ourAsinsForMarketplace(marketplaceCode, 1))[0]
+  if (!asin) return { available: false, reportType: SQP_REPORT_TYPE, marketplace: marketplaceCode, detail: `no Amazon ASIN found for ${marketplaceCode} (ChannelListing externalParentId/externalListingId)` }
   const { start, end } = periodWindow(period, new Date())
   try {
-    await fetchSpApiJsonReport({ reportType: SQP_REPORT_TYPE, marketplaceId, dataStartTime: start, dataEndTime: end, reportOptions: { reportPeriod: period } })
+    await fetchSpApiJsonReport({ reportType: SQP_REPORT_TYPE, marketplaceId, dataStartTime: start, dataEndTime: end, reportOptions: { reportPeriod: period, asin } })
     return { available: true, reportType: SQP_REPORT_TYPE, marketplace: marketplaceCode, detail: 'report request accepted' }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
@@ -133,48 +160,71 @@ export async function probeSqpAccess(marketplaceCode: string, period: SqpPeriod 
   }
 }
 
-export interface SqpIngestResult { marketplace: string; period: SqpPeriod; startDate: string; rows: number; upserted: number }
+export interface SqpIngestResult { marketplace: string; period: SqpPeriod; startDate: string; asinsRequested: number; rows: number; upserted: number; failedAsins: number }
 
-export async function ingestSqp(args: { marketplaceCode: string; period?: SqpPeriod; startDate?: Date; endDate?: Date }): Promise<SqpIngestResult> {
+/**
+ * SQP is per-ASIN, so we request one report per ASIN and store its query rows
+ * scoped to that ASIN. `asins` pins the set; otherwise the top-N of our ASINs
+ * for the marketplace (per-ASIN reports are slow + rate-limited, so keep the
+ * batch bounded — the cron cycles coverage over days).
+ */
+export async function ingestSqp(args: { marketplaceCode: string; period?: SqpPeriod; asins?: string[]; limit?: number; startDate?: Date; endDate?: Date }): Promise<SqpIngestResult> {
   const period = args.period ?? 'WEEK'
   const marketplaceId = await resolveMarketplaceId(args.marketplaceCode)
   if (!marketplaceId) throw new Error(`ingestSqp: no Marketplace row for AMAZON:${args.marketplaceCode}`)
-  // Align to a completed period boundary unless the caller pins explicit dates.
+  const asins = args.asins?.length ? args.asins : await ourAsinsForMarketplace(args.marketplaceCode, args.limit ?? 10)
+  if (asins.length === 0) throw new Error(`ingestSqp: no Amazon ASINs for ${args.marketplaceCode}`)
   const win = periodWindow(period, new Date())
   const start = args.startDate ?? win.start
   const end = args.endDate ?? win.end
-
-  const { payload, reportId } = await fetchSpApiJsonReport<object>({ reportType: SQP_REPORT_TYPE, marketplaceId, dataStartTime: start, dataEndTime: end, reportOptions: { reportPeriod: period } })
-    .then((r) => ({ payload: r.payload, reportId: r.reportId }))
-  const rows = parseSqp(payload)
-  if (rows.length === 0) {
-    logger.info('[sqp] empty/unrecognised payload — sample logged for parser tuning', { marketplace: args.marketplaceCode, sample: JSON.stringify(payload)?.slice(0, 600) })
-  }
   const startDateOnly = new Date(start); startDateOnly.setUTCHours(0, 0, 0, 0)
+
+  let totalRows = 0
   let upserted = 0
-  for (const row of rows) {
-    await prisma.searchQueryPerformance.upsert({
-      where: { marketplace_reportPeriod_startDate_searchQuery_asin: { marketplace: args.marketplaceCode, reportPeriod: period, startDate: startDateOnly, searchQuery: row.searchQuery, asin: row.asin } },
-      create: {
-        marketplace: args.marketplaceCode, reportPeriod: period, startDate: startDateOnly,
-        searchQuery: row.searchQuery, asin: row.asin,
-        searchQueryVolume: row.searchQueryVolume, searchQueryRank: row.searchQueryRank,
-        impressionsTotal: row.impressionsTotal, impressionsBrand: row.impressionsBrand, impressionShare: share(row.impressionsBrand, row.impressionsTotal),
-        clicksTotal: row.clicksTotal, clicksBrand: row.clicksBrand, clickShare: share(row.clicksBrand, row.clicksTotal),
-        cartAddsTotal: row.cartAddsTotal, cartAddsBrand: row.cartAddsBrand, cartAddShare: share(row.cartAddsBrand, row.cartAddsTotal),
-        purchasesTotal: row.purchasesTotal, purchasesBrand: row.purchasesBrand, purchaseShare: share(row.purchasesBrand, row.purchasesTotal),
-        sourceReportId: reportId,
-      },
-      update: {
-        searchQueryVolume: row.searchQueryVolume, searchQueryRank: row.searchQueryRank,
-        impressionsTotal: row.impressionsTotal, impressionsBrand: row.impressionsBrand, impressionShare: share(row.impressionsBrand, row.impressionsTotal),
-        clicksTotal: row.clicksTotal, clicksBrand: row.clicksBrand, clickShare: share(row.clicksBrand, row.clicksTotal),
-        cartAddsTotal: row.cartAddsTotal, cartAddsBrand: row.cartAddsBrand, cartAddShare: share(row.cartAddsBrand, row.cartAddsTotal),
-        purchasesTotal: row.purchasesTotal, purchasesBrand: row.purchasesBrand, purchaseShare: share(row.purchasesBrand, row.purchasesTotal),
-        sourceReportId: reportId,
-      },
-    })
-    upserted += 1
+  let failedAsins = 0
+  let loggedSample = false
+  for (const asin of asins) {
+    let payload: object
+    let reportId: string
+    try {
+      const r = await fetchSpApiJsonReport<object>({ reportType: SQP_REPORT_TYPE, marketplaceId, dataStartTime: start, dataEndTime: end, reportOptions: { reportPeriod: period, asin } })
+      payload = r.payload; reportId = r.reportId
+    } catch (err) {
+      failedAsins += 1
+      logger.warn('[sqp] asin report failed', { marketplace: args.marketplaceCode, asin, error: err instanceof Error ? err.message : String(err) })
+      continue
+    }
+    const rows = parseSqp(payload)
+    if (rows.length === 0 && !loggedSample) {
+      loggedSample = true
+      logger.info('[sqp] empty/unrecognised payload — sample logged for parser tuning', { marketplace: args.marketplaceCode, asin, sample: JSON.stringify(payload)?.slice(0, 800) })
+    }
+    totalRows += rows.length
+    for (const row of rows) {
+      const a = row.asin || asin // report is scoped to this asin; trust it if the row omits it
+      await prisma.searchQueryPerformance.upsert({
+        where: { marketplace_reportPeriod_startDate_searchQuery_asin: { marketplace: args.marketplaceCode, reportPeriod: period, startDate: startDateOnly, searchQuery: row.searchQuery, asin: a } },
+        create: {
+          marketplace: args.marketplaceCode, reportPeriod: period, startDate: startDateOnly,
+          searchQuery: row.searchQuery, asin: a,
+          searchQueryVolume: row.searchQueryVolume, searchQueryRank: row.searchQueryRank,
+          impressionsTotal: row.impressionsTotal, impressionsBrand: row.impressionsBrand, impressionShare: share(row.impressionsBrand, row.impressionsTotal),
+          clicksTotal: row.clicksTotal, clicksBrand: row.clicksBrand, clickShare: share(row.clicksBrand, row.clicksTotal),
+          cartAddsTotal: row.cartAddsTotal, cartAddsBrand: row.cartAddsBrand, cartAddShare: share(row.cartAddsBrand, row.cartAddsTotal),
+          purchasesTotal: row.purchasesTotal, purchasesBrand: row.purchasesBrand, purchaseShare: share(row.purchasesBrand, row.purchasesTotal),
+          sourceReportId: reportId,
+        },
+        update: {
+          searchQueryVolume: row.searchQueryVolume, searchQueryRank: row.searchQueryRank,
+          impressionsTotal: row.impressionsTotal, impressionsBrand: row.impressionsBrand, impressionShare: share(row.impressionsBrand, row.impressionsTotal),
+          clicksTotal: row.clicksTotal, clicksBrand: row.clicksBrand, clickShare: share(row.clicksBrand, row.clicksTotal),
+          cartAddsTotal: row.cartAddsTotal, cartAddsBrand: row.cartAddsBrand, cartAddShare: share(row.cartAddsBrand, row.cartAddsTotal),
+          purchasesTotal: row.purchasesTotal, purchasesBrand: row.purchasesBrand, purchaseShare: share(row.purchasesBrand, row.purchasesTotal),
+          sourceReportId: reportId,
+        },
+      })
+      upserted += 1
+    }
   }
-  return { marketplace: args.marketplaceCode, period, startDate: startDateOnly.toISOString().slice(0, 10), rows: rows.length, upserted }
+  return { marketplace: args.marketplaceCode, period, startDate: startDateOnly.toISOString().slice(0, 10), asinsRequested: asins.length, rows: totalRows, upserted, failedAsins }
 }
