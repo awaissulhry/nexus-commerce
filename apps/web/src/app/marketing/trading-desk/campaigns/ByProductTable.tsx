@@ -107,7 +107,7 @@ function FragmentRow({
     // eslint-disable-next-line @next/next/no-img-element
     <img src={r.photoUrl} alt="" />
   ) : (
-    <Package size={15} />
+    <Package size={20} />
   )
   return (
     <>
@@ -139,22 +139,21 @@ function FragmentRow({
               {sub === 'loading' ? (
                 <span className="sub">Loading campaigns…</span>
               ) : sub && sub.length > 0 ? (
-                <table className="subtable">
-                  <tbody>
-                    {sub.map((c) => (
-                      <tr key={c.id}>
-                        <td className="l">
-                          <span className="cc az"><span className="dot" style={{ background: 'var(--az)' }} />{marketplaceCode(c.marketplace)}</span>
-                          &nbsp; {c.name}
-                          {c.status !== 'ENABLED' && <span className="pill n" style={{ marginLeft: 6 }}>{c.status === 'PAUSED' ? 'Paused' : c.status}</span>}
-                        </td>
-                        <td className="num">{eur(c.adSpendCents)}</td>
-                        <td className="num">{eur(c.adSalesCents)}</td>
-                        <td><span className={acosClsPct(c.acos)}>{pctN(c.acos)}</span></td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                <>
+                  <div className="subhead"><span>Campaign</span><span>Spend</span><span>Ad sales</span><span>ACOS</span></div>
+                  {sub.map((c) => (
+                    <div className="subitem" key={c.id}>
+                      <span className="subname">
+                        <span className="cc az"><span className="dot" style={{ background: 'var(--az)' }} />{marketplaceCode(c.marketplace)}</span>
+                        <span className="nm">{c.name}</span>
+                        {c.status !== 'ENABLED' && <span className="pill n">{c.status === 'PAUSED' ? 'Paused' : c.status}</span>}
+                      </span>
+                      <span className="subnum">{eur(c.adSpendCents)}</span>
+                      <span className="subnum">{eur(c.adSalesCents)}</span>
+                      <span className="subacos"><span className={acosClsPct(c.acos)}>{pctN(c.acos)}</span></span>
+                    </div>
+                  ))}
+                </>
               ) : (
                 <span className="sub">No campaign-attributed spend in this window.</span>
               )}
