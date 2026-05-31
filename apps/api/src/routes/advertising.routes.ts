@@ -100,6 +100,17 @@ function actorFromHeaders(headers: Record<string, unknown>): AdsActor {
 }
 
 const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
+  // Phase 4 — invalidate the ads read cache after any successful write so an
+  // operator never sees a stale number right after an edit. Scoped to this
+  // plugin's routes; GETs and failures are ignored.
+  fastify.addHook('onResponse', async (request, reply) => {
+    if (request.method === 'GET' || request.method === 'HEAD') return
+    if (reply.statusCode >= 400) return
+    if (!request.url.includes('/advertising/')) return
+    const { flushAdsCache } = await import('../services/advertising/ads-cache.js')
+    void flushAdsCache()
+  })
+
   // ── GET /advertising/campaigns ──────────────────────────────────────
   fastify.get('/advertising/campaigns', async (request, reply) => {
     const q = request.query as {
@@ -114,38 +125,43 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     if (q.search) where.name = { contains: q.search, mode: 'insensitive' }
     const limit = Math.min(Number(q.limit) || 200, 500)
 
-    const campaigns = await prisma.campaign.findMany({
-      where,
-      orderBy: [{ marketplace: 'asc' }, { name: 'asc' }],
-      take: limit,
-      select: {
-        id: true,
-        name: true,
-        type: true,
-        adProduct: true,
-        status: true,
-        marketplace: true,
-        externalCampaignId: true,
-        dailyBudget: true,
-        biddingStrategy: true,
-        impressions: true,
-        clicks: true,
-        spend: true,
-        sales: true,
-        acos: true,
-        roas: true,
-        trueProfitCents: true,
-        trueProfitMarginPct: true,
-        lastSyncedAt: true,
-        lastSyncStatus: true,
-        // H.2: v1 export populates these — surface in the table for
-        // operators to see *why* a campaign isn't serving.
-        deliveryStatus: true,
-        deliveryReasons: true,
-      },
+    const { cached } = await import('../services/advertising/ads-cache.js')
+    const cacheKey = `campaigns:${q.marketplace ?? ''}:${q.status ?? ''}:${q.search ?? ''}:${limit}`
+    const result = await cached(cacheKey, 30, async () => {
+      const campaigns = await prisma.campaign.findMany({
+        where,
+        orderBy: [{ marketplace: 'asc' }, { name: 'asc' }],
+        take: limit,
+        select: {
+          id: true,
+          name: true,
+          type: true,
+          adProduct: true,
+          status: true,
+          marketplace: true,
+          externalCampaignId: true,
+          dailyBudget: true,
+          biddingStrategy: true,
+          impressions: true,
+          clicks: true,
+          spend: true,
+          sales: true,
+          acos: true,
+          roas: true,
+          trueProfitCents: true,
+          trueProfitMarginPct: true,
+          lastSyncedAt: true,
+          lastSyncStatus: true,
+          // H.2: v1 export populates these — surface in the table for
+          // operators to see *why* a campaign isn't serving.
+          deliveryStatus: true,
+          deliveryReasons: true,
+        },
+      })
+      return { items: campaigns, count: campaigns.length }
     })
     reply.header('Cache-Control', 'private, max-age=60')
-    return { items: campaigns, count: campaigns.length }
+    return result
   })
 
   // ── GET /advertising/campaigns/:id ──────────────────────────────────
@@ -166,71 +182,74 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     since.setUTCDate(since.getUTCDate() - windowDays)
     since.setUTCHours(0, 0, 0, 0)
 
-    const campaign = await prisma.campaign.findUnique({
-      where: { id },
-      include: {
-        adGroups: {
-          include: {
-            targets: { take: 100 },
-            // PERF — the cockpit never renders per-ad-group product ads; we only
-            // need their ids to allocate the campaign total across ad groups.
-            // Selecting full rows (creativeJson, deliveryReasons…) for up to 500
-            // ads × every ad group was the bulk of the detail-endpoint payload.
-            productAds: { take: 500, select: { id: true } },
+    const { cached } = await import('../services/advertising/ads-cache.js')
+    const payload = await cached(`detail:${id}:${windowDays}`, 20, async () => {
+      const campaign = await prisma.campaign.findUnique({
+        where: { id },
+        include: {
+          adGroups: {
+            include: {
+              targets: { take: 100 },
+              // PERF — the cockpit never renders per-ad-group product ads; we only
+              // need their ids to allocate the campaign total across ad groups.
+              // Selecting full rows (creativeJson, deliveryReasons…) for up to 500
+              // ads × every ad group was the bulk of the detail-endpoint payload.
+              productAds: { take: 500, select: { id: true } },
+            },
           },
         },
-      },
+      })
+      if (!campaign) return null
+
+      // ── Campaign totals — authoritative + chart-consistent. CAMPAIGN daily
+      // rows are Amazon's billed campaign spend; match localEntityId OR entityId
+      // exactly like /trends. A single campaign = one marketplace/currency, so
+      // summing here is currency-safe by construction.
+      const campaignWhere = {
+        OR: [
+          { localEntityId: id },
+          ...(campaign.externalCampaignId ? [{ entityId: campaign.externalCampaignId }] : []),
+        ],
+      }
+      // Allocated metrics via the shared service (Σ ad groups == campaign).
+      const { computeCampaignDetailMetrics } = await import('../services/advertising/ads-detail-metrics.service.js')
+      const [{ campaign: campMetrics, byAdGroup }, fresh] = await Promise.all([
+        computeCampaignDetailMetrics({
+          campaignId: id,
+          externalCampaignId: campaign.externalCampaignId,
+          adGroups: campaign.adGroups.map((g) => ({ id: g.id, productAdIds: g.productAds.map((pa) => pa.id) })),
+          windowDays,
+        }),
+        prisma.amazonAdsDailyPerformance.aggregate({
+          where: { entityType: 'CAMPAIGN', date: { gte: since }, ...campaignWhere },
+          _max: { date: true }, // AME.4 — data-freshness signal for the detail UI
+        }),
+      ])
+
+      const adGroups = campaign.adGroups.map((g) => {
+        const m = byAdGroup.get(g.id)!
+        return { ...g, impressions: m.impressions, clicks: m.clicks, spendCents: m.spendCents, salesCents: m.salesCents, ordersCount: m.orders, acos: m.acos, roas: m.roas }
+      })
+
+      return {
+        campaign: {
+          ...campaign,
+          impressions: campMetrics.impressions,
+          clicks: campMetrics.clicks,
+          spend: campMetrics.spendCents / 100,
+          sales: campMetrics.salesCents / 100,
+          acos: campMetrics.acos,
+          roas: campMetrics.roas,
+          adGroups,
+          metricsWindowDays: windowDays,
+          metricsSource: 'daily_performance',
+          dataThrough: fresh._max.date ? fresh._max.date.toISOString().slice(0, 10) : null,
+        },
+      }
     })
-    if (!campaign) {
-      reply.code(404)
-      return { error: 'not_found' }
-    }
-
-    // ── Campaign totals — authoritative + chart-consistent. CAMPAIGN daily
-    // rows are Amazon's billed campaign spend; match localEntityId OR entityId
-    // exactly like /trends. A single campaign = one marketplace/currency, so
-    // summing here is currency-safe by construction.
-    const campaignWhere = {
-      OR: [
-        { localEntityId: id },
-        ...(campaign.externalCampaignId ? [{ entityId: campaign.externalCampaignId }] : []),
-      ],
-    }
-    // Allocated metrics via the shared service (Σ ad groups == campaign).
-    const { computeCampaignDetailMetrics } = await import('../services/advertising/ads-detail-metrics.service.js')
-    const [{ campaign: campMetrics, byAdGroup }, fresh] = await Promise.all([
-      computeCampaignDetailMetrics({
-        campaignId: id,
-        externalCampaignId: campaign.externalCampaignId,
-        adGroups: campaign.adGroups.map((g) => ({ id: g.id, productAdIds: g.productAds.map((pa) => pa.id) })),
-        windowDays,
-      }),
-      prisma.amazonAdsDailyPerformance.aggregate({
-        where: { entityType: 'CAMPAIGN', date: { gte: since }, ...campaignWhere },
-        _max: { date: true }, // AME.4 — data-freshness signal for the detail UI
-      }),
-    ])
-
-    const adGroups = campaign.adGroups.map((g) => {
-      const m = byAdGroup.get(g.id)!
-      return { ...g, impressions: m.impressions, clicks: m.clicks, spendCents: m.spendCents, salesCents: m.salesCents, ordersCount: m.orders, acos: m.acos, roas: m.roas }
-    })
-
-    return {
-      campaign: {
-        ...campaign,
-        impressions: campMetrics.impressions,
-        clicks: campMetrics.clicks,
-        spend: campMetrics.spendCents / 100,
-        sales: campMetrics.salesCents / 100,
-        acos: campMetrics.acos,
-        roas: campMetrics.roas,
-        adGroups,
-        metricsWindowDays: windowDays,
-        metricsSource: 'daily_performance',
-        dataThrough: fresh._max.date ? fresh._max.date.toISOString().slice(0, 10) : null,
-      },
-    }
+    if (!payload) { reply.code(404); return { error: 'not_found' } }
+    reply.header('Cache-Control', 'private, max-age=20')
+    return payload
   })
 
   // ── GET /advertising/ad-groups/:id (AME.6) ──────────────────────────
@@ -244,6 +263,8 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const windowDays = Math.max(1, Math.min(180, Number(q.windowDays) || 30))
     const since = new Date(); since.setUTCDate(since.getUTCDate() - windowDays); since.setUTCHours(0, 0, 0, 0)
 
+    const { cached: cachedAg } = await import('../services/advertising/ads-cache.js')
+    const agPayload = await cachedAg(`adgroup:${id}:${windowDays}`, 20, async () => {
     const adGroup = await prisma.adGroup.findUnique({
       where: { id },
       include: {
@@ -252,7 +273,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
         productAds: { take: 200, select: { id: true, asin: true, sku: true, productId: true, status: true } },
       },
     })
-    if (!adGroup) { reply.code(404); return { error: 'not_found' } }
+    if (!adGroup) return null
 
     const adIds = adGroup.productAds.map((a) => a.id)
     const [perAd, trendRaw, siblings] = await Promise.all([
@@ -325,6 +346,10 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
         dataThrough: trendRaw.length ? trendRaw[trendRaw.length - 1]!.date.toISOString().slice(0, 10) : null,
       },
     }
+    })
+    if (!agPayload) { reply.code(404); return { error: 'not_found' } }
+    reply.header('Cache-Control', 'private, max-age=20')
+    return agPayload
   })
 
   // ── GET /advertising/fba-storage-age ────────────────────────────────
@@ -692,6 +717,8 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     since.setUTCDate(since.getUTCDate() - windowDays)
     since.setUTCHours(0, 0, 0, 0)
 
+    const { cached } = await import('../services/advertising/ads-cache.js')
+    const payload = await cached(`v1metrics:${windowDays}:${query.marketplace ?? ''}`, 30, async () => {
     const rows = await prisma.amazonAdsDailyPerformance.groupBy({
       by: ['entityId', 'adProduct', 'marketplace', 'currencyCode'],
       where: {
@@ -752,8 +779,10 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       }
     }
 
-    reply.header('Cache-Control', 'private, max-age=30')
     return { windowDays, count: Object.keys(byCampaign).length, byCampaign }
+    })
+    reply.header('Cache-Control', 'private, max-age=30')
+    return payload
   })
 
   // GET /api/advertising/insights — rule-based insight engine (Phase 8)
@@ -1692,6 +1721,9 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
         ] }
       : {}
 
+    const { cached: cachedTrends } = await import('../services/advertising/ads-cache.js')
+    const trendsKey = `trends:${query.campaignId ?? ''}:${windowDays}:${query.marketplace ?? ''}:${query.adProduct ?? ''}:${query.currencyCode ?? ''}:${query.compare ?? ''}`
+    const result = await cachedTrends(trendsKey, 30, async () => {
     // ── Ad performance per day ──────────────────────────────────────────
     const perfByDay = await prisma.amazonAdsDailyPerformance.groupBy({
       by: ['date'],
@@ -1810,8 +1842,10 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       )
     }
 
-    reply.header('Cache-Control', 'private, max-age=60')
     return { windowDays, count: rows.length, rows, summary: curSummary, previous }
+    })
+    reply.header('Cache-Control', 'private, max-age=60')
+    return result
   })
 
   // CD.6 — batched per-entity sparklines. Returns one trailing daily series
@@ -1830,11 +1864,14 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     since.setUTCDate(since.getUTCDate() - (windowDays - 1))
     since.setUTCHours(0, 0, 0, 0)
 
+    const { cached: cachedSpark } = await import('../services/advertising/ads-cache.js')
+    reply.header('Cache-Control', 'private, max-age=120')
+    return cachedSpark(`spark:${q.campaignId}:${entityType}:${metric}:${windowDays}`, 60, async () => {
     // Resolve the campaign's child local ids for the requested grain.
     const localIds = entityType === 'AD_GROUP'
       ? (await prisma.adGroup.findMany({ where: { campaignId: q.campaignId }, select: { id: true } })).map((r) => r.id)
       : (await prisma.adTarget.findMany({ where: { adGroup: { campaignId: q.campaignId } }, select: { id: true } })).map((r) => r.id)
-    if (localIds.length === 0) { reply.header('Cache-Control', 'private, max-age=120'); return { windowDays, metric, entityType, series: {} } }
+    if (localIds.length === 0) { return { windowDays, metric, entityType, series: {} } }
 
     const perf = await prisma.amazonAdsDailyPerformance.groupBy({
       by: ['localEntityId', 'date'],
@@ -1863,8 +1900,8 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
         : microsToCents(r._sum.costMicros) // cents
     }
 
-    reply.header('Cache-Control', 'private, max-age=120')
     return { windowDays, metric, entityType, axis, series }
+    })
   })
 
   // CD.12 — dayparting heatmap. Aggregates the hourly store (CD.11) into a
