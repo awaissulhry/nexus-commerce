@@ -18,12 +18,37 @@ import { logger } from '../../utils/logger.js'
 import { microsToCents, toEurCents } from './ads-metrics-math.js'
 import { getFxRate } from '../fx-rate.service.js'
 
+// A.3 — Amazon ad report data keeps restating for up to ~72h: impressions/
+// clicks/cost firm up as invalid-traffic validation runs (up to 3 days) and
+// conversions/sales settle even later. So a date is only AUTHORITATIVE once
+// it's outside this window; data inside it is the current best estimate but
+// may still move. The truth layer reports both, and never treats in-window
+// movement as "drift".
+export const RESTATEMENT_WINDOW_HOURS = Number(process.env.NEXUS_ADS_RESTATEMENT_HOURS ?? 72)
+
+/**
+ * The UTC day-floor boundary separating settled (authoritative) report dates
+ * from provisional ones. A daily-perf row is settled iff its date < this. Pure
+ * + exported for unit testing. e.g. now=2026-05-31T02:00Z, hours=72 →
+ * 2026-05-28 (rows dated 05-27 and earlier are settled; 05-28+ provisional).
+ */
+export function settledCutoffDay(now: Date, hours: number = RESTATEMENT_WINDOW_HOURS): Date {
+  const d = new Date(now.getTime() - hours * 3_600_000)
+  d.setUTCHours(0, 0, 0, 0)
+  return d
+}
+
 export interface ReconcileReport {
   windowDays: number
-  accountSpendCents: number          // authoritative CAMPAIGN spend (EUR)
+  accountSpendCents: number          // authoritative CAMPAIGN spend (EUR), full window
   attributedProductAdCents: number   // Σ PRODUCT_AD spend (EUR)
   variancePct: number | null         // (productAd − account) / account
   dataThrough: string | null         // newest daily-perf date across markets
+  // A.3 — restatement truth layer.
+  restatementWindowHours: number
+  settledThrough: string | null      // newest date OUTSIDE the restatement window (authoritative boundary)
+  settledSpendCents: number          // CAMPAIGN spend on settled dates (final)
+  provisionalSpendCents: number      // CAMPAIGN spend still inside the restatement window (may move)
   staleMarketplaces: Array<{ marketplace: string; lastDate: string; daysStale: number }>
   healed: boolean
   campaignsHealed: number
@@ -55,6 +80,24 @@ export async function reconcileAdMetrics(
   for (const r of acctRows) accountSpendCents += toEurCents(microsToCents(r._sum.costMicros), await eurRate(fx, r.currencyCode))
   let attributedProductAdCents = 0
   for (const r of paRows) attributedProductAdCents += toEurCents(microsToCents(r._sum.costMicros), await eurRate(fx, r.currencyCode))
+
+  // A.3 — split account spend into settled (authoritative, outside the
+  // restatement window) vs provisional (still inside it, may move). settled =
+  // [since, cutoffDay); provisional = the remainder of the full-window total.
+  const cutoffDay = settledCutoffDay(new Date())
+  const settledRows = await prisma.amazonAdsDailyPerformance.groupBy({
+    by: ['currencyCode'],
+    where: { entityType: 'CAMPAIGN', date: { gte: since, lt: cutoffDay } },
+    _sum: { costMicros: true },
+  })
+  let settledSpendCents = 0
+  for (const r of settledRows) settledSpendCents += toEurCents(microsToCents(r._sum.costMicros), await eurRate(fx, r.currencyCode))
+  const provisionalSpendCents = Math.max(0, accountSpendCents - settledSpendCents)
+  const settledThroughRow = await prisma.amazonAdsDailyPerformance.aggregate({
+    where: { entityType: 'CAMPAIGN', date: { lt: cutoffDay } },
+    _max: { date: true },
+  })
+  const settledThrough = settledThroughRow._max.date ? settledThroughRow._max.date.toISOString().slice(0, 10) : null
 
   // Freshness per marketplace (latest CAMPAIGN daily date).
   const fresh = await prisma.amazonAdsDailyPerformance.groupBy({ by: ['marketplace'], where: { entityType: 'CAMPAIGN' }, _max: { date: true } })
@@ -108,6 +151,10 @@ export async function reconcileAdMetrics(
     attributedProductAdCents,
     variancePct: accountSpendCents > 0 ? Math.round(((attributedProductAdCents - accountSpendCents) / accountSpendCents) * 1000) / 10 : null,
     dataThrough,
+    restatementWindowHours: RESTATEMENT_WINDOW_HOURS,
+    settledThrough,
+    settledSpendCents,
+    provisionalSpendCents,
     staleMarketplaces,
     healed: heal,
     campaignsHealed,
