@@ -9,6 +9,7 @@
 
 import type { FastifyPluginAsync } from 'fastify'
 import { computeProductTargetAcos, computeFleetTargetAcos, type AcosMode } from '../services/advertising/ads-target-acos.service.js'
+import { simulateAutopilot } from '../services/advertising/ads-autopilot.service.js'
 import { envEnabled } from '../utils/env-flag.js'
 import { cronStartupState } from '../jobs/cron-startup-state.js'
 
@@ -45,6 +46,22 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
     })
     reply.header('Cache-Control', 'private, max-age=120')
     return result
+  })
+
+  // Apex F.1 — beginner autopilot: simulate (read-only) the full plan one north
+  // star drives (profit-native bids + Bayesian sparse handling + ToS defense),
+  // as a plain-language list. Nothing is applied.
+  fastify.get('/advertising/autopilot/simulate', async (request, reply) => {
+    const q = request.query as { campaignId?: string; marketplace?: string; mode?: string; bayesian?: string; targetAcos?: string }
+    const plan = await simulateAutopilot({
+      campaignId: q.campaignId,
+      marketplace: q.marketplace,
+      mode: q.mode === 'profit' || q.mode === 'balanced' || q.mode === 'growth' ? q.mode : undefined,
+      bayesian: q.bayesian == null ? true : q.bayesian === '1' || q.bayesian === 'true',
+      targetAcos: q.targetAcos ? Number(q.targetAcos) : undefined,
+    })
+    reply.header('Cache-Control', 'private, max-age=30')
+    return plan
   })
 
   // Fleet view — every advertised product's target ACOS, revenue-ranked.
