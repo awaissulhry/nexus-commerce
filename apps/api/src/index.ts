@@ -1099,6 +1099,10 @@ async function start() {
       // window elapses (finalizes CampaignAction; sandbox or live-dispatch).
       const { startMarketingSyncDrainCron } = await import('./jobs/marketing-sync-drain.job.js');
       startMarketingSyncDrainCron();
+      // Apex A.2c — Redis-free autonomous drain of queued ad mutations, so live
+      // bid writes flow without a manual trigger even when BullMQ/Redis is down.
+      const { startAdsSyncDrainCron } = await import('./jobs/ads-sync-drain.job.js');
+      startAdsSyncDrainCron();
     }
 
     // SR.1 — Sentient Review Loop. Default-OFF — opt in via

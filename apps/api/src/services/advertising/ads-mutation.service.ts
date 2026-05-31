@@ -157,25 +157,34 @@ async function writeBidHistory(args: {
   return ids
 }
 
+// Bound on how long we'll wait for the BullMQ enqueue before giving up and
+// letting the cron drain handle the row. When Redis is unreachable ioredis
+// *hangs* on connect rather than throwing, so a bare try/catch isn't enough —
+// without this cap the operator's PATCH response blocked for the full ioredis
+// connect timeout (observed as curl HTTP 000 on prod). The row is already
+// persisted to OutboundSyncQueue, so timing out here is safe.
+const ENQUEUE_TIMEOUT_MS = Number(process.env.NEXUS_ADS_ENQUEUE_TIMEOUT_MS ?? 1500)
+
 async function enqueueBullMQJob(queueRowId: string, syncType: AdSyncType): Promise<void> {
-  // Best-effort BullMQ enqueue. If Redis is down or the queue isn't
-  // initialized, the row still sits in OutboundSyncQueue and gets
-  // drained by the cron fallback. Don't fail the operator's write.
+  // Best-effort BullMQ enqueue. If Redis is down/slow or the queue isn't
+  // initialized, the row still sits in OutboundSyncQueue and gets drained by
+  // the cron fallback (drain-ads-sync). Never block or fail the operator write.
   try {
     const { adsSyncQueue } = await import('../../lib/queue.js')
-    await adsSyncQueue.add(
-      syncType,
-      { queueId: queueRowId, syncType },
-      {
-        delay: GRACE_PERIOD_MS,
-        jobId: `ads-sync:${queueRowId}`,
-      },
-    )
+    const add = adsSyncQueue
+      .add(syncType, { queueId: queueRowId, syncType }, { delay: GRACE_PERIOD_MS, jobId: `ads-sync:${queueRowId}` })
+      .then(() => undefined)
+      .catch((err: unknown) => {
+        logger.warn('[ads-mutation] BullMQ enqueue failed (cron drain will handle)', {
+          queueRowId, syncType, error: err instanceof Error ? err.message : String(err),
+        })
+      })
+    // Cap the wait — a hung Redis connect must not stall the HTTP response.
+    const timeout = new Promise<void>((resolve) => setTimeout(resolve, ENQUEUE_TIMEOUT_MS))
+    await Promise.race([add, timeout])
   } catch (err) {
-    logger.warn('[ads-mutation] BullMQ enqueue failed (will fall back to cron drain)', {
-      queueRowId,
-      syncType,
-      error: err instanceof Error ? err.message : String(err),
+    logger.warn('[ads-mutation] BullMQ enqueue setup failed (cron drain will handle)', {
+      queueRowId, syncType, error: err instanceof Error ? err.message : String(err),
     })
   }
 }

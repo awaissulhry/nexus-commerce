@@ -85,6 +85,7 @@ import {
 import { runAdvertisingRuleEvaluatorCron } from './advertising-rule-evaluator.job.js'
 import { runMarketingRuleEvaluatorCron } from './marketing-rule-evaluator.job.js'
 import { runMarketingSyncDrainCron } from './marketing-sync-drain.job.js'
+import { runAdsSyncDrainCron } from './ads-sync-drain.job.js'
 import { runDaypartingCron } from './ad-dayparting.job.js'
 // AD.5 — cross-marketplace BudgetPool rebalancer.
 import { runBudgetPoolRebalanceCron } from './budget-pool-rebalance.job.js'
@@ -202,6 +203,8 @@ export const CRON_REGISTRY: Record<string, () => Promise<unknown>> = {
   'advertising-rule-evaluator': () => runAdvertisingRuleEvaluatorCron(),
   'marketing-rule-evaluator': () => runMarketingRuleEvaluatorCron(),
   'marketing-sync-drain': () => runMarketingSyncDrainCron(),
+  // Apex A.2c — Redis-free autonomous drain of queued ad bid/budget/state writes.
+  'drain-ads-sync': () => runAdsSyncDrainCron(),
   'ad-dayparting': () => runDaypartingCron(),
   'budget-pool-rebalance': () => runBudgetPoolRebalanceCron(),
 
