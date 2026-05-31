@@ -13,7 +13,7 @@ import { usePathname } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import type { LucideIcon } from 'lucide-react'
 import {
-  Activity, Target, Plus, Wand2, Sparkles, Gauge, Wallet, Clock, Sprout,
+  Activity, Target, Plus, Wand2, Sparkles, Gauge, Wallet, Clock, Sprout, Rocket,
   Radar, Brain, Crosshair, PackageX, Lightbulb, BarChart2, Tv, Users,
   Bot, Search, ClipboardList, TrendingUp, Rss, Zap, History, Filter,
   PanelLeftClose, PanelLeftOpen, ChevronDown, ChevronRight,
@@ -25,6 +25,7 @@ interface Group { label: string; items: Item[]; advanced?: boolean }
 const GROUPS: Group[] = [
   { label: 'Overview', items: [
     { href: '/marketing/advertising/campaigns', label: 'Campaigns', icon: Activity },
+    { href: '/marketing/advertising/autopilot', label: 'Autopilot', icon: Rocket },
     { href: '/marketing/advertising/recommendations', label: 'Recommendations', icon: Sparkles },
     { href: '/marketing/advertising/momentum', label: 'Live momentum', icon: Zap },
   ] },
