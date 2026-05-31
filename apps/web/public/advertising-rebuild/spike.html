@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Nexus Advertising — Rebuild Design Spike</title>
+<style>
+  :root{
+    --bg:#f6f7f9; --panel:#ffffff; --ink:#0f172a; --ink2:#475569; --ink3:#94a3b8;
+    --line:#e6e8ec; --line2:#eef0f3; --brand:#4f46e5; --brand-soft:#eef2ff;
+    --green:#16a34a; --green-soft:#e8f6ee; --red:#dc2626; --red-soft:#fdecec;
+    --amber:#d97706; --amber-soft:#fdf3e6; --blue:#2563eb; --slate:#64748b;
+    --az:#ff9900; --az-soft:#fff4e0; --ebay:#0064d2; --ebay-soft:#e7f0fc; --shop:#5a8f3c; --shop-soft:#edf5e7;
+    --radius:10px; --shadow:0 1px 2px rgba(15,23,42,.04),0 1px 1px rgba(15,23,42,.03);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{background:var(--bg);color:var(--ink);font:13px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,sans-serif;-webkit-font-smoothing:antialiased}
+  svg{vertical-align:middle}
+  .app{display:grid;grid-template-columns:224px 1fr;height:100vh;overflow:hidden}
+
+  /* SIDEBAR */
+  .side{background:#0f1729;color:#cbd5e1;display:flex;flex-direction:column;border-right:1px solid #0b1120}
+  .brand{display:flex;align-items:center;gap:9px;padding:16px 16px 14px;color:#fff;font-weight:700;font-size:14px;letter-spacing:.2px}
+  .brand .logo{width:26px;height:26px;border-radius:7px;background:linear-gradient(135deg,#6366f1,#4f46e5);display:grid;place-items:center;font-size:14px}
+  .brand small{display:block;color:#64748b;font-weight:500;font-size:10.5px;letter-spacing:.3px;text-transform:uppercase}
+  .nav{padding:6px 10px;flex:1;overflow:auto}
+  .nav .grp{color:#475569;font-size:10px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;padding:14px 10px 6px}
+  .nav a{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;color:#cbd5e1;text-decoration:none;font-weight:500;cursor:pointer;position:relative}
+  .nav a svg{width:17px;height:17px;stroke:#94a3b8;flex:none}
+  .nav a:hover{background:#1e293b;color:#fff}
+  .nav a:hover svg{stroke:#cbd5e1}
+  .nav a.on{background:var(--brand);color:#fff}
+  .nav a.on svg{stroke:#fff}
+  .nav a .ph{margin-left:auto;font-size:9px;color:#64748b;background:#1e293b;border-radius:5px;padding:2px 6px;font-weight:600}
+  .nav a .ct{margin-left:auto;font-size:10px;color:#fff;background:var(--red);border-radius:9px;padding:1px 7px;font-weight:700}
+  .nav a.on .ph{background:rgba(255,255,255,.18);color:#e0e7ff}
+  .side .foot{border-top:1px solid #1e293b;padding:10px 14px;display:flex;align-items:center;gap:9px;color:#94a3b8}
+  .side .foot .av{width:26px;height:26px;border-radius:50%;background:#334155;display:grid;place-items:center;color:#e2e8f0;font-weight:700;font-size:11px}
+
+  /* MAIN */
+  .main{display:flex;flex-direction:column;overflow:hidden}
+  .top{display:flex;align-items:center;gap:10px;padding:10px 18px;background:var(--panel);border-bottom:1px solid var(--line);flex:none}
+  .top h1{font-size:15px;margin:0;font-weight:700}
+  .top .sub{color:var(--ink3);font-size:11.5px}
+  .spacer{flex:1}
+  .ctl{display:flex;align-items:center;gap:6px;border:1px solid var(--line);background:#fff;border-radius:8px;padding:6px 10px;color:var(--ink2);font-weight:600;cursor:pointer;font-size:12px}
+  .ctl svg{width:14px;height:14px;stroke:var(--slate)}
+  .ctl.acc{background:var(--brand);border-color:var(--brand);color:#fff}
+  .ctl.acc svg{stroke:#fff}
+  .chips{display:flex;gap:6px}
+  .chip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:#fff;border-radius:20px;padding:5px 11px;font-weight:600;font-size:11.5px;color:var(--ink2);cursor:pointer}
+  .chip .d{width:7px;height:7px;border-radius:50%}
+  .chip.on{border-color:var(--brand);background:var(--brand-soft);color:var(--brand)}
+  .chip.off{opacity:.5}
+  .scroll{overflow:auto;padding:18px;flex:1}
+  .view{display:none}
+  .view.on{display:block}
+
+  /* generic */
+  .grid5{display:grid;grid-template-columns:repeat(5,1fr);gap:12px}
+  .grid2{display:grid;grid-template-columns:1.6fr 1fr;gap:14px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow)}
+  .card .hd{display:flex;align-items:center;gap:8px;padding:12px 14px;border-bottom:1px solid var(--line2);font-weight:700;font-size:12.5px}
+  .card .hd .mut{color:var(--ink3);font-weight:500;font-size:11px}
+  .card .bd{padding:14px}
+  .kpi{padding:14px 15px}
+  .kpi .lbl{color:var(--ink3);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;display:flex;align-items:center;gap:6px}
+  .kpi .val{font-size:23px;font-weight:750;margin-top:8px;letter-spacing:-.4px}
+  .kpi .dlt{font-size:11.5px;font-weight:700;margin-top:5px;display:inline-flex;align-items:center;gap:4px}
+  .up{color:var(--green)} .down{color:var(--red)}
+  .pill{display:inline-flex;align-items:center;gap:5px;border-radius:6px;padding:2px 8px;font-weight:700;font-size:11px}
+  .pill.g{background:var(--green-soft);color:var(--green)} .pill.r{background:var(--red-soft);color:var(--red)}
+  .pill.a{background:var(--amber-soft);color:var(--amber)} .pill.b{background:var(--brand-soft);color:var(--brand)}
+  .pill.n{background:#f1f5f9;color:var(--slate)}
+  .cc{display:inline-flex;align-items:center;gap:5px;border-radius:6px;padding:2px 7px;font-weight:700;font-size:10.5px}
+  .cc.az{background:var(--az-soft);color:#b45309} .cc.ebay{background:var(--ebay-soft);color:var(--ebay)} .cc.shop{background:var(--shop-soft);color:var(--shop)}
+  .cc .d{width:6px;height:6px;border-radius:50%}
+
+  /* tables */
+  table{width:100%;border-collapse:collapse;font-size:12px}
+  thead th{position:sticky;top:0;background:#fbfcfd;text-align:right;color:var(--ink3);font-weight:700;font-size:10.5px;text-transform:uppercase;letter-spacing:.3px;padding:9px 10px;border-bottom:1px solid var(--line);white-space:nowrap;z-index:1}
+  thead th.l{text-align:left}
+  tbody td{padding:9px 10px;border-bottom:1px solid var(--line2);text-align:right;white-space:nowrap}
+  tbody td.l{text-align:left}
+  tbody tr:hover{background:#fafbff}
+  .num{font-variant-numeric:tabular-nums;font-weight:600}
+  .acos-good{color:var(--green);font-weight:700} .acos-bad{color:var(--red);font-weight:700} .acos-mid{color:var(--amber);font-weight:700}
+  .cname{font-weight:650;color:var(--ink)} .csub{color:var(--ink3);font-size:11px}
+  .ck{display:flex;align-items:center;gap:9px}
+  .thumb{width:30px;height:30px;border-radius:7px;flex:none;background:#e2e8f0;display:grid;place-items:center;font-size:15px}
+  .bar{height:6px;border-radius:4px;background:#eef0f3;overflow:hidden;width:70px;display:inline-block;vertical-align:middle}
+  .bar i{display:block;height:100%;border-radius:4px}
+  .bidbox{display:inline-flex;align-items:center;border:1px solid var(--line);border-radius:6px;padding:2px 7px;font-weight:700;font-variant-numeric:tabular-nums;background:#fff}
+  .mult{display:inline-flex;align-items:center;gap:3px;border-radius:6px;padding:2px 6px;font-weight:700;font-size:11px;background:#f1f5f9;color:var(--slate)}
+  .mult.pos{background:var(--green-soft);color:var(--green)}
+  .matchbadge{font-size:10px;font-weight:800;letter-spacing:.4px;border-radius:4px;padding:1px 5px}
+  .mt-exact{background:#ede9fe;color:#6d28d9}.mt-phrase{background:#dbeafe;color:#1d4ed8}.mt-broad{background:#dcfce7;color:#15803d}.mt-auto{background:#f1f5f9;color:#64748b}
+
+  .toolbar{display:flex;align-items:center;gap:8px;margin-bottom:12px}
+  .seg{display:inline-flex;background:#eef0f3;border-radius:8px;padding:3px}
+  .seg button{border:0;background:transparent;padding:6px 12px;border-radius:6px;font-weight:700;color:var(--ink2);cursor:pointer;font-size:12px}
+  .seg button.on{background:#fff;color:var(--ink);box-shadow:var(--shadow)}
+  .search{display:flex;align-items:center;gap:7px;border:1px solid var(--line);border-radius:8px;padding:6px 10px;background:#fff;min-width:230px;color:var(--ink3)}
+  .search input{border:0;outline:0;font:inherit;flex:1;color:var(--ink)}
+  .bulkbar{display:none;align-items:center;gap:10px;background:#0f1729;color:#fff;border-radius:10px;padding:9px 14px;margin-bottom:12px;font-weight:600;font-size:12px}
+  .bulkbar .gho{border:1px solid #334155;background:#1e293b;color:#e2e8f0;border-radius:7px;padding:5px 11px;cursor:pointer;font-weight:600}
+  .expander{cursor:pointer;color:var(--ink3);user-select:none;font-size:11px;width:12px;display:inline-block}
+  .subrow td{background:#fafbfd}
+  .alert{display:flex;gap:11px;align-items:flex-start;padding:11px 13px;border-bottom:1px solid var(--line2)}
+  .alert:last-child{border-bottom:0}
+  .alert .ic{width:28px;height:28px;border-radius:8px;flex:none;display:grid;place-items:center}
+  .alert .t{font-weight:650} .alert .s{color:var(--ink3);font-size:11.5px;margin-top:2px}
+
+  /* suggestions */
+  .sugtabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
+  .sugtab{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--line);background:#fff;border-radius:9px;padding:8px 12px;cursor:pointer;font-weight:650;color:var(--ink2)}
+  .sugtab svg{width:15px;height:15px;stroke:var(--slate)}
+  .sugtab.on{border-color:var(--brand);background:var(--brand-soft);color:var(--brand)}
+  .sugtab.on svg{stroke:var(--brand)}
+  .sugtab .n{background:#0f1729;color:#fff;border-radius:9px;padding:1px 8px;font-size:11px;font-weight:800}
+  .sugtab.on .n{background:var(--brand)}
+  .sugrow{display:grid;grid-template-columns:24px 1fr auto auto;gap:14px;align-items:center;padding:13px 15px;border-bottom:1px solid var(--line2)}
+  .sugrow:hover{background:#fafbff}
+  .sugrow .ttl{font-weight:700}
+  .sugrow .why{color:var(--ink2);font-size:12px;margin-top:3px}
+  .sugrow .meta{color:var(--ink3);font-size:11px;margin-top:5px;display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+  .impact{text-align:right} .impact .big{font-weight:800;font-size:14px} .impact .lab{color:var(--ink3);font-size:10.5px;text-transform:uppercase;letter-spacing:.3px}
+  .sugact{display:flex;gap:7px}
+  .btn{border-radius:8px;padding:7px 13px;font-weight:700;cursor:pointer;border:1px solid var(--line);background:#fff;color:var(--ink2);display:inline-flex;align-items:center;gap:6px}
+  .btn svg{width:14px;height:14px}
+  .btn.ok{background:var(--green);border-color:var(--green);color:#fff}
+  .btn.no{background:#fff;color:var(--slate)}
+  .btn.sm{padding:5px 10px;font-size:11.5px}
+  .toggle{display:inline-flex;align-items:center;gap:8px;font-weight:650;color:var(--ink2);font-size:12px;cursor:pointer}
+  .sw{width:34px;height:19px;border-radius:20px;background:#cbd5e1;position:relative;transition:.15s;flex:none}
+  .sw i{position:absolute;top:2px;left:2px;width:15px;height:15px;border-radius:50%;background:#fff;transition:.15s;box-shadow:0 1px 2px rgba(0,0,0,.2)}
+  .toggle.on .sw{background:var(--green)} .toggle.on .sw i{left:17px}
+  .ai-banner{display:flex;align-items:center;gap:11px;background:linear-gradient(90deg,#eef2ff,#faf5ff);border:1px solid #e0e7ff;border-radius:10px;padding:12px 15px;margin-bottom:14px}
+  .ai-banner .sp{width:30px;height:30px;border-radius:8px;background:linear-gradient(135deg,#818cf8,#a855f7);display:grid;place-items:center;flex:none}
+
+  /* cockpit */
+  .placewrap{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+  .placecard{border:1px solid var(--line);border-radius:9px;padding:12px}
+  .placecard .pn{font-weight:700;font-size:12px;display:flex;align-items:center;gap:7px}
+  .placecard .pn svg{width:14px;height:14px}
+  .placecard .pv{font-size:20px;font-weight:750;margin-top:6px}
+  .placecard .pr{color:var(--ink3);font-size:11px;margin-top:4px}
+  .tabline{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-bottom:0}
+  .tabline button{border:0;background:transparent;padding:11px 14px;font-weight:700;color:var(--ink3);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px}
+  .tabline button.on{color:var(--brand);border-color:var(--brand)}
+  .note{font-size:11px;color:var(--ink3)}
+  .legend{color:var(--ink3);font-size:11px;display:flex;gap:14px;margin-top:10px;flex-wrap:wrap;align-items:center}
+  .legend b{color:var(--ink2)}
+  .legend .d{width:8px;height:8px;border-radius:50%;display:inline-block}
+
+  /* copilot */
+  .cop-btn{position:fixed;right:22px;bottom:22px;z-index:40;background:linear-gradient(135deg,#6366f1,#7c3aed);color:#fff;border:0;border-radius:30px;padding:13px 18px;font-weight:700;cursor:pointer;box-shadow:0 8px 24px rgba(79,70,229,.4);display:flex;gap:9px;align-items:center}
+  .cop-btn svg{width:16px;height:16px}
+  .cop{position:fixed;top:0;right:-460px;width:430px;height:100vh;background:#fff;border-left:1px solid var(--line);box-shadow:-12px 0 40px rgba(15,23,42,.12);z-index:50;transition:right .22s;display:flex;flex-direction:column}
+  .cop.on{right:0}
+  .cop .ch{display:flex;align-items:center;gap:9px;padding:15px 17px;border-bottom:1px solid var(--line);font-weight:700}
+  .cop .ch .x{margin-left:auto;cursor:pointer;color:var(--ink3);font-size:18px}
+  .cop .body{flex:1;overflow:auto;padding:16px}
+  .msg{margin-bottom:14px}
+  .msg.u{text-align:right}
+  .msg .b{display:inline-block;max-width:86%;padding:10px 13px;border-radius:12px;font-size:12.5px;text-align:left}
+  .msg.u .b{background:var(--brand);color:#fff;border-bottom-right-radius:4px}
+  .msg.a .b{background:#f1f5f9;color:var(--ink);border-bottom-left-radius:4px}
+  .cop .actcard{border:1px solid #e0e7ff;background:#f8f9ff;border-radius:10px;padding:11px;margin-top:9px}
+  .cop .ghosthint{color:var(--ink3);font-size:11px;margin-top:4px}
+  .cop .ci{padding:13px;border-top:1px solid var(--line);display:flex;gap:8px}
+  .cop .ci input{flex:1;border:1px solid var(--line);border-radius:9px;padding:10px 12px;font:inherit;outline:0}
+  .ph-hero{width:54px;height:54px;border-radius:14px;background:var(--brand-soft);display:grid;place-items:center;margin:0 auto 16px}
+  .ph-hero svg{width:26px;height:26px;stroke:var(--brand)}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<button class="cop-btn" onclick="document.getElementById('cop').classList.add('on')"></button>
+<div class="cop" id="cop"></div>
+
+<script>
+/* ---------- icons ---------- */
+const ICONS={
+  grid:'<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>',
+  layers:'<path d="M12 2 2 7l10 5 10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>',
+  check:'<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>',
+  wand:'<path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 15v4M21 17h-4M5 4v2M6 5H4"/>',
+  target:'<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5"/>',
+  chart:'<path d="M3 3v18h18"/><rect x="7" y="11" width="3" height="7"/><rect x="12" y="7" width="3" height="11"/><rect x="17" y="4" width="3" height="14"/>',
+  gear:'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-2.7 1.1V21a2 2 0 1 1-4 0v-.1A1.6 1.6 0 0 0 7 19.4a1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0-1.1-2.7H1a2 2 0 1 1 0-4h.1A1.6 1.6 0 0 0 2.6 7a1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3H7a1.6 1.6 0 0 0 1-1.5V1a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 2.7 1.1l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V7a1.6 1.6 0 0 0 1.5 1H23a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z"/>',
+  flag:'<path d="M4 22V4M4 4h13l-2 4 2 4H4"/>',
+  cal:'<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/>',
+  up:'<path d="M7 17 17 7M9 7h8v8"/>',
+  down:'<path d="M7 7l10 10M17 9v8H9"/>',
+  trend:'<path d="M3 17l6-6 4 4 7-7"/><path d="M17 8h4v4"/>',
+  alert:'<path d="M10.3 3.6 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.6a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h0"/>',
+  box:'<path d="M21 8 12 3 3 8l9 5 9-5z"/><path d="M3 8v8l9 5 9-5V8"/>',
+  cap:'<path d="M4 16a8 8 0 1 1 16 0"/><path d="M12 16l3.5-3.5"/>',
+  flash:'<path d="M13 2 4 14h7l-1 8 9-12h-7z"/>',
+  search:'<circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/>',
+  filter:'<path d="M3 4h18l-7 8v6l-4 2v-8z"/>',
+  cols:'<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18M15 3v18"/>',
+  plus:'<path d="M12 5v14M5 12h14"/>',
+  back:'<path d="M15 18l-6-6 6-6"/>',
+  coin:'<circle cx="12" cy="12" r="9"/><path d="M12 7v10M9.5 9.5h4a1.5 1.5 0 0 1 0 3h-3a1.5 1.5 0 0 0 0 3h4"/>',
+  arrow:'<path d="M5 12h14M13 6l6 6-6 6"/>',
+  minus:'<circle cx="12" cy="12" r="9"/><path d="M8 12h8"/>',
+  send:'<path d="M22 2 11 13M22 2l-7 20-4-9-9-4z"/>'
+};
+function ic(n,c){return '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="'+(c||'currentColor')+'" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+(ICONS[n]||'')+'</svg>';}
+function dot(c){return '<span class="d" style="background:'+c+'"></span>';}
+function acl(t){return t==='g'?'acos-good':t==='a'?'acos-mid':'acos-bad';}
+function barc(t){return t==='g'?'var(--green)':t==='a'?'var(--amber)':'var(--red)';}
+function profitColor(p){return String(p).startsWith('-')?'var(--red)':(p==='€0'||p==='—')?'var(--ink3)':'#6d28d9';}
+
+/* ---------- row builders ---------- */
+function moverRow(name,mkt,spend,sales,acos,profit,score,tone){
+  return '<tr><td class="l"><span class="cname">'+name+'</span></td>'
+    +'<td><span class="cc az">'+dot('var(--az)')+mkt+'</span></td>'
+    +'<td class="num">'+spend+'</td><td class="num">'+sales+'</td>'
+    +'<td><span class="'+acl(tone)+'">'+acos+'%</span></td>'
+    +'<td><span style="color:#6d28d9;font-weight:700">'+profit+'</span></td>'
+    +'<td><span class="bar"><i style="width:'+score+'%;background:'+barc(tone)+'"></i></span></td></tr>';
+}
+function mult(v){var pos=String(v).startsWith('+');return '<span class="mult '+(pos?'pos':'')+'">'+v+'</span>';}
+function campRow(name,status,type,mkt,budget,spend,sales,acos,tone,profit,tos,pdp,ros){
+  return '<tr><td class="l"><input type="checkbox" onclick="toggleBulk()"/></td>'
+    +'<td class="l"><div class="cname" style="cursor:pointer" onclick="go(\'cockpit\',null)">'+name+'</div></td>'
+    +'<td>'+(status==='Paused'?'<span class="pill n">Paused</span>':'<span class="pill g">Enabled</span>')+'</td>'
+    +'<td><span class="cc az">'+dot('var(--az)')+type+'</span></td><td>'+mkt+'</td>'
+    +'<td class="num">'+budget+'</td><td class="num">'+spend+'</td><td class="num">'+sales+'</td>'
+    +'<td><span class="'+acl(tone)+'">'+acos+'%</span></td>'
+    +'<td><span style="color:'+profitColor(profit)+';font-weight:700">'+profit+'</span></td>'
+    +'<td>'+mult(tos)+'</td><td>'+mult(pdp)+'</td><td>'+mult(ros)+'</td></tr>';
+}
+function prodRow(name,sku,emoji,stock,stockTone,buybox,spend,sales,acos,tacos,profit,nCamp,tone,expandable){
+  var stp={ok:'pill g',warn:'pill a',out:'pill r',n:'pill n'}[stockTone]||'pill n';
+  var bb=buybox==='Won'?'<span class="pill g">Won</span>':buybox==='Lost'?'<span class="pill r">Lost</span>':'<span class="pill n">—</span>';
+  return '<tr><td class="l"><div class="ck">'
+    +(expandable?'<span class="expander" onclick="expand(this)">&#9656;</span>':'<span style="width:12px;display:inline-block"></span>')
+    +'<span class="thumb">'+emoji+'</span><div><div class="cname">'+name+'</div><div class="csub">'+sku+'</div></div></div></td>'
+    +'<td><span class="'+stp+'">'+stock+'</span></td><td>'+bb+'</td>'
+    +'<td class="num">'+spend+'</td><td class="num">'+sales+'</td>'
+    +'<td>'+(acos==='—'?'<span class="csub">—</span>':'<span class="'+acl(tone)+'">'+acos+'%</span>')+'</td>'
+    +'<td class="num">'+(tacos==='—'?'—':tacos+'%')+'</td>'
+    +'<td><span style="color:'+profitColor(profit)+';font-weight:700">'+profit+'</span></td>'
+    +'<td>'+(nCamp>0?'<span class="pill b">'+nCamp+' active</span>':'<span class="pill n" style="cursor:pointer" onclick="go(\'launch\',null)">launch →</span>')+'</td></tr>';
+}
+function subCamp(name,mkt,spend,acos,tone){
+  return '<tr><td class="l"><span class="cc az">'+dot('var(--az)')+mkt+'</span> &nbsp; '+name+'</td>'
+    +'<td class="num">'+spend+'</td><td><span class="'+acl(tone)+'">'+acos+'%</span></td></tr>';
+}
+function placeCard(name,m,eff,rationale){
+  return '<div class="placecard"><div class="pn">'+ic('target','var(--brand)')+name+'</div>'
+    +'<div class="pv">'+m+' <span style="font-size:12px;color:var(--ink3);font-weight:600">'+eff+'</span></div>'
+    +'<div class="pr">'+rationale+'</div></div>';
+}
+function kwRow(kw,match,bid,impr,clicks,spend,orders,acos,tone){
+  var mb={exact:'mt-exact',phrase:'mt-phrase',broad:'mt-broad',auto:'mt-auto'}[match];
+  return '<tr><td class="l">'+kw+'</td><td><span class="matchbadge '+mb+'">'+match.toUpperCase()+'</span></td>'
+    +'<td><span class="bidbox">'+bid+'</span></td><td class="num">'+impr+'</td><td class="num">'+clicks+'</td>'
+    +'<td class="num">'+spend+'</td><td class="num">'+orders+'</td>'
+    +'<td><span class="'+acl(tone)+'">'+acos+'%</span></td>'
+    +'<td><span class="btn sm" style="padding:4px 9px">Edit</span></td></tr>';
+}
+function sug(title,why,change,impact){
+  return '<div class="sugrow"><div><input type="checkbox" checked/></div>'
+    +'<div><div class="ttl">'+title+'</div><div class="why">'+why+'</div><div class="meta"><span>'+change+'</span></div></div>'
+    +'<div class="impact"><div class="big" style="color:var(--green)">'+impact+'</div><div class="lab">est. impact</div></div>'
+    +'<div class="sugact"><span class="btn no sm" onclick="approve(this)">Dismiss</span><span class="btn ok sm" onclick="approve(this)">'+ic('check','#fff')+'Approve</span></div></div>';
+}
+function gradRow(title,why,from,to,impact){
+  var mb=function(m){return {exact:'mt-exact',phrase:'mt-phrase',broad:'mt-broad',auto:'mt-auto'}[m];};
+  return '<div class="sugrow"><div><input type="checkbox" checked/></div>'
+    +'<div><div class="ttl">'+title+'</div><div class="why">'+why+'</div>'
+    +'<div class="meta"><span><span class="matchbadge '+mb(from)+'">'+from.toUpperCase()+'</span> '+ic('arrow','var(--ink3)')+' <span class="matchbadge '+mb(to)+'">'+to.toUpperCase()+'</span></span>'
+    +'<span>+ negative-exact written back to source (no cannibalization)</span></div></div>'
+    +'<div class="impact"><div class="big" style="color:var(--green)">'+impact+'</div><div class="lab">on graduated term</div></div>'
+    +'<div class="sugact"><span class="btn no sm" onclick="approve(this)">Dismiss</span><span class="btn ok sm" onclick="approve(this)">Graduate</span></div></div>';
+}
+function placeholder(id,title,sub,body){
+  return '<section class="view" id="'+id+'"><div class="card"><div class="bd" style="padding:48px;text-align:center">'
+    +'<div class="ph-hero">'+ic('wand')+'</div>'
+    +'<h2 style="margin:0 0 6px">'+title+'</h2>'
+    +'<div style="color:var(--ink2);font-weight:600;margin-bottom:14px">'+sub+'</div>'
+    +'<p style="max-width:640px;margin:0 auto;color:var(--ink3);line-height:1.6">'+body+'</p></div></div></section>';
+}
+
+/* ---------- views ---------- */
+var DASH='<section class="view on" id="v-dash">'
+  +'<div class="grid5" style="margin-bottom:14px">'
+  +'<div class="card kpi"><div class="lbl">Ad Spend</div><div class="val">€18,420</div><div class="dlt up">'+ic('up')+' 12.4% vs prev</div></div>'
+  +'<div class="card kpi"><div class="lbl">Ad Sales</div><div class="val">€96,310</div><div class="dlt up">'+ic('up')+' 18.1%</div></div>'
+  +'<div class="card kpi"><div class="lbl">ACOS</div><div class="val">19.1%</div><div class="dlt up">'+ic('down')+' 2.3pt better</div></div>'
+  +'<div class="card kpi"><div class="lbl">TACOS</div><div class="val">8.4%</div><div class="dlt up">'+ic('down')+' 0.9pt</div></div>'
+  +'<div class="card kpi" style="background:linear-gradient(135deg,#faf5ff,#fff);border-color:#e9d5ff"><div class="lbl" style="color:#7c3aed">True Profit ◆</div><div class="val" style="color:#6d28d9">€41,880</div><div class="dlt up">'+ic('up')+' 21% · 43.5% margin</div></div>'
+  +'</div>'
+  +'<div class="grid2" style="margin-bottom:14px">'
+  +'<div class="card"><div class="hd">'+ic('trend')+' Spend vs Sales <span class="mut">· profit-native</span><span class="spacer" style="flex:1"></span><span class="pill b">iROAS 5.2×</span></div>'
+  +'<div class="bd"><div style="height:170px;border-radius:8px;background:linear-gradient(180deg,#f8faff,#fff);border:1px dashed var(--line);display:grid;place-items:center;color:var(--ink3)">trend chart — daily spend / sales / true-profit overlay</div>'
+  +'<div class="legend"><span><b>—</b> Spend</span><span style="color:var(--green)"><b>—</b> Sales</span><span style="color:#7c3aed"><b>—</b> True profit</span><span><b>···</b> Today (live partial)</span></div></div></div>'
+  +'<div class="card"><div class="hd">'+ic('alert')+' Needs attention</div><div>'
+  +'<div class="alert"><div class="ic" style="background:var(--red-soft)">'+ic('box','var(--red)')+'</div><div><div class="t">2 campaigns advertising out-of-stock SKUs</div><div class="s">Casco Carbon (IT), Stivali GTX (DE) — auto-pause queued in Suggestions</div></div></div>'
+  +'<div class="alert"><div class="ic" style="background:var(--amber-soft)">'+ic('cap','var(--amber)')+'</div><div><div class="t">Budget pace: 4 winners capped before 6pm</div><div class="s">Going-dark mitigation can stretch €240/day across peak hours</div></div></div>'
+  +'<div class="alert"><div class="ic" style="background:var(--brand-soft)">'+ic('target','var(--brand)')+'</div><div><div class="t">Competitor lost Buy Box on "casco integrale"</div><div class="s">SOV opening 14:00–17:00 — ToS defense ready to seize</div></div></div>'
+  +'</div></div></div>'
+  +'<div class="card"><div class="hd">'+ic('flash')+' Top movers <span class="mut">· last 7 days</span></div>'
+  +'<table><thead><tr><th class="l">Campaign</th><th>Channel</th><th>Spend</th><th>Sales</th><th>ACOS</th><th>True profit</th><th>7-day trend</th></tr></thead><tbody>'
+  +moverRow('SP · Giacca Pelle · Exact','IT','€1,240','€9,180','13.5','€4,820',92,'g')
+  +moverRow('SP · Casco Carbon · Auto','IT','€980','€3,210','30.5','€410',55,'a')
+  +moverRow('SB · Brand Defense','IT','€620','€7,400','8.4','€3,980',88,'g')
+  +moverRow('SP · Guanti Estivi · Broad','DE','€540','€1,180','45.8','-€90',28,'r')
+  +moverRow('SD · Retargeting','FR','€430','€2,610','16.5','€1,120',71,'g')
+  +'</tbody></table></div></section>';
+
+var CAMP='<section class="view" id="v-camp">'
+  +'<div class="toolbar"><div class="seg"><button class="on" onclick="campView(\'c\',this)">By campaign</button><button onclick="campView(\'p\',this)">By product</button></div>'
+  +'<div class="search">'+ic('search')+'<input placeholder="Filter campaigns, products, ASINs…"/></div>'
+  +'<div class="ctl">'+ic('filter')+'<span>Filters</span></div><span class="spacer" style="flex:1"></span>'
+  +'<div class="ctl">'+ic('cols')+'<span>Columns</span></div><div class="ctl acc" onclick="go(\'launch\',null)">'+ic('plus')+'<span>Launch</span></div></div>'
+  +'<div class="bulkbar" id="bulkbar"><b>0 selected</b><span style="flex:1"></span><span class="gho">Set bid</span><span class="gho">Adjust budget ±%</span><span class="gho">Placement bids</span><span class="gho">Pause</span><span class="gho">Apply target ACOS</span></div>'
+  +'<div class="card" id="camp-c"><table><thead><tr>'
+  +'<th class="l" style="width:26px"></th><th class="l">Campaign</th><th>Status</th><th>Type</th><th>Mkt</th>'
+  +'<th>Daily budget</th><th>Spend</th><th>Sales</th><th>ACOS</th><th>True profit</th>'
+  +'<th title="Top of Search">ToS bid</th><th title="Product pages">PDP</th><th title="Rest of search">RoS</th></tr></thead><tbody>'
+  +campRow('SP · Giacca Pelle Nera · Exact','Enabled','SP','IT','€80','€1,240','€9,180','13.5','g','€4,820','+40%','+15%','—')
+  +campRow('SP · Casco Carbon · Auto','Enabled','SP','IT','€60','€980','€3,210','30.5','a','€410','+25%','—','—')
+  +campRow('SB · Brand Defense — Xavia','Enabled','SB','IT','€45','€620','€7,400','8.4','g','€3,980','+60%','—','—')
+  +campRow('SP · Guanti Estivi · Broad','Enabled','SP','DE','€40','€540','€1,180','45.8','r','-€90','—','—','—')
+  +campRow('SD · Retargeting Viewers','Enabled','SD','FR','€35','€430','€2,610','16.5','g','€1,120','—','+20%','—')
+  +campRow('SP · Stivali Adventure · Exact','Paused','SP','DE','€50','€710','€4,050','17.5','g','€1,940','+35%','+10%','—')
+  +'<tr style="opacity:.55"><td></td><td class="l"><div class="ck"><span class="thumb">e</span><div><div class="cname">eBay Promoted · Giacca Pelle</div><div class="csub">Channel-agnostic schema already supports this</div></div></div></td><td><span class="pill n">P12</span></td><td><span class="cc ebay">'+dot('var(--ebay)')+'PL</span></td><td>IT</td><td colspan="8" class="l note">Write path lights up in Phase 12 — same grid, same cockpit.</td></tr>'
+  +'</tbody></table>'
+  +'<div class="legend" style="padding:12px 14px"><span><b>ToS / PDP / RoS</b> = placement bid multipliers inline (Amazon hides these behind 3 clicks).</span><span>'+dot('var(--green)')+' ACOS ≤ target</span><span>'+dot('var(--amber)')+' near target</span><span>'+dot('var(--red)')+' over / unprofitable</span></div></div>'
+  +'<div class="card" id="camp-p" style="display:none"><table><thead><tr><th class="l">Product</th><th>Stock</th><th>Buy Box</th><th>Ad spend</th><th>Ad sales</th><th>ACOS</th><th>TACOS</th><th>True profit</th><th>Campaigns</th></tr></thead><tbody>'
+  +prodRow('Giacca Racing Pelle Nera','GIA-PEL-NR','🧥','In stock · 142','ok','Won','€1,560','€11,200','13.9','7.1','€5,640',3,'g',true)
+  +'<tr class="subrow" style="display:none"><td colspan="9" class="l"><div style="padding:4px 0 4px 54px"><table style="width:auto;min-width:420px"><tbody>'
+  +subCamp('SP · Giacca Pelle · Exact','IT','€1,240','13.5','g')
+  +subCamp('SB · Brand Defense','IT','€220','9.1','g')
+  +subCamp('SD · Retargeting','DE','€100','22.0','a')
+  +'</tbody></table></div></td></tr>'
+  +prodRow('Casco Integrale Carbon','CAS-CRB-01','🪖','⚠ 3 left','warn','Won','€980','€3,210','30.5','14.2','€410',2,'a',false)
+  +prodRow('Guanti Estivi Touch','GUA-EST-TC','🧤','In stock · 88','ok','Lost','€540','€1,180','45.8','19.9','-€90',2,'r',false)
+  +prodRow('Stivali Adventure GTX','STV-ADV-GT','🥾','Out of stock','out','—','€710','€4,050','17.5','9.0','€1,940',1,'g',false)
+  +prodRow('Giubbotto Textile Impermeabile','GIU-TEX-IMP','🧥','In stock · 64','ok','Won','€0','€0','—','—','€0',0,'n',false)
+  +'</tbody></table><div class="legend" style="padding:12px 14px"><span><b>By-product</b> = row is the product (photo + stock + Buy Box); expand to see its campaigns. Per-product ad attribution was 99.5% unattributed before this lens.</span></div></div></section>';
+
+var COCKPIT='<section class="view" id="v-cockpit">'
+  +'<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap">'
+  +'<span class="ctl" onclick="go(\'camp\',null)">'+ic('back')+'Campaigns</span>'
+  +'<h2 style="margin:0;font-size:16px">SP · Giacca Pelle Nera · Exact</h2>'
+  +'<span class="cc az">'+dot('var(--az)')+'Sponsored Products</span><span class="pill g">Enabled</span><span class="pill b">IT</span>'
+  +'<span class="spacer" style="flex:1"></span><span class="pill g" style="font-size:12px">Health 92 ◆</span>'
+  +'<span class="ctl acc">'+ic('flash')+'Live writes ON</span></div>'
+  +'<div class="grid5" style="margin-bottom:14px">'
+  +'<div class="card kpi"><div class="lbl">Spend</div><div class="val" style="font-size:19px">€1,240</div></div>'
+  +'<div class="card kpi"><div class="lbl">Sales</div><div class="val" style="font-size:19px">€9,180</div></div>'
+  +'<div class="card kpi"><div class="lbl">ACOS</div><div class="val" style="font-size:19px">13.5%</div><div class="note">target 22%</div></div>'
+  +'<div class="card kpi"><div class="lbl">True profit</div><div class="val" style="font-size:19px;color:#6d28d9">€4,820</div></div>'
+  +'<div class="card kpi"><div class="lbl">Budget pace</div><div class="val" style="font-size:19px">68%</div><div class="bar" style="width:100%;margin-top:8px"><i style="width:68%;background:var(--green)"></i></div></div></div>'
+  +'<div class="card" style="margin-bottom:14px"><div class="hd">'+ic('target')+' Placement bidding <span class="mut">· base bid €0.92 · strategy: dynamic down-only</span><span class="spacer" style="flex:1"></span><span class="toggle on" onclick="this.classList.toggle(\'on\')"><span class="sw"><i></i></span>Auto-optimize placements</span></div>'
+  +'<div class="bd"><div class="placewrap">'
+  +placeCard('Top of Search','+40%','→ €1.29','ACOS 11.2% · 62% of sales')
+  +placeCard('Product pages','+15%','→ €1.06','ACOS 15.8% · 26% of sales')
+  +placeCard('Rest of search','0%','€0.92 base','ACOS 19.1% · 12% of sales')
+  +'</div><div class="note" style="margin-top:10px">In queue: raise ToS to +55% (ACOS headroom to target). One screen, no drill-through — this is the Pacvue fix.</div></div></div>'
+  +'<div class="card"><div class="tabline" style="padding:0 8px"><button class="on">Targets (keywords)</button><button>Ad groups</button><button>Search terms</button></div>'
+  +'<table><thead><tr><th class="l">Keyword / target</th><th>Match</th><th>Bid</th><th>Impr.</th><th>Clicks</th><th>Spend</th><th>Orders</th><th>ACOS</th><th></th></tr></thead><tbody>'
+  +kwRow('giacca pelle moto','exact','€0.95','12,400','410','€289','41','11.0','g')
+  +kwRow('giacca racing donna','exact','€0.88','6,210','188','€142','18','14.2','g')
+  +kwRow('giacca pelle nera moto','exact','€1.10','4,880','166','€171','9','28.4','a')
+  +kwRow('giacca xavia','exact','€0.70','3,100','96','€58','12','7.1','g')
+  +kwRow('giubbotto pelle','phrase','€0.65','9,400','120','€96','4','42.0','r')
+  +'</tbody></table></div></section>';
+
+var SUG='<section class="view" id="v-sug">'
+  +'<div class="ai-banner"><div class="sp">'+ic('wand','#fff')+'</div>'
+  +'<div style="flex:1"><div style="font-weight:700">18 suggestions ready · est. <span style="color:var(--green)">+€2,340 profit / mo</span></div>'
+  +'<div class="note">Every optimizer, harvester and guardrail proposes here. Approve manually, or flip a category to auto-apply once you trust it.</div></div>'
+  +'<span class="btn ok">'+ic('check','#fff')+'Approve all safe (11)</span></div>'
+  +'<div class="sugtabs">'
+  +'<span class="sugtab on" onclick="sugTab(0,this)">'+ic('coin')+' Bid changes <span class="n">6</span></span>'
+  +'<span class="sugtab" onclick="sugTab(1,this)">'+ic('arrow')+' Match-type graduations <span class="n">4</span></span>'
+  +'<span class="sugtab" onclick="sugTab(2,this)">'+ic('plus')+' New keywords <span class="n">3</span></span>'
+  +'<span class="sugtab" onclick="sugTab(3,this)">'+ic('minus')+' Negatives <span class="n">2</span></span>'
+  +'<span class="sugtab" onclick="sugTab(4,this)">'+ic('cap')+' Budget <span class="n">2</span></span>'
+  +'<span class="sugtab" onclick="sugTab(5,this)">'+ic('box')+' Retail-pause <span class="n">1</span></span></div>'
+  +'<div class="card"><div class="hd" style="justify-content:space-between"><span id="sug-title">Bid changes</span>'
+  +'<span class="toggle" onclick="this.classList.toggle(\'on\')"><span class="sw"><i></i></span>Auto-apply this category</span></div>'
+  +'<div id="sug-bids">'
+  +sug('Lower bid on "giubbotto pelle" → €0.42','Phrase target · ACOS 42% vs 22% target · €96 spent, 4 orders in 14d','−55% bid','Save €41/mo')
+  +sug('Raise ToS placement +55% on Giacca Pelle · Exact','ToS ACOS 11.2% has headroom to the 22% target — capture more #1 slots','+€18/day spend','+€1,100/mo sales')
+  +sug('Lower bid on "casco moto economico" → €0.31','High clicks, low conversion · ACOS 58%','−40% bid','Save €62/mo')
+  +sug('Raise bid on "giacca racing donna" → €1.05','Converting at 14% ACOS with 38% lost impression share','+19% bid','+€420/mo sales')
+  +sug('Keyword Boost: push "giacca pelle moto" to #1 ToS','Hero term · isolate + bid aggressively to #1, then ease to cheapest holding CPC','TOSO engaged','+€900/mo sales')
+  +sug('Lower bid on "tuta moto" → €0.28','Irrelevant adjacency · 0 orders on €34 spend','−60% bid','Save €34/mo')
+  +'</div><div id="sug-grad" style="display:none">'
+  +gradRow('"giacca pelle moto" — graduate to Exact','Proven in Auto: 41 orders at 11% ACOS over 21 days','auto','exact','−18% ACOS')
+  +gradRow('"casco carbonio integrale" — Broad → Phrase','18 orders at 16% ACOS; tighten match to cut waste','broad','phrase','−12% ACOS')
+  +gradRow('"stivali moto impermeabili" — graduate to Exact','12 orders at 14% ACOS in the Phrase campaign','phrase','exact','−15% ACOS')
+  +gradRow('"guanti moto estivi traforati" — to Exact','9 orders at 17% ACOS, stable 14 days','broad','exact','−9% ACOS')
+  +'</div><div id="sug-other" style="display:none"><div style="padding:46px;text-align:center;color:var(--ink3)">Same row pattern — rationale, impact estimate, Approve / Dismiss, plus a per-category auto-apply toggle — for New keywords, Negatives, Budget moves and Retail-pause.</div></div></div></section>';
+
+var PLACEHOLDERS=placeholder('v-auto','Automation','Rules · Goals · Dayparting · Budget pacing · Retail-aware guards',
+    'Built across Phases 3–9. The existing rules engine (4 triggers, 11 action handlers), target-ACOS optimizer, keyword harvest, dayparting executor, retail-readiness verdict, budget rebalancer and the currently-dormant bidding-engine all converge here — each rule with a per-rule <b>auto-apply</b> toggle, full change log, and one-click rollback.')
+  +placeholder('v-comp','Competitive','Share of Voice · SQP · competitor moves',
+    'Phase 9. Share of Voice by keyword, competitor budget-exhaustion windows feeding ToS-defense + dayparting, and share trends vs the top rivals — built on the existing SQP (Brand Analytics) and brand-metrics ingestion you already have.')
+  +placeholder('v-ana','Analytics','Trends · True profit · Search terms · Reports',
+    'Phase 11. One surface absorbing today&rsquo;s separate analytics, true-profit, search-terms, reports, storage-age and feeds pages — profit-native by default.')
+  +placeholder('v-set','Settings','Connections · Write-mode gates · Budget caps · Tags',
+    'Connection health, the live-write allowlist (sandbox → live, per-campaign canary), monthly budget caps with stop-over-spend, and campaign tags for reporting. (Billing tags &amp; agency features intentionally cut — you&rsquo;re one brand.)')
+  +placeholder('v-launch','Launch a product (Goal)','Pick product → target ACOS + budget → AI builds the cluster',
+    'Phase 4. Collapses today&rsquo;s four separate create / architect / goals / funnel pages into one Perpetua-style flow: set a target ACOS and daily budget, and the engine spins up Auto + Broad/Phrase + Exact + Product-Targeting campaigns with a harvest loop wired between them.');
+
+/* ---------- shell ---------- */
+var SHELL='<div class="app"><aside class="side">'
+  +'<div class="brand"><div class="logo">◎</div><div>Nexus Ads<small>Trading Desk</small></div></div>'
+  +'<nav class="nav"><div class="grp">Operate</div>'
+  +'<a class="on" onclick="go(\'dash\',this)">'+ic('grid')+'<span>Dashboard</span></a>'
+  +'<a onclick="go(\'camp\',this)">'+ic('layers')+'<span>Campaigns</span></a>'
+  +'<a onclick="go(\'sug\',this)">'+ic('check')+'<span>Suggestions</span><span class="ct">18</span></a>'
+  +'<div class="grp">Automate</div>'
+  +'<a onclick="go(\'auto\',this)">'+ic('wand')+'<span>Automation</span><span class="ph">P3–9</span></a>'
+  +'<div class="grp">Intelligence</div>'
+  +'<a onclick="go(\'comp\',this)">'+ic('target')+'<span>Competitive</span><span class="ph">P9</span></a>'
+  +'<a onclick="go(\'ana\',this)">'+ic('chart')+'<span>Analytics</span><span class="ph">P11</span></a>'
+  +'<div class="grp">Setup</div>'
+  +'<a onclick="go(\'set\',this)">'+ic('gear')+'<span>Settings</span></a></nav>'
+  +'<div class="foot"><div class="av">XV</div><div><div style="color:#e2e8f0;font-weight:600">Xavia</div><div style="font-size:10.5px">Amazon · eBay · Shopify</div></div></div></aside>'
+  +'<div class="main"><div class="top"><div><h1 id="ttl">Dashboard</h1><div class="sub" id="sub">Last 30 days · all markets</div></div>'
+  +'<span class="spacer" style="flex:1"></span>'
+  +'<div class="chips"><span class="chip on">'+dot('var(--az)')+'Amazon</span>'
+  +'<span class="chip off" title="Goes live in P12">'+dot('var(--ebay)')+'eBay</span>'
+  +'<span class="chip off" title="Goes live in P12">'+dot('var(--shop)')+'Shopify</span></div>'
+  +'<div class="ctl">'+ic('flag')+'<span>IT · DE · FR · ES</span></div>'
+  +'<div class="ctl">'+ic('cal')+'<span>Last 30 days</span></div></div>'
+  +'<div class="scroll">'+DASH+CAMP+COCKPIT+SUG+PLACEHOLDERS+'</div></div></div>';
+
+document.getElementById('root').innerHTML=SHELL;
+
+/* copilot */
+document.querySelector('.cop-btn').innerHTML=ic('wand','#fff')+' Copilot';
+document.getElementById('cop').innerHTML=
+  '<div class="ch">'+ic('wand','#7c3aed')+' Ads Copilot <span class="x" onclick="document.getElementById(\'cop\').classList.remove(\'on\')">&#10005;</span></div>'
+  +'<div class="body">'
+  +'<div class="msg a"><div class="b">Hi — ask me anything, or tell me what to do. I route every action through your Suggestions inbox so nothing happens without your nod.</div></div>'
+  +'<div class="msg u"><div class="b">Lower bids on all keywords with ACOS over 40% in Germany</div></div>'
+  +'<div class="msg a"><div class="b">Found <b>7 keywords</b> in DE with ACOS &gt; 40% (€212 spend / 14d, 9 orders). I&rsquo;ll reduce each toward your 22% target — est. <b>save €128/mo</b>.'
+  +'<div class="actcard"><b>7 bid reductions</b> queued in Suggestions → Bid changes<div class="ghosthint">Review them, or say &ldquo;apply now&rdquo; since this is within guardrails.</div>'
+  +'<div style="margin-top:9px;display:flex;gap:7px"><span class="btn ok sm" onclick="go(\'sug\',null);document.getElementById(\'cop\').classList.remove(\'on\')">Open in Suggestions</span><span class="btn sm">Apply now</span></div></div></div></div></div>'
+  +'<div class="ci"><input placeholder="e.g. graduate winning auto terms to exact"/><span class="ctl acc">'+ic('send')+'</span></div>';
+
+/* ---------- interactions ---------- */
+function go(v,el){
+  document.querySelectorAll('.view').forEach(function(x){x.classList.remove('on');});
+  var map={dash:'v-dash',camp:'v-camp',sug:'v-sug',auto:'v-auto',comp:'v-comp',ana:'v-ana',set:'v-set',cockpit:'v-cockpit',launch:'v-launch'};
+  document.getElementById(map[v]).classList.add('on');
+  var titles={dash:['Dashboard','Last 30 days · all markets'],camp:['Campaigns','Ad Manager · 169 campaigns · Amazon'],sug:['Suggestions','18 pending · est. +€2,340/mo'],auto:['Automation','Rules · Goals · Dayparting'],comp:['Competitive','Share of Voice · competitor moves'],ana:['Analytics','Trends · profit · search terms'],set:['Settings','Connections · gates · budgets'],cockpit:['Campaign','SP · Giacca Pelle Nera · Exact'],launch:['Launch a product','Goal-based campaign creation']};
+  document.getElementById('ttl').textContent=titles[v][0];
+  document.getElementById('sub').textContent=titles[v][1];
+  var navmap={dash:0,camp:1,sug:2,auto:3,comp:4,ana:5,set:6};
+  document.querySelectorAll('.nav a').forEach(function(a){a.classList.remove('on');});
+  if(navmap[v]!=null) document.querySelectorAll('.nav a')[navmap[v]].classList.add('on');
+  document.querySelector('.scroll').scrollTop=0;
+}
+function campView(m,el){
+  document.querySelectorAll('#v-camp .seg button').forEach(function(b){b.classList.remove('on');});
+  el.classList.add('on');
+  document.getElementById('camp-c').style.display=m==='c'?'':'none';
+  document.getElementById('camp-p').style.display=m==='p'?'':'none';
+}
+function toggleBulk(){
+  var n=document.querySelectorAll('#camp-c tbody input[type=checkbox]:checked').length;
+  var tb=document.getElementById('bulkbar');
+  tb.style.display=n>0?'flex':'none';
+  tb.querySelector('b').textContent=n+' selected';
+}
+function expand(el){
+  var r=el.closest('tr').nextElementSibling;
+  if(r&&r.classList.contains('subrow')){
+    var open=r.style.display!=='none';
+    r.style.display=open?'none':'';
+    el.innerHTML=open?'&#9656;':'&#9662;';
+  }
+}
+function sugTab(i,el){
+  document.querySelectorAll('.sugtab').forEach(function(t){t.classList.remove('on');});
+  el.classList.add('on');
+  var names=['Bid changes','Match-type graduations','New keywords','Negatives','Budget','Retail-pause'];
+  document.getElementById('sug-title').textContent=names[i];
+  document.getElementById('sug-bids').style.display=i===0?'':'none';
+  document.getElementById('sug-grad').style.display=i===1?'':'none';
+  document.getElementById('sug-other').style.display=i>1?'':'none';
+}
+function approve(el){
+  var r=el.closest('.sugrow');
+  r.style.transition='.25s';r.style.opacity='0';r.style.transform='translateX(20px)';
+  setTimeout(function(){r.style.display='none';},250);
+}
+</script>
+</body>
+</html>
