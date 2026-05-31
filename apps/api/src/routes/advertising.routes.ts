@@ -127,7 +127,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
 
     const { cached } = await import('../services/advertising/ads-cache.js')
     const cacheKey = `campaigns:${q.marketplace ?? ''}:${q.status ?? ''}:${q.search ?? ''}:${limit}`
-    const result = await cached(cacheKey, 30, async () => {
+    const result = await cached(cacheKey, 300, async () => {
       const campaigns = await prisma.campaign.findMany({
         where,
         orderBy: [{ marketplace: 'asc' }, { name: 'asc' }],
@@ -183,7 +183,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     since.setUTCHours(0, 0, 0, 0)
 
     const { cached } = await import('../services/advertising/ads-cache.js')
-    const payload = await cached(`detail:${id}:${windowDays}`, 20, async () => {
+    const payload = await cached(`detail:${id}:${windowDays}`, 300, async () => {
       const campaign = await prisma.campaign.findUnique({
         where: { id },
         include: {
@@ -264,7 +264,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const since = new Date(); since.setUTCDate(since.getUTCDate() - windowDays); since.setUTCHours(0, 0, 0, 0)
 
     const { cached: cachedAg } = await import('../services/advertising/ads-cache.js')
-    const agPayload = await cachedAg(`adgroup:${id}:${windowDays}`, 20, async () => {
+    const agPayload = await cachedAg(`adgroup:${id}:${windowDays}`, 300, async () => {
     const adGroup = await prisma.adGroup.findUnique({
       where: { id },
       include: {
@@ -854,7 +854,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     since.setUTCHours(0, 0, 0, 0)
 
     const { cached } = await import('../services/advertising/ads-cache.js')
-    const payload = await cached(`v1metrics:${windowDays}:${query.marketplace ?? ''}`, 30, async () => {
+    const payload = await cached(`v1metrics:${windowDays}:${query.marketplace ?? ''}`, 300, async () => {
     const rows = await prisma.amazonAdsDailyPerformance.groupBy({
       by: ['entityId', 'adProduct', 'marketplace', 'currencyCode'],
       where: {
@@ -1859,7 +1859,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
 
     const { cached: cachedTrends } = await import('../services/advertising/ads-cache.js')
     const trendsKey = `trends:${query.campaignId ?? ''}:${windowDays}:${query.marketplace ?? ''}:${query.adProduct ?? ''}:${query.currencyCode ?? ''}:${query.compare ?? ''}`
-    const result = await cachedTrends(trendsKey, 30, async () => {
+    const result = await cachedTrends(trendsKey, 300, async () => {
     // ── Ad performance per day ──────────────────────────────────────────
     const perfByDay = await prisma.amazonAdsDailyPerformance.groupBy({
       by: ['date'],
@@ -2002,7 +2002,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
 
     const { cached: cachedSpark } = await import('../services/advertising/ads-cache.js')
     reply.header('Cache-Control', 'private, max-age=120')
-    return cachedSpark(`spark:${q.campaignId}:${entityType}:${metric}:${windowDays}`, 60, async () => {
+    return cachedSpark(`spark:${q.campaignId}:${entityType}:${metric}:${windowDays}`, 300, async () => {
     // Resolve the campaign's child local ids for the requested grain.
     const localIds = entityType === 'AD_GROUP'
       ? (await prisma.adGroup.findMany({ where: { campaignId: q.campaignId }, select: { id: true } })).map((r) => r.id)
