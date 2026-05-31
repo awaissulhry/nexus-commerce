@@ -28,11 +28,29 @@ const acosClsFrac = (v: number | null | undefined) => (v == null ? '' : v <= 0.2
 const matchCls = (t: string) => { const u = t.toUpperCase(); return u === 'EXACT' ? 'mt-exact' : u === 'PHRASE' ? 'mt-phrase' : u === 'BROAD' ? 'mt-broad' : 'mt-auto' }
 const placeLabel = (k: string) => { const l = k.toLowerCase(); if (l.includes('top')) return 'Top of Search'; if (l.includes('product') || l.includes('detail')) return 'Product pages'; if (l.includes('rest')) return 'Rest of search'; if (l.includes('home')) return 'Home'; return k }
 
-export function CampaignCockpit({ campaign: c }: { campaign: CockpitCampaign }) {
+export function CampaignCockpit({ campaign }: { campaign: CockpitCampaign }) {
+  const [c, setC] = useState<CockpitCampaign>(campaign)
   const [tab, setTab] = useState<'placements' | 'targets' | 'adgroups'>('placements')
   const [placements, setPlacements] = useState<Placement[] | null>(null)
   const [edit, setEdit] = useState<Record<string, string>>({})
   const [busy, setBusy] = useState(false)
+  const [bidEdit, setBidEdit] = useState<Record<string, string>>({})
+  const [bidBusy, setBidBusy] = useState<string | null>(null)
+
+  const refetchCampaign = useCallback(async () => {
+    const d = await fetch(`${getBackendUrl()}/api/advertising/campaigns/${campaign.id}`, { cache: 'no-store' }).then((r) => r.json()).catch(() => null)
+    if (d?.campaign) setC(d.campaign as CockpitCampaign)
+  }, [campaign.id])
+  const saveBid = async (t: AdTarget) => {
+    const v = bidEdit[t.id]; if (v == null) return
+    const n = parseFloat(v); if (!Number.isFinite(n) || n < 0) { setBidEdit((s) => { const x = { ...s }; delete x[t.id]; return x }); return }
+    setBidBusy(t.id)
+    try {
+      await fetch(`${getBackendUrl()}/api/advertising/ad-targets/bulk-bid`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ entries: [{ adTargetId: t.id, bidCents: Math.round(n * 100) }] }) })
+      setBidEdit((s) => { const x = { ...s }; delete x[t.id]; return x })
+      await refetchCampaign()
+    } finally { setBidBusy(null) }
+  }
 
   const loadPlacements = useCallback(async () => {
     const d = await fetch(`${getBackendUrl()}/api/advertising/campaigns/${c.id}/placements`, { cache: 'no-store' }).then((r) => r.json()).catch(() => ({ placements: [] }))
@@ -121,7 +139,9 @@ export function CampaignCockpit({ campaign: c }: { campaign: CockpitCampaign }) 
                 <tr key={t.id}>
                   <td className="l">{t.expressionValue}</td>
                   <td><span className={`matchbadge ${matchCls(t.expressionType)}`}>{t.expressionType}</span></td>
-                  <td className="num">{eur(t.bidCents)}</td>
+                  <td className="num">{bidEdit[t.id] != null
+                    ? <input autoFocus className="bedit" type="number" step="0.01" value={bidEdit[t.id]} onChange={(e) => setBidEdit((s) => ({ ...s, [t.id]: e.target.value }))} onKeyDown={(e) => { if (e.key === 'Enter') void saveBid(t); if (e.key === 'Escape') setBidEdit((s) => { const x = { ...s }; delete x[t.id]; return x }) }} onBlur={() => void saveBid(t)} disabled={bidBusy === t.id} />
+                    : <button className="budget-btn" onClick={() => setBidEdit((s) => ({ ...s, [t.id]: (t.bidCents / 100).toFixed(2) }))} title="Edit bid">{eur(t.bidCents)}</button>}</td>
                   <td className="num">{num(t.impressions)}</td><td className="num">{num(t.clicks)}</td>
                   <td className="num">{eur(t.spendCents)}</td><td className="num">{num(t.ordersCount)}</td>
                   <td><span className={acosClsFrac(acos)}>{pctFrac(acos)}</span></td>
