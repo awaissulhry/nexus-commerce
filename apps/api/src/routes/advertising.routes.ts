@@ -4454,6 +4454,42 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     return { ok: true, connection: conn }
   })
 
+  // ── Apex A.2b: set a connection's mode (sandbox ↔ production) ───────────
+  // Connections are created mode=sandbox; this is the only way to promote one
+  // to production, which is a *precondition* for enable-writes (it does NOT by
+  // itself enable any live write — writesEnabledAt stays null and the per-
+  // campaign allowlist still applies). Switching back to sandbox also clears
+  // writesEnabledAt so the gate hard-closes immediately.
+  fastify.post('/advertising/connection/set-mode', async (request, reply) => {
+    const body = request.body as { profileId?: string; mode?: string }
+    if (!body?.profileId || (body.mode !== 'sandbox' && body.mode !== 'production')) {
+      reply.code(400)
+      return { error: 'profileId + mode (sandbox|production) required' }
+    }
+    const existing = await prisma.amazonAdsConnection.findUnique({
+      where: { profileId: body.profileId },
+      select: { profileId: true, marketplace: true, accountLabel: true, mode: true },
+    })
+    if (!existing) { reply.code(404); return { error: 'connection_not_found' } }
+    const conn = await prisma.amazonAdsConnection.update({
+      where: { profileId: body.profileId },
+      data: {
+        mode: body.mode,
+        // Demoting to sandbox revokes any standing write enablement.
+        ...(body.mode === 'sandbox' ? { writesEnabledAt: null } : {}),
+      },
+      select: { profileId: true, marketplace: true, mode: true, writesEnabledAt: true },
+    })
+    logger.warn('[ADS-CONNECTION-SET-MODE]', {
+      profileId: conn.profileId,
+      marketplace: conn.marketplace,
+      from: existing.mode,
+      to: conn.mode,
+      actor: actorFromHeaders(request.headers as Record<string, unknown>),
+    })
+    return { ok: true, connection: conn }
+  })
+
   fastify.get('/advertising/connections', async (_request, reply) => {
     const items = await prisma.amazonAdsConnection.findMany({
       orderBy: [{ marketplace: 'asc' }],
