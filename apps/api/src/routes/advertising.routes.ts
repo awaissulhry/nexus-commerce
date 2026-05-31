@@ -156,9 +156,25 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
           // operators to see *why* a campaign isn't serving.
           deliveryStatus: true,
           deliveryReasons: true,
+          // P2 (Trading Desk Ad Manager): placement multipliers live here.
+          dynamicBidding: true,
         },
       })
-      return { items: campaigns, count: campaigns.length }
+      // P2 — derive inline placement multipliers (ToS/PDP/RoS) from
+      // Campaign.dynamicBidding.placementBidding so the Ad Manager grid can
+      // show them as columns without an extra per-campaign fetch. The heavy
+      // dynamicBidding JSON is stripped from the response.
+      const items = campaigns.map((c) => {
+        const { dynamicBidding, ...rest } = c
+        const db = (dynamicBidding ?? {}) as { placementBidding?: Array<{ placement: string; percentage: number }> }
+        const pb = db.placementBidding ?? []
+        const find = (kw: string) => {
+          const m = pb.find((p) => p.placement?.toLowerCase().includes(kw))
+          return m ? m.percentage : null
+        }
+        return { ...rest, placements: { tos: find('top'), pdp: find('product'), ros: find('rest') } }
+      })
+      return { items, count: items.length }
     })
     reply.header('Cache-Control', 'private, max-age=60')
     return result

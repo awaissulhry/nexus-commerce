@@ -125,3 +125,42 @@
 .td-root .alert .ai { width: 28px; height: 28px; border-radius: 8px; flex: none; display: grid; place-items: center; }
 .td-root .alert .at { font-weight: 650; }
 .td-root .alert .as { color: var(--ink3); font-size: 11.5px; margin-top: 2px; }
+
+/* ── CAMPAIGNS / AD MANAGER GRID ───────────────────────────── */
+.td-root .toolbar { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+.td-root .seg { display: inline-flex; background: #eef0f3; border-radius: 8px; padding: 3px; }
+.td-root .seg button { border: 0; background: transparent; padding: 6px 12px; border-radius: 6px; font-weight: 700; color: var(--ink2); cursor: pointer; font-size: 12px; }
+.td-root .seg button.on { background: #fff; color: var(--ink); box-shadow: var(--shadow); }
+.td-root .search { display: flex; align-items: center; gap: 7px; border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; background: #fff; min-width: 220px; color: var(--ink3); }
+.td-root .search svg { width: 14px; height: 14px; stroke: var(--ink3); }
+.td-root .search input { border: 0; outline: 0; font: inherit; flex: 1; color: var(--ink); background: transparent; }
+.td-root select.flt { border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; font: inherit; font-size: 12px; color: var(--ink2); background: #fff; font-weight: 600; cursor: pointer; }
+.td-root .bulkbar { display: flex; align-items: center; gap: 10px; background: #0f1729; color: #fff; border-radius: 10px; padding: 9px 14px; margin-bottom: 12px; font-weight: 600; font-size: 12px; }
+.td-root .bulkbar .gho { border: 1px solid #334155; background: #1e293b; color: #e2e8f0; border-radius: 7px; padding: 5px 11px; cursor: pointer; font-weight: 600; }
+.td-root .bulkbar .gho:hover { background: #334155; }
+.td-root .bulkbar .clear { margin-left: auto; color: #94a3b8; cursor: pointer; background: transparent; border: 0; font: inherit; }
+.td-root .tablewrap { overflow-x: auto; }
+.td-root th.s { cursor: pointer; user-select: none; }
+.td-root .mult { display: inline-flex; align-items: center; border-radius: 6px; padding: 2px 6px; font-weight: 700; font-size: 11px; background: #f1f5f9; color: var(--slate); }
+.td-root .mult.pos { background: var(--green-soft); color: var(--green); }
+.td-root .acos-good { color: var(--green); font-weight: 700; }
+.td-root .acos-mid { color: var(--amber); font-weight: 700; }
+.td-root .acos-bad { color: var(--red); font-weight: 700; }
+.td-root .cname { font-weight: 650; color: var(--ink); display: inline-flex; align-items: center; gap: 5px; max-width: 320px; }
+.td-root .cname span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.td-root .cname:hover { color: var(--brand); }
+.td-root .cname:hover span { text-decoration: underline; }
+.td-root .cname svg.ext { width: 11px; height: 11px; stroke: var(--ink3); flex: none; }
+.td-root .bedit { width: 70px; border: 1px solid var(--brand); border-radius: 6px; padding: 2px 6px; font: inherit; font-weight: 700; text-align: right; }
+.td-root .budget-btn { background: transparent; border: 0; cursor: pointer; font: inherit; font-weight: 600; color: var(--ink2); border-bottom: 1px dotted var(--ink3); }
+.td-root .budget-btn:hover { color: var(--brand); }
+.td-root .iact { background: transparent; border: 1px solid var(--line); border-radius: 6px; padding: 3px 7px; cursor: pointer; color: var(--ink2); font-weight: 600; font-size: 11px; display: inline-flex; align-items: center; gap: 4px; }
+.td-root .iact:hover { background: #f1f5f9; }
+.td-root .iact:disabled { opacity: .4; cursor: default; }
+.td-root .livewrap { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 600; color: var(--green); }
+.td-root .livedot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); }
+.td-root tr.sel { background: #f5f3ff; }
+.td-root .empty { padding: 40px; text-align: center; color: var(--ink3); }
+.td-root .spin { animation: td-spin 1s linear infinite; }
+@keyframes td-spin { to { transform: rotate(360deg); } }
+.td-root .legend .d { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }

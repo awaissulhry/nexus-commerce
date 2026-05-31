@@ -24,7 +24,7 @@ interface Group { label: string; items: Item[] }
 const GROUPS: Group[] = [
   { label: 'Operate', items: [
     { label: 'Dashboard', href: BASE, icon: LayoutDashboard, native: true },
-    { label: 'Campaigns', href: '/marketing/advertising/campaigns', icon: Megaphone, phase: 'P2' },
+    { label: 'Campaigns', href: `${BASE}/campaigns`, icon: Megaphone, native: true },
     { label: 'Suggestions', href: '/marketing/advertising/recommendations', icon: ListChecks, phase: 'P3' },
   ] },
   { label: 'Automate', items: [
@@ -54,7 +54,8 @@ export function TradingDeskSidebar() {
             <div className="grp">{g.label}</div>
             {g.items.map((it) => {
               const Icon = it.icon
-              const active = !!it.native && pathname === it.href
+              // Dashboard (BASE) must match exactly; deeper native routes match by prefix.
+              const active = !!it.native && (it.href === BASE ? pathname === BASE : pathname === it.href || pathname.startsWith(`${it.href}/`))
               const body = (
                 <>
                   <Icon size={17} />
