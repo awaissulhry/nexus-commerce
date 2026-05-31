@@ -102,10 +102,18 @@ export type AmsMessage = AmsTrafficMsg & AmsConversionMsg & { marketplace?: stri
 
 export interface AmsIngestResult { received: number; upserted: number; skipped: number }
 
+// Diagnostic ring buffer — the last few raw messages + ingest results seen, so
+// we can confirm the real AMS field shape once data flows (the ingest field
+// mapping was written speculatively). In-memory, best-effort.
+const _amsDebug: { samples: unknown[]; lastResult: AmsIngestResult | null; lastAt: string | null } = { samples: [], lastResult: null, lastAt: null }
+export function amsDebugSnapshot() { return _amsDebug }
+
 /** Ingest a batch of AMS messages. Idempotent-ish: accumulates into the
  *  (profile, adProduct=SP, CAMPAIGN, campaign_id, day) daily row. */
 export async function ingestMarketingStream(messages: AmsMessage[]): Promise<AmsIngestResult> {
   const result: AmsIngestResult = { received: messages.length, upserted: 0, skipped: 0 }
+  // Capture a couple of raw samples for diagnostics (cap 5).
+  try { if (messages.length) { _amsDebug.samples = [...messages.slice(0, 5)]; _amsDebug.lastAt = new Date().toISOString() } } catch { /* ignore */ }
   // CD.11 — resolve local Campaign.id per (externalCampaignId, marketplace)
   // once so hourly rows carry localEntityId for cheap indexed campaign-scoped
   // reads (dayparting). Cached across the batch.
@@ -165,5 +173,6 @@ export async function ingestMarketingStream(messages: AmsMessage[]): Promise<Ams
     } catch (e) { logger.warn('[AX.12] AMS ingest row failed', { campaignId, error: (e as Error).message }); result.skipped++ }
   }
   logger.info('[AX.12] AMS ingest', result)
+  _amsDebug.lastResult = result
   return result
 }

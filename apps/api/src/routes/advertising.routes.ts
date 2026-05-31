@@ -3735,6 +3735,12 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const { amsStatus } = await import('../services/advertising/ads-marketing-stream.service.js')
     return amsStatus()
   })
+  // Diagnostic — last raw AMS messages + ingest result this instance saw, to
+  // confirm the real field shape once data flows.
+  fastify.get('/advertising/marketing-stream/debug-sample', async () => {
+    const { amsDebugSnapshot } = await import('../services/advertising/ads-marketing-stream.service.js')
+    return amsDebugSnapshot()
+  })
   fastify.get('/advertising/marketing-stream/subscriptions', async (request, reply) => {
     const prof = await firstActiveAdsProfile()
     if (!prof) { reply.status(400); return { error: 'no active Amazon Ads connection' } }
