@@ -320,3 +320,21 @@
 .td-root .xrow { cursor: pointer; color: var(--ink3); text-align: center; background: transparent; border: 0; padding: 4px; }
 .td-root .xrow:hover { color: var(--red); }
 .td-root .grd { display: grid; grid-template-columns: repeat(3,1fr); gap: 10px; }
+
+/* dayparting heatmap */
+.td-root .heatgrid { display: grid; grid-template-columns: repeat(7,1fr); gap: 8px; }
+@media (max-width: 900px) { .td-root .heatgrid { grid-template-columns: repeat(4,1fr); } }
+.td-root .heatcell { border: 1px solid var(--line); border-radius: 10px; padding: 12px 10px; text-align: center; background: #fff; }
+.td-root .heatcell.up { background: var(--green-soft); border-color: #bbf7d0; }
+.td-root .heatcell.down { background: var(--red-soft); border-color: #fecaca; }
+.td-root .heatcell .hd2 { font-weight: 700; font-size: 12px; }
+.td-root .heatcell .hi { font-size: 20px; font-weight: 750; margin-top: 4px; font-variant-numeric: tabular-nums; }
+.td-root .heatcell .hs { font-size: 10.5px; color: var(--ink3); margin-top: 3px; }
+
+/* budget pace */
+.td-root .pacewrap { min-width: 150px; }
+.td-root .pacebar { position: relative; height: 10px; border-radius: 6px; background: #eef0f3; }
+.td-root .pacebar > i { display: block; height: 100%; border-radius: 6px; }
+.td-root .pacemark { position: absolute; top: -3px; width: 2px; height: 16px; background: var(--ink2); border-radius: 1px; }
+.td-root .addcap { display: flex; gap: 10px; align-items: flex-end; padding: 13px 14px; border-top: 1px solid var(--line2); flex-wrap: wrap; }
+.td-root .addcap label { font-size: 11px; color: var(--ink3); font-weight: 600; display: block; margin-bottom: 3px; }
