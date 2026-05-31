@@ -11,7 +11,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
-import { Search, ChevronDown, MoreVertical, RefreshCw, Settings, Download, Filter, Info, X } from 'lucide-react'
+import { Search, ChevronDown, MoreVertical, RefreshCw, Settings, Download, Filter, Info, X, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react'
 import { marketplaceCountryName } from '@/lib/marketplace-code'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useMarketingEvents } from '@/lib/sync/use-marketing-events'
@@ -95,6 +95,8 @@ export function CampaignsTable({ initial }: { initial: Base[] }) {
   const [showRange, setShowRange] = useState(false)
   const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS)
   const [showFilter, setShowFilter] = useState(false)
+  const [pageSize, setPageSize] = useState(50)
+  const [page, setPage] = useState(1)
   const rangeLabel = RANGES.find((r) => r.d === days)?.label ?? `Last ${days} days`
 
   // hydrate column prefs from localStorage (client-only → no SSR mismatch)
@@ -210,6 +212,14 @@ export function CampaignsTable({ initial }: { initial: Base[] }) {
 
   const order = useMemo(() => ['active', 'name', ...visible.filter((k) => META_BY_KEY[k] && !META_BY_KEY[k].locked)], [visible])
 
+  // pagination — reset to page 1 whenever the result set changes
+  useEffect(() => { setPage(1) }, [tab, search, filters, pageSize, sortKey, sortDir])
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize))
+  const curPage = Math.min(page, totalPages)
+  const paged = useMemo(() => filtered.slice((curPage - 1) * pageSize, curPage * pageSize), [filtered, curPage, pageSize])
+  const firstRow = filtered.length === 0 ? 0 : (curPage - 1) * pageSize + 1
+  const lastRow = Math.min(curPage * pageSize, filtered.length)
+
   const toggleSort = (k: string) => { if (sortKey === k) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc')); else { setSortKey(k); setSortDir('desc') } }
   const arrow = (k: string) => (sortKey === k ? (sortDir === 'asc' ? ' ▲' : ' ▼') : '')
   const patch = (id: string, body: Record<string, unknown>) => fetch(`${getBackendUrl()}/api/advertising/campaigns/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
@@ -300,7 +310,7 @@ export function CampaignsTable({ initial }: { initial: Base[] }) {
     const url = URL.createObjectURL(new Blob([lines.join('\n')], { type: 'text/csv' })); const a = document.createElement('a'); a.href = url; a.download = 'campaigns.csv'; a.click(); URL.revokeObjectURL(url)
   }
 
-  const allChecked = filtered.length > 0 && filtered.every((r) => sel.has(r.b.id))
+  const allChecked = paged.length > 0 && paged.every((r) => sel.has(r.b.id))
 
   return (
     <div className="az-wrap">
@@ -353,7 +363,7 @@ export function CampaignsTable({ initial }: { initial: Base[] }) {
         <table className="az-table">
           <thead>
             <tr>
-              <th className="l az-cellsticky" style={{ width: 36 }}><input className="az-check" type="checkbox" checked={allChecked} onChange={(e) => setSel(e.target.checked ? new Set(filtered.map((r) => r.b.id)) : new Set())} /></th>
+              <th className="l az-cellsticky" style={{ width: 36 }}><input className="az-check" type="checkbox" checked={allChecked} onChange={(e) => setSel((s) => { const n = new Set(s); paged.forEach((r) => { if (e.target.checked) n.add(r.b.id); else n.delete(r.b.id) }); return n })} /></th>
               {order.map((k) => {
                 const m = META_BY_KEY[k]; const label = k === 'active' ? 'Active' : m?.label ?? k
                 return (
@@ -365,8 +375,8 @@ export function CampaignsTable({ initial }: { initial: Base[] }) {
             </tr>
           </thead>
           <tbody>
-            {filtered.length === 0 && <tr><td className="az-empty" colSpan={1 + order.length}>{loading ? 'Loading…' : 'No campaigns.'}</td></tr>}
-            {filtered.map((r) => {
+            {filtered.length === 0 && <tr><td className="az-empty" colSpan={1 + order.length}>{loading ? 'Loading…' : 'No campaigns match your filters.'}</td></tr>}
+            {paged.map((r) => {
               const b = r.b
               return (
                 <tr key={b.id} className={sel.has(b.id) ? 'sel' : ''}>
@@ -378,7 +388,22 @@ export function CampaignsTable({ initial }: { initial: Base[] }) {
           </tbody>
         </table>
       </div>
-      <div style={{ padding: '10px 2px', color: 'var(--ink2)', fontSize: 12 }}>{filtered.length} campaigns · {order.length} columns · metrics last {days} days{loading ? ' · updating…' : ''}</div>
+      <div className="az-pager">
+        <span className="count">{filtered.length} campaigns · {order.length} columns · last {days} days{loading ? ' · updating…' : ''}</span>
+        <span className="rpp">Results per page
+          <select value={pageSize} onChange={(e) => setPageSize(Number(e.target.value))} aria-label="Results per page">
+            {[25, 50, 100, 200, 300].map((n) => <option key={n} value={n}>{n}</option>)}
+          </select>
+        </span>
+        <span className="range">{firstRow}–{lastRow} of {filtered.length}</span>
+        <span className="nav">
+          <button onClick={() => setPage(1)} disabled={curPage <= 1} aria-label="First page"><ChevronsLeft size={16} /></button>
+          <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={curPage <= 1} aria-label="Previous page"><ChevronLeft size={16} /></button>
+          <span className="pg">{curPage} / {totalPages}</span>
+          <button onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={curPage >= totalPages} aria-label="Next page"><ChevronRight size={16} /></button>
+          <button onClick={() => setPage(totalPages)} disabled={curPage >= totalPages} aria-label="Last page"><ChevronsRight size={16} /></button>
+        </span>
+      </div>
 
       {showCols && <CustomiseColumns visible={visible} onClose={() => setShowCols(false)} onApply={applyCols} />}
     </div>

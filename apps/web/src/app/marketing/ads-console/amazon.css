@@ -237,3 +237,15 @@
 .az-fp-mf { display: flex; align-items: center; gap: 6px; background: var(--bg3); border-radius: 6px; padding: 5px 6px 5px 10px; margin-bottom: 5px; font-weight: 500; }
 .az-fp-mf .rm { margin-left: auto; background: none; border: 0; color: var(--ink2); cursor: pointer; display: grid; place-items: center; }
 .az-fp-foot { display: flex; justify-content: space-between; align-items: center; padding-top: 12px; }
+
+/* ── PAGER (results-per-page + page nav) ───────────────────── */
+.az-pager { display: flex; align-items: center; justify-content: flex-end; gap: 20px; padding: 14px 4px 8px; color: var(--ink); font-size: 13px; flex-wrap: wrap; }
+.az-pager .count { margin-right: auto; color: var(--ink2); font-size: 12px; }
+.az-pager .rpp { display: inline-flex; align-items: center; gap: 8px; }
+.az-pager select { border: 1px solid var(--border); border-radius: 6px; padding: 5px 8px; font: inherit; cursor: pointer; background: #fff; color: var(--ink); }
+.az-pager .range { color: var(--ink2); font-variant-numeric: tabular-nums; }
+.az-pager .nav { display: inline-flex; align-items: center; gap: 3px; }
+.az-pager .nav button { width: 32px; height: 32px; border: 1px solid var(--border); background: #fff; border-radius: 6px; display: grid; place-items: center; cursor: pointer; color: var(--ink); }
+.az-pager .nav button:hover:not(:disabled) { background: var(--bg3); }
+.az-pager .nav button:disabled { opacity: .4; cursor: default; }
+.az-pager .pg { padding: 0 10px; font-variant-numeric: tabular-nums; font-weight: 500; }
