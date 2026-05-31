@@ -1,5 +1,17 @@
 import { describe, it, expect } from 'vitest'
-import { parseAmsBody } from './ams-sqs.service.js'
+import { parseAmsBody, sqsUrlFromArn } from './ams-sqs.service.js'
+
+describe('sqsUrlFromArn', () => {
+  it('derives the HTTPS queue URL from an SQS ARN', () => {
+    expect(sqsUrlFromArn('arn:aws:sqs:eu-west-1:123456789012:nexus-ams')).toBe('https://sqs.eu-west-1.amazonaws.com/123456789012/nexus-ams')
+  })
+  it('returns null for a non-SQS ARN (e.g. Firehose)', () => {
+    expect(sqsUrlFromArn('arn:aws:firehose:eu-west-1:123456789012:deliverystream/nexus-ams')).toBeNull()
+  })
+  it('returns null for garbage', () => {
+    expect(sqsUrlFromArn('not-an-arn')).toBeNull()
+  })
+})
 
 describe('parseAmsBody', () => {
   it('parses a raw single AMS record', () => {

@@ -10,20 +10,47 @@
 
 import { SQSClient, ReceiveMessageCommand, DeleteMessageCommand } from '@aws-sdk/client-sqs'
 
+/**
+ * Derive the SQS HTTPS URL from an SQS ARN, so the operator doesn't have to set
+ * a second env var: AMS subscriptions already point at NEXUS_AMS_DESTINATION_ARN,
+ * and if that's an SQS queue we can poll it directly. Returns null for non-SQS
+ * ARNs (e.g. Firehose) — those need a different consumer.
+ * arn:aws:sqs:<region>:<account>:<queue>  →  https://sqs.<region>.amazonaws.com/<account>/<queue>
+ */
+export function sqsUrlFromArn(arn: string): string | null {
+  const m = /^arn:aws:sqs:([^:]+):([^:]+):(.+)$/.exec(arn.trim())
+  if (!m) return null
+  return `https://sqs.${m[1]}.amazonaws.com/${m[2]}/${m[3]}`
+}
+
+/** The AMS queue URL: explicit override, else derived from the destination ARN. */
+export function amsQueueUrl(): string | null {
+  if (process.env.NEXUS_AMS_SQS_QUEUE_URL) return process.env.NEXUS_AMS_SQS_QUEUE_URL
+  const arn = process.env.NEXUS_AMS_DESTINATION_ARN
+  return arn ? sqsUrlFromArn(arn) : null
+}
+
+/** Region from the queue URL (https://sqs.<region>...), else AWS_REGION. */
+function amsRegion(): string {
+  const url = amsQueueUrl()
+  const m = url ? /sqs\.([^.]+)\.amazonaws\.com/.exec(url) : null
+  return m?.[1] ?? process.env.AWS_REGION ?? 'eu-west-1'
+}
+
 export function isAmsSqsConfigured(): boolean {
-  return !!(process.env.NEXUS_AMS_SQS_QUEUE_URL && process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY)
+  return !!(amsQueueUrl() && process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY)
 }
 
 function buildClient(): SQSClient | null {
   if (!isAmsSqsConfigured()) return null
-  return new SQSClient({ region: process.env.AWS_REGION ?? 'eu-west-1' })
+  return new SQSClient({ region: amsRegion() })
 }
 
 export interface AmsRawMessage { receiptHandle: string; body: string }
 
 export async function pollAmsRaw(maxMessages = 10): Promise<AmsRawMessage[]> {
   const client = buildClient()
-  const url = process.env.NEXUS_AMS_SQS_QUEUE_URL
+  const url = amsQueueUrl()
   if (!client || !url) return []
   const res = await client.send(new ReceiveMessageCommand({
     QueueUrl: url,
@@ -38,7 +65,7 @@ export async function pollAmsRaw(maxMessages = 10): Promise<AmsRawMessage[]> {
 
 export async function deleteAmsMessage(receiptHandle: string): Promise<void> {
   const client = buildClient()
-  const url = process.env.NEXUS_AMS_SQS_QUEUE_URL
+  const url = amsQueueUrl()
   if (!client || !url) return
   await client.send(new DeleteMessageCommand({ QueueUrl: url, ReceiptHandle: receiptHandle }))
 }
