@@ -3711,6 +3711,11 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   // The operator creates an AMS subscription (Ads API → their AWS Firehose
   // → this endpoint). Accepts a single message or { messages: [...] }.
   fastify.post('/advertising/marketing-stream/ingest', async (request, reply) => {
+    // AME.9 — shared-secret gate. When NEXUS_AMS_INGEST_SECRET is set, the
+    // forwarder (SQS→Lambda) must send a matching x-ams-secret header. Left
+    // open only if the secret is unset (so existing flows don't break).
+    const secret = process.env.NEXUS_AMS_INGEST_SECRET
+    if (secret && request.headers['x-ams-secret'] !== secret) { reply.status(401); return { error: 'unauthorized' } }
     const b = request.body as Record<string, unknown>
     const messages = Array.isArray((b as { messages?: unknown[] })?.messages) ? (b as { messages: unknown[] }).messages : [b]
     const { ingestMarketingStream } = await import('../services/advertising/ads-marketing-stream.service.js')

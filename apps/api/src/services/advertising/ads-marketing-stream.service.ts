@@ -14,6 +14,7 @@
  * exercise it end-to-end.
  */
 
+import { randomUUID } from 'node:crypto'
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import { liveCall, adsMode, type AdsRegion } from './ads-api-client.js'
@@ -45,7 +46,9 @@ export async function createAmsSubscription(input: AmsSubscriptionInput): Promis
     region: input.region,
     method: 'POST',
     path: '/streams/subscriptions',
-    body: { dataSetId: input.dataSetId, destinationArn: arn, notes: input.notes ?? 'Nexus AMS subscription' },
+    // clientRequestToken — Amazon requires this idempotency token (a unique
+    // UUID per create). Without it the API 400s "Value null at clientRequestToken".
+    body: { dataSetId: input.dataSetId, destinationArn: arn, clientRequestToken: randomUUID(), notes: input.notes ?? 'Nexus AMS subscription' },
   })
 }
 
