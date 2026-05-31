@@ -19,6 +19,7 @@ import { getBackendUrl } from '@/lib/backend-url'
 import { TRIGGERS, CONDITION_FIELDS, OPS, ACTION_TYPES, TEMPLATES, type RuleTemplate } from '@/app/marketing/advertising/_shared/rule-catalog'
 import { DaypartingTab } from './DaypartingTab'
 import { BudgetTab } from './BudgetTab'
+import { RetailGuardTab } from './RetailGuardTab'
 
 interface Rule {
   id: string; name: string; description?: string | null; trigger: string
@@ -63,7 +64,7 @@ function draftFromRule(r: Rule): Draft {
 const newDraft = (): Draft => ({ name: '', trigger: TRIGGERS[0].key, conditions: [{ field: CONDITION_FIELDS[0].field, op: 'gte', value: '' }], actions: [{ type: ACTION_TYPES[0].type, params: defaultParams(ACTION_TYPES[0].type) }], maxExec: '10', maxSpendEur: '100', scope: '' })
 
 export function AutomationClient({ initialRules, initialHealth }: { initialRules: Rule[]; initialHealth: Health | null }) {
-  const [tab, setTab] = useState<'rules' | 'strategies' | 'dayparting' | 'budget' | 'activity'>('rules')
+  const [tab, setTab] = useState<'rules' | 'strategies' | 'dayparting' | 'budget' | 'retail' | 'activity'>('rules')
   const [rules, setRules] = useState<Rule[]>(initialRules)
   const [health, setHealth] = useState<Health | null>(initialHealth)
   const [execs, setExecs] = useState<Execution[] | null>(null)
@@ -140,6 +141,7 @@ export function AutomationClient({ initialRules, initialHealth }: { initialRules
           <button className={tab === 'strategies' ? 'on' : ''} onClick={() => setTab('strategies')}>Strategies</button>
           <button className={tab === 'dayparting' ? 'on' : ''} onClick={() => setTab('dayparting')}>Dayparting</button>
           <button className={tab === 'budget' ? 'on' : ''} onClick={() => setTab('budget')}>Budget</button>
+          <button className={tab === 'retail' ? 'on' : ''} onClick={() => setTab('retail')}>Retail guard</button>
           <button className={tab === 'activity' ? 'on' : ''} onClick={() => setTab('activity')}>Activity</button>
         </div>
 
@@ -204,6 +206,7 @@ export function AutomationClient({ initialRules, initialHealth }: { initialRules
 
         {tab === 'dayparting' && <DaypartingTab />}
         {tab === 'budget' && <BudgetTab />}
+        {tab === 'retail' && <RetailGuardTab />}
 
         {tab === 'activity' && (
           <div className="card"><div className="tablewrap"><table>
