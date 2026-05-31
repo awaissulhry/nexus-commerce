@@ -24,6 +24,7 @@ import { StatusChip } from '@/app/_shared/ads-ui'
 import { marketplaceCode, marketplaceCountryName } from '@/lib/marketplace-code'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useMarketingEvents } from '@/lib/sync/use-marketing-events'
+import { DateRangePicker, useAdRange, rangeQuery, labelFor } from '../_shared/DateRangePicker'
 
 interface TrendSummary { impressions: number; clicks: number; orders: number; spendCents: number; salesCents: number }
 
@@ -48,14 +49,6 @@ interface Row {
   ctr: number | null; cpc: number | null; cvr: number | null; acos: number | null; roas: number | null
   marginPct: number | null; budgetC: number; aov: number | null
 }
-
-const DATE_PRESETS = [
-  { key: '7', label: 'Last 7 days', days: 7 },
-  { key: '14', label: 'Last 14 days', days: 14 },
-  { key: '30', label: 'Last 30 days', days: 30 },
-  { key: '60', label: 'Last 60 days', days: 60 },
-  { key: '90', label: 'Last 90 days', days: 90 },
-]
 
 const CHART_METRICS: Array<{ key: string; label: string; color: string; axis: 'l' | 'r' }> = [
   { key: 'clicks', label: 'Clicks', color: '#6366f1', axis: 'l' },
@@ -83,7 +76,8 @@ export function AdCampaignsCockpit({ initial }: { initial: { items: CampaignBase
   const [trend, setTrend] = useState<TrendPoint[]>([])
   const [trendPrev, setTrendPrev] = useState<TrendSummary | null>(null) // CD.13
   const [liveTs, setLiveTs] = useState<number | null>(null) // CD.13
-  const [days, setDays] = useState(30)
+  const { range, setRange } = useAdRange()
+  const rq = rangeQuery(range)
   const [loading, setLoading] = useState(false)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
@@ -114,16 +108,16 @@ export function AdCampaignsCockpit({ initial }: { initial: { items: CampaignBase
       const base = getBackendUrl()
       const [c, m, t] = await Promise.all([
         fetch(`${base}/api/advertising/campaigns?limit=500`, { cache: 'no-store' }).then((r) => r.json()).catch(() => ({ items: [] })),
-        fetch(`${base}/api/advertising/campaigns/v1-metrics?windowDays=${days}`, { cache: 'no-store' }).then((r) => r.json()).catch(() => ({ items: [] })),
-        fetch(`${base}/api/advertising/trends?windowDays=${days}&compare=true`, { cache: 'no-store' }).then((r) => r.json()).catch(() => ({ items: [] })),
+        fetch(`${base}/api/advertising/campaigns/v1-metrics?${rq}`, { cache: 'no-store' }).then((r) => r.json()).catch(() => ({ items: [] })),
+        fetch(`${base}/api/advertising/trends?${rq}&compare=true`, { cache: 'no-store' }).then((r) => r.json()).catch(() => ({ items: [] })),
       ])
       setRowsRaw(c.items ?? [])
       setMetrics((m.byCampaign ?? {}) as Record<string, V1Metric>)
       setTrend((t.items ?? t.trends ?? t.daily ?? t.rows ?? []) as TrendPoint[])
       setTrendPrev((t.previous ?? null) as TrendSummary | null)
     } finally { setLoading(false) }
-  }, [days])
-  useEffect(() => { void refetch() }, [days, refetch])
+  }, [rq])
+  useEffect(() => { void refetch() }, [rq, refetch])
 
   // CD.13 — parity: live-refresh the roster on marketing events + a Live badge.
   useMarketingEvents(useCallback(() => { void refetch(); setLiveTs(Date.now()); setTimeout(() => setLiveTs(null), 4000) }, [refetch]))
@@ -258,7 +252,7 @@ export function AdCampaignsCockpit({ initial }: { initial: { items: CampaignBase
       lines.push(v.map((x) => `"${String(x).replace(/"/g, '""')}"`).join(','))
     }
     const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' })
-    const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `campaigns-${days}d.csv`; a.click(); URL.revokeObjectURL(url)
+    const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `campaigns-${labelFor(range).replace(/\s+/g, '-')}.csv`; a.click(); URL.revokeObjectURL(url)
   }
 
   const cols = useMemo(() => COLUMN_DEFS(budgetEdits, setBudgetEdits, saveBudget, toggleStatus, busy), [budgetEdits, busy])
@@ -275,11 +269,7 @@ export function AdCampaignsCockpit({ initial }: { initial: { items: CampaignBase
     <div>
       {/* Date range + KPIs */}
       <div className="flex items-center justify-between mb-3">
-        <div className="flex gap-1">
-          {DATE_PRESETS.map((p) => (
-            <button key={p.key} onClick={() => setDays(p.days)} className={`px-2.5 py-1 text-xs rounded-md border ${days === p.days ? 'bg-blue-600 text-white border-blue-600' : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>{p.label}</button>
-          ))}
-        </div>
+        <DateRangePicker value={range} onChange={setRange} />
         <span className="inline-flex items-center gap-1.5 text-xs">
           {loading && <span className="text-slate-400">updating…</span>}
           <span className={`inline-flex h-2 w-2 rounded-full ${liveTs ? 'bg-emerald-500 animate-pulse' : 'bg-emerald-500/70'}`} />
