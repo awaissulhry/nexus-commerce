@@ -25,10 +25,32 @@ import { liveCall, adsMode, type AdsRegion } from './ads-api-client.js'
 // feed stays dormant (the ingest endpoint simply receives nothing).
 const AMS_DESTINATION_ARN = process.env.NEXUS_AMS_DESTINATION_ARN || ''
 
-// AMS datasets we care about for intraday optimisation. sp-traffic =
-// impressions/clicks/cost by hour; sp-conversion = attributed sales/orders.
-export const AMS_DATASETS = ['sp-traffic', 'sp-conversion'] as const
+// AMS performance datasets — *-traffic = impressions/clicks/cost by hour,
+// *-conversion = attributed sales/orders. SP/SD/SB share the same message
+// shape; only the dataset_id (→ ad product) differs. Budget-usage + entity
+// change-streams (campaigns/adgroups/ads/targets) have DIFFERENT shapes and
+// are intentionally NOT subscribed here yet (they need dedicated ingest).
+export const AMS_DATASETS = [
+  'sp-traffic', 'sp-conversion',
+  'sd-traffic', 'sd-conversion',
+  'sb-traffic', 'sb-conversion',
+] as const
 export type AmsDataset = (typeof AMS_DATASETS)[number]
+
+/** Map an AMS dataset_id to our ad-product enum. Returns 'SKIP' for datasets
+ *  this performance-ingest doesn't model (budget-usage, entity streams, …) so
+ *  an unexpected message is dropped cleanly instead of polluting metrics.
+ *  Null = no dataset_id supplied → treat as legacy SP (back-compat). */
+function adProductFromDataset(ds?: string): 'SPONSORED_PRODUCTS' | 'SPONSORED_DISPLAY' | 'SPONSORED_BRANDS' | 'SKIP' | null {
+  if (!ds) return null
+  const d = ds.toLowerCase()
+  const isPerf = d.includes('traffic') || d.includes('conversion')
+  if (!isPerf) return 'SKIP'
+  if (d.startsWith('sp-')) return 'SPONSORED_PRODUCTS'
+  if (d.startsWith('sd-')) return 'SPONSORED_DISPLAY'
+  if (d.startsWith('sb-')) return 'SPONSORED_BRANDS'
+  return 'SKIP'
+}
 
 export interface AmsSubscriptionInput { profileId: string; region: AdsRegion; dataSetId: string; destinationArn?: string; notes?: string }
 
@@ -98,6 +120,9 @@ export async function ingestMarketingStream(messages: AmsMessage[]): Promise<Ams
     return id
   }
   for (const m of messages) {
+    const ap = adProductFromDataset(m.dataset_id)
+    if (ap === 'SKIP') { result.skipped++; continue }
+    const adProduct = ap ?? 'SPONSORED_PRODUCTS'
     const campaignId = m.campaign_id
     const profileId = m.profileId ?? 'ams'
     const tw = m.time_window_start ? new Date(m.time_window_start) : new Date()
@@ -110,9 +135,9 @@ export async function ingestMarketingStream(messages: AmsMessage[]): Promise<Ams
     const salesCents = m.attributed_sales_1d != null ? Math.round(m.attributed_sales_1d * 100) : 0
     try {
       await prisma.amazonAdsDailyPerformance.upsert({
-        where: { profileId_adProduct_entityType_entityId_date: { profileId, adProduct: 'SPONSORED_PRODUCTS', entityType: 'CAMPAIGN', entityId: campaignId, date } },
+        where: { profileId_adProduct_entityType_entityId_date: { profileId, adProduct, entityType: 'CAMPAIGN', entityId: campaignId, date } },
         create: {
-          profileId, marketplace, adProduct: 'SPONSORED_PRODUCTS', date, entityType: 'CAMPAIGN', entityId: campaignId,
+          profileId, marketplace, adProduct, date, entityType: 'CAMPAIGN', entityId: campaignId,
           impressions: m.impressions ?? 0, clicks: m.clicks ?? 0, costMicros, currencyCode: m.currency ?? 'EUR',
           sales7dCents: salesCents,
           orders7d: m.attributed_conversions_1d ?? 0, units7d: m.attributed_units_ordered_1d ?? 0,
@@ -125,9 +150,9 @@ export async function ingestMarketingStream(messages: AmsMessage[]): Promise<Ams
       // CD.11 — also write the hourly row (the genuine AMS edge: hour grain).
       const localEntityId = await resolveLocalId(campaignId, marketplace)
       await prisma.amazonAdsHourlyPerformance.upsert({
-        where: { profileId_adProduct_entityType_entityId_date_hour: { profileId, adProduct: 'SPONSORED_PRODUCTS', entityType: 'CAMPAIGN', entityId: campaignId, date, hour } },
+        where: { profileId_adProduct_entityType_entityId_date_hour: { profileId, adProduct, entityType: 'CAMPAIGN', entityId: campaignId, date, hour } },
         create: {
-          profileId, marketplace, adProduct: 'SPONSORED_PRODUCTS', date, hour, entityType: 'CAMPAIGN', entityId: campaignId, localEntityId,
+          profileId, marketplace, adProduct, date, hour, entityType: 'CAMPAIGN', entityId: campaignId, localEntityId,
           impressions: m.impressions ?? 0, clicks: m.clicks ?? 0, costMicros, currencyCode: m.currency ?? 'EUR',
           sales7dCents: salesCents, orders7d: m.attributed_conversions_1d ?? 0, units7d: m.attributed_units_ordered_1d ?? 0,
           reportRunId: 'ams-stream', reportedAt: new Date(),
