@@ -172,3 +172,41 @@
 .az-cc-chip .lk { color: var(--ink3); }
 
 .az-modal input[type=checkbox] { width: 16px; height: 16px; accent-color: var(--blue); cursor: pointer; }
+
+/* ── PERFORMANCE PANEL (KPI tiles + multi-metric chart) ────── */
+.az-perf { border: 1px solid var(--divider); border-radius: var(--radius); background: #fff; margin: 4px 0 18px; overflow: hidden; }
+.az-perf-head { display: flex; align-items: center; gap: 10px; padding: 12px 16px 0; }
+.az-perf-head .t { font-size: 15px; font-weight: 700; flex: 1; }
+.az-perf-head .hint { color: var(--ink3); font-size: 11.5px; }
+
+/* KPI tile strip — each tile toggles a line onto the chart */
+.az-kpis { display: flex; gap: 0; overflow-x: auto; padding: 12px 16px 0; }
+.az-kpi { flex: none; min-width: 132px; text-align: left; border: 0; border-top: 3px solid transparent; background: none; font: inherit; color: var(--ink); cursor: pointer; padding: 9px 16px 11px; border-radius: 0; position: relative; }
+.az-kpi + .az-kpi { border-left: 1px solid var(--divider); }
+.az-kpi:hover { background: var(--bg3); }
+.az-kpi.on { border-top-color: var(--c); background: var(--bg3); }
+.az-kpi .lab { display: flex; align-items: center; gap: 6px; color: var(--ink2); font-size: 12px; font-weight: 500; }
+.az-kpi .lab .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--c); opacity: 0; }
+.az-kpi.on .lab .dot { opacity: 1; }
+.az-kpi.on .lab { color: var(--ink); font-weight: 700; }
+.az-kpi .v { font-size: 19px; font-weight: 700; line-height: 1.3; margin-top: 2px; font-variant-numeric: tabular-nums; }
+.az-kpi .d { font-size: 11.5px; font-weight: 500; display: inline-flex; align-items: center; gap: 2px; margin-top: 1px; }
+.az-kpi .d.up { color: var(--green); }
+.az-kpi .d.down { color: #cc1100; }
+.az-kpi .d.flat { color: var(--ink3); }
+
+.az-chart { padding: 8px 12px 14px; }
+.az-chart-legend { display: flex; gap: 16px; padding: 4px 6px 8px; flex-wrap: wrap; }
+.az-chart-legend .lg { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink2); font-weight: 500; }
+.az-chart-legend .lg i { width: 14px; height: 3px; border-radius: 2px; display: inline-block; }
+.az-perf-empty { padding: 40px; text-align: center; color: var(--ink2); }
+.az-perf-skel { height: 300px; background: linear-gradient(90deg, var(--bg3) 25%, var(--bg2) 37%, var(--bg3) 63%); background-size: 400% 100%; animation: az-shimmer 1.4s ease infinite; border-radius: 6px; margin: 12px 16px 16px; }
+@keyframes az-shimmer { 0% { background-position: 100% 0 } 100% { background-position: -100% 0 } }
+
+/* ── DROPDOWN MENU (date range / view) ─────────────────────── */
+.az-menuwrap { position: relative; display: inline-flex; }
+.az-menu { position: absolute; top: calc(100% + 6px); right: 0; z-index: 30; background: #fff; border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 8px 28px rgba(0,0,0,.18); padding: 6px; min-width: 200px; }
+.az-menu button { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; text-align: left; border: 0; background: none; font: inherit; color: var(--ink); padding: 8px 12px; border-radius: 6px; cursor: pointer; }
+.az-menu button:hover { background: var(--bg3); }
+.az-menu button.on { background: var(--bg2); font-weight: 700; }
+.az-menu .sep { height: 1px; background: var(--divider); margin: 5px 4px; }

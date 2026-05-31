@@ -16,6 +16,7 @@ import { marketplaceCountryName } from '@/lib/marketplace-code'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useMarketingEvents } from '@/lib/sync/use-marketing-events'
 import { CustomiseColumns } from './CustomiseColumns'
+import { PerformancePanel } from './PerformancePanel'
 import { META_BY_KEY, DEFAULT_VISIBLE, STORAGE_KEY } from './columns'
 
 interface Placements { tos: number | null; pdp: number | null; ros: number | null }
@@ -49,6 +50,7 @@ const isAuto = (name: string) => /\bauto|close match|loose match|substitute|comp
 const bidLabel = (s: string | null | undefined) => (s ? BID_STRATEGY[s] ?? s.replace(/_/g, ' ').toLowerCase().replace(/^./, (c) => c.toUpperCase()) : '—')
 const titlecase = (s: string) => s.charAt(0) + s.slice(1).toLowerCase()
 const TD = '/marketing/trading-desk/campaigns'
+const RANGES = [{ d: 1, label: 'Today' }, { d: 7, label: 'Last 7 days' }, { d: 14, label: 'Last 14 days' }, { d: 30, label: 'Last 30 days' }, { d: 60, label: 'Last 60 days' }, { d: 90, label: 'Last 90 days' }]
 
 export function CampaignsTable({ initial }: { initial: Base[] }) {
   const [raw, setRaw] = useState<Base[]>(initial)
@@ -63,6 +65,9 @@ export function CampaignsTable({ initial }: { initial: Base[] }) {
   const [loading, setLoading] = useState(false)
   const [visible, setVisible] = useState<string[]>(DEFAULT_VISIBLE)
   const [showCols, setShowCols] = useState(false)
+  const [days, setDays] = useState(30)
+  const [showRange, setShowRange] = useState(false)
+  const rangeLabel = RANGES.find((r) => r.d === days)?.label ?? `Last ${days} days`
 
   // hydrate column prefs from localStorage (client-only → no SSR mismatch)
   useEffect(() => {
@@ -82,11 +87,11 @@ export function CampaignsTable({ initial }: { initial: Base[] }) {
       const b = getBackendUrl()
       const [c, m] = await Promise.all([
         fetch(`${b}/api/advertising/campaigns?limit=500`, { cache: 'no-store' }).then((r) => r.json()).catch(() => ({ items: [] })),
-        fetch(`${b}/api/advertising/campaigns/v1-metrics?windowDays=7`, { cache: 'no-store' }).then((r) => r.json()).catch(() => ({ byCampaign: {} })),
+        fetch(`${b}/api/advertising/campaigns/v1-metrics?windowDays=${days}`, { cache: 'no-store' }).then((r) => r.json()).catch(() => ({ byCampaign: {} })),
       ])
       setRaw((c.items ?? []) as Base[]); setMetrics((m.byCampaign ?? {}) as Record<string, V1>)
     } finally { setLoading(false) }
-  }, [])
+  }, [days])
   useEffect(() => { void refetch() }, [refetch])
   useMarketingEvents(useCallback(() => { void refetch() }, [refetch]))
 
@@ -260,10 +265,20 @@ export function CampaignsTable({ initial }: { initial: Base[] }) {
         <span style={{ flex: 1 }} />
       </div>
 
+      <PerformancePanel adProduct={tab} days={days} />
+
       <div className="az-tbar2">
         <span className="ctl">View: Compact <ChevronDown size={14} /></span>
         <span className="ctl" onClick={() => setShowCols(true)} title="Customise columns">Columns <ChevronDown size={14} /></span>
-        <span className="ctl">25 May - 1 Jun 2026 <ChevronDown size={14} /></span>
+        <span className="az-menuwrap">
+          <span className="ctl" onClick={() => setShowRange((v) => !v)}>{rangeLabel} <ChevronDown size={14} /></span>
+          {showRange && <>
+            <div style={{ position: 'fixed', inset: 0, zIndex: 29 }} onClick={() => setShowRange(false)} />
+            <div className="az-menu">
+              {RANGES.map((r) => <button key={r.d} className={days === r.d ? 'on' : ''} onClick={() => { setDays(r.d); setShowRange(false) }}>{r.label}{days === r.d && <span>✔</span>}</button>)}
+            </div>
+          </>}
+        </span>
         <button className="az-iconbtn" onClick={() => void refetch()} title="Refresh"><RefreshCw size={15} className={loading ? 'az-spin' : ''} /></button>
         <span className="az-iconbtn" style={{ border: 0 }} onClick={() => setShowCols(true)} title="Settings"><Settings size={16} /></span>
         <span className="ctl" onClick={exportCsv}><Download size={14} /> Export <ChevronDown size={14} /></span>
@@ -298,7 +313,7 @@ export function CampaignsTable({ initial }: { initial: Base[] }) {
           </tbody>
         </table>
       </div>
-      <div style={{ padding: '10px 2px', color: 'var(--ink2)', fontSize: 12 }}>{filtered.length} campaigns · {order.length} columns · metrics last 7 days{loading ? ' · updating…' : ''}</div>
+      <div style={{ padding: '10px 2px', color: 'var(--ink2)', fontSize: 12 }}>{filtered.length} campaigns · {order.length} columns · metrics last {days} days{loading ? ' · updating…' : ''}</div>
 
       {showCols && <CustomiseColumns visible={visible} onClose={() => setShowCols(false)} onApply={applyCols} />}
     </div>
