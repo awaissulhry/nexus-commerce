@@ -63,11 +63,39 @@ export async function computeCampaignDetailMetrics(opts: {
     },
     _sum: { impressions: true, clicks: true, costMicros: true, sales7dCents: true, sales14dCents: true, orders7d: true },
   })
-  const campImpr = cagg._sum.impressions ?? 0
-  const campClicks = cagg._sum.clicks ?? 0
-  const campSpend = microsToCents(cagg._sum.costMicros)
-  const campSales = (cagg._sum.sales7dCents ?? 0) + (cagg._sum.sales14dCents ?? 0)
-  const campOrders = cagg._sum.orders7d ?? 0
+  let campImpr = cagg._sum.impressions ?? 0
+  let campClicks = cagg._sum.clicks ?? 0
+  let campSpend = microsToCents(cagg._sum.costMicros)
+  let campSales = (cagg._sum.sales7dCents ?? 0) + (cagg._sum.sales14dCents ?? 0)
+  let campOrders = cagg._sum.orders7d ?? 0
+
+  // DR.3 — intraday overlay. Daily performance is T+1, so when the range
+  // includes today its daily row is absent; layer in today's Amazon Marketing
+  // Stream HOURLY rows (CAMPAIGN grain) so "Today"/MTD/YTD reflect live spend.
+  const todayUtc = new Date(); todayUtc.setUTCHours(0, 0, 0, 0)
+  const includesToday = !opts.until || opts.until.getTime() >= todayUtc.getTime()
+  if (includesToday) {
+    const hourly = await prisma.amazonAdsHourlyPerformance.aggregate({
+      where: {
+        entityType: 'CAMPAIGN',
+        date: todayUtc,
+        OR: [
+          { localEntityId: opts.campaignId },
+          ...(opts.externalCampaignId ? [{ entityId: opts.externalCampaignId }] : []),
+        ],
+      },
+      _sum: { impressions: true, clicks: true, costMicros: true, sales7dCents: true, orders7d: true },
+    }).catch(() => null)
+    if (hourly?._sum) {
+      campImpr += hourly._sum.impressions ?? 0
+      campClicks += hourly._sum.clicks ?? 0
+      campSpend += microsToCents(hourly._sum.costMicros)
+      // AmazonAdsHourlyPerformance only carries sales7dCents (no 14d like the
+      // daily model) — referencing sales14dCents here broke the build.
+      campSales += hourly._sum.sales7dCents ?? 0
+      campOrders += hourly._sum.orders7d ?? 0
+    }
+  }
 
   const adIdToGroup = new Map<string, string>()
   for (const g of opts.adGroups) for (const aid of g.productAdIds) adIdToGroup.set(aid, g.id)
