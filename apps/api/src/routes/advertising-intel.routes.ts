@@ -9,8 +9,27 @@
 
 import type { FastifyPluginAsync } from 'fastify'
 import { computeProductTargetAcos, computeFleetTargetAcos, type AcosMode } from '../services/advertising/ads-target-acos.service.js'
+import { envEnabled } from '../utils/env-flag.js'
 
 const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
+  // Apex — diagnostic probe for the ads-cron gate. Reads the SAME process.env
+  // the boot-time cron block reads (single process serves HTTP + crons), so this
+  // definitively shows whether the running process sees the flag as enabled and
+  // what raw value was set. processUptimeSec confirms whether a recent deploy
+  // actually restarted the container.
+  fastify.get('/advertising/cron-status', async (_request, reply) => {
+    reply.header('Cache-Control', 'no-store')
+    return {
+      adsCronEnabled: envEnabled('NEXUS_ENABLE_AMAZON_ADS_CRON'),
+      adsCronRaw: process.env.NEXUS_ENABLE_AMAZON_ADS_CRON ?? null,
+      adsMode: process.env.NEXUS_AMAZON_ADS_MODE ?? null,
+      queueWorkersRaw: process.env.ENABLE_QUEUE_WORKERS ?? null,
+      hasRedisUrl: !!process.env.REDIS_URL,
+      processUptimeSec: Math.round(process.uptime()),
+      nowUtc: new Date().toISOString(),
+    }
+  })
+
   // Per-product profit-native target ACOS + break-even + TACOS/TACoP.
   fastify.get('/advertising/target-acos', async (request, reply) => {
     const q = request.query as { productId?: string; marketplace?: string; windowDays?: string; mode?: string }
