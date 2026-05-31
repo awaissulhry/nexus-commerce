@@ -2829,6 +2829,47 @@ model AmazonAdsSearchTerm {
   @@index([profileId, query])
 }
 
+// Apex E.1 — Amazon Brand Analytics Search Query Performance (SQP).
+// Market-level competitive intel: for each search query (optionally scoped to one
+// of our ASINs), the TOTAL market counts vs OUR brand's counts at each funnel
+// stage (impressions → clicks → cart-adds → purchases), so we know our SHARE of
+// the query and where we leak vs competitors. Pulled from SP-API Brand Analytics
+// (GET_BRAND_ANALYTICS_SEARCH_QUERY_PERFORMANCE_REPORT); upserted by the
+// sqp-ingest cron. Distinct from AmazonAdsSearchTerm (which is OUR ad terms only).
+model SearchQueryPerformance {
+  id            String   @id @default(cuid())
+  marketplace   String // country code (IT, DE, …)
+  reportPeriod  String // WEEK | MONTH | QUARTER
+  startDate     DateTime @db.Date // period start
+  searchQuery   String
+  asin          String? // null = brand-level; set = ASIN-level row
+  searchQueryVolume Int @default(0) // total market searches for this query (rank proxy)
+  searchQueryRank   Int? // query's popularity rank in the marketplace
+
+  // Funnel: total = whole market, brand = OUR share count. shares are 0..1.
+  impressionsTotal Int     @default(0)
+  impressionsBrand Int     @default(0)
+  impressionShare  Decimal @default(0) @db.Decimal(6, 4)
+  clicksTotal      Int     @default(0)
+  clicksBrand      Int     @default(0)
+  clickShare       Decimal @default(0) @db.Decimal(6, 4)
+  cartAddsTotal    Int     @default(0)
+  cartAddsBrand    Int     @default(0)
+  cartAddShare     Decimal @default(0) @db.Decimal(6, 4)
+  purchasesTotal   Int     @default(0)
+  purchasesBrand   Int     @default(0)
+  purchaseShare    Decimal @default(0) @db.Decimal(6, 4)
+
+  sourceReportId String?
+  ingestedAt     DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([marketplace, reportPeriod, startDate, searchQuery, asin])
+  @@index([marketplace, startDate])
+  @@index([searchQuery])
+  @@index([asin, startDate])
+}
+
 // Placement-level performance: TOP_OF_SEARCH | PRODUCT_PAGE |
 // REST_OF_SEARCH | HOME_PAGE. Drives placement bid adjustments.
 model AmazonAdsPlacementReport {

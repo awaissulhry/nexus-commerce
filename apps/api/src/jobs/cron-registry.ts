@@ -88,6 +88,7 @@ import { runMarketingSyncDrainCron } from './marketing-sync-drain.job.js'
 import { runAdsSyncDrainCron } from './ads-sync-drain.job.js'
 import { runTosDefenseCron } from './ads-tos-defense.job.js'
 import { runAmsSqsPoll } from './ams-sqs-poll.job.js'
+import { runSqpIngestCron } from './sqp-ingest.job.js'
 import { runDaypartingCron } from './ad-dayparting.job.js'
 // AD.5 — cross-marketplace BudgetPool rebalancer.
 import { runBudgetPoolRebalanceCron } from './budget-pool-rebalance.job.js'
@@ -211,6 +212,8 @@ export const CRON_REGISTRY: Record<string, () => Promise<unknown>> = {
   'top-of-search-defense': () => runTosDefenseCron(),
   // Apex B.1 — drain the AMS SQS queue (hourly SP/SD/SB stream) into hourly perf.
   'ams-sqs-poll': () => runAmsSqsPoll(),
+  // Apex E.1 — ingest Brand Analytics Search Query Performance (competitive share).
+  'sqp-ingest': () => runSqpIngestCron(),
   'ad-dayparting': () => runDaypartingCron(),
   'budget-pool-rebalance': () => runBudgetPoolRebalanceCron(),
 

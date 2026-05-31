@@ -1128,6 +1128,8 @@ async function start() {
       const { startTosDefenseCron } = await import('./jobs/ads-tos-defense.job.js');
       // Apex B.1 — AMS SQS consumer (self-gated on NEXUS_AMS_SQS_QUEUE_URL + AWS creds).
       const { startAmsSqsPollCron } = await import('./jobs/ams-sqs-poll.job.js');
+      // Apex E.1 — SQP competitive-intel ingest (self-gated on NEXUS_ENABLE_SQP_INGEST_CRON).
+      const { startSqpIngestCron } = await import('./jobs/sqp-ingest.job.js');
       // Register all schedules (these are synchronous node-cron registrations).
       markCronStep('ads:register schedules');
       startDaypartingCron();
@@ -1139,6 +1141,7 @@ async function start() {
       startAdsSyncDrainCron();
       startTosDefenseCron();
       startAmsSqsPollCron();
+      startSqpIngestCron();
       markCronStep('ads:schedules registered');
       // Redis-dependent BullMQ worker LAST + non-blocking: a hung/failed Redis
       // connect must not freeze the crons above (which is what happened — the

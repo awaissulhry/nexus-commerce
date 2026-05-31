@@ -8,6 +8,7 @@
  */
 
 import type { FastifyPluginAsync } from 'fastify'
+import prisma from '../db.js'
 import { computeProductTargetAcos, computeFleetTargetAcos, type AcosMode } from '../services/advertising/ads-target-acos.service.js'
 import { simulateAutopilot, applyAutopilot } from '../services/advertising/ads-autopilot.service.js'
 import { envEnabled } from '../utils/env-flag.js'
@@ -96,6 +97,45 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
       reply.status(500)
       return { ok: false, error: (e as Error)?.message }
     }
+  })
+
+  // Apex E.1 — competitive intel: our SHARE per search query (Brand Analytics SQP).
+  // Read the ingested SearchQueryPerformance, newest period first, biggest-volume
+  // queries first. Optional minShare / asin filters surface where we under-index.
+  fastify.get('/advertising/search-query-performance', async (request, reply) => {
+    const q = request.query as { marketplace?: string; asin?: string; minImpressionShare?: string; limit?: string; days?: string }
+    const since = new Date(); since.setUTCDate(since.getUTCDate() - (q.days ? Number(q.days) : 90)); since.setUTCHours(0, 0, 0, 0)
+    const rows = await prisma.searchQueryPerformance.findMany({
+      where: {
+        startDate: { gte: since },
+        ...(q.marketplace ? { marketplace: q.marketplace } : {}),
+        ...(q.asin ? { asin: q.asin } : {}),
+        ...(q.minImpressionShare ? { impressionShare: { gte: Number(q.minImpressionShare) } } : {}),
+      },
+      orderBy: [{ startDate: 'desc' }, { searchQueryVolume: 'desc' }],
+      take: Math.min(2000, q.limit ? Number(q.limit) : 500),
+    })
+    reply.header('Cache-Control', 'private, max-age=120')
+    return { items: rows, count: rows.length }
+  })
+
+  // Probe whether the account has Brand Analytics SQP access (resolves the
+  // gating dependency without committing to ingestion).
+  fastify.post('/advertising/sqp/probe', async (request, reply) => {
+    const b = (request.body ?? {}) as { marketplace?: string; period?: string }
+    if (!b.marketplace) { reply.status(400); return { error: 'marketplace required' } }
+    const { probeSqpAccess } = await import('../services/advertising/sqp.service.js')
+    return probeSqpAccess(b.marketplace, (b.period as 'WEEK' | 'MONTH' | 'QUARTER') ?? 'WEEK')
+  })
+
+  // Manual SQP ingest trigger (for one marketplace/period).
+  fastify.post('/advertising/sqp/ingest', async (request, reply) => {
+    const b = (request.body ?? {}) as { marketplace?: string; period?: string }
+    if (!b.marketplace) { reply.status(400); return { error: 'marketplace required' } }
+    const { ingestSqp } = await import('../services/advertising/sqp.service.js')
+    try {
+      return await ingestSqp({ marketplaceCode: b.marketplace, period: (b.period as 'WEEK' | 'MONTH' | 'QUARTER') ?? 'WEEK' })
+    } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
   })
 
   // Fleet view — every advertised product's target ACOS, revenue-ranked.
