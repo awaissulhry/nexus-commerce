@@ -18,6 +18,7 @@ import { getBackendUrl } from '@/lib/backend-url'
 import { StatusChip } from '@/app/_shared/ads-ui'
 import { marketplaceCode, marketplaceCountryName } from '@/lib/marketplace-code'
 import { useMarketingEvents } from '@/lib/sync/use-marketing-events'
+import { DateRangePicker, useAdRange, rangeQuery } from '../_shared/DateRangePicker'
 import { Megaphone, ShoppingCart, Coins, Package, Search, SlidersHorizontal, Pause, Play, ChevronsUp, ChevronsDown } from 'lucide-react'
 
 interface Row extends GridLensRow {
@@ -66,8 +67,6 @@ function rowRec(row: { acos?: number | null; adSalesCents?: number; adSpendCents
   return null
 }
 
-const DATE_PRESETS = [{ label: '7d', days: 7 }, { label: '14d', days: 14 }, { label: '30d', days: 30 }, { label: '60d', days: 60 }, { label: '90d', days: 90 }]
-
 const ALL_COLUMNS: GridLensColumn[] = [
   { key: 'product', label: 'Product', width: 320, locked: true },
   { key: 'campaigns', label: 'Campaigns', width: 96 },
@@ -97,7 +96,9 @@ export function ByProductView() {
   const [accountSpend, setAccountSpend] = useState(0)
   const [liveTs, setLiveTs] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
-  const [windowDays, setWindowDays] = useState(30)
+  const [windowDays] = useState(30) // legacy label fallback for empty-state copy
+  const { range, setRange } = useAdRange()
+  const rq = rangeQuery(range)
   const [density, setDensity] = useState<Density>('comfortable')
   const [search, setSearch] = useState('')
   const [mode, setMode] = useState<Mode>('advertised')
@@ -124,10 +125,10 @@ export function ByProductView() {
     setLoading(true)
     try {
       const sortParam = SORT_KEYS[sortBy] ?? 'spend'
-      const qs = new URLSearchParams({ windowDays: String(windowDays), sort: sortParam, dir: sortDir, limit: '500', compare: 'true', mode })
+      const qs = new URLSearchParams({ sort: sortParam, dir: sortDir, limit: '500', compare: 'true', mode })
       if (search.trim()) qs.set('search', search.trim())
       if (marketplace) qs.set('marketplace', marketplace)
-      const r = await fetch(`${getBackendUrl()}/api/advertising/by-product?${qs}`, { cache: 'no-store' }).then((x) => x.json()).catch(() => ({ rows: [] }))
+      const r = await fetch(`${getBackendUrl()}/api/advertising/by-product?${qs}&${rq}`, { cache: 'no-store' }).then((x) => x.json()).catch(() => ({ rows: [] }))
       setRows((r.rows ?? []) as Row[])
       setTotals(r.totals ?? { adSpendCents: 0, revenueCents: 0, profitCents: 0, products: 0 })
       setPrevTotals(r.previousTotals ?? null)
@@ -136,7 +137,7 @@ export function ByProductView() {
       setAccountSpend(r.accountSpendCents ?? 0)
       if (Array.isArray(r.marketplaces)) setMarketplaces(r.marketplaces)
     } finally { setLoading(false) }
-  }, [windowDays, sortBy, sortDir, search, marketplace, mode])
+  }, [rq, sortBy, sortDir, search, marketplace, mode])
   useEffect(() => { const t = setTimeout(() => void load(), search ? 300 : 0); return () => clearTimeout(t) }, [load, search])
 
   // PC.5 — live refresh on marketing events.
@@ -148,7 +149,7 @@ export function ByProductView() {
     if (childrenByParent[parentId]) return
     setLoadingChildren((s) => new Set(s).add(parentId))
     try {
-      const qp = new URLSearchParams({ windowDays: String(windowDays) })
+      const qp = new URLSearchParams(Object.fromEntries(new URLSearchParams(rq)))
       if (marketplace) qp.set('marketplace', marketplace)
       let kids: Row[]
       if (expandMode === 'campaigns') {
@@ -179,7 +180,7 @@ export function ByProductView() {
     } finally {
       setLoadingChildren((s) => { const n = new Set(s); n.delete(parentId); return n })
     }
-  }, [childrenByParent, windowDays, marketplace, expandMode, statusFilter])
+  }, [childrenByParent, rq, marketplace, expandMode, statusFilter])
   // Switching expand mode / status / market clears cached children so open rows refetch.
   useEffect(() => { setChildrenByParent({}); setExpandedParents(new Set()) }, [expandMode, statusFilter, marketplace])
 
@@ -319,11 +320,7 @@ export function ByProductView() {
   return (
     <div>
       <div className="flex items-center justify-between mb-3">
-        <div className="flex gap-1">
-          {DATE_PRESETS.map((p) => (
-            <button key={p.days} onClick={() => setWindowDays(p.days)} className={`px-2.5 py-1 text-xs rounded-md border ${windowDays === p.days ? 'bg-blue-600 text-white border-blue-600' : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>{p.label}</button>
-          ))}
-        </div>
+        <DateRangePicker value={range} onChange={setRange} />
         <span className="inline-flex items-center gap-1.5 text-xs">
           {loading && <span className="text-slate-400">updating…</span>}
           <span className={`inline-flex h-2 w-2 rounded-full ${liveTs ? 'bg-emerald-500 animate-pulse' : 'bg-emerald-500/70'}`} />

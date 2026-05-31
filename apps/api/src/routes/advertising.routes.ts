@@ -971,16 +971,16 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   // embedding in the /products/[id]/edit "Ads" tab.
   fastify.get('/advertising/product-ads', async (request, reply) => {
     const query = request.query as {
-      productId?: string; asin?: string; sku?: string; windowDays?: string
+      productId?: string; asin?: string; sku?: string; windowDays?: string; preset?: string; startDate?: string; endDate?: string
     }
-    const windowDays = Math.max(7, Math.min(90, Number(query.windowDays ?? 30)))
     if (!query.productId && !query.asin && !query.sku) {
       return reply.code(400).send({ error: 'productId, asin, or sku required' })
     }
-
-    const since = new Date()
-    since.setUTCDate(since.getUTCDate() - windowDays)
-    since.setUTCHours(0, 0, 0, 0)
+    const { resolveRange } = await import('../services/advertising/ads-date-range.js')
+    const range = resolveRange(query)
+    const windowDays = range.days
+    const since = range.since
+    const dateFilterPA = { gte: since, lte: range.until }
 
     // ── 1. Find all AdProductAd rows for this product ───────────────────
     // Select creativeJson + adType so the UI can render multi-product
@@ -1028,7 +1028,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       where: {
         entityId: { in: extIds },
         entityType: 'CAMPAIGN',
-        date: { gte: since },
+        date: dateFilterPA,
       },
       _sum: {
         impressions:   true,
@@ -1072,7 +1072,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       by: ['query', 'matchType', 'adProduct', 'marketplace'],
       where: {
         campaignId: { in: extIds },
-        date: { gte: since },
+        date: dateFilterPA,
       },
       _sum: { impressions: true, clicks: true, costMicros: true, orders7d: true, sales7dCents: true },
       orderBy: { _sum: { costMicros: 'desc' } },
@@ -1219,10 +1219,14 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   // remainder (account spend − Σ attributed) so nothing is silently dropped.
   // GET /advertising/by-product?windowDays=&marketplace=&search=&sort=&dir=&limit=
   fastify.get('/advertising/by-product', async (request, reply) => {
-    const q = request.query as { windowDays?: string; marketplace?: string; search?: string; sort?: string; dir?: string; limit?: string; compare?: string; mode?: string }
-    const windowDays = Math.max(7, Math.min(90, Number(q.windowDays ?? 30)))
+    const q = request.query as { windowDays?: string; marketplace?: string; search?: string; sort?: string; dir?: string; limit?: string; compare?: string; mode?: string; preset?: string; startDate?: string; endDate?: string }
+    const { resolveRange } = await import('../services/advertising/ads-date-range.js')
+    const range = resolveRange(q)
+    const windowDays = range.days
+    const since = range.since
+    const until = range.until
+    const dateFilterBP = { gte: since, lte: until }
     const limit = Math.max(1, Math.min(1000, Number(q.limit ?? 300)))
-    const since = new Date(); since.setUTCDate(since.getUTCDate() - windowDays); since.setUTCHours(0, 0, 0, 0)
     const mkt = q.marketplace || undefined
     // PC.8 — mode: advertised (default) | opportunity (selling but NOT
     // advertised) | unmatched (handled separately below).
@@ -1232,7 +1236,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     if (mode === 'unmatched') {
       const um = await prisma.amazonAdsDailyPerformance.groupBy({
         by: ['entityId'],
-        where: { entityType: 'PRODUCT_AD', localEntityId: null, date: { gte: since }, ...(mkt ? { marketplace: mkt } : {}) },
+        where: { entityType: 'PRODUCT_AD', localEntityId: null, date: dateFilterBP, ...(mkt ? { marketplace: mkt } : {}) },
         _sum: { costMicros: true, sales7dCents: true, impressions: true, clicks: true, orders7d: true },
         orderBy: { _sum: { costMicros: 'desc' } },
         take: limit,
@@ -1263,7 +1267,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       // — round micros→cents once per (ad,currency) bucket, not per daily row.
       const perAd = await prisma.amazonAdsDailyPerformance.groupBy({
         by: ['localEntityId', 'currencyCode'],
-        where: { entityType: 'PRODUCT_AD', localEntityId: { not: null }, date: { gte: since }, ...(mkt ? { marketplace: mkt } : {}) },
+        where: { entityType: 'PRODUCT_AD', localEntityId: { not: null }, date: dateFilterBP, ...(mkt ? { marketplace: mkt } : {}) },
         _sum: { costMicros: true, sales7dCents: true, impressions: true, clicks: true, orders7d: true },
       })
       if (perAd.length > 0) {
@@ -1294,7 +1298,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     if (mode === 'opportunity') {
       const grouped = await prisma.productProfitDaily.groupBy({
         by: ['productId'],
-        where: { date: { gte: since }, ...(mkt ? { marketplace: mkt } : {}) },
+        where: { date: dateFilterBP, ...(mkt ? { marketplace: mkt } : {}) },
         _sum: { advertisingSpendCents: true, grossRevenueCents: true, trueProfitCents: true, unitsSold: true },
         having: { advertisingSpendCents: { _sum: { equals: 0 } }, grossRevenueCents: { _sum: { gt: 0 } } },
         orderBy: { _sum: { grossRevenueCents: 'desc' } },
@@ -1309,7 +1313,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       ids = [...adByProduct.entries()].sort((a, b) => b[1].spendC - a[1].spendC).slice(0, limit).map(([pid]) => pid)
       const ppd = await prisma.productProfitDaily.groupBy({
         by: ['productId'],
-        where: { productId: { in: ids }, date: { gte: since }, ...(mkt ? { marketplace: mkt } : {}) },
+        where: { productId: { in: ids }, date: dateFilterBP, ...(mkt ? { marketplace: mkt } : {}) },
         _sum: { advertisingSpendCents: true, grossRevenueCents: true, trueProfitCents: true, unitsSold: true },
         orderBy: { _sum: { grossRevenueCents: 'desc' } },
       })
@@ -1318,7 +1322,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       // Fallback (no PRODUCT_AD yet): ProductProfitDaily.advertisingSpendCents.
       const grouped = await prisma.productProfitDaily.groupBy({
         by: ['productId'],
-        where: { date: { gte: since }, ...(mkt ? { marketplace: mkt } : {}) },
+        where: { date: dateFilterBP, ...(mkt ? { marketplace: mkt } : {}) },
         _sum: { advertisingSpendCents: true, grossRevenueCents: true, trueProfitCents: true, unitsSold: true },
         having: { advertisingSpendCents: { _sum: { gt: 0 } } },
         orderBy: { _sum: { advertisingSpendCents: 'desc' } },
@@ -1424,7 +1428,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     // base before summing (no-op while all ad data is EUR).
     const acctRows = await prisma.amazonAdsDailyPerformance.groupBy({
       by: ['currencyCode'],
-      where: { entityType: 'CAMPAIGN', date: { gte: since }, ...(mkt ? { marketplace: mkt } : {}) },
+      where: { entityType: 'CAMPAIGN', date: dateFilterBP, ...(mkt ? { marketplace: mkt } : {}) },
       _sum: { costMicros: true },
     })
     const acctFx = await buildEurRateMap(acctRows.map((r) => r.currencyCode))
@@ -1460,7 +1464,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     // Distinct markets with ad spend in window — drives the filter dropdown.
     const mktRows = await prisma.productProfitDaily.groupBy({
       by: ['marketplace'],
-      where: { date: { gte: since }, advertisingSpendCents: { gt: 0 } },
+      where: { date: dateFilterBP, advertisingSpendCents: { gt: 0 } },
     })
     const marketplaces = mktRows.map((m) => m.marketplace).filter(Boolean).sort()
 
@@ -1563,10 +1567,12 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   // all its children. Optional status filter.
   // GET /advertising/by-product/campaigns?productId=&windowDays=&marketplace=&status=
   fastify.get('/advertising/by-product/campaigns', async (request, reply) => {
-    const q = request.query as { productId?: string; windowDays?: string; marketplace?: string; status?: string }
+    const q = request.query as { productId?: string; windowDays?: string; marketplace?: string; status?: string; preset?: string; startDate?: string; endDate?: string }
     if (!q.productId) { reply.status(400); return { error: 'productId required' } }
-    const windowDays = Math.max(7, Math.min(90, Number(q.windowDays ?? 30)))
-    const since = new Date(); since.setUTCDate(since.getUTCDate() - windowDays); since.setUTCHours(0, 0, 0, 0)
+    const { resolveRange } = await import('../services/advertising/ads-date-range.js')
+    const range = resolveRange(q)
+    const since = range.since
+    const dateFilterBPC = { gte: since, lte: range.until }
     const mkt = q.marketplace || undefined
 
     // Resolve the product + its children (parent rows roll up variants).
@@ -1584,7 +1590,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const adIds = [...adToCampaign.keys()]
     const perAd = adIds.length ? await prisma.amazonAdsDailyPerformance.groupBy({
       by: ['localEntityId'],
-      where: { entityType: 'PRODUCT_AD', localEntityId: { in: adIds }, date: { gte: since }, ...(mkt ? { marketplace: mkt } : {}) },
+      where: { entityType: 'PRODUCT_AD', localEntityId: { in: adIds }, date: dateFilterBPC, ...(mkt ? { marketplace: mkt } : {}) },
       _sum: { costMicros: true, sales7dCents: true, impressions: true, clicks: true, orders7d: true },
     }) : []
 
@@ -3629,10 +3635,54 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   })
   // ── AX2.10: Data-grounded bid suggestions ───────────────────────────
   fastify.post('/advertising/bid-suggestions', async (request, reply) => {
-    const b = request.body as { keywords?: string[]; matchType?: string; marketplace?: string }
+    const b = request.body as { keywords?: string[]; matchType?: string; marketplace?: string; adTargetId?: string }
     if (!Array.isArray(b?.keywords) || b.keywords.length === 0) { reply.status(400); return { error: 'keywords[] required' } }
     const { suggestBids } = await import('../services/advertising/ads-bid-suggest.service.js')
-    try { return await suggestBids({ keywords: b.keywords, matchType: b.matchType, marketplace: b.marketplace }) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
+    try {
+      const result = await suggestBids({ keywords: b.keywords, matchType: b.matchType, marketplace: b.marketplace })
+      // Apex C.1 — blend Amazon's own theme-based bid recommendation when the
+      // caller passes an adTargetId we can resolve to a synced ad-group context.
+      // Best-effort + read-only: any failure leaves the own-CPC suggestion intact.
+      if (b.adTargetId) {
+        try {
+          const t = await prisma.adTarget.findUnique({
+            where: { id: b.adTargetId },
+            select: {
+              expressionType: true,
+              adGroup: { select: { externalAdGroupId: true, campaign: { select: { externalCampaignId: true, marketplace: true, biddingStrategy: true } } } },
+            },
+          })
+          const ag = t?.adGroup
+          const camp = ag?.campaign
+          if (ag?.externalAdGroupId && camp?.externalCampaignId && camp.marketplace) {
+            const conn = await prisma.amazonAdsConnection.findFirst({
+              where: { marketplace: camp.marketplace, isActive: true },
+              select: { profileId: true, region: true },
+            })
+            if (conn) {
+              const { getThemeBidRecommendations } = await import('../services/advertising/ads-api-client.js')
+              const recs = await getThemeBidRecommendations(
+                { profileId: conn.profileId, region: (conn.region as 'EU' | 'NA' | 'FE') ?? 'EU' },
+                {
+                  externalCampaignId: camp.externalCampaignId,
+                  externalAdGroupId: ag.externalAdGroupId,
+                  targets: b.keywords!.map((k) => ({ expression: k, matchType: b.matchType ?? t!.expressionType ?? 'BROAD' })),
+                  biddingStrategy: camp.biddingStrategy ?? undefined,
+                },
+              )
+              const byExpr = new Map(recs.map((r) => [r.expression.toLowerCase(), r]))
+              for (const s of result.suggestions) {
+                const r = byExpr.get(s.keyword.toLowerCase())
+                if (r) s.amazon = { suggestedBidCents: r.suggestedBidCents, theme: r.theme, rangeLowCents: r.rangeLowCents, rangeHighCents: r.rangeHighCents }
+              }
+            }
+          }
+        } catch (e) {
+          logger.warn('[bid-suggestions] Amazon rec blend failed (own-CPC stands)', { error: (e as Error)?.message })
+        }
+      }
+      return result
+    } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
   })
 
   // ── AX2.9: Sponsored Brands creative ────────────────────────────────
