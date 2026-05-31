@@ -20,6 +20,9 @@ import { fetchSpApiJsonReport } from '../sp-api-reports.service.js'
 
 export const SQP_REPORT_TYPE = process.env.NEXUS_SQP_REPORT_TYPE || 'GET_BRAND_ANALYTICS_SEARCH_QUERY_PERFORMANCE_REPORT'
 export type SqpPeriod = 'WEEK' | 'MONTH' | 'QUARTER'
+// How many completed periods back to request. SQP data for the just-finished
+// period isn't queryable for a few days, so default to 2 (env-overridable).
+const SQP_LOOKBACK = Math.max(1, Number(process.env.NEXUS_SQP_LOOKBACK) || 2)
 
 export interface SqpRow {
   searchQuery: string
@@ -151,7 +154,7 @@ export async function probeSqpAccess(marketplaceCode: string, period: SqpPeriod 
   // SQP is ASIN-level — pick one of our ASINs to test against.
   const asin = (await ourAsinsForMarketplace(marketplaceCode, 1))[0]
   if (!asin) return { available: false, reportType: SQP_REPORT_TYPE, marketplace: marketplaceCode, detail: `no Amazon ASIN found for ${marketplaceCode} (ChannelListing externalParentId/externalListingId)` }
-  const { start, end } = periodWindow(period, new Date())
+  const { start, end } = periodWindow(period, new Date(), SQP_LOOKBACK)
   try {
     await fetchSpApiJsonReport({ reportType: SQP_REPORT_TYPE, marketplaceId, dataStartTime: start, dataEndTime: end, reportOptions: { reportPeriod: period, asin } })
     return { available: true, reportType: SQP_REPORT_TYPE, marketplace: marketplaceCode, detail: 'report request accepted' }
@@ -176,7 +179,7 @@ export async function ingestSqp(args: { marketplaceCode: string; period?: SqpPer
   if (!marketplaceId) throw new Error(`ingestSqp: no Marketplace row for AMAZON:${args.marketplaceCode}`)
   const asins = args.asins?.length ? args.asins : await ourAsinsForMarketplace(args.marketplaceCode, args.limit ?? 10)
   if (asins.length === 0) throw new Error(`ingestSqp: no Amazon ASINs for ${args.marketplaceCode}`)
-  const win = periodWindow(period, new Date())
+  const win = periodWindow(period, new Date(), SQP_LOOKBACK)
   const start = args.startDate ?? win.start
   const end = args.endDate ?? win.end
   const startDateOnly = new Date(start); startDateOnly.setUTCHours(0, 0, 0, 0)
