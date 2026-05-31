@@ -16,6 +16,7 @@ import { Search, Plus, RefreshCw, Play, Pause, ArrowUpRight } from 'lucide-react
 import { marketplaceCode, marketplaceCountryName } from '@/lib/marketplace-code'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useMarketingEvents } from '@/lib/sync/use-marketing-events'
+import { ByProductTable } from './ByProductTable'
 
 interface Placements { tos: number | null; pdp: number | null; ros: number | null }
 interface CampaignBase {
@@ -53,6 +54,7 @@ export function CampaignsGrid({ initial }: { initial: CampaignBase[] }) {
   const [sel, setSel] = useState<Set<string>>(new Set())
   const [edits, setEdits] = useState<Record<string, string>>({})
   const [busy, setBusy] = useState<string | null>(null)
+  const [view, setView] = useState<'campaign' | 'product'>('campaign')
 
   const refetch = useCallback(async () => {
     setLoading(true)
@@ -130,7 +132,7 @@ export function CampaignsGrid({ initial }: { initial: CampaignBase[] }) {
   return (
     <>
       <div className="top">
-        <div><h1>Campaigns</h1><div className="sub">{filtered.length} campaigns · Amazon · last 30 days</div></div>
+        <div><h1>Campaigns</h1><div className="sub">{view === 'campaign' ? `${filtered.length} campaigns` : 'By product'} · Amazon · last 30 days</div></div>
         <span className="spacer" />
         <span className="livewrap">{loading && <span style={{ color: 'var(--ink3)', fontWeight: 500 }}>updating…&nbsp;</span>}<span className="livedot" style={{ opacity: live ? 1 : 0.6 }} />{live ? 'Updated just now' : 'Live'}</span>
       </div>
@@ -138,19 +140,21 @@ export function CampaignsGrid({ initial }: { initial: CampaignBase[] }) {
       <div className="scroll">
         <div className="toolbar">
           <div className="seg">
-            <button className="on">By campaign</button>
-            <button title="Coming in P2.2" disabled style={{ opacity: 0.5, cursor: 'not-allowed' }}>By product</button>
+            <button className={view === 'campaign' ? 'on' : ''} onClick={() => setView('campaign')}>By campaign</button>
+            <button className={view === 'product' ? 'on' : ''} onClick={() => setView('product')}>By product</button>
           </div>
           <div className="search"><Search size={14} /><input placeholder="Find a campaign…" value={search} onChange={(e) => setSearch(e.target.value)} /></div>
-          <select className="flt" value={status} onChange={(e) => setStatus(e.target.value)} aria-label="Filter by status"><option value="">All status</option>{['ENABLED', 'PAUSED', 'ARCHIVED', 'DRAFT'].map((s) => <option key={s}>{s}</option>)}</select>
-          <select className="flt" value={type} onChange={(e) => setType(e.target.value)} aria-label="Filter by type"><option value="">All types</option>{['SP', 'SB', 'SD'].map((s) => <option key={s}>{s}</option>)}</select>
+          {view === 'campaign' && (<>
+            <select className="flt" value={status} onChange={(e) => setStatus(e.target.value)} aria-label="Filter by status"><option value="">All status</option>{['ENABLED', 'PAUSED', 'ARCHIVED', 'DRAFT'].map((s) => <option key={s}>{s}</option>)}</select>
+            <select className="flt" value={type} onChange={(e) => setType(e.target.value)} aria-label="Filter by type"><option value="">All types</option>{['SP', 'SB', 'SD'].map((s) => <option key={s}>{s}</option>)}</select>
+          </>)}
           <select className="flt" value={market} onChange={(e) => setMarket(e.target.value)} aria-label="Filter by market"><option value="">All markets</option>{markets.map((m) => <option key={m} value={m}>{marketplaceCode(m)}</option>)}</select>
           <span className="spacer" />
           <a className="ctl" href={OLD} target="_blank" rel="noopener noreferrer" title="Launch a campaign (opens the current tool in a new tab)"><Plus size={14} /><span>Launch</span></a>
           <button className="ctl" onClick={() => void refetch()} title="Refresh"><RefreshCw size={14} className={loading ? 'spin' : ''} /></button>
         </div>
 
-        {sel.size > 0 && (
+        {view === 'campaign' && sel.size > 0 && (
           <div className="bulkbar">
             <b>{sel.size} selected</b>
             <button className="gho" onClick={() => void bulkStatus('ENABLED')}>Enable</button>
@@ -161,6 +165,7 @@ export function CampaignsGrid({ initial }: { initial: CampaignBase[] }) {
           </div>
         )}
 
+        {view === 'campaign' ? (
         <div className="card">
           <div className="tablewrap">
             <table>
@@ -212,6 +217,9 @@ export function CampaignsGrid({ initial }: { initial: CampaignBase[] }) {
             <span style={{ marginLeft: 'auto', fontWeight: 600 }}>Σ Spend {eur0(totals.spendC)} · Sales {eur0(totals.salesC)}</span>
           </div>
         </div>
+        ) : (
+          <ByProductTable search={search} market={market} />
+        )}
       </div>
     </>
   )
