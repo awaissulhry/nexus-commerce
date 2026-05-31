@@ -105,8 +105,11 @@ export interface AmsIngestResult { received: number; upserted: number; skipped: 
 // Diagnostic ring buffer — the last few raw messages + ingest results seen, so
 // we can confirm the real AMS field shape once data flows (the ingest field
 // mapping was written speculatively). In-memory, best-effort.
-const _amsDebug: { samples: unknown[]; lastResult: AmsIngestResult | null; lastAt: string | null } = { samples: [], lastResult: null, lastAt: null }
+const _amsDebug: { samples: unknown[]; lastResult: AmsIngestResult | null; lastAt: string | null; unauthorizedCount: number; lastUnauthorizedAt: string | null } = { samples: [], lastResult: null, lastAt: null, unauthorizedCount: 0, lastUnauthorizedAt: null }
 export function amsDebugSnapshot() { return _amsDebug }
+/** Recorded when an ingest POST arrives with a missing/wrong x-ams-secret — i.e.
+ *  the forwarder IS reaching us but the secret mismatches (vs. nothing arriving). */
+export function noteAmsUnauthorized() { _amsDebug.unauthorizedCount += 1; _amsDebug.lastUnauthorizedAt = new Date().toISOString() }
 
 /** Ingest a batch of AMS messages. Idempotent-ish: accumulates into the
  *  (profile, adProduct=SP, CAMPAIGN, campaign_id, day) daily row. */
