@@ -629,8 +629,16 @@ async function start() {
 
     // ── BullMQ queue workers (outbound sync, channel sync, bulk list) ──
     // Opt-in via ENABLE_QUEUE_WORKERS=1. Requires REDIS_URL or REDIS_HOST.
-    // Failure to reach Redis logs and continues — HTTP routes stay up.
-    await tryStartQueueWorkers();
+    // Fire-and-forget: this MUST NOT block startup. An unreachable Redis used to
+    // hang the awaited init here (ioredis maxRetriesPerRequest:null → ping never
+    // rejects), which froze ALL cron registration below it. The DB-polling sync
+    // autopilot inside runs synchronously regardless; BullMQ workers attach in
+    // the background when Redis is reachable.
+    void tryStartQueueWorkers().catch((err) => {
+      logger.error('queue workers: background init failed — HTTP + crons unaffected', {
+        error: err instanceof Error ? err.message : String(err),
+      });
+    });
 
     // NN.14 / OO.1 — daily cron for abandoned wizard cleanup. Now
     // gated behind NEXUS_ENABLE_WIZARD_CLEANUP=1 so the destructive

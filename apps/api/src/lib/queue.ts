@@ -175,7 +175,16 @@ function attachEventListeners(events: QueueEvents) {
 export async function initializeQueue() {
   try {
     const conn = getRedisConnection()
-    await conn.ping()
+    // The connection is configured maxRetriesPerRequest: null, so a ping to an
+    // UNREACHABLE Redis retries forever and never rejects — it hangs. Since the
+    // caller (start()) awaits this during boot, a hang froze ALL cron
+    // registration after it. Bound the readiness check so it fails fast and the
+    // caller's catch can proceed (HTTP + crons run; queue stays dormant).
+    const PING_TIMEOUT_MS = Number(process.env.NEXUS_REDIS_PING_TIMEOUT_MS ?? 5000)
+    await Promise.race([
+      conn.ping(),
+      new Promise((_, reject) => setTimeout(() => reject(new Error(`redis ping timed out after ${PING_TIMEOUT_MS}ms`)), PING_TIMEOUT_MS)),
+    ])
     logger.info('✅ Redis connection established', {
       url: process.env.REDIS_URL ? '[rediss://***]' : undefined,
       host: !process.env.REDIS_URL ? (process.env.REDIS_HOST || 'localhost') : undefined,
