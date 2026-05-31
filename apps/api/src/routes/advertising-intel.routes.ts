@@ -128,14 +128,19 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
     return probeSqpAccess(b.marketplace, (b.period as 'WEEK' | 'MONTH' | 'QUARTER') ?? 'WEEK')
   })
 
-  // Manual SQP ingest trigger (for one marketplace/period).
+  // Manual SQP ingest trigger. FIRE-AND-FORGET: SP-API reports take minutes to
+  // generate (per ASIN), so we can't make the caller wait — kick it off in the
+  // background and return immediately. Poll GET /search-query-performance for
+  // results (or check the sqp-ingest cron run). `limit` bounds the ASIN batch.
   fastify.post('/advertising/sqp/ingest', async (request, reply) => {
-    const b = (request.body ?? {}) as { marketplace?: string; period?: string }
+    const b = (request.body ?? {}) as { marketplace?: string; period?: string; limit?: number; asins?: string[] }
     if (!b.marketplace) { reply.status(400); return { error: 'marketplace required' } }
     const { ingestSqp } = await import('../services/advertising/sqp.service.js')
-    try {
-      return await ingestSqp({ marketplaceCode: b.marketplace, period: (b.period as 'WEEK' | 'MONTH' | 'QUARTER') ?? 'WEEK' })
-    } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
+    void ingestSqp({ marketplaceCode: b.marketplace, period: (b.period as 'WEEK' | 'MONTH' | 'QUARTER') ?? 'WEEK', limit: b.limit, asins: b.asins })
+      .then((r) => fastify.log.info({ sqp: r }, '[sqp] manual ingest complete'))
+      .catch((e) => fastify.log.error({ err: e }, '[sqp] manual ingest failed'))
+    reply.header('Cache-Control', 'no-store')
+    return { ok: true, started: true, marketplace: b.marketplace, note: 'ingest running in background; poll GET /advertising/search-query-performance for results' }
   })
 
   // Fleet view — every advertised product's target ACOS, revenue-ranked.
