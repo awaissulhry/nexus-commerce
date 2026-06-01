@@ -120,7 +120,11 @@ ad-group page to link to.)
 **Triggers** (when a rule evaluates): scheduled cadence plus event/metric
 triggers such as ACOS spike, CVR drop, wasted spend, zero impressions, low CTR,
 underperforming target, profitability breach, performance/budget, price change,
-and inventory signals.
+and inventory signals. The E-series expansion added five more: high-ACOS
+keyword (converts but inefficiently), keyword scale-opportunity (proven winner
+with headroom), ad-group underperforming (coarser lens), new-to-brand winner
+(campaigns acquiring new customers), and campaign-no-sales (dead spend). Each
+new trigger's context-builder is fault-isolated and inert until a rule uses it.
 
 **Actions** (what a rule does): bid up / bid down / bid to target ACOS / lower
 to floor / raise for rank defense / scale for price change; adjust or set daily
