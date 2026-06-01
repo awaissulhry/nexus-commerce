@@ -144,6 +144,56 @@ export const ADVERTISING_TEMPLATES: AdvertisingRuleTemplate[] = [
     maxDailyAdSpendCentsEur: null,
     scopeMarketplace: null,
   },
+  // ── AU.1 — Automated keyword harvesting & negation ──────────────────
+  {
+    name: '🌾 Auto harvest & negate',
+    description:
+      'Every run: negates search terms that spent €10+ with zero orders (wasted spend), and promotes terms with 2+ orders to exact-match campaigns (free traffic recovery). The #1 automation feature. Runs up to 3 times per day via the SCHEDULE trigger. Dry-run by default — review the execution log before going live.',
+    trigger: 'SCHEDULE',
+    conditions: [],
+    actions: [
+      { type: 'harvest_and_negate', windowDays: 60, minSpendCents: 1000, minOrders: 2, graduationBidEur: 0.5 },
+      { type: 'notify', target: 'operator', message: 'Harvest & negate ran — check execution log for terms moved' },
+    ],
+    maxExecutionsPerDay: 3,
+    maxValueCentsEur: null,
+    maxDailyAdSpendCentsEur: null,
+    scopeMarketplace: null,
+  },
+  // ── AU.2 — Retail-aware advertising (inventory-linked auto-pause) ───
+  {
+    name: '🛡 Retail guard',
+    description:
+      'Every 15 min: automatically pauses campaigns advertising out-of-stock products or products that lost the Buy Box — so you never pay for traffic you can\'t convert. Resumes when products are back in stock. Dry-run by default.',
+    trigger: 'SCHEDULE',
+    conditions: [],
+    actions: [
+      { type: 'retail_guard' },
+      { type: 'notify', target: 'operator', message: 'Retail guard paused campaign(s) — check execution log' },
+    ],
+    maxExecutionsPerDay: 96,
+    maxValueCentsEur: null,
+    maxDailyAdSpendCentsEur: null,
+    scopeMarketplace: null,
+  },
+  // ── AU.4 — Hard budget failsafe kill-switch ─────────────────────────
+  {
+    name: '⛔ Monthly budget cap',
+    description:
+      'Instantly pauses ALL enabled campaigns the moment your monthly ad spend hits your cap. Guaranteed never-overspend. Set your cap in the condition (default €2,000 — adjust to your budget). Dry-run by default — enable live when you\'re ready.',
+    trigger: 'SCHEDULE',
+    conditions: [
+      { field: 'budget.monthlySpendCents', op: 'gte', value: 200000 },
+    ],
+    actions: [
+      { type: 'pause_all_campaigns', reason: 'Monthly budget cap reached' },
+      { type: 'notify', target: 'operator', message: '⛔ Monthly budget cap hit — all campaigns paused' },
+    ],
+    maxExecutionsPerDay: 96,
+    maxValueCentsEur: null,
+    maxDailyAdSpendCentsEur: null,
+    scopeMarketplace: null,
+  },
 ]
 
 /** Maps old Italian template names → current English names for rename-on-reseed. */
