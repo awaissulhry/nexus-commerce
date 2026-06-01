@@ -19,11 +19,11 @@ const BASE = '/marketing/ads-console'
 const RAIL = [Plus, Megaphone, ShieldCheck, ImageIcon, LineChart, BarChart3, Workflow, LayoutGrid, Briefcase]
 const NAV = ['Portfolios', 'Campaigns', 'Drafts', 'Products', 'Targeting', 'Budgets', 'History', 'Bulk operations', 'Rules', 'Settings']
 // Nav items that are built (real links). The rest light up as their pages land.
-const ROUTES: Record<string, string> = { Campaigns: `${BASE}/campaigns`, Products: `${BASE}/products` }
+const ROUTES: Record<string, string> = { Campaigns: `${BASE}/campaigns`, Products: `${BASE}/products`, Targeting: `${BASE}/targeting` }
 
 export function ConsoleChrome({ children }: { children: ReactNode }) {
   const pathname = usePathname() || ''
-  const crumb = pathname.includes('/products') ? 'Products' : 'Campaigns'
+  const crumb = pathname.includes('/products') ? 'Products' : pathname.includes('/targeting') ? 'Targeting' : 'Campaigns'
   return (
     <>
       <div className="az-top">

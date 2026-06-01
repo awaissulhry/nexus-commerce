@@ -3162,6 +3162,70 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     return { lookbackDays, count: items.length, items }
   })
 
+  // ── GET /advertising/targets — account-level keyword/target roster ───
+  // Positive AdTargets across all campaigns with window-aggregated metrics
+  // (AD_TARGET daily perf by localEntityId; falls back to the denormalized
+  // AdTarget columns when no daily rows in range). Powers the Ads Console
+  // Targeting screen. Filterable by kind / match type / campaign / text.
+  fastify.get('/advertising/targets', async (request, reply) => {
+    const q = request.query as { windowDays?: string; limit?: string; search?: string; kind?: string; matchType?: string; campaignId?: string; preset?: string; startDate?: string; endDate?: string }
+    const { resolveRange } = await import('../services/advertising/ads-date-range.js')
+    const range = resolveRange(q)
+    const limit = Math.max(1, Math.min(2000, Number(q.limit ?? 500)))
+    const targets = await prisma.adTarget.findMany({
+      where: {
+        isNegative: false,
+        ...(q.kind ? { kind: q.kind } : {}),
+        ...(q.matchType ? { expressionType: q.matchType } : {}),
+        ...(q.search ? { expressionValue: { contains: q.search, mode: 'insensitive' } } : {}),
+        ...(q.campaignId ? { adGroup: { campaignId: q.campaignId } } : {}),
+      },
+      select: {
+        id: true, externalTargetId: true, kind: true, expressionType: true, expressionValue: true,
+        bidCents: true, status: true, impressions: true, clicks: true, spendCents: true, salesCents: true, ordersCount: true,
+        adGroup: { select: { id: true, name: true, externalAdGroupId: true, campaign: { select: { id: true, name: true, marketplace: true, externalCampaignId: true } } } },
+      },
+      take: limit,
+    })
+    const ids = targets.map((t) => t.id)
+    const perf = ids.length ? await prisma.amazonAdsDailyPerformance.groupBy({
+      by: ['localEntityId'],
+      where: { entityType: 'AD_TARGET', localEntityId: { in: ids }, date: { gte: range.since, lte: range.until } },
+      _sum: { costMicros: true, sales7dCents: true, impressions: true, clicks: true, orders7d: true },
+    }) : []
+    const pmap = new Map(perf.map((p) => [p.localEntityId, p]))
+    const rows = targets.map((t) => {
+      const p = pmap.get(t.id)
+      const spendC = p ? microsToCents(p._sum.costMicros) : t.spendCents
+      const salesC = p ? (p._sum.sales7dCents ?? 0) : t.salesCents
+      const impr = p ? (p._sum.impressions ?? 0) : t.impressions
+      const clk = p ? (p._sum.clicks ?? 0) : t.clicks
+      const ord = p ? (p._sum.orders7d ?? 0) : t.ordersCount
+      return {
+        id: t.id, text: t.expressionValue, kind: t.kind, matchType: t.expressionType, bidCents: t.bidCents, status: t.status,
+        campaignId: t.adGroup.campaign.id, campaignName: t.adGroup.campaign.name, externalCampaignId: t.adGroup.campaign.externalCampaignId,
+        marketplace: t.adGroup.campaign.marketplace, adGroupId: t.adGroup.id, externalAdGroupId: t.adGroup.externalAdGroupId, adGroupName: t.adGroup.name,
+        impressions: impr, clicks: clk, spendCents: spendC, salesCents: salesC, orders: ord,
+        acos: salesC > 0 ? spendC / salesC : null, roas: spendC > 0 ? salesC / spendC : null,
+        windowed: !!p,
+      }
+    })
+    reply.header('Cache-Control', 'private, max-age=60')
+    return { windowDays: range.days, count: rows.length, rows }
+  })
+
+  // ── POST /advertising/search-terms/promote — harvest a search term into a
+  // positive keyword. The search-term report carries EXTERNAL ad-group ids;
+  // resolve to the local AdGroup, then create the keyword (sandbox-safe).
+  fastify.post('/advertising/search-terms/promote', async (request, reply) => {
+    const b = request.body as { query?: string; externalAdGroupId?: string; matchType?: string; bidEur?: number }
+    if (!b?.query || !b?.externalAdGroupId || !b?.matchType || b?.bidEur == null) { reply.status(400); return { error: 'query, externalAdGroupId, matchType, bidEur required' } }
+    const ag = await prisma.adGroup.findFirst({ where: { externalAdGroupId: b.externalAdGroupId }, select: { id: true } })
+    if (!ag) { reply.status(404); return { error: 'ad_group_not_found_for_externalAdGroupId' } }
+    const { createKeywordLocal } = await import('../services/advertising/ads-create.service.js')
+    try { return await createKeywordLocal({ adGroupId: ag.id, keywordText: b.query, matchType: b.matchType, bidEur: b.bidEur } as never) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
+  })
+
   // GET /api/advertising/reports/negative-keyword-candidates
   //    ?lookbackDays=30&minSpend=5&limit=100&profileId=&marketplace=
   fastify.get('/advertising/reports/negative-keyword-candidates', async (request, _reply) => {
