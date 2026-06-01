@@ -43,40 +43,37 @@
 /* ── BODY: icon rail + nav + content ───────────────────────── */
 .az-body { flex: 1; display: flex; min-height: 0; }
 
-/* ── Main nav sidebar — collapsible (no icon rail) ───────────── */
+/* ── Main nav sidebar ───────────────────────────────────────── */
+/* Collapses to 28px so the hamburger (in top bar) is always reachable */
 .az-nav { width: 220px; flex: none; background: #fff; border-right: 1px solid var(--divider); padding: 10px 8px; overflow-y: auto; overflow-x: hidden; transition: width 0.2s ease, padding 0.2s ease; position: relative; }
 .az-nav.nav-collapsed { width: 0; padding: 0; overflow: hidden; }
 .az-nav-toggle { position: absolute; top: 10px; right: 6px; width: 22px; height: 22px; border-radius: 6px; border: 1px solid var(--divider); background: var(--bg2); display: grid; place-items: center; cursor: pointer; color: var(--ink2); z-index: 2; flex-shrink: 0; }
 .az-nav-toggle:hover { background: var(--bg3); }
-.az-nav .collapse { display: flex; justify-content: flex-end; color: var(--ink2); padding: 2px 6px 8px; }
 .az-nav a { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 8px; color: var(--ink); font-weight: 500; font-size: 13.5px; cursor: pointer; white-space: nowrap; text-decoration: none; }
 .az-nav a:hover { background: var(--bg3); }
 .az-nav a.on { background: var(--bg2); font-weight: 700; }
 
-/* ── Sub nav sidebar — contextual, collapsible ───────────────── */
-.az-subnav { width: 200px; flex: none; background: var(--bg2); border-right: 1px solid var(--divider); display: flex; flex-direction: column; transition: width 0.2s ease; overflow: hidden; }
-/* Collapsed to a 28px strip — toggle button stays visible so user can re-expand */
+/* ── Sub nav sidebar ────────────────────────────────────────── */
+/* Collapses to 28px strip — toggle always reachable, never trapped at width:0 */
+.az-subnav { flex: none; width: 200px; background: var(--bg2); border-right: 1px solid var(--divider); display: flex; flex-direction: column; transition: width 0.2s ease; overflow: hidden; min-width: 0; }
 .az-subnav.subnav-collapsed { width: 28px; }
-.az-subnav.subnav-collapsed .az-subnav-inner { align-items: center; padding: 8px 3px; }
-.az-subnav-inner { width: 200px; overflow-y: auto; overflow-x: hidden; padding: 6px 8px 16px; flex: 1; display: flex; flex-direction: column; }
-.az-subnav-header { display: flex; align-items: center; justify-content: space-between; padding: 8px 4px 6px; flex-shrink: 0; min-height: 36px; }
+.az-subnav-inner { flex: 1; min-width: 0; overflow-y: auto; overflow-x: hidden; padding: 6px 8px 16px; display: flex; flex-direction: column; }
+.az-subnav-header { flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; padding: 8px 4px 6px; min-height: 36px; }
 .az-subnav-title { font-size: 10.5px; font-weight: 700; color: var(--ink3); letter-spacing: 0.6px; text-transform: uppercase; white-space: nowrap; overflow: hidden; }
 .az-subnav-toggle { width: 22px; height: 22px; border-radius: 6px; border: 1px solid var(--border); background: #fff; display: grid; place-items: center; cursor: pointer; color: var(--ink2); flex-shrink: 0; }
-.az-subnav-toggle:hover { background: var(--bg3); color: var(--ink); }
-.az-subnav-item { display: flex; align-items: center; gap: 9px; padding: 8px 10px; border-radius: 8px; color: var(--ink); font-size: 13px; font-weight: 500; cursor: pointer; white-space: nowrap; margin-bottom: 1px; border: none; background: none; width: 100%; text-align: left; line-height: 1.3; }
+.az-subnav-toggle:hover { background: var(--bg3); }
+.az-subnav-item { display: flex; align-items: center; gap: 9px; padding: 8px 10px; border-radius: 8px; color: var(--ink); font-size: 13px; font-weight: 500; cursor: pointer; white-space: nowrap; margin-bottom: 1px; border: none; background: none; width: 100%; text-align: left; }
 .az-subnav-item:hover { background: rgba(0,0,0,.04); }
 .az-subnav-item.on { background: #fff; font-weight: 700; color: var(--navy); box-shadow: 0 1px 3px rgba(0,0,0,.07); }
 .az-subnav-item .badge { margin-left: auto; font-size: 10px; font-weight: 700; color: var(--ink3); background: rgba(0,0,0,.07); border-radius: 8px; padding: 1px 6px; flex-shrink: 0; }
 .az-subnav-item.on .badge { background: var(--bg2); color: var(--navy); }
-/* Collapsed: hide all items except the toggle */
 .az-subnav.subnav-collapsed .az-subnav-item,
 .az-subnav.subnav-collapsed .az-subnav-sep,
 .az-subnav.subnav-collapsed .az-subnav-title { display: none; }
-/* Section divider */
 .az-subnav-sep { height: 1px; background: var(--divider); margin: 6px 2px; flex-shrink: 0; }
 
 /* ── Content area ────────────────────────────────────────────── */
-.az-content { flex: 1; overflow: auto; background: #fff; min-width: 0; }
+.az-content { flex: 1; min-width: 0; overflow: auto; background: #fff; }
 /* Amazon deep-link rows in nav */
 .az-amazon-link { display: flex; align-items: center; gap: 6px; padding: 7px 12px; border-radius: 8px; color: var(--ink2); font-weight: 500; font-size: 13px; text-decoration: none; cursor: pointer; }
 .az-amazon-link:hover { background: var(--bg3); text-decoration: none; }
