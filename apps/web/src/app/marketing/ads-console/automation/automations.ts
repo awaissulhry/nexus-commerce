@@ -7,6 +7,8 @@
  * rest for unlimited custom rules.
  */
 
+import { MORE_AUTOMATIONS } from './automations.more'
+
 export type ParamKind = 'pct' | 'eur' | 'num' | 'days' | 'roas' | 'select'
 export interface ParamDef { key: string; label: string; kind: ParamKind; default: number | string; options?: Array<{ v: string; l: string }>; hint?: string }
 export interface BuiltRule { conditions: Array<{ field: string; op: string; value: number }>; actions: Array<Record<string, unknown>>; maxExecutionsPerDay?: number; maxDailyAdSpendCentsEur?: number | null }
@@ -29,7 +31,7 @@ const pRoas = (key: string, label: string, def: number): ParamDef => ({ key, lab
 const pAcos = (def: number): ParamDef => ({ key: 'acos', label: 'ACOS threshold', kind: 'pct', default: def })
 const pStep = (def: number): ParamDef => ({ key: 'step', label: 'Adjust by', kind: 'pct', default: def })
 
-export const AUTOMATIONS: AutomationDef[] = [
+const BASE_AUTOMATIONS: AutomationDef[] = [
   // ── Bidding ───────────────────────────────────────────────────────────
   { id: 'cut-bids-acos', name: 'Cut bids on high ACOS', desc: 'Lower the ad-group bid when a campaign’s ACOS climbs above your threshold — defend margin on keywords turning unprofitable.', category: 'Bidding', icon: '📉', trigger: 'CAC_SPIKE', marquee: true, params: [pAcos(40), pStep(20)], build: (p) => ({ conditions: [{ field: 'campaign.acos', op: 'gte', value: N(p, 'acos', 40) / 100 }], actions: [{ type: 'bid_down', target: 'ad_group', percent: N(p, 'step', 20) }, notify('Bids cut on ACOS spike')], maxExecutionsPerDay: 50 }) },
   { id: 'raise-bids-winners', name: 'Raise bids on winners', desc: 'Push bids up on campaigns beating a ROAS target so your best performers win more impressions.', category: 'Bidding', icon: '📈', trigger: 'CAMPAIGN_PERFORMANCE_BUDGET', marquee: true, params: [pRoas('roas', 'ROAS at or above', 4), pStep(15)], build: (p) => ({ conditions: [{ field: 'campaign.roas', op: 'gte', value: N(p, 'roas', 4) }], actions: [{ type: 'bid_up', target: 'ad_group', percent: N(p, 'step', 15) }, notify('Bids raised on a ROAS winner')], maxExecutionsPerDay: 30, maxDailyAdSpendCentsEur: 20000 }) },
@@ -88,6 +90,10 @@ export const AUTOMATIONS: AutomationDef[] = [
   { id: 'pause-campaign-acos', name: 'Pause campaign on extreme ACOS', desc: 'Hard-stop an entire campaign once ACOS blows past a red-line threshold.', category: 'Bidding', icon: '🛑', trigger: 'CAC_SPIKE', params: [pAcos(100)], build: (p) => ({ conditions: [{ field: 'campaign.acos', op: 'gte', value: N(p, 'acos', 100) / 100 }], actions: [{ type: 'pause_campaign', reason: 'Extreme ACOS' }, notify('Campaign paused — extreme ACOS')], maxExecutionsPerDay: 20 }) },
 ]
 
+// merge the base set with the additional distinct concepts (de-duped by id)
+const MERGED = [...BASE_AUTOMATIONS, ...MORE_AUTOMATIONS]
+const _seen = new Set<string>()
+export const AUTOMATIONS: AutomationDef[] = MERGED.filter((a) => (_seen.has(a.id) ? false : (_seen.add(a.id), true)))
 export const CATEGORIES = ['All', ...Array.from(new Set(AUTOMATIONS.map((a) => a.category)))]
 export const AUTOMATION_COUNT = AUTOMATIONS.length
 export const META_BY_ID: Record<string, AutomationDef> = Object.fromEntries(AUTOMATIONS.map((a) => [a.id, a]))
