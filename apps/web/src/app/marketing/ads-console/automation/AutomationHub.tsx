@@ -25,6 +25,7 @@ import { AnalyticsTab } from './AnalyticsTab'
 import { ComposerTab } from './ComposerTab'
 import { EfficiencyTab } from './EfficiencyTab'
 import { RankControlTab } from './RankControlTab'
+import { campaignHref } from './useCampaignMap'
 import { DaypartingTab } from './DaypartingTab'
 import { HealthTab } from './HealthTab'
 import { SovTab } from './SovTab'
@@ -64,6 +65,7 @@ export function AutomationHub({ initialRules, initialState }: { initialRules: Ru
   const [configuring, setConfiguring] = useState<AutomationDef | null>(null)
   const [sel, setSel] = useState<Set<string>>(new Set())          // library multi-select
   const [selRules, setSelRules] = useState<Set<string>>(new Set()) // active-rules multi-select
+  const [selRecs, setSelRecs] = useState<Set<string>>(new Set())   // recommendations multi-select
 
   const refetchRules = useCallback(async () => {
     const d = await fetch(`${getBackendUrl()}/api/advertising/automation-rules`, { cache: 'no-store' }).then((r) => r.json()).catch(() => ({ items: [] }))
@@ -102,6 +104,9 @@ export function AutomationHub({ initialRules, initialState }: { initialRules: Ru
     } finally { setBusy(null) }
   }
   const applyRec = async (rec: Rec) => { setBusy(rec.id); try { await post('recommendations/apply', { id: rec.id, kind: rec.apply?.kind, payload: rec.apply?.payload }); await fetch(`${getBackendUrl()}/api/advertising/recommendations?limit=80`, { cache: 'no-store' }).then((r) => r.json()).then(setRecs) } finally { setBusy(null) } }
+  const applyRecs = async (list: Rec[]) => { if (!list.length) return; setBusy('recs-bulk'); try { for (const rec of list) await post('recommendations/apply', { id: rec.id, kind: rec.apply?.kind, payload: rec.apply?.payload }); await fetch(`${getBackendUrl()}/api/advertising/recommendations?limit=80`, { cache: 'no-store' }).then((r) => r.json()).then(setRecs); setSelRecs(new Set()) } finally { setBusy(null) } }
+  const toggleRec = (id: string) => setSelRecs((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n })
+  const recCampaignId = (rec: Rec): string | null => { const p = rec.apply?.payload as { campaignIds?: string[] } | undefined; return p?.campaignIds?.[0] ?? null }
   const runEngine = async (key: string, path: string, label: string) => { if (typeof window !== 'undefined' && !window.confirm(`Run ${label} now? It honours each rule's dry-run setting.`)) return; setBusy(key); setEngineMsg((m) => ({ ...m, [key]: 'Running…' })); try { const res = await post(path, {}).then((x) => x.json()).catch(() => null); setEngineMsg((m) => ({ ...m, [key]: res ? (res.message ?? `Done · ${res.applied ?? res.count ?? res.changed ?? 0} action(s)`) : 'Done' })) } finally { setBusy(null) } }
   const setHalt = async (halt: boolean) => { setBusy('halt'); try { await post(halt ? 'automation/halt' : 'automation/resume', halt ? { reason: 'Manual halt from console' } : undefined); await refetchState() } finally { setBusy(null) } }
 
@@ -217,15 +222,24 @@ export function AutomationHub({ initialRules, initialState }: { initialRules: Ru
 
       {tab === 'recs' && <div style={{ paddingTop: 4 }}>
         {!recs && <div className="az-empty">Loading recommendations…</div>}
-        {recs && (recs.recommendations ?? []).length === 0 && <div className="az-empty" style={{ border: '1px solid var(--divider)', borderRadius: 10 }}>No recommendations right now — you’re dialled in. 🎉</div>}
-        {recs && (recs.recommendations ?? []).map((rec) => (
+        {recs && (recs.recommendations ?? []).length === 0 && <div className="az-empty" style={{ border: '1px solid var(--divider)', borderRadius: 10 }}>No recommendations right now — you’re dialled in.</div>}
+        {recs && (recs.recommendations ?? []).length > 0 && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 12.5, color: 'var(--ink2)' }}><b style={{ color: 'var(--green)' }}>{eur(recs.potentialMonthlyImpactCents)}</b>/mo opportunity · {(recs.recommendations ?? []).length} recommendations</span>
+            <span style={{ flex: 1 }} />
+            {selRecs.size > 0 && <button className="az-btn" disabled={busy === 'recs-bulk'} onClick={() => void applyRecs((recs.recommendations ?? []).filter((r) => selRecs.has(r.id) && r.apply))}>{busy === 'recs-bulk' ? 'Applying…' : `Apply ${selRecs.size} selected`}</button>}
+            <button className="az-btn dark" disabled={busy === 'recs-bulk'} onClick={() => void applyRecs((recs.recommendations ?? []).filter((r) => r.apply))}>{busy === 'recs-bulk' ? 'Applying…' : 'Apply all'}</button>
+          </div>
+        )}
+        {recs && (recs.recommendations ?? []).map((rec) => { const cid = recCampaignId(rec); return (
           <div key={rec.id} className="az-rec">
+            {rec.apply && <input type="checkbox" className="az-check" checked={selRecs.has(rec.id)} onChange={() => toggleRec(rec.id)} style={{ alignSelf: 'center' }} aria-label="Select recommendation" />}
             <span className={`sev ${rec.severity}`} />
-            <div className="body"><div className="t">{cleanName(rec.title)}{rec.estImpactCents ? <span style={{ color: 'var(--green)', fontWeight: 700, marginLeft: 8 }}>{eur(rec.estImpactCents)}/mo</span> : null}</div><div className="d">{cleanName(rec.detail)}</div></div>
+            <div className="body"><div className="t">{cleanName(rec.title)}{rec.estImpactCents ? <span style={{ color: 'var(--green)', fontWeight: 700, marginLeft: 8 }}>{eur(rec.estImpactCents)}/mo</span> : null}</div><div className="d">{cleanName(rec.detail)}{cid ? <> · <a className="cn" href={campaignHref(cid)} target="_blank" rel="noopener noreferrer">view campaign</a></> : null}</div></div>
             <span className="trg" style={{ background: 'var(--bg2)', borderRadius: 5, padding: '2px 8px', fontSize: 10.5, fontWeight: 700, color: 'var(--ink2)', alignSelf: 'center' }}>{rec.category}</span>
             {rec.apply && <button className="az-btn dark" disabled={busy === rec.id} onClick={() => void applyRec(rec)} style={{ alignSelf: 'center' }}>{busy === rec.id ? 'Applying…' : 'Apply'}</button>}
           </div>
-        ))}
+        ) })}
       </div>}
 
       {tab === 'engine' && <div style={{ paddingTop: 4 }}>
