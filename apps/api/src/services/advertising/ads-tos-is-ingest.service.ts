@@ -28,7 +28,7 @@ export interface TosIsIngestResult {
   errors: string[]
 }
 
-export async function ingestTopOfSearchIS(opts: { windowDays?: number } = {}): Promise<TosIsIngestResult> {
+export async function ingestTopOfSearchIS(opts: { windowDays?: number; marketplace?: string } = {}): Promise<TosIsIngestResult> {
   const windowDays = Math.max(1, Math.min(60, opts.windowDays ?? 7))
   const end = new Date()
   const start = new Date(); start.setUTCDate(start.getUTCDate() - windowDays)
