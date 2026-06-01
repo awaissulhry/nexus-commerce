@@ -10,6 +10,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { AlertTriangle, TrendingUp, TrendingDown, RefreshCw } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
+import { TabControls, DEFAULT_RANGE, rangeQuery, type RangeValue } from './TabControls'
 
 interface Row { date: string; impressions: number; clicks: number; orders: number; adSpendCents: number; adSalesCents: number; acos: number | null; ctr: number | null }
 interface Summary { impressions: number; clicks: number; orders: number; spendCents: number; salesCents: number; acos: number | null; roas: number | null; ctr: number | null }
@@ -23,8 +24,9 @@ export function AnomalyTab() {
   const [summary, setSummary] = useState<Summary | null>(null)
   const [previous, setPrevious] = useState<Summary | null>(null)
   const [loading, setLoading] = useState(true)
-  const load = () => { setLoading(true); void fetch(`${getBackendUrl()}/api/advertising/trends?windowDays=30&compare=true`, { cache: 'no-store' }).then((r) => r.json()).then((d) => { setRows(d.rows ?? []); setSummary(d.summary ?? null); setPrevious(d.previous ?? null) }).catch(() => {}).finally(() => setLoading(false)) }
-  useEffect(load, [])
+  const [range, setRange] = useState<RangeValue>(DEFAULT_RANGE)
+  const load = () => { setLoading(true); void fetch(`${getBackendUrl()}/api/advertising/trends?${rangeQuery(range)}&compare=true`, { cache: 'no-store' }).then((r) => r.json()).then((d) => { setRows(d.rows ?? []); setSummary(d.summary ?? null); setPrevious(d.previous ?? null) }).catch(() => {}).finally(() => setLoading(false)) }
+  useEffect(() => { load() }, [range]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const anomalies = useMemo<Anomaly[]>(() => {
     const out: Anomaly[] = []
@@ -75,8 +77,9 @@ export function AnomalyTab() {
     <div style={{ paddingTop: 4 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
         <span style={{ fontWeight: 700 }}><AlertTriangle size={15} style={{ verticalAlign: 'text-bottom', marginRight: 5 }} />Anomaly detection</span>
-        <span style={{ color: 'var(--ink2)', fontSize: 12 }}>sudden moves vs the trailing baseline, last 30 days</span>
+        <span style={{ color: 'var(--ink2)', fontSize: 12 }}>sudden moves vs the trailing baseline</span>
         <span style={{ flex: 1 }} />
+        <TabControls value={range} onChange={setRange} />
         <button className="az-iconbtn" onClick={load} title="Refresh"><RefreshCw size={15} className={loading ? 'az-spin' : ''} /></button>
       </div>
       {loading && <div className="az-empty">Analysing…</div>}
