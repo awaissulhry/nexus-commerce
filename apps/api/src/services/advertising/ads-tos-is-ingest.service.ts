@@ -41,7 +41,10 @@ export async function ingestTopOfSearchIS(opts: { windowDays?: number } = {}): P
     const ctx: ClientContext = { profileId: conn.profileId, region: conn.region as ClientContext['region'] }
     let rows: unknown[]
     try {
-      rows = (await fetchReport(ctx, { reportType: 'campaigns', startDate: fmt(start), endDate: fmt(end), extraColumns: ['topOfSearchImpressionShare'] })) as unknown[]
+      // Campaign group-by only allows campaign-level columns — request a clean
+      // minimal set (the base set's adGroupId/keywordId/adId/orders* are rejected
+      // by the campaigns report). topOfSearchImpressionShare confirmed allowed.
+      rows = (await fetchReport(ctx, { reportType: 'campaigns', startDate: fmt(start), endDate: fmt(end), columnsOverride: ['date', 'campaignId', 'impressions', 'topOfSearchImpressionShare'] })) as unknown[]
     } catch (e) {
       out.errors.push(`${conn.profileId}: ${(e as Error).message}`)
       continue

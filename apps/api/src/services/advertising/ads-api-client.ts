@@ -761,11 +761,14 @@ export interface ReportRequest {
   reportType: ReportType
   startDate: string // YYYY-MM-DD
   endDate: string // YYYY-MM-DD
-  /** Opt-in extra report columns appended to the base set (e.g.
-   *  ['topOfSearchImpressionShare'] for the campaigns report). Default behaviour
-   *  is unchanged — callers that omit this get exactly the original columns, so
-   *  the main metrics ingestion is never affected. */
+  /** Opt-in extra report columns appended to the base set. Default behaviour is
+   *  unchanged — callers that omit this get exactly the original columns. */
   extraColumns?: string[]
+  /** Opt-in FULL column override (replaces the base set entirely). Needed for
+   *  campaign-only reports whose allowed columns differ from the base set (e.g.
+   *  the campaign group-by rejects adGroupId/keywordId/adId/orders*). The main
+   *  ingestion omits this, so it is unaffected. */
+  columnsOverride?: string[]
 }
 
 export async function fetchReport(
@@ -792,7 +795,7 @@ export async function fetchReport(
       configuration: {
         adProduct: 'SPONSORED_PRODUCTS',
         groupBy: [req.reportType === 'campaigns' ? 'campaign' : req.reportType.replace(/s$/, '')],
-        columns: [
+        columns: req.columnsOverride ?? [
           'date', 'campaignId', 'adGroupId', 'keywordId', 'adId',
           'impressions', 'clicks', 'cost', 'sales1d', 'sales7d', 'sales14d',
           'orders1d', 'orders7d', 'unitsSoldClicks7d',
