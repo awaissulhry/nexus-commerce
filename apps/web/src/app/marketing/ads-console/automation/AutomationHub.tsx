@@ -22,6 +22,8 @@ import { DaypartingTab } from './DaypartingTab'
 import { HealthTab } from './HealthTab'
 import { SovTab } from './SovTab'
 import { RetailTab } from './RetailTab'
+import { GuardrailsTab } from './GuardrailsTab'
+import { BudgetPacingTab } from './BudgetPacingTab'
 
 interface Rule { id: string; name: string; description?: string; trigger: string; conditions: unknown[]; actions: unknown[]; enabled: boolean; dryRun: boolean; evaluationCount: number; matchCount: number; executionCount: number; lastExecutedAt?: string | null; domain: string }
 interface State { autonomy?: string; halted?: boolean; haltReason?: string | null; effectivelyStopped?: boolean; lastCheckedAt?: string | null }
@@ -31,7 +33,8 @@ interface RecResp { generatedAt?: string; counts?: Record<string, number>; poten
 const TABS = [
   { k: 'library', label: 'Library' }, { k: 'playbooks', label: 'Playbooks' }, { k: 'active', label: 'Active rules' },
   { k: 'dayparting', label: 'Dayparting' }, { k: 'recs', label: 'Recommendations' }, { k: 'competitive', label: 'Competitive' },
-  { k: 'retail', label: 'Retail' }, { k: 'engine', label: 'Engine & autonomy' }, { k: 'health', label: 'Health' },
+  { k: 'retail', label: 'Retail' }, { k: 'budget', label: 'Budgets' }, { k: 'engine', label: 'Engine & autonomy' },
+  { k: 'guardrails', label: 'Guardrails' }, { k: 'health', label: 'Health' },
 ]
 const eur = (c: number | null | undefined) => (c == null ? '—' : new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(c / 100))
 const post = (path: string, body?: unknown) => fetch(`${getBackendUrl()}/api/advertising/${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined })
@@ -228,6 +231,8 @@ export function AutomationHub({ initialRules, initialState }: { initialRules: Ru
       {tab === 'dayparting' && <DaypartingTab />}
       {tab === 'competitive' && <SovTab />}
       {tab === 'retail' && <RetailTab />}
+      {tab === 'budget' && <BudgetPacingTab />}
+      {tab === 'guardrails' && <GuardrailsTab />}
       {tab === 'health' && <HealthTab />}
 
       {showBuilder && <RuleBuilder onClose={() => setShowBuilder(false)} onSaved={() => { void refetchRules() }} />}
