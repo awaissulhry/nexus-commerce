@@ -3477,6 +3477,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       'CAMPAIGN_NO_SALES',
       'SEARCH_TERM_WASTING',
       'CAMPAIGN_ROAS_DECLINING',
+      'KEYWORD_RISING_STAR',
     ])
     if (!ALLOWED_TRIGGERS.has(body.trigger)) {
       reply.code(400)

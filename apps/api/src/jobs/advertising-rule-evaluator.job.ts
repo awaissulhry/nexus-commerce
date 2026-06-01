@@ -755,6 +755,32 @@ async function buildCampaignRoasDecliningContexts() {
   } catch (e) { logger.warn('[ads-rule-evaluator] buildCampaignRoasDecliningContexts failed', { error: (e as Error).message }); return [] }
 }
 
+// ── KEYWORD_RISING_STAR (E8) ──────────────────────────────────────────
+// Keywords with accelerating orders week-over-week (≥50% growth off a real
+// base) — momentum, distinct from KEYWORD_SCALE_OPPORTUNITY's absolute ROAS.
+// Lets a rule lean into emerging winners early.
+async function buildRisingStarContexts() {
+  try {
+    const thisWeekStart = new Date(); thisWeekStart.setUTCDate(thisWeekStart.getUTCDate() - 7); thisWeekStart.setUTCHours(0, 0, 0, 0)
+    const prevWeekStart = new Date(thisWeekStart); prevWeekStart.setUTCDate(thisWeekStart.getUTCDate() - 7)
+    const [thisWk, prevWk] = await Promise.all([
+      prisma.amazonAdsDailyPerformance.groupBy({ by: ['localEntityId', 'marketplace'], where: { entityType: 'KEYWORD', date: { gte: thisWeekStart } }, _sum: { orders7d: true, costMicros: true, sales7dCents: true } }),
+      prisma.amazonAdsDailyPerformance.groupBy({ by: ['localEntityId'], where: { entityType: 'KEYWORD', date: { gte: prevWeekStart, lt: thisWeekStart } }, _sum: { orders7d: true } }),
+    ])
+    const prevMap = new Map(prevWk.map((p) => [p.localEntityId, p._sum.orders7d ?? 0]))
+    return thisWk
+      .map((p) => ({ p, orders: p._sum.orders7d ?? 0, prevOrders: prevMap.get(p.localEntityId) ?? 0, spend: microsToCents(p._sum.costMicros), sales: p._sum.sales7dCents ?? 0 }))
+      .filter((x) => x.orders >= 3 && x.prevOrders >= 1 && x.orders >= x.prevOrders * 1.5)
+      .sort((a, b) => (b.orders / Math.max(1, b.prevOrders)) - (a.orders / Math.max(1, a.prevOrders)))
+      .slice(0, 300)
+      .map(({ p, orders, prevOrders, spend, sales }) => ({
+        trigger: 'KEYWORD_RISING_STAR' as const,
+        marketplace: p.marketplace,
+        adTarget: { id: p.localEntityId, orders, previousOrders: prevOrders, spendCents: spend, salesCents: sales, roas: spend > 0 ? sales / spend : 0, growthPct: Math.round((orders / Math.max(1, prevOrders) - 1) * 100) },
+      }))
+  } catch (e) { logger.warn('[ads-rule-evaluator] buildRisingStarContexts failed', { error: (e as Error).message }); return [] }
+}
+
 export async function runAdvertisingRuleEvaluatorOnce(): Promise<TickSummary> {
   const startedAt = Date.now()
   // AME.14 — global kill-switch. When set, NO advertising rule auto-applies
@@ -781,7 +807,7 @@ export async function runAdvertisingRuleEvaluatorOnce(): Promise<TickSummary> {
     zeroImpression, lowCtr, cvrDrop, wastedKeyword, searchTermConverting,
     highAcosKeyword, scaleOpportunity, adGroupUnderperform,
     newToBrandWinner, campaignNoSales,
-    searchTermWasting, campaignRoasDeclining] = await Promise.all([
+    searchTermWasting, campaignRoasDeclining, risingStar] = await Promise.all([
     buildFbaAgeContexts(),
     buildProfitabilityContexts(),
     buildCacSpikeContexts(),
@@ -801,6 +827,7 @@ export async function runAdvertisingRuleEvaluatorOnce(): Promise<TickSummary> {
     buildCampaignNoSalesContexts(),
     buildSearchTermWastingContexts(),
     buildCampaignRoasDecliningContexts(),
+    buildRisingStarContexts(),
   ])
 
   // AU.1/AU.2/AU.4 — SCHEDULE trigger: one context per active marketplace each
@@ -840,6 +867,7 @@ export async function runAdvertisingRuleEvaluatorOnce(): Promise<TickSummary> {
     ['CAMPAIGN_NO_SALES', campaignNoSales],
     ['SEARCH_TERM_WASTING', searchTermWasting],
     ['CAMPAIGN_ROAS_DECLINING', campaignRoasDeclining],
+    ['KEYWORD_RISING_STAR', risingStar],
     ['SCHEDULE', scheduleContexts],
   ]
   for (const [trigger, contexts] of passes) {
