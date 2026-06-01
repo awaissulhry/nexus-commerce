@@ -566,6 +566,140 @@ async function buildSearchTermConvertingContexts() {
   }))
 }
 
+// ══════════════════════════════════════════════════════════════════════
+// Engine expansion (E-series) — net-new triggers, added additively. Each
+// builder is wrapped in try/catch returning [] so a new signal can NEVER
+// break the existing evaluator tick. New triggers are inert until an operator
+// enables a rule that uses them (applyMarketplaceScope skips a trigger with no
+// enabled rules), so adding them is safe by construction.
+// ══════════════════════════════════════════════════════════════════════
+
+// ── KEYWORD_HIGH_ACOS (E1) ────────────────────────────────────────────
+// Keywords that DO convert but at an inefficient ACOS. Distinct from
+// KEYWORD_WASTED_SPEND (zero orders) and CAC_SPIKE (campaign-level): these are
+// profitable-but-leaky converters a rule can bid down toward target.
+async function buildHighAcosKeywordContexts() {
+  try {
+    const since = new Date(); since.setUTCDate(since.getUTCDate() - 14); since.setUTCHours(0, 0, 0, 0)
+    const perf = await prisma.amazonAdsDailyPerformance.groupBy({
+      by: ['localEntityId', 'marketplace'],
+      where: { entityType: 'KEYWORD', date: { gte: since } },
+      _sum: { costMicros: true, sales7dCents: true, orders7d: true },
+    })
+    return perf
+      .map((p) => ({ p, spend: microsToCents(p._sum.costMicros), sales: p._sum.sales7dCents ?? 0, orders: p._sum.orders7d ?? 0 }))
+      .filter((x) => x.orders > 0 && x.sales > 0 && x.spend >= 200 && x.spend / x.sales >= 0.2)
+      .sort((a, b) => (b.spend / b.sales) - (a.spend / a.sales))
+      .slice(0, 500)
+      .map(({ p, spend, sales, orders }) => ({
+        trigger: 'KEYWORD_HIGH_ACOS' as const,
+        marketplace: p.marketplace,
+        adTarget: { id: p.localEntityId, spendCents: spend, salesCents: sales, orders, acos: spend / sales },
+      }))
+  } catch (e) { logger.warn('[ads-rule-evaluator] buildHighAcosKeywordContexts failed', { error: (e as Error).message }); return [] }
+}
+
+// ── KEYWORD_SCALE_OPPORTUNITY (E2) ────────────────────────────────────
+// Proven winners (strong ROAS + real orders) with headroom to scale — pair
+// with bid_up to win more of a profitable term.
+async function buildScaleOpportunityContexts() {
+  try {
+    const since = new Date(); since.setUTCDate(since.getUTCDate() - 14); since.setUTCHours(0, 0, 0, 0)
+    const perf = await prisma.amazonAdsDailyPerformance.groupBy({
+      by: ['localEntityId', 'marketplace'],
+      where: { entityType: 'KEYWORD', date: { gte: since } },
+      _sum: { costMicros: true, sales7dCents: true, orders7d: true, clicks: true },
+    })
+    return perf
+      .map((p) => ({ p, spend: microsToCents(p._sum.costMicros), sales: p._sum.sales7dCents ?? 0, orders: p._sum.orders7d ?? 0 }))
+      .filter((x) => x.orders >= 1 && x.spend > 0 && x.sales / x.spend >= 2)
+      .sort((a, b) => (b.sales / b.spend) - (a.sales / a.spend))
+      .slice(0, 400)
+      .map(({ p, spend, sales, orders }) => ({
+        trigger: 'KEYWORD_SCALE_OPPORTUNITY' as const,
+        marketplace: p.marketplace,
+        adTarget: { id: p.localEntityId, spendCents: spend, salesCents: sales, orders, roas: sales / spend, clicks: p._sum.clicks ?? 0 },
+      }))
+  } catch (e) { logger.warn('[ads-rule-evaluator] buildScaleOpportunityContexts failed', { error: (e as Error).message }); return [] }
+}
+
+// ── AD_GROUP_UNDERPERFORMING (E3) ─────────────────────────────────────
+// Ad-group-level spend with poor return — a coarser lens than per-keyword,
+// for operators who manage at the ad-group level. Pairs with pause_ad_group
+// or bid_down (target: ad_group).
+async function buildAdGroupUnderperformContexts() {
+  try {
+    const since = new Date(); since.setUTCDate(since.getUTCDate() - 14); since.setUTCHours(0, 0, 0, 0)
+    const perf = await prisma.amazonAdsDailyPerformance.groupBy({
+      by: ['localEntityId', 'marketplace'],
+      where: { entityType: 'AD_GROUP', date: { gte: since } },
+      _sum: { costMicros: true, sales7dCents: true, orders7d: true },
+    })
+    return perf
+      .map((p) => ({ p, spend: microsToCents(p._sum.costMicros), sales: p._sum.sales7dCents ?? 0, orders: p._sum.orders7d ?? 0 }))
+      .filter((x) => x.spend >= 500 && (x.sales === 0 || x.spend / x.sales >= 0.4))
+      .sort((a, b) => b.spend - a.spend)
+      .slice(0, 300)
+      .map(({ p, spend, sales, orders }) => ({
+        trigger: 'AD_GROUP_UNDERPERFORMING' as const,
+        marketplace: p.marketplace,
+        adGroup: { id: p.localEntityId, spendCents: spend, salesCents: sales, orders, acos: sales > 0 ? spend / sales : null },
+      }))
+  } catch (e) { logger.warn('[ads-rule-evaluator] buildAdGroupUnderperformContexts failed', { error: (e as Error).message }); return [] }
+}
+
+// ── NEW_TO_BRAND_WINNER (E4) ──────────────────────────────────────────
+// Campaigns acquiring new-to-brand customers (ntbOrders14d) — worth scaling
+// for brand growth, a signal nothing else triggers on. Pairs with adjust_ad_budget.
+async function buildNewToBrandWinnerContexts() {
+  try {
+    const since = new Date(); since.setUTCDate(since.getUTCDate() - 14); since.setUTCHours(0, 0, 0, 0)
+    const campaigns = await prisma.campaign.findMany({ where: { status: 'ENABLED' }, select: { id: true, name: true, externalCampaignId: true, marketplace: true } })
+    if (campaigns.length === 0) return []
+    const perf = await prisma.amazonAdsDailyPerformance.groupBy({
+      by: ['localEntityId'],
+      where: { entityType: 'CAMPAIGN', localEntityId: { in: campaigns.map((c) => c.id) }, date: { gte: since } },
+      _sum: { ntbOrders14d: true, ntbSalesCents14d: true, costMicros: true },
+    })
+    const byId = new Map(perf.map((p) => [p.localEntityId!, p]))
+    return campaigns
+      .map((c) => ({ c, p: byId.get(c.id) }))
+      .filter((x) => !!x.p && (x.p._sum.ntbOrders14d ?? 0) >= 1)
+      .slice(0, 200)
+      .map(({ c, p }) => ({
+        trigger: 'NEW_TO_BRAND_WINNER' as const,
+        marketplace: c.marketplace,
+        campaign: { id: c.id, externalCampaignId: c.externalCampaignId, name: c.name, ntbOrders: p!._sum.ntbOrders14d ?? 0, ntbSalesCents: p!._sum.ntbSalesCents14d ?? 0, spendCents: microsToCents(p!._sum.costMicros) },
+      }))
+  } catch (e) { logger.warn('[ads-rule-evaluator] buildNewToBrandWinnerContexts failed', { error: (e as Error).message }); return [] }
+}
+
+// ── CAMPAIGN_NO_SALES (E5) ────────────────────────────────────────────
+// Campaigns spending over the window with ZERO attributed sales — dead spend
+// at the campaign level (coarser than per-target underperformance).
+async function buildCampaignNoSalesContexts() {
+  try {
+    const since = new Date(); since.setUTCDate(since.getUTCDate() - 30); since.setUTCHours(0, 0, 0, 0)
+    const campaigns = await prisma.campaign.findMany({ where: { status: 'ENABLED' }, select: { id: true, name: true, externalCampaignId: true, marketplace: true } })
+    if (campaigns.length === 0) return []
+    const perf = await prisma.amazonAdsDailyPerformance.groupBy({
+      by: ['localEntityId'],
+      where: { entityType: 'CAMPAIGN', localEntityId: { in: campaigns.map((c) => c.id) }, date: { gte: since } },
+      _sum: { costMicros: true, sales7dCents: true, sales14dCents: true },
+    })
+    const byId = new Map(perf.map((p) => [p.localEntityId!, p]))
+    return campaigns
+      .map((c) => ({ c, p: byId.get(c.id) }))
+      .filter((x) => { if (!x.p) return false; const spend = microsToCents(x.p._sum.costMicros); const sales = (x.p._sum.sales7dCents ?? 0) + (x.p._sum.sales14dCents ?? 0); return spend >= 1000 && sales === 0 })
+      .slice(0, 200)
+      .map(({ c, p }) => ({
+        trigger: 'CAMPAIGN_NO_SALES' as const,
+        marketplace: c.marketplace,
+        campaign: { id: c.id, externalCampaignId: c.externalCampaignId, name: c.name, spendCents: microsToCents(p!._sum.costMicros), salesCents: 0 },
+      }))
+  } catch (e) { logger.warn('[ads-rule-evaluator] buildCampaignNoSalesContexts failed', { error: (e as Error).message }); return [] }
+}
+
 export async function runAdvertisingRuleEvaluatorOnce(): Promise<TickSummary> {
   const startedAt = Date.now()
   // AME.14 — global kill-switch. When set, NO advertising rule auto-applies
@@ -589,7 +723,9 @@ export async function runAdvertisingRuleEvaluatorOnce(): Promise<TickSummary> {
     forceDryRun = await shouldForceDryRun()
   } catch { /* state unavailable → fall through (env kill remains the backstop) */ }
   const [fbaAge, profitability, cacSpike, underperform, campaignBudget,
-    zeroImpression, lowCtr, cvrDrop, wastedKeyword, searchTermConverting] = await Promise.all([
+    zeroImpression, lowCtr, cvrDrop, wastedKeyword, searchTermConverting,
+    highAcosKeyword, scaleOpportunity, adGroupUnderperform,
+    newToBrandWinner, campaignNoSales] = await Promise.all([
     buildFbaAgeContexts(),
     buildProfitabilityContexts(),
     buildCacSpikeContexts(),
@@ -601,6 +737,12 @@ export async function runAdvertisingRuleEvaluatorOnce(): Promise<TickSummary> {
     buildCvrDropContexts(),
     buildWastedKeywordContexts(),
     buildSearchTermConvertingContexts(),
+    // ── Engine expansion (E-series) — net-new triggers ─────────────────
+    buildHighAcosKeywordContexts(),
+    buildScaleOpportunityContexts(),
+    buildAdGroupUnderperformContexts(),
+    buildNewToBrandWinnerContexts(),
+    buildCampaignNoSalesContexts(),
   ])
 
   // AU.1/AU.2/AU.4 — SCHEDULE trigger: one context per active marketplace each
@@ -633,6 +775,11 @@ export async function runAdvertisingRuleEvaluatorOnce(): Promise<TickSummary> {
     ['CVR_DROP', cvrDrop],
     ['KEYWORD_WASTED_SPEND', wastedKeyword],
     ['SEARCH_TERM_CONVERTING', searchTermConverting],
+    ['KEYWORD_HIGH_ACOS', highAcosKeyword],
+    ['KEYWORD_SCALE_OPPORTUNITY', scaleOpportunity],
+    ['AD_GROUP_UNDERPERFORMING', adGroupUnderperform],
+    ['NEW_TO_BRAND_WINNER', newToBrandWinner],
+    ['CAMPAIGN_NO_SALES', campaignNoSales],
     ['SCHEDULE', scheduleContexts],
   ]
   for (const [trigger, contexts] of passes) {

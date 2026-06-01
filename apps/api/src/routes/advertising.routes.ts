@@ -3469,6 +3469,12 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       'KEYWORD_WASTED_SPEND',
       'KEYWORD_ZERO_IMPRESSIONS',
       'SEARCH_TERM_CONVERTING',
+      // Engine expansion (E-series) — net-new triggers
+      'KEYWORD_HIGH_ACOS',
+      'KEYWORD_SCALE_OPPORTUNITY',
+      'AD_GROUP_UNDERPERFORMING',
+      'NEW_TO_BRAND_WINNER',
+      'CAMPAIGN_NO_SALES',
     ])
     if (!ALLOWED_TRIGGERS.has(body.trigger)) {
       reply.code(400)
