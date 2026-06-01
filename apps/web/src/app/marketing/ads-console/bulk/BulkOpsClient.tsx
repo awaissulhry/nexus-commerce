@@ -10,10 +10,12 @@
  *    sheet (Create/Update/Archive via the gated write paths) lands in Phase M.
  */
 
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import ExcelJS from 'exceljs'
-import { Download, Upload, FileSpreadsheet, CheckCircle2, AlertCircle, Info } from 'lucide-react'
+import { Download, Upload, FileSpreadsheet, CheckCircle2, AlertCircle, Info, ExternalLink } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
+import { campaignHref } from '../automation/useCampaignMap'
+import { useAmazonLinks, buildAmazonCampaignHref } from '../automation/useAmazonLinks'
 
 type Row = Record<string, string>
 interface VRow { r: Row; ok: boolean; op: string; msg: string }
@@ -44,10 +46,41 @@ const splitCsv = (line: string): string[] => {
   out.push(cur); return out
 }
 
+interface BidHistoryItem {
+  id: string; entityType: string; entityId: string; campaignId: string | null
+  field: string; oldValue: string | null; newValue: string | null
+  changedAt: string; changedBy: string; reason: string | null
+  campaign?: { id: string; name: string; marketplace: string | null; externalCampaignId: string | null }
+}
+
+const eur = (v: string | null) => { const n = Number(v); return isNaN(n) ? v ?? '—' : new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR' }).format(n) }
+const relTime = (iso: string) => { const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000); if (s < 60) return 'just now'; const m = Math.floor(s / 60); if (m < 60) return `${m}m ago`; const h = Math.floor(m / 60); return h < 24 ? `${h}h ago` : `${Math.floor(h / 24)}d ago` }
+
 export function BulkOpsClient() {
+  const [tab, setTab] = useState<'download' | 'upload' | 'diff'>('download')
   const [rows, setRows] = useState<VRow[]>([])
   const [fileName, setFileName] = useState('')
   const [parsing, setParsing] = useState(false)
+  // Automation diff state
+  const [diffItems, setDiffItems] = useState<BidHistoryItem[] | null>(null)
+  const [diffLoading, setDiffLoading] = useState(false)
+  const profileMap = useAmazonLinks()
+
+  const loadDiff = async () => {
+    setDiffLoading(true)
+    try {
+      const d = await fetch(`${getBackendUrl()}/api/advertising/bid-history?limit=200`, { cache: 'no-store' }).then(r => r.json())
+      // Only show automation-driven changes
+      const auto = (d.items ?? []).filter((i: BidHistoryItem) => i.changedBy?.startsWith('automation:'))
+      // Enrich with campaign name/marketplace via a campaigns fetch (best-effort)
+      const campRes = await fetch(`${getBackendUrl()}/api/advertising/campaigns?limit=500`, { cache: 'no-store' }).then(r => r.json()).catch(() => ({ items: [] }))
+      const campMap: Record<string, { id: string; name: string; marketplace: string | null; externalCampaignId: string | null }> = {}
+      for (const c of (campRes.items ?? [])) campMap[c.id] = c
+      setDiffItems(auto.map((i: BidHistoryItem) => ({ ...i, campaign: i.campaignId ? campMap[i.campaignId] : undefined })))
+    } finally { setDiffLoading(false) }
+  }
+
+  useEffect(() => { if (tab === 'diff' && diffItems === null) void loadDiff() }, [tab]) // eslint-disable-line react-hooks/exhaustive-deps
   const [err, setErr] = useState<string | null>(null)
   const [truncated, setTruncated] = useState(false)
   const [over, setOver] = useState(false)
@@ -141,32 +174,88 @@ export function BulkOpsClient() {
 
   return (
     <div className="az-wrap">
-      <div className="az-listhead"><span className="title">Bulk operations</span><span style={{ flex: 1 }} /></div>
-
-      <div className="az-bulk">
-        <div className="az-card">
-          <h3><Download size={16} style={{ marginRight: 6 }} />Download bulksheet</h3>
-          <p className="desc">Export your current campaigns, ad groups, keywords and product targets as a real Excel bulksheet in Amazon’s exact column layout. Edit it in Excel, then upload it here.</p>
-          <a className="az-btn dark" href={exportHref}><Download size={15} />Download current state (.xlsx)</a>
-        </div>
-
-        <div className="az-card">
-          <h3><Upload size={16} style={{ marginRight: 6 }} />Upload &amp; validate</h3>
-          <p className="desc">Drop an edited .xlsx or .csv bulksheet to validate every row against Amazon’s grammar (Entity · Operation · required fields) and preview what would change.</p>
-          <label
-            className={`az-drop ${over ? 'over' : ''}`}
-            onDragOver={(e) => { e.preventDefault(); setOver(true) }}
-            onDragLeave={() => setOver(false)}
-            onDrop={(e) => { e.preventDefault(); setOver(false); const f = e.dataTransfer.files?.[0]; if (f) void handleFile(f) }}
-            onClick={() => inputRef.current?.click()}
-          >
-            <input ref={inputRef} type="file" accept=".xlsx,.csv" onChange={(e) => { const f = e.target.files?.[0]; if (f) void handleFile(f) }} />
-            <FileSpreadsheet size={26} style={{ marginBottom: 6 }} />
-            <div>{parsing ? 'Parsing…' : fileName ? <>Loaded <span className="fn">{fileName}</span> — drop another to replace</> : <>Drag a bulksheet here, or <span className="fn">browse</span></>}</div>
-          </label>
-          {err && <div className="az-rowstat err" style={{ marginTop: 10 }}><AlertCircle size={14} />{err}</div>}
-        </div>
+      <div className="az-listhead">
+        <span className="title"><FileSpreadsheet size={18} style={{ marginRight: 6, color: 'var(--orange)' }} />Bulk operations</span>
+        <span style={{ flex: 1 }} />
       </div>
+
+      {/* Tab bar */}
+      <div style={{ display: 'flex', gap: 6, marginBottom: 16 }}>
+        {([['download', 'Download'], ['upload', 'Upload'], ['diff', 'Automation diff']] as const).map(([k, l]) => (
+          <button key={k} className={`az-chip quick ${tab === k ? 'on' : ''}`} onClick={() => setTab(k)}>{l}</button>
+        ))}
+      </div>
+
+      {/* Automation diff tab */}
+      {tab === 'diff' && (
+        <div>
+          <div style={{ color: 'var(--ink2)', fontSize: 12.5, marginBottom: 14 }}>
+            Every bid / budget / status change made by automation rules — who changed what, why, and which campaign it touched. Use this to audit what automation has done before going fully live.
+          </div>
+          {diffLoading && <div className="az-empty">Loading automation changes...</div>}
+          {!diffLoading && diffItems?.length === 0 && <div className="az-empty" style={{ border: '1px solid var(--divider)', borderRadius: 10 }}>No automation-driven changes yet. Enable a rule and let it fire.</div>}
+          {!diffLoading && (diffItems ?? []).length > 0 && (
+            <div className="az-tablewrap">
+              <table className="az-table">
+                <thead><tr>
+                  <th className="l">Rule</th><th className="l">Campaign</th><th className="l">Field</th><th>Before</th><th>After</th><th className="l">Reason</th><th className="l">When</th>
+                </tr></thead>
+                <tbody>
+                  {(diffItems ?? []).map(item => {
+                    const c = item.campaign
+                    const mkt = c?.marketplace
+                    const amzHref = c?.externalCampaignId && mkt ? buildAmazonCampaignHref(c.externalCampaignId, mkt, profileMap) : null
+                    const ruleId = item.changedBy?.replace('automation:', '')
+                    const isBid = item.field === 'bid' || item.field === 'dailyBudget' || item.field === 'defaultBid'
+                    return (
+                      <tr key={item.id}>
+                        <td className="l"><span className="sub" style={{ fontSize: 10.5 }}>{ruleId?.slice(0, 12)}...</span></td>
+                        <td className="l">
+                          {c ? <a className="cn" href={campaignHref(c.id)} target="_blank" rel="noopener noreferrer">{c.name}</a> : <span className="sub">{item.campaignId ?? item.entityId.slice(0, 12)}</span>}
+                          {amzHref && <><br /><a href={amzHref} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 3, color: 'var(--link)', fontSize: 11, fontWeight: 600, textDecoration: 'none' }}>Amazon <ExternalLink size={9} /></a></>}
+                          {mkt && <span className="az-badge" style={{ marginLeft: 4 }}>{mkt}</span>}
+                        </td>
+                        <td className="l" style={{ fontWeight: 600 }}>{item.field}</td>
+                        <td className="num" style={{ color: 'var(--ink2)' }}>{isBid ? eur(item.oldValue) : item.oldValue ?? '—'}</td>
+                        <td className="num" style={{ fontWeight: 700, color: 'var(--green)' }}>{isBid ? eur(item.newValue) : item.newValue ?? '—'}</td>
+                        <td className="l"><span className="sub">{item.reason ?? '—'}</span></td>
+                        <td className="l"><span className="sub" title={new Date(item.changedAt).toLocaleString()}>{relTime(item.changedAt)}</span></td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Original download + upload panels (now tab-gated) */}
+      {(tab === 'download' || tab === 'upload') && (<>
+        <div className="az-bulk">
+          <div className="az-card">
+            <h3><Download size={16} style={{ marginRight: 6 }} />Download bulksheet</h3>
+            <p className="desc">Export your current campaigns, ad groups, keywords and product targets as a real Excel bulksheet in Amazon's exact column layout. Edit it in Excel, then upload it here.</p>
+            <a className="az-btn dark" href={exportHref}><Download size={15} />Download current state (.xlsx)</a>
+          </div>
+
+          <div className="az-card">
+            <h3><Upload size={16} style={{ marginRight: 6 }} />Upload &amp; validate</h3>
+            <p className="desc">Drop an edited .xlsx or .csv bulksheet to validate every row against Amazon's grammar (Entity · Operation · required fields) and preview what would change.</p>
+            <label
+              className={`az-drop ${over ? 'over' : ''}`}
+              onDragOver={(e) => { e.preventDefault(); setOver(true) }}
+              onDragLeave={() => setOver(false)}
+              onDrop={(e) => { e.preventDefault(); setOver(false); const f = e.dataTransfer.files?.[0]; if (f) void handleFile(f) }}
+              onClick={() => inputRef.current?.click()}
+            >
+              <input ref={inputRef} type="file" accept=".xlsx,.csv" onChange={(e) => { const f = e.target.files?.[0]; if (f) void handleFile(f) }} />
+              <FileSpreadsheet size={26} style={{ marginBottom: 6 }} />
+              <div>{parsing ? 'Parsing...' : fileName ? <>Loaded <span className="fn">{fileName}</span> — drop another to replace</> : <>Drag a bulksheet here, or <span className="fn">browse</span></>}</div>
+            </label>
+            {err && <div className="az-rowstat err" style={{ marginTop: 10 }}><AlertCircle size={14} />{err}</div>}
+          </div>
+        </div>
 
       {rows.length > 0 && (
         <>
@@ -184,7 +273,7 @@ export function BulkOpsClient() {
             return (
               <div style={{ marginBottom: 12 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                  <button className="az-btn dark" disabled={applying || actionable === 0} onClick={() => void apply()} style={applying || actionable === 0 ? { opacity: .55 } : undefined}>{applying ? 'Applying…' : `Apply ${actionable} change${actionable === 1 ? '' : 's'}`}</button>
+                  <button className="az-btn dark" disabled={applying || actionable === 0} onClick={() => void apply()} style={applying || actionable === 0 ? { opacity: .55 } : undefined}>{applying ? 'Applying...' : `Apply ${actionable} change${actionable === 1 ? '' : 's'}`}</button>
                   <span className="az-rowstat" style={{ color: 'var(--ink2)' }}><Info size={13} />Queued as pending (sandbox-safe) — live writes still require your per-campaign allowlist. Read &amp; error rows are skipped.</span>
                 </div>
                 {applyRes && (applyRes.error
@@ -225,6 +314,7 @@ export function BulkOpsClient() {
           </div>
         </>
       )}
+      </>)}
     </div>
   )
 }
