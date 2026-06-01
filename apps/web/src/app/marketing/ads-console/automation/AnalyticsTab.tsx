@@ -13,6 +13,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { BarChart3, RefreshCw, Download } from 'lucide-react'
 import { BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts'
 import { getBackendUrl } from '@/lib/backend-url'
+import { cleanName } from './_icons'
 
 interface Rule { id: string; name: string; trigger: string; actions: Array<{ type?: string }>; enabled: boolean; dryRun: boolean; evaluationCount: number; matchCount: number; executionCount: number; domain: string }
 interface Health { executions30d?: { total: number; success: number; failed: number; dryRun: number }; matches30d?: number; successRatePct?: number | null; estTimeSavedHours?: number; rules?: { total: number; live: number; dryRun: number; disabled: number } }
@@ -131,7 +132,7 @@ export function AnalyticsTab() {
             {leaderboard.length === 0 && <tr><td className="az-empty" colSpan={6}>{loading ? 'Loading…' : 'No rules yet.'}</td></tr>}
             {leaderboard.map((r) => (
               <tr key={r.id}>
-                <td className="l" style={{ fontWeight: 500 }}>{r.name}</td>
+                <td className="l" style={{ fontWeight: 500 }}>{cleanName(r.name)}</td>
                 <td className="l">{r.trigger === 'SCHEDULE' ? 'Scheduled' : r.trigger.replace(/_/g, ' ').toLowerCase()}</td>
                 <td className="l">{r.enabled ? <span className={`az-live ${r.dryRun ? 'dry' : 'on'}`}>{r.dryRun ? 'Dry run' : 'LIVE'}</span> : <span className="az-badge paused">Off</span>}</td>
                 <td className="num">{r.evaluationCount}</td><td className="num">{r.matchCount}</td><td className="num">{r.executionCount}</td>

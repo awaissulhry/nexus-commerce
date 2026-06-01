@@ -28,3 +28,7 @@ export function CatIcon({ cat, size = 17 }: { cat: string; size?: number }) {
 export function PlaybookIcon({ size = 17 }: { size?: number }) {
   return <Layers size={size} />
 }
+
+/** Strip leading emoji/symbols from seeded rule names/messages for a clean, professional display. */
+export const cleanName = (s: string | null | undefined): string =>
+  (s ?? '').replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{2190}-\u{21FF}\u{FE0F}\u{200D}]/gu, '').replace(/\s{2,}/g, ' ').trim()

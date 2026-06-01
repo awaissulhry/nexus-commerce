@@ -17,7 +17,7 @@ import { AUTOMATIONS, CATEGORIES, AUTOMATION_COUNT, buildRule, type AutomationDe
 import { RuleBuilder } from './RuleBuilder'
 import { Configurator } from './Configurator'
 import { PLAYBOOKS, playbookAutomations } from './playbooks'
-import { CatIcon, PlaybookIcon } from './_icons'
+import { CatIcon, PlaybookIcon, cleanName } from './_icons'
 import { AnomalyTab } from './AnomalyTab'
 import { HarvestTab } from './HarvestTab'
 import { NegativeMiningTab } from './NegativeMiningTab'
@@ -184,7 +184,7 @@ export function AutomationHub({ initialRules, initialState }: { initialRules: Ru
           <div key={r.id} className={`az-rule ${selRules.has(r.id) ? 'sel' : ''}`}>
             <input type="checkbox" className="az-check" checked={selRules.has(r.id)} onChange={() => toggleSelRule(r.id)} aria-label={`Select ${r.name}`} />
             <button className={`az-toggle ${r.enabled ? 'on' : ''}`} disabled={busy === r.id} onClick={() => void toggleEnabled(r)} aria-label="Enable rule" title={r.enabled ? 'Enabled' : 'Disabled'}><i /></button>
-            <div className="nm"><div className="t">{r.name}</div><div className="d2">{r.description}</div></div>
+            <div className="nm"><div className="t">{cleanName(r.name)}</div><div className="d2">{cleanName(r.description)}</div></div>
             <span className="trg" style={{ background: 'var(--bg2)', borderRadius: 5, padding: '2px 7px', fontSize: 10, fontWeight: 700, color: 'var(--ink2)' }}>{trgLabel(r.trigger)}</span>
             <div className="stat"><b>{r.executionCount ?? 0}</b>runs</div>
             <button className={`az-live ${r.dryRun ? 'dry' : 'on'}`} disabled={busy === r.id} onClick={() => void toggleLive(r)} title="Toggle dry-run / live">{r.dryRun ? 'Dry run' : 'LIVE'}</button>
@@ -201,7 +201,7 @@ export function AutomationHub({ initialRules, initialState }: { initialRules: Ru
         {recs && (recs.recommendations ?? []).map((rec) => (
           <div key={rec.id} className="az-rec">
             <span className={`sev ${rec.severity}`} />
-            <div className="body"><div className="t">{rec.title}{rec.estImpactCents ? <span style={{ color: 'var(--green)', fontWeight: 700, marginLeft: 8 }}>{eur(rec.estImpactCents)}/mo</span> : null}</div><div className="d">{rec.detail}</div></div>
+            <div className="body"><div className="t">{cleanName(rec.title)}{rec.estImpactCents ? <span style={{ color: 'var(--green)', fontWeight: 700, marginLeft: 8 }}>{eur(rec.estImpactCents)}/mo</span> : null}</div><div className="d">{cleanName(rec.detail)}</div></div>
             <span className="trg" style={{ background: 'var(--bg2)', borderRadius: 5, padding: '2px 8px', fontSize: 10.5, fontWeight: 700, color: 'var(--ink2)', alignSelf: 'center' }}>{rec.category}</span>
             {rec.apply && <button className="az-btn dark" disabled={busy === rec.id} onClick={() => void applyRec(rec)} style={{ alignSelf: 'center' }}>{busy === rec.id ? 'Applying…' : 'Apply'}</button>}
           </div>

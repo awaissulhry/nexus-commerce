@@ -9,6 +9,7 @@
 import { useEffect, useState } from 'react'
 import { Activity, Clock, AlertTriangle, CheckCircle2, RefreshCw } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
+import { cleanName } from './_icons'
 
 interface Health {
   rules: { total: number; live: number; dryRun: number; disabled: number }
@@ -67,7 +68,7 @@ export function HealthTab() {
             {execs.map((e) => (
               <tr key={e.id}>
                 <td className="l">{fdt(e.startedAt)}</td>
-                <td className="l">{e.ruleName ?? e.ruleId ?? '—'}</td>
+                <td className="l">{cleanName(e.ruleName ?? e.ruleId ?? '—')}</td>
                 <td className="l"><span style={{ color: stColor(e.status), fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 4 }}>{e.status === 'SUCCESS' ? <CheckCircle2 size={13} /> : e.status === 'FAILED' ? <AlertTriangle size={13} /> : null}{e.status ?? '—'}</span></td>
                 <td className="num">{e.actionsApplied ?? 0}</td>
                 <td className="l"><span className="sub">{e.errorMessage ?? ''}</span></td>
