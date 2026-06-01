@@ -22,6 +22,7 @@ import { AnomalyTab } from './AnomalyTab'
 import { HarvestTab } from './HarvestTab'
 import { NegativeMiningTab } from './NegativeMiningTab'
 import { AnalyticsTab } from './AnalyticsTab'
+import { ComposerTab } from './ComposerTab'
 import { DaypartingTab } from './DaypartingTab'
 import { HealthTab } from './HealthTab'
 import { SovTab } from './SovTab'
@@ -35,7 +36,7 @@ interface Rec { id: string; category: string; severity: string; title: string; d
 interface RecResp { generatedAt?: string; counts?: Record<string, number>; potentialMonthlyImpactCents?: number; recommendations?: Rec[] }
 
 const TABS = [
-  { k: 'library', label: 'Library' }, { k: 'playbooks', label: 'Playbooks' }, { k: 'active', label: 'Active rules' },
+  { k: 'library', label: 'Library' }, { k: 'playbooks', label: 'Playbooks' }, { k: 'composer', label: 'Composer' }, { k: 'active', label: 'Active rules' },
   { k: 'analytics', label: 'Analytics' }, { k: 'dayparting', label: 'Dayparting' }, { k: 'recs', label: 'Recommendations' }, { k: 'anomaly', label: 'Anomalies' }, { k: 'competitive', label: 'Competitive' },
   { k: 'harvest', label: 'Harvest' }, { k: 'negatives', label: 'Negatives' }, { k: 'retail', label: 'Retail' }, { k: 'budget', label: 'Budgets' }, { k: 'engine', label: 'Engine & autonomy' },
   { k: 'guardrails', label: 'Guardrails' }, { k: 'health', label: 'Health' },
@@ -242,6 +243,7 @@ export function AutomationHub({ initialRules, initialState }: { initialRules: Ru
       {tab === 'guardrails' && <GuardrailsTab />}
       {tab === 'health' && <HealthTab />}
       {tab === 'analytics' && <AnalyticsTab />}
+      {tab === 'composer' && <ComposerTab onSaved={() => { void refetchRules() }} />}
       {tab === 'anomaly' && <AnomalyTab />}
       {tab === 'harvest' && <HarvestTab />}
       {tab === 'negatives' && <NegativeMiningTab />}
