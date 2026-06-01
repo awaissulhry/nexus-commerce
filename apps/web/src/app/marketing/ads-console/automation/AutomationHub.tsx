@@ -125,6 +125,7 @@ export function AutomationHub({ initialRules, initialState }: { initialRules: Ru
   const toggleSel = (id: string) => setSel((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n })
   const toggleSelRule = (id: string) => setSelRules((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n })
   const shownRules = useMemo(() => { const ql = ruleQ.trim().toLowerCase(); return rules.filter((r) => (ruleFilter === 'all' || (ruleFilter === 'live' && r.enabled && !r.dryRun) || (ruleFilter === 'dry' && r.enabled && r.dryRun) || (ruleFilter === 'off' && !r.enabled)) && (!ql || cleanName(r.name).toLowerCase().includes(ql) || (r.description ?? '').toLowerCase().includes(ql) || r.trigger.toLowerCase().includes(ql))) }, [rules, ruleQ, ruleFilter])
+  const triggerStats = useMemo(() => { const m: Record<string, { count: number; matches: number; runs: number }> = {}; for (const r of rules) { (m[r.trigger] ??= { count: 0, matches: 0, runs: 0 }); m[r.trigger].count++; m[r.trigger].matches += r.matchCount ?? 0; m[r.trigger].runs += r.executionCount ?? 0 } return Object.entries(m).sort((a, b) => b[1].runs - a[1].runs || b[1].count - a[1].count) }, [rules])
   const allRulesSel = shownRules.length > 0 && shownRules.every((r) => selRules.has(r.id))
 
   return (
@@ -224,6 +225,17 @@ export function AutomationHub({ initialRules, initialState }: { initialRules: Ru
             {selRules.size > 0
               ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}><b>{selRules.size} selected</b><button className="az-btn" disabled={busy === 'bulkrules'} onClick={() => void bulkRules('enable')}><Play size={13} />Enable</button><button className="az-btn" disabled={busy === 'bulkrules'} onClick={() => void bulkRules('pause')}><Pause size={13} />Pause</button><button className="az-btn" disabled={busy === 'bulkrules'} onClick={() => void bulkRules('dry')}>Dry-run</button><button className="az-btn" disabled={busy === 'bulkrules'} onClick={() => void bulkRules('live')} style={{ color: '#cc1100', borderColor: '#f4c7c0' }}>Set live</button><button className="az-btn" disabled={busy === 'bulkrules'} onClick={() => void bulkRules('delete')} style={{ color: '#cc1100', borderColor: '#f4c7c0' }}><Trash2 size={13} />Delete</button><button className="az-link" onClick={() => setSelRules(new Set())}>Clear</button></span>
               : <span style={{ color: 'var(--ink2)', fontSize: 12 }}>{activeCount} active · {liveCount} live · select rules for bulk actions</span>}
+          </div>
+        )}
+        {triggerStats.length > 1 && (
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+            {triggerStats.map(([trg, s]) => (
+              <button key={trg} onClick={() => setRuleQ(ruleQ === trg ? '' : trg)} title="Filter rules to this trigger" style={{ textAlign: 'left', border: `1px solid ${ruleQ === trg ? 'var(--navy)' : 'var(--divider)'}`, background: ruleQ === trg ? 'var(--bg2)' : '#fff', borderRadius: 8, padding: '7px 11px', cursor: 'pointer', minWidth: 116 }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--ink2)', letterSpacing: 0.2 }}>{trgLabel(trg)}</div>
+                <div style={{ fontSize: 12.5, fontWeight: 600, marginTop: 2 }}>{s.count} rule{s.count > 1 ? 's' : ''} · {s.runs} run{s.runs === 1 ? '' : 's'}</div>
+                <div style={{ fontSize: 10.5, color: 'var(--ink2)', marginTop: 1 }}>{s.matches} match{s.matches === 1 ? '' : 'es'}{s.matches > 0 ? ` · ${Math.round((s.runs / s.matches) * 100)}% acted` : ''}</div>
+              </button>
+            ))}
           </div>
         )}
         {rules.length === 0 && <div className="az-empty" style={{ border: '1px solid var(--divider)', borderRadius: 10 }}>No rules yet — add some from the Library.</div>}
