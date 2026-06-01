@@ -3226,6 +3226,42 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     try { return await createKeywordLocal({ adGroupId: ag.id, keywordText: b.query, matchType: b.matchType, bidEur: b.bidEur } as never) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
   })
 
+  // ── GET /advertising/bulk/export — current state as an Amazon bulksheet (.xlsx)
+  // Read-only. Campaign + Ad group + Keyword/Product-targeting rows in the exact
+  // Sponsored Products bulksheet column layout. Powers the Bulk operations screen.
+  const BULK_COLS = ['Product', 'Entity', 'Operation', 'Campaign ID', 'Ad group ID', 'Portfolio ID', 'Ad ID', 'Keyword ID', 'Product Targeting ID', 'Campaign name', 'Ad group name', 'Start date', 'End date', 'Targeting type', 'State', 'Daily budget', 'SKU', 'Ad Group Default Bid', 'Bid', 'Keyword text', 'Native language keyword', 'Native language locale', 'Match type', 'Bidding strategy', 'Placement', 'Percentage', 'Product targeting expression', 'Audience ID', 'Shopper Cohort Percentage', 'Shopper Cohort Type', 'Sites']
+  fastify.get('/advertising/bulk/export', async (request, reply) => {
+    const q = request.query as { limit?: string }
+    const limit = Math.max(1, Math.min(500, Number(q.limit ?? 200)))
+    const campaigns = await prisma.campaign.findMany({
+      take: limit, orderBy: { name: 'asc' },
+      include: { adGroups: { include: { targets: { where: { isNegative: false }, take: 200 } } } },
+    })
+    const PROD: Record<string, string> = { SPONSORED_PRODUCTS: 'Sponsored Products', SPONSORED_BRANDS: 'Sponsored Brands', SPONSORED_DISPLAY: 'Sponsored Display' }
+    const st = (s: string) => (s || '').toLowerCase()
+    const isAuto = (n: string) => /\bauto|close match|loose match|substitute|complement/i.test(n || '')
+    const ExcelJS = (await import('exceljs')).default
+    const wb = new ExcelJS.Workbook()
+    const ws = wb.addWorksheet('Sponsored Products Campaigns')
+    ws.addRow(BULK_COLS)
+    const push = (o: Record<string, unknown>) => ws.addRow(BULK_COLS.map((c) => o[c] ?? ''))
+    for (const c of campaigns) {
+      const product = PROD[c.adProduct ?? ''] ?? 'Sponsored Products'
+      push({ Product: product, Entity: 'Campaign', 'Campaign ID': c.externalCampaignId ?? '', 'Campaign name': c.name, 'Start date': c.startDate ? c.startDate.toISOString().slice(0, 10) : '', 'End date': c.endDate ? c.endDate.toISOString().slice(0, 10) : '', 'Targeting type': isAuto(c.name) ? 'auto' : 'manual', State: st(c.status), 'Daily budget': c.dailyBudget != null ? Number(c.dailyBudget) : '', 'Bidding strategy': c.biddingStrategy ?? '' })
+      for (const g of c.adGroups) {
+        push({ Product: product, Entity: 'Ad group', 'Campaign ID': c.externalCampaignId ?? '', 'Ad group ID': g.externalAdGroupId ?? '', 'Ad group name': g.name, State: st(g.status) })
+        for (const t of g.targets) {
+          const isKw = t.kind === 'KEYWORD'
+          push({ Product: product, Entity: isKw ? 'Keyword' : 'Product targeting', 'Campaign ID': c.externalCampaignId ?? '', 'Ad group ID': g.externalAdGroupId ?? '', 'Keyword ID': isKw ? (t.externalTargetId ?? '') : '', 'Product Targeting ID': isKw ? '' : (t.externalTargetId ?? ''), State: st(t.status), Bid: (t.bidCents / 100).toFixed(2), 'Keyword text': isKw ? t.expressionValue : '', 'Match type': t.expressionType, 'Product targeting expression': isKw ? '' : t.expressionValue })
+        }
+      }
+    }
+    const buf = Buffer.from(await wb.xlsx.writeBuffer())
+    reply.header('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    reply.header('Content-Disposition', 'attachment; filename="nexus-bulksheet.xlsx"')
+    return reply.send(buf)
+  })
+
   // GET /api/advertising/reports/negative-keyword-candidates
   //    ?lookbackDays=30&minSpend=5&limit=100&profileId=&marketplace=
   fastify.get('/advertising/reports/negative-keyword-candidates', async (request, _reply) => {
