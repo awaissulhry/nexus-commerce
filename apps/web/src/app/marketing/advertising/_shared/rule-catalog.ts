@@ -4,11 +4,17 @@
 
 export interface RuleTrigger { key: string; label: string; blurb: string }
 export const TRIGGERS: RuleTrigger[] = [
-  { key: 'SCHEDULE', label: '⏱ Scheduled (runs every 15 min)', blurb: 'Runs on a fixed cadence — for harvest/negate, retail guard, and other time-based automations.' },
-  { key: 'AD_TARGET_UNDERPERFORMING', label: 'Target performance', blurb: 'Evaluate keyword/product targets on spend, sales, ACOS, orders.' },
-  { key: 'CAC_SPIKE', label: 'ACOS / CAC spike', blurb: 'Fire when efficiency degrades beyond a threshold.' },
+  { key: 'SCHEDULE', label: '⏱ Scheduled (every 15 min)', blurb: 'Runs on a fixed cadence — harvest, retail guard, bid optimization, budget cap.' },
+  { key: 'AD_TARGET_UNDERPERFORMING', label: 'Target underperforming', blurb: 'Fire on keyword/product targets with poor spend, sales, ACOS, or orders.' },
+  { key: 'CAC_SPIKE', label: 'ACOS / CAC spike', blurb: 'Fire when campaign efficiency degrades beyond a threshold.' },
   { key: 'AD_SPEND_PROFITABILITY_BREACH', label: 'Profitability breach', blurb: 'Fire when ad-driven net margin goes negative.' },
   { key: 'FBA_AGE_THRESHOLD_REACHED', label: 'FBA aged stock', blurb: 'Fire as inventory approaches long-term-storage fees.' },
+  { key: 'CAMPAIGN_PERFORMANCE_BUDGET', label: 'Campaign budget/ROAS', blurb: 'Fire based on campaign-level spend, ROAS, and budget utilisation.' },
+  { key: 'KEYWORD_ZERO_IMPRESSIONS', label: '🔇 Zero impressions', blurb: 'Fire when a keyword spends money but gets ZERO impressions — delivery failure signal.' },
+  { key: 'KEYWORD_LOW_CTR', label: '📉 Low CTR', blurb: 'Fire when CTR drops below 0.2% with 500+ impressions — irrelevant traffic.' },
+  { key: 'CVR_DROP', label: '📊 Conversion rate drop', blurb: 'Fire when CVR drops >40% week-over-week — competitor or listing issue.' },
+  { key: 'KEYWORD_WASTED_SPEND', label: '🗑️ Wasted keyword', blurb: 'Fire when a keyword spends above threshold with zero orders in 14 days.' },
+  { key: 'SEARCH_TERM_CONVERTING', label: '🎯 Converting search term', blurb: 'Fire when a broad/auto search term reaches min orders — ready for exact promotion.' },
 ]
 
 export interface ConditionField { field: string; label: string; hint: string }
@@ -24,6 +30,17 @@ export const CONDITION_FIELDS: ConditionField[] = [
   { field: 'fbaAge.daysToLtsThreshold', label: 'Days to LTS fee', hint: 'days' },
   // AU.4 — budget failsafe (available on SCHEDULE trigger)
   { field: 'budget.monthlySpendCents', label: 'Monthly ad spend (¢)', hint: '100000 = €1,000' },
+  // New precision trigger fields
+  { field: 'adTarget.impressions', label: 'Target impressions', hint: 'count in window' },
+  { field: 'adTarget.ctr', label: 'Target CTR', hint: 'ratio — 0.002 = 0.2%' },
+  { field: 'adTarget.currentCvr', label: 'Current CVR', hint: 'ratio — 0.05 = 5%' },
+  { field: 'adTarget.previousCvr', label: 'Previous week CVR', hint: 'ratio for CVR_DROP trigger' },
+  { field: 'adTarget.spendCents', label: 'Target spend (¢)', hint: '1000 = €10' },
+  { field: 'adTarget.clicks', label: 'Target clicks', hint: 'count' },
+  { field: 'searchTerm.orders', label: 'Search term orders', hint: 'count — for SEARCH_TERM_CONVERTING' },
+  { field: 'searchTerm.spendCents', label: 'Search term spend (¢)', hint: 'for SEARCH_TERM_CONVERTING' },
+  { field: 'campaign.roas', label: 'Campaign ROAS', hint: 'ratio — 5 = 5× return' },
+  { field: 'campaign.budgetUtilization', label: 'Budget utilization', hint: 'ratio — 0.9 = 90% used' },
 ]
 
 export const OPS: Array<{ op: string; label: string }> = [
@@ -78,6 +95,35 @@ export const ACTION_TYPES: ActionType[] = [
   { type: 'set_placement_multiplier', label: '📍 Set placement bid multiplier', blurb: 'Adjust the Top-of-Search (or other) placement bid % for a campaign', params: [
     { key: 'placement', label: 'Placement', type: 'select', options: ['PLACEMENT_TOP', 'PLACEMENT_PRODUCT_PAGE', 'PLACEMENT_REST_OF_SEARCH'], default: 'PLACEMENT_TOP' },
     { key: 'percentage', label: 'Bid adjustment %', type: 'number', default: 30, hint: '0–900; 0 = remove boost' },
+  ] },
+  { type: 'add_negative_exact', label: '🚫 Negate keyword (exact)', blurb: 'Add a specific term as NEGATIVE EXACT to the campaign', params: [
+    { key: 'keyword', label: 'Keyword to negate', type: 'text', default: '' },
+  ] },
+  { type: 'promote_to_exact', label: '⬆️ Promote search term → exact', blurb: 'Create exact-match keyword from a converting search term', params: [
+    { key: 'bidEur', label: 'Starting bid (€)', type: 'number', default: 0.5 },
+  ] },
+  { type: 'sync_negatives_across_campaigns', label: '🌐 Negate across ALL campaigns', blurb: 'Add a wasted keyword as negative to every campaign in the marketplace', params: [] },
+  { type: 'set_campaign_target_acos', label: '🎯 Set target ACOS for campaign', blurb: 'Update the campaign\'s profit-based target ACOS used by bid optimization', params: [
+    { key: 'targetAcos', label: 'Target ACOS', type: 'number', default: 0.3, hint: '0.30 = 30%' },
+  ] },
+  { type: 'set_daily_budget', label: '💰 Set daily budget (fixed €)', blurb: 'Set a campaign\'s daily budget to a specific value', params: [
+    { key: 'budgetEur', label: 'Daily budget (€)', type: 'number', default: 50 },
+  ] },
+  { type: 'enable_campaign', label: '▶️ Enable campaign', blurb: 'Re-enable a paused campaign', params: [] },
+  { type: 'archive_keyword', label: '🗄️ Archive keyword (permanent)', blurb: 'Permanently archive a keyword — stronger than pausing', params: [] },
+  { type: 'lower_bid_to_floor', label: '⬇️ Lower bid to minimum', blurb: 'Set bid to €0.05 floor — keeps data flowing, minimizes waste', params: [
+    { key: 'floorCents', label: 'Floor bid (¢)', type: 'number', default: 5, hint: '5 = €0.05' },
+  ] },
+  { type: 'raise_bids_for_rank_defense', label: '🛡️ Raise bids for rank defense', blurb: 'Raise ALL keyword bids in a campaign to defend position', params: [
+    { key: 'percent', label: 'Raise %', type: 'number', default: 20 },
+  ] },
+  { type: 'scale_bids_for_price_change', label: '💱 Scale bids for price change', blurb: 'Proportionally adjust bids when product price changes', params: [
+    { key: 'oldPriceEur', label: 'Old price (€)', type: 'number', default: 0 },
+    { key: 'newPriceEur', label: 'New price (€)', type: 'number', default: 0 },
+  ] },
+  { type: 'alert_operator', label: '🔔 Alert (with severity)', blurb: 'Send an alert with severity level: info, warning, critical', params: [
+    { key: 'severity', label: 'Severity', type: 'select', options: ['info', 'warning', 'critical'], default: 'info' },
+    { key: 'message', label: 'Message', type: 'text', default: 'Automation triggered' },
   ] },
   // Core automation
   { type: 'bid_to_target_acos', label: '🎯 Optimize bids to target ACOS', blurb: 'Adjust keyword bids toward profit-based targets (Bayesian-smoothed for sparse keywords)', params: [

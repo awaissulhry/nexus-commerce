@@ -62,6 +62,73 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
     return result
   })
 
+  // Automation real-time activity feed — last N executions with what changed
+  fastify.get('/advertising/automation-feed', async (request, reply) => {
+    const q = request.query as { limit?: string; domain?: string }
+    const limit = Math.min(200, Math.max(10, Number(q.limit) || 50))
+    const execs = await prisma.automationRuleExecution.findMany({
+      where: { domain: 'advertising' } as never,
+      orderBy: { startedAt: 'desc' },
+      take: limit,
+      select: {
+        id: true, dryRun: true, status: true, startedAt: true, finishedAt: true, durationMs: true,
+        actionResults: true,
+        rule: { select: { id: true, name: true, trigger: true } },
+      },
+    })
+    const items = execs.map((e) => {
+      const actions = (e.actionResults as Array<{ type?: string; ok?: boolean; output?: Record<string, unknown>; error?: string }> | null) ?? []
+      const summary = actions.map((a) => {
+        const o = a.output ?? {}
+        if (a.type === 'harvest_and_negate') return `negated ${o.negativesAdded ?? 0}, graduated ${o.keywordsGraduated ?? 0}`
+        if (a.type === 'retail_guard') return `guarded ${o.paused ?? 0} campaigns`
+        if (a.type === 'pause_all_campaigns') return `paused ${o.paused ?? 0} campaigns`
+        if (a.type === 'bid_to_target_acos') return `adjusted ${o.applied ?? 0} bids`
+        if (a.type === 'promote_to_exact') return `promoted "${o.query}" → exact`
+        if (a.type === 'add_negative_exact') return `negated "${o.keyword}"`
+        if (a.type === 'bid_down' || a.type === 'bid_up') return `bid ${a.type === 'bid_down' ? '↓' : '↑'} ${o.target ?? ''}`
+        if (a.type === 'adjust_ad_budget') return `budget changed`
+        if (a.type === 'notify' || a.type === 'alert_operator') return null
+        return a.type
+      }).filter(Boolean).join('; ') || (e.dryRun ? 'dry-run preview' : 'no action')
+      return {
+        id: e.id, ruleName: e.rule?.name ?? '—', trigger: e.rule?.trigger ?? '—',
+        status: e.status, dryRun: e.dryRun, startedAt: e.startedAt,
+        durationMs: e.durationMs, summary,
+        actionCount: actions.length,
+        successCount: actions.filter((a) => a.ok !== false).length,
+      }
+    })
+    reply.header('Cache-Control', 'private, max-age=30')
+    return { items, count: items.length }
+  })
+
+  // Automation analytics — per-rule impact over time
+  fastify.get('/advertising/automation-analytics', async (request, reply) => {
+    const q = request.query as { windowDays?: string }
+    const days = Math.max(7, Math.min(90, Number(q.windowDays) || 30))
+    const since = new Date(); since.setUTCDate(since.getUTCDate() - days); since.setUTCHours(0, 0, 0, 0)
+    const execs = await prisma.automationRuleExecution.findMany({
+      where: { startedAt: { gte: since }, domain: 'advertising', status: { in: ['SUCCESS', 'PARTIAL'] } } as never,
+      select: { actionResults: true, rule: { select: { id: true, name: true } }, startedAt: true },
+    })
+    const byRule = new Map<string, { name: string; runs: number; termsNegated: number; bidsAdjusted: number; campaignsGuarded: number; lastRun: string }>()
+    for (const e of execs) {
+      const ruleId = e.rule?.id ?? 'unknown'; const ruleName = e.rule?.name ?? 'Unknown'
+      if (!byRule.has(ruleId)) byRule.set(ruleId, { name: ruleName, runs: 0, termsNegated: 0, bidsAdjusted: 0, campaignsGuarded: 0, lastRun: '' })
+      const r = byRule.get(ruleId)!; r.runs++; r.lastRun = e.startedAt.toISOString()
+      for (const a of (e.actionResults as Array<{ type?: string; output?: Record<string, unknown> }> | null) ?? []) {
+        const o = a.output ?? {}
+        if (a.type === 'harvest_and_negate') { r.termsNegated += Number(o.negativesAdded ?? 0) }
+        if (a.type === 'bid_to_target_acos') { r.bidsAdjusted += Number(o.applied ?? 0) }
+        if (a.type === 'retail_guard') { r.campaignsGuarded += Number(o.paused ?? 0) }
+      }
+    }
+    const rules = [...byRule.values()].sort((a, b) => b.runs - a.runs)
+    reply.header('Cache-Control', 'private, max-age=120')
+    return { windowDays: days, rules, totalRuns: execs.length }
+  })
+
   // AU.7 — automation impact summary: what did automation actually DO this week?
   // Parses AutomationRuleExecution.actionResults to surface real numbers.
   fastify.get('/advertising/automation-impact', async (request, reply) => {

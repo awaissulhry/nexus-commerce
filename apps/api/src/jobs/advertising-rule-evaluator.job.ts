@@ -442,6 +442,130 @@ async function buildCampaignBudgetContexts(): Promise<CampaignBudgetContext[]> {
   return out
 }
 
+// ── KEYWORD_ZERO_IMPRESSIONS ──────────────────────────────────────────
+// ENABLED keywords that spent money but got ZERO impressions in the last 7
+// days — signals delivery failure (suppressed listing, bad targeting, etc.)
+async function buildZeroImpressionContexts() {
+  const since = new Date(); since.setUTCDate(since.getUTCDate() - 7); since.setUTCHours(0, 0, 0, 0)
+  const perf = await prisma.amazonAdsDailyPerformance.groupBy({
+    by: ['localEntityId', 'marketplace'],
+    where: { entityType: 'KEYWORD', date: { gte: since }, costMicros: { gt: 0n } },
+    _sum: { impressions: true, costMicros: true },
+    having: { impressions: { _sum: { equals: 0 } } },
+  })
+  return perf.slice(0, 500).map((p) => ({
+    trigger: 'KEYWORD_ZERO_IMPRESSIONS' as const,
+    marketplace: p.marketplace,
+    adTarget: { id: p.localEntityId, spendCents: microsToCents(p._sum.costMicros), impressions: 0 },
+  }))
+}
+
+// ── KEYWORD_LOW_CTR ───────────────────────────────────────────────────
+// Keywords with >500 impressions but CTR < 0.2% — poor relevance or bad
+// creative. Signal to lower bids (fewer irrelevant impressions = better ACOS).
+const LOW_CTR_THRESHOLD = Number(process.env.NEXUS_LOW_CTR_THRESHOLD ?? 0.002)
+const LOW_CTR_MIN_IMPRESSIONS = Number(process.env.NEXUS_LOW_CTR_MIN_IMPR ?? 500)
+async function buildLowCtrContexts() {
+  const since = new Date(); since.setUTCDate(since.getUTCDate() - 14); since.setUTCHours(0, 0, 0, 0)
+  const perf = await prisma.amazonAdsDailyPerformance.groupBy({
+    by: ['localEntityId', 'marketplace'],
+    where: { entityType: 'KEYWORD', date: { gte: since } },
+    _sum: { impressions: true, clicks: true, costMicros: true },
+  })
+  return perf
+    .filter((p) => (p._sum.impressions ?? 0) >= LOW_CTR_MIN_IMPRESSIONS && (p._sum.clicks ?? 0) / (p._sum.impressions ?? 1) < LOW_CTR_THRESHOLD)
+    .slice(0, 300)
+    .map((p) => ({
+      trigger: 'KEYWORD_LOW_CTR' as const,
+      marketplace: p.marketplace,
+      adTarget: {
+        id: p.localEntityId,
+        impressions: p._sum.impressions ?? 0,
+        clicks: p._sum.clicks ?? 0,
+        ctr: (p._sum.clicks ?? 0) / Math.max(1, p._sum.impressions ?? 1),
+        spendCents: microsToCents(p._sum.costMicros),
+      },
+    }))
+}
+
+// ── CVR_DROP ──────────────────────────────────────────────────────────
+// Keywords where conversion rate dropped >40% week-over-week. Could signal
+// review score drop, competitor price cut, or listing degradation.
+async function buildCvrDropContexts() {
+  const thisWeekStart = new Date(); thisWeekStart.setUTCDate(thisWeekStart.getUTCDate() - 7); thisWeekStart.setUTCHours(0, 0, 0, 0)
+  const prevWeekStart = new Date(thisWeekStart); prevWeekStart.setUTCDate(thisWeekStart.getUTCDate() - 7)
+  const [thisWeek, prevWeek] = await Promise.all([
+    prisma.amazonAdsDailyPerformance.groupBy({ by: ['localEntityId', 'marketplace'], where: { entityType: 'KEYWORD', date: { gte: thisWeekStart }, clicks: { gt: 0 } }, _sum: { clicks: true, orders7d: true } }),
+    prisma.amazonAdsDailyPerformance.groupBy({ by: ['localEntityId', 'marketplace'], where: { entityType: 'KEYWORD', date: { gte: prevWeekStart, lt: thisWeekStart }, clicks: { gt: 0 } }, _sum: { clicks: true, orders7d: true } }),
+  ])
+  const prevMap = new Map(prevWeek.map((p) => [p.localEntityId, { cvr: (p._sum.orders7d ?? 0) / Math.max(1, p._sum.clicks ?? 1) }]))
+  return thisWeek
+    .filter((p) => {
+      const prev = prevMap.get(p.localEntityId); if (!prev || prev.cvr < 0.005) return false
+      const thisCvr = (p._sum.orders7d ?? 0) / Math.max(1, p._sum.clicks ?? 1)
+      return thisCvr < prev.cvr * 0.6 // dropped >40%
+    })
+    .slice(0, 200)
+    .map((p) => ({
+      trigger: 'CVR_DROP' as const,
+      marketplace: p.marketplace,
+      adTarget: {
+        id: p.localEntityId,
+        currentCvr: (p._sum.orders7d ?? 0) / Math.max(1, p._sum.clicks ?? 1),
+        previousCvr: prevMap.get(p.localEntityId)?.cvr ?? 0,
+        clicks: p._sum.clicks ?? 0,
+      },
+    }))
+}
+
+// ── KEYWORD_WASTED_SPEND ──────────────────────────────────────────────
+// Individual ad targets (keywords) with spend above the threshold and ZERO
+// orders in the window — more granular and faster than the daily harvest cron.
+const WASTE_MIN_SPEND = Number(process.env.NEXUS_WASTE_MIN_SPEND_CENTS ?? 500) // €5 default
+async function buildWastedKeywordContexts() {
+  const since = new Date(); since.setUTCDate(since.getUTCDate() - 14); since.setUTCHours(0, 0, 0, 0)
+  const perf = await prisma.amazonAdsDailyPerformance.groupBy({
+    by: ['localEntityId', 'marketplace'],
+    where: { entityType: 'KEYWORD', date: { gte: since } },
+    _sum: { costMicros: true, orders7d: true, clicks: true },
+  })
+  return perf
+    .filter((p) => microsToCents(p._sum.costMicros) >= WASTE_MIN_SPEND && (p._sum.orders7d ?? 0) === 0 && (p._sum.clicks ?? 0) >= 5)
+    .slice(0, 400)
+    .map((p) => ({
+      trigger: 'KEYWORD_WASTED_SPEND' as const,
+      marketplace: p.marketplace,
+      adTarget: { id: p.localEntityId, spendCents: microsToCents(p._sum.costMicros), orders: 0, clicks: p._sum.clicks ?? 0 },
+    }))
+}
+
+// ── SEARCH_TERM_CONVERTING ────────────────────────────────────────────
+// Search terms from auto/broad campaigns with 2+ orders — prime candidates
+// for exact-match promotion. Powers the match-type migration automation.
+const CONVERTING_MIN_ORDERS = Number(process.env.NEXUS_CONVERTING_MIN_ORDERS ?? 2)
+async function buildSearchTermConvertingContexts() {
+  const since = new Date(); since.setUTCDate(since.getUTCDate() - 30); since.setUTCHours(0, 0, 0, 0)
+  const terms = await prisma.amazonAdsSearchTerm.groupBy({
+    by: ['query', 'campaignId', 'adGroupId', 'marketplace'],
+    where: { date: { gte: since }, matchType: { in: ['BROAD', 'PHRASE', null] } },
+    _sum: { orders7d: true, clicks: true, costMicros: true, sales7dCents: true },
+    having: { orders7d: { _sum: { gte: CONVERTING_MIN_ORDERS } } },
+  })
+  return terms.slice(0, 300).map((t) => ({
+    trigger: 'SEARCH_TERM_CONVERTING' as const,
+    marketplace: t.marketplace,
+    searchTerm: {
+      query: t.query,
+      externalCampaignId: t.campaignId,
+      externalAdGroupId: t.adGroupId,
+      orders: t._sum.orders7d ?? 0,
+      clicks: t._sum.clicks ?? 0,
+      spendCents: microsToCents(t._sum.costMicros),
+      salesCents: t._sum.sales7dCents ?? 0,
+    },
+  }))
+}
+
 export async function runAdvertisingRuleEvaluatorOnce(): Promise<TickSummary> {
   const startedAt = Date.now()
   // AME.14 — global kill-switch. When set, NO advertising rule auto-applies
@@ -464,12 +588,19 @@ export async function runAdvertisingRuleEvaluatorOnce(): Promise<TickSummary> {
     }
     forceDryRun = await shouldForceDryRun()
   } catch { /* state unavailable → fall through (env kill remains the backstop) */ }
-  const [fbaAge, profitability, cacSpike, underperform, campaignBudget] = await Promise.all([
+  const [fbaAge, profitability, cacSpike, underperform, campaignBudget,
+    zeroImpression, lowCtr, cvrDrop, wastedKeyword, searchTermConverting] = await Promise.all([
     buildFbaAgeContexts(),
     buildProfitabilityContexts(),
     buildCacSpikeContexts(),
     buildUnderperformContexts(),
     buildCampaignBudgetContexts(),
+    // ── New precision triggers ─────────────────────────────────────────
+    buildZeroImpressionContexts(),
+    buildLowCtrContexts(),
+    buildCvrDropContexts(),
+    buildWastedKeywordContexts(),
+    buildSearchTermConvertingContexts(),
   ])
 
   // AU.1/AU.2/AU.4 — SCHEDULE trigger: one context per active marketplace each
@@ -497,6 +628,11 @@ export async function runAdvertisingRuleEvaluatorOnce(): Promise<TickSummary> {
     ['CAC_SPIKE', cacSpike],
     ['AD_TARGET_UNDERPERFORMING', underperform],
     ['CAMPAIGN_PERFORMANCE_BUDGET', campaignBudget],
+    ['KEYWORD_ZERO_IMPRESSIONS', zeroImpression],
+    ['KEYWORD_LOW_CTR', lowCtr],
+    ['CVR_DROP', cvrDrop],
+    ['KEYWORD_WASTED_SPEND', wastedKeyword],
+    ['SEARCH_TERM_CONVERTING', searchTermConverting],
     ['SCHEDULE', scheduleContexts],
   ]
   for (const [trigger, contexts] of passes) {

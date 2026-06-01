@@ -10,6 +10,7 @@ import { AdvertisingNav } from '../_shared/AdvertisingNav'
 import { getBackendUrl } from '@/lib/backend-url'
 import { AutomationActionsClient } from './AutomationActionsClient'
 import { RuleCardClient } from './RuleCardClient'
+import { ActivityFeedClient } from './ActivityFeedClient'
 
 export const metadata: Metadata = { title: 'Amazon Ads · Automation' }
 export const dynamic = 'force-dynamic'
@@ -165,6 +166,13 @@ export default async function AutomationPage() {
           <div className="text-xs text-slate-400 mt-1 mb-4">Click <strong>Load templates</strong> to seed 10 starter rules (all dry-run by default — nothing writes until you enable it).</div>
           <AutomationActionsClient hasRules={false} />
         </div>
+      )}
+
+      {/* Activity feed */}
+      {rules.length > 0 && (
+        <section className="mb-4">
+          <ActivityFeedClient />
+        </section>
       )}
 
       <div className="mt-4 rounded-md bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 px-3 py-2 text-xs text-slate-500 dark:text-slate-400">

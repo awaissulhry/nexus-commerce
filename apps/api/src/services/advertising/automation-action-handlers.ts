@@ -841,6 +841,164 @@ ACTION_HANDLERS.pause_all_campaigns = async (action, _context, meta): Promise<Ac
   return { type: action.type, ok: errors.length < campaigns.length, output: { paused, errors: errors.slice(0, 5) } }
 }
 
+// ── add_negative_exact ────────────────────────────────────────────────
+// Add a specific query as negative exact to a campaign. Designed for use with
+// KEYWORD_WASTED_SPEND and SEARCH_TERM triggers where we know the exact term.
+ACTION_HANDLERS.add_negative_exact = async (action, context, meta): Promise<ActionResult> => {
+  const keyword = (action.keyword as string | undefined) ?? (action.query as string | undefined) ?? (context as any)?.searchTerm?.query
+  const externalCampaignId = (action.externalCampaignId as string | undefined) ?? (context as any)?.searchTerm?.externalCampaignId ?? (context as any)?.campaign?.externalCampaignId
+  if (!keyword) return { type: action.type, ok: false, error: 'No keyword/query to negate' }
+  if (!externalCampaignId) return { type: action.type, ok: false, error: 'No externalCampaignId in context' }
+  if (meta.dryRun) return { type: action.type, ok: true, output: { dryRun: true, keyword, externalCampaignId } }
+  const { createNegative } = await import('./ads-negative-kw.service.js')
+  const conn = await prisma.amazonAdsConnection.findFirst({ where: { marketplace: (context as any).marketplace, isActive: true }, select: { profileId: true } })
+  await createNegative({ profileId: conn?.profileId ?? '', externalCampaignId, keywordText: keyword, matchType: 'NEGATIVE_EXACT', scope: 'CAMPAIGN' } as never)
+  return { type: action.type, ok: true, output: { keyword, externalCampaignId, matchType: 'NEGATIVE_EXACT' } }
+}
+
+// ── promote_to_exact ──────────────────────────────────────────────────
+// Take a converting search term and create an EXACT match keyword in the
+// ad group (or a specified target ad group). The match-type migration engine.
+ACTION_HANDLERS.promote_to_exact = async (action, context, meta): Promise<ActionResult> => {
+  const query = (action.query as string | undefined) ?? (context as any)?.searchTerm?.query
+  const targetAdGroupId = (action.adGroupId as string | undefined) ?? (context as any)?.searchTerm?.externalAdGroupId
+  const bidEur = Number(action.bidEur ?? 0.5)
+  if (!query) return { type: action.type, ok: false, error: 'No query in context' }
+  if (!targetAdGroupId) return { type: action.type, ok: false, error: 'No adGroupId' }
+  if (meta.dryRun) return { type: action.type, ok: true, output: { dryRun: true, query, matchType: 'EXACT', bidEur } }
+  const { createKeywordLocal } = await import('./ads-create.service.js')
+  // Resolve local adGroup id from externalAdGroupId
+  const ag = await prisma.adGroup.findFirst({ where: { externalAdGroupId: targetAdGroupId }, select: { id: true } })
+  if (!ag) return { type: action.type, ok: false, error: `No local ad group for externalAdGroupId=${targetAdGroupId}` }
+  await createKeywordLocal({ adGroupId: ag.id, keywordText: query, matchType: 'EXACT', bidEur })
+  return { type: action.type, ok: true, output: { query, matchType: 'EXACT', adGroupId: ag.id, bidEur } }
+}
+
+// ── sync_negatives_across_campaigns ──────────────────────────────────
+// Add a wasted keyword as NEGATIVE EXACT to ALL campaigns in a marketplace.
+// Stops the same bad term from wasting money across the whole account.
+ACTION_HANDLERS.sync_negatives_across_campaigns = async (action, context, meta): Promise<ActionResult> => {
+  const keyword = (action.keyword as string | undefined) ?? (context as any)?.searchTerm?.query ?? (context as any)?.adTarget?.expressionValue
+  const marketplace = (action.marketplace as string | undefined) ?? (context as any).marketplace
+  if (!keyword || !marketplace) return { type: action.type, ok: false, error: 'keyword + marketplace required' }
+  const campaigns = await prisma.campaign.findMany({ where: { marketplace, status: 'ENABLED', externalCampaignId: { not: null } }, select: { id: true, externalCampaignId: true } })
+  if (meta.dryRun) return { type: action.type, ok: true, output: { dryRun: true, keyword, wouldNegateIn: campaigns.length } }
+  const conn = await prisma.amazonAdsConnection.findFirst({ where: { marketplace, isActive: true }, select: { profileId: true } })
+  const { createNegative } = await import('./ads-negative-kw.service.js')
+  let added = 0; const errors: string[] = []
+  for (const c of campaigns) {
+    try { await createNegative({ profileId: conn?.profileId ?? '', externalCampaignId: c.externalCampaignId!, keywordText: keyword, matchType: 'NEGATIVE_EXACT', scope: 'CAMPAIGN' } as never); added++ }
+    catch (e) { errors.push((e as Error).message) }
+  }
+  return { type: action.type, ok: added > 0, output: { keyword, marketplace, added, errors: errors.slice(0, 5) } }
+}
+
+// ── set_campaign_target_acos ──────────────────────────────────────────
+// Update a campaign's target ACOS stored in dynamicBidding JSON. The bid
+// optimizer reads this to calculate per-campaign bids in profit mode.
+ACTION_HANDLERS.set_campaign_target_acos = async (action, context, meta): Promise<ActionResult> => {
+  const id = (action.campaignId as string | undefined) ?? ctxCampaignId(action, context)
+  const targetAcos = Number(action.targetAcos ?? 0.3)
+  if (!id) return { type: action.type, ok: false, error: 'No campaign.id' }
+  if (meta.dryRun) return { type: action.type, ok: true, output: { dryRun: true, campaignId: id, targetAcos } }
+  const c = await prisma.campaign.findUnique({ where: { id }, select: { dynamicBidding: true } })
+  const db = (c?.dynamicBidding ?? {}) as Record<string, unknown>
+  db.targetAcos = targetAcos
+  await prisma.campaign.update({ where: { id }, data: { dynamicBidding: db as never } })
+  return { type: action.type, ok: true, output: { campaignId: id, targetAcos } }
+}
+
+// ── increase_daily_budget_cap ────────────────────────────────────────
+// Set a campaign's daily budget to a fixed value (not a % — used for
+// "unlock this campaign on Prime Day" style automation).
+ACTION_HANDLERS.set_daily_budget = async (action, context, meta): Promise<ActionResult> => {
+  const id = (action.campaignId as string | undefined) ?? ctxCampaignId(action, context)
+  const budgetEur = Number(action.budgetEur)
+  if (!id) return { type: action.type, ok: false, error: 'No campaign.id' }
+  if (!Number.isFinite(budgetEur) || budgetEur <= 0) return { type: action.type, ok: false, error: 'budgetEur must be a positive number' }
+  if (meta.dryRun) return { type: action.type, ok: true, output: { dryRun: true, campaignId: id, budgetEur } }
+  const cap = await checkDailySpendCap(meta.ruleId, Math.round(budgetEur * 100))
+  if (!cap.allowed) return { type: action.type, ok: false, error: `daily spend cap: ${cap.capCents}¢` }
+  const res = await updateCampaignWithSync({ campaignId: id, patch: { dailyBudget: budgetEur } as never, actor: RULE_ACTOR(meta.ruleId), reason: (action.reason as string | undefined) ?? `set_daily_budget via rule ${meta.ruleId}`, applyImmediately: true } as never)
+  return { type: action.type, ok: res.ok, output: { campaignId: id, budgetEur, outboundQueueId: res.outboundQueueId } }
+}
+
+// ── scale_bids_for_price_change ───────────────────────────────────────
+// When product price changes, bids should scale proportionally to maintain
+// the same target ACOS (higher price = can afford higher bid; lower price = must cut).
+// Reads Product.listPrice to compute the scale factor.
+ACTION_HANDLERS.scale_bids_for_price_change = async (action, context, meta): Promise<ActionResult> => {
+  const id = (action.campaignId as string | undefined) ?? ctxCampaignId(action, context)
+  if (!id) return { type: action.type, ok: false, error: 'No campaign.id' }
+  const oldPriceEur = Number(action.oldPriceEur)
+  const newPriceEur = Number(action.newPriceEur)
+  if (!Number.isFinite(oldPriceEur) || !Number.isFinite(newPriceEur) || oldPriceEur <= 0) return { type: action.type, ok: false, error: 'oldPriceEur + newPriceEur required' }
+  const scaleFactor = newPriceEur / oldPriceEur
+  const clamped = Math.max(0.5, Math.min(2.0, scaleFactor)) // ±50% max per trigger
+  const targets = await prisma.adTarget.findMany({ where: { status: 'ENABLED', isNegative: false, adGroup: { campaignId: id } }, select: { id: true, bidCents: true } })
+  if (meta.dryRun) return { type: action.type, ok: true, output: { dryRun: true, targets: targets.length, scaleFactor: clamped, oldPriceEur, newPriceEur } }
+  const { bulkUpdateAdTargetBids } = await import('./ads-mutation.service.js')
+  const entries = targets.map((t) => ({ adTargetId: t.id, bidCents: Math.max(5, Math.round(t.bidCents * clamped)) }))
+  await bulkUpdateAdTargetBids({ entries, actor: RULE_ACTOR(meta.ruleId), reason: `scale_bids_for_price_change ×${clamped.toFixed(2)}` })
+  return { type: action.type, ok: true, output: { scaled: entries.length, scaleFactor: clamped } }
+}
+
+// ── enable_campaign ───────────────────────────────────────────────────
+ACTION_HANDLERS.enable_campaign = async (action, context, meta): Promise<ActionResult> => {
+  const id = (action.campaignId as string | undefined) ?? ctxCampaignId(action, context)
+  if (!id) return { type: action.type, ok: false, error: 'No campaign.id' }
+  if (meta.dryRun) return { type: action.type, ok: true, output: { dryRun: true, campaignId: id } }
+  const res = await updateCampaignWithSync({ campaignId: id, patch: { status: 'ENABLED' }, actor: RULE_ACTOR(meta.ruleId), reason: 'enable_campaign via rule', applyImmediately: true } as never)
+  return { type: action.type, ok: res.ok, output: { campaignId: id, outboundQueueId: res.outboundQueueId } }
+}
+
+// ── archive_keyword ───────────────────────────────────────────────────
+// Permanently archive a keyword (stronger than pause — Amazon ignores it).
+ACTION_HANDLERS.archive_keyword = async (action, context, meta): Promise<ActionResult> => {
+  const id = (action.adTargetId as string | undefined) ?? ctxAdTargetId(action, context)
+  if (!id) return { type: action.type, ok: false, error: 'No adTarget.id' }
+  if (meta.dryRun) return { type: action.type, ok: true, output: { dryRun: true, adTargetId: id } }
+  const res = await updateAdTargetWithSync({ adTargetId: id, patch: { status: 'ARCHIVED' }, actor: RULE_ACTOR(meta.ruleId), reason: 'archive_keyword via rule' })
+  return { type: action.type, ok: res.ok, error: res.error ?? undefined, output: { adTargetId: id, outboundQueueId: res.outboundQueueId } }
+}
+
+// ── lower_bid_to_floor ────────────────────────────────────────────────
+// Set a keyword bid to the absolute minimum (€0.05). Keeps it alive for
+// data collection while minimizing waste — preferred over archiving for
+// low-data keywords.
+ACTION_HANDLERS.lower_bid_to_floor = async (action, context, meta): Promise<ActionResult> => {
+  const id = (action.adTargetId as string | undefined) ?? ctxAdTargetId(action, context)
+  const floorCents = Math.max(5, Number(action.floorCents ?? 5))
+  if (!id) return { type: action.type, ok: false, error: 'No adTarget.id' }
+  if (meta.dryRun) return { type: action.type, ok: true, output: { dryRun: true, adTargetId: id, bidCents: floorCents } }
+  const res = await updateAdTargetWithSync({ adTargetId: id, patch: { bidCents: floorCents }, actor: RULE_ACTOR(meta.ruleId), reason: 'lower_bid_to_floor via rule' })
+  return { type: action.type, ok: res.ok, error: res.error ?? undefined, output: { adTargetId: id, bidCents: floorCents, outboundQueueId: res.outboundQueueId } }
+}
+
+// ── raise_bids_for_rank_defense ───────────────────────────────────────
+// When impression share drops, raise bids aggressively to defend position.
+// Rate-limited: caps at MAX_PCT and one-step-at-a-time per rule fire.
+ACTION_HANDLERS.raise_bids_for_rank_defense = async (action, context, meta): Promise<ActionResult> => {
+  const id = (action.campaignId as string | undefined) ?? ctxCampaignId(action, context)
+  const pct = Math.min(50, Math.max(5, Number(action.percent ?? 20)))
+  if (!id) return { type: action.type, ok: false, error: 'No campaign.id' }
+  const targets = await prisma.adTarget.findMany({ where: { status: 'ENABLED', isNegative: false, adGroup: { campaignId: id } }, select: { id: true, bidCents: true }, take: 200 })
+  const entries = targets.map((t) => ({ adTargetId: t.id, bidCents: Math.round(t.bidCents * (1 + pct / 100)) }))
+  if (meta.dryRun) return { type: action.type, ok: true, output: { dryRun: true, targets: entries.length, raisePct: pct } }
+  const { bulkUpdateAdTargetBids } = await import('./ads-mutation.service.js')
+  await bulkUpdateAdTargetBids({ entries, actor: RULE_ACTOR(meta.ruleId), reason: `rank_defense +${pct}%` })
+  return { type: action.type, ok: true, output: { raised: entries.length, pct } }
+}
+
+// ── alert_operator ────────────────────────────────────────────────────
+// Richer version of notify — can include structured data for dashboard alerts.
+ACTION_HANDLERS.alert_operator = async (action, context, meta): Promise<ActionResult> => {
+  const severity = (action.severity as string | undefined) ?? 'info'
+  const message = (action.message as string | undefined) ?? `Automation alert: ${action.type}`
+  logger.warn(`[automation:alert] ${severity.toUpperCase()}: ${message}`, { ruleId: meta.ruleId, context: JSON.stringify(context)?.slice(0, 500) })
+  return { type: action.type, ok: true, output: { severity, message, ruleId: meta.ruleId, timestamp: new Date().toISOString() } }
+}
+
 logger.debug('[advertising] action handlers registered', {
   count: 8,
   types: [
