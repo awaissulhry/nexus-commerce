@@ -16,6 +16,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Crosshair, Check, Info, Clock, TrendingUp } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
+import { RankKeywordsMode } from './RankKeywordsMode'
 
 const MARKETS = ['IT', 'DE', 'FR', 'ES', 'NL', 'BE', 'SE', 'PL', 'IE', 'UK', 'All markets']
 const PLACEMENTS = [
@@ -44,6 +45,7 @@ const clampPct = (n: number) => Math.max(0, Math.min(900, Math.round(n)))
 interface Camp { id: string; name: string; marketplace: string | null }
 
 export function RankControlTab({ onSaved }: { onSaved: () => void }) {
+  const [rcMode, setRcMode] = useState<'placement' | 'keywords'>('placement')
   const [market, setMarket] = useState('IT')
   const [camps, setCamps] = useState<Camp[]>([])
   const [selCamps, setSelCamps] = useState<Set<string>>(new Set())
@@ -139,10 +141,18 @@ export function RankControlTab({ onSaved }: { onSaved: () => void }) {
   }
 
   return (
-    <div style={{ paddingTop: 4, maxWidth: 760 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+    <div style={{ paddingTop: 4 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14, flexWrap: 'wrap' }}>
         <span style={{ fontWeight: 700, fontSize: 15 }}><Crosshair size={16} style={{ verticalAlign: 'text-bottom', marginRight: 6 }} />Rank Control</span>
+        <span style={{ flex: 1 }} />
+        <div style={{ display: 'flex', gap: 6 }}>
+          {([['placement', 'Placement %'], ['keywords', 'Keyword targeting']] as const).map(([k, l]) => (
+            <button key={k} onClick={() => setRcMode(k)} className={`az-chip quick ${rcMode === k ? 'on' : ''}`}>{l}</button>
+          ))}
+        </div>
       </div>
+      {rcMode === 'keywords' && <RankKeywordsMode />}
+      {rcMode === 'placement' && <div style={{ maxWidth: 760 }}>
       <div style={{ color: 'var(--ink2)', fontSize: 12.5, marginBottom: 16, lineHeight: 1.55 }}>Set the exact <b>Top-of-Search bid adjustment %</b> you want (and the other placements) for the campaigns you choose, by market and time. The engine writes that placement % to Amazon and — with Hold-the-position on — nudges bids up only as needed to keep the slot, capped so you win for the least cost.</div>
 
       <div className="az-eng-card" style={{ marginBottom: 16 }}>
@@ -241,6 +251,7 @@ export function RankControlTab({ onSaved }: { onSaved: () => void }) {
         <button className="az-btn dark" disabled={!canActivate} onClick={() => void activate()}><Check size={15} />{busy ? 'Creating…' : 'Activate rank control'}</button>
         {msg && <span style={{ color: msg.includes('created') ? 'var(--green)' : 'var(--ink2)', fontSize: 12, fontWeight: 600 }}>{msg}</span>}
       </div>
+      </div>}
     </div>
   )
 }
