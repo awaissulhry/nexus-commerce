@@ -14,6 +14,7 @@
  */
 
 import { useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { Crosshair, Check, Info, Clock, TrendingUp } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { RankKeywordsMode } from './RankKeywordsMode'
@@ -48,7 +49,9 @@ const clampPct = (n: number) => Math.max(0, Math.min(900, Math.round(n)))
 interface Camp { id: string; name: string; marketplace: string | null }
 
 export function RankControlTab({ onSaved }: { onSaved: () => void }) {
-  const [rcMode, setRcMode] = useState<'placement' | 'keywords' | 'strategy' | 'conquest' | 'tos'>('placement')
+  const searchParams = useSearchParams()
+  // If rendered from /rank page, use ?mode= param; when embedded in automation, use ?tab= (falls back to 'placement').
+  const rcMode = (searchParams.get('mode') ?? searchParams.get('tab') ?? 'placement') as 'placement' | 'keywords' | 'strategy' | 'conquest' | 'tos'
   const [market, setMarket] = useState('IT')
   const [camps, setCamps] = useState<Camp[]>([])
   const [selCamps, setSelCamps] = useState<Set<string>>(new Set())
@@ -149,9 +152,6 @@ export function RankControlTab({ onSaved }: { onSaved: () => void }) {
         <span style={{ fontWeight: 700, fontSize: 15 }}><Crosshair size={16} style={{ verticalAlign: 'text-bottom', marginRight: 6 }} />Rank Control</span>
         <span style={{ flex: 1 }} />
         <div style={{ display: 'flex', gap: 6 }}>
-          {([['placement', 'Placement %'], ['keywords', 'Keyword targeting'], ['strategy', 'Strategy & cost'], ['conquest', 'Conquesting'], ['tos', 'Top-of-Search IS']] as const).map(([k, l]) => (
-            <button key={k} onClick={() => setRcMode(k)} className={`az-chip quick ${rcMode === k ? 'on' : ''}`}>{l}</button>
-          ))}
         </div>
       </div>
       {rcMode === 'keywords' && <RankKeywordsMode />}

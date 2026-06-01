@@ -11,6 +11,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useSearchParams, useRouter } from 'next/navigation'
 import { Search, Zap, FlaskConical, Trash2, Check, TrendingUp, ShieldAlert, RefreshCw, Play, Pause, Sparkles, Plus, Sliders } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { AUTOMATIONS, CATEGORIES, AUTOMATION_COUNT, buildRule, type AutomationDef } from './automations'
@@ -39,12 +40,6 @@ interface State { autonomy?: string; halted?: boolean; haltReason?: string | nul
 interface Rec { id: string; category: string; severity: string; title: string; detail: string; estImpactCents?: number; apply?: { kind: string; payload: unknown } }
 interface RecResp { generatedAt?: string; counts?: Record<string, number>; potentialMonthlyImpactCents?: number; recommendations?: Rec[] }
 
-const TABS = [
-  { k: 'library', label: 'Library' }, { k: 'playbooks', label: 'Playbooks' }, { k: 'composer', label: 'Composer' }, { k: 'rank', label: 'Rank Control' }, { k: 'active', label: 'Active rules' },
-  { k: 'analytics', label: 'Analytics' }, { k: 'efficiency', label: 'Efficiency' }, { k: 'dayparting', label: 'Dayparting' }, { k: 'recs', label: 'Recommendations' }, { k: 'anomaly', label: 'Anomalies' }, { k: 'competitive', label: 'Competitive' },
-  { k: 'harvest', label: 'Harvest' }, { k: 'negatives', label: 'Negatives' }, { k: 'retail', label: 'Retail' }, { k: 'budget', label: 'Budgets' }, { k: 'engine', label: 'Engine & autonomy' },
-  { k: 'guardrails', label: 'Guardrails' }, { k: 'health', label: 'Health' },
-]
 const eur = (c: number | null | undefined) => (c == null ? '—' : new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(c / 100))
 const trgLabel = (t: string) => (t === 'SCHEDULE' ? 'SCHEDULED' : t.replace(/_/g, ' '))
 const relTime = (iso: string) => { const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000); if (s < 60) return 'just now'; const m = Math.floor(s / 60); if (m < 60) return `${m}m ago`; const h = Math.floor(m / 60); if (h < 24) return `${h}h ago`; const d = Math.floor(h / 24); return d < 30 ? `${d}d ago` : `${Math.floor(d / 30)}mo ago` }
@@ -52,7 +47,10 @@ const post = (path: string, body?: unknown) => fetch(`${getBackendUrl()}/api/adv
 const patch = (id: string, body: Record<string, unknown>) => fetch(`${getBackendUrl()}/api/advertising/automation-rules/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
 
 export function AutomationHub({ initialRules, initialState }: { initialRules: Rule[]; initialState: State | null }) {
-  const [tab, setTab] = useState('library')
+  const searchParams = useSearchParams()
+  const router = useRouter()
+  const tab = searchParams.get('tab') ?? 'library'
+  const setTab = (k: string) => router.replace(`/marketing/ads-console/automation?tab=${k}`, { scroll: false })
   const [rules, setRules] = useState<Rule[]>(initialRules.filter((r) => r.domain === 'advertising'))
   const [state, setState] = useState<State | null>(initialState)
   const [cat, setCat] = useState('All')
@@ -138,8 +136,6 @@ export function AutomationHub({ initialRules, initialState }: { initialRules: Ru
         <div className="az-stat"><div className="k">Opportunity / mo</div><div className="v" style={{ color: 'var(--green)' }}>{recs ? eur(recs.potentialMonthlyImpactCents) : '…'}</div><div className="s">{recs?.recommendations?.length ?? 0} recommendations</div></div>
         <div className="az-stat"><div className="k">Engine</div><div className="v" style={{ color: state?.effectivelyStopped ? '#cc1100' : 'var(--green)' }}>{state?.effectivelyStopped ? 'Halted' : state?.autonomy ?? 'AUTO'}</div><div className="s">{state?.halted ? 'kill-switch on' : 'running'}</div></div>
       </div>
-
-      <div className="az-tabs">{TABS.map((t) => <button key={t.k} className={`az-tab ${tab === t.k ? 'on' : ''}`} onClick={() => setTab(t.k)}>{tab === t.k && <span className="ck">✔</span>}{t.label}{t.k === 'active' && rules.length ? ` (${rules.length})` : ''}</button>)}</div>
 
       {tab === 'library' && <>
         <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap', marginBottom: 4 }}>

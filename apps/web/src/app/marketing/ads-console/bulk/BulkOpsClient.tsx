@@ -11,6 +11,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import ExcelJS from 'exceljs'
 import { Download, Upload, FileSpreadsheet, CheckCircle2, AlertCircle, Info, ExternalLink } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -57,7 +58,8 @@ const eur = (v: string | null) => { const n = Number(v); return isNaN(n) ? v ?? 
 const relTime = (iso: string) => { const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000); if (s < 60) return 'just now'; const m = Math.floor(s / 60); if (m < 60) return `${m}m ago`; const h = Math.floor(m / 60); return h < 24 ? `${h}h ago` : `${Math.floor(h / 24)}d ago` }
 
 export function BulkOpsClient() {
-  const [tab, setTab] = useState<'download' | 'upload' | 'diff'>('download')
+  const searchParams = useSearchParams()
+  const tab = (searchParams.get('tab') ?? 'download') as 'download' | 'upload' | 'diff'
   const [rows, setRows] = useState<VRow[]>([])
   const [fileName, setFileName] = useState('')
   const [parsing, setParsing] = useState(false)
@@ -177,13 +179,6 @@ export function BulkOpsClient() {
       <div className="az-listhead">
         <span className="title"><FileSpreadsheet size={18} style={{ marginRight: 6, color: 'var(--orange)' }} />Bulk operations</span>
         <span style={{ flex: 1 }} />
-      </div>
-
-      {/* Tab bar */}
-      <div style={{ display: 'flex', gap: 6, marginBottom: 16 }}>
-        {([['download', 'Download'], ['upload', 'Upload'], ['diff', 'Automation diff']] as const).map(([k, l]) => (
-          <button key={k} className={`az-chip quick ${tab === k ? 'on' : ''}`} onClick={() => setTab(k)}>{l}</button>
-        ))}
       </div>
 
       {/* Automation diff tab */}

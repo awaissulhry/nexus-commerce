@@ -10,6 +10,7 @@
  */
 
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { Activity, RefreshCw, ExternalLink, Radio } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { campaignHref } from '../automation/useCampaignMap'
@@ -60,9 +61,11 @@ function liveToExecution(e: LiveEvent): Execution {
 }
 
 export function ActivityClient({ initial }: { initial: Execution[] }) {
+  const searchParams = useSearchParams()
+
   const [items, setItems] = useState<Execution[]>(initial)
   const [loading, setLoading] = useState(false)
-  const [filter, setFilter] = useState<'all' | 'live' | 'dry' | 'failed'>('all')
+  const filter = (searchParams.get('filter') ?? 'all') as 'all' | 'live' | 'dry' | 'failed'
   const [connected, setConnected] = useState(false)
   const [todayCount, setTodayCount] = useState(0)
   const [profileMap, setProfileMap] = useState<Record<string, string>>({})
@@ -142,13 +145,7 @@ export function ActivityClient({ initial }: { initial: Execution[] }) {
         Every automation rule execution — what fired, what it did, and which campaign it touched. Updates in real time as rules run. Amazon links open the campaign directly in your Ads Console.
       </div>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14, flexWrap: 'wrap' }}>
-        {(['all', 'live', 'dry', 'failed'] as const).map(f => (
-          <button key={f} className={`az-chip quick ${filter === f ? 'on' : ''}`} onClick={() => setFilter(f)}>
-            {f === 'all' ? `All (${items.length})` : f === 'live' ? 'Live actions' : f === 'dry' ? 'Dry-run' : 'Failed / capped'}
-          </button>
-        ))}
-        <span style={{ flex: 1 }} />
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', marginBottom: 14 }}>
         <button className="az-iconbtn" onClick={() => void reload()} title="Refresh"><RefreshCw size={15} className={loading ? 'az-spin' : ''} /></button>
       </div>
 
