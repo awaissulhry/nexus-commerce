@@ -761,6 +761,11 @@ export interface ReportRequest {
   reportType: ReportType
   startDate: string // YYYY-MM-DD
   endDate: string // YYYY-MM-DD
+  /** Opt-in extra report columns appended to the base set (e.g.
+   *  ['topOfSearchImpressionShare'] for the campaigns report). Default behaviour
+   *  is unchanged — callers that omit this get exactly the original columns, so
+   *  the main metrics ingestion is never affected. */
+  extraColumns?: string[]
 }
 
 export async function fetchReport(
@@ -791,6 +796,7 @@ export async function fetchReport(
           'date', 'campaignId', 'adGroupId', 'keywordId', 'adId',
           'impressions', 'clicks', 'cost', 'sales1d', 'sales7d', 'sales14d',
           'orders1d', 'orders7d', 'unitsSoldClicks7d',
+          ...(req.extraColumns ?? []),
         ],
         reportTypeId: `spCampaigns`,
         timeUnit: 'DAILY',

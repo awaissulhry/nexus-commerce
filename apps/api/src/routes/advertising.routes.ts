@@ -3761,6 +3761,17 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   })
 
   // ── AD.3: Evaluator manual trigger + status ─────────────────────────
+  // POST /api/advertising/debug/tos-is-ingest — Option C probe + ingest.
+  // Issues an ISOLATED campaigns report with the extra topOfSearchImpressionShare
+  // column and stores it on the TOP_OF_SEARCH placement rows. Calling this both
+  // validates that Amazon accepts the metric (withIS > 0 + sample populated) and
+  // performs the first ingest. Safe: failure is isolated to this fetch.
+  fastify.post('/advertising/debug/tos-is-ingest', async (request) => {
+    const b = (request.body ?? {}) as { windowDays?: number }
+    const { ingestTopOfSearchIS } = await import('../services/advertising/ads-tos-is-ingest.service.js')
+    return ingestTopOfSearchIS({ windowDays: b.windowDays })
+  })
+
   fastify.post('/advertising/cron/advertising-rule-evaluator/trigger', async (_request, _reply) => {
     const summary = await runAdvertisingRuleEvaluatorOnce()
     return { ok: true, summary }

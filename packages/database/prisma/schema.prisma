@@ -2887,6 +2887,7 @@ model AmazonAdsPlacementReport {
   currencyCode    String
   sales7dCents    Int?     @default(0)
   orders7d        Int?     @default(0)
+  topOfSearchIS   Decimal? @db.Decimal(8, 4) // Amazon true top-of-search impression share (campaign-day, stored on the TOP row)
   reportRunId     String?
   createdAt       DateTime @default(now())
 
