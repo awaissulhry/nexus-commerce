@@ -13,12 +13,15 @@ import { getBackendUrl } from '@/lib/backend-url'
 import { useCampaignMap, campaignHref } from './useCampaignMap'
 import { TableSkel } from './_ui'
 import { downloadCsv } from './_csv'
+import { useAmazonLinks, buildAmazonCampaignHref } from './useAmazonLinks'
+import { ExternalLink } from 'lucide-react'
 
 interface Term { query: string; externalCampaignId: string; externalAdGroupId: string; impressions: number; clicks: number; costCents: number; orders: number; salesCents: number }
 const eur = (c: number) => new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR' }).format(c / 100)
 const num = (n: number) => new Intl.NumberFormat('en-US').format(n)
 
 export function HarvestTab() {
+  const profileMap = useAmazonLinks()
   const [negatives, setNegatives] = useState<Term[]>([])
   const [graduations, setGraduations] = useState<Term[]>([])
   const [windowDays, setWindowDays] = useState(60)
@@ -43,10 +46,16 @@ export function HarvestTab() {
         <tbody>
           {loading && <TableSkel cols={7} />}
           {!loading && terms.length === 0 && <tr><td className="az-empty" colSpan={7}>{kind === 'grad' ? 'No converting terms to graduate right now.' : 'No wasteful terms to negate right now.'}</td></tr>}
-          {terms.map((t, i) => { const c = campMap[t.externalCampaignId]; return (
+          {terms.map((t, i) => { const c = campMap[t.externalCampaignId]; const amzHref = buildAmazonCampaignHref(t.externalCampaignId, c?.marketplace, profileMap); return (
             <tr key={`${t.query}-${i}`}>
               <td className="l" style={{ fontWeight: 500 }}>{t.query}</td>
-              <td className="l">{c ? <a className="cn" href={campaignHref(c.id)} target="_blank" rel="noopener noreferrer">{c.name}</a> : <span className="sub">{t.externalCampaignId}</span>}<div className="sub">{c?.marketplace ? `${c.marketplace} · ` : ''}AG {t.externalAdGroupId}</div></td>
+              <td className="l">
+                {c ? <a className="cn" href={campaignHref(c.id)} target="_blank" rel="noopener noreferrer">{c.name}</a> : <span className="sub">{t.externalCampaignId}</span>}
+                <div className="sub" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  {c?.marketplace ? `${c.marketplace} · ` : ''}AG {t.externalAdGroupId}
+                  {amzHref && <a href={amzHref} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 2, color: 'var(--link)', textDecoration: 'none', fontWeight: 600 }}>Amazon <ExternalLink size={9} /></a>}
+                </div>
+              </td>
               <td className="num">{num(t.impressions)}</td><td className="num">{num(t.clicks)}</td><td className="num">{eur(t.costCents)}</td>
               <td className="num" style={{ color: kind === 'grad' ? 'var(--green)' : undefined }}>{num(t.orders)}</td><td className="num">{eur(t.salesCents)}</td>
             </tr>

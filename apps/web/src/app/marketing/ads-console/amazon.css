@@ -52,6 +52,15 @@
 .az-nav a:hover { background: var(--bg3); text-decoration: none; }
 .az-nav a.on { background: var(--bg2); font-weight: 700; }
 .az-content { flex: 1; overflow: auto; background: #fff; min-width: 0; }
+/* Amazon deep-link rows in nav */
+.az-amazon-link { display: flex; align-items: center; gap: 6px; padding: 7px 12px; border-radius: 8px; color: var(--ink2); font-weight: 500; font-size: 13px; text-decoration: none; cursor: pointer; }
+.az-amazon-link:hover { background: var(--bg3); text-decoration: none; }
+.az-amazon-link .lbl { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.az-amazon-link .live-chip { font-size: 9px; font-weight: 700; color: var(--green); background: #e8f5e9; border-radius: 3px; padding: 1px 4px; flex-shrink: 0; }
+/* Icon rail — links not spans */
+.az-rail a.ri { width: 40px; height: 40px; border-radius: 8px; display: grid; place-items: center; color: var(--ink2); cursor: pointer; text-decoration: none; }
+.az-rail a.ri:hover { background: var(--bg2); }
+.az-rail a.ri.on { color: var(--orange); }
 .az-wrap { padding: 16px 20px 60px; }
 
 /* ── AD-TYPE TABS ──────────────────────────────────────────── */
