@@ -47,6 +47,7 @@ const TABS = [
 ]
 const eur = (c: number | null | undefined) => (c == null ? '—' : new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(c / 100))
 const trgLabel = (t: string) => (t === 'SCHEDULE' ? 'SCHEDULED' : t.replace(/_/g, ' '))
+const relTime = (iso: string) => { const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000); if (s < 60) return 'just now'; const m = Math.floor(s / 60); if (m < 60) return `${m}m ago`; const h = Math.floor(m / 60); if (h < 24) return `${h}h ago`; const d = Math.floor(h / 24); return d < 30 ? `${d}d ago` : `${Math.floor(d / 30)}mo ago` }
 const post = (path: string, body?: unknown) => fetch(`${getBackendUrl()}/api/advertising/${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined })
 const patch = (id: string, body: Record<string, unknown>) => fetch(`${getBackendUrl()}/api/advertising/automation-rules/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
 
@@ -233,7 +234,8 @@ export function AutomationHub({ initialRules, initialState }: { initialRules: Ru
             <button className={`az-toggle ${r.enabled ? 'on' : ''}`} disabled={busy === r.id} onClick={() => void toggleEnabled(r)} aria-label="Enable rule" title={r.enabled ? 'Enabled' : 'Disabled'}><i /></button>
             <div className="nm"><div className="t">{cleanName(r.name)}</div><div className="d2">{cleanName(r.description)}</div></div>
             <span className="trg" style={{ background: 'var(--bg2)', borderRadius: 5, padding: '2px 7px', fontSize: 10, fontWeight: 700, color: 'var(--ink2)' }}>{trgLabel(r.trigger)}</span>
-            <div className="stat"><b>{r.executionCount ?? 0}</b>runs</div>
+            <div className="stat" title="Times this rule's conditions matched"><b>{r.matchCount ?? 0}</b>matches</div>
+            <div className="stat" title={r.lastExecutedAt ? `Last run ${new Date(r.lastExecutedAt).toLocaleString()}` : 'Never run'}><b>{r.executionCount ?? 0}</b>{r.lastExecutedAt ? relTime(r.lastExecutedAt) : 'runs'}</div>
             <button className={`az-live ${r.dryRun ? 'dry' : 'on'}`} disabled={busy === r.id} onClick={() => void toggleLive(r)} title="Toggle dry-run / live">{r.dryRun ? 'Dry run' : 'LIVE'}</button>
             <button className="az-btn" disabled={busy === r.id} onClick={() => void testRule(r)} title="Test against current data"><FlaskConical size={14} /></button>
             <button className="az-kebab" disabled={busy === r.id} onClick={() => void deleteRule(r)} title="Delete" style={{ color: '#cc1100' }}><Trash2 size={15} /></button>
