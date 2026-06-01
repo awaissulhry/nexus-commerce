@@ -18,6 +18,9 @@ import { RuleBuilder } from './RuleBuilder'
 import { Configurator } from './Configurator'
 import { PLAYBOOKS, playbookAutomations } from './playbooks'
 import { CatIcon, PlaybookIcon } from './_icons'
+import { AnomalyTab } from './AnomalyTab'
+import { HarvestTab } from './HarvestTab'
+import { NegativeMiningTab } from './NegativeMiningTab'
 import { DaypartingTab } from './DaypartingTab'
 import { HealthTab } from './HealthTab'
 import { SovTab } from './SovTab'
@@ -32,8 +35,8 @@ interface RecResp { generatedAt?: string; counts?: Record<string, number>; poten
 
 const TABS = [
   { k: 'library', label: 'Library' }, { k: 'playbooks', label: 'Playbooks' }, { k: 'active', label: 'Active rules' },
-  { k: 'dayparting', label: 'Dayparting' }, { k: 'recs', label: 'Recommendations' }, { k: 'competitive', label: 'Competitive' },
-  { k: 'retail', label: 'Retail' }, { k: 'budget', label: 'Budgets' }, { k: 'engine', label: 'Engine & autonomy' },
+  { k: 'dayparting', label: 'Dayparting' }, { k: 'recs', label: 'Recommendations' }, { k: 'anomaly', label: 'Anomalies' }, { k: 'competitive', label: 'Competitive' },
+  { k: 'harvest', label: 'Harvest' }, { k: 'negatives', label: 'Negatives' }, { k: 'retail', label: 'Retail' }, { k: 'budget', label: 'Budgets' }, { k: 'engine', label: 'Engine & autonomy' },
   { k: 'guardrails', label: 'Guardrails' }, { k: 'health', label: 'Health' },
 ]
 const eur = (c: number | null | undefined) => (c == null ? '—' : new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(c / 100))
@@ -237,6 +240,9 @@ export function AutomationHub({ initialRules, initialState }: { initialRules: Ru
       {tab === 'budget' && <BudgetPacingTab />}
       {tab === 'guardrails' && <GuardrailsTab />}
       {tab === 'health' && <HealthTab />}
+      {tab === 'anomaly' && <AnomalyTab />}
+      {tab === 'harvest' && <HarvestTab />}
+      {tab === 'negatives' && <NegativeMiningTab />}
 
       {configuring && <Configurator def={configuring} onClose={() => setConfiguring(null)} onSaved={() => { void refetchRules() }} />}
       {showBuilder && <RuleBuilder onClose={() => setShowBuilder(false)} onSaved={() => { void refetchRules() }} />}
