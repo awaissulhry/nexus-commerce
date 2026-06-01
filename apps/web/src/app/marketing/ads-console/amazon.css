@@ -44,8 +44,8 @@
 .az-body { flex: 1; display: flex; min-height: 0; }
 
 /* ── Main nav sidebar ───────────────────────────────────────── */
-/* Collapses to 28px so the hamburger (in top bar) is always reachable */
-.az-nav { width: 220px; flex: none; background: #fff; border-right: 1px solid var(--divider); padding: 10px 8px; overflow-y: auto; overflow-x: hidden; transition: width 0.2s ease, padding 0.2s ease; position: relative; }
+/* Collapses to 0 — hamburger in the top bar re-expands it */
+.az-nav { width: 204px; flex: none; background: #fff; border-right: 1px solid var(--divider); padding: 10px 8px; overflow-y: auto; overflow-x: hidden; transition: width 0.18s ease, padding 0.18s ease; position: relative; }
 .az-nav.nav-collapsed { width: 0; padding: 0; overflow: hidden; }
 .az-nav-toggle { position: absolute; top: 10px; right: 6px; width: 22px; height: 22px; border-radius: 6px; border: 1px solid var(--divider); background: var(--bg2); display: grid; place-items: center; cursor: pointer; color: var(--ink2); z-index: 2; flex-shrink: 0; }
 .az-nav-toggle:hover { background: var(--bg3); }
@@ -54,22 +54,31 @@
 .az-nav a.on { background: var(--bg2); font-weight: 700; }
 
 /* ── Sub nav sidebar ────────────────────────────────────────── */
-/* Collapses to 28px strip — toggle always reachable, never trapped at width:0 */
-.az-subnav { flex: none; width: 200px; background: var(--bg2); border-right: 1px solid var(--divider); display: flex; flex-direction: column; transition: width 0.2s ease; overflow: hidden; min-width: 0; }
-.az-subnav.subnav-collapsed { width: 28px; }
+/* Open: 196px with labels. Collapsed: 46px icon rail (icons only) — never an
+   empty sliver. Toggle always reachable. */
+.az-subnav { flex: none; width: 196px; background: var(--bg2); border-right: 1px solid var(--divider); display: flex; flex-direction: column; transition: width 0.18s ease; overflow: hidden; }
+.az-subnav.subnav-collapsed { width: 46px; }
 .az-subnav-inner { flex: 1; min-width: 0; overflow-y: auto; overflow-x: hidden; padding: 6px 8px 16px; display: flex; flex-direction: column; }
-.az-subnav-header { flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; padding: 8px 4px 6px; min-height: 36px; }
+.az-subnav.subnav-collapsed .az-subnav-inner { padding: 6px 5px 16px; }
+.az-subnav-header { flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; padding: 8px 4px 8px; min-height: 36px; }
+.az-subnav.subnav-collapsed .az-subnav-header { justify-content: center; padding: 8px 0; }
 .az-subnav-title { font-size: 10.5px; font-weight: 700; color: var(--ink3); letter-spacing: 0.6px; text-transform: uppercase; white-space: nowrap; overflow: hidden; }
-.az-subnav-toggle { width: 22px; height: 22px; border-radius: 6px; border: 1px solid var(--border); background: #fff; display: grid; place-items: center; cursor: pointer; color: var(--ink2); flex-shrink: 0; }
+.az-subnav-toggle { width: 24px; height: 24px; border-radius: 6px; border: 1px solid var(--border); background: #fff; display: grid; place-items: center; cursor: pointer; color: var(--ink2); flex-shrink: 0; }
 .az-subnav-toggle:hover { background: var(--bg3); }
 .az-subnav-item { display: flex; align-items: center; gap: 9px; padding: 8px 10px; border-radius: 8px; color: var(--ink); font-size: 13px; font-weight: 500; cursor: pointer; white-space: nowrap; margin-bottom: 1px; border: none; background: none; width: 100%; text-align: left; }
-.az-subnav-item:hover { background: rgba(0,0,0,.04); }
-.az-subnav-item.on { background: #fff; font-weight: 700; color: var(--navy); box-shadow: 0 1px 3px rgba(0,0,0,.07); }
+.az-subnav-item:hover { background: rgba(0,0,0,.05); }
+.az-subnav-item.on { background: #fff; font-weight: 700; color: var(--navy); box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+.az-subnav-item .ic { flex-shrink: 0; opacity: 0.7; display: inline-flex; }
+.az-subnav-item.on .ic { opacity: 1; color: var(--navy); }
+.az-subnav-item .lbl { flex: 1; overflow: hidden; text-overflow: ellipsis; }
 .az-subnav-item .badge { margin-left: auto; font-size: 10px; font-weight: 700; color: var(--ink3); background: rgba(0,0,0,.07); border-radius: 8px; padding: 1px 6px; flex-shrink: 0; }
 .az-subnav-item.on .badge { background: var(--bg2); color: var(--navy); }
-.az-subnav.subnav-collapsed .az-subnav-item,
-.az-subnav.subnav-collapsed .az-subnav-sep,
+/* Collapsed → icon rail: center icons, hide labels/badges/title/separators */
+.az-subnav.subnav-collapsed .az-subnav-item { justify-content: center; padding: 9px 0; gap: 0; }
+.az-subnav.subnav-collapsed .az-subnav-item .lbl,
+.az-subnav.subnav-collapsed .az-subnav-item .badge,
 .az-subnav.subnav-collapsed .az-subnav-title { display: none; }
+.az-subnav.subnav-collapsed .az-subnav-sep { margin: 6px 10px; }
 .az-subnav-sep { height: 1px; background: var(--divider); margin: 6px 2px; flex-shrink: 0; }
 
 /* ── Content area ────────────────────────────────────────────── */

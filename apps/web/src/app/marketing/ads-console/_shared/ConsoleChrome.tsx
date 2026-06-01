@@ -118,7 +118,11 @@ export function ConsoleChrome({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     setNavCollapsed(readLS(LS_NAV, false))
-    setSubCollapsed(readLS(LS_SUB, false))
+    // Sub nav: default OPEN. We store the key only if the user explicitly
+    // collapsed it in THIS version (v2). Old stale '1' from earlier testing
+    // is invalidated by checking for the version marker.
+    const subKey = localStorage.getItem(LS_SUB + ':v2')
+    setSubCollapsed(subKey === '1')
   }, [])
 
   useEffect(() => {
@@ -132,7 +136,10 @@ export function ConsoleChrome({ children }: { children: ReactNode }) {
   }, [])
 
   const toggleNav = () => { const n = !navCollapsed; setNavCollapsed(n); writeLS(LS_NAV, n) }
-  const toggleSub = () => { const n = !subCollapsed; setSubCollapsed(n); writeLS(LS_SUB, n) }
+  const toggleSub = () => {
+    const n = !subCollapsed; setSubCollapsed(n)
+    try { localStorage.setItem(LS_SUB + ':v2', n ? '1' : '0') } catch { /* ignore */ }
+  }
 
   const subNavDef = Object.entries(SUB_NAVS).find(([k]) => pathname.startsWith(k))?.[1] ?? null
   const activeParam = subNavDef ? (searchParams.get(subNavDef.paramKey) ?? subNavDef.defaultKey) : null
@@ -219,9 +226,10 @@ export function ConsoleChrome({ children }: { children: ReactNode }) {
                   <button key={item.k}
                     className={`az-subnav-item ${activeParam === item.k ? 'on' : ''}`}
                     onClick={() => navigateSub(subNavDef, item.k)}
+                    title={subCollapsed ? item.label : undefined}
                   >
-                    {Icon && <Icon size={14} style={{ flexShrink: 0, opacity: 0.7 }} />}
-                    <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.label}</span>
+                    {Icon && <span className="ic"><Icon size={15} /></span>}
+                    <span className="lbl">{item.label}</span>
                     {count > 0 && <span className="badge">{count}</span>}
                   </button>
                 )
