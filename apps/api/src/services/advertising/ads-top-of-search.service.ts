@@ -27,24 +27,27 @@ export interface TosRow {
   marketplace: string | null
   topImpr: number; topClicks: number; topSpendCents: number; topSalesCents: number
   topAcos: number | null
+  topIS: number | null // Amazon true top-of-search impression share (0–1), avg over window
   currentPct: number
   recommendedPct: number
   action: 'raise' | 'lower' | 'keep'
   reason: string
 }
 
-export async function analyzeTopOfSearch(opts: { windowDays?: number; marketplace?: string; targetAcos?: number } = {}): Promise<{ windowDays: number; targetAcos: number; rows: TosRow[] }> {
+export async function analyzeTopOfSearch(opts: { windowDays?: number; marketplace?: string; targetAcos?: number; targetIS?: number } = {}): Promise<{ windowDays: number; targetAcos: number; targetIS: number | null; rows: TosRow[] }> {
   const windowDays = Math.max(7, Math.min(90, opts.windowDays ?? 30))
   const targetAcos = opts.targetAcos ?? 0.25
+  const targetIS = opts.targetIS ?? null
   const since = new Date(); since.setUTCDate(since.getUTCDate() - windowDays); since.setUTCHours(0, 0, 0, 0)
 
   const perf = await prisma.amazonAdsPlacementReport.groupBy({
     by: ['campaignId'],
     where: { placement: TOP_REPORT_PLACEMENT, date: { gte: since } },
     _sum: { impressions: true, clicks: true, costMicros: true, sales7dCents: true, orders7d: true },
+    _avg: { topOfSearchIS: true },
   })
   const extIds = perf.map((p) => p.campaignId)
-  if (extIds.length === 0) return { windowDays, targetAcos, rows: [] }
+  if (extIds.length === 0) return { windowDays, targetAcos, targetIS, rows: [] }
   const campaigns = await prisma.campaign.findMany({
     where: { externalCampaignId: { in: extIds }, ...(opts.marketplace ? { marketplace: opts.marketplace } : {}) },
     select: { id: true, name: true, marketplace: true, externalCampaignId: true, dynamicBidding: true },
@@ -58,13 +61,24 @@ export async function analyzeTopOfSearch(opts: { windowDays?: number; marketplac
     const topSpendCents = microsToCents(p._sum.costMicros)
     const topSalesCents = p._sum.sales7dCents ?? 0
     const topAcos = topSalesCents > 0 ? topSpendCents / topSalesCents : null
+    const topIS = p._avg.topOfSearchIS != null ? Number(p._avg.topOfSearchIS) : null
     const db = (c.dynamicBidding ?? {}) as { placementBidding?: Array<{ placement: string; percentage: number }> }
     const currentPct = db.placementBidding?.find((x) => x.placement === TOP_BID_KEY)?.percentage ?? 0
     let action: TosRow['action'] = 'keep'
     let recommendedPct = currentPct
     let reason = 'within target'
     if (topSpendCents > 0 && topAcos != null) {
-      if (topAcos <= targetAcos * 0.8 && currentPct < MAX_PCT) {
+      if (targetIS != null && topIS != null) {
+        // IS-driven, ACOS-bounded: hold the slot for the LEAST cost. Raise only
+        // while we're below the impression-share target AND ACOS is in budget;
+        // ease off once we're comfortably above target or ACOS runs over.
+        const acosInBudget = topAcos <= targetAcos * 1.1
+        if (topIS < targetIS && acosInBudget && currentPct < MAX_PCT) {
+          action = 'raise'; recommendedPct = Math.min(MAX_PCT, currentPct + STEP_PCT); reason = `TOS IS ${(topIS * 100).toFixed(0)}% below target ${(targetIS * 100).toFixed(0)}% (ACOS ${(topAcos * 100).toFixed(0)}% in budget) — push for top slots`
+        } else if (currentPct > 0 && (topIS >= targetIS * 1.1 || topAcos >= targetAcos * 1.2)) {
+          action = 'lower'; recommendedPct = Math.max(0, currentPct - STEP_PCT); reason = topIS >= targetIS * 1.1 ? `TOS IS ${(topIS * 100).toFixed(0)}% comfortably above target — ease off for least cost` : `ACOS ${(topAcos * 100).toFixed(0)}% over target — ease off`
+        }
+      } else if (topAcos <= targetAcos * 0.8 && currentPct < MAX_PCT) {
         action = 'raise'; recommendedPct = Math.min(MAX_PCT, currentPct + STEP_PCT); reason = `TOP ACOS ${(topAcos * 100).toFixed(0)}% well under target — capture more top slots`
       } else if (topAcos >= targetAcos * 1.2 && currentPct > 0) {
         action = 'lower'; recommendedPct = Math.max(0, currentPct - STEP_PCT); reason = `TOP ACOS ${(topAcos * 100).toFixed(0)}% over target — ease off`
@@ -72,10 +86,10 @@ export async function analyzeTopOfSearch(opts: { windowDays?: number; marketplac
     } else if (topSpendCents === 0) {
       reason = 'no top-of-search spend in window'
     }
-    rows.push({ campaignId: c.id, name: c.name, marketplace: c.marketplace, topImpr: p._sum.impressions ?? 0, topClicks: p._sum.clicks ?? 0, topSpendCents, topSalesCents, topAcos, currentPct, recommendedPct, action, reason })
+    rows.push({ campaignId: c.id, name: c.name, marketplace: c.marketplace, topImpr: p._sum.impressions ?? 0, topClicks: p._sum.clicks ?? 0, topSpendCents, topSalesCents, topAcos, topIS, currentPct, recommendedPct, action, reason })
   }
   rows.sort((a, b) => b.topSpendCents - a.topSpendCents)
-  return { windowDays, targetAcos, rows }
+  return { windowDays, targetAcos, targetIS, rows }
 }
 
 export async function applyTopOfSearch(campaignId: string, percentage: number): Promise<unknown> {
@@ -119,12 +133,13 @@ export interface DefendTosResult {
 
 export async function defendTopOfSearch(opts: {
   targetAcos?: number
+  targetIS?: number
   marketplace?: string
   windowDays?: number
   allowlistedOnly?: boolean
   dryRun?: boolean
 } = {}): Promise<DefendTosResult> {
-  const { rows } = await analyzeTopOfSearch({ targetAcos: opts.targetAcos, marketplace: opts.marketplace, windowDays: opts.windowDays })
+  const { rows } = await analyzeTopOfSearch({ targetAcos: opts.targetAcos, targetIS: opts.targetIS, marketplace: opts.marketplace, windowDays: opts.windowDays })
   const actionable = rows.filter((r) => r.action !== 'keep' && r.recommendedPct !== r.currentPct)
   const sample = actionable.slice(0, 8).map((r) => ({ campaign: r.name, fromPct: r.currentPct, toPct: r.recommendedPct, action: r.action, reason: r.reason }))
   if (opts.dryRun) {
@@ -151,6 +166,7 @@ export async function defendTopOfSearch(opts: {
 ACTION_HANDLERS.defend_top_of_search = async (action, _context, meta): Promise<ActionResult> => {
   const r = await defendTopOfSearch({
     targetAcos: typeof action.targetAcos === 'number' ? (action.targetAcos as number) : undefined,
+    targetIS: typeof action.targetIS === 'number' ? (action.targetIS as number) : undefined,
     marketplace: typeof action.marketplace === 'string' ? (action.marketplace as string) : undefined,
     windowDays: typeof action.windowDays === 'number' ? (action.windowDays as number) : undefined,
     allowlistedOnly: true,

@@ -25,10 +25,12 @@ export async function runTosDefenseCron(): Promise<void> {
     await recordCronRun('top-of-search-defense', async () => {
       const { defendTopOfSearch } = await import('../services/advertising/ads-top-of-search.service.js')
       const targetAcos = Number(process.env.NEXUS_TOS_TARGET_ACOS)
+      const targetIS = Number(process.env.NEXUS_TOS_TARGET_IS) // 0–1; when set, the loop holds this top-of-search impression share (ACOS-bounded)
       const r = await defendTopOfSearch({
         allowlistedOnly: true,
         dryRun: false,
         targetAcos: Number.isFinite(targetAcos) && targetAcos > 0 ? targetAcos : undefined,
+        targetIS: Number.isFinite(targetIS) && targetIS > 0 && targetIS <= 1 ? targetIS : undefined,
       })
       return `evaluated=${r.evaluated} changed=${r.changed} applied=${r.applied} skipped=${r.skippedNotAllowlisted}`
     })
