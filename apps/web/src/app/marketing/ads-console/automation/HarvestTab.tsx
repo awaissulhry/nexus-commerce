@@ -10,6 +10,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Sprout, Ban, RefreshCw } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
+import { useCampaignMap, campaignHref } from './useCampaignMap'
 
 interface Term { query: string; externalCampaignId: string; externalAdGroupId: string; impressions: number; clicks: number; costCents: number; orders: number; salesCents: number }
 const eur = (c: number) => new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR' }).format(c / 100)
@@ -22,6 +23,7 @@ export function HarvestTab() {
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState('')
+  const campMap = useCampaignMap()
   const load = () => { setLoading(true); void fetch(`${getBackendUrl()}/api/advertising/harvest/preview?windowDays=${windowDays}`, { cache: 'no-store' }).then((r) => r.json()).then((d) => { setNegatives(d.negatives ?? []); setGraduations(d.graduations ?? []) }).catch(() => {}).finally(() => setLoading(false)) }
   useEffect(load, [windowDays])
 
@@ -35,16 +37,17 @@ export function HarvestTab() {
   const tbl = (terms: Term[], kind: 'grad' | 'neg') => (
     <div className="az-tablewrap" style={{ marginBottom: 18 }}>
       <table className="az-table">
-        <thead><tr><th className="l">Search term</th><th>Impressions</th><th>Clicks</th><th>Spend</th><th>Orders</th><th>Sales</th></tr></thead>
+        <thead><tr><th className="l">Search term</th><th className="l">Campaign · market</th><th>Impressions</th><th>Clicks</th><th>Spend</th><th>Orders</th><th>Sales</th></tr></thead>
         <tbody>
-          {terms.length === 0 && <tr><td className="az-empty" colSpan={6}>{loading ? 'Loading…' : kind === 'grad' ? 'No converting terms to graduate right now.' : 'No wasteful terms to negate right now.'}</td></tr>}
-          {terms.map((t, i) => (
+          {terms.length === 0 && <tr><td className="az-empty" colSpan={7}>{loading ? 'Loading…' : kind === 'grad' ? 'No converting terms to graduate right now.' : 'No wasteful terms to negate right now.'}</td></tr>}
+          {terms.map((t, i) => { const c = campMap[t.externalCampaignId]; return (
             <tr key={`${t.query}-${i}`}>
               <td className="l" style={{ fontWeight: 500 }}>{t.query}</td>
+              <td className="l">{c ? <a className="cn" href={campaignHref(c.id)} target="_blank" rel="noopener noreferrer">{c.name}</a> : <span className="sub">{t.externalCampaignId}</span>}<div className="sub">{c?.marketplace ? `${c.marketplace} · ` : ''}AG {t.externalAdGroupId}</div></td>
               <td className="num">{num(t.impressions)}</td><td className="num">{num(t.clicks)}</td><td className="num">{eur(t.costCents)}</td>
               <td className="num" style={{ color: kind === 'grad' ? 'var(--green)' : undefined }}>{num(t.orders)}</td><td className="num">{eur(t.salesCents)}</td>
             </tr>
-          ))}
+          ) })}
         </tbody>
       </table>
     </div>

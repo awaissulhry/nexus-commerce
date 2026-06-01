@@ -11,6 +11,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Ban, RefreshCw, Check } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
+import { useCampaignMap, campaignHref } from './useCampaignMap'
 
 interface Cand { query: string; matchType: string; campaignId: string; adGroupId: string; marketplace: string; totalImpressions: number; totalClicks: number; totalCostUnits: number }
 const num = (n: number) => new Intl.NumberFormat('en-US').format(Math.round(n))
@@ -23,6 +24,7 @@ export function NegativeMiningTab() {
   const [busy, setBusy] = useState(false)
   const [sel, setSel] = useState<Set<string>>(new Set())
   const [done, setDone] = useState<Set<string>>(new Set())
+  const campMap = useCampaignMap()
   const key = (c: Cand) => `${c.query}:${c.campaignId}:${c.adGroupId}`
   const load = () => { setLoading(true); void fetch(`${getBackendUrl()}/api/advertising/reports/negative-keyword-candidates?lookbackDays=30&minSpend=${minSpend || 0}&limit=300`, { cache: 'no-store' }).then((r) => r.json()).then((d) => { setCands(d.candidates ?? []); setSel(new Set()) }).catch(() => {}).finally(() => setLoading(false)) }
   useEffect(load, [minSpend])
@@ -59,7 +61,7 @@ export function NegativeMiningTab() {
         <table className="az-table">
           <thead><tr>
             <th className="l" style={{ width: 36 }}><input type="checkbox" className="az-check" checked={allSel} onChange={(e) => setSel(e.target.checked ? new Set(cands.filter((c) => !done.has(key(c))).map(key)) : new Set())} /></th>
-            <th className="l">Search term</th><th className="l">Match</th><th className="l">Market</th><th>Impressions</th><th>Clicks</th><th>Wasted spend</th><th className="l">Status</th>
+            <th className="l">Search term</th><th className="l">Match</th><th className="l">Campaign · market</th><th>Impressions</th><th>Clicks</th><th>Wasted spend</th><th className="l">Status</th>
           </tr></thead>
           <tbody>
             {cands.length === 0 && <tr><td className="az-empty" colSpan={8}>{loading ? 'Mining…' : 'No wasted-spend terms above this threshold. Clean.'}</td></tr>}
@@ -68,7 +70,7 @@ export function NegativeMiningTab() {
                 <td className="l"><input type="checkbox" className="az-check" disabled={isDone} checked={sel.has(k) || isDone} onChange={() => toggle(c)} /></td>
                 <td className="l" style={{ fontWeight: 500 }}>{c.query}</td>
                 <td className="l"><span className="az-badge paused">{(c.matchType || '').replace(/_/g, ' ').toLowerCase()}</span></td>
-                <td className="l">{c.marketplace}</td>
+                <td className="l">{(() => { const cm = campMap[c.campaignId]; return cm ? <a className="cn" href={campaignHref(cm.id)} target="_blank" rel="noopener noreferrer">{cm.name}</a> : <span className="sub">{c.campaignId}</span> })()}<div className="sub">{c.marketplace} · AG {c.adGroupId}</div></td>
                 <td className="num">{num(c.totalImpressions)}</td><td className="num">{num(c.totalClicks)}</td><td className="num">{eur(c.totalCostUnits)}</td>
                 <td className="l">{isDone ? <span className="az-rowstat ok"><Check size={13} />Negated</span> : <span className="sub">candidate</span>}</td>
               </tr>
