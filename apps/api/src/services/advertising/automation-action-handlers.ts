@@ -796,6 +796,31 @@ ACTION_HANDLERS.retail_guard = async (action, _context, meta): Promise<ActionRes
   }
 }
 
+// ── AU.4: pause_all_campaigns (budget failsafe kill-switch) ──────────
+// Pauses ALL ENABLED campaigns for a marketplace instantly. Used as the
+// hard budget-cap kill-switch: triggered when total monthly spend crosses a
+// threshold. The SCHEDULE trigger polls spend and fires this action.
+// Resume individually or via a companion rule with resume_campaign.
+ACTION_HANDLERS.pause_all_campaigns = async (action, _context, meta): Promise<ActionResult> => {
+  const marketplace = typeof action.marketplace === 'string' ? action.marketplace : undefined
+  const where: Record<string, unknown> = { status: 'ENABLED' }
+  if (marketplace) where.marketplace = marketplace
+  const campaigns = await prisma.campaign.findMany({ where, select: { id: true, name: true, marketplace: true } })
+  if (meta.dryRun) {
+    return { type: action.type, ok: true, output: { dryRun: true, wouldPause: campaigns.length, sample: campaigns.slice(0, 5).map((c) => c.name) } }
+  }
+  let paused = 0
+  const errors: string[] = []
+  for (const c of campaigns) {
+    try {
+      await updateCampaignWithSync({ campaignId: c.id, patch: { status: 'PAUSED' }, actor: RULE_ACTOR(meta.ruleId), reason: (action.reason as string | undefined) ?? `budget cap hit — pause_all_campaigns rule ${meta.ruleId}`, applyImmediately: true } as never)
+      paused++
+    } catch (e) { errors.push((e as Error).message) }
+  }
+  logger.warn('[pause_all_campaigns] budget cap pause executed', { ruleId: meta.ruleId, marketplace, paused, errors: errors.length })
+  return { type: action.type, ok: errors.length < campaigns.length, output: { paused, errors: errors.slice(0, 5) } }
+}
+
 logger.debug('[advertising] action handlers registered', {
   count: 8,
   types: [

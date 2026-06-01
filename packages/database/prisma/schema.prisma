@@ -12295,14 +12295,18 @@ model AdSchedule {
   campaignId      String // local Campaign.id
   name            String
   // Active windows the campaign SHOULD deliver in. JSON:
-  // [{ days: [1,2,3,4,5], startHour: 8, endHour: 22 }] (0=Sun..6=Sat,
-  // hour 0-23 local). Empty = always (no-op).
+  // [{ days:[0-6], startHour:0-23, endHour:0-23, bidMultiplierPct?:number }]
+  // bidMultiplierPct: +30 raises bids 30% on window-enter, restores on exit.
+  // Empty = always on (no-op schedule).
   windows         Json      @default("[]")
   timezone        String    @default("Europe/Rome")
   enabled         Boolean   @default(true)
   // Last status the cron applied, to avoid redundant writes/churn.
   lastApplied     String? // ENABLED | PAUSED
   lastEvaluatedAt DateTime?
+  // AU.3 — bid snapshot taken when entering a bid-multiplier window.
+  // JSON: { [adTargetId]: originalBidCents }. Cleared when exiting/restoring.
+  originalBids    Json?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
   createdBy       String?

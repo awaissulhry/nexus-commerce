@@ -472,14 +472,21 @@ export async function runAdvertisingRuleEvaluatorOnce(): Promise<TickSummary> {
     buildCampaignBudgetContexts(),
   ])
 
-  // AU.1/AU.2 — SCHEDULE trigger: one synthetic context per active marketplace
-  // so harvest_and_negate + retail_guard rules run on every evaluator tick.
-  // No condition fields needed (the action itself decides what to do); rules
-  // can optionally filter by marketplace using scopeMarketplace.
+  // AU.1/AU.2/AU.4 — SCHEDULE trigger: one context per active marketplace each
+  // tick. Includes budget.monthlySpendCents so budget-cap rules can fire.
   const conns = await prisma.amazonAdsConnection.findMany({ where: { isActive: true }, select: { marketplace: true } })
-  const scheduleContexts = [...new Set(conns.map((c) => c.marketplace))].map((mkt) => ({
+  const marketplaces = [...new Set(conns.map((c) => c.marketplace))]
+  const now = new Date(); const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1))
+  const monthlySpendByMkt = await prisma.amazonAdsDailyPerformance.groupBy({
+    by: ['marketplace'],
+    where: { entityType: 'CAMPAIGN', date: { gte: monthStart } },
+    _sum: { costMicros: true },
+  })
+  const spendMap = new Map(monthlySpendByMkt.map((r) => [r.marketplace, microsToCents(r._sum.costMicros)]))
+  const scheduleContexts = marketplaces.map((mkt) => ({
     trigger: 'SCHEDULE' as const,
     marketplace: mkt,
+    budget: { monthlySpendCents: spendMap.get(mkt) ?? 0 },
   }))
 
   let totalEvaluations = 0

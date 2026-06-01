@@ -22,6 +22,8 @@ export const CONDITION_FIELDS: ConditionField[] = [
   { field: 'adTarget.ordersCount', label: 'Target orders', hint: 'count' },
   { field: 'profit.netCents', label: 'Net profit', hint: 'cents — can be negative' },
   { field: 'fbaAge.daysToLtsThreshold', label: 'Days to LTS fee', hint: 'days' },
+  // AU.4 — budget failsafe (available on SCHEDULE trigger)
+  { field: 'budget.monthlySpendCents', label: 'Monthly ad spend (¢)', hint: '100000 = €1,000' },
 ]
 
 export const OPS: Array<{ op: string; label: string }> = [
@@ -68,6 +70,10 @@ export const ACTION_TYPES: ActionType[] = [
   { type: 'resume_campaign', label: '▶ Resume campaign', blurb: 'Set a paused campaign back to ENABLED', params: [] },
   // AU.2
   { type: 'retail_guard', label: '🛡 Retail guard (pause OOS/lost Buy Box)', blurb: 'Pause campaigns advertising out-of-stock or Buy Box-lost products', params: [] },
+  // AU.4
+  { type: 'pause_all_campaigns', label: '⛔ Pause ALL campaigns (budget kill-switch)', blurb: 'Immediately pause every enabled campaign — use as a hard monthly spend cap', params: [
+    { key: 'reason', label: 'Reason note', type: 'text', default: 'Monthly budget cap reached' },
+  ] },
 ]
 
 export interface RuleTemplate {
@@ -87,4 +93,6 @@ export const TEMPLATES: RuleTemplate[] = [
   { key: 'auto-harvest-negate', category: 'Sales', name: '🌾 Auto harvest & negate', description: 'Every tick: negate search terms that spent €10+ with zero orders; promote terms with 2+ orders to exact-match campaigns. The #1 way to stop wasted spend.', trigger: 'SCHEDULE', conditions: [], actions: [{ type: 'harvest_and_negate', windowDays: 60, minSpendCents: 1000, minOrders: 2, graduationBidEur: 0.5 }, { type: 'notify', message: 'Harvest & negate ran — check execution log for terms moved' }], maxExecutionsPerDay: 3 },
   // AU.2 — Retail guard (scheduled)
   { key: 'retail-guard', category: 'Sales', name: '🛡 Retail guard', description: 'Every 15 min: automatically pause campaigns advertising out-of-stock products or products that lost the Buy Box — so you never pay for traffic you can\'t convert.', trigger: 'SCHEDULE', conditions: [], actions: [{ type: 'retail_guard' }, { type: 'notify', message: 'Retail guard paused campaign(s) — check execution log' }], maxExecutionsPerDay: 96 },
+  // AU.4 — budget failsafe
+  { key: 'monthly-budget-cap', category: 'Other', name: '⛔ Monthly budget cap', description: 'Instantly pause ALL campaigns the moment your monthly ad spend hits your cap. Guaranteed never-overspend. Set your cap in the condition.', trigger: 'SCHEDULE', conditions: [{ field: 'budget.monthlySpendCents', op: 'gte', value: 200000 }], actions: [{ type: 'pause_all_campaigns', reason: 'Monthly budget cap reached' }, { type: 'notify', message: '⛔ Monthly budget cap hit — all campaigns paused' }], maxExecutionsPerDay: 96 },
 ]
