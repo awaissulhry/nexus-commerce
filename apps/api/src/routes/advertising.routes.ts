@@ -3262,6 +3262,80 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     return reply.send(buf)
   })
 
+  // ── POST /advertising/bulk/apply — apply a validated bulksheet ───────
+  // Dispatches each row's Operation to the existing audited write paths. Defaults
+  // to applyImmediately:false → pending/sandbox (no live Amazon writes unless the
+  // campaign is on the live-write allowlist). v1 supports Campaign + Ad group
+  // Update/Archive, Keyword Create, Negative keyword Create; others are skipped.
+  fastify.post('/advertising/bulk/apply', async (request, reply) => {
+    const body = request.body as { rows?: Array<Record<string, string>>; applyImmediately?: boolean }
+    const rows = Array.isArray(body?.rows) ? body.rows : []
+    if (!rows.length) { reply.status(400); return { error: 'rows[] required' } }
+    if (rows.length > 2000) { reply.status(400); return { error: 'max 2000 rows per apply' } }
+    const applyImmediately = body.applyImmediately === true
+    const actor = actorFromHeaders(request.headers as Record<string, unknown>)
+    const g = (r: Record<string, string>, k: string) => (r[k] ?? '').toString().trim()
+    const extC = [...new Set(rows.map((r) => g(r, 'Campaign ID')).filter(Boolean))]
+    const extA = [...new Set(rows.map((r) => g(r, 'Ad group ID')).filter(Boolean))]
+    const [camps, ags] = await Promise.all([
+      prisma.campaign.findMany({ where: { externalCampaignId: { in: extC } }, select: { id: true, externalCampaignId: true, marketplace: true } }),
+      prisma.adGroup.findMany({ where: { externalAdGroupId: { in: extA } }, select: { id: true, externalAdGroupId: true, campaign: { select: { marketplace: true } } } }),
+    ])
+    const campByExt = new Map(camps.map((c) => [c.externalCampaignId, c]))
+    const agByExt = new Map(ags.map((a) => [a.externalAdGroupId, a]))
+    const ST: Record<string, 'ENABLED' | 'PAUSED' | 'ARCHIVED'> = { enabled: 'ENABLED', paused: 'PAUSED', archived: 'ARCHIVED' }
+    const profileCache = new Map<string, string | null>()
+    const profileFor = async (mkt: string | null): Promise<string | null> => {
+      if (!mkt) return null
+      if (profileCache.has(mkt)) return profileCache.get(mkt) ?? null
+      const conn = await prisma.amazonAdsConnection.findFirst({ where: { marketplace: mkt, isActive: true }, select: { profileId: true } })
+      const pid = conn?.profileId ?? null; profileCache.set(mkt, pid); return pid
+    }
+    const { createKeywordLocal } = await import('../services/advertising/ads-create.service.js')
+    const { createNegative } = await import('../services/advertising/ads-negative-kw.service.js')
+
+    const results: Array<{ row: number; entity: string; operation: string; status: 'applied' | 'skipped' | 'error'; message: string }> = []
+    let applied = 0, skipped = 0, errors = 0
+    for (let i = 0; i < rows.length; i++) {
+      const r = rows[i]; const entity = g(r, 'Entity'); const op = g(r, 'Operation')
+      const push = (status: 'applied' | 'skipped' | 'error', message: string) => { results.push({ row: i + 1, entity, operation: op || 'Read', status, message }); if (status === 'applied') applied++; else if (status === 'error') errors++; else skipped++ }
+      if (!op) { push('skipped', 'No operation (read row)'); continue }
+      try {
+        if (entity === 'Campaign' && (op === 'Update' || op === 'Archive')) {
+          const c = campByExt.get(g(r, 'Campaign ID')); if (!c) { push('error', 'Campaign ID not found'); continue }
+          const patch: { status?: 'ENABLED' | 'PAUSED' | 'ARCHIVED'; dailyBudget?: number } = {}
+          if (op === 'Archive') patch.status = 'ARCHIVED'; else if (ST[g(r, 'State').toLowerCase()]) patch.status = ST[g(r, 'State').toLowerCase()]
+          const db = g(r, 'Daily budget') || g(r, 'Budget'); if (db && Number.isFinite(Number(db))) patch.dailyBudget = Number(db)
+          const res = await updateCampaignWithSync({ campaignId: c.id, patch, actor, reason: 'bulk upload', applyImmediately })
+          if (res.ok) push('applied', applyImmediately ? 'Campaign updated (live)' : 'Campaign queued (pending)'); else push('error', res.error ?? 'update failed')
+        } else if (entity === 'Ad group' && (op === 'Update' || op === 'Archive')) {
+          const a = agByExt.get(g(r, 'Ad group ID')); if (!a) { push('error', 'Ad group ID not found'); continue }
+          const status = op === 'Archive' ? 'ARCHIVED' : ST[g(r, 'State').toLowerCase()]
+          if (!status) { push('skipped', 'No State to update'); continue }
+          const res = await updateAdGroupWithSync({ adGroupId: a.id, patch: { status }, actor, reason: 'bulk upload', applyImmediately })
+          if (res.ok) push('applied', applyImmediately ? 'Ad group updated (live)' : 'Ad group queued (pending)'); else push('error', res.error ?? 'update failed')
+        } else if (entity === 'Keyword' && op === 'Create') {
+          const a = agByExt.get(g(r, 'Ad group ID')); if (!a) { push('error', 'Ad group ID not found'); continue }
+          const mt = g(r, 'Match type').toUpperCase(); const matchType = mt.includes('PHRASE') ? 'PHRASE' : mt.includes('BROAD') ? 'BROAD' : 'EXACT'
+          const bid = Number(g(r, 'Bid')); const bidEur = Number.isFinite(bid) && bid > 0 ? bid : 0.5
+          await createKeywordLocal({ adGroupId: a.id, keywordText: g(r, 'Keyword text'), matchType, bidEur } as never)
+          push('applied', 'Keyword created (pending)')
+        } else if (entity === 'Negative keyword' && op === 'Create') {
+          const cid = g(r, 'Campaign ID'); const aid = g(r, 'Ad group ID')
+          const mkt = campByExt.get(cid)?.marketplace ?? agByExt.get(aid)?.campaign?.marketplace ?? null
+          const profileId = await profileFor(mkt)
+          if (!profileId || !mkt) { push('error', 'No active connection for marketplace'); continue }
+          const matchType = g(r, 'Match type').toLowerCase().includes('phrase') ? 'NEGATIVE_PHRASE' : 'NEGATIVE_EXACT'
+          await createNegative({ profileId, externalCampaignId: cid, externalAdGroupId: aid || undefined, keywordText: g(r, 'Keyword text'), matchType, scope: aid ? 'AD_GROUP' : 'CAMPAIGN', marketplace: mkt } as never)
+          push('applied', 'Negative keyword created (pending)')
+        } else {
+          push('skipped', `${entity || 'Row'} · ${op} not supported yet`)
+        }
+      } catch (e) { push('error', (e as Error)?.message ?? 'failed') }
+    }
+    return { total: rows.length, applied, skipped, errors, applyImmediately, results }
+  })
+
   // GET /api/advertising/reports/negative-keyword-candidates
   //    ?lookbackDays=30&minSpend=5&limit=100&profileId=&marketplace=
   fastify.get('/advertising/reports/negative-keyword-candidates', async (request, _reply) => {

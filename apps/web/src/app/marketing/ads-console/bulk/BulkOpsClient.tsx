@@ -51,6 +51,8 @@ export function BulkOpsClient() {
   const [err, setErr] = useState<string | null>(null)
   const [truncated, setTruncated] = useState(false)
   const [over, setOver] = useState(false)
+  const [applying, setApplying] = useState(false)
+  const [applyRes, setApplyRes] = useState<{ total?: number; applied?: number; skipped?: number; errors?: number; results?: Array<{ row: number; entity: string; operation: string; status: string; message: string }>; error?: string } | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
   const validateRow = (r: Row): { ok: boolean; op: string; msg: string } => {
@@ -121,6 +123,16 @@ export function BulkOpsClient() {
     } catch (e) { setErr((e as Error)?.message ?? 'Could not parse file') } finally { setParsing(false) }
   }, [])
 
+  const apply = async () => {
+    const actionable = rows.filter((v) => v.ok && v.op !== 'Read')
+    if (!actionable.length) return
+    setApplying(true); setApplyRes(null)
+    try {
+      const res = await fetch(`${getBackendUrl()}/api/advertising/bulk/apply`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ rows: actionable.map((v) => v.r), applyImmediately: false }) }).then((r) => r.json())
+      setApplyRes(res)
+    } catch (e) { setApplyRes({ error: (e as Error)?.message ?? 'Apply failed' }) } finally { setApplying(false) }
+  }
+
   const keyField = (r: Row) => r['Campaign name'] || r['Ad group name'] || r['Keyword text'] || r['Product targeting expression'] || r['Portfolio name'] || r['Campaign ID'] || '—'
   const exportHref = `${getBackendUrl()}/api/advertising/bulk/export?limit=500`
 
@@ -167,10 +179,25 @@ export function BulkOpsClient() {
             <span className={`chip ${counts.errors ? 'err' : ''}`}><b>{counts.errors}</b> errors</span>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-            <button className="az-btn dark" disabled title="Applying changes ships in the next release" style={{ opacity: .5, cursor: 'not-allowed' }}>Apply changes</button>
-            <span className="az-rowstat" style={{ color: 'var(--ink2)' }}><Info size={13} />Validation only — applying (Create/Update/Archive via the gated write paths) ships next.</span>
-          </div>
+          {(() => {
+            const actionable = rows.filter((v) => v.ok && v.op !== 'Read').length
+            return (
+              <div style={{ marginBottom: 12 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                  <button className="az-btn dark" disabled={applying || actionable === 0} onClick={() => void apply()} style={applying || actionable === 0 ? { opacity: .55 } : undefined}>{applying ? 'Applying…' : `Apply ${actionable} change${actionable === 1 ? '' : 's'}`}</button>
+                  <span className="az-rowstat" style={{ color: 'var(--ink2)' }}><Info size={13} />Queued as pending (sandbox-safe) — live writes still require your per-campaign allowlist. Read &amp; error rows are skipped.</span>
+                </div>
+                {applyRes && (applyRes.error
+                  ? <div className="az-rowstat err" style={{ marginTop: 10 }}><AlertCircle size={14} />{applyRes.error}</div>
+                  : <div className="az-sum" style={{ marginTop: 12 }}>
+                      <span className="chip create"><b>{applyRes.applied ?? 0}</b> applied</span>
+                      <span className="chip"><b>{applyRes.skipped ?? 0}</b> skipped</span>
+                      <span className={`chip ${applyRes.errors ? 'err' : ''}`}><b>{applyRes.errors ?? 0}</b> errors</span>
+                      {(applyRes.results ?? []).filter((x) => x.status === 'error').slice(0, 6).map((x, i) => <span key={i} className="az-rowstat err" style={{ width: '100%' }}><AlertCircle size={12} />Row {x.row} ({x.entity} {x.operation}): {x.message}</span>)}
+                    </div>)}
+              </div>
+            )
+          })()}
 
           <div className="az-tablewrap">
             <table className="az-table">
