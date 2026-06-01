@@ -76,6 +76,7 @@ export default async function AutomationPage() {
           </Link>
           <Link href="/marketing/advertising/automation/library" className="px-3 py-1.5 text-sm rounded-md border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300">Library</Link>
           <Link href="/marketing/advertising/automation/executions" className="px-3 py-1.5 text-sm rounded-md border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300">History</Link>
+          <Link href="/marketing/advertising/automation/analytics" className="px-3 py-1.5 text-sm rounded-md border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300">Analytics</Link>
         </div>
       </div>
 

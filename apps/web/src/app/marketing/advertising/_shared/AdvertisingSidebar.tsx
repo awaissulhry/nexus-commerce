@@ -23,9 +23,17 @@ interface Item { href: string; label: string; icon: LucideIcon }
 interface Group { label: string; items: Item[]; advanced?: boolean }
 
 const GROUPS: Group[] = [
-  { label: 'Overview', items: [
-    { href: '/marketing/advertising/campaigns', label: 'Campaigns', icon: Activity },
+  { label: 'Automation', items: [
+    { href: '/marketing/advertising/automation', label: '🤖 Rules (24/7 engine)', icon: Bot },
+    { href: '/marketing/advertising/automation/library', label: 'Rule library', icon: Sparkles },
+    { href: '/marketing/advertising/automation/executions', label: 'Execution history', icon: Activity },
+    { href: '/marketing/advertising/automation/analytics', label: 'Automation analytics', icon: TrendingUp },
     { href: '/marketing/advertising/autopilot', label: 'Autopilot', icon: Rocket },
+    { href: '/marketing/advertising/dayparting', label: 'Dayparting + bid hours', icon: Clock },
+    { href: '/marketing/advertising/harvest', label: 'Harvest & negate', icon: Sprout },
+  ] },
+  { label: 'Campaigns', items: [
+    { href: '/marketing/advertising/campaigns', label: 'Campaigns', icon: Activity },
     { href: '/marketing/advertising/recommendations', label: 'Recommendations', icon: Sparkles },
     { href: '/marketing/advertising/momentum', label: 'Live momentum', icon: Zap },
   ] },
@@ -35,9 +43,7 @@ const GROUPS: Group[] = [
     { href: '/marketing/advertising/funnel', label: 'Launch & funnel', icon: Filter },
   ] },
   { label: 'Optimize', items: [
-    { href: '/marketing/advertising/automation', label: 'Automation', icon: Bot },
     { href: '/marketing/advertising/budget-manager', label: 'Budget Manager', icon: Wallet },
-    { href: '/marketing/advertising/dayparting', label: 'Dayparting', icon: Clock },
   ] },
   { label: 'Intelligence', items: [
     { href: '/marketing/advertising/analytics', label: 'Analytics', icon: BarChart2 },
