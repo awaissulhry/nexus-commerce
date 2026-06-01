@@ -353,8 +353,11 @@
 .az-tmpl.picked { border-color: var(--blue); box-shadow: 0 0 0 1px var(--blue) inset; }
 .az-tmpl .top { display: flex; align-items: center; gap: 9px; }
 .az-tmpl .top .az-check { flex: none; }
-.az-tmpl .ic { font-size: 19px; line-height: 1; }
+.az-tmpl .ic { width: 32px; height: 32px; border-radius: 8px; background: var(--bg2); color: var(--navy); display: grid; place-items: center; flex: none; }
+.az-tmpl.marquee .ic { background: #fbeed7; color: var(--amber); }
 .az-tmpl .nm { font-weight: 700; font-size: 13.5px; flex: 1; }
+.az-tmpl .flag { font-size: 9.5px; font-weight: 800; letter-spacing: .4px; text-transform: uppercase; color: var(--amber); background: #fbeed7; border-radius: 4px; padding: 2px 6px; flex: none; }
+.az-cfgicon { width: 30px; height: 30px; border-radius: 8px; background: var(--bg2); color: var(--navy); display: inline-grid; place-items: center; margin-right: 10px; vertical-align: middle; }
 .az-tmpl .cat { color: var(--ink2); font-size: 11px; font-weight: 600; }
 .az-tmpl .d { color: var(--ink2); font-size: 12px; line-height: 1.5; margin: 8px 0 12px; flex: 1; }
 .az-tmpl .foot { display: flex; align-items: center; gap: 8px; }

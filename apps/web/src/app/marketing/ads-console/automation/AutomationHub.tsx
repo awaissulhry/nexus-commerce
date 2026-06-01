@@ -17,6 +17,7 @@ import { AUTOMATIONS, CATEGORIES, AUTOMATION_COUNT, buildRule, type AutomationDe
 import { RuleBuilder } from './RuleBuilder'
 import { Configurator } from './Configurator'
 import { PLAYBOOKS, playbookAutomations } from './playbooks'
+import { CatIcon, PlaybookIcon } from './_icons'
 import { DaypartingTab } from './DaypartingTab'
 import { HealthTab } from './HealthTab'
 import { SovTab } from './SovTab'
@@ -126,8 +127,8 @@ export function AutomationHub({ initialRules, initialState }: { initialRules: Ru
             const added = ruleNames.has(t.name)
             return (
               <div key={t.id} className={`az-tmpl ${t.marquee ? 'marquee' : ''} ${sel.has(t.id) ? 'picked' : ''}`}>
-                <div className="top"><input type="checkbox" className="az-check" checked={sel.has(t.id)} onChange={() => toggleSel(t.id)} aria-label={`Select ${t.name}`} /><span className="ic">{t.icon}</span><span className="nm">{t.name}</span></div>
-                <div className="cat">{t.category}{t.marquee ? ' · ★ flagship' : ''}</div>
+                <div className="top"><input type="checkbox" className="az-check" checked={sel.has(t.id)} onChange={() => toggleSel(t.id)} aria-label={`Select ${t.name}`} /><span className="ic"><CatIcon cat={t.category} /></span><span className="nm">{t.name}</span>{t.marquee && <span className="flag">Flagship</span>}</div>
+                <div className="cat">{t.category}</div>
                 <div className="d">{t.desc}</div>
                 <div className="foot">
                   <span className="trg">{trgLabel(t.trigger)}</span>
@@ -152,10 +153,10 @@ export function AutomationHub({ initialRules, initialState }: { initialRules: Ru
             const all = autos.length > 0 && have === autos.length
             return (
               <div key={pb.id} className="az-tmpl marquee">
-                <div className="top"><span className="ic">{pb.icon}</span><span className="nm">{pb.name}</span></div>
+                <div className="top"><span className="ic"><PlaybookIcon /></span><span className="nm">{pb.name}</span></div>
                 <div className="cat">{pb.goal} · {autos.length} automations</div>
                 <div className="d">{pb.desc}</div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 10 }}>{autos.map((a) => <span key={a.id} className="trg" style={{ background: 'var(--bg2)', borderRadius: 5, padding: '2px 6px', fontSize: 10, fontWeight: 600, color: 'var(--ink2)' }}>{a.icon} {a.name}</span>)}</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 10 }}>{autos.map((a) => <span key={a.id} className="trg" style={{ background: 'var(--bg2)', borderRadius: 5, padding: '2px 7px', fontSize: 10.5, fontWeight: 600, color: 'var(--ink2)' }}>{a.name}</span>)}</div>
                 <div className="foot"><span style={{ flex: 1 }} />{all ? <button className="az-btn" onClick={() => setTab('active')}><Check size={14} />Active ({have})</button> : <button className="az-btn dark" disabled={busy === `pb:${pb.id}`} onClick={() => void enablePlaybook(pb.id)}>{busy === `pb:${pb.id}` ? 'Adding…' : have > 0 ? `Add ${autos.length - have} more` : 'Activate playbook'}</button>}</div>
               </div>
             )

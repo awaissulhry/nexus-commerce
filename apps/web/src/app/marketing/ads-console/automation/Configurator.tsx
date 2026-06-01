@@ -12,6 +12,7 @@ import { useMemo, useState } from 'react'
 import { X, Check, ChevronDown } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { buildRule, type AutomationDef, type ParamDef } from './automations'
+import { CatIcon } from './_icons'
 
 const ACTION_LABEL: Record<string, string> = {
   bid_down: 'lower bids', bid_up: 'raise bids', lower_bid_to_floor: 'drop bids to the floor', adjust_ad_budget: 'adjust the budget', set_daily_budget: 'set the daily budget', set_campaign_target_acos: 'set the target ACOS', pause_campaign: 'pause the campaign', pause_ad_group: 'pause the ad group', pause_all_campaigns: 'pause ALL campaigns', enable_campaign: 'enable the campaign', resume_campaign: 'resume the campaign', archive_keyword: 'archive the keyword', add_negative_exact: 'add a negative keyword', promote_to_exact: 'promote it to an exact keyword', harvest_and_negate: 'harvest & negate search terms', retail_guard: 'pause/resume on stock & Buy Box', liquidate_aged_stock: 'liquidate the aged stock', create_amazon_promotion: 'create a promotion', set_placement_multiplier: 'tune the placement multiplier', reroute_marketplace_budget: 'reroute budget across marketplaces', sync_negatives_across_campaigns: 'sync negatives across campaigns', raise_bids_for_rank_defense: 'raise bids to defend rank', scale_bids_for_price_change: 're-bid for the price change', bid_to_target_acos: 'optimise bids to target', alert_operator: 'alert you', notify: 'notify you',
@@ -51,7 +52,7 @@ export function Configurator({ def, onClose, onSaved }: { def: AutomationDef; on
   return (
     <div className="az-modal-back" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }}>
       <div className="az-modal" role="dialog" aria-label={`Configure ${def.name}`} style={{ width: 'min(620px, 96vw)' }}>
-        <div className="az-modal-head"><h2><span style={{ marginRight: 8 }}>{def.icon}</span>{def.name}</h2><button className="x" onClick={onClose} aria-label="Close"><X size={20} /></button></div>
+        <div className="az-modal-head"><h2><span className="az-cfgicon"><CatIcon cat={def.category} size={18} /></span>{def.name}</h2><button className="x" onClick={onClose} aria-label="Close"><X size={20} /></button></div>
         <div className="az-modal-body" style={{ display: 'block', overflowY: 'auto', padding: '14px 22px' }}>
           <div style={{ color: 'var(--ink2)', fontSize: 13, lineHeight: 1.55, marginBottom: 14 }}>{def.desc}</div>
 
