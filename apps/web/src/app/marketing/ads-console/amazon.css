@@ -290,3 +290,14 @@
 .az-table tbody tr.sel .az-stick1, .az-table tbody tr.sel .az-stick2 { background: #e3f3ff; }
 .az-table tbody tr.childrow .az-stick1, .az-table tbody tr.childrow .az-stick2 { background: #fbfcfc; }
 .az-table tbody tr.childrow:hover .az-stick1, .az-table tbody tr.childrow:hover .az-stick2 { background: #f3f6f6; }
+
+/* ── BULK ACTION BAR (floats up when rows are selected) ────── */
+.az-bulkbar { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 40; background: var(--navy); color: #fff; border-radius: 12px; box-shadow: 0 12px 40px rgba(0,0,0,.34); display: flex; align-items: center; gap: 10px; padding: 10px 14px; animation: az-rise .16s ease; }
+.az-bulkbar .n { font-weight: 700; margin-right: 4px; padding-left: 6px; }
+.az-bulkbar .az-btn { background: rgba(255,255,255,.12); color: #fff; border-color: rgba(255,255,255,.28); }
+.az-bulkbar .az-btn:hover { background: rgba(255,255,255,.22); }
+.az-bulkbar .az-btn svg { color: #fff; }
+.az-bulkbar .az-link { color: #cfe6ff; padding: 0 6px; }
+.az-bulkbar .az-link:hover { color: #fff; }
+.az-bulkbar .div { width: 1px; height: 22px; background: rgba(255,255,255,.22); }
+@keyframes az-rise { from { transform: translate(-50%, 12px); opacity: 0 } to { transform: translate(-50%, 0); opacity: 1 } }

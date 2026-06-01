@@ -252,6 +252,7 @@ export function CampaignsTable({ initial }: { initial: Base[] }) {
   const toggleActive = async (b: Base) => { setBusy(b.id); try { await patch(b.id, { status: b.status === 'ENABLED' ? 'PAUSED' : 'ENABLED' }); void refetch() } finally { setBusy(null) } }
   const saveBudget = async (b: Base) => { const v = edit[b.id]; if (v == null) return; const n = parseFloat(v); if (!Number.isFinite(n) || n < 0) { setEdit((e) => { const x = { ...e }; delete x[b.id]; return x }); return } setBusy(b.id); try { await patch(b.id, { dailyBudget: n }); setEdit((e) => { const x = { ...e }; delete x[b.id]; return x }); void refetch() } finally { setBusy(null) } }
   const bulkStatus = async (s: string) => { await Promise.all([...sel].map((id) => patch(id, { status: s }))); setSel(new Set()); void refetch() }
+  const bulkArchive = async () => { if (typeof window !== 'undefined' && !window.confirm(`Archive ${sel.size} campaign${sel.size === 1 ? '' : 's'}? They will stop delivering.`)) return; await Promise.all([...sel].map((id) => patch(id, { status: 'ARCHIVED' }))); setSel(new Set()); void refetch() }
   const openMenu = (e: { currentTarget: HTMLElement; stopPropagation: () => void }, id: string) => { e.stopPropagation(); const r = e.currentTarget.getBoundingClientRect(); setMenu({ id, x: Math.min(r.left, window.innerWidth - 232), y: r.bottom + 4 }) }
   const archive = async (b: Base) => { setMenu(null); if (typeof window !== 'undefined' && !window.confirm(`Archive “${b.name}”? It will stop delivering — find it again with the Archived filter.`)) return; setBusy(b.id); try { await patch(b.id, { status: 'ARCHIVED' }); void refetch() } finally { setBusy(null) } }
 
@@ -379,9 +380,7 @@ export function CampaignsTable({ initial }: { initial: Base[] }) {
           <span className="az-link" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }} onClick={() => setShowFilter((v) => !v)}><Filter size={14} />Filter by{countFilters(filters) > 0 ? ` (${countFilters(filters)})` : ''} <ChevronDown size={14} /></span>
           {showFilter && <FilterPanel filters={filters} setFilters={setFilters} portfolios={portfolios} onClose={() => setShowFilter(false)} />}
         </span>
-        {sel.size > 0
-          ? <span style={{ display: 'inline-flex', gap: 8, alignItems: 'center' }}><b>{sel.size} selected</b><button className="az-btn" onClick={() => void bulkStatus('ENABLED')}>Enable</button><button className="az-btn" onClick={() => void bulkStatus('PAUSED')}>Pause</button><button className="az-link" onClick={() => setSel(new Set())}>Clear</button></span>
-          : <span className="az-link" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, opacity: .6 }}>Bulk actions <ChevronDown size={14} /></span>}
+        <span className="az-link" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, opacity: sel.size ? 1 : .6 }}>Bulk actions{sel.size ? ` · ${sel.size}` : ''} <ChevronDown size={14} /></span>
         <span style={{ flex: 1 }} />
       </div>
 
@@ -495,6 +494,18 @@ export function CampaignsTable({ initial }: { initial: Base[] }) {
       })()}
 
       {showCols && <CustomiseColumns visible={visible} onClose={() => setShowCols(false)} onApply={applyCols} />}
+
+      {sel.size > 0 && (
+        <div className="az-bulkbar" role="region" aria-label="Bulk actions">
+          <span className="n">{sel.size} selected</span>
+          <span className="div" />
+          <button className="az-btn" onClick={() => void bulkStatus('ENABLED')}><Play size={15} />Enable</button>
+          <button className="az-btn" onClick={() => void bulkStatus('PAUSED')}><Pause size={15} />Pause</button>
+          <button className="az-btn" onClick={() => void bulkArchive()}><Archive size={15} />Archive</button>
+          <span className="div" />
+          <button className="az-link" onClick={() => setSel(new Set())}>Clear</button>
+        </div>
+      )}
     </div>
   )
 }
