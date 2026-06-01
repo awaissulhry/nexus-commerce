@@ -26,6 +26,7 @@ import { ComposerTab } from './ComposerTab'
 import { EfficiencyTab } from './EfficiencyTab'
 import { RankControlTab } from './RankControlTab'
 import { campaignHref } from './useCampaignMap'
+import { loadCustomPlaybooks, deleteCustomPlaybook, type CustomPlaybook } from './customPlaybooks'
 import { DaypartingTab } from './DaypartingTab'
 import { HealthTab } from './HealthTab'
 import { SovTab } from './SovTab'
@@ -66,6 +67,7 @@ export function AutomationHub({ initialRules, initialState }: { initialRules: Ru
   const [sel, setSel] = useState<Set<string>>(new Set())          // library multi-select
   const [selRules, setSelRules] = useState<Set<string>>(new Set()) // active-rules multi-select
   const [selRecs, setSelRecs] = useState<Set<string>>(new Set())   // recommendations multi-select
+  const [customPbs, setCustomPbs] = useState<CustomPlaybook[]>([])
 
   const refetchRules = useCallback(async () => {
     const d = await fetch(`${getBackendUrl()}/api/advertising/automation-rules`, { cache: 'no-store' }).then((r) => r.json()).catch(() => ({ items: [] }))
@@ -76,6 +78,7 @@ export function AutomationHub({ initialRules, initialState }: { initialRules: Ru
     setState(d)
   }, [])
   useEffect(() => { void fetch(`${getBackendUrl()}/api/advertising/recommendations?limit=80`, { cache: 'no-store' }).then((r) => r.json()).then(setRecs).catch(() => {}) }, [])
+  useEffect(() => { if (tab === 'playbooks') setCustomPbs(loadCustomPlaybooks()) }, [tab])
 
   const ruleNames = useMemo(() => new Set(rules.map((r) => r.name)), [rules])
   const liveCount = rules.filter((r) => r.enabled && !r.dryRun).length
@@ -85,6 +88,8 @@ export function AutomationHub({ initialRules, initialState }: { initialRules: Ru
   const addAutomation = async (def: AutomationDef) => { setBusy(def.id); try { await createFromDef(def); await refetchRules() } finally { setBusy(null) } }
   const addSelected = async () => { setBusy('bulk'); try { for (const id of sel) { const def = AUTOMATIONS.find((a) => a.id === id); if (def && !ruleNames.has(def.name)) await createFromDef(def) } setSel(new Set()); await refetchRules() } finally { setBusy(null) } }
   const enablePlaybook = async (pid: string) => { const pb = PLAYBOOKS.find((p) => p.id === pid); if (!pb) return; setBusy(`pb:${pid}`); try { for (const def of playbookAutomations(pb)) { if (!ruleNames.has(def.name)) await createFromDef(def) } await refetchRules() } finally { setBusy(null) } }
+  const activateCustom = async (pb: CustomPlaybook) => { setBusy(`cpb:${pb.id}`); try { for (const id of pb.automationIds) { const def = AUTOMATIONS.find((a) => a.id === id); if (def && !ruleNames.has(def.name)) await createFromDef(def) } await refetchRules() } finally { setBusy(null) } }
+  const removeCustom = (id: string) => setCustomPbs(deleteCustomPlaybook(id))
 
   const toggleEnabled = async (r: Rule) => { setBusy(r.id); try { await patch(r.id, { enabled: !r.enabled }); await refetchRules() } finally { setBusy(null) } }
   const toggleLive = async (r: Rule) => { if (r.dryRun && typeof window !== 'undefined' && !window.confirm(`Run "${r.name}" LIVE? It will make real changes to your campaigns (within your guardrails + per-campaign allowlist).`)) return; setBusy(r.id); try { await patch(r.id, { dryRun: !r.dryRun }); await refetchRules() } finally { setBusy(null) } }
@@ -189,6 +194,23 @@ export function AutomationHub({ initialRules, initialState }: { initialRules: Ru
             )
           })}
         </div>
+        {customPbs.length > 0 && <>
+          <h4 style={{ margin: '20px 2px 10px', fontSize: 13.5 }}>Your saved strategies</h4>
+          <div className="az-libgrid">
+            {customPbs.map((pb) => {
+              const autos = pb.automationIds.map((id) => AUTOMATIONS.find((a) => a.id === id)).filter((a): a is typeof AUTOMATIONS[number] => !!a)
+              const have = autos.filter((a) => ruleNames.has(a.name)).length
+              return (
+                <div key={pb.id} className="az-tmpl">
+                  <div className="top"><span className="ic"><PlaybookIcon /></span><span className="nm">{pb.name}</span><button className="az-kebab" onClick={() => removeCustom(pb.id)} title="Delete" style={{ color: '#cc1100' }}><Trash2 size={14} /></button></div>
+                  <div className="cat">Saved strategy · {autos.length} automations</div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, margin: '8px 0 10px' }}>{autos.map((a) => <span key={a.id} className="trg" style={{ background: 'var(--bg2)', borderRadius: 5, padding: '2px 6px', fontSize: 10, fontWeight: 600, color: 'var(--ink2)' }}>{a.name}</span>)}</div>
+                  <div className="foot"><span style={{ flex: 1 }} /><button className="az-btn dark" disabled={busy === `cpb:${pb.id}`} onClick={() => void activateCustom(pb)}>{busy === `cpb:${pb.id}` ? 'Adding…' : have === autos.length && autos.length > 0 ? 'Active' : 'Activate'}</button></div>
+                </div>
+              )
+            })}
+          </div>
+        </>}
       </>}
 
       {tab === 'active' && <div style={{ paddingTop: 4 }}>

@@ -12,6 +12,7 @@ import { Search, GripVertical, X, Layers, Check } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { AUTOMATIONS, buildRule, type AutomationDef } from './automations'
 import { CatIcon } from './_icons'
+import { saveCustomPlaybook } from './customPlaybooks'
 
 export function ComposerTab({ onSaved }: { onSaved: () => void }) {
   const [q, setQ] = useState('')
@@ -21,6 +22,7 @@ export function ComposerTab({ onSaved }: { onSaved: () => void }) {
   const [overIdx, setOverIdx] = useState<number | null>(null)
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState('')
+  const [pbName, setPbName] = useState('')
 
   const palette = useMemo(() => { const ql = q.trim().toLowerCase(); return AUTOMATIONS.filter((a) => !stack.includes(a.id) && (!ql || a.name.toLowerCase().includes(ql) || a.category.toLowerCase().includes(ql))) }, [q, stack])
   const stackDefs = useMemo(() => stack.map((id) => AUTOMATIONS.find((a) => a.id === id)).filter((a): a is AutomationDef => !!a), [stack])
@@ -77,10 +79,16 @@ export function ComposerTab({ onSaved }: { onSaved: () => void }) {
             ))}
           </div>
           {stack.length > 0 && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 14 }}>
-              <button className="az-btn dark" disabled={busy} onClick={() => void activate()}><Check size={15} />{busy ? 'Activating…' : `Activate strategy (${stack.length})`}</button>
-              <button className="az-link" onClick={() => setStack([])}>Clear</button>
-            </div>
+            <>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 14, flexWrap: 'wrap' }}>
+                <button className="az-btn dark" disabled={busy} onClick={() => void activate()}><Check size={15} />{busy ? 'Activating…' : `Activate strategy (${stack.length})`}</button>
+                <button className="az-link" onClick={() => setStack([])}>Clear</button>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+                <input value={pbName} onChange={(e) => setPbName(e.target.value)} placeholder="Name this strategy…" style={{ border: '1px solid var(--border)', borderRadius: 6, padding: '6px 10px', font: 'inherit', minWidth: 200 }} />
+                <button className="az-btn" disabled={!pbName.trim()} onClick={() => { saveCustomPlaybook(pbName, stack); setPbName(''); setMsg('Saved as a playbook — find it in the Playbooks tab.') }}>Save as playbook</button>
+              </div>
+            </>
           )}
           {msg && <div style={{ color: 'var(--green)', fontSize: 12, marginTop: 10, fontWeight: 600 }}>{msg}</div>}
         </div>
