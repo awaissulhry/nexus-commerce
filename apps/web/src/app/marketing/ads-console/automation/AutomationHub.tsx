@@ -54,6 +54,8 @@ export function AutomationHub({ initialRules, initialState }: { initialRules: Ru
   const [cat, setCat] = useState('All')
   const [q, setQ] = useState('')
   const [sortBy, setSortBy] = useState<'flagship' | 'name' | 'category'>('flagship')
+  const [ruleQ, setRuleQ] = useState('')
+  const [ruleFilter, setRuleFilter] = useState<'all' | 'live' | 'dry' | 'off'>('all')
   const [busy, setBusy] = useState<string | null>(null)
   const [recs, setRecs] = useState<RecResp | null>(null)
   const [engineMsg, setEngineMsg] = useState<Record<string, string>>({})
@@ -110,7 +112,8 @@ export function AutomationHub({ initialRules, initialState }: { initialRules: Ru
   }, [cat, q, sortBy])
   const toggleSel = (id: string) => setSel((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n })
   const toggleSelRule = (id: string) => setSelRules((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n })
-  const allRulesSel = rules.length > 0 && rules.every((r) => selRules.has(r.id))
+  const shownRules = useMemo(() => { const ql = ruleQ.trim().toLowerCase(); return rules.filter((r) => (ruleFilter === 'all' || (ruleFilter === 'live' && r.enabled && !r.dryRun) || (ruleFilter === 'dry' && r.enabled && r.dryRun) || (ruleFilter === 'off' && !r.enabled)) && (!ql || cleanName(r.name).toLowerCase().includes(ql) || (r.description ?? '').toLowerCase().includes(ql) || r.trigger.toLowerCase().includes(ql))) }, [rules, ruleQ, ruleFilter])
+  const allRulesSel = shownRules.length > 0 && shownRules.every((r) => selRules.has(r.id))
 
   return (
     <div className="az-wrap">
@@ -184,15 +187,19 @@ export function AutomationHub({ initialRules, initialState }: { initialRules: Ru
 
       {tab === 'active' && <div style={{ paddingTop: 4 }}>
         {rules.length > 0 && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10, flexWrap: 'wrap' }}>
-            <label className="az-rowstat" style={{ fontSize: 12.5, cursor: 'pointer' }}><input type="checkbox" className="az-check" checked={allRulesSel} onChange={(e) => setSelRules(e.target.checked ? new Set(rules.map((r) => r.id)) : new Set())} style={{ marginRight: 6 }} />Select all</label>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10, flexWrap: 'wrap' }}>
+            <div className="az-search" style={{ minWidth: 220, padding: '6px 10px' }}><Search size={14} /><input placeholder="Find a rule" value={ruleQ} onChange={(e) => setRuleQ(e.target.value)} /></div>
+            {(['all', 'live', 'dry', 'off'] as const).map((f) => <button key={f} className={`az-chip quick ${ruleFilter === f ? 'on' : ''}`} onClick={() => setRuleFilter(f)}>{f === 'all' ? `All ${rules.length}` : f === 'live' ? `Live ${liveCount}` : f === 'dry' ? `Dry-run ${activeCount - liveCount}` : `Off ${rules.length - activeCount}`}</button>)}
+            <span style={{ flex: 1 }} />
+            <label className="az-rowstat" style={{ fontSize: 12.5, cursor: 'pointer' }}><input type="checkbox" className="az-check" checked={allRulesSel} onChange={(e) => setSelRules(e.target.checked ? new Set(shownRules.map((r) => r.id)) : new Set())} style={{ marginRight: 6 }} />Select all</label>
             {selRules.size > 0
               ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}><b>{selRules.size} selected</b><button className="az-btn" disabled={busy === 'bulkrules'} onClick={() => void bulkRules('enable')}><Play size={13} />Enable</button><button className="az-btn" disabled={busy === 'bulkrules'} onClick={() => void bulkRules('pause')}><Pause size={13} />Pause</button><button className="az-btn" disabled={busy === 'bulkrules'} onClick={() => void bulkRules('dry')}>Dry-run</button><button className="az-btn" disabled={busy === 'bulkrules'} onClick={() => void bulkRules('live')} style={{ color: '#cc1100', borderColor: '#f4c7c0' }}>Set live</button><button className="az-btn" disabled={busy === 'bulkrules'} onClick={() => void bulkRules('delete')} style={{ color: '#cc1100', borderColor: '#f4c7c0' }}><Trash2 size={13} />Delete</button><button className="az-link" onClick={() => setSelRules(new Set())}>Clear</button></span>
               : <span style={{ color: 'var(--ink2)', fontSize: 12 }}>{activeCount} active · {liveCount} live · select rules for bulk actions</span>}
           </div>
         )}
         {rules.length === 0 && <div className="az-empty" style={{ border: '1px solid var(--divider)', borderRadius: 10 }}>No rules yet — add some from the Library.</div>}
-        {rules.map((r) => (
+        {rules.length > 0 && shownRules.length === 0 && <div className="az-empty" style={{ border: '1px solid var(--divider)', borderRadius: 10 }}>No rules match this filter.</div>}
+        {shownRules.map((r) => (
           <div key={r.id} className={`az-rule ${selRules.has(r.id) ? 'sel' : ''}`}>
             <input type="checkbox" className="az-check" checked={selRules.has(r.id)} onChange={() => toggleSelRule(r.id)} aria-label={`Select ${r.name}`} />
             <button className={`az-toggle ${r.enabled ? 'on' : ''}`} disabled={busy === r.id} onClick={() => void toggleEnabled(r)} aria-label="Enable rule" title={r.enabled ? 'Enabled' : 'Disabled'}><i /></button>
