@@ -23,9 +23,12 @@ export function RetailTab() {
   const load = () => { setLoading(true); void fetch(`${getBackendUrl()}/api/advertising/retail-readiness`, { cache: 'no-store' }).then((r) => r.json()).then((d) => setCamps(d.campaigns ?? [])).catch(() => {}).finally(() => setLoading(false)) }
   useEffect(load, [])
 
-  const flagged = useMemo(() => camps.filter((c) => c.verdict === 'pause'), [camps])
-  const totalOOS = camps.reduce((s, c) => s + (c.outOfStock ?? 0), 0)
-  const totalBB = camps.reduce((s, c) => s + (c.lostBuyBox ?? 0), 0)
+  const [mkt, setMkt] = useState('All')
+  const markets = useMemo(() => Array.from(new Set(camps.map((c) => c.marketplace).filter(Boolean))) as string[], [camps])
+  const shown = useMemo(() => (mkt === 'All' ? camps : camps.filter((c) => c.marketplace === mkt)), [camps, mkt])
+  const flagged = useMemo(() => shown.filter((c) => c.verdict === 'pause'), [shown])
+  const totalOOS = shown.reduce((s, c) => s + (c.outOfStock ?? 0), 0)
+  const totalBB = shown.reduce((s, c) => s + (c.lostBuyBox ?? 0), 0)
 
   const applyAll = async () => {
     if (!flagged.length) return
@@ -44,6 +47,7 @@ export function RetailTab() {
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '6px 2px 10px', flexWrap: 'wrap' }}>
         <span style={{ fontWeight: 700 }}><ShieldAlert size={15} style={{ verticalAlign: 'text-bottom', marginRight: 5 }} />Retail readiness</span>
+        <select value={mkt} onChange={(e) => setMkt(e.target.value)} style={{ border: '1px solid var(--border)', borderRadius: 6, padding: '5px 8px', font: 'inherit', cursor: 'pointer' }} aria-label="Market"><option value="All">All markets</option>{markets.map((m) => <option key={m} value={m}>{m}</option>)}</select>
         <span style={{ flex: 1 }} />
         {flagged.length > 0 && <button className="az-btn dark" disabled={busy} onClick={() => void applyAll()}><PauseCircle size={14} />Pause {flagged.length} flagged</button>}
         {msg && <span style={{ color: 'var(--ink2)', fontSize: 12 }}>{msg}</span>}
@@ -54,8 +58,8 @@ export function RetailTab() {
           <thead><tr><th className="l">Campaign</th><th className="l">Market</th><th>Products</th><th>OOS</th><th>Lost BB</th><th>Uncompetitive</th><th className="l">Verdict</th><th className="l">Reason</th></tr></thead>
           <tbody>
             {loading && <tr><td className="az-empty" colSpan={8}>Loading…</td></tr>}
-            {!loading && camps.length === 0 && <tr><td className="az-empty" colSpan={8}>All advertised products are sellable. 🎉</td></tr>}
-            {camps.map((c) => (
+            {!loading && shown.length === 0 && <tr><td className="az-empty" colSpan={8}>All advertised products are sellable.</td></tr>}
+            {shown.map((c) => (
               <tr key={c.campaignId} className={c.verdict === 'pause' ? 'sel' : ''}>
                 <td className="l" style={{ fontWeight: 500 }}>{c.name}</td>
                 <td className="l">{c.marketplace}</td>

@@ -40,19 +40,23 @@ export function NegativeMiningTab() {
     try { const ok = new Set(done); for (const c of targets) { if (await negateOne(c)) ok.add(key(c)) } setDone(ok); setSel(new Set()) } finally { setBusy(false) }
   }
   const toggle = (c: Cand) => setSel((s) => { const n = new Set(s); const k = key(c); if (n.has(k)) n.delete(k); else n.add(k); return n })
-  const wasted = useMemo(() => cands.reduce((s, c) => s + c.totalCostUnits, 0), [cands])
-  const allSel = cands.length > 0 && cands.every((c) => sel.has(key(c)) || done.has(key(c)))
+  const [mkt, setMkt] = useState('All')
+  const markets = useMemo(() => Array.from(new Set(cands.map((c) => c.marketplace).filter(Boolean))) as string[], [cands])
+  const shown = useMemo(() => (mkt === 'All' ? cands : cands.filter((c) => c.marketplace === mkt)), [cands, mkt])
+  const wasted = useMemo(() => shown.reduce((s, c) => s + c.totalCostUnits, 0), [shown])
+  const allSel = shown.length > 0 && shown.every((c) => sel.has(key(c)) || done.has(key(c)))
 
   return (
     <div style={{ paddingTop: 4 }}>
       <div className="az-hero">
-        <div className="az-stat"><div className="k">Waste candidates</div><div className="v" style={{ color: cands.length ? '#cc1100' : 'var(--green)' }}>{cands.length}</div><div className="s">spend, no orders (30d)</div></div>
+        <div className="az-stat"><div className="k">Waste candidates</div><div className="v" style={{ color: shown.length ? '#cc1100' : 'var(--green)' }}>{shown.length}</div><div className="s">spend, no orders (30d)</div></div>
         <div className="az-stat"><div className="k">Wasted spend</div><div className="v">{eur(wasted)}</div><div className="s">recoverable by negating</div></div>
         <div className="az-stat"><div className="k">Negated</div><div className="v" style={{ color: 'var(--green)' }}>{done.size}</div><div className="s">this session</div></div>
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '6px 2px 10px', flexWrap: 'wrap' }}>
         <span style={{ fontWeight: 700 }}><Ban size={15} style={{ verticalAlign: 'text-bottom', marginRight: 5 }} />Negative-keyword mining</span>
         <span className="ctl" style={{ cursor: 'default' }}>Min spend €<input type="number" value={minSpend} onChange={(e) => setMinSpend(e.target.value)} style={{ width: 56, marginLeft: 6, border: '1px solid var(--border)', borderRadius: 6, padding: '4px 6px', font: 'inherit' }} /></span>
+        <select value={mkt} onChange={(e) => setMkt(e.target.value)} style={{ border: '1px solid var(--border)', borderRadius: 6, padding: '5px 8px', font: 'inherit', cursor: 'pointer' }} aria-label="Market"><option value="All">All markets</option>{markets.map((m) => <option key={m} value={m}>{m}</option>)}</select>
         <span style={{ flex: 1 }} />
         {sel.size > 0 && <button className="az-btn dark" disabled={busy} onClick={() => void negateSelected()}>{busy ? 'Negating…' : `Negate ${sel.size}`}</button>}
         <button className="az-iconbtn" onClick={load} title="Refresh"><RefreshCw size={15} className={loading ? 'az-spin' : ''} /></button>
@@ -60,12 +64,12 @@ export function NegativeMiningTab() {
       <div className="az-tablewrap">
         <table className="az-table">
           <thead><tr>
-            <th className="l" style={{ width: 36 }}><input type="checkbox" className="az-check" checked={allSel} onChange={(e) => setSel(e.target.checked ? new Set(cands.filter((c) => !done.has(key(c))).map(key)) : new Set())} /></th>
+            <th className="l" style={{ width: 36 }}><input type="checkbox" className="az-check" checked={allSel} onChange={(e) => setSel(e.target.checked ? new Set(shown.filter((c) => !done.has(key(c))).map(key)) : new Set())} /></th>
             <th className="l">Search term</th><th className="l">Match</th><th className="l">Campaign · market</th><th>Impressions</th><th>Clicks</th><th>Wasted spend</th><th className="l">Status</th>
           </tr></thead>
           <tbody>
-            {cands.length === 0 && <tr><td className="az-empty" colSpan={8}>{loading ? 'Mining…' : 'No wasted-spend terms above this threshold. Clean.'}</td></tr>}
-            {cands.map((c, i) => { const k = key(c); const isDone = done.has(k); return (
+            {shown.length === 0 && <tr><td className="az-empty" colSpan={8}>{loading ? 'Mining…' : 'No wasted-spend terms above this threshold. Clean.'}</td></tr>}
+            {shown.map((c, i) => { const k = key(c); const isDone = done.has(k); return (
               <tr key={`${k}-${i}`} className={sel.has(k) ? 'sel' : ''}>
                 <td className="l"><input type="checkbox" className="az-check" disabled={isDone} checked={sel.has(k) || isDone} onChange={() => toggle(c)} /></td>
                 <td className="l" style={{ fontWeight: 500 }}>{c.query}</td>
