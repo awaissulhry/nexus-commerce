@@ -17,13 +17,14 @@ import { Search, Zap, FlaskConical, Trash2, Check, TrendingUp, ShieldAlert, Refr
 import { getBackendUrl } from '@/lib/backend-url'
 import { CATALOG, CATEGORIES, CATALOG_COUNT, type AutoTemplate } from './catalog'
 import { RuleBuilder } from './RuleBuilder'
+import { PLAYBOOKS, playbookTemplates } from './playbooks'
 
 interface Rule { id: string; name: string; description?: string; trigger: string; conditions: unknown[]; actions: unknown[]; enabled: boolean; dryRun: boolean; evaluationCount: number; matchCount: number; executionCount: number; lastExecutedAt?: string | null; domain: string }
 interface State { autonomy?: string; halted?: boolean; haltReason?: string | null; effectivelyStopped?: boolean; lastCheckedAt?: string | null }
 interface Rec { id: string; category: string; severity: string; title: string; detail: string; estImpactCents?: number; apply?: { kind: string; payload: unknown } }
 interface RecResp { generatedAt?: string; counts?: Record<string, number>; potentialMonthlyImpactCents?: number; recommendations?: Rec[] }
 
-const TABS = [{ k: 'library', label: 'Library' }, { k: 'active', label: 'Active rules' }, { k: 'recs', label: 'Recommendations' }, { k: 'engine', label: 'Engine & autonomy' }]
+const TABS = [{ k: 'library', label: 'Library' }, { k: 'playbooks', label: 'Playbooks' }, { k: 'active', label: 'Active rules' }, { k: 'recs', label: 'Recommendations' }, { k: 'engine', label: 'Engine & autonomy' }]
 const eur = (c: number | null | undefined) => (c == null ? '—' : new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(c / 100))
 const post = (path: string, body?: unknown) => fetch(`${getBackendUrl()}/api/advertising/${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined })
 const patch = (id: string, body: Record<string, unknown>) => fetch(`${getBackendUrl()}/api/advertising/automation-rules/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
@@ -60,6 +61,17 @@ export function AutomationHub({ initialRules, initialState }: { initialRules: Ru
     setBusy(t.id)
     try {
       await post('automation-rules', { name: t.name, description: t.desc, trigger: t.trigger, conditions: t.conditions, actions: t.actions, maxExecutionsPerDay: t.maxExecutionsPerDay, maxValueCentsEur: t.maxValueCentsEur ?? null, maxDailyAdSpendCentsEur: t.maxDailyAdSpendCentsEur ?? null })
+      await refetchRules()
+    } finally { setBusy(null) }
+  }
+  const enablePlaybook = async (pid: string) => {
+    const pb = PLAYBOOKS.find((p) => p.id === pid); if (!pb) return
+    setBusy(`pb:${pid}`)
+    try {
+      for (const t of playbookTemplates(pb)) {
+        if (ruleNames.has(t.name)) continue
+        await post('automation-rules', { name: t.name, description: t.desc, trigger: t.trigger, conditions: t.conditions, actions: t.actions, maxExecutionsPerDay: t.maxExecutionsPerDay, maxValueCentsEur: t.maxValueCentsEur ?? null, maxDailyAdSpendCentsEur: t.maxDailyAdSpendCentsEur ?? null })
+      }
       await refetchRules()
     } finally { setBusy(null) }
   }
@@ -125,6 +137,26 @@ export function AutomationHub({ initialRules, initialState }: { initialRules: Ru
         </div>
         {filtered.length > libVisible && <div style={{ textAlign: 'center', padding: '14px 0' }}><button className="az-btn" onClick={() => setLibVisible((v) => v + 60)}>Load {Math.min(60, filtered.length - libVisible)} more · {filtered.length - libVisible} left</button></div>}
         <div style={{ color: 'var(--ink2)', fontSize: 12, padding: '14px 2px' }}>Every automation is added <b>disabled + in dry-run</b> — flip it on (and later to live) from the Active rules tab when you’re ready. Need something bespoke? <button className="az-link" onClick={() => setShowBuilder(true)}>Build a custom rule</button>.</div>
+      </>}
+
+      {tab === 'playbooks' && <>
+        <div style={{ color: 'var(--ink2)', fontSize: 12.5, padding: '4px 2px 14px' }}>Adopt a whole strategy in one click — each playbook adds several coordinated automations at once (disabled + dry-run, as always).</div>
+        <div className="az-libgrid">
+          {PLAYBOOKS.map((pb) => {
+            const tmpls = playbookTemplates(pb)
+            const have = tmpls.filter((t) => ruleNames.has(t.name)).length
+            const all = tmpls.length > 0 && have === tmpls.length
+            return (
+              <div key={pb.id} className="az-tmpl marquee">
+                <div className="top"><span className="ic">{pb.icon}</span><span className="nm">{pb.name}</span></div>
+                <div className="cat">{pb.goal} · {tmpls.length} automations</div>
+                <div className="d">{pb.desc}</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 10 }}>{tmpls.map((t) => <span key={t.id} className="trg" style={{ background: 'var(--bg2)', borderRadius: 5, padding: '2px 6px', fontSize: 10, fontWeight: 600, color: 'var(--ink2)' }}>{t.icon} {t.name}</span>)}</div>
+                <div className="foot"><span style={{ flex: 1 }} />{all ? <button className="az-btn" onClick={() => setTab('active')}><Check size={14} />Active ({have})</button> : <button className="az-btn dark" disabled={busy === `pb:${pb.id}`} onClick={() => void enablePlaybook(pb.id)}>{busy === `pb:${pb.id}` ? 'Adding…' : have > 0 ? `Add ${tmpls.length - have} more` : 'Activate playbook'}</button>}</div>
+              </div>
+            )
+          })}
+        </div>
       </>}
 
       {tab === 'active' && <div style={{ paddingTop: 4 }}>
