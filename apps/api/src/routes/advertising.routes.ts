@@ -3766,6 +3766,30 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   // column and stores it on the TOP_OF_SEARCH placement rows. Calling this both
   // validates that Amazon accepts the metric (withIS > 0 + sample populated) and
   // performs the first ingest. Safe: failure is isolated to this fetch.
+  // Phase 2 — GET /api/advertising/execution-events — SSE stream for the
+  // Activity feed. Publishes automation.rule.fired whenever any advertising
+  // rule fires (matched, dry-run, failed, cap-exceeded). Reconnect via
+  // ?since=<ts> to replay the ring buffer since that timestamp.
+  fastify.get('/advertising/execution-events', async (request, reply) => {
+    const q = request.query as { since?: string }
+    const sinceMs = q.since ? Number(q.since) : 0
+    const { sseResponseHeaders } = await import('../lib/sse.js')
+    reply.raw.writeHead(200, sseResponseHeaders(request.headers.origin as string | undefined))
+    reply.raw.write(`event: ping\ndata: ${JSON.stringify({ ts: Date.now(), connected: true })}\n\n`)
+    const { subscribeAdsExecutions, replayAdsExecutionsSince } = await import('../services/ads-execution-events.service.js')
+    if (sinceMs > 0) {
+      for (const e of replayAdsExecutionsSince(sinceMs)) {
+        try { reply.raw.write(`event: ${e.type}\ndata: ${JSON.stringify(e)}\n\n`) } catch { break }
+      }
+    }
+    const send = (e: { type: string } & Record<string, unknown>) => {
+      try { reply.raw.write(`event: ${e.type}\ndata: ${JSON.stringify(e)}\n\n`) } catch { /* dead */ }
+    }
+    const unsub = subscribeAdsExecutions(send as never)
+    const hb = setInterval(() => { try { reply.raw.write(`event: ping\ndata: ${JSON.stringify({ ts: Date.now() })}\n\n`) } catch { clearInterval(hb) } }, 25_000)
+    reply.raw.on('close', () => { clearInterval(hb); unsub() })
+  })
+
   fastify.post('/advertising/debug/tos-is-ingest', async (request) => {
     const b = (request.body ?? {}) as { windowDays?: number; marketplace?: string }
     const { ingestTopOfSearchIS } = await import('../services/advertising/ads-tos-is-ingest.service.js')

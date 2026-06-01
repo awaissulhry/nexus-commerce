@@ -430,6 +430,18 @@ export interface EvaluateRuleResult {
  * The function returns even on failure — caller (cron / route)
  * decides whether to surface the failure to the operator.
  */
+// Phase 2 — extract campaign/marketplace context from the trigger payload for SSE events.
+function extractExecutionContext(ctx: unknown): { marketplace: string | null; campaignId: string | null; campaignName: string | null; externalCampaignId: string | null } {
+  const c = ctx as Record<string, unknown> | null | undefined
+  const camp = c?.campaign as Record<string, unknown> | undefined
+  return {
+    marketplace: (c?.marketplace as string | null) ?? null,
+    campaignId: (camp?.id as string | null) ?? null,
+    campaignName: (camp?.name as string | null) ?? null,
+    externalCampaignId: (camp?.externalCampaignId as string | null) ?? null,
+  }
+}
+
 export async function evaluateRule(args: EvaluateRuleArgs): Promise<EvaluateRuleResult> {
   const startedAt = Date.now()
   const rule = await prisma.automationRule.findUnique({ where: { id: args.ruleId } })
@@ -504,6 +516,10 @@ export async function evaluateRule(args: EvaluateRuleArgs): Promise<EvaluateRule
         },
         select: { id: true },
       })
+      void import('./ads-execution-events.service.js').then(m => {
+        const ctx = extractExecutionContext(args.context)
+        m.publishAdsExecution({ type: 'automation.rule.fired', executionId: exec.id, ruleId: rule.id, ruleName: rule.name, trigger: rule.trigger, status: 'CAP_EXCEEDED', dryRun: rule.dryRun, durationMs: Date.now() - startedAt, ...ctx, actionCount: 0, ts: Date.now() })
+      }).catch(() => {})
       return {
         ruleId: rule.id,
         matched: true,
@@ -599,6 +615,12 @@ export async function evaluateRule(args: EvaluateRuleArgs): Promise<EvaluateRule
       lastExecutedAt: new Date(),
     },
   })
+
+  // Phase 2 — publish to SSE activity feed (fire-and-forget; never throws).
+  void import('./ads-execution-events.service.js').then(m => {
+    const ctx = extractExecutionContext(args.context)
+    m.publishAdsExecution({ type: 'automation.rule.fired', executionId: exec.id, ruleId: rule.id, ruleName: rule.name, trigger: rule.trigger, status: status as never, dryRun, durationMs: Date.now() - startedAt, ...ctx, actionCount: actionResults.filter(a => a.ok).length, ts: Date.now() })
+  }).catch(() => {})
 
   return {
     ruleId: rule.id,
