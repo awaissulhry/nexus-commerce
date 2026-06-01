@@ -3463,6 +3463,12 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       'AD_TARGET_UNDERPERFORMING',
       'CAMPAIGN_PERFORMANCE_BUDGET',
       'SCHEDULE',
+      // evaluator also supports these keyword/search-term/conversion triggers
+      'CVR_DROP',
+      'KEYWORD_LOW_CTR',
+      'KEYWORD_WASTED_SPEND',
+      'KEYWORD_ZERO_IMPRESSIONS',
+      'SEARCH_TERM_CONVERTING',
     ])
     if (!ALLOWED_TRIGGERS.has(body.trigger)) {
       reply.code(400)

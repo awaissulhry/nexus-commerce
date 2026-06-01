@@ -1,23 +1,22 @@
 'use client'
 
 /**
- * Ads Console — Automation hub. Four tabs:
- *  • Library — the big catalogue (catalog.ts); one-click Enable creates a real
- *    rule (POST /automation-rules, seeded enabled:false + dryRun:true).
- *  • Active rules — GET /automation-rules; per-rule Active toggle (PATCH enabled),
- *    Dry-run↔Live (PATCH dryRun, confirm on going live), Test, Delete, counters.
- *  • Recommendations — GET /recommendations (live impact €/mo) + Apply.
- *  • Engine & autonomy — manual engine runs (bid/harvest/retail/dayparting) +
- *    autonomy state with Halt / Resume kill-switch.
- * Reuses the existing audited backend; all writes default to pending/dry-run.
+ * Ads Console — Automation hub. Tabs: Library (distinct, each-configurable
+ * automations) · Playbooks · Active rules (with bulk actions) · Dayparting ·
+ * Recommendations · Competitive · Retail · Budgets · Engine & autonomy ·
+ * Guardrails · Health. Every automation is one distinct concept, configured per
+ * use (Configurator) or quick-added with defaults; bulk-add from the library and
+ * bulk enable/pause/dry-run/delete in Active rules. Reuses the audited backend;
+ * everything is created disabled + dry-run.
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Search, Zap, FlaskConical, Trash2, Check, TrendingUp, ShieldAlert, RefreshCw, Play, Pause, Sparkles, Plus } from 'lucide-react'
+import { Search, Zap, FlaskConical, Trash2, Check, TrendingUp, ShieldAlert, RefreshCw, Play, Pause, Sparkles, Plus, Sliders } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
-import { CATALOG, CATEGORIES, CATALOG_COUNT, type AutoTemplate } from './catalog'
+import { AUTOMATIONS, CATEGORIES, AUTOMATION_COUNT, buildRule, type AutomationDef } from './automations'
 import { RuleBuilder } from './RuleBuilder'
-import { PLAYBOOKS, playbookAutomations as playbookTemplates } from './playbooks'
+import { Configurator } from './Configurator'
+import { PLAYBOOKS, playbookAutomations } from './playbooks'
 import { DaypartingTab } from './DaypartingTab'
 import { HealthTab } from './HealthTab'
 import { SovTab } from './SovTab'
@@ -37,6 +36,7 @@ const TABS = [
   { k: 'guardrails', label: 'Guardrails' }, { k: 'health', label: 'Health' },
 ]
 const eur = (c: number | null | undefined) => (c == null ? '—' : new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(c / 100))
+const trgLabel = (t: string) => (t === 'SCHEDULE' ? 'SCHEDULED' : t.replace(/_/g, ' '))
 const post = (path: string, body?: unknown) => fetch(`${getBackendUrl()}/api/advertising/${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined })
 const patch = (id: string, body: Record<string, unknown>) => fetch(`${getBackendUrl()}/api/advertising/automation-rules/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
 
@@ -50,7 +50,9 @@ export function AutomationHub({ initialRules, initialState }: { initialRules: Ru
   const [recs, setRecs] = useState<RecResp | null>(null)
   const [engineMsg, setEngineMsg] = useState<Record<string, string>>({})
   const [showBuilder, setShowBuilder] = useState(false)
-  const [libVisible, setLibVisible] = useState(48)
+  const [configuring, setConfiguring] = useState<AutomationDef | null>(null)
+  const [sel, setSel] = useState<Set<string>>(new Set())          // library multi-select
+  const [selRules, setSelRules] = useState<Set<string>>(new Set()) // active-rules multi-select
 
   const refetchRules = useCallback(async () => {
     const d = await fetch(`${getBackendUrl()}/api/advertising/automation-rules`, { cache: 'no-store' }).then((r) => r.json()).catch(() => ({ items: [] }))
@@ -60,58 +62,49 @@ export function AutomationHub({ initialRules, initialState }: { initialRules: Ru
     const d = await fetch(`${getBackendUrl()}/api/advertising/automation/state`, { cache: 'no-store' }).then((r) => r.json()).catch(() => null)
     setState(d)
   }, [])
-  useEffect(() => {
-    void fetch(`${getBackendUrl()}/api/advertising/recommendations?limit=80`, { cache: 'no-store' }).then((r) => r.json()).then(setRecs).catch(() => {})
-  }, [])
+  useEffect(() => { void fetch(`${getBackendUrl()}/api/advertising/recommendations?limit=80`, { cache: 'no-store' }).then((r) => r.json()).then(setRecs).catch(() => {}) }, [])
 
   const ruleNames = useMemo(() => new Set(rules.map((r) => r.name)), [rules])
   const liveCount = rules.filter((r) => r.enabled && !r.dryRun).length
   const activeCount = rules.filter((r) => r.enabled).length
 
-  const enableTemplate = async (t: AutoTemplate) => {
-    setBusy(t.id)
-    try {
-      await post('automation-rules', { name: t.name, description: t.desc, trigger: t.trigger, conditions: t.conditions, actions: t.actions, maxExecutionsPerDay: t.maxExecutionsPerDay, maxValueCentsEur: t.maxValueCentsEur ?? null, maxDailyAdSpendCentsEur: t.maxDailyAdSpendCentsEur ?? null })
-      await refetchRules()
-    } finally { setBusy(null) }
-  }
-  const enablePlaybook = async (pid: string) => {
-    const pb = PLAYBOOKS.find((p) => p.id === pid); if (!pb) return
-    setBusy(`pb:${pid}`)
-    try {
-      for (const t of playbookTemplates(pb)) {
-        if (ruleNames.has(t.name)) continue
-        const spec = t.build({}); await post('automation-rules', { name: t.name, description: t.desc, trigger: t.trigger, conditions: spec.conditions, actions: spec.actions, maxExecutionsPerDay: spec.maxExecutionsPerDay ?? null, maxValueCentsEur: null, maxDailyAdSpendCentsEur: spec.maxDailyAdSpendCentsEur ?? null })
-      }
-      await refetchRules()
-    } finally { setBusy(null) }
-  }
+  const createFromDef = (def: AutomationDef) => { const b = buildRule(def); return post('automation-rules', { name: def.name, description: def.desc, trigger: def.trigger, conditions: b.conditions, actions: b.actions, maxExecutionsPerDay: b.maxExecutionsPerDay, maxDailyAdSpendCentsEur: b.maxDailyAdSpendCentsEur ?? null }) }
+  const addAutomation = async (def: AutomationDef) => { setBusy(def.id); try { await createFromDef(def); await refetchRules() } finally { setBusy(null) } }
+  const addSelected = async () => { setBusy('bulk'); try { for (const id of sel) { const def = AUTOMATIONS.find((a) => a.id === id); if (def && !ruleNames.has(def.name)) await createFromDef(def) } setSel(new Set()); await refetchRules() } finally { setBusy(null) } }
+  const enablePlaybook = async (pid: string) => { const pb = PLAYBOOKS.find((p) => p.id === pid); if (!pb) return; setBusy(`pb:${pid}`); try { for (const def of playbookAutomations(pb)) { if (!ruleNames.has(def.name)) await createFromDef(def) } await refetchRules() } finally { setBusy(null) } }
+
   const toggleEnabled = async (r: Rule) => { setBusy(r.id); try { await patch(r.id, { enabled: !r.enabled }); await refetchRules() } finally { setBusy(null) } }
-  const toggleLive = async (r: Rule) => {
-    if (r.dryRun && typeof window !== 'undefined' && !window.confirm(`Run "${r.name}" LIVE? It will make real changes to your campaigns (subject to your guardrails + per-campaign allowlist).`)) return
-    setBusy(r.id); try { await patch(r.id, { dryRun: !r.dryRun }); await refetchRules() } finally { setBusy(null) }
-  }
+  const toggleLive = async (r: Rule) => { if (r.dryRun && typeof window !== 'undefined' && !window.confirm(`Run "${r.name}" LIVE? It will make real changes to your campaigns (within your guardrails + per-campaign allowlist).`)) return; setBusy(r.id); try { await patch(r.id, { dryRun: !r.dryRun }); await refetchRules() } finally { setBusy(null) } }
   const testRule = async (r: Rule) => { setBusy(r.id); try { const res = await post(`automation-rules/${r.id}/test`).then((x) => x.json()).catch(() => null); setEngineMsg((m) => ({ ...m, [r.id]: res ? `Tested · ${res.matched ?? res.matches ?? 0} match(es)` : 'Tested' })) } finally { setBusy(null) } }
   const deleteRule = async (r: Rule) => { if (typeof window !== 'undefined' && !window.confirm(`Delete "${r.name}"?`)) return; setBusy(r.id); try { await fetch(`${getBackendUrl()}/api/advertising/automation-rules/${r.id}`, { method: 'DELETE' }); await refetchRules() } finally { setBusy(null) } }
-  const applyRec = async (rec: Rec) => { setBusy(rec.id); try { await post('recommendations/apply', { id: rec.id, kind: rec.apply?.kind, payload: rec.apply?.payload }); await fetch(`${getBackendUrl()}/api/advertising/recommendations?limit=80`, { cache: 'no-store' }).then((r) => r.json()).then(setRecs) } finally { setBusy(null) } }
-  const runEngine = async (key: string, path: string, label: string) => {
-    if (typeof window !== 'undefined' && !window.confirm(`Run ${label} now? It honours each rule's dry-run setting (dry-run rules only preview).`)) return
-    setBusy(key); setEngineMsg((m) => ({ ...m, [key]: 'Running…' }))
-    try { const res = await post(path, {}).then((x) => x.json()).catch(() => null); setEngineMsg((m) => ({ ...m, [key]: res ? (res.message ?? `Done · ${res.applied ?? res.count ?? res.changed ?? 0} action(s)`) : 'Done' })) } finally { setBusy(null) }
+  const bulkRules = async (action: 'enable' | 'pause' | 'dry' | 'live' | 'delete') => {
+    const ids = [...selRules]; if (!ids.length) return
+    if (action === 'delete' && typeof window !== 'undefined' && !window.confirm(`Delete ${ids.length} rule(s)?`)) return
+    if (action === 'live' && typeof window !== 'undefined' && !window.confirm(`Set ${ids.length} rule(s) LIVE? Real changes will be made.`)) return
+    setBusy('bulkrules')
+    try {
+      for (const id of ids) {
+        if (action === 'delete') await fetch(`${getBackendUrl()}/api/advertising/automation-rules/${id}`, { method: 'DELETE' })
+        else await patch(id, action === 'enable' ? { enabled: true } : action === 'pause' ? { enabled: false } : action === 'dry' ? { dryRun: true } : { dryRun: false })
+      }
+      setSelRules(new Set()); await refetchRules()
+    } finally { setBusy(null) }
   }
+  const applyRec = async (rec: Rec) => { setBusy(rec.id); try { await post('recommendations/apply', { id: rec.id, kind: rec.apply?.kind, payload: rec.apply?.payload }); await fetch(`${getBackendUrl()}/api/advertising/recommendations?limit=80`, { cache: 'no-store' }).then((r) => r.json()).then(setRecs) } finally { setBusy(null) } }
+  const runEngine = async (key: string, path: string, label: string) => { if (typeof window !== 'undefined' && !window.confirm(`Run ${label} now? It honours each rule's dry-run setting.`)) return; setBusy(key); setEngineMsg((m) => ({ ...m, [key]: 'Running…' })); try { const res = await post(path, {}).then((x) => x.json()).catch(() => null); setEngineMsg((m) => ({ ...m, [key]: res ? (res.message ?? `Done · ${res.applied ?? res.count ?? res.changed ?? 0} action(s)`) : 'Done' })) } finally { setBusy(null) } }
   const setHalt = async (halt: boolean) => { setBusy('halt'); try { await post(halt ? 'automation/halt' : 'automation/resume', halt ? { reason: 'Manual halt from console' } : undefined); await refetchState() } finally { setBusy(null) } }
 
-  const filtered = useMemo(() => {
-    const ql = q.trim().toLowerCase()
-    return CATALOG.filter((t) => (cat === 'All' || t.category === cat) && (!ql || t.name.toLowerCase().includes(ql) || t.desc.toLowerCase().includes(ql) || t.category.toLowerCase().includes(ql)))
-  }, [cat, q])
+  const filtered = useMemo(() => { const ql = q.trim().toLowerCase(); return AUTOMATIONS.filter((a) => (cat === 'All' || a.category === cat) && (!ql || a.name.toLowerCase().includes(ql) || a.desc.toLowerCase().includes(ql) || a.category.toLowerCase().includes(ql))) }, [cat, q])
+  const toggleSel = (id: string) => setSel((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n })
+  const toggleSelRule = (id: string) => setSelRules((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n })
+  const allRulesSel = rules.length > 0 && rules.every((r) => selRules.has(r.id))
 
   return (
     <div className="az-wrap">
       <div className="az-listhead"><span className="title"><Zap size={18} style={{ marginRight: 6, color: 'var(--orange)' }} />Automation</span><span style={{ flex: 1 }} /></div>
 
       <div className="az-hero">
-        <div className="az-stat"><div className="k">Ready automations</div><div className="v">{CATALOG_COUNT}</div><div className="s">+ unlimited custom rules</div></div>
+        <div className="az-stat"><div className="k">Automations</div><div className="v">{AUTOMATION_COUNT}</div><div className="s">distinct · each fully configurable</div></div>
         <div className="az-stat"><div className="k">Active rules</div><div className="v">{activeCount}</div><div className="s">{liveCount} live · {activeCount - liveCount} dry-run</div></div>
         <div className="az-stat"><div className="k">Opportunity / mo</div><div className="v" style={{ color: 'var(--green)' }}>{recs ? eur(recs.potentialMonthlyImpactCents) : '…'}</div><div className="s">{recs?.recommendations?.length ?? 0} recommendations</div></div>
         <div className="az-stat"><div className="k">Engine</div><div className="v" style={{ color: state?.effectivelyStopped ? '#cc1100' : 'var(--green)' }}>{state?.effectivelyStopped ? 'Halted' : state?.autonomy ?? 'AUTO'}</div><div className="s">{state?.halted ? 'kill-switch on' : 'running'}</div></div>
@@ -121,49 +114,49 @@ export function AutomationHub({ initialRules, initialState }: { initialRules: Ru
 
       {tab === 'library' && <>
         <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap', marginBottom: 4 }}>
-          <div className="az-search" style={{ minWidth: 300 }}><Search size={15} /><input placeholder="Search automations…" value={q} onChange={(e) => { setQ(e.target.value); setLibVisible(48) }} /></div>
-          <span style={{ color: 'var(--ink2)', fontSize: 12 }}>{filtered.length} of {CATALOG_COUNT}</span>
+          <div className="az-search" style={{ minWidth: 300 }}><Search size={15} /><input placeholder="Search automations…" value={q} onChange={(e) => setQ(e.target.value)} /></div>
+          <span style={{ color: 'var(--ink2)', fontSize: 12 }}>{filtered.length} of {AUTOMATION_COUNT}</span>
+          {sel.size > 0 && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}><b>{sel.size} selected</b><button className="az-btn dark" disabled={busy === 'bulk'} onClick={() => void addSelected()}>{busy === 'bulk' ? 'Adding…' : `Add ${sel.size}`}</button><button className="az-link" onClick={() => setSel(new Set())}>Clear</button></span>}
           <span style={{ flex: 1 }} />
           <button className="az-btn dark" onClick={() => setShowBuilder(true)}><Plus size={15} />Build custom rule</button>
         </div>
-        <div className="az-cats">{CATEGORIES.map((c) => <button key={c} className={`az-cat ${cat === c ? 'on' : ''}`} onClick={() => { setCat(c); setLibVisible(48) }}>{c}</button>)}</div>
+        <div className="az-cats">{CATEGORIES.map((c) => <button key={c} className={`az-cat ${cat === c ? 'on' : ''}`} onClick={() => setCat(c)}>{c}</button>)}</div>
         <div className="az-libgrid">
-          {filtered.slice(0, libVisible).map((t) => {
+          {filtered.map((t) => {
             const added = ruleNames.has(t.name)
             return (
-              <div key={t.id} className={`az-tmpl ${t.marquee ? 'marquee' : ''}`}>
-                <div className="top"><span className="ic">{t.icon}</span><span className="nm">{t.name}</span></div>
+              <div key={t.id} className={`az-tmpl ${t.marquee ? 'marquee' : ''} ${sel.has(t.id) ? 'picked' : ''}`}>
+                <div className="top"><input type="checkbox" className="az-check" checked={sel.has(t.id)} onChange={() => toggleSel(t.id)} aria-label={`Select ${t.name}`} /><span className="ic">{t.icon}</span><span className="nm">{t.name}</span></div>
                 <div className="cat">{t.category}{t.marquee ? ' · ★ flagship' : ''}</div>
                 <div className="d">{t.desc}</div>
                 <div className="foot">
-                  <span className="trg">{t.trigger === 'SCHEDULE' ? 'SCHEDULED' : t.trigger.replace(/_/g, ' ')}</span>
+                  <span className="trg">{trgLabel(t.trigger)}</span>
                   <span style={{ flex: 1 }} />
                   {added
-                    ? <button className="az-btn" onClick={() => setTab('active')}><Check size={14} />In your rules</button>
-                    : <button className="az-btn dark" disabled={busy === t.id} onClick={() => void enableTemplate(t)}>{busy === t.id ? 'Adding…' : 'Add'}</button>}
+                    ? <button className="az-btn" onClick={() => setTab('active')}><Check size={14} />In rules</button>
+                    : <><button className="az-btn" onClick={() => setConfiguring(t)} title="Configure parameters"><Sliders size={13} />Configure</button><button className="az-btn dark" disabled={busy === t.id} onClick={() => void addAutomation(t)}>{busy === t.id ? '…' : 'Add'}</button></>}
                 </div>
               </div>
             )
           })}
         </div>
-        {filtered.length > libVisible && <div style={{ textAlign: 'center', padding: '14px 0' }}><button className="az-btn" onClick={() => setLibVisible((v) => v + 60)}>Load {Math.min(60, filtered.length - libVisible)} more · {filtered.length - libVisible} left</button></div>}
-        <div style={{ color: 'var(--ink2)', fontSize: 12, padding: '14px 2px' }}>Every automation is added <b>disabled + in dry-run</b> — flip it on (and later to live) from the Active rules tab when you’re ready. Need something bespoke? <button className="az-link" onClick={() => setShowBuilder(true)}>Build a custom rule</button>.</div>
+        <div style={{ color: 'var(--ink2)', fontSize: 12, padding: '14px 2px' }}>Every automation is distinct and fully configurable — hit <b>Configure</b> to tune it, or <b>Add</b> with smart defaults (select several for a bulk add). All are added <b>disabled + dry-run</b>; turn them on from Active rules. Need something bespoke? <button className="az-link" onClick={() => setShowBuilder(true)}>Build a custom rule</button>.</div>
       </>}
 
       {tab === 'playbooks' && <>
         <div style={{ color: 'var(--ink2)', fontSize: 12.5, padding: '4px 2px 14px' }}>Adopt a whole strategy in one click — each playbook adds several coordinated automations at once (disabled + dry-run, as always).</div>
         <div className="az-libgrid">
           {PLAYBOOKS.map((pb) => {
-            const tmpls = playbookTemplates(pb)
-            const have = tmpls.filter((t) => ruleNames.has(t.name)).length
-            const all = tmpls.length > 0 && have === tmpls.length
+            const autos = playbookAutomations(pb)
+            const have = autos.filter((a) => ruleNames.has(a.name)).length
+            const all = autos.length > 0 && have === autos.length
             return (
               <div key={pb.id} className="az-tmpl marquee">
                 <div className="top"><span className="ic">{pb.icon}</span><span className="nm">{pb.name}</span></div>
-                <div className="cat">{pb.goal} · {tmpls.length} automations</div>
+                <div className="cat">{pb.goal} · {autos.length} automations</div>
                 <div className="d">{pb.desc}</div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 10 }}>{tmpls.map((t) => <span key={t.id} className="trg" style={{ background: 'var(--bg2)', borderRadius: 5, padding: '2px 6px', fontSize: 10, fontWeight: 600, color: 'var(--ink2)' }}>{t.icon} {t.name}</span>)}</div>
-                <div className="foot"><span style={{ flex: 1 }} />{all ? <button className="az-btn" onClick={() => setTab('active')}><Check size={14} />Active ({have})</button> : <button className="az-btn dark" disabled={busy === `pb:${pb.id}`} onClick={() => void enablePlaybook(pb.id)}>{busy === `pb:${pb.id}` ? 'Adding…' : have > 0 ? `Add ${tmpls.length - have} more` : 'Activate playbook'}</button>}</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 10 }}>{autos.map((a) => <span key={a.id} className="trg" style={{ background: 'var(--bg2)', borderRadius: 5, padding: '2px 6px', fontSize: 10, fontWeight: 600, color: 'var(--ink2)' }}>{a.icon} {a.name}</span>)}</div>
+                <div className="foot"><span style={{ flex: 1 }} />{all ? <button className="az-btn" onClick={() => setTab('active')}><Check size={14} />Active ({have})</button> : <button className="az-btn dark" disabled={busy === `pb:${pb.id}`} onClick={() => void enablePlaybook(pb.id)}>{busy === `pb:${pb.id}` ? 'Adding…' : have > 0 ? `Add ${autos.length - have} more` : 'Activate playbook'}</button>}</div>
               </div>
             )
           })}
@@ -171,12 +164,21 @@ export function AutomationHub({ initialRules, initialState }: { initialRules: Ru
       </>}
 
       {tab === 'active' && <div style={{ paddingTop: 4 }}>
+        {rules.length > 0 && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10, flexWrap: 'wrap' }}>
+            <label className="az-rowstat" style={{ fontSize: 12.5, cursor: 'pointer' }}><input type="checkbox" className="az-check" checked={allRulesSel} onChange={(e) => setSelRules(e.target.checked ? new Set(rules.map((r) => r.id)) : new Set())} style={{ marginRight: 6 }} />Select all</label>
+            {selRules.size > 0
+              ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}><b>{selRules.size} selected</b><button className="az-btn" disabled={busy === 'bulkrules'} onClick={() => void bulkRules('enable')}><Play size={13} />Enable</button><button className="az-btn" disabled={busy === 'bulkrules'} onClick={() => void bulkRules('pause')}><Pause size={13} />Pause</button><button className="az-btn" disabled={busy === 'bulkrules'} onClick={() => void bulkRules('dry')}>Dry-run</button><button className="az-btn" disabled={busy === 'bulkrules'} onClick={() => void bulkRules('live')} style={{ color: '#cc1100', borderColor: '#f4c7c0' }}>Set live</button><button className="az-btn" disabled={busy === 'bulkrules'} onClick={() => void bulkRules('delete')} style={{ color: '#cc1100', borderColor: '#f4c7c0' }}><Trash2 size={13} />Delete</button><button className="az-link" onClick={() => setSelRules(new Set())}>Clear</button></span>
+              : <span style={{ color: 'var(--ink2)', fontSize: 12 }}>{activeCount} active · {liveCount} live · select rules for bulk actions</span>}
+          </div>
+        )}
         {rules.length === 0 && <div className="az-empty" style={{ border: '1px solid var(--divider)', borderRadius: 10 }}>No rules yet — add some from the Library.</div>}
         {rules.map((r) => (
-          <div key={r.id} className="az-rule">
+          <div key={r.id} className={`az-rule ${selRules.has(r.id) ? 'sel' : ''}`}>
+            <input type="checkbox" className="az-check" checked={selRules.has(r.id)} onChange={() => toggleSelRule(r.id)} aria-label={`Select ${r.name}`} />
             <button className={`az-toggle ${r.enabled ? 'on' : ''}`} disabled={busy === r.id} onClick={() => void toggleEnabled(r)} aria-label="Enable rule" title={r.enabled ? 'Enabled' : 'Disabled'}><i /></button>
             <div className="nm"><div className="t">{r.name}</div><div className="d2">{r.description}</div></div>
-            <span className="trg" style={{ background: 'var(--bg2)', borderRadius: 5, padding: '2px 7px', fontSize: 10, fontWeight: 700, color: 'var(--ink2)' }}>{r.trigger === 'SCHEDULE' ? 'SCHEDULED' : r.trigger.replace(/_/g, ' ')}</span>
+            <span className="trg" style={{ background: 'var(--bg2)', borderRadius: 5, padding: '2px 7px', fontSize: 10, fontWeight: 700, color: 'var(--ink2)' }}>{trgLabel(r.trigger)}</span>
             <div className="stat"><b>{r.executionCount ?? 0}</b>runs</div>
             <button className={`az-live ${r.dryRun ? 'dry' : 'on'}`} disabled={busy === r.id} onClick={() => void toggleLive(r)} title="Toggle dry-run / live">{r.dryRun ? 'Dry run' : 'LIVE'}</button>
             <button className="az-btn" disabled={busy === r.id} onClick={() => void testRule(r)} title="Test against current data"><FlaskConical size={14} /></button>
@@ -235,6 +237,7 @@ export function AutomationHub({ initialRules, initialState }: { initialRules: Ru
       {tab === 'guardrails' && <GuardrailsTab />}
       {tab === 'health' && <HealthTab />}
 
+      {configuring && <Configurator def={configuring} onClose={() => setConfiguring(null)} onSaved={() => { void refetchRules() }} />}
       {showBuilder && <RuleBuilder onClose={() => setShowBuilder(false)} onSaved={() => { void refetchRules() }} />}
     </div>
   )

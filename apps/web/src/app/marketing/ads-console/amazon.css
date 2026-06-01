@@ -350,7 +350,9 @@
 .az-libgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(312px, 1fr)); gap: 14px; }
 .az-tmpl { border: 1px solid var(--divider); border-radius: 10px; background: #fff; padding: 15px 16px; display: flex; flex-direction: column; }
 .az-tmpl.marquee { border-color: #f3c98b; box-shadow: 0 0 0 1px #f7dcae inset; }
+.az-tmpl.picked { border-color: var(--blue); box-shadow: 0 0 0 1px var(--blue) inset; }
 .az-tmpl .top { display: flex; align-items: center; gap: 9px; }
+.az-tmpl .top .az-check { flex: none; }
 .az-tmpl .ic { font-size: 19px; line-height: 1; }
 .az-tmpl .nm { font-weight: 700; font-size: 13.5px; flex: 1; }
 .az-tmpl .cat { color: var(--ink2); font-size: 11px; font-weight: 600; }

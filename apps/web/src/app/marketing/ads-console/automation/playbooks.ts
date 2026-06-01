@@ -1,12 +1,10 @@
 /**
- * Playbooks — one-click strategy bundles. A playbook enables several catalogue
- * automations at once so an operator can adopt a whole posture ("Profit
- * Autopilot", "Margin Defender", …) in a single click instead of wiring rules
- * one by one. Each references catalogue template ids (resolved at enable time;
- * missing ids are skipped, so this stays safe even if the catalogue shifts).
+ * Playbooks — one-click strategy bundles. A playbook activates several distinct
+ * automations at once so an operator adopts a whole posture in a single click.
+ * References automation ids (resolved at enable time; missing ids are skipped).
  */
 
-import { CATALOG, type AutoTemplate } from './catalog'
+import { AUTOMATIONS, type AutomationDef } from './automations'
 
 export interface Playbook {
   id: string
@@ -14,51 +12,19 @@ export interface Playbook {
   icon: string
   goal: string
   desc: string
-  templateIds: string[]
+  automationIds: string[]
 }
 
 export const PLAYBOOKS: Playbook[] = [
-  {
-    id: 'profit-autopilot', name: 'Profit Autopilot', icon: '🤖', goal: 'Hands-off profitable growth',
-    desc: 'The full set-and-forget stack: profit-native bid optimisation, daily harvest & negate, retail guard, and a €2k monthly safety cap. The closest thing to a 24/7 PPC manager.',
-    templateIds: ['profit-bidding', 'harvest-60-2-10', 'retail-guard', 'cap-2000'],
-  },
-  {
-    id: 'margin-defender', name: 'Margin Defender', icon: '🛟', goal: 'Protect profitability',
-    desc: 'Clamps down the moment ads stop paying: trim budget at ACOS ≥ 40%, bid −20% at ACOS ≥ 50%, auto-defend on profit breach, and alert on negative ad margin.',
-    templateIds: ['trim-40-15', 'bid-down-50-20', 'negative-margin-defend', 'negative-margin-alert'],
-  },
-  {
-    id: 'aggressive-growth', name: 'Aggressive Growth', icon: '🚀', goal: 'Scale winners fast',
-    desc: 'Lean into momentum: target-ACOS bid optimisation, scale budget +20% on ROAS ≥ 3 winners, and aggressive harvesting of converting terms.',
-    templateIds: ['target-acos-bidding', 'scale-3-20', 'harvest-30-1-5'],
-  },
-  {
-    id: 'waste-eliminator', name: 'Waste Eliminator', icon: '🧹', goal: 'Kill wasted spend',
-    desc: 'Stops the bleed: pause targets that spent €20 with no sales, negate wasted search terms, and bid −25% on campaigns over 80% ACOS.',
-    templateIds: ['prune-20-0', 'harvest-60-2-10', 'bid-down-80-25'],
-  },
-  {
-    id: 'launch-mode', name: 'Launch Mode', icon: '🎬', goal: 'Win a new product launch',
-    desc: 'Discovery-first for new ASINs: short-window harvesting to find converting terms fast, plus eager budget scaling on early ROAS ≥ 2.5 signals.',
-    templateIds: ['harvest-14-1-5', 'scale-2.5-25'],
-  },
-  {
-    id: 'inventory-safe', name: 'Inventory-Safe', icon: '📦', goal: 'Never waste spend on dead stock',
-    desc: 'Inventory-aware defense: pause ads on out-of-stock / lost-Buy-Box products, and auto-liquidate stock nearing long-term-storage with a promo.',
-    templateIds: ['retail-guard', 'aged-14'],
-  },
-  {
-    id: 'tight-budget', name: 'Tight Budget', icon: '🪙', goal: 'Spend every euro well on a small budget',
-    desc: 'For lean budgets: a hard €1k monthly cap, ACOS ≥ 35% bid cuts, and pause targets after just €10 of wasted spend.',
-    templateIds: ['cap-1000', 'bid-down-35-15', 'prune-10-0'],
-  },
-  {
-    id: 'set-and-forget', name: 'Set & Forget Lite', icon: '😌', goal: 'Safe automation for beginners',
-    desc: 'A gentle starting posture: profit bid optimisation, harvest & negate, and a negative-margin alert (notify-only) — nothing aggressive.',
-    templateIds: ['profit-bidding', 'harvest-60-2-10', 'negative-margin-alert'],
-  },
+  { id: 'profit-autopilot', name: 'Profit Autopilot', icon: '🤖', goal: 'Hands-off profitable growth', desc: 'The full set-and-forget stack: profit-native bid optimisation, daily harvest & negate, retail guard, and a monthly spend cap.', automationIds: ['profit-bid-opt', 'harvest-negate', 'retail-guard', 'monthly-cap'] },
+  { id: 'margin-defender', name: 'Margin Defender', icon: '🛟', goal: 'Protect profitability', desc: 'Clamps down when ads stop paying: trim budget on weak ACOS, cut bids on spikes, bid down on profit breach, and alert on negative margin.', automationIds: ['trim-budget-losers', 'cut-bids-acos', 'biddown-profit-breach', 'alert-profit-breach'] },
+  { id: 'aggressive-growth', name: 'Aggressive Growth', icon: '🚀', goal: 'Scale winners fast', desc: 'Lean into momentum: target-ACOS bidding, scale budget on capped winners, and aggressive harvesting.', automationIds: ['target-acos-bid-opt', 'scale-budget-winners', 'harvest-negate'] },
+  { id: 'waste-eliminator', name: 'Waste Eliminator', icon: '🧹', goal: 'Kill wasted spend', desc: 'Stop the bleed: pause dead targets, negate wasted terms, and drop wasted keywords to the bid floor.', automationIds: ['pause-wasted-adgroup', 'negate-wasted-term', 'floor-wasted-kw'] },
+  { id: 'launch-mode', name: 'Launch Mode', icon: '🎬', goal: 'Win a new product launch', desc: 'Discovery-first for new ASINs: promote converting terms, scale budget on early winners, and boost starved keywords.', automationIds: ['promote-converting', 'scale-budget-winners', 'boost-no-impressions'] },
+  { id: 'inventory-safe', name: 'Inventory-Safe', icon: '📦', goal: 'Never waste spend on dead stock', desc: 'Inventory-aware defense: retail guard on stock & Buy Box, plus auto-liquidation of aged stock.', automationIds: ['retail-guard', 'liquidate-aged'] },
+  { id: 'tight-budget', name: 'Tight Budget', icon: '🪙', goal: 'Spend every euro well', desc: 'For lean budgets: a hard monthly cap, ACOS bid cuts, and archiving of wasted keywords.', automationIds: ['monthly-cap', 'cut-bids-acos', 'archive-wasted-kw'] },
+  { id: 'set-and-forget', name: 'Set & Forget Lite', icon: '😌', goal: 'Safe automation for beginners', desc: 'A gentle posture: profit bid optimisation, harvest & negate, and a negative-margin alert (notify-only).', automationIds: ['profit-bid-opt', 'harvest-negate', 'alert-profit-breach'] },
 ]
 
-export const playbookTemplates = (p: Playbook): AutoTemplate[] =>
-  p.templateIds.map((id) => CATALOG.find((t) => t.id === id)).filter((t): t is AutoTemplate => !!t)
+export const playbookAutomations = (p: Playbook): AutomationDef[] =>
+  p.automationIds.map((id) => AUTOMATIONS.find((a) => a.id === id)).filter((a): a is AutomationDef => !!a)
