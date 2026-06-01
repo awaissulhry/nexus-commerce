@@ -700,6 +700,61 @@ async function buildCampaignNoSalesContexts() {
   } catch (e) { logger.warn('[ads-rule-evaluator] buildCampaignNoSalesContexts failed', { error: (e as Error).message }); return [] }
 }
 
+// ── SEARCH_TERM_WASTING (E6) ──────────────────────────────────────────
+// Search terms (not keywords) burning spend with zero orders — feed straight
+// into add_negative_exact to negate the exact query. Distinct from
+// KEYWORD_WASTED_SPEND (keyword entity) and the batch harvest cron.
+async function buildSearchTermWastingContexts() {
+  try {
+    const since = new Date(); since.setUTCDate(since.getUTCDate() - 30); since.setUTCHours(0, 0, 0, 0)
+    const terms = await prisma.amazonAdsSearchTerm.groupBy({
+      by: ['query', 'campaignId', 'adGroupId', 'marketplace'],
+      where: { date: { gte: since } },
+      _sum: { orders7d: true, clicks: true, costMicros: true },
+      having: { orders7d: { _sum: { equals: 0 } } },
+    })
+    return terms
+      .map((t) => ({ t, spend: microsToCents(t._sum.costMicros), clicks: t._sum.clicks ?? 0 }))
+      .filter((x) => x.spend >= 300 && x.clicks >= 5)
+      .sort((a, b) => b.spend - a.spend)
+      .slice(0, 300)
+      .map(({ t, spend, clicks }) => ({
+        trigger: 'SEARCH_TERM_WASTING' as const,
+        marketplace: t.marketplace,
+        searchTerm: { query: t.query, externalCampaignId: t.campaignId, externalAdGroupId: t.adGroupId, spendCents: spend, clicks, orders: 0 },
+      }))
+  } catch (e) { logger.warn('[ads-rule-evaluator] buildSearchTermWastingContexts failed', { error: (e as Error).message }); return [] }
+}
+
+// ── CAMPAIGN_ROAS_DECLINING (E7) ──────────────────────────────────────
+// Campaigns whose ROAS dropped >30% week-over-week off a viable base — an
+// efficiency-trend signal (distinct from absolute ACOS spike or keyword CVR).
+async function buildCampaignRoasDecliningContexts() {
+  try {
+    const thisWeekStart = new Date(); thisWeekStart.setUTCDate(thisWeekStart.getUTCDate() - 7); thisWeekStart.setUTCHours(0, 0, 0, 0)
+    const prevWeekStart = new Date(thisWeekStart); prevWeekStart.setUTCDate(thisWeekStart.getUTCDate() - 7)
+    const campaigns = await prisma.campaign.findMany({ where: { status: 'ENABLED' }, select: { id: true, name: true, externalCampaignId: true, marketplace: true } })
+    if (campaigns.length === 0) return []
+    const ids = campaigns.map((c) => c.id)
+    const [thisWk, prevWk] = await Promise.all([
+      prisma.amazonAdsDailyPerformance.groupBy({ by: ['localEntityId'], where: { entityType: 'CAMPAIGN', localEntityId: { in: ids }, date: { gte: thisWeekStart } }, _sum: { costMicros: true, sales7dCents: true } }),
+      prisma.amazonAdsDailyPerformance.groupBy({ by: ['localEntityId'], where: { entityType: 'CAMPAIGN', localEntityId: { in: ids }, date: { gte: prevWeekStart, lt: thisWeekStart } }, _sum: { costMicros: true, sales7dCents: true } }),
+    ])
+    const roasOf = (s: number, c: number) => (c > 0 ? s / c : 0)
+    const prevMap = new Map(prevWk.map((p) => [p.localEntityId, roasOf(p._sum.sales7dCents ?? 0, microsToCents(p._sum.costMicros))]))
+    const thisMap = new Map(thisWk.map((p) => [p.localEntityId, { roas: roasOf(p._sum.sales7dCents ?? 0, microsToCents(p._sum.costMicros)), spend: microsToCents(p._sum.costMicros) }]))
+    return campaigns
+      .map((c) => ({ c, now: thisMap.get(c.id), prev: prevMap.get(c.id) }))
+      .filter((x) => !!x.now && x.prev !== undefined && (x.prev as number) >= 1 && x.now!.spend >= 500 && x.now!.roas < (x.prev as number) * 0.7)
+      .slice(0, 200)
+      .map(({ c, now, prev }) => ({
+        trigger: 'CAMPAIGN_ROAS_DECLINING' as const,
+        marketplace: c.marketplace,
+        campaign: { id: c.id, externalCampaignId: c.externalCampaignId, name: c.name, roas: now!.roas, previousRoas: prev as number, spendCents: now!.spend, declinePct: Math.round((1 - now!.roas / (prev as number)) * 100) },
+      }))
+  } catch (e) { logger.warn('[ads-rule-evaluator] buildCampaignRoasDecliningContexts failed', { error: (e as Error).message }); return [] }
+}
+
 export async function runAdvertisingRuleEvaluatorOnce(): Promise<TickSummary> {
   const startedAt = Date.now()
   // AME.14 — global kill-switch. When set, NO advertising rule auto-applies
@@ -725,7 +780,8 @@ export async function runAdvertisingRuleEvaluatorOnce(): Promise<TickSummary> {
   const [fbaAge, profitability, cacSpike, underperform, campaignBudget,
     zeroImpression, lowCtr, cvrDrop, wastedKeyword, searchTermConverting,
     highAcosKeyword, scaleOpportunity, adGroupUnderperform,
-    newToBrandWinner, campaignNoSales] = await Promise.all([
+    newToBrandWinner, campaignNoSales,
+    searchTermWasting, campaignRoasDeclining] = await Promise.all([
     buildFbaAgeContexts(),
     buildProfitabilityContexts(),
     buildCacSpikeContexts(),
@@ -743,6 +799,8 @@ export async function runAdvertisingRuleEvaluatorOnce(): Promise<TickSummary> {
     buildAdGroupUnderperformContexts(),
     buildNewToBrandWinnerContexts(),
     buildCampaignNoSalesContexts(),
+    buildSearchTermWastingContexts(),
+    buildCampaignRoasDecliningContexts(),
   ])
 
   // AU.1/AU.2/AU.4 — SCHEDULE trigger: one context per active marketplace each
@@ -780,6 +838,8 @@ export async function runAdvertisingRuleEvaluatorOnce(): Promise<TickSummary> {
     ['AD_GROUP_UNDERPERFORMING', adGroupUnderperform],
     ['NEW_TO_BRAND_WINNER', newToBrandWinner],
     ['CAMPAIGN_NO_SALES', campaignNoSales],
+    ['SEARCH_TERM_WASTING', searchTermWasting],
+    ['CAMPAIGN_ROAS_DECLINING', campaignRoasDeclining],
     ['SCHEDULE', scheduleContexts],
   ]
   for (const [trigger, contexts] of passes) {

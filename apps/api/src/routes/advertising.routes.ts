@@ -3475,6 +3475,8 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       'AD_GROUP_UNDERPERFORMING',
       'NEW_TO_BRAND_WINNER',
       'CAMPAIGN_NO_SALES',
+      'SEARCH_TERM_WASTING',
+      'CAMPAIGN_ROAS_DECLINING',
     ])
     if (!ALLOWED_TRIGGERS.has(body.trigger)) {
       reply.code(400)
