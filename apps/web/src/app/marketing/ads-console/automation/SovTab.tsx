@@ -10,6 +10,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Swords, RefreshCw } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
+import { TabControls, DEFAULT_RANGE, rangeQuery, type RangeValue } from './TabControls'
 
 interface SovRow { query: string; impressions: number; clicks: number; costCents: number; orders: number; ctr: number; cvr: number; cpcCents: number; sovPct: number; campaignCount: number; topCampaignSharePct: number; cannibalized: boolean; flag?: string }
 interface SovResp { windowDays: number; totalImpressions: number; queries: number; rows: SovRow[] }
@@ -21,8 +22,9 @@ const flagLabel: Record<string, string> = { 'weak-relevance': 'Weak relevance', 
 export function SovTab() {
   const [d, setD] = useState<SovResp | null>(null)
   const [onlyFlags, setOnlyFlags] = useState(false)
-  const load = () => void fetch(`${getBackendUrl()}/api/advertising/share-of-voice?limit=200`, { cache: 'no-store' }).then((r) => r.json()).then(setD).catch(() => {})
-  useEffect(load, [])
+  const [range, setRange] = useState<RangeValue>(DEFAULT_RANGE)
+  const load = () => void fetch(`${getBackendUrl()}/api/advertising/share-of-voice?${rangeQuery(range)}&limit=200`, { cache: 'no-store' }).then((r) => r.json()).then(setD).catch(() => {})
+  useEffect(() => { load() }, [range]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const rows = useMemo(() => (d?.rows ?? []).filter((r) => !onlyFlags || r.cannibalized || r.flag), [d, onlyFlags])
   const cannibalized = (d?.rows ?? []).filter((r) => r.cannibalized).length
@@ -39,6 +41,7 @@ export function SovTab() {
         <span style={{ fontWeight: 700 }}><Swords size={15} style={{ verticalAlign: 'text-bottom', marginRight: 5 }} />Share of voice by query</span>
         <label className="az-rowstat" style={{ color: 'var(--ink2)', fontSize: 12, cursor: 'pointer' }}><input type="checkbox" checked={onlyFlags} onChange={(e) => setOnlyFlags(e.target.checked)} style={{ marginRight: 6 }} />Flagged only</label>
         <span style={{ flex: 1 }} />
+        <TabControls value={range} onChange={setRange} />
         <button className="az-iconbtn" onClick={load} title="Refresh"><RefreshCw size={15} /></button>
       </div>
       <div className="az-tablewrap">

@@ -11,6 +11,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Gauge, RefreshCw, ArrowDownRight, ArrowUpRight } from 'lucide-react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { getBackendUrl } from '@/lib/backend-url'
+import { TabControls, DEFAULT_RANGE, rangeQuery, rangeLabel, type RangeValue } from './TabControls'
 
 interface Row { date: string; clicks: number; orders: number; adSpendCents: number; adSalesCents: number }
 interface Summary { clicks: number; orders: number; spendCents: number; salesCents: number; roas: number | null }
@@ -25,15 +26,16 @@ export function EfficiencyTab() {
   const [previous, setPrevious] = useState<Summary | null>(null)
   const [impactCents, setImpactCents] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
+  const [range, setRange] = useState<RangeValue>(DEFAULT_RANGE)
   const load = () => {
     setLoading(true)
     const b = getBackendUrl()
     Promise.all([
-      fetch(`${b}/api/advertising/trends?windowDays=30&compare=true`, { cache: 'no-store' }).then((r) => r.json()).catch(() => ({})),
+      fetch(`${b}/api/advertising/trends?${rangeQuery(range)}&compare=true`, { cache: 'no-store' }).then((r) => r.json()).catch(() => ({})),
       fetch(`${b}/api/advertising/recommendations?limit=2`, { cache: 'no-store' }).then((r) => r.json()).catch(() => null),
     ]).then(([t, rec]) => { setRows(t.rows ?? []); setSummary(t.summary ?? null); setPrevious(t.previous ?? null); setImpactCents(rec?.potentialMonthlyImpactCents ?? null) }).finally(() => setLoading(false))
   }
-  useEffect(load, [])
+  useEffect(() => { load() }, [range]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const m = (s: Summary | null) => {
     if (!s) return null
@@ -61,8 +63,9 @@ export function EfficiencyTab() {
     <div style={{ paddingTop: 4 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
         <span style={{ fontWeight: 700 }}><Gauge size={15} style={{ verticalAlign: 'text-bottom', marginRight: 5 }} />Efficiency — winning for the least cost</span>
-        <span style={{ color: 'var(--ink2)', fontSize: 12 }}>last 30 days vs previous 30</span>
+        <span style={{ color: 'var(--ink2)', fontSize: 12 }}>{rangeLabel(range)} vs previous</span>
         <span style={{ flex: 1 }} />
+        <TabControls value={range} onChange={setRange} />
         <button className="az-iconbtn" onClick={load} title="Refresh"><RefreshCw size={15} className={loading ? 'az-spin' : ''} /></button>
       </div>
 

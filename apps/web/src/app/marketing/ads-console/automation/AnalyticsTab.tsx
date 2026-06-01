@@ -14,6 +14,7 @@ import { BarChart3, RefreshCw, Download } from 'lucide-react'
 import { BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cleanName } from './_icons'
+import { TabControls, DEFAULT_RANGE, rangeQuery, type RangeValue } from './TabControls'
 
 interface Rule { id: string; name: string; trigger: string; actions: Array<{ type?: string }>; enabled: boolean; dryRun: boolean; evaluationCount: number; matchCount: number; executionCount: number; domain: string }
 interface Health { executions30d?: { total: number; success: number; failed: number; dryRun: number }; matches30d?: number; successRatePct?: number | null; estTimeSavedHours?: number; rules?: { total: number; live: number; dryRun: number; disabled: number } }
@@ -30,6 +31,7 @@ export function AnalyticsTab() {
   const [recs, setRecs] = useState<RecResp | null>(null)
   const [trend, setTrend] = useState<Trend[]>([])
   const [loading, setLoading] = useState(true)
+  const [range, setRange] = useState<RangeValue>(DEFAULT_RANGE)
   const load = () => {
     setLoading(true)
     const b = getBackendUrl()
@@ -37,10 +39,10 @@ export function AnalyticsTab() {
       fetch(`${b}/api/advertising/automation-rules`, { cache: 'no-store' }).then((r) => r.json()).catch(() => ({ items: [] })),
       fetch(`${b}/api/advertising/automation-health`, { cache: 'no-store' }).then((r) => r.json()).catch(() => null),
       fetch(`${b}/api/advertising/recommendations?limit=80`, { cache: 'no-store' }).then((r) => r.json()).catch(() => null),
-      fetch(`${b}/api/advertising/trends?windowDays=30`, { cache: 'no-store' }).then((r) => r.json()).catch(() => ({ rows: [] })),
+      fetch(`${b}/api/advertising/trends?${rangeQuery(range)}`, { cache: 'no-store' }).then((r) => r.json()).catch(() => ({ rows: [] })),
     ]).then(([ru, he, re, tr]) => { setRules((ru.items ?? []).filter((r: Rule) => r.domain === 'advertising')); setHealth(he); setRecs(re); setTrend(tr.rows ?? []) }).finally(() => setLoading(false))
   }
-  useEffect(load, [])
+  useEffect(() => { load() }, [range]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const actionBreakdown = useMemo(() => {
     const m: Record<string, number> = {}
@@ -64,6 +66,7 @@ export function AnalyticsTab() {
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
         <span style={{ fontWeight: 700 }}><BarChart3 size={15} style={{ verticalAlign: 'text-bottom', marginRight: 5 }} />Automation analytics &amp; reports</span>
         <span style={{ flex: 1 }} />
+        <TabControls value={range} onChange={setRange} />
         <button className="az-btn" onClick={exportCsv}><Download size={14} />Export report</button>
         <button className="az-iconbtn" onClick={load} title="Refresh"><RefreshCw size={15} className={loading ? 'az-spin' : ''} /></button>
       </div>
