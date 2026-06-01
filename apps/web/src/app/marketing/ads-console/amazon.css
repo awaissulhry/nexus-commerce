@@ -43,23 +43,14 @@
 /* ── BODY: icon rail + nav + content ───────────────────────── */
 .az-body { flex: 1; display: flex; min-height: 0; }
 
-/* ── Icon rail — always visible, never collapses ─────────────── */
-.az-rail { width: 56px; flex: none; background: #fff; border-right: 1px solid var(--divider); display: flex; flex-direction: column; align-items: center; padding-top: 10px; gap: 4px; }
-.az-rail .ri { width: 40px; height: 40px; border-radius: 8px; display: grid; place-items: center; color: var(--ink2); cursor: pointer; }
-.az-rail .ri:hover { background: var(--bg2); }
-.az-rail .ri.on { color: var(--orange); }
-
-/* ── Main nav sidebar — collapsible ─────────────────────────── */
-.az-nav { width: 208px; flex: none; background: #fff; border-right: 1px solid var(--divider); padding: 10px 8px; overflow-y: auto; overflow-x: hidden; transition: width 0.2s ease, padding 0.2s ease; position: relative; }
+/* ── Main nav sidebar — collapsible (no icon rail) ───────────── */
+.az-nav { width: 220px; flex: none; background: #fff; border-right: 1px solid var(--divider); padding: 10px 8px; overflow-y: auto; overflow-x: hidden; transition: width 0.2s ease, padding 0.2s ease; position: relative; }
 .az-nav.nav-collapsed { width: 0; padding: 0; overflow: hidden; }
 .az-nav-toggle { position: absolute; top: 10px; right: 6px; width: 22px; height: 22px; border-radius: 6px; border: 1px solid var(--divider); background: var(--bg2); display: grid; place-items: center; cursor: pointer; color: var(--ink2); z-index: 2; flex-shrink: 0; }
 .az-nav-toggle:hover { background: var(--bg3); }
-/* Rail expand button shown when nav is collapsed */
-.az-rail-expand { width: 40px; height: 40px; border-radius: 8px; display: grid; place-items: center; color: var(--ink2); cursor: pointer; margin-bottom: 4px; }
-.az-rail-expand:hover { background: var(--bg2); }
 .az-nav .collapse { display: flex; justify-content: flex-end; color: var(--ink2); padding: 2px 6px 8px; }
-.az-nav a { display: block; padding: 9px 12px; border-radius: 8px; color: var(--ink); font-weight: 500; font-size: 13.5px; cursor: pointer; white-space: nowrap; }
-.az-nav a:hover { background: var(--bg3); text-decoration: none; }
+.az-nav a { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 8px; color: var(--ink); font-weight: 500; font-size: 13.5px; cursor: pointer; white-space: nowrap; text-decoration: none; }
+.az-nav a:hover { background: var(--bg3); }
 .az-nav a.on { background: var(--bg2); font-weight: 700; }
 
 /* ── Sub nav sidebar — contextual, collapsible ───────────────── */
@@ -85,10 +76,6 @@
 .az-amazon-link:hover { background: var(--bg3); text-decoration: none; }
 .az-amazon-link .lbl { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .az-amazon-link .live-chip { font-size: 9px; font-weight: 700; color: var(--green); background: #e8f5e9; border-radius: 3px; padding: 1px 4px; flex-shrink: 0; }
-/* Icon rail — links not spans */
-.az-rail a.ri { width: 40px; height: 40px; border-radius: 8px; display: grid; place-items: center; color: var(--ink2); cursor: pointer; text-decoration: none; }
-.az-rail a.ri:hover { background: var(--bg2); }
-.az-rail a.ri.on { color: var(--orange); }
 .az-wrap { padding: 16px 20px 60px; }
 
 /* ── AD-TYPE TABS ──────────────────────────────────────────── */
