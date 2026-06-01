@@ -3805,6 +3805,11 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const { runAutoBidOnce } = await import('../services/advertising/ads-auto-bid.service.js')
     return runAutoBidOnce()
   })
+  // TD.2 — run the keyword harvest+prune pass on demand (autonomy-gated).
+  fastify.post('/advertising/automation/auto-harvest/run', async () => {
+    const { runAutoHarvestOnce } = await import('../services/advertising/ads-auto-harvest.service.js')
+    return runAutoHarvestOnce()
+  })
   fastify.get('/advertising/marketing-stream/subscriptions', async (request, reply) => {
     const prof = await firstActiveAdsProfile()
     if (!prof) { reply.status(400); return { error: 'no active Amazon Ads connection' } }
