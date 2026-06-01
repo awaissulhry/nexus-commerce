@@ -17,6 +17,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Plus, RefreshCw, Sparkles, X, Trash2, Pencil, Wand2 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { TRIGGERS, CONDITION_FIELDS, OPS, ACTION_TYPES, TEMPLATES, type RuleTemplate } from '@/app/marketing/advertising/_shared/rule-catalog'
+import { AutonomyControlCenter } from './AutonomyControlCenter'
 import { DaypartingTab } from './DaypartingTab'
 import { BudgetTab } from './BudgetTab'
 import { RetailGuardTab } from './RetailGuardTab'
@@ -125,6 +126,8 @@ export function AutomationClient({ initialRules, initialHealth }: { initialRules
       </div>
 
       <div className="scroll">
+        {/* TD.0 — Autonomy Control Center (dial + circuit-breaker). */}
+        <AutonomyControlCenter />
         {/* Health strip */}
         <div className="statrow">
           <div className="stat"><div className="sv" style={{ color: 'var(--green)' }}>{health?.rules.live ?? '—'}</div><div className="sl">Live</div></div>
