@@ -144,6 +144,22 @@ export const ADVERTISING_TEMPLATES: AdvertisingRuleTemplate[] = [
     maxDailyAdSpendCentsEur: null,
     scopeMarketplace: null,
   },
+  // ── Autonomous bid optimization (the core paid feature) ─────────────
+  {
+    name: '🎯 Bid optimization (profit-native)',
+    description:
+      'Runs daily: adjusts every keyword bid toward its product\'s true profit-based ACOS target using Bayesian smoothing for low-data keywords. Raises bids on underperforming winners, cuts bids on losers. This is the primary thing PPC tools charge €500+/mo for — built in.',
+    trigger: 'SCHEDULE',
+    conditions: [],
+    actions: [
+      { type: 'bid_to_target_acos', profitMode: true, bayesian: true, acosMode: 'profit' },
+      { type: 'notify', target: 'operator', message: 'Bid optimization ran — check execution log for changes' },
+    ],
+    maxExecutionsPerDay: 2,
+    maxValueCentsEur: null,
+    maxDailyAdSpendCentsEur: null,
+    scopeMarketplace: null,
+  },
   // ── AU.1 — Automated keyword harvesting & negation ──────────────────
   {
     name: '🌾 Auto harvest & negate',

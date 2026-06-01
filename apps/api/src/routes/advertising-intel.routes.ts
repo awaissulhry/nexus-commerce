@@ -62,6 +62,37 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
     return result
   })
 
+  // AU.7 — automation impact summary: what did automation actually DO this week?
+  // Parses AutomationRuleExecution.actionResults to surface real numbers.
+  fastify.get('/advertising/automation-impact', async (request, reply) => {
+    const q = request.query as { windowDays?: string }
+    const days = Math.max(1, Math.min(90, Number(q.windowDays) || 7))
+    const since = new Date(); since.setUTCDate(since.getUTCDate() - days); since.setUTCHours(0, 0, 0, 0)
+    const execs = await prisma.automationRuleExecution.findMany({
+      where: { startedAt: { gte: since }, domain: 'advertising', status: { in: ['SUCCESS', 'PARTIAL', 'DRY_RUN'] } } as never,
+      select: { actionResults: true, dryRun: true, status: true, startedAt: true, rule: { select: { name: true, trigger: true } } },
+      orderBy: { startedAt: 'desc' },
+      take: 2000,
+    })
+    let termsNegated = 0, termsGraduated = 0, campaignsPaused = 0, campaignsGuarded = 0, bidsAdjusted = 0, budgetChanges = 0
+    for (const e of execs) {
+      for (const a of (e.actionResults as Array<{ type?: string; output?: Record<string, unknown> }> | null) ?? []) {
+        if (!a?.output) continue
+        const o = a.output
+        switch (a.type) {
+          case 'harvest_and_negate': termsNegated += Number(o.negativesAdded ?? 0); termsGraduated += Number(o.keywordsGraduated ?? 0); break
+          case 'retail_guard': campaignsGuarded += Number(o.paused ?? 0); break
+          case 'pause_campaign': case 'pause_ad_group': campaignsPaused += 1; break
+          case 'pause_all_campaigns': campaignsPaused += Number(o.paused ?? 0); break
+          case 'bid_down': case 'bid_up': case 'bid_to_target_acos': bidsAdjusted += Number(o.applied ?? (o.outboundQueueId ? 1 : 0)); break
+          case 'adjust_ad_budget': budgetChanges += 1; break
+        }
+      }
+    }
+    reply.header('Cache-Control', 'private, max-age=120')
+    return { windowDays: days, liveRuns: execs.filter((e) => !e.dryRun).length, dryRuns: execs.filter((e) => e.dryRun).length, termsNegated, termsGraduated, campaignsPaused, campaignsGuarded, bidsAdjusted, budgetChanges }
+  })
+
   // Apex F.1 — beginner autopilot: simulate (read-only) the full plan one north
   // star drives (profit-native bids + Bayesian sparse handling + ToS defense),
   // as a plain-language list. Nothing is applied.

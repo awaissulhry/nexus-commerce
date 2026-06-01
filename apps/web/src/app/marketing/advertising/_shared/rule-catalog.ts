@@ -74,6 +74,17 @@ export const ACTION_TYPES: ActionType[] = [
   { type: 'pause_all_campaigns', label: '⛔ Pause ALL campaigns (budget kill-switch)', blurb: 'Immediately pause every enabled campaign — use as a hard monthly spend cap', params: [
     { key: 'reason', label: 'Reason note', type: 'text', default: 'Monthly budget cap reached' },
   ] },
+  // AU.6
+  { type: 'set_placement_multiplier', label: '📍 Set placement bid multiplier', blurb: 'Adjust the Top-of-Search (or other) placement bid % for a campaign', params: [
+    { key: 'placement', label: 'Placement', type: 'select', options: ['PLACEMENT_TOP', 'PLACEMENT_PRODUCT_PAGE', 'PLACEMENT_REST_OF_SEARCH'], default: 'PLACEMENT_TOP' },
+    { key: 'percentage', label: 'Bid adjustment %', type: 'number', default: 30, hint: '0–900; 0 = remove boost' },
+  ] },
+  // Core automation
+  { type: 'bid_to_target_acos', label: '🎯 Optimize bids to target ACOS', blurb: 'Adjust keyword bids toward profit-based targets (Bayesian-smoothed for sparse keywords)', params: [
+    { key: 'profitMode', label: 'Profit-native mode', type: 'select', options: ['true', 'false'], default: 'true' },
+    { key: 'bayesian', label: 'Bayesian sparse handling', type: 'select', options: ['true', 'false'], default: 'true' },
+    { key: 'acosMode', label: 'Lifecycle', type: 'select', options: ['profit', 'balanced', 'growth'], default: 'profit' },
+  ] },
 ]
 
 export interface RuleTemplate {
@@ -89,6 +100,7 @@ export const TEMPLATES: RuleTemplate[] = [
   { key: 'raise-converters', category: 'Relevancy', name: 'Raise bids on strong converters', description: 'Push bids up 15% on targets with 2+ orders and healthy ACOS.', trigger: 'AD_TARGET_UNDERPERFORMING', conditions: [{ field: 'adTarget.ordersCount', op: 'gte', value: 2 }, { field: 'campaign.acos', op: 'lte', value: 0.25 }], actions: [{ type: 'bid_up', target: 'ad_target', percent: 15 }], maxExecutionsPerDay: 30 },
   { key: 'defend-margin', category: 'Other', name: 'Defend margin (alert)', description: 'Alert when ad-driven net margin turns negative — no automated write.', trigger: 'AD_SPEND_PROFITABILITY_BREACH', conditions: [{ field: 'profit.netCents', op: 'lt', value: 0 }], actions: [{ type: 'notify', message: 'Negative ad margin detected' }], maxExecutionsPerDay: 10 },
   { key: 'liquidate-aged', category: 'Other', name: 'Liquidate aged stock', description: 'As stock nears LTS fees, run a promo, pause ads, and boost budget to clear it.', trigger: 'FBA_AGE_THRESHOLD_REACHED', conditions: [{ field: 'fbaAge.daysToLtsThreshold', op: 'lte', value: 14 }], actions: [{ type: 'liquidate_aged_stock', discountPct: 15, durationDays: 14, budgetBoostPct: 25 }], maxExecutionsPerDay: 20, maxDailyAdSpendCentsEur: 10000 },
+  { key: 'bid-optimization', category: 'Sales', name: '🎯 Bid optimization (profit-native)', description: 'Runs twice daily: adjusts every keyword bid toward its product\'s true profit-based ACOS target using Bayesian smoothing for low-data keywords. This is what Pacvue and Perpetua charge €500+/mo for.', trigger: 'SCHEDULE', conditions: [], actions: [{ type: 'bid_to_target_acos', profitMode: true, bayesian: true, acosMode: 'profit' }], maxExecutionsPerDay: 2 },
   // AU.1 — Harvest & negate (scheduled)
   { key: 'auto-harvest-negate', category: 'Sales', name: '🌾 Auto harvest & negate', description: 'Every tick: negate search terms that spent €10+ with zero orders; promote terms with 2+ orders to exact-match campaigns. The #1 way to stop wasted spend.', trigger: 'SCHEDULE', conditions: [], actions: [{ type: 'harvest_and_negate', windowDays: 60, minSpendCents: 1000, minOrders: 2, graduationBidEur: 0.5 }, { type: 'notify', message: 'Harvest & negate ran — check execution log for terms moved' }], maxExecutionsPerDay: 3 },
   // AU.2 — Retail guard (scheduled)

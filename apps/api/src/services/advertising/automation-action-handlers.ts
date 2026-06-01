@@ -758,6 +758,26 @@ ACTION_HANDLERS.harvest_and_negate = async (action, _context, meta): Promise<Act
   }
 }
 
+// ── AU.6: set_placement_multiplier ────────────────────────────────────
+// Adjusts the PLACEMENT_TOP (or other placement) bid adjustment % for a
+// campaign. Lets rules like "raise top-of-search bids when ACOS is low" or
+// "lower when ACOS is high" without touching keyword bids directly.
+ACTION_HANDLERS.set_placement_multiplier = async (action, context, meta): Promise<ActionResult> => {
+  const campaignId = (action.campaignId as string | undefined) ?? ctxCampaignId(action, context)
+  if (!campaignId) return { type: action.type, ok: false, error: 'No campaign.id in context' }
+  const placement = (action.placement as string | undefined) ?? 'PLACEMENT_TOP'
+  const pct = Math.max(0, Math.min(900, Math.round(Number(action.percentage ?? 0))))
+  if (meta.dryRun) {
+    return { type: action.type, ok: true, output: { dryRun: true, campaignId, placement, percentage: pct } }
+  }
+  const { updatePlacementBidding } = await import('./ads-create.service.js')
+  const c = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { dynamicBidding: true } })
+  const db = (c?.dynamicBidding ?? {}) as { placementBidding?: Array<{ placement: string; percentage: number }> }
+  const others = (db.placementBidding ?? []).filter((x) => x.placement !== placement)
+  const res = await updatePlacementBidding({ campaignId, adjustments: [...others, { placement, percentage: pct }] })
+  return { type: action.type, ok: res.ok !== false, output: { campaignId, placement, percentage: pct, mode: res.mode } }
+}
+
 // ── AU.2: retail_guard ────────────────────────────────────────────────
 // Pauses campaigns advertising out-of-stock products or products that
 // lost the Buy Box. Safe to run every 15 min on a SCHEDULE trigger — the
