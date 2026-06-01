@@ -28,6 +28,7 @@ const GROUPS: Group[] = [
     { href: '/marketing/advertising/automation/library', label: 'Rule library', icon: Sparkles },
     { href: '/marketing/advertising/automation/executions', label: 'Execution history', icon: Activity },
     { href: '/marketing/advertising/automation/analytics', label: 'Automation analytics', icon: TrendingUp },
+    { href: '/marketing/ads-console/automation', label: '⚡ 187+ automation catalog', icon: TrendingUp },
     { href: '/marketing/advertising/autopilot', label: 'Autopilot', icon: Rocket },
     { href: '/marketing/advertising/dayparting', label: 'Dayparting + bid hours', icon: Clock },
     { href: '/marketing/advertising/harvest', label: 'Harvest & negate', icon: Sprout },
