@@ -19,6 +19,7 @@ import { getBackendUrl } from '@/lib/backend-url'
 import { RankKeywordsMode } from './RankKeywordsMode'
 import { RankStrategyMode } from './RankStrategyMode'
 import { RankConquestMode } from './RankConquestMode'
+import { RankTosMode } from './RankTosMode'
 
 const MARKETS = ['IT', 'DE', 'FR', 'ES', 'NL', 'BE', 'SE', 'PL', 'IE', 'UK', 'All markets']
 const PLACEMENTS = [
@@ -47,7 +48,7 @@ const clampPct = (n: number) => Math.max(0, Math.min(900, Math.round(n)))
 interface Camp { id: string; name: string; marketplace: string | null }
 
 export function RankControlTab({ onSaved }: { onSaved: () => void }) {
-  const [rcMode, setRcMode] = useState<'placement' | 'keywords' | 'strategy' | 'conquest'>('placement')
+  const [rcMode, setRcMode] = useState<'placement' | 'keywords' | 'strategy' | 'conquest' | 'tos'>('placement')
   const [market, setMarket] = useState('IT')
   const [camps, setCamps] = useState<Camp[]>([])
   const [selCamps, setSelCamps] = useState<Set<string>>(new Set())
@@ -148,7 +149,7 @@ export function RankControlTab({ onSaved }: { onSaved: () => void }) {
         <span style={{ fontWeight: 700, fontSize: 15 }}><Crosshair size={16} style={{ verticalAlign: 'text-bottom', marginRight: 6 }} />Rank Control</span>
         <span style={{ flex: 1 }} />
         <div style={{ display: 'flex', gap: 6 }}>
-          {([['placement', 'Placement %'], ['keywords', 'Keyword targeting'], ['strategy', 'Strategy & cost'], ['conquest', 'Conquesting']] as const).map(([k, l]) => (
+          {([['placement', 'Placement %'], ['keywords', 'Keyword targeting'], ['strategy', 'Strategy & cost'], ['conquest', 'Conquesting'], ['tos', 'Top-of-Search IS']] as const).map(([k, l]) => (
             <button key={k} onClick={() => setRcMode(k)} className={`az-chip quick ${rcMode === k ? 'on' : ''}`}>{l}</button>
           ))}
         </div>
@@ -156,6 +157,7 @@ export function RankControlTab({ onSaved }: { onSaved: () => void }) {
       {rcMode === 'keywords' && <RankKeywordsMode />}
       {rcMode === 'strategy' && <RankStrategyMode />}
       {rcMode === 'conquest' && <RankConquestMode />}
+      {rcMode === 'tos' && <RankTosMode onSaved={onSaved} />}
       {rcMode === 'placement' && <div style={{ maxWidth: 760 }}>
       <div style={{ color: 'var(--ink2)', fontSize: 12.5, marginBottom: 16, lineHeight: 1.55 }}>Set the exact <b>Top-of-Search bid adjustment %</b> you want (and the other placements) for the campaigns you choose, by market and time. The engine writes that placement % to Amazon and — with Hold-the-position on — nudges bids up only as needed to keep the slot, capped so you win for the least cost.</div>
 
