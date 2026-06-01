@@ -205,8 +205,8 @@ export function ConsoleChrome({ children }: { children: ReactNode }) {
           <div className={`az-subnav ${subCollapsed ? 'subnav-collapsed' : ''}`}>
             <div className="az-subnav-inner">
               <div className="az-subnav-header">
-                {!subCollapsed && <span className="az-subnav-title">{subNavDef.title}</span>}
-                <button className="az-subnav-toggle" onClick={toggleSub} title={subCollapsed ? 'Expand' : 'Collapse'} style={{ border: 'none', marginLeft: 'auto' }}>
+                <span className="az-subnav-title">{subNavDef.title}</span>
+                <button className="az-subnav-toggle" onClick={toggleSub} title={subCollapsed ? 'Expand panel' : 'Collapse panel'}>
                   {subCollapsed ? <ChevronRight size={12} /> : <ChevronLeft size={12} />}
                 </button>
               </div>
