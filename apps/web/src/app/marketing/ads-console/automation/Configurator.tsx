@@ -19,8 +19,14 @@ const ACTION_LABEL: Record<string, string> = {
 }
 const TRIGGER_LABEL: Record<string, string> = {
   CAC_SPIKE: 'a campaign’s ACOS spikes', CAMPAIGN_PERFORMANCE_BUDGET: 'a campaign meets performance/budget conditions', AD_TARGET_UNDERPERFORMING: 'a target underperforms', AD_SPEND_PROFITABILITY_BREACH: 'ad spend beats true profit', CVR_DROP: 'conversion rate drops sharply', KEYWORD_LOW_CTR: 'a keyword’s CTR is chronically low', KEYWORD_WASTED_SPEND: 'a keyword wastes spend', KEYWORD_ZERO_IMPRESSIONS: 'a keyword gets no impressions', SEARCH_TERM_CONVERTING: 'a search term is converting', FBA_AGE_THRESHOLD_REACHED: 'stock nears long-term storage', SCHEDULE: 'it runs on schedule',
+  // Engine expansion (E-series)
+  KEYWORD_HIGH_ACOS: 'a keyword converts but at a high ACOS', KEYWORD_SCALE_OPPORTUNITY: 'a keyword is a proven winner with headroom', AD_GROUP_UNDERPERFORMING: 'an ad group underperforms', NEW_TO_BRAND_WINNER: 'a campaign wins new-to-brand customers', CAMPAIGN_NO_SALES: 'a campaign spends with no sales', SEARCH_TERM_WASTING: 'a search term wastes spend', CAMPAIGN_ROAS_DECLINING: 'a campaign’s ROAS declines week-over-week', KEYWORD_RISING_STAR: 'a keyword’s orders are accelerating',
 }
 const unitSuffix = (k: ParamDef['kind']) => (k === 'pct' ? '%' : k === 'roas' ? '×' : k === 'days' ? 'days' : '')
+// Friendly condition rendering for the live preview (handles the E-series fields
+// declinePct / growthPct / ntbOrders / roas alongside the originals).
+const condFieldLabel = (f: string) => (f.split('.').pop() ?? f).replace(/Cents$/, '').replace(/Pct$/, '').replace(/([A-Z])/g, ' $1').trim().toLowerCase()
+const condValue = (f: string, v: number) => f.includes('Cents') ? '€' + (v / 100) : f.endsWith('Pct') ? v + '%' : (f.includes('acos') || f.includes('Utilization') || f.includes('ctr')) ? (v * 100).toFixed(0) + '%' : String(v)
 
 export function Configurator({ def, onClose, onSaved }: { def: AutomationDef; onClose: () => void; onSaved: () => void }) {
   const [vals, setVals] = useState<Record<string, number | string>>(() => Object.fromEntries(def.params.map((p) => [p.key, p.default])))
@@ -59,7 +65,7 @@ export function Configurator({ def, onClose, onSaved }: { def: AutomationDef; on
           {/* live plain-English preview */}
           <div style={{ background: 'var(--bg3)', border: '1px solid var(--divider)', borderRadius: 10, padding: '12px 14px', marginBottom: 16, fontSize: 13, lineHeight: 1.6 }}>
             <span style={{ color: 'var(--ink2)' }}>When </span><b>{TRIGGER_LABEL[def.trigger] ?? def.trigger}</b>
-            {built.conditions.length > 0 && <><span style={{ color: 'var(--ink2)' }}> and </span><b>{built.conditions.map((c) => `${c.field.split('.').pop()} ${c.op === 'gte' ? '≥' : c.op === 'lte' ? '≤' : c.op === 'lt' ? '<' : c.op === 'gt' ? '>' : '='} ${c.field.includes('Cents') ? '€' + (c.value / 100) : c.field.includes('acos') || c.field.includes('Utilization') || c.field.includes('ctr') ? (c.value * 100).toFixed(0) + '%' : c.value}`).join(' and ')}</b></>}
+            {built.conditions.length > 0 && <><span style={{ color: 'var(--ink2)' }}> and </span><b>{built.conditions.map((c) => `${condFieldLabel(c.field)} ${c.op === 'gte' ? '≥' : c.op === 'lte' ? '≤' : c.op === 'lt' ? '<' : c.op === 'gt' ? '>' : '='} ${condValue(c.field, Number(c.value))}`).join(' and ')}</b></>}
             <span style={{ color: 'var(--ink2)' }}>, this will </span><b>{actionWords.join(' + ')}</b>.
           </div>
 
