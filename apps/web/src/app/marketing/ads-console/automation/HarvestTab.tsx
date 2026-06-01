@@ -8,9 +8,11 @@
  */
 
 import { useEffect, useMemo, useState } from 'react'
-import { Sprout, Ban, RefreshCw } from 'lucide-react'
+import { Sprout, Ban, RefreshCw, Download } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useCampaignMap, campaignHref } from './useCampaignMap'
+import { TableSkel } from './_ui'
+import { downloadCsv } from './_csv'
 
 interface Term { query: string; externalCampaignId: string; externalAdGroupId: string; impressions: number; clicks: number; costCents: number; orders: number; salesCents: number }
 const eur = (c: number) => new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR' }).format(c / 100)
@@ -39,7 +41,8 @@ export function HarvestTab() {
       <table className="az-table">
         <thead><tr><th className="l">Search term</th><th className="l">Campaign · market</th><th>Impressions</th><th>Clicks</th><th>Spend</th><th>Orders</th><th>Sales</th></tr></thead>
         <tbody>
-          {terms.length === 0 && <tr><td className="az-empty" colSpan={7}>{loading ? 'Loading…' : kind === 'grad' ? 'No converting terms to graduate right now.' : 'No wasteful terms to negate right now.'}</td></tr>}
+          {loading && <TableSkel cols={7} />}
+          {!loading && terms.length === 0 && <tr><td className="az-empty" colSpan={7}>{kind === 'grad' ? 'No converting terms to graduate right now.' : 'No wasteful terms to negate right now.'}</td></tr>}
           {terms.map((t, i) => { const c = campMap[t.externalCampaignId]; return (
             <tr key={`${t.query}-${i}`}>
               <td className="l" style={{ fontWeight: 500 }}>{t.query}</td>
@@ -67,6 +70,7 @@ export function HarvestTab() {
         <span style={{ flex: 1 }} />
         <button className="az-btn dark" disabled={busy || (negatives.length + graduations.length === 0)} onClick={() => void applyAll()}>{busy ? 'Applying…' : `Apply harvest (${negatives.length + graduations.length})`}</button>
         {msg && <span style={{ color: 'var(--ink2)', fontSize: 12 }}>{msg}</span>}
+        <button className="az-iconbtn" onClick={() => downloadCsv(`harvest-${windowDays}d.csv`, [...graduations, ...negatives].map((t, idx) => ({ kind: idx < graduations.length ? 'graduate' : 'negate', query: t.query, campaign: campMap[t.externalCampaignId]?.name ?? t.externalCampaignId, marketplace: campMap[t.externalCampaignId]?.marketplace ?? '', adGroupId: t.externalAdGroupId, impressions: t.impressions, clicks: t.clicks, spendCents: t.costCents, orders: t.orders, salesCents: t.salesCents })))} title="Export CSV"><Download size={15} /></button>
         <button className="az-iconbtn" onClick={load} title="Refresh"><RefreshCw size={15} className={loading ? 'az-spin' : ''} /></button>
       </div>
       <h4 style={{ margin: '4px 2px 8px', fontSize: 13.5 }}><Sprout size={15} style={{ verticalAlign: 'text-bottom', marginRight: 5, color: 'var(--green)' }} />Graduate to exact keywords</h4>

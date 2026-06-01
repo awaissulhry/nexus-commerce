@@ -8,9 +8,11 @@
  */
 
 import { useEffect, useMemo, useState } from 'react'
-import { Swords, RefreshCw } from 'lucide-react'
+import { Swords, RefreshCw, Download } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { TabControls, DEFAULT_RANGE, rangeQuery, type RangeValue } from './TabControls'
+import { TableSkel } from './_ui'
+import { downloadCsv } from './_csv'
 
 interface SovRow { query: string; impressions: number; clicks: number; costCents: number; orders: number; ctr: number; cvr: number; cpcCents: number; sovPct: number; campaignCount: number; topCampaignSharePct: number; cannibalized: boolean; flag?: string }
 interface SovResp { windowDays: number; totalImpressions: number; queries: number; rows: SovRow[] }
@@ -42,13 +44,15 @@ export function SovTab() {
         <label className="az-rowstat" style={{ color: 'var(--ink2)', fontSize: 12, cursor: 'pointer' }}><input type="checkbox" checked={onlyFlags} onChange={(e) => setOnlyFlags(e.target.checked)} style={{ marginRight: 6 }} />Flagged only</label>
         <span style={{ flex: 1 }} />
         <TabControls value={range} onChange={setRange} />
+        <button className="az-iconbtn" onClick={() => downloadCsv('share-of-voice.csv', rows.map((r) => ({ query: r.query, sovPct: r.sovPct, impressions: r.impressions, clicks: r.clicks, ctr: r.ctr, cvr: r.cvr, cpcCents: r.cpcCents, orders: r.orders, campaigns: r.campaignCount, flag: r.flag ?? '' })))} title="Export CSV"><Download size={15} /></button>
         <button className="az-iconbtn" onClick={load} title="Refresh"><RefreshCw size={15} /></button>
       </div>
       <div className="az-tablewrap">
         <table className="az-table">
           <thead><tr><th className="l">Search query</th><th>SoV</th><th>Impressions</th><th>Clicks</th><th>CTR</th><th>CVR</th><th>CPC</th><th>Orders</th><th>Campaigns</th><th className="l">Flags</th></tr></thead>
           <tbody>
-            {rows.length === 0 && <tr><td className="az-empty" colSpan={10}>{d ? 'No queries match.' : 'Loading…'}</td></tr>}
+            {!d && <TableSkel cols={10} />}
+            {d && rows.length === 0 && <tr><td className="az-empty" colSpan={10}>No queries match.</td></tr>}
             {rows.map((r, i) => (
               <tr key={`${r.query}-${i}`}>
                 <td className="l" style={{ fontWeight: 500 }}>{r.query}</td>
@@ -59,7 +63,7 @@ export function SovTab() {
                 <td className="num">{pct(r.cvr, 1)}</td>
                 <td className="num">{eur(r.cpcCents)}</td>
                 <td className="num">{num(r.orders)}</td>
-                <td className="num">{r.campaignCount}{r.cannibalized ? '⚠' : ''}</td>
+                <td className="num" style={r.cannibalized ? { color: '#cc1100', fontWeight: 700 } : undefined}>{r.campaignCount}</td>
                 <td className="l">
                   {r.cannibalized && <span className="az-badge warn" style={{ marginRight: 4 }}>cannibalised</span>}
                   {r.flag && <span className="az-badge paused">{flagLabel[r.flag] ?? r.flag}</span>}

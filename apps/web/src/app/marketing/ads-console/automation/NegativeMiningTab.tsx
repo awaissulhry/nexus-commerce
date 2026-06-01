@@ -9,9 +9,11 @@
  */
 
 import { useEffect, useMemo, useState } from 'react'
-import { Ban, RefreshCw, Check } from 'lucide-react'
+import { Ban, RefreshCw, Check, Download } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useCampaignMap, campaignHref } from './useCampaignMap'
+import { TableSkel } from './_ui'
+import { downloadCsv } from './_csv'
 
 interface Cand { query: string; matchType: string; campaignId: string; adGroupId: string; marketplace: string; totalImpressions: number; totalClicks: number; totalCostUnits: number }
 const num = (n: number) => new Intl.NumberFormat('en-US').format(Math.round(n))
@@ -59,6 +61,7 @@ export function NegativeMiningTab() {
         <select value={mkt} onChange={(e) => setMkt(e.target.value)} style={{ border: '1px solid var(--border)', borderRadius: 6, padding: '5px 8px', font: 'inherit', cursor: 'pointer' }} aria-label="Market"><option value="All">All markets</option>{markets.map((m) => <option key={m} value={m}>{m}</option>)}</select>
         <span style={{ flex: 1 }} />
         {sel.size > 0 && <button className="az-btn dark" disabled={busy} onClick={() => void negateSelected()}>{busy ? 'Negating…' : `Negate ${sel.size}`}</button>}
+        <button className="az-iconbtn" onClick={() => downloadCsv('negative-keyword-candidates.csv', shown.map((c) => ({ query: c.query, matchType: c.matchType, campaign: campMap[c.campaignId]?.name ?? c.campaignId, marketplace: c.marketplace ?? '', adGroupId: c.adGroupId, impressions: c.totalImpressions, clicks: c.totalClicks, wastedSpendEur: c.totalCostUnits, status: done.has(key(c)) ? 'negated' : 'candidate' })))} title="Export CSV"><Download size={15} /></button>
         <button className="az-iconbtn" onClick={load} title="Refresh"><RefreshCw size={15} className={loading ? 'az-spin' : ''} /></button>
       </div>
       <div className="az-tablewrap">
@@ -68,7 +71,8 @@ export function NegativeMiningTab() {
             <th className="l">Search term</th><th className="l">Match</th><th className="l">Campaign · market</th><th>Impressions</th><th>Clicks</th><th>Wasted spend</th><th className="l">Status</th>
           </tr></thead>
           <tbody>
-            {shown.length === 0 && <tr><td className="az-empty" colSpan={8}>{loading ? 'Mining…' : 'No wasted-spend terms above this threshold. Clean.'}</td></tr>}
+            {loading && <TableSkel cols={8} />}
+            {!loading && shown.length === 0 && <tr><td className="az-empty" colSpan={8}>No wasted-spend terms above this threshold. Clean.</td></tr>}
             {shown.map((c, i) => { const k = key(c); const isDone = done.has(k); return (
               <tr key={`${k}-${i}`} className={sel.has(k) ? 'sel' : ''}>
                 <td className="l"><input type="checkbox" className="az-check" disabled={isDone} checked={sel.has(k) || isDone} onChange={() => toggle(c)} /></td>
