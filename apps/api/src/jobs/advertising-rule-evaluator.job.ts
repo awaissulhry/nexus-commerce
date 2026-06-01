@@ -472,6 +472,16 @@ export async function runAdvertisingRuleEvaluatorOnce(): Promise<TickSummary> {
     buildCampaignBudgetContexts(),
   ])
 
+  // AU.1/AU.2 — SCHEDULE trigger: one synthetic context per active marketplace
+  // so harvest_and_negate + retail_guard rules run on every evaluator tick.
+  // No condition fields needed (the action itself decides what to do); rules
+  // can optionally filter by marketplace using scopeMarketplace.
+  const conns = await prisma.amazonAdsConnection.findMany({ where: { isActive: true }, select: { marketplace: true } })
+  const scheduleContexts = [...new Set(conns.map((c) => c.marketplace))].map((mkt) => ({
+    trigger: 'SCHEDULE' as const,
+    marketplace: mkt,
+  }))
+
   let totalEvaluations = 0
   let totalMatches = 0
   const passes: Array<[string, Array<{ marketplace: string | null }>]> = [
@@ -480,6 +490,7 @@ export async function runAdvertisingRuleEvaluatorOnce(): Promise<TickSummary> {
     ['CAC_SPIKE', cacSpike],
     ['AD_TARGET_UNDERPERFORMING', underperform],
     ['CAMPAIGN_PERFORMANCE_BUDGET', campaignBudget],
+    ['SCHEDULE', scheduleContexts],
   ]
   for (const [trigger, contexts] of passes) {
     const r = await applyMarketplaceScope(trigger, contexts, forceDryRun)
@@ -498,7 +509,7 @@ export async function runAdvertisingRuleEvaluatorOnce(): Promise<TickSummary> {
     durationMs: Date.now() - startedAt,
   }
   lastRunAt = new Date()
-  lastSummary = `fba=${fbaAge.length} prof=${profitability.length} cac=${cacSpike.length} under=${underperform.length} evals=${totalEvaluations} matches=${totalMatches} durationMs=${summary.durationMs}`
+  lastSummary = `fba=${fbaAge.length} prof=${profitability.length} cac=${cacSpike.length} under=${underperform.length} schedule=${scheduleContexts.length} evals=${totalEvaluations} matches=${totalMatches} durationMs=${summary.durationMs}`
   return summary
 }
 

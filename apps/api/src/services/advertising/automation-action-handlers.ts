@@ -701,6 +701,101 @@ ACTION_HANDLERS.liquidate_aged_stock = async (action, context, meta): Promise<Ac
   }
 }
 
+// ── AU.1: resume_campaign ─────────────────────────────────────────────
+// Companion to pause_campaign. Restores a campaign to ENABLED (e.g. when
+// retail guard re-evaluates and stock is back / Buy Box regained).
+ACTION_HANDLERS.resume_campaign = async (action, context, meta): Promise<ActionResult> => {
+  const id = (action.campaignId as string | undefined) ?? ctxCampaignId(action, context)
+  if (!id) return { type: action.type, ok: false, error: 'No campaign.id in context' }
+  if (meta.dryRun) return { type: action.type, ok: true, output: { dryRun: true, campaignId: id } }
+  const res = await updateCampaignWithSync({
+    campaignId: id,
+    patch: { status: 'ENABLED' },
+    actor: RULE_ACTOR(meta.ruleId),
+    reason: (action.reason as string | undefined) ?? `resume_campaign via rule ${meta.ruleId}`,
+    applyImmediately: true,
+  } as never)
+  return { type: action.type, ok: res.ok, error: res.error ?? undefined, output: { campaignId: id, outboundQueueId: res.outboundQueueId } }
+}
+
+// ── AU.1: harvest_and_negate ──────────────────────────────────────────
+// Runs automated keyword harvesting: promotes high-converting search terms
+// to exact-match campaigns (graduation) and negates wasters. Designed for
+// the SCHEDULE trigger so it runs on a daily cadence without user input.
+// Parameters mirror previewHarvest opts so a rule can tune thresholds.
+ACTION_HANDLERS.harvest_and_negate = async (action, _context, meta): Promise<ActionResult> => {
+  const windowDays = typeof action.windowDays === 'number' ? action.windowDays : 60
+  const minSpendCents = typeof action.minSpendCents === 'number' ? action.minSpendCents : 1000 // €10 default
+  const minOrders = typeof action.minOrders === 'number' ? action.minOrders : 2
+  const { previewHarvest, applyHarvest } = await import('./ads-harvest.service.js')
+  const preview = await previewHarvest({ windowDays, minSpendCents, minOrders })
+  if (meta.dryRun) {
+    return {
+      type: action.type,
+      ok: true,
+      output: {
+        dryRun: true,
+        wouldNegate: preview.negatives.length,
+        wouldGraduate: preview.graduations.length,
+        topNegatives: preview.negatives.slice(0, 5).map((n) => ({ query: n.query, costCents: n.costCents })),
+        topGraduations: preview.graduations.slice(0, 5).map((g) => ({ query: g.query, orders: g.orders })),
+      },
+    }
+  }
+  const result = await applyHarvest({
+    negatives: preview.negatives,
+    graduations: preview.graduations.map((g) => ({ ...g, bidEur: typeof action.graduationBidEur === 'number' ? action.graduationBidEur : 0.5 })),
+    userId: `automation:${meta.ruleId}`,
+  })
+  return {
+    type: action.type,
+    ok: result.errors.length === 0 || result.negativesAdded + result.keywordsGraduated > 0,
+    output: {
+      negativesAdded: result.negativesAdded,
+      keywordsGraduated: result.keywordsGraduated,
+      errors: result.errors.slice(0, 5),
+    },
+  }
+}
+
+// ── AU.2: retail_guard ────────────────────────────────────────────────
+// Pauses campaigns advertising out-of-stock products or products that
+// lost the Buy Box. Safe to run every 15 min on a SCHEDULE trigger — the
+// write-gate + allowlist ensures live Amazon writes only on approved
+// campaigns, and resume_campaign undoes it when conditions clear.
+ACTION_HANDLERS.retail_guard = async (action, _context, meta): Promise<ActionResult> => {
+  const marketplace = typeof action.marketplace === 'string' ? action.marketplace : undefined
+  const { analyzeRetailReadiness, applyRetailGuard } = await import('./ads-retail-readiness.service.js')
+  const analysis = await analyzeRetailReadiness({ marketplace })
+  const toPause = analysis.campaigns.filter((c) => c.verdict === 'pause' && c.status === 'ENABLED')
+  if (meta.dryRun) {
+    return {
+      type: action.type,
+      ok: true,
+      output: {
+        dryRun: true,
+        wouldPause: toPause.length,
+        sample: toPause.slice(0, 8).map((c) => ({ id: c.campaignId, name: c.name, reason: c.reason })),
+        watched: analysis.summary.watch,
+      },
+    }
+  }
+  const result = await applyRetailGuard({
+    campaignIds: toPause.map((c) => c.campaignId),
+    actor: RULE_ACTOR(meta.ruleId),
+    marketplace,
+  })
+  return {
+    type: action.type,
+    ok: true,
+    output: {
+      paused: result.paused.length,
+      skipped: result.skipped,
+      pausedIds: result.paused.slice(0, 10),
+    },
+  }
+}
+
 logger.debug('[advertising] action handlers registered', {
   count: 8,
   types: [

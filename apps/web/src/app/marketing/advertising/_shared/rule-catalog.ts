@@ -4,6 +4,7 @@
 
 export interface RuleTrigger { key: string; label: string; blurb: string }
 export const TRIGGERS: RuleTrigger[] = [
+  { key: 'SCHEDULE', label: '⏱ Scheduled (runs every 15 min)', blurb: 'Runs on a fixed cadence — for harvest/negate, retail guard, and other time-based automations.' },
   { key: 'AD_TARGET_UNDERPERFORMING', label: 'Target performance', blurb: 'Evaluate keyword/product targets on spend, sales, ACOS, orders.' },
   { key: 'CAC_SPIKE', label: 'ACOS / CAC spike', blurb: 'Fire when efficiency degrades beyond a threshold.' },
   { key: 'AD_SPEND_PROFITABILITY_BREACH', label: 'Profitability breach', blurb: 'Fire when ad-driven net margin goes negative.' },
@@ -57,6 +58,16 @@ export const ACTION_TYPES: ActionType[] = [
   { type: 'notify', label: 'Notify only', blurb: 'Alert the operator, no write', params: [
     { key: 'message', label: 'Message', type: 'text', default: 'Rule triggered' },
   ] },
+  // AU.1
+  { type: 'harvest_and_negate', label: '🌾 Harvest & negate keywords', blurb: 'Auto-negate wasters + promote converters to exact-match', params: [
+    { key: 'windowDays', label: 'Look-back (days)', type: 'number', default: 60, hint: 'Search-term window' },
+    { key: 'minSpendCents', label: 'Min waste spend (¢)', type: 'number', default: 1000, hint: '1000 = €10' },
+    { key: 'minOrders', label: 'Min orders to graduate', type: 'number', default: 2 },
+    { key: 'graduationBidEur', label: 'Starting bid for new exact (€)', type: 'number', default: 0.5 },
+  ] },
+  { type: 'resume_campaign', label: '▶ Resume campaign', blurb: 'Set a paused campaign back to ENABLED', params: [] },
+  // AU.2
+  { type: 'retail_guard', label: '🛡 Retail guard (pause OOS/lost Buy Box)', blurb: 'Pause campaigns advertising out-of-stock or Buy Box-lost products', params: [] },
 ]
 
 export interface RuleTemplate {
@@ -72,4 +83,8 @@ export const TEMPLATES: RuleTemplate[] = [
   { key: 'raise-converters', category: 'Relevancy', name: 'Raise bids on strong converters', description: 'Push bids up 15% on targets with 2+ orders and healthy ACOS.', trigger: 'AD_TARGET_UNDERPERFORMING', conditions: [{ field: 'adTarget.ordersCount', op: 'gte', value: 2 }, { field: 'campaign.acos', op: 'lte', value: 0.25 }], actions: [{ type: 'bid_up', target: 'ad_target', percent: 15 }], maxExecutionsPerDay: 30 },
   { key: 'defend-margin', category: 'Other', name: 'Defend margin (alert)', description: 'Alert when ad-driven net margin turns negative — no automated write.', trigger: 'AD_SPEND_PROFITABILITY_BREACH', conditions: [{ field: 'profit.netCents', op: 'lt', value: 0 }], actions: [{ type: 'notify', message: 'Negative ad margin detected' }], maxExecutionsPerDay: 10 },
   { key: 'liquidate-aged', category: 'Other', name: 'Liquidate aged stock', description: 'As stock nears LTS fees, run a promo, pause ads, and boost budget to clear it.', trigger: 'FBA_AGE_THRESHOLD_REACHED', conditions: [{ field: 'fbaAge.daysToLtsThreshold', op: 'lte', value: 14 }], actions: [{ type: 'liquidate_aged_stock', discountPct: 15, durationDays: 14, budgetBoostPct: 25 }], maxExecutionsPerDay: 20, maxDailyAdSpendCentsEur: 10000 },
+  // AU.1 — Harvest & negate (scheduled)
+  { key: 'auto-harvest-negate', category: 'Sales', name: '🌾 Auto harvest & negate', description: 'Every tick: negate search terms that spent €10+ with zero orders; promote terms with 2+ orders to exact-match campaigns. The #1 way to stop wasted spend.', trigger: 'SCHEDULE', conditions: [], actions: [{ type: 'harvest_and_negate', windowDays: 60, minSpendCents: 1000, minOrders: 2, graduationBidEur: 0.5 }, { type: 'notify', message: 'Harvest & negate ran — check execution log for terms moved' }], maxExecutionsPerDay: 3 },
+  // AU.2 — Retail guard (scheduled)
+  { key: 'retail-guard', category: 'Sales', name: '🛡 Retail guard', description: 'Every 15 min: automatically pause campaigns advertising out-of-stock products or products that lost the Buy Box — so you never pay for traffic you can\'t convert.', trigger: 'SCHEDULE', conditions: [], actions: [{ type: 'retail_guard' }, { type: 'notify', message: 'Retail guard paused campaign(s) — check execution log' }], maxExecutionsPerDay: 96 },
 ]
