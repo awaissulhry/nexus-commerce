@@ -53,6 +53,7 @@ export function AutomationHub({ initialRules, initialState }: { initialRules: Ru
   const [state, setState] = useState<State | null>(initialState)
   const [cat, setCat] = useState('All')
   const [q, setQ] = useState('')
+  const [sortBy, setSortBy] = useState<'flagship' | 'name' | 'category'>('flagship')
   const [busy, setBusy] = useState<string | null>(null)
   const [recs, setRecs] = useState<RecResp | null>(null)
   const [engineMsg, setEngineMsg] = useState<Record<string, string>>({})
@@ -101,7 +102,12 @@ export function AutomationHub({ initialRules, initialState }: { initialRules: Ru
   const runEngine = async (key: string, path: string, label: string) => { if (typeof window !== 'undefined' && !window.confirm(`Run ${label} now? It honours each rule's dry-run setting.`)) return; setBusy(key); setEngineMsg((m) => ({ ...m, [key]: 'Running…' })); try { const res = await post(path, {}).then((x) => x.json()).catch(() => null); setEngineMsg((m) => ({ ...m, [key]: res ? (res.message ?? `Done · ${res.applied ?? res.count ?? res.changed ?? 0} action(s)`) : 'Done' })) } finally { setBusy(null) } }
   const setHalt = async (halt: boolean) => { setBusy('halt'); try { await post(halt ? 'automation/halt' : 'automation/resume', halt ? { reason: 'Manual halt from console' } : undefined); await refetchState() } finally { setBusy(null) } }
 
-  const filtered = useMemo(() => { const ql = q.trim().toLowerCase(); return AUTOMATIONS.filter((a) => (cat === 'All' || a.category === cat) && (!ql || a.name.toLowerCase().includes(ql) || a.desc.toLowerCase().includes(ql) || a.category.toLowerCase().includes(ql))) }, [cat, q])
+  const catCounts = useMemo(() => { const m: Record<string, number> = {}; for (const a of AUTOMATIONS) m[a.category] = (m[a.category] ?? 0) + 1; return m }, [])
+  const filtered = useMemo(() => {
+    const ql = q.trim().toLowerCase()
+    const r = AUTOMATIONS.filter((a) => (cat === 'All' || a.category === cat) && (!ql || a.name.toLowerCase().includes(ql) || a.desc.toLowerCase().includes(ql) || a.category.toLowerCase().includes(ql)))
+    return [...r].sort((a, b) => sortBy === 'name' ? a.name.localeCompare(b.name) : sortBy === 'category' ? (a.category.localeCompare(b.category) || a.name.localeCompare(b.name)) : ((Number(!!b.marquee) - Number(!!a.marquee)) || a.name.localeCompare(b.name)))
+  }, [cat, q, sortBy])
   const toggleSel = (id: string) => setSel((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n })
   const toggleSelRule = (id: string) => setSelRules((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n })
   const allRulesSel = rules.length > 0 && rules.every((r) => selRules.has(r.id))
@@ -123,11 +129,17 @@ export function AutomationHub({ initialRules, initialState }: { initialRules: Ru
         <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap', marginBottom: 4 }}>
           <div className="az-search" style={{ minWidth: 300 }}><Search size={15} /><input placeholder="Search automations…" value={q} onChange={(e) => setQ(e.target.value)} /></div>
           <span style={{ color: 'var(--ink2)', fontSize: 12 }}>{filtered.length} of {AUTOMATION_COUNT}</span>
+          {filtered.length > 0 && <button className="az-link" onClick={() => setSel(new Set(filtered.map((a) => a.id)))}>Select all</button>}
           {sel.size > 0 && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}><b>{sel.size} selected</b><button className="az-btn dark" disabled={busy === 'bulk'} onClick={() => void addSelected()}>{busy === 'bulk' ? 'Adding…' : `Add ${sel.size}`}</button><button className="az-link" onClick={() => setSel(new Set())}>Clear</button></span>}
           <span style={{ flex: 1 }} />
+          <span className="ctl" style={{ cursor: 'default' }}>Sort
+            <select value={sortBy} onChange={(e) => setSortBy(e.target.value as 'flagship' | 'name' | 'category')} style={{ marginLeft: 6, border: '1px solid var(--border)', borderRadius: 6, padding: '5px 7px', font: 'inherit', cursor: 'pointer' }}>
+              <option value="flagship">Flagship first</option><option value="name">Name (A–Z)</option><option value="category">Category</option>
+            </select>
+          </span>
           <button className="az-btn dark" onClick={() => setShowBuilder(true)}><Plus size={15} />Build custom rule</button>
         </div>
-        <div className="az-cats">{CATEGORIES.map((c) => <button key={c} className={`az-cat ${cat === c ? 'on' : ''}`} onClick={() => setCat(c)}>{c}</button>)}</div>
+        <div className="az-cats">{CATEGORIES.map((c) => <button key={c} className={`az-cat ${cat === c ? 'on' : ''}`} onClick={() => setCat(c)}>{c}{c !== 'All' && <span style={{ opacity: .55, marginLeft: 5 }}>{catCounts[c] ?? 0}</span>}</button>)}</div>
         <div className="az-libgrid">
           {filtered.map((t) => {
             const added = ruleNames.has(t.name)
