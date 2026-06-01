@@ -3461,6 +3461,8 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       'AD_SPEND_PROFITABILITY_BREACH',
       'CAC_SPIKE',
       'AD_TARGET_UNDERPERFORMING',
+      'CAMPAIGN_PERFORMANCE_BUDGET',
+      'SCHEDULE',
     ])
     if (!ALLOWED_TRIGGERS.has(body.trigger)) {
       reply.code(400)
