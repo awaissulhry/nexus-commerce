@@ -13,9 +13,10 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Search, Zap, FlaskConical, Trash2, Check, TrendingUp, ShieldAlert, RefreshCw, Play, Pause, Sparkles } from 'lucide-react'
+import { Search, Zap, FlaskConical, Trash2, Check, TrendingUp, ShieldAlert, RefreshCw, Play, Pause, Sparkles, Plus } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { CATALOG, CATEGORIES, CATALOG_COUNT, type AutoTemplate } from './catalog'
+import { RuleBuilder } from './RuleBuilder'
 
 interface Rule { id: string; name: string; description?: string; trigger: string; conditions: unknown[]; actions: unknown[]; enabled: boolean; dryRun: boolean; evaluationCount: number; matchCount: number; executionCount: number; lastExecutedAt?: string | null; domain: string }
 interface State { autonomy?: string; halted?: boolean; haltReason?: string | null; effectivelyStopped?: boolean; lastCheckedAt?: string | null }
@@ -36,6 +37,8 @@ export function AutomationHub({ initialRules, initialState }: { initialRules: Ru
   const [busy, setBusy] = useState<string | null>(null)
   const [recs, setRecs] = useState<RecResp | null>(null)
   const [engineMsg, setEngineMsg] = useState<Record<string, string>>({})
+  const [showBuilder, setShowBuilder] = useState(false)
+  const [libVisible, setLibVisible] = useState(48)
 
   const refetchRules = useCallback(async () => {
     const d = await fetch(`${getBackendUrl()}/api/advertising/automation-rules`, { cache: 'no-store' }).then((r) => r.json()).catch(() => ({ items: [] }))
@@ -95,12 +98,14 @@ export function AutomationHub({ initialRules, initialState }: { initialRules: Ru
 
       {tab === 'library' && <>
         <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap', marginBottom: 4 }}>
-          <div className="az-search" style={{ minWidth: 320 }}><Search size={15} /><input placeholder="Search automations…" value={q} onChange={(e) => setQ(e.target.value)} /></div>
+          <div className="az-search" style={{ minWidth: 300 }}><Search size={15} /><input placeholder="Search automations…" value={q} onChange={(e) => { setQ(e.target.value); setLibVisible(48) }} /></div>
           <span style={{ color: 'var(--ink2)', fontSize: 12 }}>{filtered.length} of {CATALOG_COUNT}</span>
+          <span style={{ flex: 1 }} />
+          <button className="az-btn dark" onClick={() => setShowBuilder(true)}><Plus size={15} />Build custom rule</button>
         </div>
-        <div className="az-cats">{CATEGORIES.map((c) => <button key={c} className={`az-cat ${cat === c ? 'on' : ''}`} onClick={() => setCat(c)}>{c}</button>)}</div>
+        <div className="az-cats">{CATEGORIES.map((c) => <button key={c} className={`az-cat ${cat === c ? 'on' : ''}`} onClick={() => { setCat(c); setLibVisible(48) }}>{c}</button>)}</div>
         <div className="az-libgrid">
-          {filtered.map((t) => {
+          {filtered.slice(0, libVisible).map((t) => {
             const added = ruleNames.has(t.name)
             return (
               <div key={t.id} className={`az-tmpl ${t.marquee ? 'marquee' : ''}`}>
@@ -118,7 +123,8 @@ export function AutomationHub({ initialRules, initialState }: { initialRules: Ru
             )
           })}
         </div>
-        <div style={{ color: 'var(--ink2)', fontSize: 12, padding: '14px 2px' }}>Every automation is added <b>disabled + in dry-run</b> — flip it on (and later to live) from the Active rules tab when you’re ready.</div>
+        {filtered.length > libVisible && <div style={{ textAlign: 'center', padding: '14px 0' }}><button className="az-btn" onClick={() => setLibVisible((v) => v + 60)}>Load {Math.min(60, filtered.length - libVisible)} more · {filtered.length - libVisible} left</button></div>}
+        <div style={{ color: 'var(--ink2)', fontSize: 12, padding: '14px 2px' }}>Every automation is added <b>disabled + in dry-run</b> — flip it on (and later to live) from the Active rules tab when you’re ready. Need something bespoke? <button className="az-link" onClick={() => setShowBuilder(true)}>Build a custom rule</button>.</div>
       </>}
 
       {tab === 'active' && <div style={{ paddingTop: 4 }}>
@@ -178,6 +184,8 @@ export function AutomationHub({ initialRules, initialState }: { initialRules: Ru
         </div>
         <div style={{ color: 'var(--ink2)', fontSize: 12, padding: '14px 2px' }}>Manual runs honour each rule’s dry-run setting — a dry-run rule only previews. Set targets &amp; thresholds per rule in the Active rules tab.</div>
       </div>}
+
+      {showBuilder && <RuleBuilder onClose={() => setShowBuilder(false)} onSaved={() => { void refetchRules() }} />}
     </div>
   )
 }

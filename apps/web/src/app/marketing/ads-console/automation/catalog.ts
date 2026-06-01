@@ -129,23 +129,29 @@ const MARQUEE: AutoTemplate[] = [
   },
 ]
 
-export const CATALOG: AutoTemplate[] = [
+const grid = <A, B>(as: A[], bs: B[], f: (a: A, b: B) => AutoTemplate) => as.flatMap((a) => bs.map((b) => f(a, b)))
+
+const ALL: AutoTemplate[] = [
   ...MARQUEE,
-  // Bidding — ACOS-defensive presets
-  bidDown(35, 10), bidDown(45, 15), bidDown(55, 15), bidDown(65, 20), bidDown(80, 25), bidDown(100, 30),
-  // Pruning — wasted-spend presets
-  prune(10, 0), prune(15, 0), prune(20, 0), prune(30, 0), prune(50, 0), prune(75, 0), prune(25, 1), prune(50, 1),
-  // Scaling — winner presets
-  scale(3, 10), scale(3, 15), scale(4, 15), scale(4, 20), scale(5, 20), scale(5, 25),
-  // Budget — trim presets
-  trim(30, 10), trim(40, 15), trim(50, 20),
-  // Budget — caps
-  monthlyCap(500), monthlyCap(1000), monthlyCap(5000), monthlyCap(10000),
-  // Harvesting — window/threshold presets
-  harvest(30, 1, 5), harvest(30, 2, 10), harvest(90, 3, 15), harvest(14, 1, 8),
-  // Inventory defense
-  agedStock(7), agedStock(14), agedStock(21),
+  // Bidding — ACOS-defensive presets across every band × aggressiveness
+  ...grid([20, 25, 30, 35, 40, 45, 50, 60, 70, 80, 100], [10, 15, 20, 25], bidDown),
+  // Pruning — wasted-spend presets (spend × max-orders)
+  ...grid([5, 10, 15, 20, 25, 30, 40, 50, 75, 100], [0, 1, 2], prune),
+  // Scaling — winner presets (ROAS × budget step)
+  ...grid([2.5, 3, 3.5, 4, 5, 6], [10, 15, 20, 25], scale),
+  // Budget — trim presets (ACOS × step)
+  ...grid([25, 30, 35, 40, 50, 60], [10, 15, 20], trim),
+  // Harvesting — window × min-orders × min-spend presets
+  ...[14, 30, 60, 90].flatMap((w) => [1, 2, 3].flatMap((o) => [5, 10, 15].map((s) => harvest(w, o, s)))),
+  // Budget — monthly spend caps at every level
+  ...[250, 500, 750, 1000, 1500, 2000, 3000, 5000, 7500, 10000].map(monthlyCap),
+  // Inventory defense — aged-stock thresholds
+  ...[7, 10, 14, 21, 30].map(agedStock),
 ]
+
+// dedupe by id (a few presets overlap the marquee set)
+const seen = new Set<string>()
+export const CATALOG: AutoTemplate[] = ALL.filter((t) => (seen.has(t.id) ? false : (seen.add(t.id), true)))
 
 export const CATEGORIES = ['All', ...Array.from(new Set(CATALOG.map((t) => t.category)))]
 export const CATALOG_COUNT = CATALOG.length
