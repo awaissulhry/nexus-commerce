@@ -36,7 +36,13 @@ export function DaypartingTab() {
   }, [])
 
   const persist = useCallback((g: number[][]) => { setGrid(g); try { localStorage.setItem(STORE, JSON.stringify(g)) } catch { /* ignore */ } }, [])
-  const cycle = (d: number, h: number) => persist(grid.map((row, di) => di === d ? row.map((v, hi) => hi === h ? MODS[(MODS.indexOf(v) + 1) % MODS.length] : v) : row))
+  // drag-to-paint: mousedown cycles a cell + arms the paint value; dragging over
+  // cells paints them; a global mouseup disarms.
+  const setCell = useCallback((d: number, h: number, v: number) => setGrid((g) => { const ng = g.map((row, di) => di === d ? row.map((x, hi) => hi === h ? v : x) : row); try { localStorage.setItem(STORE, JSON.stringify(ng)) } catch { /* ignore */ } return ng }), [])
+  const [paintVal, setPaintVal] = useState<number | null>(null)
+  useEffect(() => { const up = () => setPaintVal(null); window.addEventListener('mouseup', up); return () => window.removeEventListener('mouseup', up) }, [])
+  const startPaint = (d: number, h: number) => { const next = MODS[(MODS.indexOf(grid[d][h]) + 1) % MODS.length]; setPaintVal(next); setCell(d, h, next) }
+  const dragOver = (d: number, h: number) => { if (paintVal !== null) setCell(d, h, paintVal) }
   const preset = (name: string) => {
     const g = Array.from({ length: 7 }, (_, d) => Array.from({ length: 24 }, (_, h) => {
       if (name === 'always') return 0
@@ -86,7 +92,7 @@ export function DaypartingTab() {
             <Fragment key={d}>
               <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--ink2)', alignSelf: 'center' }}>{DAYS[d]}</span>
               {row.map((m, h) => (
-                <button key={`${d}-${h}`} onClick={() => cycle(d, h)} title={`${DAYS[d]} ${h}:00 · ${m > 0 ? '+' : ''}${m}%`} style={{ height: 22, border: '1px solid #fff', borderRadius: 3, background: modColor(m), cursor: 'pointer', fontSize: 8, color: Math.abs(m) > 25 ? '#fff' : 'var(--ink2)', padding: 0 }}>{m !== 0 ? (m > 0 ? '+' : '') + m : ''}</button>
+                <button key={`${d}-${h}`} onMouseDown={(e) => { e.preventDefault(); startPaint(d, h) }} onMouseEnter={() => dragOver(d, h)} draggable={false} title={`${DAYS[d]} ${h}:00 · ${m > 0 ? '+' : ''}${m}% — drag to paint`} style={{ height: 22, border: '1px solid #fff', borderRadius: 3, background: modColor(m), cursor: 'pointer', fontSize: 8, color: Math.abs(m) > 25 ? '#fff' : 'var(--ink2)', padding: 0, userSelect: 'none' }}>{m !== 0 ? (m > 0 ? '+' : '') + m : ''}</button>
               ))}
             </Fragment>
           ))}
