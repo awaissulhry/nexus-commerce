@@ -18,13 +18,21 @@ import { getBackendUrl } from '@/lib/backend-url'
 import { CATALOG, CATEGORIES, CATALOG_COUNT, type AutoTemplate } from './catalog'
 import { RuleBuilder } from './RuleBuilder'
 import { PLAYBOOKS, playbookTemplates } from './playbooks'
+import { DaypartingTab } from './DaypartingTab'
+import { HealthTab } from './HealthTab'
+import { SovTab } from './SovTab'
+import { RetailTab } from './RetailTab'
 
 interface Rule { id: string; name: string; description?: string; trigger: string; conditions: unknown[]; actions: unknown[]; enabled: boolean; dryRun: boolean; evaluationCount: number; matchCount: number; executionCount: number; lastExecutedAt?: string | null; domain: string }
 interface State { autonomy?: string; halted?: boolean; haltReason?: string | null; effectivelyStopped?: boolean; lastCheckedAt?: string | null }
 interface Rec { id: string; category: string; severity: string; title: string; detail: string; estImpactCents?: number; apply?: { kind: string; payload: unknown } }
 interface RecResp { generatedAt?: string; counts?: Record<string, number>; potentialMonthlyImpactCents?: number; recommendations?: Rec[] }
 
-const TABS = [{ k: 'library', label: 'Library' }, { k: 'playbooks', label: 'Playbooks' }, { k: 'active', label: 'Active rules' }, { k: 'recs', label: 'Recommendations' }, { k: 'engine', label: 'Engine & autonomy' }]
+const TABS = [
+  { k: 'library', label: 'Library' }, { k: 'playbooks', label: 'Playbooks' }, { k: 'active', label: 'Active rules' },
+  { k: 'dayparting', label: 'Dayparting' }, { k: 'recs', label: 'Recommendations' }, { k: 'competitive', label: 'Competitive' },
+  { k: 'retail', label: 'Retail' }, { k: 'engine', label: 'Engine & autonomy' }, { k: 'health', label: 'Health' },
+]
 const eur = (c: number | null | undefined) => (c == null ? '—' : new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(c / 100))
 const post = (path: string, body?: unknown) => fetch(`${getBackendUrl()}/api/advertising/${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined })
 const patch = (id: string, body: Record<string, unknown>) => fetch(`${getBackendUrl()}/api/advertising/automation-rules/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
@@ -216,6 +224,11 @@ export function AutomationHub({ initialRules, initialState }: { initialRules: Ru
         </div>
         <div style={{ color: 'var(--ink2)', fontSize: 12, padding: '14px 2px' }}>Manual runs honour each rule’s dry-run setting — a dry-run rule only previews. Set targets &amp; thresholds per rule in the Active rules tab.</div>
       </div>}
+
+      {tab === 'dayparting' && <DaypartingTab />}
+      {tab === 'competitive' && <SovTab />}
+      {tab === 'retail' && <RetailTab />}
+      {tab === 'health' && <HealthTab />}
 
       {showBuilder && <RuleBuilder onClose={() => setShowBuilder(false)} onSaved={() => { void refetchRules() }} />}
     </div>
