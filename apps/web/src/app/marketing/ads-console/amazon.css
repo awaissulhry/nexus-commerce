@@ -301,3 +301,18 @@
 .az-bulkbar .az-link:hover { color: #fff; }
 .az-bulkbar .div { width: 1px; height: 22px; background: rgba(255,255,255,.22); }
 @keyframes az-rise { from { transform: translate(-50%, 12px); opacity: 0 } to { transform: translate(-50%, 0); opacity: 1 } }
+
+/* ── PRODUCT CELL (advertised-products screen) ─────────────── */
+.az-prod { display: inline-flex; align-items: center; gap: 10px; }
+.az-prod .ph { width: 40px; height: 40px; border-radius: 6px; border: 1px solid var(--divider); object-fit: cover; background: var(--bg2); flex: none; }
+.az-prod .ph0 { display: grid; place-items: center; color: var(--ink3); font-size: 10px; }
+.az-prod .nm { font-weight: 500; color: var(--link); display: block; max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.az-prod .nm:hover { color: var(--link-hover); text-decoration: underline; }
+.az-prod .ids { color: var(--ink2); font-size: 11px; }
+/* product-name column pins right after the checkbox */
+.az-table .az-prodstick { position: sticky; left: 46px; background: #fff; z-index: 1; box-shadow: 6px 0 8px -6px rgba(0,0,0,.18); }
+.az-table thead th.az-prodstick { z-index: 3; }
+.az-table tbody tr:hover .az-prodstick { background: #f7fafa; }
+.az-table tbody tr.sel .az-prodstick { background: #e3f3ff; }
+.az-table tbody tr.childrow .az-prodstick { background: #fbfcfc; }
+.az-table tbody tr.childrow:hover .az-prodstick { background: #f3f6f6; }

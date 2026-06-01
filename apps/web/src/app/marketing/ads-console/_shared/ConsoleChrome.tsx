@@ -18,14 +18,17 @@ import {
 const BASE = '/marketing/ads-console'
 const RAIL = [Plus, Megaphone, ShieldCheck, ImageIcon, LineChart, BarChart3, Workflow, LayoutGrid, Briefcase]
 const NAV = ['Portfolios', 'Campaigns', 'Drafts', 'Products', 'Targeting', 'Budgets', 'History', 'Bulk operations', 'Rules', 'Settings']
+// Nav items that are built (real links). The rest light up as their pages land.
+const ROUTES: Record<string, string> = { Campaigns: `${BASE}/campaigns`, Products: `${BASE}/products` }
 
 export function ConsoleChrome({ children }: { children: ReactNode }) {
   const pathname = usePathname() || ''
+  const crumb = pathname.includes('/products') ? 'Products' : 'Campaigns'
   return (
     <>
       <div className="az-top">
         <Link href={`${BASE}/campaigns`} className="brand"><Megaphone size={18} /><span>Nexus<span className="mk"> ads</span></span></Link>
-        <span className="crumb">Campaigns</span>
+        <span className="crumb">{crumb}</span>
         <span className="home"><Home size={16} /></span>
         <span className="sp" />
         <div className="acct"><div className="n">XAVIA</div><div className="s">Sponsored ads, multiple countries</div></div>
@@ -44,10 +47,10 @@ export function ConsoleChrome({ children }: { children: ReactNode }) {
         <nav className="az-nav">
           <div className="collapse"><ChevronLeft size={16} /></div>
           {NAV.map((label) => {
-            const isCampaigns = label === 'Campaigns'
-            const active = isCampaigns && pathname.startsWith(`${BASE}/campaigns`)
-            return isCampaigns
-              ? <Link key={label} href={`${BASE}/campaigns`} className={active ? 'on' : ''}>{label}</Link>
+            const href = ROUTES[label]
+            const active = !!href && pathname.startsWith(href)
+            return href
+              ? <Link key={label} href={href} className={active ? 'on' : ''}>{label}</Link>
               : <a key={label} className="" title="Lands in a later phase" onClick={(e) => e.preventDefault()} style={{ color: 'var(--ink2)' }}>{label}</a>
           })}
         </nav>
