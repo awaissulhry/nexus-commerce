@@ -1,31 +1,32 @@
 'use client'
 
 /**
- * Rank Control — choose WHERE you want to win (placement), HOW hard, WHEN
- * (day-of-week / hour-of-day), and in WHICH market, and the engine bids to take
- * and defend that slot. Built on real actions: set_placement_multiplier
- * (Top-of-search / Product-pages / Rest-of-search, up to Amazon's +900% cap) +
- * raise_bids_for_rank_defense, scoped to the market. The WHEN dimension biases
- * the shared Dayparting schedule (merged, never clobbered) so the push lands in
- * the hours you choose. Created disabled + dry-run; enable in Active rules.
- * (Amazon is an auction — this targets/defends the slot maximally; it can't
- * literally guarantee a fixed position.)
+ * Rank Control — set the EXACT placement bid adjustment you want (Amazon's
+ * "Top of search (Page 1)" / "Product pages" / "Rest of search" %, 0–900%),
+ * by market and (optionally) by day/hour, and hold the slot. The % you choose
+ * is sent verbatim to set_placement_multiplier (action.percentage). An optional
+ * "hold the position" layer nudges keyword bids up in small steps if you slip,
+ * capped at a €/day ceiling so it wins for the LEAST cost (never runs away).
+ * Created disabled + dry-run; enable in Active rules. (Amazon is an auction —
+ * this maximises/defends the slot within your cap; it can't pin a fixed rank.)
  */
 
 import { useState } from 'react'
-import { Crosshair, Check, Info, Clock } from 'lucide-react'
+import { Crosshair, Check, Info, Clock, TrendingUp } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 
 const MARKETS = ['IT', 'DE', 'FR', 'ES', 'NL', 'BE', 'SE', 'PL', 'IE', 'UK', 'All markets']
+// Amazon placement bid adjustments (0–900%). Top of search is the headline lever.
 const PLACEMENTS = [
-  { k: 'PLACEMENT_TOP', label: 'Top of search', hint: 'Page 1, above the fold — the most visible, most competitive slot.' },
-  { k: 'PLACEMENT_PRODUCT_PAGE', label: 'Product pages', hint: 'On competitors’ and related detail pages.' },
-  { k: 'PLACEMENT_REST_OF_SEARCH', label: 'Rest of search', hint: 'Lower / later search results — cheapest reach.' },
+  { k: 'PLACEMENT_TOP', label: 'Top of search (Page 1)', hint: 'Above-the-fold, page 1 — the most visible, most competitive slot.', primary: true, def: 100 },
+  { k: 'PLACEMENT_PRODUCT_PAGE', label: 'Product pages', hint: 'On competitors’ and related detail pages.', def: 0 },
+  { k: 'PLACEMENT_REST_OF_SEARCH', label: 'Rest of search', hint: 'Lower / later search results — cheapest reach.', def: 0 },
 ]
-const AGGR = [
-  { k: 'defend', label: 'Defend', pct: 50, step: 10, desc: 'Hold a strong position cost-effectively.' },
-  { k: 'aggressive', label: 'Aggressive', pct: 150, step: 20, desc: 'Push hard for a top slot.' },
-  { k: 'dominate', label: 'Dominate', pct: 300, step: 30, desc: 'Maximise share of the slot — highest cost.' },
+const PRESETS = [
+  { k: 'defend', label: 'Defend', top: 50 },
+  { k: 'aggressive', label: 'Aggressive', top: 150 },
+  { k: 'dominate', label: 'Dominate', top: 300 },
+  { k: 'max', label: 'Max (+900%)', top: 900 },
 ]
 const DOW = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] // Mon-first, matches Dayparting grid rows
 const WHENS = [
@@ -36,15 +37,17 @@ const WHENS = [
 ]
 const DP_STORE = 'ads-console:dayparting:v1'
 const emptyGrid = () => Array.from({ length: 7 }, () => Array.from({ length: 24 }, () => 0))
-
 const hh = (h: number) => `${String(h).padStart(2, '0')}:00`
+const clampPct = (n: number) => Math.max(0, Math.min(900, Math.round(n)))
 
 export function RankControlTab({ onSaved }: { onSaved: () => void }) {
   const [market, setMarket] = useState('IT')
-  const [placement, setPlacement] = useState('PLACEMENT_TOP')
-  const [aggr, setAggr] = useState('aggressive')
-  const [retarget, setRetarget] = useState(false)
+  // The actual placement bid-adjustment percentages (this is the thing you control).
+  const [pct, setPct] = useState<Record<string, number>>({ PLACEMENT_TOP: 100, PLACEMENT_PRODUCT_PAGE: 0, PLACEMENT_REST_OF_SEARCH: 0 })
+  const [autoDefend, setAutoDefend] = useState(true)
+  const [defendStep, setDefendStep] = useState(15)
   const [ceiling, setCeiling] = useState('')
+  const [retarget, setRetarget] = useState(false)
   const [when, setWhen] = useState('all')
   const [days, setDays] = useState<Set<number>>(new Set([0, 1, 2, 3, 4]))
   const [hStart, setHStart] = useState(8)
@@ -53,20 +56,17 @@ export function RankControlTab({ onSaved }: { onSaved: () => void }) {
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState('')
 
-  const pl = PLACEMENTS.find((p) => p.k === placement)!
-  const ag = AGGR.find((a) => a.k === aggr)!
+  const topPct = pct.PLACEMENT_TOP ?? 0
+  const setP = (k: string, v: number) => setPct((m) => ({ ...m, [k]: clampPct(v) }))
 
-  // [day(Mon=0..Sun=6), hour] cells covered by the chosen window
   const windowCells = (): Array<[number, number]> => {
     const cells: Array<[number, number]> = []
     const inHours = (h: number) => (hStart <= hEnd ? h >= hStart && h < hEnd : h >= hStart || h < hEnd)
-    for (let d = 0; d < 7; d++) {
-      for (let h = 0; h < 24; h++) {
-        if (when === 'all') continue
-        if (when === 'business' && d < 5 && h >= 8 && h < 20) cells.push([d, h])
-        else if (when === 'evenings' && h >= 17 && h < 23) cells.push([d, h])
-        else if (when === 'custom' && days.has(d) && inHours(h)) cells.push([d, h])
-      }
+    for (let d = 0; d < 7; d++) for (let h = 0; h < 24; h++) {
+      if (when === 'all') continue
+      if (when === 'business' && d < 5 && h >= 8 && h < 20) cells.push([d, h])
+      else if (when === 'evenings' && h >= 17 && h < 23) cells.push([d, h])
+      else if (when === 'custom' && days.has(d) && inHours(h)) cells.push([d, h])
     }
     return cells
   }
@@ -75,22 +75,22 @@ export function RankControlTab({ onSaved }: { onSaved: () => void }) {
     : when === 'business' ? 'business hours (Mon–Fri, 08:00–20:00)'
     : when === 'evenings' ? 'evenings (17:00–23:00)'
     : `${DOW.filter((_, i) => days.has(i)).join(', ') || 'no days'} · ${hh(hStart)}–${hh(hEnd)}`
-
   const toggleDay = (i: number) => setDays((s) => { const n = new Set(s); if (n.has(i)) n.delete(i); else n.add(i); return n })
 
   const activate = async () => {
     setBusy(true); setMsg('')
     try {
-      const actions: Array<Record<string, unknown>> = [
-        { type: 'set_placement_multiplier', placement, maxPct: ag.pct },
-        { type: 'raise_bids_for_rank_defense', percent: ag.step },
-        { type: 'notify', target: 'operator', message: `Rank control enforced — ${pl.label} in ${market} (${whenLabel})` },
-      ]
+      // One set_placement_multiplier per placement — the % you chose is sent as
+      // `percentage` (the exact param the engine writes to Amazon).
+      const actions: Array<Record<string, unknown>> = PLACEMENTS.map((p) => ({ type: 'set_placement_multiplier', placement: p.k, percentage: clampPct(pct[p.k] ?? 0) }))
+      if (autoDefend) actions.push({ type: 'raise_bids_for_rank_defense', percent: defendStep })
+      actions.push({ type: 'notify', target: 'operator', message: `Rank control — Top of search +${topPct}% in ${market} (${whenLabel})` })
+      const extras = [pct.PLACEMENT_PRODUCT_PAGE ? `Product pages +${pct.PLACEMENT_PRODUCT_PAGE}%` : '', pct.PLACEMENT_REST_OF_SEARCH ? `Rest of search +${pct.PLACEMENT_REST_OF_SEARCH}%` : ''].filter(Boolean).join(', ')
       const r = await fetch(`${getBackendUrl()}/api/advertising/automation-rules`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name: `Rank control — ${pl.label} (${market})${when !== 'all' ? ` · ${when}` : ''}${retarget ? ' · PDP retarget' : ''}`,
-          description: `Targets and defends ${pl.label} placement in ${market} at ${ag.label.toLowerCase()} aggressiveness (+${ag.pct}% multiplier), ${whenLabel}.${retarget ? ' Retargets prior PDP viewers where Sponsored Display supports it.' : ''}`,
+          name: `Rank control — Top of search +${topPct}% (${market})${when !== 'all' ? ` · ${when}` : ''}`,
+          description: `Sets Top of search (Page 1) bid adjustment to +${topPct}%${extras ? `, ${extras}` : ''} in ${market}${autoDefend ? `, then holds the slot with +${defendStep}% bid steps${ceiling ? ` capped at €${ceiling}/day` : ''}` : ''}, ${whenLabel}.${retarget ? ' Retargets prior PDP viewers where Sponsored Display supports it.' : ''}`,
           trigger: 'SCHEDULE', conditions: [], actions,
           scopeMarketplace: market === 'All markets' ? null : market,
           maxExecutionsPerDay: 24,
@@ -99,17 +99,15 @@ export function RankControlTab({ onSaved }: { onSaved: () => void }) {
       })
       if (!r.ok) { setMsg('Could not create'); return }
 
-      // WHEN dimension → bias the shared Dayparting schedule for the chosen hours
-      // (merge: only lift cells in the window, never lower the operator's design).
       let biased = 0
       if (biasDp && when !== 'all') {
         const cells = windowCells()
         let grid: number[][]
         try { const s = localStorage.getItem(DP_STORE); const g = s ? JSON.parse(s) : null; grid = Array.isArray(g) && g.length === 7 ? g : emptyGrid() } catch { grid = emptyGrid() }
-        const boost = ag.k === 'dominate' ? 50 : 25
+        const boost = topPct >= 300 ? 50 : 25
         for (const [d, h] of cells) { if ((grid[d]?.[h] ?? 0) < boost) { grid[d][h] = boost; biased++ } }
         try { localStorage.setItem(DP_STORE, JSON.stringify(grid)) } catch { /* ignore */ }
-        await fetch(`${getBackendUrl()}/api/advertising/schedules`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'DAYPARTING', name: `Rank-control window — ${pl.label} ${market}`, grid }) }).catch(() => {})
+        await fetch(`${getBackendUrl()}/api/advertising/schedules`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'DAYPARTING', name: `Rank-control window — Top +${topPct}% ${market}`, grid }) }).catch(() => {})
       }
       setMsg(`Rank control created (disabled + dry-run)${biased ? ` · biased ${biased} Dayparting hour(s)` : ''} — enable it in Active rules.`)
       onSaved()
@@ -121,7 +119,7 @@ export function RankControlTab({ onSaved }: { onSaved: () => void }) {
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
         <span style={{ fontWeight: 700, fontSize: 15 }}><Crosshair size={16} style={{ verticalAlign: 'text-bottom', marginRight: 6 }} />Rank Control</span>
       </div>
-      <div style={{ color: 'var(--ink2)', fontSize: 12.5, marginBottom: 16, lineHeight: 1.55 }}>Pick where you want to win, how hard, when, and in which market. The engine sets the placement bid multiplier and defends the slot; the <b>When</b> step biases your Dayparting schedule so the push lands in the hours you choose.</div>
+      <div style={{ color: 'var(--ink2)', fontSize: 12.5, marginBottom: 16, lineHeight: 1.55 }}>Set the exact <b>Top-of-Search bid adjustment %</b> you want (and the other placements), by market and time. The engine writes that placement % to Amazon and — if you turn on Hold-the-position — nudges bids up only as needed to keep the slot, capped so you win for the least cost.</div>
 
       <div className="az-eng-card" style={{ marginBottom: 16 }}>
         <h4>1 · Market</h4>
@@ -129,32 +127,48 @@ export function RankControlTab({ onSaved }: { onSaved: () => void }) {
       </div>
 
       <div className="az-eng-card" style={{ marginBottom: 16 }}>
-        <h4>2 · Where to win (placement)</h4>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(210px,1fr))', gap: 10 }}>
-          {PLACEMENTS.map((p) => (
-            <button key={p.k} onClick={() => setPlacement(p.k)} style={{ textAlign: 'left', border: `1.5px solid ${placement === p.k ? 'var(--navy)' : 'var(--border)'}`, background: placement === p.k ? 'var(--bg2)' : '#fff', borderRadius: 10, padding: '12px 14px', cursor: 'pointer' }}>
-              <div style={{ fontWeight: 700 }}>{p.label}{placement === p.k ? ' ✓' : ''}</div>
-              <div style={{ color: 'var(--ink2)', fontSize: 11.5, marginTop: 3 }}>{p.hint}</div>
-            </button>
+        <h4>2 · Placement bid adjustments</h4>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
+          <span style={{ fontSize: 11.5, color: 'var(--ink2)', alignSelf: 'center' }}>Quick-set Top of search:</span>
+          {PRESETS.map((p) => (
+            <button key={p.k} onClick={() => setP('PLACEMENT_TOP', p.top)} style={{ border: `1.5px solid ${topPct === p.top ? 'var(--navy)' : 'var(--border)'}`, background: topPct === p.top ? 'var(--bg2)' : '#fff', borderRadius: 8, padding: '5px 12px', cursor: 'pointer', fontWeight: 600, fontSize: 12 }}>{p.label}</button>
           ))}
         </div>
+        {PLACEMENTS.map((p) => {
+          const v = pct[p.k] ?? 0
+          return (
+            <div key={p.k} style={{ padding: p.primary ? '12px 14px' : '10px 14px', border: `1px solid ${p.primary ? 'var(--navy)' : 'var(--divider)'}`, borderRadius: 10, marginBottom: 10, background: p.primary ? 'var(--bg2)' : '#fff' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+                <span style={{ fontWeight: p.primary ? 700 : 600, fontSize: p.primary ? 13.5 : 12.5 }}>{p.label}</span>
+                {p.primary && <span style={{ fontSize: 10, fontWeight: 700, color: '#fff', background: 'var(--navy)', borderRadius: 4, padding: '1px 6px' }}>HEADLINE</span>}
+                <span style={{ flex: 1 }} />
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <span style={{ color: 'var(--ink2)', fontWeight: 700 }}>+</span>
+                  <input type="number" min={0} max={900} value={v} onChange={(e) => setP(p.k, Number(e.target.value))} style={{ width: 72, border: '1px solid var(--border)', borderRadius: 6, padding: '5px 8px', font: 'inherit', fontWeight: 700, textAlign: 'right' }} />
+                  <span style={{ color: 'var(--ink2)', fontWeight: 700 }}>%</span>
+                </div>
+              </div>
+              <input type="range" min={0} max={900} step={5} value={v} onChange={(e) => setP(p.k, Number(e.target.value))} style={{ width: '100%', accentColor: 'var(--navy)', cursor: 'pointer' }} aria-label={`${p.label} bid adjustment`} />
+              <div style={{ color: 'var(--ink2)', fontSize: 11, marginTop: 2 }}>{p.hint}</div>
+            </div>
+          )
+        })}
+        <div style={{ color: 'var(--ink2)', fontSize: 11, marginTop: 2 }}><Info size={11} style={{ verticalAlign: 'text-bottom' }} /> A bid that wins Top of search is your base bid × (1 + this %). Amazon caps placement adjustments at +900%.</div>
       </div>
 
       <div className="az-eng-card" style={{ marginBottom: 16 }}>
-        <h4>3 · How hard (aggressiveness)</h4>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: 10 }}>
-          {AGGR.map((a) => (
-            <button key={a.k} onClick={() => setAggr(a.k)} style={{ textAlign: 'left', border: `1.5px solid ${aggr === a.k ? 'var(--navy)' : 'var(--border)'}`, background: aggr === a.k ? 'var(--bg2)' : '#fff', borderRadius: 10, padding: '12px 14px', cursor: 'pointer' }}>
-              <div style={{ fontWeight: 700 }}>{a.label} <span style={{ color: 'var(--ink2)', fontWeight: 500 }}>+{a.pct}%</span></div>
-              <div style={{ color: 'var(--ink2)', fontSize: 11.5, marginTop: 3 }}>{a.desc}</div>
-            </button>
-          ))}
+        <h4>3 · Hold the position — win for the least cost</h4>
+        <label className="az-rowstat" style={{ fontSize: 12.5, cursor: 'pointer', display: 'inline-flex', alignItems: 'center' }}><input type="checkbox" checked={autoDefend} onChange={(e) => setAutoDefend(e.target.checked)} style={{ marginRight: 6 }} /><TrendingUp size={14} style={{ marginRight: 5 }} />Auto-defend the slot: nudge bids up in small steps if you start losing it</label>
+        {autoDefend && (
+          <div style={{ marginTop: 12, display: 'flex', gap: 18, flexWrap: 'wrap', alignItems: 'center' }}>
+            <label style={{ fontSize: 12, color: 'var(--ink2)' }}>Bid step <input type="number" min={5} max={50} value={defendStep} onChange={(e) => setDefendStep(Math.max(5, Math.min(50, Number(e.target.value))))} style={{ width: 60, margin: '0 4px', border: '1px solid var(--border)', borderRadius: 6, padding: '5px 8px', font: 'inherit' }} />%</label>
+            <label style={{ fontSize: 12, color: 'var(--ink2)' }}>Max €/day (cost cap) <input type="number" value={ceiling} placeholder="none" onChange={(e) => setCeiling(e.target.value)} style={{ width: 90, marginLeft: 6, border: '1px solid var(--border)', borderRadius: 6, padding: '5px 8px', font: 'inherit' }} /></label>
+          </div>
+        )}
+        <div style={{ marginTop: 12 }}>
+          <label className="az-rowstat" style={{ fontSize: 12.5, cursor: 'pointer' }}><input type="checkbox" checked={retarget} onChange={(e) => setRetarget(e.target.checked)} style={{ marginRight: 6 }} />Boost shoppers who already viewed the product page</label>
+          {retarget && <div style={{ color: 'var(--ink2)', fontSize: 11.5, marginTop: 8 }}><Info size={12} style={{ verticalAlign: 'text-bottom' }} /> PDP-viewer retargeting runs via Sponsored Display view-remarketing audiences where your account supports them.</div>}
         </div>
-        <div style={{ marginTop: 12, display: 'flex', gap: 18, flexWrap: 'wrap', alignItems: 'center' }}>
-          <label className="az-rowstat" style={{ fontSize: 12.5, cursor: 'pointer' }}><input type="checkbox" checked={retarget} onChange={(e) => setRetarget(e.target.checked)} style={{ marginRight: 6 }} />Boost shoppers who viewed the product page</label>
-          <label style={{ fontSize: 12, color: 'var(--ink2)' }}>Max €/day ceiling <input type="number" value={ceiling} placeholder="none" onChange={(e) => setCeiling(e.target.value)} style={{ width: 90, marginLeft: 6, border: '1px solid var(--border)', borderRadius: 6, padding: '6px 8px', font: 'inherit' }} /></label>
-        </div>
-        {retarget && <div style={{ color: 'var(--ink2)', fontSize: 11.5, marginTop: 8 }}><Info size={12} style={{ verticalAlign: 'text-bottom' }} /> PDP-viewer retargeting runs via Sponsored Display view-remarketing audiences where your account supports them.</div>}
       </div>
 
       <div className="az-eng-card" style={{ marginBottom: 16 }}>
@@ -178,7 +192,7 @@ export function RankControlTab({ onSaved }: { onSaved: () => void }) {
       </div>
 
       <div style={{ background: 'var(--bg3)', border: '1px solid var(--divider)', borderRadius: 10, padding: '12px 14px', marginBottom: 16, fontSize: 13, lineHeight: 1.6 }}>
-        <b>Plan:</b> in <b>{market}</b>, take &amp; defend <b>{pl.label}</b> at <b>{ag.label.toLowerCase()}</b> aggressiveness (placement multiplier <b>+{ag.pct}%</b>, rank-defense +{ag.step}% steps){ceiling ? `, capped at €${ceiling}/day` : ''}, <b>{whenLabel}</b>.{when !== 'all' && biasDp ? <span style={{ color: 'var(--ink2)' }}> <Clock size={12} style={{ verticalAlign: 'text-bottom' }} /> Dayparting biased up for {cellCount} hour(s).</span> : null}
+        <b>Plan:</b> in <b>{market}</b>, set <b>Top of search to +{topPct}%</b>{pct.PLACEMENT_PRODUCT_PAGE ? `, Product pages +${pct.PLACEMENT_PRODUCT_PAGE}%` : ''}{pct.PLACEMENT_REST_OF_SEARCH ? `, Rest of search +${pct.PLACEMENT_REST_OF_SEARCH}%` : ''}.{autoDefend ? <> Then <b>hold the slot</b> with +{defendStep}% bid steps{ceiling ? <>, capped at <b>€{ceiling}/day</b> (least cost)</> : ' (set a €/day cap to bound the cost)'}.</> : null} <b>{whenLabel}</b>.{when !== 'all' && biasDp ? <span style={{ color: 'var(--ink2)' }}> <Clock size={12} style={{ verticalAlign: 'text-bottom' }} /> Dayparting biased up for {cellCount} hour(s).</span> : null}
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
