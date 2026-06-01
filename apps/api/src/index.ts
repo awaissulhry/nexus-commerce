@@ -1142,6 +1142,8 @@ async function start() {
       startTosDefenseCron();
       startAmsSqsPollCron();
       startSqpIngestCron();
+      const { startTosIsIngestCron } = await import('./jobs/ads-tos-is-ingest.job.js');
+      startTosIsIngestCron();
       markCronStep('ads:schedules registered');
       // Redis-dependent BullMQ worker LAST + non-blocking: a hung/failed Redis
       // connect must not freeze the crons above (which is what happened — the

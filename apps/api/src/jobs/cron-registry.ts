@@ -210,6 +210,8 @@ export const CRON_REGISTRY: Record<string, () => Promise<unknown>> = {
   'drain-ads-sync': () => runAdsSyncDrainCron(),
   // Apex D.2 — autonomous Top-of-Search placement-multiplier defense (allowlisted).
   'top-of-search-defense': () => runTosDefenseCron(),
+  // Option C — TOS impression-share ingest (parallel per marketplace, daily).
+  'tos-is-ingest': () => import('./ads-tos-is-ingest.job.js').then(m => m.runTosIsIngestCron()),
   // Apex B.1 — drain the AMS SQS queue (hourly SP/SD/SB stream) into hourly perf.
   'ams-sqs-poll': () => runAmsSqsPoll(),
   // Apex E.1 — ingest Brand Analytics Search Query Performance (competitive share).
