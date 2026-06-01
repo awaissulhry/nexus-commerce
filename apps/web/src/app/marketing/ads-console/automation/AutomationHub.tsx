@@ -17,7 +17,7 @@ import { Search, Zap, FlaskConical, Trash2, Check, TrendingUp, ShieldAlert, Refr
 import { getBackendUrl } from '@/lib/backend-url'
 import { CATALOG, CATEGORIES, CATALOG_COUNT, type AutoTemplate } from './catalog'
 import { RuleBuilder } from './RuleBuilder'
-import { PLAYBOOKS, playbookTemplates } from './playbooks'
+import { PLAYBOOKS, playbookAutomations as playbookTemplates } from './playbooks'
 import { DaypartingTab } from './DaypartingTab'
 import { HealthTab } from './HealthTab'
 import { SovTab } from './SovTab'
@@ -81,7 +81,7 @@ export function AutomationHub({ initialRules, initialState }: { initialRules: Ru
     try {
       for (const t of playbookTemplates(pb)) {
         if (ruleNames.has(t.name)) continue
-        await post('automation-rules', { name: t.name, description: t.desc, trigger: t.trigger, conditions: t.conditions, actions: t.actions, maxExecutionsPerDay: t.maxExecutionsPerDay, maxValueCentsEur: t.maxValueCentsEur ?? null, maxDailyAdSpendCentsEur: t.maxDailyAdSpendCentsEur ?? null })
+        const spec = t.build({}); await post('automation-rules', { name: t.name, description: t.desc, trigger: t.trigger, conditions: spec.conditions, actions: spec.actions, maxExecutionsPerDay: spec.maxExecutionsPerDay ?? null, maxValueCentsEur: null, maxDailyAdSpendCentsEur: spec.maxDailyAdSpendCentsEur ?? null })
       }
       await refetchRules()
     } finally { setBusy(null) }
