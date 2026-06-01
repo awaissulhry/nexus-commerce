@@ -784,31 +784,41 @@ export async function fetchReport(
   //   POST /reporting/reports  → { reportId }
   //   GET  /reporting/reports/:reportId  → poll until status=COMPLETED
   //   GET  location (S3 presigned URL)   → download + parse JSON/gzip
-  const created = await liveCall<{ reportId: string }>({
-    ...ctx,
-    method: 'POST',
-    path: '/reporting/reports',
-    body: {
-      name: `nexus-${req.reportType}-${req.startDate}`,
-      startDate: req.startDate,
-      endDate: req.endDate,
-      configuration: {
-        adProduct: 'SPONSORED_PRODUCTS',
-        groupBy: [req.reportType === 'campaigns' ? 'campaign' : req.reportType.replace(/s$/, '')],
-        columns: req.columnsOverride ?? [
-          'date', 'campaignId', 'adGroupId', 'keywordId', 'adId',
-          'impressions', 'clicks', 'cost', 'sales1d', 'sales7d', 'sales14d',
-          'orders1d', 'orders7d', 'unitsSoldClicks7d',
-          ...(req.extraColumns ?? []),
-        ],
-        reportTypeId: `spCampaigns`,
-        timeUnit: 'DAILY',
-        format: 'GZIP_JSON',
+  let reportId: string
+  try {
+    const created = await liveCall<{ reportId: string }>({
+      ...ctx,
+      method: 'POST',
+      path: '/reporting/reports',
+      body: {
+        name: `nexus-${req.reportType}-${req.startDate}-${req.endDate}${req.columnsOverride ? '-c' : ''}`,
+        startDate: req.startDate,
+        endDate: req.endDate,
+        configuration: {
+          adProduct: 'SPONSORED_PRODUCTS',
+          groupBy: [req.reportType === 'campaigns' ? 'campaign' : req.reportType.replace(/s$/, '')],
+          columns: req.columnsOverride ?? [
+            'date', 'campaignId', 'adGroupId', 'keywordId', 'adId',
+            'impressions', 'clicks', 'cost', 'sales1d', 'sales7d', 'sales14d',
+            'orders1d', 'orders7d', 'unitsSoldClicks7d',
+            ...(req.extraColumns ?? []),
+          ],
+          reportTypeId: `spCampaigns`,
+          timeUnit: 'DAILY',
+          format: 'GZIP_JSON',
+        },
       },
-    },
-  })
+    })
+    reportId = created.reportId
+  } catch (e) {
+    // Amazon dedups an identical in-flight/recent report config with HTTP 425,
+    // pointing to the existing reportId — reuse it instead of failing.
+    const m = (e as Error).message.match(/duplicate of\s*:?\s*([0-9a-f-]{36})/i)
+    if (!m) throw e
+    reportId = m[1]
+    logger.info('[ADS-LIVE] report dedup (425) — reusing existing report', { reportId })
+  }
 
-  const { reportId } = created
   logger.info('[ADS-LIVE] report created, polling', { reportId })
 
   // Poll for up to 10 minutes (60 × 10 s)
