@@ -80,6 +80,7 @@ let v1ExportPollTask: ReturnType<typeof cron.schedule> | null = null
 let v1ExportIngestTask: ReturnType<typeof cron.schedule> | null = null
 let keywordBidResyncTask: ReturnType<typeof cron.schedule> | null = null
 let anomalyGuardTask: ReturnType<typeof cron.schedule> | null = null
+let autoBidTask: ReturnType<typeof cron.schedule> | null = null
 
 // ── fba-storage-age-ingest ────────────────────────────────────────────
 
@@ -525,6 +526,25 @@ export function startAnomalyGuardCron(): void {
   logger.info('ads-anomaly-guard cron: scheduled', { schedule })
 }
 
+// TD.1 — automatic profit-native target-ACOS bidding. Every 6h: optimize bids
+// toward each ad group's profit-derived target ACOS. Autonomy-gated (OFF/halt
+// skip, SUGGEST propose-only) + per-campaign write-gate allowlist downstream.
+export async function runAutoBidCron(): Promise<void> {
+  await recordCronRun('ads-auto-bid', async () => {
+    const { runAutoBidOnce } = await import('../services/advertising/ads-auto-bid.service.js')
+    const r = await runAutoBidOnce()
+    return r.skipped ? `skipped=${r.skipped}` : `proposed=${r.proposed} applied=${r.applied} dryRun=${r.dryRun}`
+  }).catch((err) => logger.error('ads-auto-bid cron: failure', { error: String(err) }))
+}
+
+export function startAutoBidCron(): void {
+  if (autoBidTask) { logger.warn('ads-auto-bid already started'); return }
+  const schedule = process.env.NEXUS_ADS_AUTO_BID_SCHEDULE ?? '20 */6 * * *'
+  if (!cron.validate(schedule)) { logger.error('ads-auto-bid: invalid schedule', { schedule }); return }
+  autoBidTask = cron.schedule(schedule, () => { void runAutoBidCron() })
+  logger.info('ads-auto-bid cron: scheduled', { schedule })
+}
+
 export function startV1ExportIngestCron(): void {
   if (v1ExportIngestTask) { logger.warn('ads-v1-export-ingest already started'); return }
   const schedule = process.env.NEXUS_ADS_V1_EXPORT_INGEST_SCHEDULE ?? '2,7,12,17,22,27,32,37,42,47,52,57 * * * *'
@@ -565,6 +585,8 @@ export function startAllAdvertisingCrons(): void {
   startKeywordBidResyncCron()
   // TD.0 — automation anomaly circuit-breaker.
   startAnomalyGuardCron()
+  // TD.1 — automatic profit-native target-ACOS bidding.
+  startAutoBidCron()
 }
 
 export function stopAllAdvertisingCrons(): void {
@@ -594,11 +616,12 @@ export function stopAllAdvertisingCrons(): void {
     ['v1ExportIngestTask',  v1ExportIngestTask]  as const,
     ['keywordBidResyncTask', keywordBidResyncTask] as const,
     ['anomalyGuardTask', anomalyGuardTask] as const,
+    ['autoBidTask', autoBidTask] as const,
   ]) {
     if (task) { task.stop(); logger.debug(`${key} stopped`) }
   }
   reportCreateTask = null; reportCreateStTask = null; reportCreatePlTask = null; reportCreateApTask = null
   reportPollTask = null; reportIngestTask = null; searchTermCleanupTask = null
   v1ExportCreateTask = null; v1ExportPollTask = null; v1ExportIngestTask = null
-  keywordBidResyncTask = null; anomalyGuardTask = null
+  keywordBidResyncTask = null; anomalyGuardTask = null; autoBidTask = null
 }

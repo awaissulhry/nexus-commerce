@@ -3799,6 +3799,12 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const { runAnomalyGuardOnce } = await import('../services/advertising/ads-anomaly-guard.service.js')
     return runAnomalyGuardOnce()
   })
+  // TD.1 — run the profit-native target-ACOS auto-bid pass on demand (respects
+  // the autonomy dial; SUGGEST = proposals only).
+  fastify.post('/advertising/automation/auto-bid/run', async () => {
+    const { runAutoBidOnce } = await import('../services/advertising/ads-auto-bid.service.js')
+    return runAutoBidOnce()
+  })
   fastify.get('/advertising/marketing-stream/subscriptions', async (request, reply) => {
     const prof = await firstActiveAdsProfile()
     if (!prof) { reply.status(400); return { error: 'no active Amazon Ads connection' } }
