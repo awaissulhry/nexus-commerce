@@ -34,10 +34,15 @@ export async function ingestTopOfSearchIS(opts: { windowDays?: number } = {}): P
   const start = new Date(); start.setUTCDate(start.getUTCDate() - windowDays)
   const fmt = (d: Date) => d.toISOString().slice(0, 10)
 
-  const conns = await prisma.amazonAdsConnection.findMany({ where: { isActive: true }, select: { profileId: true, region: true } })
-  const out: TosIsIngestResult = { profiles: conns.length, rowsFetched: 0, withIS: 0, rowsUpdated: 0, sample: [], errors: [] }
+  const conns = await prisma.amazonAdsConnection.findMany({
+    where: { isActive: true, ...(opts.marketplace ? { marketplace: opts.marketplace } : {}) },
+    select: { profileId: true, region: true },
+  })
 
-  for (const conn of conns) {
+  // Per-profile reports run in PARALLEL (each is an independent async report) so
+  // total wall-clock ≈ the slowest single report, not the sum over all profiles.
+  const perProfile = await Promise.all(conns.map(async (conn) => {
+    const local = { rowsFetched: 0, withIS: 0, rowsUpdated: 0, sample: [] as TosIsIngestResult['sample'], error: null as string | null }
     const ctx: ClientContext = { profileId: conn.profileId, region: conn.region as ClientContext['region'] }
     let rows: unknown[]
     try {
@@ -46,11 +51,11 @@ export async function ingestTopOfSearchIS(opts: { windowDays?: number } = {}): P
       // by the campaigns report). topOfSearchImpressionShare confirmed allowed.
       rows = (await fetchReport(ctx, { reportType: 'campaigns', startDate: fmt(start), endDate: fmt(end), columnsOverride: ['date', 'campaignId', 'impressions', 'topOfSearchImpressionShare'] })) as unknown[]
     } catch (e) {
-      out.errors.push(`${conn.profileId}: ${(e as Error).message}`)
-      continue
+      local.error = `${conn.profileId}: ${(e as Error).message}`
+      return local
     }
     for (const raw of rows) {
-      out.rowsFetched++
+      local.rowsFetched++
       const r = raw as Record<string, unknown>
       const cid = String(r.campaignId ?? '')
       const dateStr = String(r.date ?? '').slice(0, 10)
@@ -59,14 +64,22 @@ export async function ingestTopOfSearchIS(opts: { windowDays?: number } = {}): P
       const num = Number(v)
       if (!Number.isFinite(num) || num < 0) continue
       const frac = num > 1 ? num / 100 : num // Amazon may return % (12.34) or fraction (0.1234) — normalise to 0–1
-      out.withIS++
+      local.withIS++
       const res = await prisma.amazonAdsPlacementReport.updateMany({
         where: { campaignId: cid, date: new Date(dateStr), placement: TOP_REPORT_PLACEMENT },
         data: { topOfSearchIS: frac },
       })
-      out.rowsUpdated += res.count
-      if (out.sample.length < 5) out.sample.push({ campaignId: cid, date: dateStr, tosIS: Number(frac.toFixed(4)) })
+      local.rowsUpdated += res.count
+      if (local.sample.length < 3) local.sample.push({ campaignId: cid, date: dateStr, tosIS: Number(frac.toFixed(4)) })
     }
+    return local
+  }))
+
+  const out: TosIsIngestResult = { profiles: conns.length, rowsFetched: 0, withIS: 0, rowsUpdated: 0, sample: [], errors: [] }
+  for (const p of perProfile) {
+    out.rowsFetched += p.rowsFetched; out.withIS += p.withIS; out.rowsUpdated += p.rowsUpdated
+    if (p.error) out.errors.push(p.error)
+    for (const s of p.sample) if (out.sample.length < 5) out.sample.push(s)
   }
   logger.info('[tos-is-ingest] done', { profiles: out.profiles, rowsFetched: out.rowsFetched, withIS: out.withIS, rowsUpdated: out.rowsUpdated, errors: out.errors.length })
   return out

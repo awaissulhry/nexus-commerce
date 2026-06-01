@@ -3767,9 +3767,9 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   // validates that Amazon accepts the metric (withIS > 0 + sample populated) and
   // performs the first ingest. Safe: failure is isolated to this fetch.
   fastify.post('/advertising/debug/tos-is-ingest', async (request) => {
-    const b = (request.body ?? {}) as { windowDays?: number }
+    const b = (request.body ?? {}) as { windowDays?: number; marketplace?: string }
     const { ingestTopOfSearchIS } = await import('../services/advertising/ads-tos-is-ingest.service.js')
-    return ingestTopOfSearchIS({ windowDays: b.windowDays })
+    return ingestTopOfSearchIS({ windowDays: b.windowDays, marketplace: b.marketplace })
   })
 
   fastify.post('/advertising/cron/advertising-rule-evaluator/trigger', async (_request, _reply) => {
@@ -4048,10 +4048,10 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
 
   // ── AME.11: Top-of-search placement optimizer ───────────────────────
   fastify.get('/advertising/top-of-search', async (request, reply) => {
-    const q = request.query as { windowDays?: string; marketplace?: string; targetAcos?: string }
+    const q = request.query as { windowDays?: string; marketplace?: string; targetAcos?: string; targetIS?: string }
     const { analyzeTopOfSearch } = await import('../services/advertising/ads-top-of-search.service.js')
     reply.header('Cache-Control', 'private, max-age=60')
-    return analyzeTopOfSearch({ windowDays: q.windowDays ? Number(q.windowDays) : undefined, marketplace: q.marketplace, targetAcos: q.targetAcos ? Number(q.targetAcos) : undefined })
+    return analyzeTopOfSearch({ windowDays: q.windowDays ? Number(q.windowDays) : undefined, marketplace: q.marketplace, targetAcos: q.targetAcos ? Number(q.targetAcos) : undefined, targetIS: q.targetIS ? Number(q.targetIS) : undefined })
   })
   fastify.post('/advertising/top-of-search/apply', async (request, reply) => {
     const b = (request.body ?? {}) as { campaignId?: string; percentage?: number }
