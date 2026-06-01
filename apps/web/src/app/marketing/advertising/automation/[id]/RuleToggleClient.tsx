@@ -8,7 +8,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Loader2, Power, ShieldAlert, FlaskConical } from 'lucide-react'
+import { Loader2, Power, ShieldAlert, FlaskConical, Play } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 
 export function RuleToggleClient({
@@ -24,6 +24,8 @@ export function RuleToggleClient({
   const [enabled, setEnabled] = useState(initialEnabled)
   const [dryRun, setDryRun] = useState(initialDryRun)
   const [busy, setBusy] = useState(false)
+  const [simBusy, setSimBusy] = useState(false)
+  const [simResult, setSimResult] = useState<string | null>(null)
   const [pendingLive, setPendingLive] = useState(false)
 
   async function patch(body: Record<string, unknown>) {
@@ -98,13 +100,26 @@ export function RuleToggleClient({
         </button>
 
         <span className="text-xs text-slate-500 dark:text-slate-400">
-          {!enabled
-            ? 'Rule is disabled — the cron will not evaluate it.'
-            : dryRun
-              ? 'Dry-run mode: each execution produces only an audit entry, no writes.'
-              : 'Live mode: actions are sent to Amazon Ads via OutboundSyncQueue.'}
+          {!enabled ? 'Disabled — cron skips it.' : dryRun ? 'Dry-run — proposes changes, no writes.' : 'Live — writes to Amazon Ads.'}
         </span>
+        <button
+          type="button"
+          disabled={simBusy}
+          onClick={async () => {
+            setSimBusy(true); setSimResult(null)
+            try {
+              const r = await fetch(`${getBackendUrl()}/api/advertising/automation-rules/${ruleId}/simulate`, { method: 'POST', headers: { 'Content-Type': 'application/json' } }).then((x) => x.json())
+              setSimResult(r.note ?? (r.ok ? 'Evaluator triggered — refresh execution history in ~30s' : (r.error ?? 'Failed')))
+              setTimeout(() => router.refresh(), 30_000)
+            } catch { setSimResult('Error triggering simulation') } finally { setSimBusy(false) }
+          }}
+          className="ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 disabled:opacity-50"
+        >
+          {simBusy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Play className="h-3 w-3" />}
+          Simulate now
+        </button>
       </div>
+      {simResult && <div className="mt-2 text-xs text-blue-600 dark:text-blue-400 pl-0.5">{simResult}</div>}
 
       {pendingLive && (
         <div className="mt-3 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 rounded-md px-3 py-2">

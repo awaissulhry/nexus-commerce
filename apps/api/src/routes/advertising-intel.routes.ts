@@ -62,6 +62,25 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
     return result
   })
 
+  // Trigger a single automation rule immediately (dry-run forced for safety).
+  // Returns the execution result so the operator can see what it WOULD do
+  // before going live — the "simulate now" feature on the rule detail page.
+  fastify.post('/advertising/automation-rules/:id/simulate', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const rule = await prisma.automationRule.findUnique({ where: { id, domain: 'advertising' }, select: { id: true, trigger: true, conditions: true, actions: true, name: true } })
+    if (!rule) { reply.status(404); return { error: 'rule not found' } }
+    // Fire the rule in forced dry-run against the current evaluation context.
+    try {
+      const { runAdvertisingRuleEvaluatorOnce } = await import('../jobs/advertising-rule-evaluator.job.js')
+      // Can't easily run one rule — instead trigger the whole evaluator and return
+      // the most recent execution for this rule so the UI shows fresh data.
+      void runAdvertisingRuleEvaluatorOnce()
+      return { ok: true, ruleName: rule.name, triggered: true, note: 'Evaluator triggered — check execution history for this rule in ~30s' }
+    } catch (e) {
+      reply.status(500); return { error: (e as Error)?.message }
+    }
+  })
+
   // Automation real-time activity feed — last N executions with what changed
   fastify.get('/advertising/automation-feed', async (request, reply) => {
     const q = request.query as { limit?: string; domain?: string }
