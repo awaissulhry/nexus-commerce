@@ -22,6 +22,8 @@ import { useRankUndo } from './useRankUndo'
 import { StrategyStation } from './StrategyStation'
 import { ConquestStation } from './ConquestStation'
 import { AutomateStation } from './AutomateStation'
+import { KeywordBidStation } from './KeywordBidStation'
+import { BulkApplyStation } from './BulkApplyStation'
 import { SimpleRankPanel } from './SimpleRankPanel'
 import { CommandPalette, type CmdAction } from './CommandPalette'
 import { IntelligenceBanner } from './IntelligenceBanner'
@@ -134,8 +136,10 @@ export function UnifiedRankCockpit() {
 
         {/* ── Absorbed modes as progressive stations (RC4.2+) ── */}
         {campaignId && <StrategyStation campaignId={campaignId} currentStrategy={campaign?.biddingStrategy ?? null} onChanged={loadPending} />}
+        {campaignId && <KeywordBidStation campaignId={campaignId} onChanged={loadPending} />}
         {campaignId && <ConquestStation campaignId={campaignId} onChanged={loadPending} />}
         <AutomateStation market={market} onChanged={loadPending} />
+        <BulkApplyStation campaigns={inMarket} market={market} onChanged={loadPending} />
       </>)}
 
       {/* ── Footer: staged-changes tray + history (RC4.5 / RC4.6) ── */}
