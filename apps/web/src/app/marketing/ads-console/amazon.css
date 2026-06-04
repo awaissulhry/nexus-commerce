@@ -226,6 +226,21 @@
 .az-spend-table tr.on td { background: var(--bg3); }
 .az-spend-table td.chg { color: var(--navy); font-weight: 700; }
 .az-spend-table tr.tot td { border-top: 2px solid var(--divider); border-bottom: none; font-weight: 700; }
+/* Editable bias cell = the multi-placement mixer (R7) */
+.az-bias-edit { display: inline-flex; align-items: center; border: 1px solid var(--border); border-radius: 7px; overflow: hidden; }
+.az-bias-edit button { border: none; background: #fff; width: 22px; height: 26px; font-size: 14px; line-height: 1; cursor: pointer; color: var(--ink); font-family: inherit; }
+.az-bias-edit button:hover:not(:disabled) { background: var(--bg3); }
+.az-bias-edit button:disabled { opacity: .4; cursor: default; }
+.az-bias-edit input { width: 48px; border: none; border-left: 1px solid var(--divider); border-right: 1px solid var(--divider); padding: 4px 4px; font: inherit; font-size: 12px; font-weight: 700; text-align: center; -moz-appearance: textfield; }
+.az-bias-edit input::-webkit-outer-spin-button, .az-bias-edit input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.az-spend-table td .was { display: block; font-size: 9.5px; color: var(--ink3); margin-top: 2px; }
+.az-spend-actions { display: flex; align-items: center; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
+.az-spend-actions .az-cockpit-sub { margin: 0; }
+
+/* Self-competition warning (R8) */
+.az-selfcomp { display: flex; align-items: flex-start; gap: 8px; margin: 0 0 12px; padding: 10px 12px; background: #fbeee3; border: 1px solid #f0c9a8; border-radius: 9px; font-size: 12.5px; line-height: 1.5; color: #8a4a1a; }
+.az-selfcomp svg { flex-shrink: 0; margin-top: 1px; color: #c2570f; }
+.az-selfcomp b { color: #7a3e15; }
 
 /* Action chip + per-campaign lines */
 .az-act { display: inline-flex; align-items: center; gap: 3px; font-size: 10px; font-weight: 700; border-radius: 4px; padding: 1px 6px; vertical-align: middle; }

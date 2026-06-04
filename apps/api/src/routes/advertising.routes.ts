@@ -532,6 +532,36 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     return { ok: true, cpcCeiling: db.cpcCeiling }
   })
 
+  // ── Self-competition (RC2.R8) — other campaigns in the SAME market that
+  // advertise the SAME ASIN as this campaign. They compete in the same auction
+  // (only the highest-eligible bid serves), so this flags accidental
+  // cannibalisation. Read-only.
+  fastify.get('/advertising/campaigns/:id/self-competition', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const camp = await prisma.campaign.findUnique({ where: { id }, select: { marketplace: true } })
+    if (!camp) { reply.status(404); return { error: 'campaign not found' } }
+    const myAds = await prisma.adProductAd.findMany({ where: { adGroup: { campaignId: id }, asin: { not: null } }, select: { asin: true } })
+    const asins = [...new Set(myAds.map((a) => a.asin).filter((x): x is string => !!x))]
+    reply.header('Cache-Control', 'private, max-age=120')
+    if (asins.length === 0) return { marketplace: camp.marketplace, asins: [], conflicts: [] }
+    const others = await prisma.adProductAd.findMany({
+      where: { asin: { in: asins }, adGroup: { campaign: { marketplace: camp.marketplace, id: { not: id } } } },
+      select: { asin: true, adGroup: { select: { campaign: { select: { id: true, name: true, status: true } } } } },
+    })
+    const byCamp = new Map<string, { campaignId: string; name: string; status: string; asins: Set<string> }>()
+    for (const o of others) {
+      const c = o.adGroup?.campaign
+      if (!c || !o.asin) continue
+      let g = byCamp.get(c.id)
+      if (!g) { g = { campaignId: c.id, name: c.name, status: c.status, asins: new Set() }; byCamp.set(c.id, g) }
+      g.asins.add(o.asin)
+    }
+    const conflicts = [...byCamp.values()]
+      .map((g) => ({ campaignId: g.campaignId, name: g.name, status: g.status, asins: [...g.asins] }))
+      .sort((a, b) => b.asins.length - a.asins.length)
+    return { marketplace: camp.marketplace, asins, conflicts }
+  })
+
   // ── Apex A.2a: per-campaign bid guardrails (max-change-% + writes/day) ──
   // Stored in dynamicBidding JSON alongside cpcCeiling. maxBidChangePct clamps
   // how far any single bid move (manual/bulk/automation) can swing from the
