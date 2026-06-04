@@ -20,6 +20,7 @@ import { RankPlacementCockpit } from '../automation/RankPlacementCockpit'
 import { StagedChangesTray } from './StagedChangesTray'
 import { useRankUndo } from './useRankUndo'
 import { StrategyStation } from './StrategyStation'
+import { ConquestStation } from './ConquestStation'
 
 const MARKETS = ['IT', 'DE', 'FR', 'ES', 'NL', 'BE', 'SE', 'PL', 'IE', 'UK']
 const LOOKBACKS = [7, 14, 30, 60, 90]
@@ -116,6 +117,7 @@ export function UnifiedRankCockpit() {
 
       {/* ── Absorbed modes as progressive stations (RC4.2+) ── */}
       {campaignId && <StrategyStation campaignId={campaignId} currentStrategy={campaign?.biddingStrategy ?? null} onChanged={loadPending} />}
+      {campaignId && <ConquestStation campaignId={campaignId} onChanged={loadPending} />}
 
       {/* ── Footer: staged-changes tray + history (RC4.5 / RC4.6) ── */}
       <div className="az-urc-foot">

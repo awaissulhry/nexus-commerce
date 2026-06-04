@@ -533,6 +533,12 @@
 .az-strat-btn.on { border-color: var(--navy); color: var(--navy); background: var(--bg2); }
 .az-strat-ceil { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; margin-top: 12px; font-size: 12.5px; color: var(--ink2); }
 .az-strat-ceil input[type="number"] { width: 60px; border: 1px solid var(--border); border-radius: 6px; padding: 4px 7px; font: inherit; font-weight: 700; text-align: right; }
+.az-cq-ag { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 700; color: var(--ink2); margin-bottom: 10px; }
+.az-cq-ag select { border: 1px solid var(--border); border-radius: 6px; padding: 5px 8px; font: inherit; cursor: pointer; }
+.az-cq-ta { width: 100%; border: 1px solid var(--border); border-radius: 8px; padding: 9px 11px; font: inherit; font-size: 12.5px; resize: vertical; box-sizing: border-box; }
+.az-cq-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
+.az-cq-row label { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; color: var(--ink2); }
+.az-cq-row input[type="number"] { width: 74px; border: 1px solid var(--border); border-radius: 6px; padding: 5px 8px; font: inherit; font-weight: 700; text-align: right; }
 
 /* Inline rank-set collision warning in the Strategy panel (RC3.4) */
 .az-rankwarn { margin: 10px 0 0; padding: 10px 11px; border: 1px solid #f0c9a8; border-left: 3px solid #b3541e; border-radius: 9px; background: #fff7f0; }
