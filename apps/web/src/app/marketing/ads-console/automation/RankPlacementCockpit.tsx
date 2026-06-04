@@ -22,7 +22,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { DndContext, useDraggable, useDroppable, DragOverlay, type DragEndEvent, type DragStartEvent, PointerSensor, KeyboardSensor, useSensor, useSensors } from '@dnd-kit/core'
-import { GripVertical, Info, ArrowUp, Crosshair, TrendingUp, TrendingDown, Minus, Search, Plus, Loader2, Check, ListPlus, Sparkles } from 'lucide-react'
+import { GripVertical, Info, ArrowUp, Crosshair, TrendingUp, TrendingDown, Minus, Search, Plus, Loader2, Check, ListPlus, Sparkles, Zap, ShieldCheck } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 
 const MARKETS = ['IT', 'DE', 'FR', 'ES', 'NL', 'BE', 'SE', 'PL', 'IE', 'UK']
@@ -50,6 +50,8 @@ const slotLabel = (k: SlotKey) => {
   return s?.group === 'top' ? `Top of search · ${s.short}` : s?.short ?? '—'
 }
 const euros = (c: number) => `€${(c / 100).toFixed(2)}`
+// Starting top-of-search bias per slot — the hold loop fine-tunes from here.
+const SLOT_PUSH: Record<SlotKey, number> = { top1: 120, top2: 70, top3: 35, rest: 0, product: 0 }
 // Map a campaign's current top-of-search state → the slot it effectively sits in.
 function impliedSlot(topIS: number | null, currentPct: number): SlotKey {
   if (topIS != null) return topIS >= 0.55 ? 'top1' : topIS >= 0.38 ? 'top2' : topIS >= 0.20 ? 'top3' : 'rest'
@@ -135,6 +137,14 @@ export function RankPlacementCockpit() {
   const [suggesting, setSuggesting] = useState(false)
   const [adding, setAdding] = useState(false)
   const [addMsg, setAddMsg] = useState('')
+  // R4 — apply rank + hold the slot
+  const [applyPct, setApplyPct] = useState(35)
+  const [applying, setApplying] = useState(false)
+  const [applyResult, setApplyResult] = useState<{ mode: string } | null>(null)
+  const [holdIS, setHoldIS] = useState(30)
+  const [holdAcos, setHoldAcos] = useState(25)
+  const [holding, setHolding] = useState(false)
+  const [holdMsg, setHoldMsg] = useState('')
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }), useSensor(KeyboardSensor))
 
@@ -255,8 +265,55 @@ export function RankPlacementCockpit() {
   const onDragEnd = (e: DragEndEvent) => {
     setActiveId(null)
     const over = e.over?.id as SlotKey | undefined
-    if (over && SLOTS.some(s => s.k === over)) { setSlot(over); setUserMoved(true) }
+    if (over && SLOTS.some(s => s.k === over)) { setSlot(over); setUserMoved(true); setApplyResult(null); setHoldMsg('') }
   }
+
+  // R4 — default the apply bias + hold target from the chosen slot.
+  useEffect(() => {
+    setApplyPct(SLOT_PUSH[slot])
+    const s = SLOTS.find(x => x.k === slot)
+    if (s?.isTarget != null) setHoldIS(Math.round(s.isTarget * 100))
+  }, [slot])
+
+  // Apply the rank target to THIS campaign (single PLACEMENT_TOP write, gated).
+  const applyRank = useCallback(async () => {
+    if (!campaignId) return
+    setApplying(true); setApplyResult(null)
+    try {
+      const r = await fetch(`${getBackendUrl()}/api/advertising/top-of-search/apply`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ campaignId, percentage: applyPct }),
+      }).then(r => r.json())
+      setApplyResult({ mode: r?.result?.mode ?? (r?.ok ? 'local' : 'error') })
+    } catch { setApplyResult({ mode: 'error' }) }
+    setApplying(false)
+    void loadSignals()
+  }, [campaignId, applyPct, loadSignals])
+
+  // Create the autonomous hold-the-slot loop (defend_top_of_search), targetIS
+  // from the chosen rank. Allowlist-enforced + dry-run; market-scoped engine.
+  const createHold = useCallback(async () => {
+    if (!campaign) return
+    setHolding(true); setHoldMsg('')
+    try {
+      const r = await fetch(`${getBackendUrl()}/api/advertising/automation-rules`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: `Hold ${slotLabel(slot)} — IS ≥ ${holdIS}% (${market})`,
+          description: `Holds top-of-search impression share ≥ ${holdIS}% (target rank ${slotLabel(slot)}) by tuning PLACEMENT_TOP ±15%/run, ≤900%, bounded by ${holdAcos}% ACOS — raise while below target and in budget, ease off once above or over ACOS (win the slot for least cost). Created from the Placement Cockpit for ${campaign.name}.`,
+          trigger: 'SCHEDULE', conditions: [],
+          actions: [
+            { type: 'defend_top_of_search', targetIS: holdIS / 100, targetAcos: holdAcos / 100, marketplace: market },
+            { type: 'notify', target: 'operator', message: `Holding ${slotLabel(slot)} (IS ≥ ${holdIS}%) in ${market}` },
+          ],
+          scopeMarketplace: market,
+          maxExecutionsPerDay: 48,
+        }),
+      })
+      setHoldMsg(r.ok ? 'created' : 'error')
+    } catch { setHoldMsg('error') }
+    finally { setHolding(false) }
+  }, [campaign, slot, holdIS, holdAcos, market])
 
   const isPct = cur?.topIS != null ? cur.topIS * 100 : null
   const targetSlot = SLOTS.find(s => s.k === slot) ?? null
@@ -346,9 +403,54 @@ export function RankPlacementCockpit() {
           <div className="row"><span>Top ACOS</span><b>{cur?.topAcos != null ? `${(cur.topAcos * 100).toFixed(0)}%` : '—'}</b></div>
           {cur?.reason && <div className="az-cockpit-sub">{cur.reason}.</div>}
 
-          <div className="az-cockpit-note">
-            <Info size={12} /> The numbered rank ladder + live IS feedback are read-only. Bulk keyword management is below; one-click apply + hold-the-slot land in R4.
-          </div>
+          <div className="sep" />
+          {/* ── R4: apply the rank + hold the slot ───────────────── */}
+          {!userMoved ? (
+            <div className="az-cockpit-note"><Info size={12} /> Drag your listing onto a rank to apply it. The card starts where the campaign sits today.</div>
+          ) : !campaign ? null : targetSlot?.group === 'product' ? (
+            <div className="az-cockpit-note"><Info size={12} /> Product-page targeting is read-only for now — its apply lands in a later pass. Top-of-search ranks apply below.</div>
+          ) : (
+            <>
+              <div className="az-plan-head">{targetSlot?.group === 'rest' ? 'Remove top-of-search bias' : `Push toward ${slotLabel(slot)}`}</div>
+              {targetSlot?.group === 'top' && (
+                <div className="az-plan-target">
+                  <span className="az-gauge-lbl">Top-of-search bias{cur ? ` · now +${cur.currentPct}%` : ''}</span>
+                  <div className="az-stepper">
+                    <button type="button" onClick={() => setApplyPct(p => Math.max(0, p - 10))} disabled={applying} aria-label="Decrease bias">−</button>
+                    <span className="v">+{applyPct}%</span>
+                    <button type="button" onClick={() => setApplyPct(p => Math.min(900, p + 10))} disabled={applying} aria-label="Increase bias">+</button>
+                  </div>
+                </div>
+              )}
+              <button type="button" className="az-btn dark" style={{ marginTop: 8, width: '100%', justifyContent: 'center' }} disabled={applying || (cur != null && cur.currentPct === applyPct)} onClick={() => void applyRank()}>
+                {applying ? <><Loader2 size={14} className="az-spin" /> Applying…</> : <><Zap size={14} /> Apply +{applyPct}% to this campaign</>}
+              </button>
+              {applyResult && (
+                <div className="az-cockpit-sub" style={{ marginTop: 6, color: applyResult.mode === 'live' ? 'var(--green)' : applyResult.mode === 'error' ? '#cc1100' : 'var(--ink2)' }}>
+                  {applyResult.mode === 'error' ? 'Apply failed — check the campaign sync status.'
+                    : applyResult.mode === 'live' ? <><Check size={12} style={{ verticalAlign: 'text-bottom' }} /> Applied live on Amazon.</>
+                    : <><Check size={12} style={{ verticalAlign: 'text-bottom' }} /> Staged locally ({applyResult.mode}) — not live on Amazon. Flip the write-gate to push live.</>}
+                </div>
+              )}
+
+              {targetSlot?.group === 'top' && (
+                <div className="az-hold">
+                  <div className="az-hold-head"><ShieldCheck size={13} /> Hold {slotLabel(slot)}</div>
+                  <div className="az-hold-sub">Run an autonomous loop that keeps impression share at the target for the least cost — raise while below &amp; ACOS is in budget, ease off otherwise.</div>
+                  <div className="az-hold-ctls">
+                    <label>Target IS <input type="number" min={1} max={100} value={holdIS} onChange={e => setHoldIS(Math.max(1, Math.min(100, Number(e.target.value))))} disabled={holding} />%</label>
+                    <label>Max ACOS <input type="number" min={1} max={200} value={holdAcos} onChange={e => setHoldAcos(Math.max(1, Math.min(200, Number(e.target.value))))} disabled={holding} />%</label>
+                  </div>
+                  <button type="button" className="az-btn" style={{ marginTop: 8, width: '100%', justifyContent: 'center' }} disabled={holding} onClick={() => void createHold()}>
+                    {holding ? <><Loader2 size={14} className="az-spin" /> Creating…</> : <><ShieldCheck size={14} /> Hold IS ≥ {holdIS}%</>}
+                  </button>
+                  {holdMsg === 'created' && <div className="az-cockpit-sub" style={{ marginTop: 6, color: 'var(--green)' }}><Check size={12} style={{ verticalAlign: 'text-bottom' }} /> Hold rule created (disabled + dry-run). Enable it in Active rules and allowlist this campaign to go live.</div>}
+                  {holdMsg === 'error' && <div className="az-cockpit-sub" style={{ marginTop: 6, color: '#cc1100' }}>Could not create the hold rule.</div>}
+                </div>
+              )}
+              <div className="az-cockpit-note" style={{ marginTop: 8 }}><Info size={12} /> Apply &amp; Hold are gated — sandbox stages locally until the ads write-gate is live (needs approval). The hold loop is market-scoped; allowlist this campaign to include it.</div>
+            </>
+          )}
         </div>
       </div>
 
