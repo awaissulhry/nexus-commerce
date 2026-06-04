@@ -86,15 +86,22 @@ function DropSlot({ slot, active, numbered, children }: { slot: Slot; active: bo
   )
 }
 
-function Gauge({ pct, target, tone }: { pct: number | null; target?: number; tone?: 'is' }) {
-  const v = pct == null ? null : Math.max(0, Math.min(100, pct))
+// Rank meter — a single 0–100% top-of-search impression-share scale with the
+// 3rd/2nd/1st bands marked, the live IS fill, and a caret at the target slot.
+// Makes the honest rank→IS mapping visible: where you're holding vs the target.
+const RANK_BANDS = [{ at: 30, lbl: '3rd' }, { at: 45, lbl: '2nd' }, { at: 65, lbl: '1st' }]
+function RankMeter({ isPct, targetPct }: { isPct: number | null; targetPct: number | null }) {
   return (
-    <div className="az-gauge">
-      <div className="az-gauge-track">
-        {v != null && <div className={`az-gauge-fill ${tone ?? ''}`} style={{ width: `${v}%` }} />}
-        {target != null && <div className="az-gauge-mark" style={{ left: `${Math.max(0, Math.min(100, target))}%` }} title={`Target ${target}%`} />}
+    <div className="az-rankmeter">
+      <div className="az-rankmeter-labels">
+        {RANK_BANDS.map(b => <span key={b.lbl} className="bl" style={{ left: `${b.at}%` }}>{b.lbl}</span>)}
       </div>
-      <span className="az-gauge-val">{v == null ? '—' : `${v.toFixed(0)}%`}</span>
+      <div className="az-rankmeter-track">
+        {isPct != null && <div className="fill" style={{ width: `${Math.min(100, Math.max(0, isPct))}%` }} />}
+        {RANK_BANDS.map(b => <span key={b.lbl} className="tick" style={{ left: `${b.at}%` }} />)}
+        {targetPct != null && <span className="target" style={{ left: `${Math.min(100, Math.max(0, targetPct))}%` }} title={`Target ${targetPct}% IS`} />}
+      </div>
+      <div className="az-rankmeter-foot"><span>{isPct == null ? 'IS — (not ingested)' : `Holding ${isPct.toFixed(0)}% IS`}</span><span className="leg">1st ≥65 · 2nd ≥45 · 3rd ≥30</span></div>
     </div>
   )
 }
@@ -170,7 +177,21 @@ export function RankPlacementCockpit() {
 
   const isPct = cur?.topIS != null ? cur.topIS * 100 : null
   const targetSlot = SLOTS.find(s => s.k === slot) ?? null
+  const targetIsPct = targetSlot?.isTarget != null ? Math.round(targetSlot.isTarget * 100) : null
+  const curRankSlot = cur?.topIS != null ? impliedSlot(cur.topIS, cur.currentPct) : null
   const topSlots = SLOTS.filter(s => s.group === 'top')
+
+  // Honest rank readout: where you're holding vs the target slot.
+  const rankReadout = (() => {
+    if (!cur) return null
+    if (targetSlot?.group !== 'top') return `Targeting ${slotLabel(slot)} — easing off top-of-search to cut cost.`
+    if (cur.topIS == null) return `Top-of-search IS not ingested yet — targeting ${slotLabel(slot)}; the hold loop uses ACOS until IS data lands.`
+    const x = Math.round(cur.topIS * 100)
+    const est = curRankSlot ? slotLabel(curRankSlot) : '—'
+    if (targetIsPct == null) return null
+    if (x >= targetIsPct) return `On/above target — holding ${x}% IS (≈ ${est}).`
+    return `Targeting ${slotLabel(slot)} (≥ ${targetIsPct}% IS). Holding ${x}% ≈ ${est} — about +${targetIsPct - x} pts to reach it.`
+  })()
 
   return (
     <div className="az-cockpit">
@@ -230,11 +251,11 @@ export function RankPlacementCockpit() {
           <div className="sep" />
           <div className="row"><span>Target rank</span><b>{slotLabel(slot)}{userMoved ? '' : ' (current)'}</b></div>
 
-          <div className="az-gauge-row">
-            <span className="az-gauge-lbl">Top-of-search IS{targetSlot?.isTarget != null ? ` · target ${Math.round(targetSlot.isTarget * 100)}%` : ''}</span>
-            <Gauge pct={isPct} target={targetSlot?.isTarget != null ? Math.round(targetSlot.isTarget * 100) : undefined} tone="is" />
+          <div className="az-rankmeter-wrap">
+            <span className="az-gauge-lbl">Rank · top-of-search impression share</span>
+            <RankMeter isPct={isPct} targetPct={targetIsPct} />
           </div>
-          {cur && cur.topIS == null && <div className="az-cockpit-sub">IS not ingested yet — recommendation falls back to ACOS.</div>}
+          {rankReadout && <div className="az-cockpit-sub">{rankReadout}</div>}
 
           <div className="sep" />
           <div className="row"><span>Current top-of-search %</span><b>{cur ? `+${cur.currentPct}%` : '—'}</b></div>

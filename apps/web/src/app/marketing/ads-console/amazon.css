@@ -171,6 +171,18 @@
 .az-gauge-mark::after { content: ''; position: absolute; top: -3px; left: -2px; width: 6px; height: 6px; border-radius: 50%; background: var(--ink); }
 .az-gauge-val { font-size: 11.5px; font-weight: 700; color: var(--ink); min-width: 34px; text-align: right; }
 
+/* Rank meter (R2) — IS scale with 3rd/2nd/1st bands, live fill + target caret */
+.az-rankmeter-wrap { display: flex; flex-direction: column; gap: 5px; padding: 8px 0 4px; }
+.az-rankmeter { display: flex; flex-direction: column; gap: 3px; }
+.az-rankmeter-labels { position: relative; height: 13px; }
+.az-rankmeter-labels .bl { position: absolute; transform: translateX(-50%); font-size: 9.5px; font-weight: 700; color: var(--ink3); }
+.az-rankmeter-track { position: relative; height: 10px; border-radius: 5px; background: var(--bg3); overflow: hidden; }
+.az-rankmeter-track .fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 5px; background: linear-gradient(90deg, #1f6feb, #0a3d91); transition: width .35s ease; }
+.az-rankmeter-track .tick { position: absolute; top: 0; bottom: 0; width: 1px; background: rgba(255,255,255,.7); }
+.az-rankmeter-track .target { position: absolute; top: -2px; bottom: -2px; width: 2.5px; background: #d4380d; border-radius: 2px; box-shadow: 0 0 0 1px #fff; transition: left .35s ease; }
+.az-rankmeter-foot { display: flex; justify-content: space-between; font-size: 10px; color: var(--ink2); }
+.az-rankmeter-foot .leg { color: var(--ink3); }
+
 /* Action chip + per-campaign lines */
 .az-act { display: inline-flex; align-items: center; gap: 3px; font-size: 10px; font-weight: 700; border-radius: 4px; padding: 1px 6px; vertical-align: middle; }
 .az-act.raise { color: #1e7a4f; background: #e8f5ee; }
