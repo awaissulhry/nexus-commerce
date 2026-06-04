@@ -17,6 +17,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Crosshair, Search, ChevronRight, Undo2, Redo2, Layers, Zap, AlertTriangle } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { RankPlacementCockpit } from '../automation/RankPlacementCockpit'
+import { StagedChangesTray } from './StagedChangesTray'
 
 const MARKETS = ['IT', 'DE', 'FR', 'ES', 'NL', 'BE', 'SE', 'PL', 'IE', 'UK']
 const LOOKBACKS = [7, 14, 30, 60, 90]
@@ -32,15 +33,15 @@ export function UnifiedRankCockpit() {
   const [searchOpen, setSearchOpen] = useState(false)
   const [autonomy, setAutonomy] = useState<Autonomy | null>(null)
   const [pending, setPending] = useState(0)
+  const [trayOpen, setTrayOpen] = useState(false)
 
   useEffect(() => { void fetch(`${getBackendUrl()}/api/advertising/campaigns?limit=500`, { cache: 'no-store' }).then(r => r.json()).then(d => setCampaigns((d.items ?? []) as Camp[])).catch(() => {}) }, [])
   useEffect(() => { void fetch(`${getBackendUrl()}/api/advertising/autonomy/status`, { cache: 'no-store' }).then(r => r.json()).then(d => setAutonomy(d as Autonomy)).catch(() => {}) }, [])
-  useEffect(() => {
+  const loadPending = useCallback(() => {
     if (!campaignId) { setPending(0); return }
-    const ac = new AbortController()
-    void fetch(`${getBackendUrl()}/api/advertising/campaigns/${campaignId}/pending-writes`, { cache: 'no-store', signal: ac.signal }).then(r => r.json()).then(d => setPending((d.pending ?? []).length)).catch(() => {})
-    return () => ac.abort()
-  }, [campaignId, market])
+    void fetch(`${getBackendUrl()}/api/advertising/campaigns/${campaignId}/pending-writes`, { cache: 'no-store' }).then(r => r.json()).then(d => setPending((d.pending ?? []).length)).catch(() => {})
+  }, [campaignId])
+  useEffect(() => { loadPending() }, [loadPending, market])
 
   const inMarket = useMemo(() => campaigns.filter(c => c.marketplace === market), [campaigns, market])
   useEffect(() => {
@@ -97,10 +98,13 @@ export function UnifiedRankCockpit() {
             Stations get extracted from here in RC4.1–RC4.4. ── */}
       <RankPlacementCockpit market={market} campaignId={campaignId} lookbackDays={lookback} onMarketChange={setMarket} onCampaignChange={setCampaignId} hideScopeBar />
 
-      {/* ── Footer: staged-changes indicator (tray wired in RC4.5, history in RC4.6) ── */}
+      {/* ── Footer: opens the staged-changes tray (RC4.5) ── */}
       <div className="az-urc-foot">
-        <span className={`az-urc-staged ${pending > 0 ? 'has' : ''}`}><Layers size={14} /> {pending > 0 ? `${pending} staged change${pending === 1 ? '' : 's'} waiting for the write-gate` : 'No staged changes'}</span>
+        <button type="button" className={`az-urc-staged ${pending > 0 ? 'has' : ''}`} onClick={() => setTrayOpen(v => !v)} aria-expanded={trayOpen}>
+          <Layers size={14} /> {pending > 0 ? `${pending} staged change${pending === 1 ? '' : 's'}` : 'No staged changes'} · Review &amp; write-gate {trayOpen ? '▾' : '▸'}
+        </button>
       </div>
+      <StagedChangesTray campaignId={campaignId} open={trayOpen} onClose={() => setTrayOpen(false)} onChanged={loadPending} />
     </div>
   )
 }
