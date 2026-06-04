@@ -12,6 +12,7 @@
 import type { FastifyPluginAsync } from 'fastify'
 import { planMappingPropagation } from '../services/pim/mapping-propagation.service.js'
 import { applyCatalogCascade } from '../services/pim/apply-mapping.service.js'
+import { scanProductDivergence } from '../services/pim/reconcile-divergence.service.js'
 
 const mappingPropagationRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post<{
@@ -96,6 +97,26 @@ const mappingPropagationRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.status(500).send({ error: msg })
     }
   })
+
+  // FM.12 — read-only divergence scan: per-coordinate overrides that diverge
+  // from the master + catalog mapping (so the operator can adopt-master or keep).
+  fastify.get<{ Params: { id: string }; Querystring: { locale?: string } }>(
+    '/products/:id/mapping/divergence',
+    async (request, reply) => {
+      try {
+        const report = await scanProductDivergence({
+          productId: request.params.id,
+          locale: request.query.locale,
+        })
+        return reply.send(report)
+      } catch (err: any) {
+        const msg = err?.message ?? 'divergence scan failed'
+        if (msg.startsWith('Product not found')) return reply.status(404).send({ error: msg })
+        request.log.error({ err }, 'mapping divergence scan failed')
+        return reply.status(500).send({ error: msg })
+      }
+    },
+  )
 }
 
 export default mappingPropagationRoutes
