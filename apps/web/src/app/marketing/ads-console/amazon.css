@@ -412,6 +412,13 @@
 .az-kwx-act .why { font-size: 11px; color: var(--ink2); }
 .az-kwx-act .why b { color: #1e7a4f; }
 .az-kwx-act .msg { font-size: 11px; font-weight: 600; color: #1e7a4f; }
+.az-kwx-restore { font: inherit; font-size: 10.5px; font-weight: 700; color: var(--ink2); background: none; border: 1px solid var(--border); border-radius: 6px; padding: 2px 8px; cursor: pointer; }
+.az-kwx-restore:hover { background: var(--bg3); color: var(--navy); }
+.az-kwx-more { display: inline-block; margin-top: 10px; font: inherit; font-size: 11.5px; font-weight: 700; color: var(--navy); background: none; border: none; cursor: pointer; padding: 0; }
+.az-kwx-more:hover { text-decoration: underline; }
+.az-kwx-clean { display: inline-flex; align-items: center; gap: 6px; margin-top: 14px; padding: 8px 12px; border: 1px solid var(--divider); border-radius: 9px; background: var(--bg2); font-size: 12px; color: var(--ink2); }
+.az-kwx-clean svg { color: #1e7a4f; }
+.az-kwx-clean .lnk { font: inherit; font-weight: 700; color: var(--navy); background: none; border: none; cursor: pointer; padding: 0; text-decoration: underline; }
 
 /* Inline rank-set collision warning in the Strategy panel (RC3.4) */
 .az-rankwarn { margin: 10px 0 0; padding: 10px 11px; border: 1px solid #f0c9a8; border-left: 3px solid #b3541e; border-radius: 9px; background: #fff7f0; }

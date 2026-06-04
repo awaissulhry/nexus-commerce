@@ -203,6 +203,7 @@ export function RankPlacementCockpit() {
   const [inlineMsg, setInlineMsg] = useState('')
   const [inlineBusy, setInlineBusy] = useState(false)
   const [inlineHidden, setInlineHidden] = useState(false)
+  const [kwShowAll, setKwShowAll] = useState(false)
   // T·product — dayparting scoped to the parent product family
   const [family, setFamily] = useState<ProductFamily | null>(null)
   const [whenLoading, setWhenLoading] = useState(false)
@@ -325,7 +326,11 @@ export function RankPlacementCockpit() {
   useEffect(() => {
     if (!campaignId) { setKwConflicts(null); return }
     const ac = new AbortController()
-    setKwMsg({}); setKwDismissed(new Set()); setInlineHidden(false); setInlineMsg('')
+    setKwMsg({}); setInlineHidden(false); setInlineMsg('')
+    // RC3.5 — hydrate previously-ignored keywords for this campaign+market.
+    let dis = new Set<string>()
+    try { const raw = localStorage.getItem(`rc3kwdis:${campaignId}:${market}`); if (raw) dis = new Set<string>(JSON.parse(raw)) } catch { /* ignore */ }
+    setKwDismissed(dis)
     fetch(`${getBackendUrl()}/api/advertising/campaigns/${encodeURIComponent(campaignId)}/keyword-conflicts?marketplace=${market}`, { cache: 'no-store', signal: ac.signal })
       .then(r => r.json()).then(d => { if (!ac.signal.aborted) setKwConflicts(d && Array.isArray(d.conflicts) ? d as KwConflicts : null) })
       .catch(() => {})
@@ -371,7 +376,15 @@ export function RankPlacementCockpit() {
   // Lowering only the contested keyword's bid is precise: that one keyword drops
   // toward rest-of-search without touching the campaign's other keywords.
   const visibleConflicts = useMemo(() => (kwConflicts?.conflicts ?? []).filter(c => !kwDismissed.has(c.keyNorm)), [kwConflicts, kwDismissed])
-  const dismissConflict = useCallback((keyNorm: string) => setKwDismissed(s => { const n = new Set(s); n.add(keyNorm); return n }), [])
+  const dismissConflict = useCallback((keyNorm: string) => setKwDismissed(s => {
+    const n = new Set(s); n.add(keyNorm)
+    try { localStorage.setItem(`rc3kwdis:${campaignId}:${market}`, JSON.stringify([...n])) } catch { /* ignore */ }
+    return n
+  }), [campaignId, market])
+  const restoreDismissed = useCallback(() => {
+    try { localStorage.removeItem(`rc3kwdis:${campaignId}:${market}`) } catch { /* ignore */ }
+    setKwDismissed(new Set())
+  }, [campaignId, market])
   const resolveConflict = useCallback(async (c: KwConflict, mode: 'champion' | 'rest' | 'second', who?: KwContender) => {
     const champ = c.contenders.find(x => x.campaignId === c.championId) ?? null
     const champBid = champ?.bidCents ?? Math.max(...c.contenders.map(x => x.bidCents), 10)
@@ -790,7 +803,7 @@ export function RankPlacementCockpit() {
 
           {/* RC3.4 — inline collision warning when aiming for the top */}
           {targetSlot?.group === 'top' && !inlineHidden && visibleConflicts.length > 0 && (
-            <div className="az-rankwarn">
+            <div className="az-rankwarn" role="region" aria-label="Keyword rank-collision warning">
               <div className="az-rankwarn-msg"><AlertTriangle size={13} /> <b>{visibleConflicts.length} keyword{visibleConflicts.length === 1 ? '' : 's'}</b> you bid on {visibleConflicts.length === 1 ? 'is' : 'are'} also pushed by your other products{visibleConflicts[0]?.contenders.find(x => !x.isMine) ? <> (e.g. <b>{visibleConflicts[0].contenders.find(x => !x.isMine)!.campaignName}</b>)</> : null} — at the top you bid each other up.</div>
               <div className="az-rankwarn-acts">
                 <button type="button" className="az-btn dark" disabled={inlineBusy} onClick={() => void resolveAllTop('champion')}>{inlineBusy ? <><Loader2 size={12} className="az-spin" /> Staging…</> : <><ShieldCheck size={12} /> Let the best own each</>}</button>
@@ -798,7 +811,7 @@ export function RankPlacementCockpit() {
                 <button type="button" className="az-btn" disabled={inlineBusy} onClick={() => void resolveAllTop('rest')} title="Lower this campaign's bid on these keywords so they fall to rest of search">Move me to Rest</button>
                 <button type="button" className="az-btn ghost" disabled={inlineBusy} onClick={() => setInlineHidden(true)}>Ignore</button>
               </div>
-              {inlineMsg && <div className="az-rankwarn-res">{inlineMsg}</div>}
+              {inlineMsg && <div className="az-rankwarn-res" role="status" aria-live="polite">{inlineMsg}</div>}
               <a className="az-rankwarn-link" href="#az-kwx" onClick={() => setKwOpen(true)}>Review each in Keyword overlap below ↓</a>
             </div>
           )}
@@ -922,17 +935,18 @@ export function RankPlacementCockpit() {
 
       {/* ── RC3.3: cross-product keyword-rank overlap ─────────────── */}
       {kwConflicts && visibleConflicts.length > 0 && (
-        <div className="az-kwx" id="az-kwx">
+        <div className="az-kwx" id="az-kwx" role="region" aria-label="Keyword overlap between your products">
           <div className="az-kwx-head">
             <AlertTriangle size={15} />
             <b>Keyword overlap</b>
             <span className="az-kwx-badge">{visibleConflicts.length} contested</span>
             <span className="cap">your own products bidding on the same keyword in {market} — they bid each other up</span>
             <span style={{ flex: 1 }} />
+            {kwDismissed.size > 0 && <button type="button" className="az-kwx-restore" onClick={restoreDismissed}>{kwDismissed.size} ignored · restore</button>}
             <button type="button" className="az-tr-toggle" onClick={() => setKwOpen(v => !v)} aria-expanded={kwOpen}>{kwOpen ? 'Hide' : 'Show'} {kwOpen ? '▾' : '▸'}</button>
           </div>
           {kwOpen && <div className="az-kwx-body">
-            {visibleConflicts.map(c => {
+            {(kwShowAll ? visibleConflicts : visibleConflicts.slice(0, 10)).map(c => {
               const champ = c.contenders.find(x => x.campaignId === c.championId) ?? null
               const champName = champ ? (champ.isMine ? 'this campaign' : champ.campaignName) : 'the best performer'
               return (
@@ -954,8 +968,8 @@ export function RankPlacementCockpit() {
                           <span className="met">{ct.acos != null ? `ACOS ${Math.round(ct.acos * 100)}%` : ct.orders > 0 ? `${ct.orders} ord` : ct.clicks > 0 ? `${ct.clicks} clk · no sale` : 'no traffic'}</span>
                           {ct.tosBias > 0 && <span className="tos">Top +{ct.tosBias}%</span>}
                           {!isChamp && <span className="acts">
-                            <button type="button" onClick={() => void resolveConflict(c, 'rest', ct)} disabled={kwBusy === c.keyNorm || ct.targetIds.length === 0} title="Lower this product's bid on this keyword so it drops to rest of search">→ Rest of search</button>
-                            {ct.isMine && <button type="button" onClick={() => void resolveConflict(c, 'second', ct)} disabled={kwBusy === c.keyNorm || ct.targetIds.length === 0} title="Set this campaign's bid just below the top — aim for 2nd, not a bidding war for 1st">Take 2nd</button>}
+                            <button type="button" onClick={() => void resolveConflict(c, 'rest', ct)} disabled={kwBusy === c.keyNorm || ct.targetIds.length === 0} aria-label={`Move ${ct.isMine ? 'this campaign' : ct.campaignName} to rest of search on “${c.keyword}”`} title="Lower this product's bid on this keyword so it drops to rest of search">→ Rest of search</button>
+                            {ct.isMine && <button type="button" onClick={() => void resolveConflict(c, 'second', ct)} disabled={kwBusy === c.keyNorm || ct.targetIds.length === 0} aria-label={`Take 2nd on “${c.keyword}” — bid just below the leader`} title="Set this campaign's bid just below the top — aim for 2nd, not a bidding war for 1st">Take 2nd</button>}
                           </span>}
                         </div>
                       )
@@ -967,14 +981,24 @@ export function RankPlacementCockpit() {
                     </button>
                     <button type="button" className="az-btn" disabled={kwBusy === c.keyNorm} onClick={() => dismissConflict(c.keyNorm)}>Ignore</button>
                     <span className="why">Best: <b>{champName}</b> — {c.championReason}</span>
-                    {kwMsg[c.keyNorm] && <span className="msg">{kwMsg[c.keyNorm]}</span>}
+                    {kwMsg[c.keyNorm] && <span className="msg" role="status" aria-live="polite">{kwMsg[c.keyNorm]}</span>}
                   </div>
                 </div>
               )
             })}
+            {visibleConflicts.length > 10 && (
+              <button type="button" className="az-kwx-more" onClick={() => setKwShowAll(v => !v)}>{kwShowAll ? 'Show fewer' : `+${visibleConflicts.length - 10} more contested keyword${visibleConflicts.length - 10 === 1 ? '' : 's'}`}</button>
+            )}
             <div className="az-cockpit-note"><Info size={12} /> “Let the best own Top” lowers every other product’s bid on just that keyword to half the leader’s — so they ease off and stop bidding it up. All staged: nothing changes on Amazon until you flip the write-gate.</div>
           </div>}
         </div>
+      )}
+      {/* RC3.5 — reassuring clean state + restore-after-ignore-all */}
+      {kwConflicts && kwConflicts.conflicts.length === 0 && (
+        <div className="az-kwx-clean"><Check size={13} /> No keyword overlap — none of your other products bid on this campaign’s keywords in {market}.</div>
+      )}
+      {kwConflicts && kwConflicts.conflicts.length > 0 && visibleConflicts.length === 0 && (
+        <div className="az-kwx-clean"><Check size={13} /> All {kwConflicts.conflicts.length} keyword overlap{kwConflicts.conflicts.length === 1 ? '' : 's'} ignored for this campaign. <button type="button" className="lnk" onClick={restoreDismissed}>Show again</button></div>
       )}
 
       {/* ── T·product: When · dayparting for the product family ──── */}
