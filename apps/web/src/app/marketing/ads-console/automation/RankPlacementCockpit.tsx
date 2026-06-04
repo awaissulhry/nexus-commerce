@@ -24,7 +24,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { DndContext, useDraggable, useDroppable, DragOverlay, type DragEndEvent, type DragStartEvent, PointerSensor, KeyboardSensor, useSensor, useSensors } from '@dnd-kit/core'
 import { GripVertical, Info, ArrowUp, Crosshair, TrendingUp, TrendingDown, Minus, Search, Plus, Loader2, Check, ListPlus, Sparkles, Zap, ShieldCheck, BarChart3, AlertTriangle, Clock, Wallet } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
-import { TimeRankGrid, compileGrid, type Level } from './TimeRankGrid'
+import { TimeRankGrid, compileGrid, describeGrid, type Level } from './TimeRankGrid'
 import { DemandHeatmap } from './DemandHeatmap'
 
 const MARKETS = ['IT', 'DE', 'FR', 'ES', 'NL', 'BE', 'SE', 'PL', 'IE', 'UK']
@@ -44,7 +44,6 @@ type DemandHour = DemandBucket
 interface FamCampaign { id: string; name: string; status: string; marketplace: string | null }
 interface HeatCell { orders: number; units: number; revenueCents: number; familyOrders?: number; confidence?: 'high' | 'med' | 'low' }
 interface ProductFamily { parentProductId: string | null; parentName: string | null; productIds: string[]; asins: string[]; campaigns: FamCampaign[]; demand: { totals: { orders: number; units: number; revenueCents: number }; hourProfile: DemandHour[]; weekdayProfile: DemandBucket[]; grid?: HeatCell[][]; hasData: boolean; blended?: boolean; familyOrders?: number; windowDays?: number } | null }
-type DayRecommend = 'bid-up' | 'keep' | 'bid-down'
 const MATCH_TYPES = ['BROAD', 'PHRASE', 'EXACT'] as const
 const pad2 = (n: number) => String(n).padStart(2, '0')
 const DOW_LABEL = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
@@ -80,7 +79,7 @@ function buildGuidedGrid(grid: HeatCell[][], level: Level, pauseOvernight: boole
     })
   })
 }
-const demandRecommend = (index: number | null): DayRecommend => index == null ? 'keep' : index >= 1.2 ? 'bid-up' : index < 0.6 ? 'bid-down' : 'keep'
+const EMPTY_GRID: Level[][] = Array.from({ length: 7 }, () => Array.from({ length: 24 }, () => 'normal' as Level))
 
 // ── The numbered rank ladder. Each slot maps to an Amazon placement + a
 // starting bias % (the hold loop fine-tunes from there). Top-of-search slots
@@ -193,24 +192,23 @@ export function RankPlacementCockpit() {
   // T·product — dayparting scoped to the parent product family
   const [family, setFamily] = useState<ProductFamily | null>(null)
   const [whenLoading, setWhenLoading] = useState(false)
-  // T2 — smart schedule params (bid-down default; pause only the dead overnight)
-  const [bidUpPct, setBidUpPct] = useState(25)
-  const [bidDownPct, setBidDownPct] = useState(40)
-  const [pauseOvernight, setPauseOvernight] = useState(true)
-  // T3 — the family's persisted AdSchedules + apply state
+  // Defaults the auto-maintain rule (T6) uses for its bid windows.
+  const [bidUpPct] = useState(25)
+  const [bidDownPct] = useState(40)
+  const [pauseOvernight] = useState(true)
+  // The family's persisted AdSchedules.
   const [famScheds, setFamScheds] = useState<{ id: string; campaignId: string; enabled: boolean }[]>([])
-  const [schedSaving, setSchedSaving] = useState(false)
-  const [schedMsg, setSchedMsg] = useState('')
   // T6 — autonomous self-refresh rule
   const [creatingRule, setCreatingRule] = useState(false)
   const [autoMsg, setAutoMsg] = useState('')
-  // TR1/TR3 — time × rank grid editor + apply
+  // S2 — one grid source of truth: the guided set-up builds it, the Advanced
+  // editor tweaks it (gridEdited stops the guided from clobbering manual edits).
   const [showGrid, setShowGrid] = useState(false)
   const [trGrid, setTrGrid] = useState<Level[][] | null>(null)
+  const [gridEdited, setGridEdited] = useState(false)
   // DD4 — guided "maintain rank at peak"
   const [guidedLevel, setGuidedLevel] = useState<Level>('strong')
   const [guidedPause, setGuidedPause] = useState(true)
-  const [guidedGrid, setGuidedGrid] = useState<Level[][] | null>(null)
   const [gridSaving, setGridSaving] = useState(false)
   const [gridMsg, setGridMsg] = useState('')
   // TR5 — defend the rank during the grid's push hours
@@ -306,11 +304,9 @@ export function RankPlacementCockpit() {
     return () => ac.abort()
   }, [campaignId, market])
 
-  // T·product — family demand → weekday rows + hour profile (the schedule signal).
+  // T·product — family hour profile (for the budget-peak figure).
   const demand = family?.demand?.hourProfile ?? null
-  const dayRows = useMemo(() => (family?.demand?.weekdayProfile ?? []).map(w => ({ weekday: w.key, label: DOW_LABEL[w.key] ?? String(w.key), revenueCents: w.revenueCents, orders: w.orders, index: w.index, recommend: demandRecommend(w.index) })), [family])
   const maxDemand = demand && demand.length ? Math.max(1, ...demand.map(h => h.revenueCents)) : 1
-  const dayLabel = (wd: number) => DOW_LABEL[wd] ?? String(wd)
 
   // DD4 — per-day demand peak (the hours differ by day) + one-click guided set-up.
   const dayPeaks = useMemo(() => {
@@ -322,33 +318,16 @@ export function RankPlacementCockpit() {
     })
   }, [family])
 
-  const applyGuided = useCallback(() => {
+  // S2 — the guided config builds the one grid (until the operator hand-edits it
+  // in Advanced); changing a guided setting re-guides (clears the edit flag).
+  useEffect(() => {
     const grid = family?.demand?.grid
-    if (!grid) return
-    const g = buildGuidedGrid(grid, guidedLevel, guidedPause)
-    setGuidedGrid(g); setTrGrid(g); setShowGrid(true)
-  }, [family, guidedLevel, guidedPause])
-
-  // T2 — generate the family schedule from demand: bid-up high-demand days,
-  // bid-down low-demand days, keep average, pause the dead overnight (≈0 demand).
-  const smartSchedule = useMemo(() => {
-    if (!dayRows.length) return null
-    const peak = dayRows.filter(d => d.recommend === 'bid-up').map(d => d.weekday)
-    const weak = dayRows.filter(d => d.recommend === 'bid-down').map(d => d.weekday)
-    const keep = dayRows.filter(d => d.recommend === 'keep').map(d => d.weekday)
-    let activeStart = 0, activeEnd = 24, deadHours: number[] = []
-    if (pauseOvernight && demand && demand.length) {
-      const max = Math.max(1, ...demand.map(h => h.revenueCents))
-      const thr = max * 0.05
-      const live = demand.filter(h => h.revenueCents >= thr).map(h => h.key)
-      if (live.length && live.length < 24) { activeStart = Math.min(...live); activeEnd = Math.max(...live) + 1; deadHours = demand.filter(h => h.revenueCents < thr).map(h => h.key) }
-    }
-    const windows: Array<{ days: number[]; startHour: number; endHour: number; bidMultiplierPct?: number }> = []
-    if (peak.length) windows.push({ days: peak, startHour: activeStart, endHour: activeEnd, bidMultiplierPct: bidUpPct })
-    if (weak.length) windows.push({ days: weak, startHour: activeStart, endHour: activeEnd, bidMultiplierPct: -bidDownPct })
-    if (keep.length) windows.push({ days: keep, startHour: activeStart, endHour: activeEnd })
-    return { windows, peak, weak, keep, activeStart, activeEnd, deadHours }
-  }, [dayRows, demand, bidUpPct, bidDownPct, pauseOvernight])
+    if (grid && !gridEdited) setTrGrid(buildGuidedGrid(grid, guidedLevel, guidedPause))
+  }, [family, guidedLevel, guidedPause, gridEdited])
+  useEffect(() => { setGridEdited(false) }, [campaignId, market])
+  const setGuided = (fn: () => void) => { fn(); setGridEdited(false) }
+  const onGridEdit = useCallback((g: Level[][]) => { setTrGrid(g); setGridEdited(true) }, [])
+  const gridSummary = useMemo(() => (trGrid ? describeGrid(trGrid) : []), [trGrid])
 
   // T3 — the family's persisted schedules (one AdSchedule per campaign).
   const loadSchedules = useCallback(async (signal?: AbortSignal) => {
@@ -361,37 +340,18 @@ export function RankPlacementCockpit() {
 
   useEffect(() => {
     const ac = new AbortController()
-    setSchedMsg('')
+    setGridMsg('')
     void loadSchedules(ac.signal)
     return () => ac.abort()
   }, [loadSchedules])
 
   // Apply the schedule to EVERY campaign in the product family (this market).
-  const applySchedule = useCallback(async () => {
-    if (!smartSchedule || !family || family.campaigns.length === 0) return
-    setSchedSaving(true); setSchedMsg('')
-    const timezone = MARKET_TZ[market] ?? 'Europe/Rome'
-    const existing = new Map(famScheds.map(s => [s.campaignId, s.id]))
-    let ok = 0
-    for (const c of family.campaigns) {
-      try {
-        const sid = existing.get(c.id)
-        if (sid) await fetch(`${getBackendUrl()}/api/advertising/schedules/${sid}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ windows: smartSchedule.windows, timezone }) })
-        else await fetch(`${getBackendUrl()}/api/advertising/schedules`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ campaignId: c.id, name: `Dayparting — ${family.parentName ?? 'product'} (${market})`, windows: smartSchedule.windows, timezone, enabled: false }) })
-        ok += 1
-      } catch { /* continue; partial result surfaced via reload */ }
-    }
-    setSchedMsg(ok > 0 ? 'saved' : 'error')
-    setSchedSaving(false)
-    void loadSchedules()
-  }, [smartSchedule, family, market, famScheds, loadSchedules])
-
   // Enable/disable the whole family's schedules at once.
   const toggleAll = useCallback(async (enabled: boolean) => {
     if (famScheds.length === 0) return
-    setSchedSaving(true)
+    setGridSaving(true)
     for (const s of famScheds) { try { await fetch(`${getBackendUrl()}/api/advertising/schedules/${s.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled }) }) } catch { /* ignore */ } }
-    setSchedSaving(false)
+    setGridSaving(false)
     void loadSchedules()
   }, [famScheds, loadSchedules])
 
@@ -633,26 +593,12 @@ export function RankPlacementCockpit() {
   const totalPerDay = spendRows.reduce((s, r) => s + r.perDay, 0)
   const totalProjPerDay = spendRows.reduce((s, r) => s + r.projPerDay, 0)
 
-  // Demand coverage: % of revenue in the overnight block the schedule would pause.
-  const totalRevenueCents = family?.demand?.totals?.revenueCents ?? 0
-  const pausedRevenuePct = smartSchedule && totalRevenueCents > 0 && demand
-    ? Math.round((smartSchedule.deadHours.reduce((s, h) => s + (demand.find(d => d.key === h)?.revenueCents ?? 0), 0) / totalRevenueCents) * 100)
-    : 0
-
-  // T4 — placement × time coupling. The top-of-search bias compounds with the
-  // day's dayparting multiplier: effective bid factor = (1+top%)·(1+dayMult%).
-  const topBias = biasDraft.PLACEMENT_TOP
-  const couplingDays = smartSchedule ? dayRows.map(d => {
-    const mult = smartSchedule.peak.includes(d.weekday) ? bidUpPct : smartSchedule.weak.includes(d.weekday) ? -bidDownPct : 0
-    return { weekday: d.weekday, label: d.label, mult, eff: (1 + topBias / 100) * (1 + mult / 100) }
-  }) : []
-  const maxEff = couplingDays.length ? Math.max(1, ...couplingDays.map(c => c.eff)) : 1
-
   // T5 — budget pacing. Join the family's campaigns to the loaded list for budget
   // + Amazon delivery status; size the evening demand peak the budget must reach.
   const famDetails = (family?.campaigns ?? []).map(fc => campaigns.find(c => c.id === fc.id)).filter(Boolean) as Camp[]
   const totalDailyBudgetCents = Math.round(famDetails.reduce((s, c) => s + (parseFloat(String(c.dailyBudget ?? '0')) || 0), 0) * 100)
   const budgetLimited = famDetails.filter(c => (c.deliveryStatus && c.deliveryStatus !== 'DELIVERING') || (Array.isArray(c.deliveryReasons) && (c.deliveryReasons as unknown[]).some(r => String(r).toUpperCase().includes('BUDGET'))))
+  const totalRevenueCents = family?.demand?.totals?.revenueCents ?? 0
   const peakHrs = demand ? demand.filter(h => h.revenueCents >= maxDemand * 0.6) : []
   const peakRevShare = demand && totalRevenueCents > 0 ? Math.round(peakHrs.reduce((s, h) => s + h.revenueCents, 0) / totalRevenueCents * 100) : 0
   const peakRange = peakHrs.length ? `${pad2(Math.min(...peakHrs.map(h => h.key)))}:00–${pad2((Math.max(...peakHrs.map(h => h.key)) + 1) % 24)}:00` : null
@@ -885,148 +831,65 @@ export function RankPlacementCockpit() {
           <a className="az-when-link" href={`/marketing/ads-console/automation?tab=dayparting&dpMarket=${market}`} title={`Open the full ${market} demand heatmap`}>Full heatmap →</a>
         </div>
 
-        <div className="az-when-sub">Family demand by day of week — when the product sells ({market}, 90d orders)</div>
-        <div className="az-when-days" role="img" aria-label={dayRows.length ? `Family demand by weekday in ${market}: ${dayRows.map(d => `${d.label} ${d.index != null ? d.index.toFixed(1) + '×' : 'n/a'}`).join(', ')}` : 'Family demand by weekday'}>
-          {whenLoading && dayRows.length === 0
-            ? Array.from({ length: 7 }).map((_, i) => <div key={i} className="az-dpday"><div className="lbl">&nbsp;</div><div className="bar"><div className="fill skel" style={{ height: `${25 + ((i * 17) % 55)}%` }} /></div></div>)
-            : dayRows.map(d => (
-              <div key={d.weekday} className={`az-dpday ${d.recommend}`} title={`${d.label}: ${euros(d.revenueCents)} · ${d.orders} orders${d.index != null ? ` · ${(d.index).toFixed(2)}× avg` : ''}`}>
-                <div className="lbl">{d.label}</div>
-                <div className="bar"><div className="fill" style={{ height: `${Math.max(3, Math.min(100, (d.index ?? 0) * 55))}%` }} /></div>
-                <div className="val">{d.index != null ? `${d.index.toFixed(1)}×` : '—'}</div>
-                <div className="rec">{d.recommend === 'bid-up' ? <TrendingUp size={11} /> : d.recommend === 'bid-down' ? <TrendingDown size={11} /> : <Minus size={11} />}</div>
-              </div>
-            ))}
-          {dayRows.length === 0 && !whenLoading && <div className="az-cockpit-sub">No order-demand data for this product family in {market}.</div>}
-        </div>
-
-        <div className="az-when-sub" style={{ marginTop: 12 }}>Demand by day &amp; hour ({market}, Europe/Rome) — how the hours differ across days{family?.demand?.blended ? ` · blended with the market pattern where ${family.parentName ?? 'this product'} is thin (${family.demand.familyOrders} orders, ${family.demand.windowDays}d)` : ''}</div>
+        <div className="az-when-sub">Demand by day &amp; hour ({market}, Europe/Rome) — the hours genuinely differ across days{family?.demand?.blended ? ` · accurate even where ${family.parentName ?? 'this product'} is thin (${family.demand.familyOrders} orders, ${family.demand.windowDays}d, market-blended)` : ''}</div>
         {whenLoading && !family?.demand?.grid
           ? <div className="az-heat-skel">{Array.from({ length: 7 }).map((_, i) => <div key={i} className="r" />)}</div>
           : <DemandHeatmap grid={family?.demand?.grid ?? null} />}
         {!family?.demand?.grid && !whenLoading && <div className="az-cockpit-sub">No order-demand data for {market}.</div>}
 
-        {/* ── DD4: guided "maintain rank at peak" (lead set-up) ────── */}
-        {family && family.demand?.grid && family.campaigns.length > 0 && (
+        {/* ── S2: guided 'maintain at peak' = the one primary control ── */}
+        {family && family.demand?.grid && family.campaigns.length > 0 && (<>
           <div className="az-guided">
             <div className="az-guided-head"><Sparkles size={14} /> Maintain your rank when it sells</div>
             <div className="az-guided-row">
               <span>Maintain</span>
-              <select value={guidedLevel} onChange={e => setGuidedLevel(e.target.value as Level)}><option value="max">Max</option><option value="strong">Strong</option></select>
-              <span>rank during each day&apos;s peak hours, Normal outside.</span>
-              <label className="az-sched-check"><input type="checkbox" checked={guidedPause} onChange={e => setGuidedPause(e.target.checked)} /> Pause dead overnight</label>
-              <span style={{ flex: 1 }} />
-              <button type="button" className="az-btn dark" onClick={applyGuided}><Sparkles size={14} /> Set it up</button>
+              <select value={guidedLevel} onChange={e => setGuided(() => setGuidedLevel(e.target.value as Level))}><option value="max">Max</option><option value="strong">Strong</option></select>
+              <span>rank during each day&apos;s peak, Normal outside.</span>
+              <label className="az-sched-check"><input type="checkbox" checked={guidedPause} onChange={e => setGuided(() => setGuidedPause(e.target.checked))} /> Pause dead overnight</label>
             </div>
             <div className="az-guided-peaks">
               {dayPeaks.map(p => <span key={p.d} className="it"><b>{p.label}</b> {p.range ? `${p.range} · ${p.pct}%` : '—'}</span>)}
             </div>
-            <div className="az-cockpit-sub">Detected each day&apos;s sales peak from {family.parentName ?? 'the product'}&apos;s demand — the hours genuinely differ by day. &ldquo;Set it up&rdquo; fills the grid below; review &amp; apply there.</div>
+            {gridSummary.length > 0 && <div className="az-tr-summary"><span className="t">This applies</span>{gridSummary.map((s, i) => <div key={i} className="line">{s}</div>)}</div>}
+            <div className="az-sched-actions">
+              <button type="button" className="az-btn dark" disabled={gridSaving || !trGrid} onClick={() => void applyGrid()}>
+                {gridSaving ? <><Loader2 size={14} className="az-spin" /> Saving…</> : <><Check size={14} /> Apply to {family.campaigns.length} campaign{family.campaigns.length === 1 ? '' : 's'}</>}
+              </button>
+              {famScheds.length > 0 && <label className="az-sched-toggle"><input type="checkbox" checked={famScheds.every(s => s.enabled)} disabled={gridSaving} onChange={e => void toggleAll(e.target.checked)} /> Enabled ({famScheds.filter(s => s.enabled).length}/{famScheds.length})</label>}
+              {gridMsg === 'saved' && <span className="az-cockpit-sub" style={{ margin: 0, color: 'var(--green)' }}><Check size={12} style={{ verticalAlign: 'text-bottom' }} /> Saved{famScheds.length && !famScheds.every(s => s.enabled) ? ' — toggle Enabled to run' : ''}</span>}
+              {gridMsg === 'error' && <span className="az-cockpit-sub" style={{ margin: 0, color: '#cc1100' }}>Save failed</span>}
+            </div>
+            <div className="az-cockpit-note"><Info size={12} /> One schedule across all <b>{family.campaigns.length} {family.parentName ?? 'product'} campaigns in {market}</b> ({MARKET_TZ[market] ?? 'Europe/Rome'}). Starts <b>disabled</b> — enable to run; writes gated (sandbox stages locally). Disabling auto-resumes a paused campaign.</div>
           </div>
-        )}
 
-        {/* ── T5: budget pacing ────────────────────────────────────── */}
-        {family && family.campaigns.length > 0 && totalDailyBudgetCents > 0 && (
-          <div className={`az-budget-pace ${budgetLimited.length > 0 ? 'warn' : ''}`}>
-            <Wallet size={14} />
-            <span>
-              Family budget <b>{euros(totalDailyBudgetCents)}/day</b> across {family.campaigns.length} campaigns.{' '}
-              {budgetLimited.length > 0
-                ? <><b>{budgetLimited.length} budget-limited</b> — likely exhausting before peak. </>
-                : 'All delivering. '}
-              {peakRange && <>Peak demand <b>{peakRange}</b> carries <b>{peakRevShare}%</b> of revenue{peakRevShare >= 40 ? ' — concentrate the limited budget there: the schedule pauses dead hours so spend survives to peak' : ''}.</>}
-            </span>
-          </div>
-        )}
+          {totalDailyBudgetCents > 0 && (
+            <div className={`az-budget-pace ${budgetLimited.length > 0 ? 'warn' : ''}`}>
+              <Wallet size={14} />
+              <span>Budget <b>{euros(totalDailyBudgetCents)}/day</b>.{budgetLimited.length > 0 ? <> <b>{budgetLimited.length} budget-limited</b> — likely out before peak.</> : ''}{peakRange ? <> Peak <b>{peakRange}</b> = <b>{peakRevShare}%</b> of sales{peakRevShare >= 40 ? ' — pausing dead hours preserves budget for it' : ''}.</> : ''}</span>
+            </div>
+          )}
 
-        {/* ── TR1: time × rank grid editor ─────────────────────────── */}
-        {family && family.campaigns.length > 0 && (
+          {/* Advanced — fine-tune by hour, auto-maintain, defend */}
           <div className="az-tr-section">
-            <button type="button" className="az-tr-toggle" onClick={() => setShowGrid(v => !v)} aria-expanded={showGrid}>
-              <Sparkles size={13} /> Time × rank grid — paint the rank/pause for every hour {showGrid ? '▾' : '▸'}
-            </button>
+            <button type="button" className="az-tr-toggle" onClick={() => setShowGrid(v => !v)} aria-expanded={showGrid}>Advanced — fine-tune by hour · auto-maintain · defend rank {showGrid ? '▾' : '▸'}</button>
             {showGrid && <>
-              <div className="az-cockpit-sub" style={{ marginTop: 6 }}>Seeded from {family.parentName ?? 'the family'}&apos;s demand. Paint each hour: <b>Max/Strong</b> push for higher rank, <b>Light</b> eases off, <b>Pause</b> stops spend (e.g. 2am). Applies across all {family.campaigns.length} campaigns ({MARKET_TZ[market] ?? 'Europe/Rome'}). Apply lands in TR3.</div>
-              <TimeRankGrid demandGrid={family.demand?.grid ?? null} onChange={setTrGrid} pushGrid={guidedGrid} />
-              <div className="az-sched-actions">
-                <button type="button" className="az-btn dark" disabled={gridSaving || !trGrid || family.campaigns.length === 0} onClick={() => void applyGrid()}>
-                  {gridSaving ? <><Loader2 size={14} className="az-spin" /> Saving…</> : <><Clock size={14} /> Apply grid to {family.campaigns.length} campaign{family.campaigns.length === 1 ? '' : 's'}</>}
+              <div className="az-cockpit-sub" style={{ marginTop: 6 }}>Tweak any hour: <b>Max/Strong</b> push, <b>Light</b> eases off, <b>Pause</b> stops spend. The guided set-up above fills this; edits here override it until you change a guided setting.</div>
+              <TimeRankGrid grid={trGrid ?? EMPTY_GRID} onChange={onGridEdit} demandGrid={family.demand?.grid ?? null} />
+              <div className="az-sched-actions" style={{ marginTop: 8 }}>
+                <button type="button" className="az-btn" disabled={creatingRule || !family.parentProductId} onClick={() => void createRefreshRule()}>
+                  {creatingRule ? <><Loader2 size={14} className="az-spin" /> …</> : <><Sparkles size={14} /> Auto-maintain weekly</>}
                 </button>
-                {famScheds.length > 0 && <label className="az-sched-toggle"><input type="checkbox" checked={famScheds.every(s => s.enabled)} disabled={gridSaving} onChange={e => void toggleAll(e.target.checked)} /> Enabled ({famScheds.filter(s => s.enabled).length}/{famScheds.length})</label>}
-                {trGrid && <span className="az-cockpit-sub" style={{ margin: 0 }}>{trGrid.flat().filter(l => l === 'pause').length}h/week paused</span>}
-                {gridMsg === 'saved' && <span className="az-cockpit-sub" style={{ margin: 0, color: 'var(--green)' }}><Check size={12} style={{ verticalAlign: 'text-bottom' }} /> Saved across the family{famScheds.length && !famScheds.every(s => s.enabled) ? ' — toggle Enabled to run' : ''}</span>}
-                {gridMsg === 'error' && <span className="az-cockpit-sub" style={{ margin: 0, color: '#cc1100' }}>Save failed</span>}
-              </div>
-              <div className="az-cockpit-note" style={{ marginTop: 8 }}><Info size={12} /> Compiles to a delivery schedule across <b>all {family.campaigns.length} campaigns</b> in <b>{MARKET_TZ[market] ?? 'Europe/Rome'}</b> — Pause hours stop spend, Max/Strong/Light scale bids per hour (the cron now transitions cleanly between levels). Starts <b>disabled</b>; writes are gated (sandbox stages locally until the write-gate is live). Enforced at hour boundaries on the cron tick.</div>
-              <div className="az-sched-actions" style={{ borderTop: '1px solid var(--divider)', marginTop: 10, paddingTop: 10 }}>
-                <button type="button" className="az-btn" disabled={gridHolding || !family?.parentProductId} onClick={() => void createGridHold()}>
-                  {gridHolding ? <><Loader2 size={14} className="az-spin" /> Creating…</> : <><ShieldCheck size={14} /> Defend top rank in push hours</>}
+                <button type="button" className="az-btn" disabled={gridHolding || !family.parentProductId} onClick={() => void createGridHold()}>
+                  {gridHolding ? <><Loader2 size={14} className="az-spin" /> …</> : <><ShieldCheck size={14} /> Defend top rank in push hours</>}
                 </button>
-                <span className="az-cockpit-sub" style={{ margin: 0 }}>Holds the IS target where you painted Max/Strong</span>
-                {gridHoldMsg === 'created' && <span className="az-cockpit-sub" style={{ margin: 0, color: 'var(--green)' }}><Check size={12} style={{ verticalAlign: 'text-bottom' }} /> Defense rule created (disabled + dry-run) — enable in Active rules.</span>}
-                {gridHoldMsg === 'error' && <span className="az-cockpit-sub" style={{ margin: 0, color: '#cc1100' }}>Could not create the rule.</span>}
+                {autoMsg === 'created' && <span className="az-cockpit-sub" style={{ margin: 0, color: 'var(--green)' }}>Auto-maintain rule created.</span>}
+                {gridHoldMsg === 'created' && <span className="az-cockpit-sub" style={{ margin: 0, color: 'var(--green)' }}>Defense rule created.</span>}
+                {(autoMsg === 'error' || gridHoldMsg === 'error') && <span className="az-cockpit-sub" style={{ margin: 0, color: '#cc1100' }}>Could not create the rule.</span>}
               </div>
+              <div className="az-cockpit-note" style={{ marginTop: 6 }}><Info size={12} /> Both rules are created disabled + dry-run — enable in Active rules.</div>
             </>}
           </div>
-        )}
-
-        {/* ── T2/T3: demand-auto smart schedule (alternative to the grid) ── */}
-        {!showGrid && smartSchedule && (smartSchedule.peak.length > 0 || smartSchedule.weak.length > 0 || smartSchedule.deadHours.length > 0) ? (
-          <div className="az-sched">
-            <div className="az-sched-head"><Sparkles size={14} /> Smart schedule <span className="tag">preview</span></div>
-            <div className="az-sched-sum">
-              {smartSchedule.peak.length > 0 && <>Bid <b>+{bidUpPct}%</b> on <b>{smartSchedule.peak.map(dayLabel).join(', ')}</b> (best selling). </>}
-              {smartSchedule.weak.length > 0 && <>Bid <b>−{bidDownPct}%</b> on <b>{smartSchedule.weak.map(dayLabel).join(', ')}</b> (low demand). </>}
-              {smartSchedule.keep.length > 0 && <>Keep {smartSchedule.keep.map(dayLabel).join(', ')}. </>}
-              {pauseOvernight && smartSchedule.deadHours.length > 0 && <>Pause <b>{pad2(smartSchedule.activeEnd % 24)}:00–{pad2(smartSchedule.activeStart)}:00</b> ({pausedRevenuePct <= 1 ? '≈0' : `${pausedRevenuePct}%`} of revenue). </>}
-            </div>
-            <div className="az-sched-ctls">
-              <label>Bid-up <input type="number" min={0} max={900} value={bidUpPct} onChange={e => setBidUpPct(Math.max(0, Math.min(900, Number(e.target.value) || 0)))} />%</label>
-              <label>Bid-down <input type="number" min={0} max={99} value={bidDownPct} onChange={e => setBidDownPct(Math.max(0, Math.min(99, Number(e.target.value) || 0)))} />%</label>
-              <label className="az-sched-check"><input type="checkbox" checked={pauseOvernight} onChange={e => setPauseOvernight(e.target.checked)} /> Pause dead overnight hours</label>
-            </div>
-            <div className="az-sched-actions">
-              <button type="button" className="az-btn dark" disabled={schedSaving || !family || family.campaigns.length === 0} onClick={() => void applySchedule()}>
-                {schedSaving ? <><Loader2 size={14} className="az-spin" /> Saving…</> : <><Clock size={14} /> Apply to {family?.campaigns.length ?? 0} campaign{(family?.campaigns.length ?? 0) === 1 ? '' : 's'}</>}
-              </button>
-              {famScheds.length > 0 && <label className="az-sched-toggle"><input type="checkbox" checked={famScheds.every(s => s.enabled)} disabled={schedSaving} onChange={e => void toggleAll(e.target.checked)} /> Enabled ({famScheds.filter(s => s.enabled).length}/{famScheds.length})</label>}
-              {schedMsg === 'saved' && <span className="az-cockpit-sub" style={{ margin: 0, color: 'var(--green)' }}><Check size={12} style={{ verticalAlign: 'text-bottom' }} /> Saved across the family{famScheds.length && !famScheds.every(s => s.enabled) ? ' — toggle Enabled to run' : ''}</span>}
-              {schedMsg === 'error' && <span className="az-cockpit-sub" style={{ margin: 0, color: '#cc1100' }}>Save failed</span>}
-            </div>
-            <div className="az-cockpit-note" style={{ marginTop: 8 }}><Info size={12} /> One schedule applied to <b>all {family?.campaigns.length ?? 0} {family?.parentName ?? 'product'} campaigns in {market}</b>, enforced in <b>{MARKET_TZ[market] ?? 'Europe/Rome'}</b>. Starts <b>disabled</b> — enable to run. The cron bid-adjusts low-demand days &amp; pauses the dead overnight; writes are gated (sandbox stages locally until the ads write-gate is live). Disabling/deleting auto-resumes a paused campaign.</div>
-
-            {/* ── T6: autonomous self-refresh ─────────────────────── */}
-            <div className="az-sched-actions" style={{ borderTop: '1px solid var(--divider)', marginTop: 10, paddingTop: 10 }}>
-              <button type="button" className="az-btn" disabled={creatingRule || !family?.parentProductId} onClick={() => void createRefreshRule()}>
-                {creatingRule ? <><Loader2 size={14} className="az-spin" /> Creating…</> : <><Sparkles size={14} /> Auto-maintain weekly</>}
-              </button>
-              <span className="az-cockpit-sub" style={{ margin: 0 }}>Self-refresh the schedule from fresh demand as it shifts</span>
-              {autoMsg === 'created' && <span className="az-cockpit-sub" style={{ margin: 0, color: 'var(--green)' }}><Check size={12} style={{ verticalAlign: 'text-bottom' }} /> Auto-maintain rule created (disabled + dry-run) — enable it in Active rules.</span>}
-              {autoMsg === 'error' && <span className="az-cockpit-sub" style={{ margin: 0, color: '#cc1100' }}>Could not create the rule.</span>}
-            </div>
-          </div>
-        ) : family && family.campaigns.length > 0 && !whenLoading ? (
-          <div className="az-cockpit-sub" style={{ marginTop: 8 }}>Demand is even across the week — no day-level schedule needed yet.</div>
-        ) : null}
-
-        {/* ── T4: placement × time coupling ────────────────────────── */}
-        {smartSchedule && couplingDays.length > 0 && (topBias > 0 ? (
-          <div className="az-couple">
-            <div className="az-when-sub" style={{ marginTop: 4 }}>Top-of-search push × demand — effective aggressiveness by day (placement +{topBias}% compounded with the schedule)</div>
-            <div className="az-couple-days">
-              {couplingDays.map(c => (
-                <div key={c.weekday} className={`az-couplecell ${c.mult > 0 ? 'up' : c.mult < 0 ? 'down' : ''}`} title={`${c.label}: placement +${topBias}% × time ${c.mult >= 0 ? '+' : ''}${c.mult}% = ${c.eff.toFixed(2)}× base bid`}>
-                  <div className="lbl">{c.label}</div>
-                  <div className="bar"><div className="fill" style={{ height: `${Math.max(4, (c.eff / maxEff) * 100)}%` }} /></div>
-                  <div className="val">{c.eff.toFixed(1)}×</div>
-                </div>
-              ))}
-            </div>
-            <div className="az-cockpit-sub">Your top-of-search push runs full-strength on high-demand days and is throttled on low-demand days — you win the slot when it converts and ease off when it doesn&apos;t. The hold-loop also won&apos;t raise the slot while a campaign is paused by the schedule.</div>
-          </div>
-        ) : (
-          <div className="az-cockpit-sub" style={{ marginTop: 6 }}>Set a <b>Top-of-search</b> bias in the spend mixer above to see it compounded with this schedule (full on high-demand days, throttled on low-demand days).</div>
-        ))}
+        </>)}
 
         <div className="az-cockpit-note"><Info size={12} /> Timing is a product property, so this covers the whole parent family (all variants &amp; their campaigns) in {market}. Demand is order-placed time (Europe/Rome) — a live proxy until Amazon Marketing Stream provides true hourly ad data.</div>
       </div>

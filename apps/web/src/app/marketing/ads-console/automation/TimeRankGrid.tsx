@@ -121,21 +121,11 @@ export function seedFromDemand(grid: Bucket[][] | null | undefined): Level[][] {
   }))
 }
 
-export function TimeRankGrid({ demandGrid, onChange, pushGrid }: { demandGrid: Bucket[][] | null; onChange?: (grid: Level[][]) => void; pushGrid?: Level[][] | null }) {
-  const [grid, setGrid] = useState<Level[][]>(emptyGrid)
+// S2 — controlled component: the cockpit owns the grid (one source of truth for
+// the guided set-up, the editor and Apply). All edits go through onChange.
+export function TimeRankGrid({ grid, onChange, demandGrid }: { grid: Level[][]; onChange: (grid: Level[][]) => void; demandGrid: Bucket[][] | null }) {
   const [brush, setBrush] = useState<Level>('max')
-  const [userEdited, setUserEdited] = useState(false)
   const painting = useRef(false)
-
-  // Seed from demand once it arrives (until the operator paints).
-  useEffect(() => {
-    if (!userEdited && demandGrid) setGrid(seedFromDemand(demandGrid))
-  }, [demandGrid, userEdited])
-
-  // DD4 — accept a grid pushed from the guided "maintain at peak" set-up.
-  useEffect(() => { if (pushGrid) { setUserEdited(true); setGrid(pushGrid) } }, [pushGrid])
-
-  useEffect(() => { onChange?.(grid) }, [grid]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Global mouseup ends a paint stroke.
   useEffect(() => {
@@ -156,25 +146,22 @@ export function TimeRankGrid({ demandGrid, onChange, pushGrid }: { demandGrid: B
     return () => window.removeEventListener('keydown', onKey)
   }, [])
 
-  const paint = (d: number, h: number) => {
-    setUserEdited(true)
-    setGrid(g => { if (g[d][h] === brush) return g; const next = g.map(r => r.slice()); next[d][h] = brush; return next })
-  }
-  const paintRow = (d: number) => { setUserEdited(true); setGrid(g => { const next = g.map(r => r.slice()); next[d] = next[d].map(() => brush); return next }) }
-  const paintCol = (h: number) => { setUserEdited(true); setGrid(g => g.map(r => { const nr = r.slice(); nr[h] = brush; return nr })) }
-  const fillAll = () => { setUserEdited(true); setGrid(g => g.map(r => r.map(() => brush))) }
-  const reseed = () => { setUserEdited(false); setGrid(seedFromDemand(demandGrid)) }
+  const mutate = (fn: (g: Level[][]) => Level[][]) => onChange(fn(grid))
+  const paint = (d: number, h: number) => { if (grid[d][h] === brush) return; mutate(g => { const next = g.map(r => r.slice()); next[d][h] = brush; return next }) }
+  const paintRow = (d: number) => mutate(g => { const next = g.map(r => r.slice()); next[d] = next[d].map(() => brush); return next })
+  const paintCol = (h: number) => mutate(g => g.map(r => { const nr = r.slice(); nr[h] = brush; return nr }))
+  const fillAll = () => mutate(g => g.map(r => r.map(() => brush)))
+  const reseed = () => onChange(seedFromDemand(demandGrid))
   // TR4 — presets (compose over the current grid).
-  const setEdited = (fn: (g: Level[][]) => Level[][]) => { setUserEdited(true); setGrid(fn) }
-  const pPauseNight = () => setEdited(g => g.map(r => r.map((c, h) => (h < 7 ? 'pause' : c))))
-  const pPushEvenings = () => setEdited(g => g.map(r => r.map((c, h) => (h >= 17 && h < 23 ? 'max' : c))))
-  const pWeekendsLight = () => setEdited(g => g.map((r, d) => (d === 0 || d === 6 ? r.map(() => 'light') : r)))
+  const pPauseNight = () => mutate(g => g.map(r => r.map((c, h) => (h < 7 ? 'pause' : c))))
+  const pPushEvenings = () => mutate(g => g.map(r => r.map((c, h) => (h >= 17 && h < 23 ? 'max' : c))))
+  const pWeekendsLight = () => mutate(g => g.map((r, d) => (d === 0 || d === 6 ? r.map(() => 'light') : r)))
   // TR6 — copy Monday's profile + save/load a reusable template (localStorage).
-  const copyMonWeekdays = () => setEdited(g => g.map((r, d) => (d >= 2 && d <= 5 ? g[1].slice() : r)))
-  const copyMonEveryday = () => setEdited(g => g.map(() => g[1].slice()))
+  const copyMonWeekdays = () => mutate(g => g.map((r, d) => (d >= 2 && d <= 5 ? g[1].slice() : r)))
+  const copyMonEveryday = () => mutate(g => g.map(() => g[1].slice()))
   const TPL_KEY = 'ads:trgrid:template:v1'
   const saveTpl = () => { try { localStorage.setItem(TPL_KEY, JSON.stringify(grid)) } catch { /* ignore */ } }
-  const loadTpl = () => { try { const s = localStorage.getItem(TPL_KEY); if (s) { setUserEdited(true); setGrid(JSON.parse(s) as Level[][]) } } catch { /* ignore */ } }
+  const loadTpl = () => { try { const s = localStorage.getItem(TPL_KEY); if (s) onChange(JSON.parse(s) as Level[][]) } catch { /* ignore */ } }
 
   const counts = useMemo(() => {
     const c: Record<Level, number> = { max: 0, strong: 0, normal: 0, light: 0, pause: 0 }
