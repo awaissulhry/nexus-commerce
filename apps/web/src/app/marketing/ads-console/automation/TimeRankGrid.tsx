@@ -82,7 +82,7 @@ export function seedFromDemand(grid: Bucket[][] | null | undefined): Level[][] {
   }))
 }
 
-export function TimeRankGrid({ demandGrid, onChange }: { demandGrid: Bucket[][] | null; onChange?: (grid: Level[][]) => void }) {
+export function TimeRankGrid({ demandGrid, onChange, pushGrid }: { demandGrid: Bucket[][] | null; onChange?: (grid: Level[][]) => void; pushGrid?: Level[][] | null }) {
   const [grid, setGrid] = useState<Level[][]>(emptyGrid)
   const [brush, setBrush] = useState<Level>('max')
   const [userEdited, setUserEdited] = useState(false)
@@ -92,6 +92,9 @@ export function TimeRankGrid({ demandGrid, onChange }: { demandGrid: Bucket[][] 
   useEffect(() => {
     if (!userEdited && demandGrid) setGrid(seedFromDemand(demandGrid))
   }, [demandGrid, userEdited])
+
+  // DD4 — accept a grid pushed from the guided "maintain at peak" set-up.
+  useEffect(() => { if (pushGrid) { setUserEdited(true); setGrid(pushGrid) } }, [pushGrid])
 
   useEffect(() => { onChange?.(grid) }, [grid]) // eslint-disable-line react-hooks/exhaustive-deps
 

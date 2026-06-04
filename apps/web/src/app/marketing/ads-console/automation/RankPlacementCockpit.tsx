@@ -48,6 +48,21 @@ type DayRecommend = 'bid-up' | 'keep' | 'bid-down'
 const MATCH_TYPES = ['BROAD', 'PHRASE', 'EXACT'] as const
 const pad2 = (n: number) => String(n).padStart(2, '0')
 const DOW_LABEL = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+const DOW_ORDER = [1, 2, 3, 4, 5, 6, 0] // Mon→Sun for display
+// DD4 — guided grid: each day's peak hours → the chosen level, Normal outside,
+// the dead overnight → Pause. Per-day peaks (the hours differ by day).
+function buildGuidedGrid(grid: HeatCell[][], level: Level, pauseOvernight: boolean): Level[][] {
+  return Array.from({ length: 7 }, (_, d) => {
+    const row = grid[d] ?? []
+    const max = Math.max(1, ...row.map(c => c.revenueCents))
+    return Array.from({ length: 24 }, (_, h) => {
+      const rev = row[h]?.revenueCents ?? 0
+      if (pauseOvernight && rev < max * 0.08) return 'pause' as Level
+      if (rev >= max * 0.6) return level
+      return 'normal' as Level
+    })
+  })
+}
 const demandRecommend = (index: number | null): DayRecommend => index == null ? 'keep' : index >= 1.2 ? 'bid-up' : index < 0.6 ? 'bid-down' : 'keep'
 
 // ── The numbered rank ladder. Each slot maps to an Amazon placement + a
@@ -175,6 +190,10 @@ export function RankPlacementCockpit() {
   // TR1/TR3 — time × rank grid editor + apply
   const [showGrid, setShowGrid] = useState(false)
   const [trGrid, setTrGrid] = useState<Level[][] | null>(null)
+  // DD4 — guided "maintain rank at peak"
+  const [guidedLevel, setGuidedLevel] = useState<Level>('strong')
+  const [guidedPause, setGuidedPause] = useState(true)
+  const [guidedGrid, setGuidedGrid] = useState<Level[][] | null>(null)
   const [gridSaving, setGridSaving] = useState(false)
   const [gridMsg, setGridMsg] = useState('')
   // TR5 — defend the rank during the grid's push hours
@@ -275,6 +294,29 @@ export function RankPlacementCockpit() {
   const dayRows = useMemo(() => (family?.demand?.weekdayProfile ?? []).map(w => ({ weekday: w.key, label: DOW_LABEL[w.key] ?? String(w.key), revenueCents: w.revenueCents, orders: w.orders, index: w.index, recommend: demandRecommend(w.index) })), [family])
   const maxDemand = demand && demand.length ? Math.max(1, ...demand.map(h => h.revenueCents)) : 1
   const dayLabel = (wd: number) => DOW_LABEL[wd] ?? String(wd)
+
+  // DD4 — per-day demand peak (the hours differ by day) + one-click guided set-up.
+  const dayPeaks = useMemo(() => {
+    const grid = family?.demand?.grid
+    if (!grid) return []
+    return DOW_ORDER.map(d => {
+      const row = grid[d] ?? []
+      const max = Math.max(1, ...row.map(c => c.revenueCents))
+      const dayTotal = row.reduce((s, c) => s + c.revenueCents, 0)
+      const peakHs = row.map((c, h) => ({ h, rev: c.revenueCents })).filter(x => x.rev >= max * 0.6).map(x => x.h)
+      if (peakHs.length === 0) return { d, label: DOW_LABEL[d], range: null as string | null, pct: 0 }
+      const start = Math.min(...peakHs), end = (Math.max(...peakHs) + 1) % 24
+      const peakRev = peakHs.reduce((s, h) => s + (row[h]?.revenueCents ?? 0), 0)
+      return { d, label: DOW_LABEL[d], range: `${pad2(start)}–${pad2(end)}`, pct: dayTotal > 0 ? Math.round((peakRev / dayTotal) * 100) : 0 }
+    })
+  }, [family])
+
+  const applyGuided = useCallback(() => {
+    const grid = family?.demand?.grid
+    if (!grid) return
+    const g = buildGuidedGrid(grid, guidedLevel, guidedPause)
+    setGuidedGrid(g); setTrGrid(g); setShowGrid(true)
+  }, [family, guidedLevel, guidedPause])
 
   // T2 — generate the family schedule from demand: bid-up high-demand days,
   // bid-down low-demand days, keep average, pause the dead overnight (≈0 demand).
@@ -853,6 +895,25 @@ export function RankPlacementCockpit() {
           : <DemandHeatmap grid={family?.demand?.grid ?? null} />}
         {!family?.demand?.grid && !whenLoading && <div className="az-cockpit-sub">No order-demand data for {market}.</div>}
 
+        {/* ── DD4: guided "maintain rank at peak" (lead set-up) ────── */}
+        {family && family.demand?.grid && family.campaigns.length > 0 && (
+          <div className="az-guided">
+            <div className="az-guided-head"><Sparkles size={14} /> Maintain your rank when it sells</div>
+            <div className="az-guided-row">
+              <span>Maintain</span>
+              <select value={guidedLevel} onChange={e => setGuidedLevel(e.target.value as Level)}><option value="max">Max</option><option value="strong">Strong</option></select>
+              <span>rank during each day&apos;s peak hours, Normal outside.</span>
+              <label className="az-sched-check"><input type="checkbox" checked={guidedPause} onChange={e => setGuidedPause(e.target.checked)} /> Pause dead overnight</label>
+              <span style={{ flex: 1 }} />
+              <button type="button" className="az-btn dark" onClick={applyGuided}><Sparkles size={14} /> Set it up</button>
+            </div>
+            <div className="az-guided-peaks">
+              {dayPeaks.map(p => <span key={p.d} className="it"><b>{p.label}</b> {p.range ? `${p.range} · ${p.pct}%` : '—'}</span>)}
+            </div>
+            <div className="az-cockpit-sub">Detected each day&apos;s sales peak from {family.parentName ?? 'the product'}&apos;s demand — the hours genuinely differ by day. &ldquo;Set it up&rdquo; fills the grid below; review &amp; apply there.</div>
+          </div>
+        )}
+
         {/* ── T5: budget pacing ────────────────────────────────────── */}
         {family && family.campaigns.length > 0 && totalDailyBudgetCents > 0 && (
           <div className={`az-budget-pace ${budgetLimited.length > 0 ? 'warn' : ''}`}>
@@ -875,7 +936,7 @@ export function RankPlacementCockpit() {
             </button>
             {showGrid && <>
               <div className="az-cockpit-sub" style={{ marginTop: 6 }}>Seeded from {family.parentName ?? 'the family'}&apos;s demand. Paint each hour: <b>Max/Strong</b> push for higher rank, <b>Light</b> eases off, <b>Pause</b> stops spend (e.g. 2am). Applies across all {family.campaigns.length} campaigns ({MARKET_TZ[market] ?? 'Europe/Rome'}). Apply lands in TR3.</div>
-              <TimeRankGrid demandGrid={family.demand?.grid ?? null} onChange={setTrGrid} />
+              <TimeRankGrid demandGrid={family.demand?.grid ?? null} onChange={setTrGrid} pushGrid={guidedGrid} />
               <div className="az-sched-actions">
                 <button type="button" className="az-btn dark" disabled={gridSaving || !trGrid || family.campaigns.length === 0} onClick={() => void applyGrid()}>
                   {gridSaving ? <><Loader2 size={14} className="az-spin" /> Saving…</> : <><Clock size={14} /> Apply grid to {family.campaigns.length} campaign{family.campaigns.length === 1 ? '' : 's'}</>}
