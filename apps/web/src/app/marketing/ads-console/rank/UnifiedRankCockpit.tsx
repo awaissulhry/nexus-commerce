@@ -19,10 +19,11 @@ import { getBackendUrl } from '@/lib/backend-url'
 import { RankPlacementCockpit } from '../automation/RankPlacementCockpit'
 import { StagedChangesTray } from './StagedChangesTray'
 import { useRankUndo } from './useRankUndo'
+import { StrategyStation } from './StrategyStation'
 
 const MARKETS = ['IT', 'DE', 'FR', 'ES', 'NL', 'BE', 'SE', 'PL', 'IE', 'UK']
 const LOOKBACKS = [7, 14, 30, 60, 90]
-interface Camp { id: string; name: string; marketplace: string | null; status: string }
+interface Camp { id: string; name: string; marketplace: string | null; status: string; biddingStrategy?: string | null }
 interface Autonomy { killSwitch: boolean; rules: { total: number; enabled: number; live: number; dryRun: number; disabled: number } }
 
 export function UnifiedRankCockpit() {
@@ -112,6 +113,9 @@ export function UnifiedRankCockpit() {
       {/* ── Body: the existing placement cockpit, driven by the shared context.
             Stations get extracted from here in RC4.1–RC4.4. ── */}
       <RankPlacementCockpit market={market} campaignId={campaignId} lookbackDays={lookback} onMarketChange={setMarket} onCampaignChange={setCampaignId} hideScopeBar />
+
+      {/* ── Absorbed modes as progressive stations (RC4.2+) ── */}
+      {campaignId && <StrategyStation campaignId={campaignId} currentStrategy={campaign?.biddingStrategy ?? null} onChanged={loadPending} />}
 
       {/* ── Footer: staged-changes tray + history (RC4.5 / RC4.6) ── */}
       <div className="az-urc-foot">

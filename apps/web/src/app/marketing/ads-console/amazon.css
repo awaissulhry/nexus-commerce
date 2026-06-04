@@ -518,6 +518,22 @@
 .az-urc-toast { position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%); z-index: 60; display: inline-flex; align-items: center; gap: 7px; background: var(--ink); color: #fff; font-size: 12.5px; font-weight: 600; padding: 9px 16px; border-radius: 10px; box-shadow: 0 8px 28px rgba(0,0,0,.28); }
 .az-urc-toast svg { opacity: .8; }
 
+/* RC4.2+ — progressive station cards (absorbed modes) */
+.az-station { margin-top: 14px; border: 1px solid var(--divider); border-radius: 12px; background: #fff; overflow: hidden; }
+.az-station-head { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; background: var(--bg2); border: none; font: inherit; font-size: 14px; color: var(--navy); cursor: pointer; padding: 12px 14px; }
+.az-station-head[aria-expanded="true"] { border-bottom: 1px solid var(--divider); }
+.az-station-head b { font-weight: 800; }
+.az-station-head .sub { font-size: 11.5px; font-weight: 500; color: var(--ink2); }
+.az-station-head > svg:first-child { color: var(--ink3); }
+.az-station-body { padding: 14px; }
+.az-strat-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.az-strat-row .lbl { font-size: 11px; font-weight: 700; color: var(--ink3); text-transform: uppercase; letter-spacing: .3px; }
+.az-strat-btn { border: 1.5px solid var(--border); background: #fff; border-radius: 7px; padding: 6px 13px; font: inherit; font-size: 12.5px; font-weight: 700; cursor: pointer; color: var(--ink2); }
+.az-strat-btn:hover { background: var(--bg3); }
+.az-strat-btn.on { border-color: var(--navy); color: var(--navy); background: var(--bg2); }
+.az-strat-ceil { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; margin-top: 12px; font-size: 12.5px; color: var(--ink2); }
+.az-strat-ceil input[type="number"] { width: 60px; border: 1px solid var(--border); border-radius: 6px; padding: 4px 7px; font: inherit; font-weight: 700; text-align: right; }
+
 /* Inline rank-set collision warning in the Strategy panel (RC3.4) */
 .az-rankwarn { margin: 10px 0 0; padding: 10px 11px; border: 1px solid #f0c9a8; border-left: 3px solid #b3541e; border-radius: 9px; background: #fff7f0; }
 .az-rankwarn-msg { display: flex; align-items: flex-start; gap: 6px; font-size: 11.5px; line-height: 1.45; color: var(--ink); }
