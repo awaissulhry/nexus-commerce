@@ -284,6 +284,17 @@
 .az-sched-toggle { font-size: 12px; font-weight: 700; color: var(--ink2); display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
 .az-sched-toggle input { cursor: pointer; }
 
+/* Placement × time coupling (T4) */
+.az-couple { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--divider); }
+.az-couple-days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; margin-bottom: 6px; }
+.az-couplecell { display: flex; flex-direction: column; align-items: center; gap: 3px; }
+.az-couplecell .lbl { font-size: 10px; font-weight: 700; color: var(--ink3); }
+.az-couplecell .bar { width: 100%; height: 40px; display: flex; align-items: flex-end; justify-content: center; }
+.az-couplecell .fill { width: 62%; min-height: 4px; border-radius: 3px 3px 0 0; background: var(--navy); }
+.az-couplecell.up .fill { background: #2e9e6b; }
+.az-couplecell.down .fill { background: #d4843b; }
+.az-couplecell .val { font-size: 10.5px; font-weight: 700; color: var(--ink); }
+
 /* Action chip + per-campaign lines */
 .az-act { display: inline-flex; align-items: center; gap: 3px; font-size: 10px; font-weight: 700; border-radius: 4px; padding: 1px 6px; vertical-align: middle; }
 .az-act.raise { color: #1e7a4f; background: #e8f5ee; }

@@ -494,6 +494,15 @@ export function RankPlacementCockpit() {
     ? Math.round((smartSchedule.deadHours.reduce((s, h) => s + (demand.find(d => d.key === h)?.revenueCents ?? 0), 0) / totalRevenueCents) * 100)
     : 0
 
+  // T4 — placement × time coupling. The top-of-search bias compounds with the
+  // day's dayparting multiplier: effective bid factor = (1+top%)·(1+dayMult%).
+  const topBias = biasDraft.PLACEMENT_TOP
+  const couplingDays = smartSchedule ? dayRows.map(d => {
+    const mult = smartSchedule.peak.includes(d.weekday) ? bidUpPct : smartSchedule.weak.includes(d.weekday) ? -bidDownPct : 0
+    return { weekday: d.weekday, label: d.label, mult, eff: (1 + topBias / 100) * (1 + mult / 100) }
+  }) : []
+  const maxEff = couplingDays.length ? Math.max(1, ...couplingDays.map(c => c.eff)) : 1
+
   // Honest rank readout: where you're holding vs the target slot.
   const rankReadout = (() => {
     if (!cur && placements.length === 0) return null
@@ -773,6 +782,25 @@ export function RankPlacementCockpit() {
         ) : family && family.campaigns.length > 0 && !whenLoading ? (
           <div className="az-cockpit-sub" style={{ marginTop: 8 }}>Demand is even across the week — no day-level schedule needed yet.</div>
         ) : null}
+
+        {/* ── T4: placement × time coupling ────────────────────────── */}
+        {smartSchedule && couplingDays.length > 0 && (topBias > 0 ? (
+          <div className="az-couple">
+            <div className="az-when-sub" style={{ marginTop: 4 }}>Top-of-search push × demand — effective aggressiveness by day (placement +{topBias}% compounded with the schedule)</div>
+            <div className="az-couple-days">
+              {couplingDays.map(c => (
+                <div key={c.weekday} className={`az-couplecell ${c.mult > 0 ? 'up' : c.mult < 0 ? 'down' : ''}`} title={`${c.label}: placement +${topBias}% × time ${c.mult >= 0 ? '+' : ''}${c.mult}% = ${c.eff.toFixed(2)}× base bid`}>
+                  <div className="lbl">{c.label}</div>
+                  <div className="bar"><div className="fill" style={{ height: `${Math.max(4, (c.eff / maxEff) * 100)}%` }} /></div>
+                  <div className="val">{c.eff.toFixed(1)}×</div>
+                </div>
+              ))}
+            </div>
+            <div className="az-cockpit-sub">Your top-of-search push runs full-strength on high-demand days and is throttled on low-demand days — you win the slot when it converts and ease off when it doesn&apos;t. The hold-loop also won&apos;t raise the slot while a campaign is paused by the schedule.</div>
+          </div>
+        ) : (
+          <div className="az-cockpit-sub" style={{ marginTop: 6 }}>Set a <b>Top-of-search</b> bias in the spend mixer above to see it compounded with this schedule (full on high-demand days, throttled on low-demand days).</div>
+        ))}
 
         <div className="az-cockpit-note"><Info size={12} /> Timing is a product property, so this covers the whole parent family (all variants &amp; their campaigns) in {market}. Demand is order-placed time (Europe/Rome) — a live proxy until Amazon Marketing Stream provides true hourly ad data.</div>
       </div>

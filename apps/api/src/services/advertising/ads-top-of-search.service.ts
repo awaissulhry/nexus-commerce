@@ -32,6 +32,7 @@ export interface TosRow {
   recommendedPct: number
   action: 'raise' | 'lower' | 'keep'
   reason: string
+  status: string // RC2.T4 — so the hold-loop can skip dayparting-paused campaigns
 }
 
 export async function analyzeTopOfSearch(opts: { windowDays?: number; marketplace?: string; targetAcos?: number; targetIS?: number } = {}): Promise<{ windowDays: number; targetAcos: number; targetIS: number | null; rows: TosRow[] }> {
@@ -50,7 +51,7 @@ export async function analyzeTopOfSearch(opts: { windowDays?: number; marketplac
   if (extIds.length === 0) return { windowDays, targetAcos, targetIS, rows: [] }
   const campaigns = await prisma.campaign.findMany({
     where: { externalCampaignId: { in: extIds }, ...(opts.marketplace ? { marketplace: opts.marketplace } : {}) },
-    select: { id: true, name: true, marketplace: true, externalCampaignId: true, dynamicBidding: true },
+    select: { id: true, name: true, marketplace: true, externalCampaignId: true, dynamicBidding: true, status: true },
   })
   const byExt = new Map(campaigns.map((c) => [c.externalCampaignId!, c]))
 
@@ -86,7 +87,7 @@ export async function analyzeTopOfSearch(opts: { windowDays?: number; marketplac
     } else if (topSpendCents === 0) {
       reason = 'no top-of-search spend in window'
     }
-    rows.push({ campaignId: c.id, name: c.name, marketplace: c.marketplace, topImpr: p._sum.impressions ?? 0, topClicks: p._sum.clicks ?? 0, topSpendCents, topSalesCents, topAcos, topIS, currentPct, recommendedPct, action, reason })
+    rows.push({ campaignId: c.id, name: c.name, marketplace: c.marketplace, topImpr: p._sum.impressions ?? 0, topClicks: p._sum.clicks ?? 0, topSpendCents, topSalesCents, topAcos, topIS, currentPct, recommendedPct, action, reason, status: c.status })
   }
   rows.sort((a, b) => b.topSpendCents - a.topSpendCents)
   return { windowDays, targetAcos, targetIS, rows }
@@ -127,6 +128,7 @@ export interface DefendTosResult {
   changed: number
   applied: number
   skippedNotAllowlisted: number
+  skippedPaused: number // RC2.T4 — raises skipped because dayparting paused the campaign
   dryRun: boolean
   sample: Array<{ campaign: string; fromPct: number; toPct: number; action: string; reason: string }>
 }
@@ -140,10 +142,15 @@ export async function defendTopOfSearch(opts: {
   dryRun?: boolean
 } = {}): Promise<DefendTosResult> {
   const { rows } = await analyzeTopOfSearch({ targetAcos: opts.targetAcos, targetIS: opts.targetIS, marketplace: opts.marketplace, windowDays: opts.windowDays })
-  const actionable = rows.filter((r) => r.action !== 'keep' && r.recommendedPct !== r.currentPct)
+  // RC2.T4 — respect dayparting: never RAISE top-of-search on a campaign that is
+  // currently PAUSED (dayparting pauses dead windows; pushing the slot then just
+  // queues more spend for when it un-pauses). Easing off (lower) still applies.
+  const candidate = rows.filter((r) => r.action !== 'keep' && r.recommendedPct !== r.currentPct)
+  const skippedPaused = candidate.filter((r) => r.action === 'raise' && r.status === 'PAUSED').length
+  const actionable = candidate.filter((r) => !(r.action === 'raise' && r.status === 'PAUSED'))
   const sample = actionable.slice(0, 8).map((r) => ({ campaign: r.name, fromPct: r.currentPct, toPct: r.recommendedPct, action: r.action, reason: r.reason }))
   if (opts.dryRun) {
-    return { evaluated: rows.length, changed: actionable.length, applied: 0, skippedNotAllowlisted: 0, dryRun: true, sample }
+    return { evaluated: rows.length, changed: actionable.length, applied: 0, skippedNotAllowlisted: 0, skippedPaused, dryRun: true, sample }
   }
   let allowed: Set<string> | null = null
   if (opts.allowlistedOnly) {
@@ -159,7 +166,7 @@ export async function defendTopOfSearch(opts: {
     await applyTopOfSearch(r.campaignId, r.recommendedPct)
     applied += 1
   }
-  return { evaluated: rows.length, changed: actionable.length, applied, skippedNotAllowlisted, dryRun: false, sample }
+  return { evaluated: rows.length, changed: actionable.length, applied, skippedNotAllowlisted, skippedPaused, dryRun: false, sample }
 }
 
 // Rule action — same engine, allowlist-enforced, dry-run honored from rule meta.
