@@ -586,7 +586,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     return {
       marketplace: fam.marketplace ?? marketplace, parentProductId: fam.parentProductId, parentName: fam.parentName, productIds: fam.productIds, asins: fam.asins,
       campaigns: fam.campaigns,
-      demand: { totals: demand.totals, hourProfile: demand.hourProfile, weekdayProfile: demand.weekdayProfile, hasData: demand.hasData },
+      demand: { totals: demand.totals, hourProfile: demand.hourProfile, weekdayProfile: demand.weekdayProfile, grid: demand.grid, hasData: demand.hasData },
     }
   })
 

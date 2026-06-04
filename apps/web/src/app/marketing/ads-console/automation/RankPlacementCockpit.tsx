@@ -24,6 +24,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { DndContext, useDraggable, useDroppable, DragOverlay, type DragEndEvent, type DragStartEvent, PointerSensor, KeyboardSensor, useSensor, useSensors } from '@dnd-kit/core'
 import { GripVertical, Info, ArrowUp, Crosshair, TrendingUp, TrendingDown, Minus, Search, Plus, Loader2, Check, ListPlus, Sparkles, Zap, ShieldCheck, BarChart3, AlertTriangle, Clock, Wallet } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
+import { TimeRankGrid, type Level } from './TimeRankGrid'
 
 const MARKETS = ['IT', 'DE', 'FR', 'ES', 'NL', 'BE', 'SE', 'PL', 'IE', 'UK']
 const WINDOW_DAYS = 30
@@ -40,7 +41,7 @@ interface SelfComp { campaignId: string; name: string; status: string; asins: st
 interface DemandBucket { key: number; orders: number; units: number; revenueCents: number; index: number | null }
 type DemandHour = DemandBucket
 interface FamCampaign { id: string; name: string; status: string; marketplace: string | null }
-interface ProductFamily { parentProductId: string | null; parentName: string | null; productIds: string[]; asins: string[]; campaigns: FamCampaign[]; demand: { totals: { orders: number; units: number; revenueCents: number }; hourProfile: DemandHour[]; weekdayProfile: DemandBucket[]; hasData: boolean } | null }
+interface ProductFamily { parentProductId: string | null; parentName: string | null; productIds: string[]; asins: string[]; campaigns: FamCampaign[]; demand: { totals: { orders: number; units: number; revenueCents: number }; hourProfile: DemandHour[]; weekdayProfile: DemandBucket[]; grid?: { orders: number; units: number; revenueCents: number }[][]; hasData: boolean } | null }
 type DayRecommend = 'bid-up' | 'keep' | 'bid-down'
 const MATCH_TYPES = ['BROAD', 'PHRASE', 'EXACT'] as const
 const pad2 = (n: number) => String(n).padStart(2, '0')
@@ -169,6 +170,9 @@ export function RankPlacementCockpit() {
   // T6 — autonomous self-refresh rule
   const [creatingRule, setCreatingRule] = useState(false)
   const [autoMsg, setAutoMsg] = useState('')
+  // TR1 — time × rank grid editor
+  const [showGrid, setShowGrid] = useState(false)
+  const [trGrid, setTrGrid] = useState<Level[][] | null>(null)
   // R3 — bulk keyword manager
   const [targets, setTargets] = useState<Target[]>([])
   const [targetsLoading, setTargetsLoading] = useState(false)
@@ -811,8 +815,22 @@ export function RankPlacementCockpit() {
           </div>
         )}
 
-        {/* ── T2/T3: smart schedule generator + apply across the family ── */}
-        {smartSchedule && (smartSchedule.peak.length > 0 || smartSchedule.weak.length > 0 || smartSchedule.deadHours.length > 0) ? (
+        {/* ── TR1: time × rank grid editor ─────────────────────────── */}
+        {family && family.campaigns.length > 0 && (
+          <div className="az-tr-section">
+            <button type="button" className="az-tr-toggle" onClick={() => setShowGrid(v => !v)} aria-expanded={showGrid}>
+              <Sparkles size={13} /> Time × rank grid — paint the rank/pause for every hour {showGrid ? '▾' : '▸'}
+            </button>
+            {showGrid && <>
+              <div className="az-cockpit-sub" style={{ marginTop: 6 }}>Seeded from {family.parentName ?? 'the family'}&apos;s demand. Paint each hour: <b>Max/Strong</b> push for higher rank, <b>Light</b> eases off, <b>Pause</b> stops spend (e.g. 2am). Applies across all {family.campaigns.length} campaigns ({MARKET_TZ[market] ?? 'Europe/Rome'}). Apply lands in TR3.</div>
+              <TimeRankGrid demandGrid={family.demand?.grid ?? null} onChange={setTrGrid} />
+              {trGrid && <div className="az-cockpit-note" style={{ marginTop: 8 }}><Info size={12} /> <b>{trGrid.flat().filter(l => l === 'pause').length}</b> of 168 hours/week paused. One-click apply across the family — plus the effective-cost preview and the over-pause guard — land in TR2/TR3.</div>}
+            </>}
+          </div>
+        )}
+
+        {/* ── T2/T3: demand-auto smart schedule (alternative to the grid) ── */}
+        {!showGrid && smartSchedule && (smartSchedule.peak.length > 0 || smartSchedule.weak.length > 0 || smartSchedule.deadHours.length > 0) ? (
           <div className="az-sched">
             <div className="az-sched-head"><Sparkles size={14} /> Smart schedule <span className="tag">preview</span></div>
             <div className="az-sched-sum">

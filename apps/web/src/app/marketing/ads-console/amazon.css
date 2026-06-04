@@ -308,6 +308,34 @@
 .az-when-link:hover { text-decoration: underline; }
 .az-dpday .fill.skel, .az-dphour .fill.skel { background: linear-gradient(90deg, var(--bg3), var(--bg2), var(--bg3)); background-size: 200% 100%; animation: az-shimmer 1.3s linear infinite; opacity: .7; }
 
+/* Time × rank grid editor (TR1) */
+.az-tr-section { margin-top: 14px; }
+.az-tr-toggle { display: inline-flex; align-items: center; gap: 6px; background: none; border: none; font: inherit; font-weight: 700; font-size: 13px; color: var(--navy); cursor: pointer; padding: 0; }
+.az-tr-toggle:hover { text-decoration: underline; }
+.az-trgrid { margin-top: 10px; }
+.az-trgrid-bar { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
+.az-trgrid-bar .lbl { font-size: 11px; font-weight: 700; color: var(--ink3); }
+.az-tr-swatch { border: 1.5px solid transparent; border-radius: 6px; padding: 4px 9px; font-size: 11px; font-weight: 700; cursor: pointer; font-family: inherit; }
+.az-tr-swatch.on { border-color: var(--ink); box-shadow: 0 0 0 2px rgba(0,0,0,.12); }
+.az-tr-mini { border: 1px solid var(--border); background: #fff; border-radius: 6px; padding: 4px 9px; font-size: 11px; cursor: pointer; font-family: inherit; color: var(--ink2); }
+.az-tr-mini:hover { background: var(--bg3); }
+.az-trgrid-table { user-select: none; overflow-x: auto; padding-bottom: 2px; }
+.az-tr-hrow { display: flex; align-items: center; gap: 2px; }
+.az-tr-corner { width: 40px; flex: none; }
+.az-tr-hh { width: 18px; flex: none; text-align: center; font-size: 8.5px; color: var(--ink3); }
+.az-tr-drow { display: flex; align-items: center; gap: 2px; margin-top: 2px; }
+.az-tr-dlbl { width: 40px; flex: none; text-align: right; padding-right: 6px; font-size: 10.5px; font-weight: 700; color: var(--ink2); background: none; border: none; cursor: pointer; font-family: inherit; }
+.az-tr-dlbl:hover { color: var(--navy); text-decoration: underline; }
+.az-tr-cell { width: 18px; height: 20px; flex: none; border-radius: 3px; cursor: pointer; }
+.az-tr-cell:hover { outline: 2px solid var(--ink); outline-offset: -1px; }
+.az-tr-hrow.foot { margin-top: 2px; }
+.az-tr-collbl { width: 18px; height: 14px; flex: none; background: none; border: none; cursor: pointer; font-size: 9px; color: var(--ink3); padding: 0; line-height: 1; }
+.az-tr-collbl:hover { color: var(--navy); }
+.az-trgrid-legend { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 8px; font-size: 10.5px; color: var(--ink2); }
+.az-trgrid-legend .it { display: inline-flex; align-items: center; gap: 5px; }
+.az-trgrid-legend .it i { width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
+.az-trgrid-legend .hint { color: var(--ink3); }
+
 /* Action chip + per-campaign lines */
 .az-act { display: inline-flex; align-items: center; gap: 3px; font-size: 10px; font-weight: 700; border-radius: 4px; padding: 1px 6px; vertical-align: middle; }
 .az-act.raise { color: #1e7a4f; background: #e8f5ee; }
