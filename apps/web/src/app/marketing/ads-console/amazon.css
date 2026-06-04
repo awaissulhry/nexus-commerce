@@ -98,6 +98,7 @@
 .az-cockpit-bar select { border: 1px solid var(--border); border-radius: 7px; padding: 7px 9px; font: inherit; font-size: 13px; cursor: pointer; background: #fff; min-width: 150px; max-width: 260px; }
 .az-cockpit-bar .kw-wrap { display: flex; align-items: center; gap: 6px; border: 1px solid var(--border); border-radius: 7px; padding: 0 9px; background: #fff; color: var(--ink2); }
 .az-cockpit-bar .kw-wrap select { border: none; padding: 7px 4px; min-width: 150px; }
+.az-cockpit-bar .kw-wrap input { border: none; padding: 7px 4px; min-width: 130px; font: inherit; font-size: 13px; background: transparent; outline: none; color: var(--ink); }
 
 .az-cockpit-body { display: grid; grid-template-columns: 1fr 300px; gap: 16px; align-items: start; }
 @media (max-width: 900px) { .az-cockpit-body { grid-template-columns: 1fr; } }
@@ -115,6 +116,25 @@
 .az-tier-slots { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-height: 44px; }
 .az-slot-ghost { width: 52px; height: 38px; border-radius: 7px; background: repeating-linear-gradient(135deg, var(--bg2), var(--bg2) 6px, var(--bg3) 6px, var(--bg3) 12px); border: 1px dashed var(--divider); flex: none; }
 .az-tier-hint { font-size: 11px; color: var(--ink3); margin-left: 4px; }
+
+/* Numbered rank ladder (RC2 campaign-first) */
+.az-rankgroup { border: 1px solid var(--divider); border-left: 3px solid var(--navy); border-radius: 10px; background: #fff; padding: 10px 12px; }
+.az-rankgroup-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.az-rankgroup-head .t { font-weight: 700; font-size: 13.5px; }
+.az-rankgroup-head .badge { font-size: 9px; font-weight: 700; color: #fff; background: var(--navy); border-radius: 4px; padding: 2px 6px; letter-spacing: .3px; }
+.az-ranktop { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.az-rankslot { position: relative; border: 1px dashed var(--divider); border-radius: 9px; background: var(--bg2); transition: background .15s, box-shadow .15s, border-color .15s; display: flex; align-items: center; }
+.az-rankslot.num { flex-direction: column; justify-content: center; gap: 6px; min-height: 86px; padding: 10px 8px; text-align: center; }
+.az-rankslot.wide { border-left: 3px solid var(--ink3); border-style: solid; gap: 10px; min-height: 52px; padding: 8px 12px; }
+.az-rankslot.over { background: #fff; border-color: var(--navy); box-shadow: inset 0 0 0 2px var(--navy); }
+.az-rankslot.has-you { background: linear-gradient(0deg, #fff, var(--bg3)); border-style: solid; border-color: var(--navy); }
+.az-rank-no { font-size: 22px; font-weight: 800; color: var(--ink3); line-height: 1; }
+.az-rankslot.has-you .az-rank-no { color: var(--navy); }
+.az-rank-wide-lbl { font-weight: 700; font-size: 12.5px; color: var(--ink2); white-space: nowrap; }
+.az-slot-ghost.sm { width: 64px; height: 30px; }
+.az-rankslot.num .az-prodcard { min-width: 0; width: 100%; max-width: none; }
+.az-rankslot.num .az-prodcard .meta .nm { font-size: 11px; white-space: normal; line-height: 1.2; max-height: 28px; overflow: hidden; }
+.az-rankslot.num .az-prodcard .you { display: none; }
 
 /* Product card */
 .az-prodcard { display: flex; align-items: center; gap: 9px; background: #fff; border: 1.5px solid var(--navy); border-radius: 9px; padding: 7px 10px 7px 6px; box-shadow: 0 2px 8px rgba(0,0,0,.1); min-width: 230px; max-width: 320px; }

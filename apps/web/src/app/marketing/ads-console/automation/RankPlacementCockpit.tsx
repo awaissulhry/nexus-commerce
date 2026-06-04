@@ -1,101 +1,92 @@
 'use client'
 
 /**
- * Rank Control — Placement Cockpit (RC2 series).
+ * Rank Control — Placement Cockpit (RC2 series, campaign-first redesign).
  *
- * P1: visual shell + drag-drop placement ladder.
- * P2: wire REAL signals. Picking a product + market resolves the product's
- * campaigns (/by-product/campaigns), their top-of-search impression share +
- * current placement multiplier + recommendation (/top-of-search), and the
- * keyword's share-of-voice (/share-of-voice).
- * P3 (this file): drop → plan + bid-to-win + sandbox Apply. Dragging the card
- * to a tier computes a per-campaign placement-% plan (TOP_OF_SEARCH lever) and
- * a bid-to-win for the selected keyword (/bid-suggestions). "Apply" pushes the
- * plan via /top-of-search/apply, which is gated: with the ads write-gate closed
- * it stages the change locally (mode:'local', sandbox) without touching live
- * Amazon ads; the result surfaces which mode it took. Hold-the-slot loop = P4.
+ * Direction (2026-06): manage ONE campaign at a time (Market → Campaign), drag
+ * the listing onto an EXACT rank slot (Top of search 1st / 2nd / 3rd, Rest,
+ * Product pages), and bulk-manage keywords. Replaces the product-aggregate +
+ * coarse-tier model — campaign-first removes the multi-market aggregation pain.
  *
- * Honest model: Amazon's API exposes no literal SERP rank, so the ladder is a
- * CONTROL METAPHOR — drag = your TARGET placement; impression-share is the real
- * "are you showing there" proxy (null until the IS ingest has run).
+ * Honest rank model (approved): Amazon runs a blind auction — no API sets or
+ * reads literal SERP rank. So each slot maps to a top-of-search impression-share
+ * TARGET + bid-to-win; the autonomous loop holds it and the real TOS-IS is the
+ * "how often you actually win that slot" feedback. Higher slot → higher IS
+ * target + more aggressive bid. It targets/defends a position; it can't pin one.
+ *
+ * R1 (this file): campaign-first scope bar + numbered rank ladder + live
+ * per-campaign signals (TOS-IS, current %, recommendation), card initialised to
+ * the campaign's current implied rank. Read-only. R2 = IS-band mapping +
+ * feedback; R3 = bulk keywords; R4 = apply + hold; R5 = dynamic polish.
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { DndContext, useDraggable, useDroppable, DragOverlay, type DragEndEvent, type DragStartEvent, PointerSensor, KeyboardSensor, useSensor, useSensors } from '@dnd-kit/core'
-import { Search, GripVertical, Info, ArrowUp, Crosshair, TrendingUp, TrendingDown, Minus, Check, Loader2, Zap, ShieldCheck } from 'lucide-react'
+import { GripVertical, Info, ArrowUp, Crosshair, TrendingUp, TrendingDown, Minus, Search } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 
-const MARKETS = ['IT', 'DE', 'FR', 'ES', 'NL', 'BE', 'SE', 'PL', 'IE', 'UK', 'All']
+const MARKETS = ['IT', 'DE', 'FR', 'ES', 'NL', 'BE', 'SE', 'PL', 'IE', 'UK']
 const WINDOW_DAYS = 30
-const TOP_TIER_THRESHOLD = 30 // currentPct ≥ this ⇒ product already biased to top-of-search
 
-interface Prod { id: string; name: string; asin: string | null; photoUrl: string | null; marketCount?: number }
-interface Sov { query: string; impressions: number; sovPct: number }
-interface CampRow { id: string; name: string; marketplace: string | null; status: string; acos: number | null; adSpendCents: number; impressions: number }
+interface Camp { id: string; name: string; marketplace: string | null; status: string; externalCampaignId: string | null; acos: number | null; dailyBudget: unknown; adProduct: string | null }
 interface TosRow { campaignId: string; name: string; marketplace: string | null; topImpr: number; topSpendCents: number; topSalesCents: number; topAcos: number | null; topIS: number | null; currentPct: number; recommendedPct: number; action: 'raise' | 'lower' | 'keep'; reason: string }
-interface Bid { suggestedBidCents: number; lowCents: number; highCents: number; basis: string; samples: number }
-interface PlanItem { campaignId: string; name: string; fromPct: number; toPct: number }
-interface Agg {
-  campaignCount: number
-  topIS: number | null
-  currentPct: number
-  recommendedPct: number
-  action: 'raise' | 'lower' | 'keep'
-  reason: string
-  blendedAcos: number | null
-  perCampaign: TosRow[]
+
+// ── The numbered rank ladder. isTarget = the top-of-search impression-share
+// band each slot maps to (the honest rank proxy; R2 wires the live feedback). ──
+type SlotKey = 'top1' | 'top2' | 'top3' | 'rest' | 'product'
+interface Slot { k: SlotKey; group: 'top' | 'rest' | 'product'; rank: number | null; isTarget: number | null; short: string }
+const SLOTS: Slot[] = [
+  { k: 'top1', group: 'top', rank: 1, isTarget: 0.65, short: '1st' },
+  { k: 'top2', group: 'top', rank: 2, isTarget: 0.45, short: '2nd' },
+  { k: 'top3', group: 'top', rank: 3, isTarget: 0.30, short: '3rd' },
+  { k: 'rest', group: 'rest', rank: null, isTarget: null, short: 'Rest of search' },
+  { k: 'product', group: 'product', rank: null, isTarget: null, short: 'Product pages' },
+]
+const slotLabel = (k: SlotKey) => {
+  const s = SLOTS.find(x => x.k === k)
+  return s?.group === 'top' ? `Top of search · ${s.short}` : s?.short ?? '—'
+}
+// Map a campaign's current top-of-search state → the slot it effectively sits in.
+function impliedSlot(topIS: number | null, currentPct: number): SlotKey {
+  if (topIS != null) return topIS >= 0.55 ? 'top1' : topIS >= 0.38 ? 'top2' : topIS >= 0.20 ? 'top3' : 'rest'
+  return currentPct >= 150 ? 'top1' : currentPct >= 60 ? 'top2' : currentPct >= 15 ? 'top3' : 'rest'
 }
 
-type TierKey = 'top' | 'rest' | 'product'
-const TIERS: Array<{ k: TierKey; label: string; hint: string; accent: string }> = [
-  { k: 'top', label: 'Top of search', hint: 'Page 1, above the fold — most visible, most competitive (≈3 sponsored slots).', accent: 'var(--navy)' },
-  { k: 'rest', label: 'Rest of search', hint: 'Lower / later search results — cheaper reach.', accent: 'var(--ink3)' },
-  { k: 'product', label: 'Product pages', hint: 'On competitors’ and related detail pages.', accent: 'var(--ink3)' },
-]
-
-// ── Draggable product card ─────────────────────────────────────────────
-function ProductCard({ prod, dragging }: { prod: Prod; dragging?: boolean }) {
+// ── Listing card (the campaign you're placing) ─────────────────────────
+function CampaignCard({ camp, dragging }: { camp: Camp; dragging?: boolean }) {
   return (
     <div className={`az-prodcard ${dragging ? 'drag' : ''}`}>
       <GripVertical size={14} className="grip" />
-      {prod.photoUrl ? <img src={prod.photoUrl} alt="" className="ph" /> : <div className="ph ph-empty" />}
       <div className="meta">
-        <div className="nm">{prod.name}</div>
-        <div className="as">{prod.asin ?? '—'}</div>
+        <div className="nm">{camp.name}</div>
+        <div className="as">{camp.marketplace ?? '—'} · {camp.status}</div>
       </div>
       <span className="you">YOU</span>
     </div>
   )
 }
-function DraggableProduct({ prod }: { prod: Prod }) {
-  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: 'product' })
+function DraggableCard({ camp }: { camp: Camp }) {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: 'card' })
   return (
     <div ref={setNodeRef} {...listeners} {...attributes} style={{ opacity: isDragging ? 0.3 : 1, cursor: 'grab', touchAction: 'none' }}>
-      <ProductCard prod={prod} />
+      <CampaignCard camp={camp} />
     </div>
   )
 }
 
-// ── Droppable tier ─────────────────────────────────────────────────────
-function Tier({ tierKey, label, hint, accent, active, children }: { tierKey: TierKey; label: string; hint: string; accent: string; active: boolean; children?: React.ReactNode }) {
-  const { setNodeRef, isOver } = useDroppable({ id: tierKey })
+// ── A droppable rank slot ──────────────────────────────────────────────
+function DropSlot({ slot, active, numbered, children }: { slot: Slot; active: boolean; numbered?: boolean; children?: React.ReactNode }) {
+  const { setNodeRef, isOver } = useDroppable({ id: slot.k })
   return (
-    <div ref={setNodeRef} className={`az-tier ${active ? 'has-you' : ''} ${isOver ? 'over' : ''}`} style={{ borderLeftColor: accent }}>
-      <div className="az-tier-head">
-        <span className="t">{label}</span>
-        {active && <span className="badge">YOUR TARGET</span>}
-      </div>
-      <div className="az-tier-slots">
-        {!active && Array.from({ length: tierKey === 'top' ? 3 : 4 }).map((_, i) => <div key={i} className="az-slot-ghost" />)}
-        {children}
-        {!active && <span className="az-tier-hint">{hint}</span>}
-      </div>
+    <div ref={setNodeRef} className={`az-rankslot ${numbered ? 'num' : 'wide'} ${active ? 'has-you' : ''} ${isOver ? 'over' : ''}`}>
+      {numbered && <span className="az-rank-no">{slot.rank}</span>}
+      {!numbered && <span className="az-rank-wide-lbl">{slot.short}</span>}
+      {active ? children : (numbered ? <span className="az-slot-ghost sm" /> : null)}
     </div>
   )
 }
 
-// ── Gauge ───────────────────────────────────────────────────────────────
-function Gauge({ pct, target, tone }: { pct: number | null; target?: number; tone?: 'is' | 'sov' }) {
+function Gauge({ pct, target, tone }: { pct: number | null; target?: number; tone?: 'is' }) {
   const v = pct == null ? null : Math.max(0, Math.min(100, pct))
   return (
     <div className="az-gauge">
@@ -107,8 +98,7 @@ function Gauge({ pct, target, tone }: { pct: number | null; target?: number; ton
     </div>
   )
 }
-
-const ActionChip = ({ action }: { action: Agg['action'] }) => (
+const ActionChip = ({ action }: { action: TosRow['action'] }) => (
   <span className={`az-act ${action}`}>
     {action === 'raise' ? <TrendingUp size={11} /> : action === 'lower' ? <TrendingDown size={11} /> : <Minus size={11} />}
     {action === 'raise' ? 'Raise' : action === 'lower' ? 'Ease off' : 'Hold'}
@@ -116,344 +106,145 @@ const ActionChip = ({ action }: { action: Agg['action'] }) => (
 )
 
 export function RankPlacementCockpit() {
+  const [campaigns, setCampaigns] = useState<Camp[]>([])
   const [market, setMarket] = useState('IT')
-  const [products, setProducts] = useState<Prod[]>([])
-  const [productId, setProductId] = useState<string>('')
-  const [keywords, setKeywords] = useState<Sov[]>([])
-  const [keyword, setKeyword] = useState<string>('')
-  const [tier, setTier] = useState<TierKey>('rest')
+  const [campaignId, setCampaignId] = useState('')
+  const [campaignSearch, setCampaignSearch] = useState('')
+  const [slot, setSlot] = useState<SlotKey>('top3')
   const [activeId, setActiveId] = useState<string | null>(null)
-  // P2 live signals
-  const [agg, setAgg] = useState<Agg | null>(null)
+  const [cur, setCur] = useState<TosRow | null>(null)
   const [signalsLoading, setSignalsLoading] = useState(false)
-  const [signalErr, setSignalErr] = useState(false)
   const [userMoved, setUserMoved] = useState(false)
-  // P3 — plan + bid-to-win + apply
-  const [targetPct, setTargetPct] = useState(50)
-  const [bid, setBid] = useState<Bid | null>(null)
-  const [applying, setApplying] = useState(false)
-  const [applyResult, setApplyResult] = useState<{ mode: string; count: number } | null>(null)
-  // P4 — hold-the-slot defense loop
-  const [holdIS, setHoldIS] = useState(40)
-  const [holdAcos, setHoldAcos] = useState(25)
-  const [holding, setHolding] = useState(false)
-  const [holdMsg, setHoldMsg] = useState('')
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }), useSensor(KeyboardSensor))
 
-  // Products (real, with photos) for the picker
+  // All campaigns once (campaign-first: filtered by market + search in the picker).
   useEffect(() => {
-    void fetch(`${getBackendUrl()}/api/advertising/by-product?windowDays=30&limit=200`, { cache: 'no-store' })
+    void fetch(`${getBackendUrl()}/api/advertising/campaigns?limit=500`, { cache: 'no-store' })
       .then(r => r.json())
-      .then(d => {
-        const rows: Prod[] = (d.rows ?? []).map((p: Record<string, unknown>) => ({ id: p.id as string, name: p.name as string, asin: (p.asin as string) ?? null, photoUrl: (p.photoUrl as string) ?? null, marketCount: p.marketCount as number }))
-        setProducts(rows)
-        if (rows.length && !productId) setProductId(rows[0].id)
-      }).catch(() => {})
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+      .then(d => setCampaigns((d.items ?? []) as Camp[]))
+      .catch(() => {})
+  }, [])
 
-  // Keyword context options (market SoV queries)
+  const inMarket = useMemo(() => campaigns.filter(c => c.marketplace === market), [campaigns, market])
+  const filtered = useMemo(() => {
+    const q = campaignSearch.trim().toLowerCase()
+    const rows = q ? inMarket.filter(c => c.name.toLowerCase().includes(q)) : inMarket
+    return [...rows].sort((a, b) => (a.status === b.status ? a.name.localeCompare(b.name) : a.status === 'ENABLED' ? -1 : 1))
+  }, [inMarket, campaignSearch])
+
+  // Keep a valid selection as the market/filter changes.
   useEffect(() => {
-    void fetch(`${getBackendUrl()}/api/advertising/share-of-voice?windowDays=30&limit=60`, { cache: 'no-store' })
-      .then(r => r.json())
-      .then(d => {
-        const rows: Sov[] = (d.rows ?? []).map((s: Record<string, unknown>) => ({ query: s.query as string, impressions: s.impressions as number, sovPct: s.sovPct as number }))
-        setKeywords(rows)
-        if (rows.length && !keyword) setKeyword(rows[0].query)
-      }).catch(() => {})
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+    if (filtered.length === 0) { setCampaignId(''); return }
+    if (!filtered.some(c => c.id === campaignId)) setCampaignId(filtered[0].id)
+  }, [filtered, campaignId])
 
-  // ── P2: resolve the product's campaigns + their top-of-search state ──────
-  // Extracted so P3's Apply can refresh the panel after a write. `keepTier`
-  // preserves the operator's dragged tier on a post-apply reload.
-  const loadSignals = useCallback(async (signal?: AbortSignal, keepTier?: boolean) => {
-    if (!productId) return
-    setSignalsLoading(true); setSignalErr(false)
-    const mq = market === 'All' ? '' : `&marketplace=${market}`
+  const campaign = useMemo(() => campaigns.find(c => c.id === campaignId) ?? null, [campaigns, campaignId])
+
+  // Per-campaign top-of-search signals (single row from /top-of-search).
+  const loadSignals = useCallback(async (signal?: AbortSignal) => {
+    if (!campaignId) { setCur(null); return }
+    setSignalsLoading(true)
     try {
-      const [campD, tosD] = await Promise.all([
-        fetch(`${getBackendUrl()}/api/advertising/by-product/campaigns?productId=${encodeURIComponent(productId)}&windowDays=${WINDOW_DAYS}${mq}`, { cache: 'no-store', signal }).then(r => r.json()).catch(() => ({ rows: [] })),
-        fetch(`${getBackendUrl()}/api/advertising/top-of-search?windowDays=${WINDOW_DAYS}${mq}`, { cache: 'no-store', signal }).then(r => r.json()).catch(() => ({ rows: [] })),
-      ])
+      const d = await fetch(`${getBackendUrl()}/api/advertising/top-of-search?windowDays=${WINDOW_DAYS}&marketplace=${market}`, { cache: 'no-store', signal }).then(r => r.json()).catch(() => ({ rows: [] }))
       if (signal?.aborted) return
-      const camps: CampRow[] = campD.rows ?? []
-      const mineIds = new Set(camps.map(c => c.id))
-      const tosRows: TosRow[] = (tosD.rows ?? []).filter((r: TosRow) => mineIds.has(r.campaignId))
-      if (tosRows.length === 0) {
-        setAgg(camps.length ? { campaignCount: camps.length, topIS: null, currentPct: 0, recommendedPct: 0, action: 'keep', reason: 'no top-of-search spend in window', blendedAcos: null, perCampaign: [] } : null)
-        if (!keepTier) setTier('rest')
-        return
-      }
-      const totImpr = tosRows.reduce((s, r) => s + (r.topImpr || 0), 0)
-      const isRows = tosRows.filter(r => r.topIS != null)
-      const isImpr = isRows.reduce((s, r) => s + (r.topImpr || 0), 0)
-      const wTopIS = isImpr > 0 ? isRows.reduce((s, r) => s + (r.topIS as number) * (r.topImpr || 0), 0) / isImpr : (isRows.length ? isRows.reduce((s, r) => s + (r.topIS as number), 0) / isRows.length : null)
-      const totSpend = tosRows.reduce((s, r) => s + (r.topSpendCents || 0), 0)
-      const totSales = tosRows.reduce((s, r) => s + (r.topSalesCents || 0), 0)
-      const curPct = totImpr > 0 ? Math.round(tosRows.reduce((s, r) => s + r.currentPct * (r.topImpr || 0), 0) / totImpr) : Math.round(tosRows.reduce((s, r) => s + r.currentPct, 0) / tosRows.length)
-      const rep = [...tosRows].sort((a, b) => b.topSpendCents - a.topSpendCents)[0]
-      setAgg({
-        campaignCount: camps.length || tosRows.length,
-        topIS: wTopIS,
-        currentPct: curPct,
-        recommendedPct: rep?.recommendedPct ?? curPct,
-        action: rep?.action ?? 'keep',
-        reason: rep?.reason ?? 'within target',
-        blendedAcos: totSales > 0 ? totSpend / totSales : null,
-        perCampaign: [...tosRows].sort((a, b) => b.topSpendCents - a.topSpendCents).slice(0, 6),
-      })
-      // Initialise the card to where the product actually sits today.
-      if (!keepTier) setTier(curPct >= TOP_TIER_THRESHOLD || (wTopIS != null && wTopIS >= 0.4) ? 'top' : 'rest')
-    } catch { if (!signal?.aborted) setSignalErr(true) }
-    finally { if (!signal?.aborted) setSignalsLoading(false) }
-  }, [productId, market])
+      const row: TosRow | null = (d.rows ?? []).find((r: TosRow) => r.campaignId === campaignId) ?? null
+      setCur(row)
+      if (!userMoved) setSlot(row ? impliedSlot(row.topIS, row.currentPct) : 'rest')
+    } finally { if (!signal?.aborted) setSignalsLoading(false) }
+  }, [campaignId, market]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const ac = new AbortController()
-    setUserMoved(false); setApplyResult(null)
+    setUserMoved(false)
     void loadSignals(ac.signal)
     return () => ac.abort()
   }, [loadSignals])
 
-  const product = useMemo(() => products.find(p => p.id === productId) ?? null, [products, productId])
-  const kwSov = useMemo(() => keywords.find(k => k.query === keyword) ?? null, [keywords, keyword])
-
   const onDragStart = (e: DragStartEvent) => setActiveId(String(e.active.id))
   const onDragEnd = (e: DragEndEvent) => {
     setActiveId(null)
-    const over = e.over?.id
-    if (over === 'top' || over === 'rest' || over === 'product') { setTier(over); setUserMoved(true); setApplyResult(null) }
+    const over = e.over?.id as SlotKey | undefined
+    if (over && SLOTS.some(s => s.k === over)) { setSlot(over); setUserMoved(true) }
   }
 
-  // When the operator drops on TOP, propose a deliberate push above the current
-  // bias (engine-aware: at least the recommendation, floored at +50%).
-  useEffect(() => {
-    if (tier === 'top' && agg) setTargetPct(Math.min(900, Math.max(50, agg.currentPct + 50, agg.recommendedPct)))
-  }, [tier, agg])
-
-  // Bid-to-win for the selected keyword (read-only; recomputes on keyword/market).
-  useEffect(() => {
-    if (!keyword) { setBid(null); return }
-    const ac = new AbortController()
-    void fetch(`${getBackendUrl()}/api/advertising/bid-suggestions`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: ac.signal,
-      body: JSON.stringify({ keywords: [keyword], matchType: 'BROAD', ...(market === 'All' ? {} : { marketplace: market }) }),
-    }).then(r => r.json()).then(d => {
-      if (ac.signal.aborted) return
-      const s = d?.suggestions?.[0]
-      setBid(s ? { suggestedBidCents: s.suggestedBidCents, lowCents: s.lowCents, highCents: s.highCents, basis: s.basis, samples: s.samples } : null)
-    }).catch(() => {})
-    return () => ac.abort()
-  }, [keyword, market])
-
-  // The placement plan implied by the dropped tier (TOP_OF_SEARCH lever).
-  // 'rest' removes the top bias (→0); 'product' apply is deferred to a later phase.
-  const plan = useMemo<PlanItem[] | null>(() => {
-    if (!agg || !userMoved || tier === 'product' || agg.perCampaign.length === 0) return null
-    const toPct = tier === 'rest' ? 0 : targetPct
-    return agg.perCampaign.map(c => ({ campaignId: c.campaignId, name: c.name, fromPct: c.currentPct, toPct }))
-  }, [agg, userMoved, tier, targetPct])
-
-  const planChanges = useMemo(() => (plan ?? []).filter(p => p.fromPct !== p.toPct), [plan])
-
-  const apply = useCallback(async () => {
-    if (!plan || planChanges.length === 0) return
-    setApplying(true)
-    let mode = 'local'; let count = 0
-    for (const item of planChanges) {
-      try {
-        const r = await fetch(`${getBackendUrl()}/api/advertising/top-of-search/apply`, {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ campaignId: item.campaignId, percentage: item.toPct }),
-        }).then(r => r.json())
-        if (r?.ok) { count += 1; if (r.result?.mode) mode = r.result.mode }
-      } catch { /* continue; partial apply is surfaced via count */ }
-    }
-    setApplyResult({ mode, count })
-    setApplying(false)
-    setUserMoved(false)
-    void loadSignals(undefined, true) // refresh, keep the dragged tier
-  }, [plan, planChanges, loadSignals])
-
-  // P4 — create the autonomous "hold the slot" loop. Reuses the existing
-  // defend_top_of_search rule action (allowlist-enforced, dry-run honored): it
-  // tunes PLACEMENT_TOP ±15%/run toward the IS target, bounded by ACOS, to win
-  // the slot for the least cost. Created disabled + dry-run; market-scoped (the
-  // engine's granularity), so it holds top-of-search across the whole market.
-  const createHold = useCallback(async () => {
-    setHolding(true); setHoldMsg('')
-    const mkt = market === 'All' ? '' : ` (${market})`
-    try {
-      const r = await fetch(`${getBackendUrl()}/api/advertising/automation-rules`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: `Hold Top-of-Search IS ≥ ${holdIS}%${mkt}`,
-          description: `Holds top-of-search impression share ≥ ${holdIS}% by tuning the PLACEMENT_TOP multiplier (±15%/run, ≤900%), bounded by ${holdAcos}% ACOS — raise while below target and in budget, ease off once above target or over ACOS (win the slot for the least cost). Created from the Placement Cockpit for ${product?.name ?? 'a product'}.`,
-          trigger: 'SCHEDULE', conditions: [],
-          actions: [
-            { type: 'defend_top_of_search', targetIS: holdIS / 100, targetAcos: holdAcos / 100, ...(market === 'All' ? {} : { marketplace: market }) },
-            { type: 'notify', target: 'operator', message: `Top-of-Search IS defense holding ≥ ${holdIS}%${mkt}` },
-          ],
-          scopeMarketplace: market === 'All' ? null : market,
-          maxExecutionsPerDay: 48,
-        }),
-      })
-      setHoldMsg(r.ok ? 'created' : 'error')
-    } catch { setHoldMsg('error') }
-    finally { setHolding(false) }
-  }, [market, holdIS, holdAcos, product])
-
-  const tierLabel = TIERS.find(t => t.k === tier)?.label ?? 'Rest of search'
-  const isPct = agg?.topIS != null ? agg.topIS * 100 : null
-  const euros = (c: number) => `€${(c / 100).toFixed(2)}`
+  const isPct = cur?.topIS != null ? cur.topIS * 100 : null
+  const targetSlot = SLOTS.find(s => s.k === slot) ?? null
+  const topSlots = SLOTS.filter(s => s.group === 'top')
 
   return (
     <div className="az-cockpit">
-      {/* ── Context bar ─────────────────────────────── */}
+      {/* ── Campaign-first scope bar ─────────────────────────── */}
       <div className="az-cockpit-bar">
-        <label className="ctl"><span className="lbl">Product</span>
-          <select value={productId} onChange={e => setProductId(e.target.value)}>
-            {products.length === 0 && <option>Loading…</option>}
-            {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+        <label className="ctl"><span className="lbl">Market</span>
+          <select value={market} onChange={e => setMarket(e.target.value)}>{MARKETS.map(m => <option key={m}>{m}</option>)}</select>
+        </label>
+        <label className="ctl" style={{ flex: 1, minWidth: 220 }}><span className="lbl">Campaign</span>
+          <select value={campaignId} onChange={e => { setCampaignId(e.target.value) }} style={{ maxWidth: 'none', width: '100%' }}>
+            {filtered.length === 0 && <option>No campaigns in {market}</option>}
+            {filtered.map(c => <option key={c.id} value={c.id}>{c.status === 'ENABLED' ? '● ' : '○ '}{c.name}</option>)}
           </select>
         </label>
-        <label className="ctl"><span className="lbl">Keyword</span>
-          <div className="kw-wrap">
-            <Search size={13} />
-            <select value={keyword} onChange={e => setKeyword(e.target.value)}>
-              {keywords.length === 0 && <option>Loading…</option>}
-              {keywords.map(k => <option key={k.query} value={k.query}>{k.query}</option>)}
-            </select>
-          </div>
-        </label>
-        <label className="ctl"><span className="lbl">Market</span>
-          <select value={market} onChange={e => setMarket(e.target.value)}>{MARKETS.map(m => <option key={m}>{m === 'All' ? 'All markets' : m}</option>)}</select>
+        <label className="ctl"><span className="lbl">Find</span>
+          <div className="kw-wrap"><Search size={13} /><input value={campaignSearch} onChange={e => setCampaignSearch(e.target.value)} placeholder="Filter campaigns…" /></div>
         </label>
         <span style={{ flex: 1 }} />
-        {signalsLoading && <span className="az-cockpit-status">Loading live signals…</span>}
-        {!signalsLoading && agg && <span className="az-cockpit-status ok">{agg.campaignCount} campaign{agg.campaignCount === 1 ? '' : 's'} · {WINDOW_DAYS}d</span>}
-        {!signalsLoading && !agg && !signalErr && <span className="az-cockpit-status">No campaigns for this product{market !== 'All' ? ` in ${market}` : ''}</span>}
+        {signalsLoading && <span className="az-cockpit-status">Loading…</span>}
+        {!signalsLoading && campaign && <span className="az-cockpit-status ok">{filtered.length} in {market} · {WINDOW_DAYS}d</span>}
       </div>
 
       <div className="az-cockpit-body">
-        {/* ── Placement ladder ───────────────────────── */}
+        {/* ── Numbered rank ladder ───────────────────────────── */}
         <DndContext sensors={sensors} onDragStart={onDragStart} onDragEnd={onDragEnd}>
           <div className="az-ladder">
-            <div className="az-ladder-cap"><ArrowUp size={13} /> More visible · more competitive · costs more</div>
-            {TIERS.map(t => (
-              <Tier key={t.k} tierKey={t.k} label={t.label} hint={t.hint} accent={t.accent} active={tier === t.k}>
-                {tier === t.k && product && <DraggableProduct prod={product} />}
-              </Tier>
+            <div className="az-ladder-cap"><ArrowUp size={13} /> Higher rank · more visible · more competitive · costs more</div>
+
+            <div className="az-rankgroup">
+              <div className="az-rankgroup-head"><span className="t">Top of search</span><span className="badge">≈ 3 sponsored slots</span></div>
+              <div className="az-ranktop">
+                {topSlots.map(s => (
+                  <DropSlot key={s.k} slot={s} numbered active={slot === s.k && !!campaign}>
+                    {campaign && <DraggableCard camp={campaign} />}
+                  </DropSlot>
+                ))}
+              </div>
+            </div>
+
+            {SLOTS.filter(s => s.group !== 'top').map(s => (
+              <DropSlot key={s.k} slot={s} active={slot === s.k && !!campaign}>
+                {campaign && <DraggableCard camp={campaign} />}
+              </DropSlot>
             ))}
-            <div className="az-ladder-foot"><Info size={11} /> Drag your product to the placement you want to win. The card starts where your campaigns actually sit today. Amazon is an auction — this targets &amp; defends the slot; it can’t pin a fixed rank.</div>
+
+            <div className="az-ladder-foot"><Info size={11} /> Drag your listing onto the rank you want. Amazon is a blind auction — this targets &amp; defends the slot via impression-share + bid; it can’t pin a fixed rank.</div>
           </div>
-          <DragOverlay>{activeId && product ? <ProductCard prod={product} dragging /> : null}</DragOverlay>
+          <DragOverlay>{activeId && campaign ? <CampaignCard camp={campaign} dragging /> : null}</DragOverlay>
         </DndContext>
 
-        {/* ── Strategy panel — live read-only signals (P3 wires Apply) ── */}
+        {/* ── Strategy panel (R2 wires IS mapping; R3 bulk kw; R4 apply/hold) ── */}
         <div className="az-cockpit-panel">
           <div className="az-cockpit-panel-head"><Crosshair size={15} /> Strategy</div>
-          <div className="row"><span>Product</span><b>{product?.name ?? '—'}</b></div>
-          <div className="row"><span>Keyword</span><b>{keyword || '—'}</b></div>
+          <div className="row"><span>Campaign</span><b>{campaign?.name ?? '—'}</b></div>
           <div className="row"><span>Market</span><b>{market}</b></div>
+          <div className="row"><span>Status</span><b>{campaign?.status ?? '—'}</b></div>
           <div className="sep" />
-          <div className="row"><span>Target placement</span><b>{tierLabel}{userMoved ? '' : ' (current)'}</b></div>
+          <div className="row"><span>Target rank</span><b>{slotLabel(slot)}{userMoved ? '' : ' (current)'}</b></div>
 
-          {/* Top-of-search impression share — the real "are you showing there" proxy */}
           <div className="az-gauge-row">
-            <span className="az-gauge-lbl">Top-of-search IS{tier === 'top' ? ' · target 40%' : ''}</span>
-            <Gauge pct={isPct} target={tier === 'top' ? 40 : undefined} tone="is" />
+            <span className="az-gauge-lbl">Top-of-search IS{targetSlot?.isTarget != null ? ` · target ${Math.round(targetSlot.isTarget * 100)}%` : ''}</span>
+            <Gauge pct={isPct} target={targetSlot?.isTarget != null ? Math.round(targetSlot.isTarget * 100) : undefined} tone="is" />
           </div>
-          {agg && agg.topIS == null && <div className="az-cockpit-sub">IS not ingested yet — recommendation falls back to ACOS.</div>}
-
-          {/* Keyword share-of-voice */}
-          <div className="az-gauge-row">
-            <span className="az-gauge-lbl">Keyword share-of-voice</span>
-            <Gauge pct={kwSov?.sovPct ?? null} tone="sov" />
-          </div>
+          {cur && cur.topIS == null && <div className="az-cockpit-sub">IS not ingested yet — recommendation falls back to ACOS.</div>}
 
           <div className="sep" />
-          <div className="row"><span>Current top-of-search %</span><b>{agg ? `+${agg.currentPct}%` : '—'}</b></div>
-          <div className="row"><span>Recommended</span><b>{agg ? `+${agg.recommendedPct}%` : '—'} {agg && <ActionChip action={agg.action} />}</b></div>
-          <div className="row"><span>Blended ACOS</span><b>{agg?.blendedAcos != null ? `${(agg.blendedAcos * 100).toFixed(0)}%` : '—'}</b></div>
-          {agg?.reason && <div className="az-cockpit-sub">{agg.reason}.</div>}
-          {bid && (
-            <>
-              <div className="row"><span>Keyword bid to win</span><b>{euros(bid.suggestedBidCents)} <span style={{ fontWeight: 500, color: 'var(--ink3)', fontSize: 11 }}>{euros(bid.lowCents)}–{euros(bid.highCents)}</span></b></div>
-              {bid.basis === 'default' && <div className="az-cockpit-sub">No history for this keyword yet — account default; refines after clicks.</div>}
-            </>
-          )}
+          <div className="row"><span>Current top-of-search %</span><b>{cur ? `+${cur.currentPct}%` : '—'}</b></div>
+          <div className="row"><span>Recommended</span><b>{cur ? `+${cur.recommendedPct}%` : '—'} {cur && <ActionChip action={cur.action} />}</b></div>
+          <div className="row"><span>Top ACOS</span><b>{cur?.topAcos != null ? `${(cur.topAcos * 100).toFixed(0)}%` : '—'}</b></div>
+          {cur?.reason && <div className="az-cockpit-sub">{cur.reason}.</div>}
 
-          {agg && agg.perCampaign.length > 0 && (
-            <>
-              <div className="sep" />
-              <div className="az-cockpit-sublbl">Per campaign</div>
-              {agg.perCampaign.map(c => (
-                <div key={c.campaignId} className="az-campline">
-                  <span className="nm" title={c.name}>{c.name}</span>
-                  <span className="pct">+{c.currentPct}%</span>
-                  <ActionChip action={c.action} />
-                </div>
-              ))}
-            </>
-          )}
-
-          <div className="sep" />
-          {/* ── P3: plan + sandbox apply ─────────────────────────── */}
-          {tier === 'product' ? (
-            <div className="az-cockpit-note"><Info size={12} /> Product-page targeting is read-only here for now — its one-click apply lands in a later phase. The bid-to-win above still applies.</div>
-          ) : !userMoved ? (
-            <div className="az-cockpit-note"><Info size={12} /> Drag your product up to <b>Top of search</b> (or down to <b>Rest of search</b>) to build a placement plan you can apply.</div>
-          ) : (
-            <div className="az-cockpit-plan">
-              {tier === 'top' && (
-                <div className="az-plan-target">
-                  <span className="az-gauge-lbl">Target top-of-search bias</span>
-                  <div className="az-stepper">
-                    <button type="button" onClick={() => setTargetPct(p => Math.max(0, p - 10))} disabled={applying} aria-label="Decrease target">−</button>
-                    <span className="v">+{targetPct}%</span>
-                    <button type="button" onClick={() => setTargetPct(p => Math.min(900, p + 10))} disabled={applying} aria-label="Increase target">+</button>
-                  </div>
-                </div>
-              )}
-              <div className="az-plan-head">{tier === 'rest' ? 'Remove top-of-search bias' : 'Push to top of search'} · {planChanges.length} of {plan?.length ?? 0} campaign{(plan?.length ?? 0) === 1 ? '' : 's'} change</div>
-              {planChanges.slice(0, 6).map(p => (
-                <div key={p.campaignId} className="az-campline">
-                  <span className="nm" title={p.name}>{p.name}</span>
-                  <span className="pct">+{p.fromPct}% → +{p.toPct}%</span>
-                </div>
-              ))}
-              {planChanges.length === 0 && <div className="az-cockpit-sub">Already at the target — nothing to change.</div>}
-              <button type="button" className="az-btn dark" style={{ marginTop: 10, width: '100%', justifyContent: 'center' }} disabled={applying || planChanges.length === 0} onClick={() => void apply()}>
-                {applying ? <><Loader2 size={14} className="az-spin" /> Applying…</> : <><Zap size={14} /> Apply to {planChanges.length} campaign{planChanges.length === 1 ? '' : 's'}</>}
-              </button>
-              {applyResult && (
-                <div className="az-cockpit-sub" style={{ marginTop: 6, color: applyResult.mode === 'live' ? 'var(--green)' : 'var(--ink2)' }}>
-                  <Check size={12} style={{ verticalAlign: 'text-bottom' }} /> {applyResult.mode === 'live'
-                    ? `Applied live on ${applyResult.count} campaign(s).`
-                    : `Staged on ${applyResult.count} campaign(s) (${applyResult.mode}) — not live on Amazon. Flip the write-gate to push live.`}
-                </div>
-              )}
-              <div className="az-cockpit-note"><Info size={12} /> Apply is gated: with the ads write-gate closed it stages the placement % locally (sandbox); the result says which mode it took. Flipping the gate live needs approval.</div>
-
-              {/* ── P4: hold the slot (autonomous IS defense) ──────────── */}
-              {tier === 'top' && (
-                <div className="az-hold">
-                  <div className="az-hold-head"><ShieldCheck size={13} /> Hold this slot</div>
-                  <div className="az-hold-sub">Run an autonomous loop that keeps top-of-search impression share at your target for the least cost — raising the bias while you’re below target and ACOS is in budget, easing off otherwise.</div>
-                  <div className="az-hold-ctls">
-                    <label>Target IS <input type="number" min={1} max={100} value={holdIS} onChange={e => setHoldIS(Math.max(1, Math.min(100, Number(e.target.value))))} disabled={holding} />%</label>
-                    <label>Max ACOS <input type="number" min={1} max={200} value={holdAcos} onChange={e => setHoldAcos(Math.max(1, Math.min(200, Number(e.target.value))))} disabled={holding} />%</label>
-                  </div>
-                  <button type="button" className="az-btn" style={{ marginTop: 8, width: '100%', justifyContent: 'center' }} disabled={holding} onClick={() => void createHold()}>
-                    {holding ? <><Loader2 size={14} className="az-spin" /> Creating…</> : <><ShieldCheck size={14} /> Hold IS ≥ {holdIS}%</>}
-                  </button>
-                  {holdMsg === 'created' && <div className="az-cockpit-sub" style={{ marginTop: 6, color: 'var(--green)' }}><Check size={12} style={{ verticalAlign: 'text-bottom' }} /> Hold rule created (disabled + dry-run). Enable it in Active rules and allowlist campaigns to go live. Holds across {market === 'All' ? 'all markets' : market}.</div>}
-                  {holdMsg === 'error' && <div className="az-cockpit-sub" style={{ marginTop: 6, color: '#cc1100' }}>Could not create the hold rule.</div>}
-                </div>
-              )}
-            </div>
-          )}
+          <div className="az-cockpit-note">
+            <Info size={12} /> Read-only preview of the new campaign-first cockpit. The rank→impression-share mapping &amp; live feedback (R2), bulk keyword manager (R3) and one-click apply + hold-the-slot (R4) land next.
+          </div>
         </div>
       </div>
     </div>
