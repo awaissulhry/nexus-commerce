@@ -114,13 +114,56 @@ export function resolveSourcePath(
 }
 
 /**
- * FM.3 will populate this with value-map / size-scale / manifest lookups.
- * FM.2 leaves it undefined so applyTransforms runs the existing pure
- * string ops only.
+ * Lookup/format context for the FM.3 data-backed transform ops. All
+ * fields optional: when absent, valueMap/sizeScale no-op with a warning
+ * (the FM.4 store + FM.9 manifest wire them up) and template/channelLimit
+ * fall back to their inline inputs.
  */
 export interface TransformContext {
-  // reserved — FM.3: valueMap / sizeScale caches, resolved attrs, manifest maxLength
-  [k: string]: unknown
+  /** Flat resolved attribute values, for {{attr}} template interpolation. */
+  values?: Record<string, unknown>
+  /** FM.4 — canonical value → channel/market value (e.g. Rosso → Red);
+   *  null on a miss. */
+  lookupValueMap?: (attribute: string, fromValue: string) => string | null
+  /** FM.4 — size across systems (e.g. EU 52 → UK "L"); null on a miss. */
+  lookupSizeScale?: (scale: string, from: string, to: string, value: string) => string | null
+  /** FM.9 — channel field max length from the manifest, for channelLimit. */
+  maxLength?: number
+}
+
+// ── FM.3 transform helpers (pure) ───────────────────────────────────
+
+// Unit conversion via a base unit per dimension. Returns null when the
+// two units aren't in the same known dimension.
+const WEIGHT_TO_GRAMS: Record<string, number> = { mg: 0.001, g: 1, kg: 1000, oz: 28.349523125, lb: 453.59237 }
+const LENGTH_TO_MM: Record<string, number> = { mm: 1, cm: 10, m: 1000, in: 25.4, ft: 304.8 }
+
+function convertUnit(value: number, from: string, to: string): number | null {
+  const f = from.toLowerCase()
+  const t = to.toLowerCase()
+  for (const table of [WEIGHT_TO_GRAMS, LENGTH_TO_MM]) {
+    if (f in table && t in table) return (value * table[f]) / table[t]
+  }
+  return null
+}
+
+function formatNumber(
+  n: number,
+  decimals: number | undefined,
+  decimalSep: string,
+  thousandsSep: string,
+): string {
+  const fixed = decimals != null ? n.toFixed(decimals) : String(n)
+  const [intPart, fracPart] = fixed.split('.')
+  const grouped = thousandsSep ? intPart.replace(/\B(?=(\d{3})+(?!\d))/g, thousandsSep) : intPart
+  return fracPart != null ? `${grouped}${decimalSep}${fracPart}` : grouped
+}
+
+function interpolateTemplate(expr: string, values: Record<string, unknown>): string {
+  return expr.replace(/\{\{\s*([\w.]+)\s*\}\}/g, (_m, key) => {
+    const v = values[key]
+    return v == null ? '' : String(v)
+  })
 }
 
 /** Apply transforms in order. Each transform mutates the value;
@@ -132,6 +175,7 @@ export function applyTransforms(
   value: unknown,
   transforms: TransformOp[] | undefined,
   warnings: string[],
+  ctx?: TransformContext,
 ): { out: unknown; applied: TransformOp['type'][] } {
   if (!transforms || transforms.length === 0) return { out: value, applied: [] }
   let current: unknown = value
@@ -211,6 +255,92 @@ export function applyTransforms(
             current = t.value ?? null
             applied.push('default')
           }
+          break
+        // ── FM.3 ────────────────────────────────────────────────────
+        case 'unit': {
+          const num = typeof current === 'number' ? current : Number(current)
+          if (!Number.isFinite(num)) {
+            warnings.push('unit skipped — value is not numeric')
+            break
+          }
+          const converted = convertUnit(num, t.from, t.to)
+          if (converted == null) {
+            warnings.push(`unit skipped — cannot convert ${t.from}→${t.to}`)
+            break
+          }
+          current = converted
+          applied.push('unit')
+          break
+        }
+        case 'numberFormat': {
+          const num = typeof current === 'number' ? current : Number(current)
+          if (!Number.isFinite(num)) {
+            warnings.push('numberFormat skipped — value is not numeric')
+            break
+          }
+          current = formatNumber(num, t.decimals, t.decimalSep ?? '.', t.thousandsSep ?? '')
+          applied.push('numberFormat')
+          break
+        }
+        case 'template':
+          current = interpolateTemplate(t.expr ?? '', ctx?.values ?? {})
+          applied.push('template')
+          break
+        case 'channelLimit': {
+          if (typeof current !== 'string') {
+            warnings.push('channelLimit skipped — value is not a string')
+            break
+          }
+          const max = t.max ?? ctx?.maxLength
+          if (max != null && current.length > max) {
+            if (t.mode === 'flag') {
+              warnings.push(`exceeds channel limit ${current.length} > ${max}`)
+            } else {
+              warnings.push(`channel-limited from ${current.length} → ${max}`)
+              current = current.slice(0, max)
+            }
+          }
+          applied.push('channelLimit')
+          break
+        }
+        case 'valueMap': {
+          if (!ctx?.lookupValueMap) {
+            warnings.push('valueMap skipped — no value-map context (FM.4)')
+            break
+          }
+          if (current == null) break
+          const mapped = ctx.lookupValueMap(t.attribute, String(current))
+          if (mapped != null) {
+            current = mapped
+          } else if (t.onMiss === 'null') {
+            current = null
+          } else if (t.onMiss === 'flag') {
+            warnings.push(`valueMap miss — no mapping for ${t.attribute}="${String(current)}"`)
+          }
+          applied.push('valueMap')
+          break
+        }
+        case 'sizeScale': {
+          if (!ctx?.lookupSizeScale) {
+            warnings.push('sizeScale skipped — no size-scale context (FM.4)')
+            break
+          }
+          if (current == null) break
+          const mapped = ctx.lookupSizeScale(t.scale, t.from, t.to, String(current))
+          if (mapped != null) {
+            current = mapped
+          } else if (t.onMiss === 'null') {
+            current = null
+          } else if (t.onMiss === 'flag') {
+            warnings.push(`sizeScale miss — ${t.scale} ${t.from}→${t.to} "${String(current)}"`)
+          }
+          applied.push('sizeScale')
+          break
+        }
+        case 'translate':
+          // Deferred marker — never mutates the value inline; the resolver
+          // forces needsTranslation when this op is present (FM.5 fills it).
+          applied.push('translate')
           break
         default:
           warnings.push(`unknown transform type "${(t as { type: string }).type}" skipped`)
@@ -368,7 +498,7 @@ export function resolveChannelField(input: ResolveChannelFieldInput): ResolvedCh
       usedFallback = true
     }
   }
-  const { out, applied } = applyTransforms(value, rule.transforms, warnings)
+  const { out, applied } = applyTransforms(value, rule.transforms, warnings, { values: flat })
   value = out
   const defaultFired = applied.includes('default') && !isPresent(sourceRaw)
 
@@ -390,6 +520,12 @@ export function resolveChannelField(input: ResolveChannelFieldInput): ResolvedCh
       !!link.targetLanguage &&
       !!link.sourceLanguage &&
       link.targetLanguage.toLowerCase() !== link.sourceLanguage.toLowerCase()
+  }
+  // An explicit `translate` transform op flags the field for translation
+  // regardless of link membership; the FM.5 executor resolves the target
+  // language per coordinate and skips same-language no-ops.
+  if (!needsTranslation && isPresent(value) && (rule.transforms ?? []).some((t) => t.type === 'translate')) {
+    needsTranslation = true
   }
 
   // 4. Provenance precedence (does not change the value).

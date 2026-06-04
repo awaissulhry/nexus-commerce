@@ -596,3 +596,52 @@ describe('removeFieldMapping — productType overlay (FM.1)', () => {
     expect(result.byProductType).toEqual({})
   })
 })
+
+// ════════════════════════════════════════════════════════════════════
+// FM.3 — transform op validation
+// ════════════════════════════════════════════════════════════════════
+describe('validateFieldRule — FM.3 transform ops', () => {
+  it('accepts the new ops with their required fields', () => {
+    const rule: FieldMappingRule = {
+      source: 'categoryAttributes.color',
+      transforms: [
+        { type: 'valueMap', attribute: 'color' },
+        { type: 'sizeScale', scale: 'JACKET', from: 'EU', to: 'ALPHA' },
+        { type: 'unit', from: 'kg', to: 'lb' },
+        { type: 'numberFormat', decimals: 2 },
+        { type: 'template', expr: '{{brand}} {{name}}' },
+        { type: 'channelLimit', max: 200 },
+        { type: 'translate' },
+      ],
+    }
+    expect(validateFieldRule('material_type', rule)).toEqual([])
+  })
+
+  it('rejects valueMap without attribute', () => {
+    const errs = validateFieldRule('x', { source: 's', transforms: [{ type: 'valueMap' }] })
+    expect(errs.some((e) => e.includes('transforms[0].attribute'))).toBe(true)
+  })
+
+  it('rejects sizeScale missing scale/from/to', () => {
+    const errs = validateFieldRule('x', { source: 's', transforms: [{ type: 'sizeScale' }] })
+    expect(errs.some((e) => e.includes('transforms[0].scale'))).toBe(true)
+    expect(errs.some((e) => e.includes('transforms[0].from'))).toBe(true)
+    expect(errs.some((e) => e.includes('transforms[0].to'))).toBe(true)
+  })
+
+  it('rejects unit missing from/to', () => {
+    const errs = validateFieldRule('x', { source: 's', transforms: [{ type: 'unit' }] })
+    expect(errs.some((e) => e.includes('transforms[0].from'))).toBe(true)
+    expect(errs.some((e) => e.includes('transforms[0].to'))).toBe(true)
+  })
+
+  it('rejects template without expr', () => {
+    const errs = validateFieldRule('x', { source: 's', transforms: [{ type: 'template' }] })
+    expect(errs.some((e) => e.includes('transforms[0].expr'))).toBe(true)
+  })
+
+  it('still rejects an entirely unknown transform type', () => {
+    const errs = validateFieldRule('x', { source: 's', transforms: [{ type: 'nope' }] })
+    expect(errs.some((e) => e.includes('transforms[0] has invalid type'))).toBe(true)
+  })
+})

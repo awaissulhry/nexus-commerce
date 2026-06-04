@@ -22,7 +22,11 @@ import prisma from '../../db.js'
 // ────────────────────────────────────────────────────────────────────
 
 /** Operations a transform can apply to a source value before it lands
- *  in the external payload. Extend in D.3; A.3 only fixes the shape. */
+ *  in the external payload, composed left→right. The string ops (A.3) are
+ *  pure; FM.3 adds value/format ops. valueMap + sizeScale resolve through
+ *  the FM.4 lookup context; `translate` is a deferred MARKER — it never
+ *  mutates the value inline, it flags the field so the FM.5 executor fills
+ *  the AI translation. */
 export type TransformOp =
   | { type: 'truncate'; max: number }
   | { type: 'titleCase' }
@@ -32,6 +36,27 @@ export type TransformOp =
   | { type: 'append'; value: string }
   | { type: 'replace'; pattern: string; replacement: string }
   | { type: 'default'; value: unknown }
+  // ── FM.3: data-backed + format ops ──────────────────────────────────
+  /** Map a canonical value → channel/market value via FM.4's
+   *  FieldValueMap (e.g. "Rosso" → "Red"). onMiss: keep (default) | null
+   *  | flag. No-op + warning until the FM.4 lookup context is wired. */
+  | { type: 'valueMap'; attribute: string; onMiss?: 'keep' | 'null' | 'flag' }
+  /** Convert a size across systems via FM.4's SizeScaleMap (e.g. EU 52 →
+   *  UK "L"). onMiss: keep (default) | null | flag. */
+  | { type: 'sizeScale'; scale: string; from: string; to: string; onMiss?: 'keep' | 'null' | 'flag' }
+  /** Pure unit conversion — weight (kg/g/lb/oz) or length (mm/cm/m/in/ft). */
+  | { type: 'unit'; from: string; to: string }
+  /** Format a number with locale separators (e.g. 5.5 → "5,5"). */
+  | { type: 'numberFormat'; decimals?: number; decimalSep?: string; thousandsSep?: string }
+  /** Interpolate {{attr}} placeholders from the resolved attributes
+   *  (e.g. "{{brand}} {{name}}"). */
+  | { type: 'template'; expr: string }
+  /** Enforce the channel field's max length — op.max, else the manifest
+   *  maxLength from context. mode: truncate (default) | flag. */
+  | { type: 'channelLimit'; max?: number; mode?: 'truncate' | 'flag' }
+  /** MARKER — flag this field for AI translation to the target market
+   *  language. Never mutates the value here (FM.5 executor fills it). */
+  | { type: 'translate' }
 
 /** Mapping rule for a single field on this marketplace's external
  *  schema (e.g., Amazon's `bullet_point_1`). */
@@ -101,6 +126,14 @@ const VALID_TRANSFORM_TYPES = new Set([
   'append',
   'replace',
   'default',
+  // FM.3
+  'valueMap',
+  'sizeScale',
+  'unit',
+  'numberFormat',
+  'template',
+  'channelLimit',
+  'translate',
 ])
 
 function isPlainObject(v: unknown): v is Record<string, unknown> {
@@ -194,8 +227,35 @@ function validateRuleShape(rule: unknown, prefix: string): string[] {
       errors.push(`${prefix}.transforms must be an array when present`)
     } else {
       rule.transforms.forEach((t, i) => {
+        const tp = `${prefix}.transforms[${i}]`
         if (!isPlainObject(t) || typeof t.type !== 'string' || !VALID_TRANSFORM_TYPES.has(t.type)) {
-          errors.push(`${prefix}.transforms[${i}] has invalid type`)
+          errors.push(`${tp} has invalid type`)
+          return
+        }
+        // FM.3 — required fields for the data-backed / format ops. The
+        // A.3 string ops stay permissive (matches prior behaviour).
+        const tt = t as Record<string, unknown>
+        const needStr = (k: string) => {
+          if (typeof tt[k] !== 'string' || (tt[k] as string).length === 0) {
+            errors.push(`${tp}.${k} must be a non-empty string`)
+          }
+        }
+        switch (t.type) {
+          case 'valueMap':
+            needStr('attribute')
+            break
+          case 'sizeScale':
+            needStr('scale')
+            needStr('from')
+            needStr('to')
+            break
+          case 'unit':
+            needStr('from')
+            needStr('to')
+            break
+          case 'template':
+            needStr('expr')
+            break
         }
       })
     }

@@ -312,3 +312,94 @@ describe('linkForCoordinate', () => {
     expect(linkForCoordinate([bad], 'item_name', 'AMAZON', 'IT')).toBeNull()
   })
 })
+
+// ════════════════════════════════════════════════════════════════════
+// FM.3 — new transform ops
+// ════════════════════════════════════════════════════════════════════
+describe('applyTransforms — FM.3 ops', () => {
+  const w = () => [] as string[]
+
+  it('unit converts within a dimension (kg→g, cm→in) and skips cross-dimension', () => {
+    expect(applyTransforms(1.5, [{ type: 'unit', from: 'kg', to: 'g' }], w()).out).toBe(1500)
+    expect(applyTransforms(25.4, [{ type: 'unit', from: 'cm', to: 'in' }], w()).out).toBeCloseTo(10)
+    const warn: string[] = []
+    expect(applyTransforms(1, [{ type: 'unit', from: 'kg', to: 'cm' }], warn).out).toBe(1)
+    expect(warn.some((m) => m.includes('cannot convert'))).toBe(true)
+  })
+
+  it('unit skips a non-numeric value with a warning', () => {
+    const warn: string[] = []
+    applyTransforms('abc', [{ type: 'unit', from: 'kg', to: 'g' }], warn)
+    expect(warn.some((m) => m.includes('not numeric'))).toBe(true)
+  })
+
+  it('numberFormat applies decimals + separators', () => {
+    expect(applyTransforms(5.5, [{ type: 'numberFormat', decimals: 1, decimalSep: ',' }], w()).out).toBe('5,5')
+    expect(
+      applyTransforms(1234.5, [{ type: 'numberFormat', decimals: 2, decimalSep: ',', thousandsSep: '.' }], w()).out,
+    ).toBe('1.234,50')
+  })
+
+  it('template interpolates from ctx.values', () => {
+    const { out } = applyTransforms(null, [{ type: 'template', expr: '{{brand}} {{name}}' }], w(), {
+      values: { brand: 'XAVIA', name: 'Jacket' },
+    })
+    expect(out).toBe('XAVIA Jacket')
+  })
+
+  it('channelLimit truncates by op.max, flags by mode, falls back to ctx.maxLength', () => {
+    expect(applyTransforms('abcdef', [{ type: 'channelLimit', max: 3 }], w()).out).toBe('abc')
+    const warn: string[] = []
+    expect(applyTransforms('abcdef', [{ type: 'channelLimit', max: 3, mode: 'flag' }], warn).out).toBe('abcdef')
+    expect(warn.some((m) => m.includes('exceeds channel limit'))).toBe(true)
+    expect(applyTransforms('abcdef', [{ type: 'channelLimit' }], w(), { maxLength: 2 }).out).toBe('ab')
+  })
+
+  it('valueMap maps via ctx; no-ops with a warning when no context', () => {
+    const ctx = { lookupValueMap: (attr: string, from: string) => (attr === 'color' && from === 'Rosso' ? 'Red' : null) }
+    expect(applyTransforms('Rosso', [{ type: 'valueMap', attribute: 'color' }], w(), ctx).out).toBe('Red')
+    expect(applyTransforms('Verde', [{ type: 'valueMap', attribute: 'color' }], w(), ctx).out).toBe('Verde') // miss → keep
+    expect(applyTransforms('Verde', [{ type: 'valueMap', attribute: 'color', onMiss: 'null' }], w(), ctx).out).toBeNull()
+    const warn: string[] = []
+    expect(applyTransforms('Rosso', [{ type: 'valueMap', attribute: 'color' }], warn).out).toBe('Rosso')
+    expect(warn.some((m) => m.includes('no value-map context'))).toBe(true)
+  })
+
+  it('sizeScale maps via ctx; no-ops with a warning when no context', () => {
+    const ctx = { lookupSizeScale: (scale: string, _f: string, _t: string, v: string) => (scale === 'JACKET' && v === '52' ? 'L' : null) }
+    expect(applyTransforms('52', [{ type: 'sizeScale', scale: 'JACKET', from: 'EU', to: 'ALPHA' }], w(), ctx).out).toBe('L')
+    const warn: string[] = []
+    applyTransforms('52', [{ type: 'sizeScale', scale: 'JACKET', from: 'EU', to: 'ALPHA' }], warn)
+    expect(warn.some((m) => m.includes('no size-scale context'))).toBe(true)
+  })
+
+  it('translate is a marker — records applied, leaves the value', () => {
+    const { out, applied } = applyTransforms('Ciao', [{ type: 'translate' }], w())
+    expect(out).toBe('Ciao')
+    expect(applied).toContain('translate')
+  })
+})
+
+describe('resolveChannelField — FM.3 integration', () => {
+  it('a template op interpolates from the resolved attributes', () => {
+    const r = resolveChannelField({
+      fieldKey: 'item_name',
+      rule: { source: 'title', transforms: [{ type: 'template', expr: '{{brand}} {{name}}' }] },
+      resolvedAttrs: attrs({ title: { value: 'ignored' }, brand: { value: 'XAVIA' }, name: { value: 'Touring Jacket' } }),
+      product: PROD,
+      locale: 'en',
+    })
+    expect(r.value).toBe('XAVIA Touring Jacket')
+  })
+
+  it('a translate op forces needsTranslation even without a link group', () => {
+    const r = resolveChannelField({
+      fieldKey: 'item_name',
+      rule: { source: 'title', transforms: [{ type: 'translate' }] },
+      resolvedAttrs: attrs({ title: { value: 'Giacca' } }),
+      product: PROD,
+      locale: 'it',
+    })
+    expect(r.needsTranslation).toBe(true)
+  })
+})
