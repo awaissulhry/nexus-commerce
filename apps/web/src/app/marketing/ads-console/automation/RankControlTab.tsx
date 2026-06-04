@@ -21,6 +21,7 @@ import { RankKeywordsMode } from './RankKeywordsMode'
 import { RankStrategyMode } from './RankStrategyMode'
 import { RankConquestMode } from './RankConquestMode'
 import { RankTosMode } from './RankTosMode'
+import { RankPlacementCockpit } from './RankPlacementCockpit'
 
 const MARKETS = ['IT', 'DE', 'FR', 'ES', 'NL', 'BE', 'SE', 'PL', 'IE', 'UK', 'All markets']
 const PLACEMENTS = [
@@ -67,6 +68,7 @@ export function RankControlTab({ onSaved }: { onSaved: () => void }) {
   const [biasDp, setBiasDp] = useState(true)
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState('')
+  const [placeView, setPlaceView] = useState<'cockpit' | 'advanced'>('cockpit')
 
   useEffect(() => {
     void fetch(`${getBackendUrl()}/api/advertising/campaigns?limit=500`, { cache: 'no-store' })
@@ -158,7 +160,13 @@ export function RankControlTab({ onSaved }: { onSaved: () => void }) {
       {rcMode === 'strategy' && <RankStrategyMode />}
       {rcMode === 'conquest' && <RankConquestMode />}
       {rcMode === 'tos' && <RankTosMode onSaved={onSaved} />}
-      {rcMode === 'placement' && <div style={{ maxWidth: 760 }}>
+      {rcMode === 'placement' && <div>
+      <div style={{ display: 'flex', gap: 6, marginBottom: 14 }}>
+        <button type="button" onClick={() => setPlaceView('cockpit')} className={`az-chip quick ${placeView === 'cockpit' ? 'on' : ''}`}>Cockpit</button>
+        <button type="button" onClick={() => setPlaceView('advanced')} className={`az-chip quick ${placeView === 'advanced' ? 'on' : ''}`}>Advanced form</button>
+      </div>
+      {placeView === 'cockpit' && <RankPlacementCockpit />}
+      {placeView === 'advanced' && <div style={{ maxWidth: 760 }}>
       <div style={{ color: 'var(--ink2)', fontSize: 12.5, marginBottom: 16, lineHeight: 1.55 }}>Set the exact <b>Top-of-Search bid adjustment %</b> you want (and the other placements) for the campaigns you choose, by market and time. The engine writes that placement % to Amazon and — with Hold-the-position on — nudges bids up only as needed to keep the slot, capped so you win for the least cost.</div>
 
       <div className="az-eng-card" style={{ marginBottom: 16 }}>
@@ -257,6 +265,7 @@ export function RankControlTab({ onSaved }: { onSaved: () => void }) {
         <button className="az-btn dark" disabled={!canActivate} onClick={() => void activate()}><Check size={15} />{busy ? 'Creating…' : 'Activate rank control'}</button>
         {msg && <span style={{ color: msg.includes('created') ? 'var(--green)' : 'var(--ink2)', fontSize: 12, fontWeight: 600 }}>{msg}</span>}
       </div>
+      </div>}
       </div>}
     </div>
   )

@@ -90,6 +90,51 @@
 .az-amazon-link .live-chip { font-size: 9px; font-weight: 700; color: var(--green); background: #e8f5e9; border-radius: 3px; padding: 1px 4px; flex-shrink: 0; }
 .az-wrap { padding: 16px 20px 60px; }
 
+/* ── PLACEMENT COCKPIT (RC2) ─────────────────────────────────── */
+.az-cockpit { display: flex; flex-direction: column; gap: 14px; }
+.az-cockpit-bar { display: flex; gap: 16px; flex-wrap: wrap; align-items: flex-end; padding: 12px 14px; background: var(--bg2); border: 1px solid var(--divider); border-radius: 10px; }
+.az-cockpit-bar .ctl { display: flex; flex-direction: column; gap: 4px; }
+.az-cockpit-bar .ctl .lbl { font-size: 10.5px; font-weight: 700; color: var(--ink3); letter-spacing: .4px; text-transform: uppercase; }
+.az-cockpit-bar select { border: 1px solid var(--border); border-radius: 7px; padding: 7px 9px; font: inherit; font-size: 13px; cursor: pointer; background: #fff; min-width: 150px; max-width: 260px; }
+.az-cockpit-bar .kw-wrap { display: flex; align-items: center; gap: 6px; border: 1px solid var(--border); border-radius: 7px; padding: 0 9px; background: #fff; color: var(--ink2); }
+.az-cockpit-bar .kw-wrap select { border: none; padding: 7px 4px; min-width: 150px; }
+
+.az-cockpit-body { display: grid; grid-template-columns: 1fr 300px; gap: 16px; align-items: start; }
+@media (max-width: 900px) { .az-cockpit-body { grid-template-columns: 1fr; } }
+
+/* Ladder */
+.az-ladder { display: flex; flex-direction: column; gap: 10px; }
+.az-ladder-cap { font-size: 11px; font-weight: 600; color: var(--ink2); display: flex; align-items: center; gap: 5px; padding-left: 2px; }
+.az-ladder-foot { font-size: 11px; color: var(--ink2); display: flex; align-items: flex-start; gap: 5px; line-height: 1.5; padding: 2px; }
+.az-tier { border: 1px solid var(--divider); border-left: 3px solid var(--ink3); border-radius: 10px; background: #fff; padding: 10px 12px; transition: background .15s, box-shadow .15s; }
+.az-tier.over { background: var(--bg2); box-shadow: inset 0 0 0 2px var(--navy); }
+.az-tier.has-you { background: linear-gradient(0deg, #fff, var(--bg3)); }
+.az-tier-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.az-tier-head .t { font-weight: 700; font-size: 13.5px; }
+.az-tier-head .badge { font-size: 9px; font-weight: 700; color: #fff; background: var(--navy); border-radius: 4px; padding: 2px 6px; letter-spacing: .3px; }
+.az-tier-slots { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-height: 44px; }
+.az-slot-ghost { width: 52px; height: 38px; border-radius: 7px; background: repeating-linear-gradient(135deg, var(--bg2), var(--bg2) 6px, var(--bg3) 6px, var(--bg3) 12px); border: 1px dashed var(--divider); flex: none; }
+.az-tier-hint { font-size: 11px; color: var(--ink3); margin-left: 4px; }
+
+/* Product card */
+.az-prodcard { display: flex; align-items: center; gap: 9px; background: #fff; border: 1.5px solid var(--navy); border-radius: 9px; padding: 7px 10px 7px 6px; box-shadow: 0 2px 8px rgba(0,0,0,.1); min-width: 230px; max-width: 320px; }
+.az-prodcard.drag { box-shadow: 0 8px 24px rgba(0,0,0,.22); transform: rotate(-1.5deg); }
+.az-prodcard .grip { color: var(--ink3); flex-shrink: 0; }
+.az-prodcard .ph { width: 38px; height: 38px; border-radius: 6px; object-fit: cover; flex-shrink: 0; background: var(--bg3); }
+.az-prodcard .ph-empty { background: var(--bg3); }
+.az-prodcard .meta { flex: 1; min-width: 0; }
+.az-prodcard .meta .nm { font-weight: 600; font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.az-prodcard .meta .as { font-size: 10.5px; color: var(--ink3); font-family: monospace; }
+.az-prodcard .you { font-size: 9px; font-weight: 700; color: var(--green); background: #e8f5e9; border-radius: 4px; padding: 2px 6px; flex-shrink: 0; }
+
+/* Strategy panel */
+.az-cockpit-panel { border: 1px solid var(--divider); border-radius: 10px; padding: 14px; background: #fff; position: sticky; top: 8px; }
+.az-cockpit-panel-head { display: flex; align-items: center; gap: 7px; font-weight: 700; font-size: 14px; margin-bottom: 12px; color: var(--navy); }
+.az-cockpit-panel .row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 0; font-size: 12.5px; color: var(--ink2); }
+.az-cockpit-panel .row b { color: var(--ink); font-weight: 700; text-align: right; max-width: 170px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.az-cockpit-panel .sep { height: 1px; background: var(--divider); margin: 8px 0; }
+.az-cockpit-note { display: flex; align-items: flex-start; gap: 6px; font-size: 11.5px; color: var(--ink2); line-height: 1.5; margin-top: 10px; padding: 9px 10px; background: var(--bg2); border-radius: 8px; }
+
 /* ── AD-TYPE TABS ──────────────────────────────────────────── */
 .az-tabs { display: flex; flex-wrap: wrap; gap: 6px; padding: 6px 0 14px; max-width: 100%; }
 .az-tab { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--border); background: #fff; border-radius: 16px; padding: 6px 13px; font-weight: 500; font-size: 12.5px; color: var(--ink); cursor: pointer; white-space: nowrap; }
