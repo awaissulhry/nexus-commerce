@@ -20,6 +20,13 @@ import {
   getResolvedRules,
   type FieldMappingRule,
 } from './schema-mapping.service.js'
+import { resolveSourcePath, isPresent } from './resolve-channel-field.js'
+
+// The dotted-path resolver + presence check moved to the FM.2 core module
+// (resolve-channel-field) so preview / validate / cascade / sync share one
+// implementation. Re-exported for back-compat with callers/docs that
+// reference D.5's resolveSourcePath.
+export { resolveSourcePath }
 
 export interface FieldValidationError {
   fieldKey: string
@@ -47,77 +54,6 @@ export interface ValidationResult {
   errors: FieldValidationError[]
   /** Convenience: true when errors.length === 0. */
   ok: boolean
-}
-
-/**
- * Resolve a dotted source path like 'localizedContent.{locale}.title'
- * against the flat resolver output. The resolver already merges every
- * layer into one shape so this is just a key-path walk + {locale}
- * substitution.
- *
- * Supported syntax:
- *   - `title`                              top-level resolver key
- *   - `localizedContent.{locale}.title`    {locale} substituted; the
- *                                          path then walks into the
- *                                          original Product object
- *   - `categoryAttributes.material`        walks into raw Product field
- *   - `variantAttributes.Color`            ditto
- *
- * The resolver flattens localizedContent + categoryAttributes into the
- * top-level result already (A.4 synthesis included), so most rules only
- * need the leaf key. The dotted form stays for forward-compat with
- * Phase D.3 transforms and D.4 templates that want explicit paths.
- */
-export function resolveSourcePath(
-  path: string,
-  resolved: Record<string, unknown>,
-  product: { localizedContent: unknown; categoryAttributes: unknown; variantAttributes: unknown },
-  locale: string,
-): unknown {
-  if (!path || typeof path !== 'string') return null
-  const substituted = path.replace(/\{locale\}/g, locale)
-
-  // Single-segment paths read straight from the resolved map.
-  if (!substituted.includes('.')) {
-    return resolved[substituted] ?? null
-  }
-
-  // Multi-segment paths walk into the raw Product structure. This lets
-  // mapping rules use deep paths even when the resolver didn't lift the
-  // key into its top-level shape.
-  const segments = substituted.split('.')
-  const root = segments[0]
-  const rest = segments.slice(1)
-
-  let cursor: unknown
-  switch (root) {
-    case 'localizedContent':
-      cursor = product.localizedContent
-      break
-    case 'categoryAttributes':
-      cursor = product.categoryAttributes
-      break
-    case 'variantAttributes':
-      cursor = product.variantAttributes
-      break
-    default:
-      // Unknown root → try resolved map first (handles `title.foo`
-      // style paths where `title` resolved to an object).
-      cursor = resolved[root] ?? null
-  }
-
-  for (const seg of rest) {
-    if (cursor === null || cursor === undefined || typeof cursor !== 'object') return null
-    cursor = (cursor as Record<string, unknown>)[seg]
-  }
-  return cursor ?? null
-}
-
-function isPresent(v: unknown): boolean {
-  if (v === null || v === undefined) return false
-  if (typeof v === 'string' && v.trim() === '') return false
-  if (Array.isArray(v) && v.length === 0) return false
-  return true
 }
 
 /**
