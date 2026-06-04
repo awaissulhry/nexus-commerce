@@ -22,6 +22,7 @@
 import type { FastifyPluginAsync } from 'fastify'
 import prisma from '../db.js'
 import { resolveAttributes } from '../services/pim/attribute-resolver.js'
+import { applyCatalogCascade } from '../services/pim/apply-mapping.service.js'
 
 // ────────────────────────────────────────────────────────────────────
 // Types
@@ -288,6 +289,31 @@ const pimGlobalRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       await prisma.product.update({ where: { id }, data })
+
+      // FM.8 — flag-gated auto-cascade: when master content/attributes
+      // change, fan out to mapped channel coordinates via the catalog
+      // mapping (translate + enqueue on the undo window). Default OFF
+      // (FM_CASCADE_ON_SAVE !== 'on') → no behaviour change. Fire-and-
+      // forget: the PATCH returns immediately; applyCatalogCascade enqueues
+      // durably (OutboundSyncQueue) on its own.
+      if (process.env.FM_CASCADE_ON_SAVE === 'on') {
+        const changes: Record<string, unknown> = {}
+        if (patch.technical) Object.assign(changes, patch.technical)
+        const loc = (patch.en ?? patch.it) as { title?: string; description?: string } | undefined
+        if (loc?.title != null) changes.title = loc.title
+        if (loc?.description != null) changes.description = loc.description
+        if (Object.keys(changes).length > 0) {
+          void applyCatalogCascade({ productId: id, changes }, { reason: 'global-tab-save' }).catch(
+            (err: unknown) => {
+              request.log.warn(
+                { err, productId: id },
+                '[fm-cascade] auto-cascade after global save failed (non-blocking)',
+              )
+            },
+          )
+        }
+      }
+
       return reply.send({ ok: true, changed: true })
     },
   )
