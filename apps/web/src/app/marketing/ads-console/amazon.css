@@ -342,6 +342,18 @@
 .az-tr-preview .ok { color: #1e7a4f; font-weight: 600; }
 .az-tr-preview .warn { color: #b3541e; font-weight: 600; background: #fbeee3; border-radius: 5px; padding: 2px 7px; }
 
+/* Per-day demand heatmap (DD2) */
+.az-heat { user-select: none; overflow-x: auto; padding-bottom: 2px; }
+.az-heat-row { display: flex; gap: 1px; }
+.az-heat-row.head { margin-bottom: 1px; }
+.az-heat-dlbl { width: 34px; flex: none; font-size: 9.5px; font-weight: 700; color: var(--ink2); text-align: right; padding-right: 5px; display: flex; align-items: center; justify-content: flex-end; min-height: 16px; }
+.az-heat-hh { width: 14px; flex: none; text-align: center; font-size: 8px; color: var(--ink3); }
+.az-heat-cell { width: 14px; height: 16px; flex: none; border-radius: 2px; border: 1px solid transparent; box-sizing: border-box; }
+.az-heat-cell:hover { outline: 1px solid var(--ink); outline-offset: -1px; }
+.az-heat-cell.peak { border-color: #d4380d; }
+.az-heat-skel { display: flex; flex-direction: column; gap: 1px; }
+.az-heat-skel .r { height: 16px; border-radius: 2px; background: linear-gradient(90deg, var(--bg3), var(--bg2), var(--bg3)); background-size: 200% 100%; animation: az-shimmer 1.3s linear infinite; }
+
 /* Action chip + per-campaign lines */
 .az-act { display: inline-flex; align-items: center; gap: 3px; font-size: 10px; font-weight: 700; border-radius: 4px; padding: 1px 6px; vertical-align: middle; }
 .az-act.raise { color: #1e7a4f; background: #e8f5ee; }

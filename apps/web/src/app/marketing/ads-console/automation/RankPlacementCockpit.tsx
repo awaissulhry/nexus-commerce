@@ -25,6 +25,7 @@ import { DndContext, useDraggable, useDroppable, DragOverlay, type DragEndEvent,
 import { GripVertical, Info, ArrowUp, Crosshair, TrendingUp, TrendingDown, Minus, Search, Plus, Loader2, Check, ListPlus, Sparkles, Zap, ShieldCheck, BarChart3, AlertTriangle, Clock, Wallet } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { TimeRankGrid, compileGrid, type Level } from './TimeRankGrid'
+import { DemandHeatmap } from './DemandHeatmap'
 
 const MARKETS = ['IT', 'DE', 'FR', 'ES', 'NL', 'BE', 'SE', 'PL', 'IE', 'UK']
 const WINDOW_DAYS = 30
@@ -41,7 +42,8 @@ interface SelfComp { campaignId: string; name: string; status: string; asins: st
 interface DemandBucket { key: number; orders: number; units: number; revenueCents: number; index: number | null }
 type DemandHour = DemandBucket
 interface FamCampaign { id: string; name: string; status: string; marketplace: string | null }
-interface ProductFamily { parentProductId: string | null; parentName: string | null; productIds: string[]; asins: string[]; campaigns: FamCampaign[]; demand: { totals: { orders: number; units: number; revenueCents: number }; hourProfile: DemandHour[]; weekdayProfile: DemandBucket[]; grid?: { orders: number; units: number; revenueCents: number }[][]; hasData: boolean } | null }
+interface HeatCell { orders: number; units: number; revenueCents: number; familyOrders?: number; confidence?: 'high' | 'med' | 'low' }
+interface ProductFamily { parentProductId: string | null; parentName: string | null; productIds: string[]; asins: string[]; campaigns: FamCampaign[]; demand: { totals: { orders: number; units: number; revenueCents: number }; hourProfile: DemandHour[]; weekdayProfile: DemandBucket[]; grid?: HeatCell[][]; hasData: boolean; blended?: boolean; familyOrders?: number; windowDays?: number } | null }
 type DayRecommend = 'bid-up' | 'keep' | 'bid-down'
 const MATCH_TYPES = ['BROAD', 'PHRASE', 'EXACT'] as const
 const pad2 = (n: number) => String(n).padStart(2, '0')
@@ -845,18 +847,11 @@ export function RankPlacementCockpit() {
           {dayRows.length === 0 && !whenLoading && <div className="az-cockpit-sub">No order-demand data for this product family in {market}.</div>}
         </div>
 
-        <div className="az-when-sub" style={{ marginTop: 12 }}>Demand by hour ({market}, Europe/Rome) — when customers buy this family</div>
-        <div className="az-when-hours" role="img" aria-label={demand && demand.length ? `Hourly demand in ${market}; peaks at ${[...demand].sort((a, b) => b.revenueCents - a.revenueCents).slice(0, 3).map(h => pad2(h.key) + ':00').join(', ')}` : 'Hourly demand'}>
-          {whenLoading && !demand
-            ? Array.from({ length: 24 }).map((_, i) => <div key={i} className="az-dphour"><div className="bar"><div className="fill skel" style={{ height: `${10 + ((i * 23) % 70)}%` }} /></div><div className="hr">{i % 6 === 0 ? pad2(i) : ''}</div></div>)
-            : (demand ?? []).map(h => (
-            <div key={h.key} className="az-dphour" title={`${pad2(h.key)}:00 — ${euros(h.revenueCents)} · ${h.orders} orders`}>
-              <div className="bar"><div className="fill" style={{ height: `${Math.max(2, (h.revenueCents / maxDemand) * 100)}%` }} /></div>
-              <div className="hr">{h.key % 6 === 0 ? pad2(h.key) : ''}</div>
-            </div>
-          ))}
-          {!demand && !whenLoading && <div className="az-cockpit-sub">No order-demand data.</div>}
-        </div>
+        <div className="az-when-sub" style={{ marginTop: 12 }}>Demand by day &amp; hour ({market}, Europe/Rome) — how the hours differ across days{family?.demand?.blended ? ` · blended with the market pattern where ${family.parentName ?? 'this product'} is thin (${family.demand.familyOrders} orders, ${family.demand.windowDays}d)` : ''}</div>
+        {whenLoading && !family?.demand?.grid
+          ? <div className="az-heat-skel">{Array.from({ length: 7 }).map((_, i) => <div key={i} className="r" />)}</div>
+          : <DemandHeatmap grid={family?.demand?.grid ?? null} />}
+        {!family?.demand?.grid && !whenLoading && <div className="az-cockpit-sub">No order-demand data for {market}.</div>}
 
         {/* ── T5: budget pacing ────────────────────────────────────── */}
         {family && family.campaigns.length > 0 && totalDailyBudgetCents > 0 && (
