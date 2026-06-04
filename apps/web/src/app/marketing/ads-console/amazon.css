@@ -597,6 +597,13 @@
 .az-cmdk-row .sb { font-size: 11px; color: var(--ink3); }
 .az-cmdk-row > svg { color: var(--ink3); }
 
+/* RC4.10 — consolidated intelligence banner */
+.az-intel { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; margin-bottom: 14px; padding: 10px 14px; border: 1px solid #f0c9a8; border-left: 3px solid #b3541e; border-radius: 10px; background: #fff7f0; font-size: 12.5px; color: var(--ink2); }
+.az-intel > svg { color: #b3541e; flex: none; }
+.az-intel .it b { color: #b3541e; font-weight: 800; }
+.az-intel .dot { color: var(--ink3); }
+.az-intel .hint { margin-left: auto; font-size: 11px; color: var(--ink3); }
+
 /* Inline rank-set collision warning in the Strategy panel (RC3.4) */
 .az-rankwarn { margin: 10px 0 0; padding: 10px 11px; border: 1px solid #f0c9a8; border-left: 3px solid #b3541e; border-radius: 9px; background: #fff7f0; }
 .az-rankwarn-msg { display: flex; align-items: flex-start; gap: 6px; font-size: 11.5px; line-height: 1.45; color: var(--ink); }
