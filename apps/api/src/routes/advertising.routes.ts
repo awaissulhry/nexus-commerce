@@ -24,6 +24,7 @@ import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
 import { testConnection, adsMode, type AdsRegion } from '../services/advertising/ads-api-client.js'
 import { allocate, microsToCents, toEurCents } from '../services/advertising/ads-metrics-math.js'
+import { detectKeywordConflicts } from '../services/advertising/keyword-conflicts.service.js'
 import { getFxRate } from '../services/fx-rate.service.js'
 import {
   runFbaStorageAgeIngestOnce,
@@ -560,6 +561,20 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       .map((g) => ({ campaignId: g.campaignId, name: g.name, status: g.status, asins: [...g.asins] }))
       .sort((a, b) => b.asins.length - a.asins.length)
     return { marketplace: camp.marketplace, asins, conflicts }
+  })
+
+  // ── GET /advertising/campaigns/:id/keyword-conflicts (RC3.2) ───────────
+  // Cross-product keyword-rank collisions: DIFFERENT products of ours bidding on
+  // the SAME keyword, fighting for the same Top-of-search slot. Returns, per
+  // contested keyword, every contender (mine + rivals) with bid/efficiency/ToS
+  // intent and a recommended champion. Read-only; resolutions are gated writes.
+  fastify.get('/advertising/campaigns/:id/keyword-conflicts', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const { marketplace } = request.query as { marketplace?: string }
+    const result = await detectKeywordConflicts(prisma, id, marketplace)
+    if (!result) { reply.status(404); return { error: 'campaign not found' } }
+    reply.header('Cache-Control', 'private, max-age=120')
+    return result
   })
 
   // ── Product-family dayparting (RC2.T·product) ──────────────────────────
