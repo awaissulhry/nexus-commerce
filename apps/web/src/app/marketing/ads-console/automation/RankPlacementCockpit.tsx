@@ -22,7 +22,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { DndContext, useDraggable, useDroppable, DragOverlay, type DragEndEvent, type DragStartEvent, PointerSensor, KeyboardSensor, useSensor, useSensors } from '@dnd-kit/core'
-import { GripVertical, Info, ArrowUp, Crosshair, TrendingUp, TrendingDown, Minus, Search, Plus, Loader2, Check, ListPlus, Sparkles, Zap, ShieldCheck, BarChart3, AlertTriangle, Clock, Wallet } from 'lucide-react'
+import { GripVertical, Info, ArrowUp, Crosshair, TrendingUp, TrendingDown, Minus, Search, Plus, Loader2, Check, ListPlus, Sparkles, Zap, ShieldCheck, BarChart3, AlertTriangle, Clock, Wallet, RotateCcw } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { TimeRankGrid, compileGrid, describeGrid, type Level } from './TimeRankGrid'
 import { DemandHeatmap } from './DemandHeatmap'
@@ -201,9 +201,10 @@ export function RankPlacementCockpit() {
   // T6 — autonomous self-refresh rule
   const [creatingRule, setCreatingRule] = useState(false)
   const [autoMsg, setAutoMsg] = useState('')
-  // S2 — one grid source of truth: the guided set-up builds it, the Advanced
-  // editor tweaks it (gridEdited stops the guided from clobbering manual edits).
-  const [showGrid, setShowGrid] = useState(false)
+  // S3 — one grid is the source of truth, two ways to set it: "Guided" builds it
+  // from each day's demand peak; "Custom" lets the operator paint any hour they
+  // choose. gridEdited stops the guided rebuild from clobbering hand-painted edits.
+  const [schedMode, setSchedMode] = useState<'guided' | 'custom'>('guided')
   const [trGrid, setTrGrid] = useState<Level[][] | null>(null)
   const [gridEdited, setGridEdited] = useState(false)
   // DD4 — guided "maintain rank at peak"
@@ -318,8 +319,8 @@ export function RankPlacementCockpit() {
     })
   }, [family])
 
-  // S2 — the guided config builds the one grid (until the operator hand-edits it
-  // in Advanced); changing a guided setting re-guides (clears the edit flag).
+  // S3 — the guided config builds the one grid (until the operator hand-edits it
+  // in Custom mode); changing a guided setting re-guides (clears the edit flag).
   useEffect(() => {
     const grid = family?.demand?.grid
     if (grid && !gridEdited) setTrGrid(buildGuidedGrid(grid, guidedLevel, guidedPause))
@@ -837,19 +838,34 @@ export function RankPlacementCockpit() {
           : <DemandHeatmap grid={family?.demand?.grid ?? null} />}
         {!family?.demand?.grid && !whenLoading && <div className="az-cockpit-sub">No order-demand data for {market}.</div>}
 
-        {/* ── S2: guided 'maintain at peak' = the one primary control ── */}
+        {/* ── S3: one schedule, two ways to set it — Guided peaks or Custom-by-hour ── */}
         {family && family.demand?.grid && family.campaigns.length > 0 && (<>
           <div className="az-guided">
-            <div className="az-guided-head"><Sparkles size={14} /> Maintain your rank when it sells</div>
-            <div className="az-guided-row">
-              <span>Maintain</span>
-              <select value={guidedLevel} onChange={e => setGuided(() => setGuidedLevel(e.target.value as Level))}><option value="max">Max</option><option value="strong">Strong</option></select>
-              <span>rank during each day&apos;s peak, Normal outside.</span>
-              <label className="az-sched-check"><input type="checkbox" checked={guidedPause} onChange={e => setGuided(() => setGuidedPause(e.target.checked))} /> Pause dead overnight</label>
+            <div className="az-guided-head"><Sparkles size={14} /> Schedule your rank by time
+              <span style={{ flex: 1 }} />
+              <span className="az-mode-seg" role="tablist" aria-label="Schedule mode">
+                <button type="button" role="tab" aria-selected={schedMode === 'guided'} className={schedMode === 'guided' ? 'on' : ''} onClick={() => setSchedMode('guided')}>Guided</button>
+                <button type="button" role="tab" aria-selected={schedMode === 'custom'} className={schedMode === 'custom' ? 'on' : ''} onClick={() => setSchedMode('custom')}>Custom by hour</button>
+              </span>
             </div>
-            <div className="az-guided-peaks">
-              {dayPeaks.map(p => <span key={p.d} className="it"><b>{p.label}</b> {p.range ? `${p.range} · ${p.pct}%` : '—'}</span>)}
-            </div>
+
+            {schedMode === 'guided' ? (<>
+              <div className="az-guided-row">
+                <span>Maintain</span>
+                <select value={guidedLevel} onChange={e => setGuided(() => setGuidedLevel(e.target.value as Level))}><option value="max">Max</option><option value="strong">Strong</option></select>
+                <span>rank during each day&apos;s peak, Normal outside.</span>
+                <label className="az-sched-check"><input type="checkbox" checked={guidedPause} onChange={e => setGuided(() => setGuidedPause(e.target.checked))} /> Pause dead overnight</label>
+              </div>
+              <div className="az-guided-peaks">
+                {dayPeaks.map(p => <span key={p.d} className="it"><b>{p.label}</b> {p.range ? `${p.range} · ${p.pct}%` : '—'}</span>)}
+              </div>
+              {gridEdited && <div className="az-mode-hint"><Info size={12} /> You&apos;ve hand-edited the grid in Custom — changing a setting here re-applies the guided pattern over your edits.</div>}
+            </>) : (<>
+              <div className="az-cockpit-sub" style={{ margin: '4px 0 0' }}>Set any hour of any day yourself — <b>Max/Strong</b> push, <b>Normal</b> baseline, <b>Light</b> eases off, <b>Pause</b> stops spend. Click &amp; drag to paint, or press <b>1–5</b>. The blue bars mark when the family actually sells.</div>
+              <TimeRankGrid grid={trGrid ?? EMPTY_GRID} onChange={onGridEdit} demandGrid={family.demand?.grid ?? null} />
+              {gridEdited && <button type="button" className="az-tr-reset" onClick={() => setGuided(() => {})}><RotateCcw size={12} /> Reset to the guided pattern</button>}
+            </>)}
+
             {gridSummary.length > 0 && <div className="az-tr-summary"><span className="t">This applies</span>{gridSummary.map((s, i) => <div key={i} className="line">{s}</div>)}</div>}
             <div className="az-sched-actions">
               <button type="button" className="az-btn dark" disabled={gridSaving || !trGrid} onClick={() => void applyGrid()}>
@@ -869,25 +885,19 @@ export function RankPlacementCockpit() {
             </div>
           )}
 
-          {/* Advanced — fine-tune by hour, auto-maintain, defend */}
-          <div className="az-tr-section">
-            <button type="button" className="az-tr-toggle" onClick={() => setShowGrid(v => !v)} aria-expanded={showGrid}>Advanced — fine-tune by hour · auto-maintain · defend rank {showGrid ? '▾' : '▸'}</button>
-            {showGrid && <>
-              <div className="az-cockpit-sub" style={{ marginTop: 6 }}>Tweak any hour: <b>Max/Strong</b> push, <b>Light</b> eases off, <b>Pause</b> stops spend. The guided set-up above fills this; edits here override it until you change a guided setting.</div>
-              <TimeRankGrid grid={trGrid ?? EMPTY_GRID} onChange={onGridEdit} demandGrid={family.demand?.grid ?? null} />
-              <div className="az-sched-actions" style={{ marginTop: 8 }}>
-                <button type="button" className="az-btn" disabled={creatingRule || !family.parentProductId} onClick={() => void createRefreshRule()}>
-                  {creatingRule ? <><Loader2 size={14} className="az-spin" /> …</> : <><Sparkles size={14} /> Auto-maintain weekly</>}
-                </button>
-                <button type="button" className="az-btn" disabled={gridHolding || !family.parentProductId} onClick={() => void createGridHold()}>
-                  {gridHolding ? <><Loader2 size={14} className="az-spin" /> …</> : <><ShieldCheck size={14} /> Defend top rank in push hours</>}
-                </button>
-                {autoMsg === 'created' && <span className="az-cockpit-sub" style={{ margin: 0, color: 'var(--green)' }}>Auto-maintain rule created.</span>}
-                {gridHoldMsg === 'created' && <span className="az-cockpit-sub" style={{ margin: 0, color: 'var(--green)' }}>Defense rule created.</span>}
-                {(autoMsg === 'error' || gridHoldMsg === 'error') && <span className="az-cockpit-sub" style={{ margin: 0, color: '#cc1100' }}>Could not create the rule.</span>}
-              </div>
-              <div className="az-cockpit-note" style={{ marginTop: 6 }}><Info size={12} /> Both rules are created disabled + dry-run — enable in Active rules.</div>
-            </>}
+          {/* Automate — hold the rank without re-applying by hand */}
+          <div className="az-tr-automate">
+            <span className="l">Keep it automatic</span>
+            <button type="button" className="az-btn" disabled={creatingRule || !family.parentProductId} onClick={() => void createRefreshRule()}>
+              {creatingRule ? <><Loader2 size={14} className="az-spin" /> …</> : <><Sparkles size={14} /> Auto-maintain weekly</>}
+            </button>
+            <button type="button" className="az-btn" disabled={gridHolding || !family.parentProductId} onClick={() => void createGridHold()}>
+              {gridHolding ? <><Loader2 size={14} className="az-spin" /> …</> : <><ShieldCheck size={14} /> Defend top rank in push hours</>}
+            </button>
+            {autoMsg === 'created' && <span className="az-cockpit-sub" style={{ margin: 0, color: 'var(--green)' }}>Auto-maintain rule created.</span>}
+            {gridHoldMsg === 'created' && <span className="az-cockpit-sub" style={{ margin: 0, color: 'var(--green)' }}>Defense rule created.</span>}
+            {(autoMsg === 'error' || gridHoldMsg === 'error') && <span className="az-cockpit-sub" style={{ margin: 0, color: '#cc1100' }}>Could not create the rule.</span>}
+            <span className="az-tr-automate-note">Created disabled + dry-run — enable in Active rules.</span>
           </div>
         </>)}
 
