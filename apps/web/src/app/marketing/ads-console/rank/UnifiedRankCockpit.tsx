@@ -27,6 +27,7 @@ import { BulkApplyStation } from './BulkApplyStation'
 import { SimpleRankPanel } from './SimpleRankPanel'
 import { CommandPalette, type CmdAction } from './CommandPalette'
 import { IntelligenceBanner } from './IntelligenceBanner'
+import { RankTrend } from './RankTrend'
 
 const MARKETS = ['IT', 'DE', 'FR', 'ES', 'NL', 'BE', 'SE', 'PL', 'IE', 'UK']
 const LOOKBACKS = [7, 14, 30, 60, 90]
@@ -126,6 +127,7 @@ export function UnifiedRankCockpit() {
       {toast && <div className="az-urc-toast" role="status" aria-live="polite"><Undo2 size={13} /> {toast}</div>}
 
       {campaignId && <IntelligenceBanner campaignId={campaignId} market={market} />}
+      {campaignId && <RankTrend campaignId={campaignId} lookback={lookback} />}
 
       {/* ── Body: the existing placement cockpit, driven by the shared context.
             Stations get extracted from here in RC4.1–RC4.4. ── */}

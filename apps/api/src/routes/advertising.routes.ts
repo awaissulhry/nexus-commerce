@@ -816,6 +816,36 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     return { campaignId: id, entries }
   })
 
+  // ── RC4.12: per-day Top-of-search impression-share + ACOS trend (sparklines) ──
+  fastify.get('/advertising/campaigns/:id/rank-trend', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const { windowDays } = request.query as { windowDays?: string }
+    const days = Math.max(7, Math.min(90, Number(windowDays) || 30))
+    const campaign = await prisma.campaign.findUnique({ where: { id }, select: { externalCampaignId: true } })
+    reply.header('Cache-Control', 'private, max-age=300')
+    if (!campaign?.externalCampaignId) return { axis: [], is: [], acos: [], windowDays: days }
+    const since = new Date(); since.setUTCDate(since.getUTCDate() - (days - 1)); since.setUTCHours(0, 0, 0, 0)
+    const rows = await prisma.amazonAdsPlacementReport.groupBy({
+      by: ['date'],
+      where: { campaignId: campaign.externalCampaignId, placement: 'Top of Search on-Amazon', date: { gte: since } },
+      _avg: { topOfSearchIS: true },
+      _sum: { costMicros: true, sales7dCents: true },
+    })
+    const axis: string[] = []
+    for (let i = 0; i < days; i++) { const d = new Date(since); d.setUTCDate(since.getUTCDate() + i); axis.push(d.toISOString().slice(0, 10)) }
+    const idx = new Map(axis.map((d, i) => [d, i]))
+    const is: (number | null)[] = new Array(days).fill(null)
+    const acos: (number | null)[] = new Array(days).fill(null)
+    for (const r of rows) {
+      const i = idx.get(r.date.toISOString().slice(0, 10)); if (i == null) continue
+      is[i] = r._avg.topOfSearchIS != null ? Number(r._avg.topOfSearchIS) : null
+      const costCents = microsToCents(r._sum.costMicros ?? 0n)
+      const sales = r._sum.sales7dCents ?? 0
+      acos[i] = sales > 0 ? costCents / sales : null
+    }
+    return { axis, is, acos, windowDays: days }
+  })
+
   // ── GET /advertising/fba-storage-age/:productId ─────────────────────
   fastify.get('/advertising/fba-storage-age/:productId', async (request, _reply) => {
     const { productId } = request.params as { productId: string }
