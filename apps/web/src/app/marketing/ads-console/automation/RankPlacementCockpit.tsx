@@ -27,6 +27,8 @@ import { getBackendUrl } from '@/lib/backend-url'
 
 const MARKETS = ['IT', 'DE', 'FR', 'ES', 'NL', 'BE', 'SE', 'PL', 'IE', 'UK']
 const WINDOW_DAYS = 30
+// Shopper-local timezone per market (dayparting windows are enforced in this TZ).
+const MARKET_TZ: Record<string, string> = { IT: 'Europe/Rome', DE: 'Europe/Berlin', FR: 'Europe/Paris', ES: 'Europe/Madrid', NL: 'Europe/Amsterdam', BE: 'Europe/Brussels', SE: 'Europe/Stockholm', PL: 'Europe/Warsaw', IE: 'Europe/Dublin', UK: 'Europe/London' }
 
 interface Camp { id: string; name: string; marketplace: string | null; status: string; externalCampaignId: string | null; acos: number | null; dailyBudget: unknown; adProduct: string | null }
 interface TosRow { campaignId: string; name: string; marketplace: string | null; topImpr: number; topSpendCents: number; topSalesCents: number; topAcos: number | null; topIS: number | null; currentPct: number; recommendedPct: number; action: 'raise' | 'lower' | 'keep'; reason: string }
@@ -157,6 +159,10 @@ export function RankPlacementCockpit() {
   const [bidUpPct, setBidUpPct] = useState(25)
   const [bidDownPct, setBidDownPct] = useState(40)
   const [pauseOvernight, setPauseOvernight] = useState(true)
+  // T3 — the campaign's persisted AdSchedule + apply state
+  const [existingSched, setExistingSched] = useState<{ id: string; enabled: boolean; windows: unknown[]; name: string } | null>(null)
+  const [schedSaving, setSchedSaving] = useState(false)
+  const [schedMsg, setSchedMsg] = useState('')
   // R3 — bulk keyword manager
   const [targets, setTargets] = useState<Target[]>([])
   const [targetsLoading, setTargetsLoading] = useState(false)
@@ -251,6 +257,71 @@ export function RankPlacementCockpit() {
     }).finally(() => { if (!ac.signal.aborted) setWhenLoading(false) })
     return () => ac.abort()
   }, [campaignId, market])
+
+  // T2 — generate a schedule from the intel: bid-up peak days, bid-down weak
+  // days, keep average days, and (optionally) pause the dead overnight hours
+  // where order demand is ~0. Maps to AdSchedule.windows (cron-enforced).
+  const smartSchedule = useMemo(() => {
+    if (!intel || intel.days.length === 0) return null
+    const peak = intel.days.filter(d => d.recommend === 'bid-up').map(d => d.weekday)
+    const weak = intel.days.filter(d => d.recommend === 'bid-down').map(d => d.weekday)
+    const keep = intel.days.filter(d => d.recommend === 'keep').map(d => d.weekday)
+    let activeStart = 0, activeEnd = 24, deadHours: number[] = []
+    if (pauseOvernight && demand && demand.length) {
+      const max = Math.max(1, ...demand.map(h => h.revenueCents))
+      const thr = max * 0.05
+      const live = demand.filter(h => h.revenueCents >= thr).map(h => h.key)
+      if (live.length && live.length < 24) { activeStart = Math.min(...live); activeEnd = Math.max(...live) + 1; deadHours = demand.filter(h => h.revenueCents < thr).map(h => h.key) }
+    }
+    const windows: Array<{ days: number[]; startHour: number; endHour: number; bidMultiplierPct?: number }> = []
+    if (peak.length) windows.push({ days: peak, startHour: activeStart, endHour: activeEnd, bidMultiplierPct: bidUpPct })
+    if (weak.length) windows.push({ days: weak, startHour: activeStart, endHour: activeEnd, bidMultiplierPct: -bidDownPct })
+    if (keep.length) windows.push({ days: keep, startHour: activeStart, endHour: activeEnd })
+    return { windows, peak, weak, keep, activeStart, activeEnd, deadHours }
+  }, [intel, demand, bidUpPct, bidDownPct, pauseOvernight])
+
+  // T3 — the campaign's persisted dayparting schedule
+  const loadSchedule = useCallback(async (signal?: AbortSignal) => {
+    if (!campaignId) { setExistingSched(null); return }
+    const d = await fetch(`${getBackendUrl()}/api/advertising/schedules`, { cache: 'no-store', signal }).then(r => r.json()).catch(() => ({ items: [] }))
+    if (signal?.aborted) return
+    const mine = (d.items ?? []).find((s: { campaignId: string }) => s.campaignId === campaignId) as { id: string; enabled: boolean; windows: unknown[]; name: string } | undefined
+    setExistingSched(mine ? { id: mine.id, enabled: mine.enabled, windows: mine.windows ?? [], name: mine.name } : null)
+  }, [campaignId])
+
+  useEffect(() => {
+    const ac = new AbortController()
+    setSchedMsg('')
+    void loadSchedule(ac.signal)
+    return () => ac.abort()
+  }, [loadSchedule])
+
+  // T3 — apply the generated schedule: create (disabled) or update the campaign's
+  // AdSchedule with per-market timezone. The cron enforces it once enabled.
+  const applySchedule = useCallback(async () => {
+    if (!campaignId || !smartSchedule) return
+    setSchedSaving(true); setSchedMsg('')
+    const timezone = MARKET_TZ[market] ?? 'Europe/Rome'
+    try {
+      let r: { id?: string }
+      if (existingSched) {
+        r = await fetch(`${getBackendUrl()}/api/advertising/schedules/${existingSched.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ windows: smartSchedule.windows, timezone }) }).then(r => r.json())
+      } else {
+        r = await fetch(`${getBackendUrl()}/api/advertising/schedules`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ campaignId, name: `Dayparting — ${campaign?.name ?? campaignId}`, windows: smartSchedule.windows, timezone, enabled: false }) }).then(r => r.json())
+      }
+      setSchedMsg(r?.id ? 'saved' : 'error')
+    } catch { setSchedMsg('error') }
+    setSchedSaving(false)
+    void loadSchedule()
+  }, [campaignId, smartSchedule, existingSched, market, campaign, loadSchedule])
+
+  const toggleSchedule = useCallback(async (enabled: boolean) => {
+    if (!existingSched) return
+    setSchedSaving(true)
+    try { await fetch(`${getBackendUrl()}/api/advertising/schedules/${existingSched.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled }) }) } catch { /* ignore */ }
+    setSchedSaving(false)
+    void loadSchedule()
+  }, [existingSched, loadSchedule])
 
   // R3 — load the campaign's existing keywords (also gives the destination ad group)
   const loadTargets = useCallback(async (signal?: AbortSignal) => {
@@ -418,28 +489,6 @@ export function RankPlacementCockpit() {
   const deadDays = intel ? intel.days.filter(d => d.recommend === 'bid-down') : []
   const peakDays = intel ? intel.days.filter(d => d.recommend === 'bid-up') : []
   const dayLabel = useCallback((wd: number) => intel?.days.find(d => d.weekday === wd)?.label.slice(0, 3) ?? String(wd), [intel])
-
-  // T2 — generate a schedule from the intel: bid-up peak days, bid-down weak
-  // days, keep average days, and (optionally) pause the dead overnight hours
-  // where order demand is ~0. Maps to AdSchedule.windows (cron-enforced).
-  const smartSchedule = useMemo(() => {
-    if (!intel || intel.days.length === 0) return null
-    const peak = intel.days.filter(d => d.recommend === 'bid-up').map(d => d.weekday)
-    const weak = intel.days.filter(d => d.recommend === 'bid-down').map(d => d.weekday)
-    const keep = intel.days.filter(d => d.recommend === 'keep').map(d => d.weekday)
-    let activeStart = 0, activeEnd = 24, deadHours: number[] = []
-    if (pauseOvernight && demand && demand.length) {
-      const max = Math.max(1, ...demand.map(h => h.revenueCents))
-      const thr = max * 0.05
-      const live = demand.filter(h => h.revenueCents >= thr).map(h => h.key)
-      if (live.length && live.length < 24) { activeStart = Math.min(...live); activeEnd = Math.max(...live) + 1; deadHours = demand.filter(h => h.revenueCents < thr).map(h => h.key) }
-    }
-    const windows: Array<{ days: number[]; startHour: number; endHour: number; bidMultiplierPct?: number }> = []
-    if (peak.length) windows.push({ days: peak, startHour: activeStart, endHour: activeEnd, bidMultiplierPct: bidUpPct })
-    if (weak.length) windows.push({ days: weak, startHour: activeStart, endHour: activeEnd, bidMultiplierPct: -bidDownPct })
-    if (keep.length) windows.push({ days: keep, startHour: activeStart, endHour: activeEnd })
-    return { windows, peak, weak, keep, activeStart, activeEnd, deadHours }
-  }, [intel, demand, bidUpPct, bidDownPct, pauseOvernight])
 
   // Honest rank readout: where you're holding vs the target slot.
   const rankReadout = (() => {
@@ -711,7 +760,15 @@ export function RankPlacementCockpit() {
               <label>Bid-down <input type="number" min={0} max={99} value={bidDownPct} onChange={e => setBidDownPct(Math.max(0, Math.min(99, Number(e.target.value) || 0)))} />%</label>
               <label className="az-sched-check"><input type="checkbox" checked={pauseOvernight} onChange={e => setPauseOvernight(e.target.checked)} /> Pause dead overnight hours</label>
             </div>
-            <div className="az-cockpit-note" style={{ marginTop: 8 }}><Info size={12} /> Preview only — this maps to a campaign delivery schedule (cron-enforced in {market === 'IT' ? 'Europe/Rome' : 'the market timezone'}). One-click apply lands in T3. Weak days bid down (keeps ranking); only the ~0-demand overnight block pauses.</div>
+            <div className="az-sched-actions">
+              <button type="button" className="az-btn dark" disabled={schedSaving || !campaign} onClick={() => void applySchedule()}>
+                {schedSaving ? <><Loader2 size={14} className="az-spin" /> Saving…</> : <><Clock size={14} /> {existingSched ? 'Update schedule' : 'Apply schedule'}</>}
+              </button>
+              {existingSched && <label className="az-sched-toggle"><input type="checkbox" checked={existingSched.enabled} disabled={schedSaving} onChange={e => void toggleSchedule(e.target.checked)} /> Enabled</label>}
+              {schedMsg === 'saved' && <span className="az-cockpit-sub" style={{ margin: 0, color: 'var(--green)' }}><Check size={12} style={{ verticalAlign: 'text-bottom' }} /> Saved{existingSched && !existingSched.enabled ? ' — toggle Enabled to run' : ''}</span>}
+              {schedMsg === 'error' && <span className="az-cockpit-sub" style={{ margin: 0, color: '#cc1100' }}>Save failed</span>}
+            </div>
+            <div className="az-cockpit-note" style={{ marginTop: 8 }}><Info size={12} /> Enforced in <b>{MARKET_TZ[market] ?? 'Europe/Rome'}</b>. New schedules start <b>disabled</b> — enable to run. Once enabled the cron bid-adjusts weak days &amp; pauses the dead overnight; writes are gated (sandbox stages locally until the ads write-gate is live). Disabling/deleting a schedule auto-resumes a paused campaign.</div>
           </div>
         ) : intel && !whenLoading ? (
           <div className="az-cockpit-sub" style={{ marginTop: 8 }}>Conversion is even across the week — no day-level schedule needed yet.</div>

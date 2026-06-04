@@ -280,6 +280,9 @@
 .az-sched-ctls input[type=number] { width: 52px; border: 1px solid var(--border); border-radius: 6px; padding: 5px 7px; font: inherit; font-size: 12px; font-weight: 700; text-align: right; }
 .az-sched-check { cursor: pointer; }
 .az-sched-check input { cursor: pointer; }
+.az-sched-actions { display: flex; align-items: center; gap: 12px; margin-top: 10px; flex-wrap: wrap; }
+.az-sched-toggle { font-size: 12px; font-weight: 700; color: var(--ink2); display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+.az-sched-toggle input { cursor: pointer; }
 
 /* Action chip + per-campaign lines */
 .az-act { display: inline-flex; align-items: center; gap: 3px; font-size: 10px; font-weight: 700; border-radius: 4px; padding: 1px 6px; vertical-align: middle; }

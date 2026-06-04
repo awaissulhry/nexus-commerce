@@ -4446,10 +4446,29 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const b = request.body as Record<string, unknown>
     const data: Record<string, unknown> = {}
     for (const k of ['name', 'windows', 'timezone', 'enabled']) if (b[k] !== undefined) data[k] = b[k]
+    const before = await prisma.adSchedule.findUnique({ where: { id }, select: { campaignId: true, lastApplied: true } })
+    if (!before) { reply.status(404); return { error: 'not found' } }
+    // RC2.T3 reactivation safety: disabling a schedule that currently has the
+    // campaign PAUSED must resume it — the cron only resumes ENABLED schedules,
+    // so a disable-while-paused would otherwise strand the campaign paused.
+    if (data.enabled === false && before.lastApplied === 'PAUSED') {
+      try {
+        const { updateCampaignWithSync } = await import('../services/advertising/ads-mutation.service.js')
+        await updateCampaignWithSync({ campaignId: before.campaignId, patch: { status: 'ENABLED' }, actor: 'automation:dayparting-disable', reason: 'dayparting schedule disabled — resume', applyImmediately: true } as never)
+        data.lastApplied = 'ENABLED'
+      } catch { /* best-effort resume */ }
+    }
     try { return await prisma.adSchedule.update({ where: { id }, data }) } catch { reply.status(404); return { error: 'not found' } }
   })
   fastify.delete('/advertising/schedules/:id', async (request, reply) => {
     const { id } = request.params as { id: string }
+    const before = await prisma.adSchedule.findUnique({ where: { id }, select: { campaignId: true, lastApplied: true } })
+    if (before?.lastApplied === 'PAUSED') {
+      try {
+        const { updateCampaignWithSync } = await import('../services/advertising/ads-mutation.service.js')
+        await updateCampaignWithSync({ campaignId: before.campaignId, patch: { status: 'ENABLED' }, actor: 'automation:dayparting-delete', reason: 'dayparting schedule deleted — resume', applyImmediately: true } as never)
+      } catch { /* best-effort resume */ }
+    }
     try { await prisma.adSchedule.delete({ where: { id } }); return { ok: true } } catch { reply.status(404); return { error: 'not found' } }
   })
   fastify.post('/advertising/dayparting/run-now', async (_request, reply) => {
