@@ -49,16 +49,33 @@ const MATCH_TYPES = ['BROAD', 'PHRASE', 'EXACT'] as const
 const pad2 = (n: number) => String(n).padStart(2, '0')
 const DOW_LABEL = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const DOW_ORDER = [1, 2, 3, 4, 5, 6, 0] // Mon→Sun for display
-// DD4 — guided grid: each day's peak hours → the chosen level, Normal outside,
+// S1 — a day's peak = the SMALLEST contiguous window capturing ≥50% of that day's
+// sales. A real, concentrated peak (not "half the day"), precise per product.
+function peakWindow(rev: number[]): { start: number; end: number; pct: number } | null {
+  const total = rev.reduce((a, b) => a + b, 0)
+  if (total <= 0) return null
+  const target = total * 0.5
+  let best: { start: number; end: number; len: number; sum: number } | null = null
+  for (let s = 0; s < 24; s++) {
+    let sum = 0
+    for (let e = s; e < 24; e++) {
+      sum += rev[e]
+      if (sum >= target) { if (!best || e - s + 1 < best.len) best = { start: s, end: e + 1, len: e - s + 1, sum }; break }
+    }
+  }
+  return best ? { start: best.start, end: best.end, pct: Math.round((best.sum / total) * 100) } : null
+}
+// DD4/S1 — guided grid: each day's peak window → the chosen level, Normal outside,
 // the dead overnight → Pause. Per-day peaks (the hours differ by day).
 function buildGuidedGrid(grid: HeatCell[][], level: Level, pauseOvernight: boolean): Level[][] {
   return Array.from({ length: 7 }, (_, d) => {
     const row = grid[d] ?? []
-    const max = Math.max(1, ...row.map(c => c.revenueCents))
+    const rev = row.map(c => c.revenueCents)
+    const max = Math.max(1, ...rev)
+    const pw = peakWindow(rev)
     return Array.from({ length: 24 }, (_, h) => {
-      const rev = row[h]?.revenueCents ?? 0
-      if (pauseOvernight && rev < max * 0.08) return 'pause' as Level
-      if (rev >= max * 0.6) return level
+      if (pauseOvernight && (rev[h] ?? 0) < max * 0.08) return 'pause' as Level
+      if (pw && h >= pw.start && h < pw.end) return level
       return 'normal' as Level
     })
   })
@@ -300,14 +317,8 @@ export function RankPlacementCockpit() {
     const grid = family?.demand?.grid
     if (!grid) return []
     return DOW_ORDER.map(d => {
-      const row = grid[d] ?? []
-      const max = Math.max(1, ...row.map(c => c.revenueCents))
-      const dayTotal = row.reduce((s, c) => s + c.revenueCents, 0)
-      const peakHs = row.map((c, h) => ({ h, rev: c.revenueCents })).filter(x => x.rev >= max * 0.6).map(x => x.h)
-      if (peakHs.length === 0) return { d, label: DOW_LABEL[d], range: null as string | null, pct: 0 }
-      const start = Math.min(...peakHs), end = Math.max(...peakHs) + 1 // 24 = midnight, shown as 24
-      const peakRev = peakHs.reduce((s, h) => s + (row[h]?.revenueCents ?? 0), 0)
-      return { d, label: DOW_LABEL[d], range: `${pad2(start)}:00–${pad2(end)}:00`, pct: dayTotal > 0 ? Math.round((peakRev / dayTotal) * 100) : 0 }
+      const pw = peakWindow((grid[d] ?? []).map(c => c.revenueCents))
+      return { d, label: DOW_LABEL[d], range: pw ? `${pad2(pw.start)}:00–${pad2(pw.end)}:00` : null as string | null, pct: pw?.pct ?? 0 }
     })
   }, [family])
 
