@@ -10,13 +10,14 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { Loader2 } from 'lucide-react'
+import { Loader2, SlidersHorizontal, Plus } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
 import { useFieldLinks } from '../_shared/cockpit-shell'
 import FieldSourceBadge from '../_shared/cockpit-shell/FieldSourceBadge'
 import FieldScopePopover, { type ScopeMember } from '../_shared/cockpit-shell/FieldScopePopover'
 import CatalogCascadeDrawer from '../_shared/cockpit-shell/CatalogCascadeDrawer'
+import RuleEditorDrawer from '../_shared/cockpit-shell/RuleEditorDrawer'
 import type { FieldSource } from '../_shared/cockpit-shell/contracts'
 
 interface MatrixCell {
@@ -103,6 +104,7 @@ interface MappingTabProduct {
   bulletPoints?: unknown
   keywords?: unknown
   isParent?: boolean
+  productType?: string | null
 }
 
 export default function MappingTab({ product }: { product: MappingTabProduct }) {
@@ -118,6 +120,10 @@ export default function MappingTab({ product }: { product: MappingTabProduct }) 
   // master content on open so the drawer's preview input stays stable.
   const [cascadeOpen, setCascadeOpen] = useState(false)
   const [cascadeChanges, setCascadeChanges] = useState<Record<string, unknown>>({})
+  const [ruleDrawer, setRuleDrawer] = useState<{
+    open: boolean
+    initial?: { channel: string; marketplace: string; fieldKey: string }
+  }>({ open: false })
   const openCascade = useCallback(() => {
     const c: Record<string, unknown> = {}
     if (product.name) c.title = product.name
@@ -268,9 +274,17 @@ export default function MappingTab({ product }: { product: MappingTabProduct }) 
         )}
         <button
           type="button"
+          onClick={() => setRuleDrawer({ open: true })}
+          title="Add a mapping rule for an unmapped field"
+          className="ml-auto inline-flex items-center gap-1 rounded-md border border-slate-200 px-2 py-1 font-medium text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800"
+        >
+          <Plus className="h-3 w-3" /> Add rule
+        </button>
+        <button
+          type="button"
           onClick={openCascade}
           title="Preview + apply this product's master content across every mapped channel & market"
-          className="ml-auto inline-flex items-center gap-1 rounded-md border border-blue-200 bg-blue-50 px-2 py-1 font-medium text-blue-700 hover:bg-blue-100 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-300"
+          className="inline-flex items-center gap-1 rounded-md border border-blue-200 bg-blue-50 px-2 py-1 font-medium text-blue-700 hover:bg-blue-100 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-300"
         >
           Cascade from master →
         </button>
@@ -317,7 +331,7 @@ export default function MappingTab({ product }: { product: MappingTabProduct }) 
                 key={row.fieldKey}
                 role="row"
                 aria-rowindex={vi.index + 2}
-                className="absolute left-0 grid border-b border-slate-100 text-xs hover:bg-slate-50/60 dark:border-slate-800/60 dark:hover:bg-slate-800/30"
+                className="group absolute left-0 grid border-b border-slate-100 text-xs hover:bg-slate-50/60 dark:border-slate-800/60 dark:hover:bg-slate-800/30"
                 style={{
                   gridTemplateColumns: gridCols,
                   width: '100%',
@@ -371,6 +385,19 @@ export default function MappingTab({ product }: { product: MappingTabProduct }) 
                           setScopeTarget({ fieldKey: row.fieldKey, channel: c.channel, marketplace: c.marketplace })
                         }
                       />
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setRuleDrawer({
+                            open: true,
+                            initial: { channel: c.channel, marketplace: c.marketplace, fieldKey: row.fieldKey },
+                          })
+                        }
+                        title="Edit mapping rule"
+                        className="shrink-0 rounded px-0.5 text-slate-400 opacity-0 hover:bg-slate-100 hover:text-slate-700 group-hover:opacity-100 dark:hover:bg-slate-800"
+                      >
+                        <SlidersHorizontal className="h-3 w-3" />
+                      </button>
                       {cell.diverges && (
                         <button
                           type="button"
@@ -413,6 +440,15 @@ export default function MappingTab({ product }: { product: MappingTabProduct }) 
           setCascadeOpen(false)
           void load()
         }}
+      />
+
+      <RuleEditorDrawer
+        productType={product.productType}
+        coordinates={coords.map((c) => ({ channel: c.channel, marketplace: c.marketplace }))}
+        initial={ruleDrawer.initial}
+        open={ruleDrawer.open}
+        onClose={() => setRuleDrawer({ open: false })}
+        onSaved={() => void load()}
       />
     </div>
   )
