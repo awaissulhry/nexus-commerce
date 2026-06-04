@@ -23,6 +23,7 @@ import { StrategyStation } from './StrategyStation'
 import { ConquestStation } from './ConquestStation'
 import { AutomateStation } from './AutomateStation'
 import { SimpleRankPanel } from './SimpleRankPanel'
+import { CommandPalette, type CmdAction } from './CommandPalette'
 
 const MARKETS = ['IT', 'DE', 'FR', 'ES', 'NL', 'BE', 'SE', 'PL', 'IE', 'UK']
 const LOOKBACKS = [7, 14, 30, 60, 90]
@@ -41,6 +42,7 @@ export function UnifiedRankCockpit() {
   const [trayOpen, setTrayOpen] = useState(false)
   const [trayTab, setTrayTab] = useState<'staged' | 'history'>('staged')
   const [simple, setSimple] = useState(false)
+  const [cmdkOpen, setCmdkOpen] = useState(false)
 
   useEffect(() => { void fetch(`${getBackendUrl()}/api/advertising/campaigns?limit=500`, { cache: 'no-store' }).then(r => r.json()).then(d => setCampaigns((d.items ?? []) as Camp[])).catch(() => {}) }, [])
   useEffect(() => { void fetch(`${getBackendUrl()}/api/advertising/autonomy/status`, { cache: 'no-store' }).then(r => r.json()).then(d => setAutonomy(d as Autonomy)).catch(() => {}) }, [])
@@ -56,6 +58,7 @@ export function UnifiedRankCockpit() {
   const { undo, redo, canUndo, canRedo, toast, setToast } = undoApi
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); setCmdkOpen(v => !v); return }
       if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== 'z') return
       const t = e.target as HTMLElement | null
       if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return
@@ -99,6 +102,7 @@ export function UnifiedRankCockpit() {
         <div className="az-urc-search">
           <Search size={13} />
           <input value={search} onChange={e => { setSearch(e.target.value); setSearchOpen(true) }} onFocus={() => setSearchOpen(true)} onBlur={() => setTimeout(() => setSearchOpen(false), 150)} placeholder={`Search ${inMarket.length} campaigns…`} aria-label="Search campaigns" />
+          {!searchOpen && <kbd title="Command palette">⌘K</kbd>}
           {searchOpen && searchResults.length > 0 && (
             <div className="az-urc-results" role="listbox">
               {searchResults.map(c => <button key={c.id} type="button" role="option" aria-selected={c.id === campaignId} className={c.id === campaignId ? 'on' : ''} onMouseDown={() => pickCampaign(c.id)}>{c.status === 'ENABLED' ? '● ' : '○ '}{c.name}{c.marketplace ? <span className="mk">{c.marketplace}</span> : null}</button>)}
@@ -142,6 +146,19 @@ export function UnifiedRankCockpit() {
         </button>
       </div>
       <StagedChangesTray campaignId={campaignId} open={trayOpen} tab={trayTab} onTab={setTrayTab} onClose={() => setTrayOpen(false)} onChanged={loadPending} undoApi={undoApi} />
+      <CommandPalette
+        open={cmdkOpen}
+        onClose={() => setCmdkOpen(false)}
+        campaigns={campaigns}
+        onPick={(id, mk) => { if (mk) setMarket(mk); setCampaignId(id) }}
+        actions={[
+          { id: 'simple', label: simple ? 'Switch to Full view' : 'Switch to Simple view', run: () => setSimple(v => !v) },
+          { id: 'staged', label: 'Open staged changes', run: () => { setTrayTab('staged'); setTrayOpen(true) } },
+          { id: 'history', label: 'Open change history', run: () => { setTrayTab('history'); setTrayOpen(true) } },
+          { id: 'undo', label: 'Undo last change', run: () => void undo() },
+          { id: 'redo', label: 'Redo last undo', run: () => void redo() },
+        ] satisfies CmdAction[]}
+      />
     </div>
   )
 }

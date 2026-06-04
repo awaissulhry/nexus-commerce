@@ -578,6 +578,25 @@
 .az-simple-full:hover { text-decoration: underline; }
 .az-simple-msg { display: inline-flex; align-items: center; gap: 6px; margin-top: 12px; font-size: 12.5px; font-weight: 600; color: #1e7a4f; }
 
+/* RC4.10 — Cmd+K command palette */
+.az-urc-search kbd { font-size: 9.5px; font-weight: 700; color: var(--ink3); background: var(--bg3); border-radius: 4px; padding: 1px 5px; flex: none; }
+.az-cmdk-backdrop { position: fixed; inset: 0; z-index: 80; background: rgba(15,23,42,.32); display: flex; align-items: flex-start; justify-content: center; padding-top: 12vh; }
+.az-cmdk { width: min(560px, 92vw); background: #fff; border-radius: 14px; box-shadow: 0 20px 60px rgba(0,0,0,.3); overflow: hidden; }
+.az-cmdk-in { display: flex; align-items: center; gap: 9px; padding: 13px 15px; border-bottom: 1px solid var(--divider); }
+.az-cmdk-in > svg { color: var(--ink3); }
+.az-cmdk-in input { flex: 1; border: none; outline: none; font: inherit; font-size: 14.5px; background: none; color: var(--ink); }
+.az-cmdk-in kbd { font-size: 10px; font-weight: 700; color: var(--ink3); background: var(--bg3); border-radius: 4px; padding: 2px 6px; }
+.az-cmdk-list { max-height: 50vh; overflow-y: auto; padding: 6px; }
+.az-cmdk-empty { padding: 18px; text-align: center; font-size: 13px; color: var(--ink3); }
+.az-cmdk-row { display: flex; align-items: center; gap: 9px; width: 100%; text-align: left; background: none; border: none; font: inherit; padding: 9px 11px; border-radius: 8px; cursor: pointer; }
+.az-cmdk-row.on { background: var(--bg2); }
+.az-cmdk-row .tag { font-size: 8.5px; font-weight: 800; letter-spacing: .3px; border-radius: 4px; padding: 1px 6px; flex: none; }
+.az-cmdk-row .tag.action { background: #fbeee3; color: #b3541e; }
+.az-cmdk-row .tag.campaign { background: var(--bg3); color: var(--navy); }
+.az-cmdk-row .lb { flex: 1; font-size: 13px; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.az-cmdk-row .sb { font-size: 11px; color: var(--ink3); }
+.az-cmdk-row > svg { color: var(--ink3); }
+
 /* Inline rank-set collision warning in the Strategy panel (RC3.4) */
 .az-rankwarn { margin: 10px 0 0; padding: 10px 11px; border: 1px solid #f0c9a8; border-left: 3px solid #b3541e; border-radius: 9px; background: #fff7f0; }
 .az-rankwarn-msg { display: flex; align-items: flex-start; gap: 6px; font-size: 11.5px; line-height: 1.45; color: var(--ink); }
