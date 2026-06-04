@@ -12,6 +12,7 @@ import {
   Link2,
   Loader2,
   RefreshCw,
+  Share2,
   Sparkles,
   Upload,
   X,
@@ -29,6 +30,7 @@ import {
   LinkSuggestionsBanner,
   useFieldLinks,
 } from '../_shared/cockpit-shell'
+import CatalogCascadeDrawer from '../_shared/cockpit-shell/CatalogCascadeDrawer'
 import PublishReviewModal from './PublishReviewModal'
 import { Card } from '@/components/ui/Card'
 import { Input } from '@/components/ui/Input'
@@ -132,6 +134,22 @@ export default function MasterDataTab({
   const [cascadeField, setCascadeField] = useState<MasterField | null>(null)
   const [cascading, setCascading] = useState(false)
   const [cascadeAllOpen, setCascadeAllOpen] = useState(false)
+  // FM.10 — edit-once catalog cascade drawer. Snapshot the (edited) master
+  // values on open so the drawer's preview input stays stable until reopened.
+  const [cascadeOpen, setCascadeOpen] = useState(false)
+  const [cascadeSnapshot, setCascadeSnapshot] = useState<Record<string, unknown>>({})
+  const openCascade = useCallback(() => {
+    const c: Record<string, unknown> = {}
+    if (data.name) c.title = data.name
+    if (data.brand) c.brand = data.brand
+    if (data.manufacturer) c.manufacturer = data.manufacturer
+    const p = product as any
+    if (p?.description) c.description = p.description
+    if (Array.isArray(p?.bulletPoints) && p.bulletPoints.length) c.bulletPoints = p.bulletPoints
+    if (Array.isArray(p?.keywords) && p.keywords.length) c.keywords = p.keywords
+    setCascadeSnapshot(c)
+    setCascadeOpen(true)
+  }, [data, product])
 
   const update = (field: MasterField, value: string) => {
     setData((prev) => ({ ...prev, [field]: value }))
@@ -400,7 +418,26 @@ export default function MasterDataTab({
             )}
           </div>
         )}
+        <button
+          type="button"
+          onClick={openCascade}
+          title="Preview + apply this product's master content across every mapped channel & market (translate + transform via the catalog mapping)"
+          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800"
+        >
+          <Share2 className="w-3.5 h-3.5" />
+          Cascade to channels
+        </button>
       </div>
+
+      <CatalogCascadeDrawer
+        productId={product.id}
+        open={cascadeOpen}
+        changes={cascadeSnapshot}
+        onClose={() => setCascadeOpen(false)}
+        onApplied={() =>
+          emitInvalidation({ type: 'product.updated', id: product.id, meta: { source: 'catalog-cascade' } })
+        }
+      />
 
       <Card
         title={t('products.edit.master.identityTitle')}
