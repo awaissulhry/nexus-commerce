@@ -76,7 +76,7 @@ export function SimpleRankPanel({ market, campaignId, campaignName, onFull, onCh
         {LEVELS.map(l => {
           const Icon = l.icon
           return (
-            <button key={l.k} type="button" className="az-simple-lvl" disabled={busy === l.k} onClick={() => void setRank(l)}>
+            <button key={l.k} type="button" className="az-simple-lvl" aria-label={`${l.label} — ${l.desc}`} disabled={busy === l.k} onClick={() => void setRank(l)}>
               {busy === l.k ? <Loader2 size={22} className="az-spin" /> : <Icon size={22} />}
               <span className="t">{l.label}</span>
               <span className="d">{l.desc}</span>

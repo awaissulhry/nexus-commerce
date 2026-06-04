@@ -98,7 +98,7 @@ export function AutomateStation({ market, onChanged }: { market: string; onChang
                 <span style={{ flex: 1 }} />
                 <button type="button" className="az-mini" disabled={busy === r.id} onClick={() => void patchRule(r.id, { enabled: !r.enabled })}>{r.enabled ? 'Disable' : 'Enable'}</button>
                 {r.enabled && <button type="button" className="az-mini" disabled={busy === r.id} onClick={() => void patchRule(r.id, { dryRun: !r.dryRun }, r.dryRun)}>{r.dryRun ? 'Go live' : 'Dry-run'}</button>}
-                <button type="button" className="az-mini" disabled={busy === r.id} onClick={() => void testRule(r.id)} title="Dry-run test fire"><FlaskConical size={11} /></button>
+                <button type="button" className="az-mini" disabled={busy === r.id} onClick={() => void testRule(r.id)} title="Dry-run test fire" aria-label={`Dry-run test fire: ${r.name}`}><FlaskConical size={11} /></button>
               </div>
             ))}
           </div>

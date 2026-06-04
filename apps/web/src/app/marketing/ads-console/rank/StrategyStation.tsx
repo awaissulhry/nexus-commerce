@@ -56,7 +56,7 @@ export function StrategyStation({ campaignId, currentStrategy, onChanged }: { ca
         <div className="az-station-body">
           <div className="az-strat-row">
             <span className="lbl">Bidding</span>
-            {STRATS.map(s => <button key={s.k} type="button" title={s.hint} className={`az-strat-btn ${strat === s.k ? 'on' : ''}`} onClick={() => setStrat(s.k)}>{s.label}</button>)}
+            {STRATS.map(s => <button key={s.k} type="button" title={s.hint} aria-pressed={strat === s.k} className={`az-strat-btn ${strat === s.k ? 'on' : ''}`} onClick={() => setStrat(s.k)}>{s.label}</button>)}
           </div>
           <div className="az-cockpit-sub" style={{ marginTop: 4 }}>{STRATS.find(s => s.k === strat)?.hint}</div>
           <label className="az-strat-ceil"><input type="checkbox" checked={ceilOn} onChange={e => setCeilOn(e.target.checked)} /> Cap effective CPC at <input type="number" min={1} max={10} step={0.1} value={ceilMult} disabled={!ceilOn} onChange={e => setCeilMult(Math.max(1, Math.min(10, Number(e.target.value))))} />× the keyword&apos;s historical CPC</label>

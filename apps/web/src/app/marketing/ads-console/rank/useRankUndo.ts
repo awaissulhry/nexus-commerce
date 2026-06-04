@@ -13,14 +13,10 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { getBackendUrl } from '@/lib/backend-url'
+import { type HistEntry, fmtEur, pickUndoTarget } from './rank-undo-logic'
 
-export interface HistEntry {
-  id: string; at: string; actor: 'you' | 'automation'; entityType: string; entityId: string
-  field: string; oldValue: string | null; newValue: string | null; reason: string | null
-  isUndo: boolean; undoable: boolean
-}
-
-const fmtEur = (c: number) => `€${(c / 100).toFixed(2)}`
+export type { HistEntry } from './rank-undo-logic'
+export { fmtEur, pickUndoTarget } from './rank-undo-logic'
 
 export function useRankUndo(campaignId: string, onChanged?: () => void) {
   const [entries, setEntries] = useState<HistEntry[]>([])
@@ -50,7 +46,7 @@ export function useRankUndo(campaignId: string, onChanged?: () => void) {
     await reload(); setBusy(false); onChanged?.()
   }, [applyBid, busy, reload, onChanged])
 
-  const nextUndo = useMemo(() => entries.find(e => e.undoable && !e.isUndo && !consumed.has(e.id)) ?? null, [entries, consumed])
+  const nextUndo = useMemo(() => pickUndoTarget(entries, consumed), [entries, consumed])
 
   const undo = useCallback(async () => { if (nextUndo) await undoEntry(nextUndo) }, [nextUndo, undoEntry])
 
