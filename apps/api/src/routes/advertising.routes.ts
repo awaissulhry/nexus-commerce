@@ -573,28 +573,37 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const camp = await prisma.campaign.findUnique({ where: { id }, select: { marketplace: true } })
     if (!camp) { reply.status(404); return { error: 'campaign not found' } }
     const marketplace = q.marketplace || camp.marketplace || undefined
-    // 1. campaign → the product(s) it advertises
-    const myAds = await prisma.adProductAd.findMany({ where: { adGroup: { campaignId: id }, productId: { not: null } }, select: { productId: true } })
+    const empty = { marketplace, parentProductId: null, parentName: null, productIds: [], asins: [], campaigns: [], demand: null }
+    // 1. campaign → the ASINs + productIds it advertises. ASIN is reliably set on
+    // AdProductAd; productId frequently is NOT, so we resolve products by ASIN.
+    const myAds = await prisma.adProductAd.findMany({ where: { adGroup: { campaignId: id } }, select: { asin: true, productId: true } })
+    const myAsins = [...new Set(myAds.map((a) => a.asin).filter((x): x is string => !!x))]
     const directIds = [...new Set(myAds.map((a) => a.productId).filter((x): x is string => !!x))]
-    if (directIds.length === 0) { reply.header('Cache-Control', 'private, max-age=120'); return { marketplace, parentProductId: null, parentName: null, productIds: [], asins: [], campaigns: [], demand: null } }
-    // 2. resolve each to its parent (or itself), pick the dominant parent
-    const prods = await prisma.product.findMany({ where: { id: { in: directIds } }, select: { id: true, parentId: true } })
-    const parentCount = new Map<string, number>()
-    for (const p of prods) { const par = p.parentId ?? p.id; parentCount.set(par, (parentCount.get(par) ?? 0) + 1) }
-    const parentProductId = [...parentCount.entries()].sort((a, b) => b[1] - a[1])[0][0]
-    // 3. family = parent + its children
-    const family = await prisma.product.findMany({ where: { OR: [{ id: parentProductId }, { parentId: parentProductId }] }, select: { id: true, name: true } })
-    const familyIds = family.map((f) => f.id)
-    const parent = family.find((f) => f.id === parentProductId) ?? family[0]
-    // 4. family campaigns in this market
-    const famAds = await prisma.adProductAd.findMany({
-      where: { productId: { in: familyIds }, ...(marketplace ? { adGroup: { campaign: { marketplace } } } : {}) },
-      select: { asin: true, adGroup: { select: { campaign: { select: { id: true, name: true, status: true, marketplace: true } } } } },
+    if (myAsins.length === 0 && directIds.length === 0) { reply.header('Cache-Control', 'private, max-age=120'); return empty }
+    // 2. seed products: by Amazon ASIN (Product.amazonAsin) OR direct productId
+    const seed = await prisma.product.findMany({
+      where: { OR: [...(myAsins.length ? [{ amazonAsin: { in: myAsins } }] : []), ...(directIds.length ? [{ id: { in: directIds } }] : [])] },
+      select: { id: true, parentId: true },
     })
+    if (seed.length === 0) { reply.header('Cache-Control', 'private, max-age=120'); return empty }
+    // 3. dominant parent (parentId or self)
+    const parentCount = new Map<string, number>()
+    for (const p of seed) { const par = p.parentId ?? p.id; parentCount.set(par, (parentCount.get(par) ?? 0) + 1) }
+    const parentProductId = [...parentCount.entries()].sort((a, b) => b[1] - a[1])[0][0]
+    // 4. family = parent + its children (with their ASINs)
+    const family = await prisma.product.findMany({ where: { OR: [{ id: parentProductId }, { parentId: parentProductId }] }, select: { id: true, name: true, amazonAsin: true } })
+    const familyIds = family.map((f) => f.id)
+    const familyAsins = [...new Set(family.map((f) => f.amazonAsin).filter((x): x is string => !!x))]
+    const parent = family.find((f) => f.id === parentProductId) ?? family[0]
+    // 5. family campaigns in this market — match by the family's ASINs (reliable)
+    const famAds = familyAsins.length ? await prisma.adProductAd.findMany({
+      where: { asin: { in: familyAsins }, ...(marketplace ? { adGroup: { campaign: { marketplace } } } : {}) },
+      select: { adGroup: { select: { campaign: { select: { id: true, name: true, status: true, marketplace: true } } } } },
+    }) : []
     const campMap = new Map<string, { id: string; name: string; status: string; marketplace: string | null }>()
-    const asinSet = new Set<string>()
-    for (const a of famAds) { if (a.asin) asinSet.add(a.asin); const c = a.adGroup?.campaign; if (c && (!marketplace || c.marketplace === marketplace)) campMap.set(c.id, c) }
-    // 5. family demand — roll up the children's orders, market-scoped
+    for (const a of famAds) { const c = a.adGroup?.campaign; if (c && (!marketplace || c.marketplace === marketplace)) campMap.set(c.id, c) }
+    const asinSet = new Set<string>(familyAsins)
+    // 6. family demand — roll up the children's orders, market-scoped
     const { aggregateOrdersDayparting } = await import('../services/advertising/orders-dayparting.service.js')
     const windowDays = q.windowDays ? Math.max(7, Math.min(365, Number(q.windowDays))) : 90
     const demand = await aggregateOrdersDayparting({ channel: 'AMAZON', marketplace, productIds: familyIds, windowDays, metric: 'revenue' })
