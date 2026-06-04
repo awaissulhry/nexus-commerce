@@ -75,33 +75,52 @@ export async function runDaypartingOnce(): Promise<{ evaluated: number; changed:
       } catch (e) { logger.warn('[dayparting] status apply failed', { scheduleId: s.id, error: (e as Error).message }) }
     }
 
-    // ── AU.3 bid multiplier ───────────────────────────────────────────
-    const storedOriginals = (s.originalBids ?? {}) as Record<string, number>
-    const hasStoredOriginals = Object.keys(storedOriginals).length > 0
+    // ── AU.3 / RC2.TR0 bid multiplier (enter / transition / exit) ───────
+    // originalBids holds the TRUE base bids snapshotted on entry, plus a reserved
+    // __mult__ key = the multiplier currently applied. Tracking the applied level
+    // lets us re-apply from base when moving between two DIFFERENT multiplier
+    // windows on the same day (e.g. +0% morning → +50% evening) — without it the
+    // bids stuck at the first level. (originalBids is touched only here.)
+    const MULT_KEY = '__mult__'
+    const stored = (s.originalBids ?? {}) as Record<string, number>
+    const appliedMult = MULT_KEY in stored ? stored[MULT_KEY] : null
+    const baseBids: Record<string, number> = {}
+    for (const [k, v] of Object.entries(stored)) if (k !== MULT_KEY) baseBids[k] = v
+    const hasBase = Object.keys(baseBids).length > 0
+    // 0 / undefined multiplier behaves like "no adjustment".
+    const effMult = (multiplier == null || multiplier === 0) ? null : multiplier
 
-    if (inWindow && multiplier != null && !hasStoredOriginals) {
-      // Entering a bid-multiplier window: snapshot originals + apply scaled bids.
+    if (inWindow && effMult != null && !hasBase) {
+      // ENTER a multiplier window: snapshot base bids + apply scaled.
       const targets = await prisma.adTarget.findMany({
         where: { status: 'ENABLED', isNegative: false, adGroup: { campaignId: s.campaignId } },
         select: { id: true, bidCents: true },
       })
       if (targets.length > 0) {
-        const originals: Record<string, number> = {}
+        const originals: Record<string, number> = { [MULT_KEY]: effMult }
         const entries = targets.map((t) => {
           originals[t.id] = t.bidCents
-          const scaled = Math.max(5, Math.round(t.bidCents * (1 + multiplier / 100)))
-          return { adTargetId: t.id, bidCents: scaled }
+          return { adTargetId: t.id, bidCents: Math.max(5, Math.round(t.bidCents * (1 + effMult / 100))) }
         })
         try {
-          await bulkUpdateAdTargetBids({ entries, actor: `automation:dayparting-${s.id}` as AdsActor, reason: `bid multiplier +${multiplier}%`, applyImmediately: true })
+          await bulkUpdateAdTargetBids({ entries, actor: `automation:dayparting-${s.id}` as AdsActor, reason: `bid multiplier ${effMult >= 0 ? '+' : ''}${effMult}%`, applyImmediately: true })
           await prisma.adSchedule.update({ where: { id: s.id }, data: { originalBids: originals } })
           bidsAdjusted += entries.length
-          logger.info('[dayparting] bid multiplier applied', { scheduleId: s.id, multiplier, targets: entries.length })
+          logger.info('[dayparting] bid multiplier applied', { scheduleId: s.id, multiplier: effMult, targets: entries.length })
         } catch (e) { logger.warn('[dayparting] bid multiply failed', { scheduleId: s.id, error: (e as Error).message }) }
       }
-    } else if ((!inWindow || multiplier == null) && hasStoredOriginals) {
-      // Exiting the bid-multiplier window: restore original bids.
-      const entries = Object.entries(storedOriginals).map(([adTargetId, bidCents]) => ({ adTargetId, bidCents }))
+    } else if (inWindow && effMult != null && hasBase && appliedMult !== effMult) {
+      // TRANSITION between two multiplier windows: re-apply from base at new level.
+      const entries = Object.entries(baseBids).map(([adTargetId, base]) => ({ adTargetId, bidCents: Math.max(5, Math.round(base * (1 + effMult / 100))) }))
+      try {
+        await bulkUpdateAdTargetBids({ entries, actor: `automation:dayparting-${s.id}` as AdsActor, reason: `bid multiplier ${effMult >= 0 ? '+' : ''}${effMult}% (transition)`, applyImmediately: true })
+        await prisma.adSchedule.update({ where: { id: s.id }, data: { originalBids: { [MULT_KEY]: effMult, ...baseBids } } })
+        bidsAdjusted += entries.length
+        logger.info('[dayparting] bid multiplier transitioned', { scheduleId: s.id, from: appliedMult, to: effMult, targets: entries.length })
+      } catch (e) { logger.warn('[dayparting] bid transition failed', { scheduleId: s.id, error: (e as Error).message }) }
+    } else if ((!inWindow || effMult == null) && hasBase) {
+      // EXIT: restore base bids.
+      const entries = Object.entries(baseBids).map(([adTargetId, bidCents]) => ({ adTargetId, bidCents }))
       try {
         await bulkUpdateAdTargetBids({ entries, actor: `automation:dayparting-${s.id}` as AdsActor, reason: 'bid multiplier restore', applyImmediately: true })
         await prisma.adSchedule.update({ where: { id: s.id }, data: { originalBids: {} } })
