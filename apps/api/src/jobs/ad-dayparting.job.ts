@@ -56,6 +56,20 @@ function activeMultiplier(windows: Window[], tz: string): number | null {
   return null
 }
 
+export type BidAction = 'enter' | 'transition' | 'exit' | 'none'
+/**
+ * RC2.TR0 — pure decision for the per-window bid multiplier (regression-tested).
+ * enter: first time into a multiplier window (no base snapshot yet).
+ * transition: already adjusted, but the active window's multiplier changed.
+ * exit: was adjusted, now out of any multiplier window → restore base.
+ */
+export function bidAction(o: { inWindow: boolean; effMult: number | null; hasBase: boolean; appliedMult: number | null }): BidAction {
+  if (o.inWindow && o.effMult != null && !o.hasBase) return 'enter'
+  if (o.inWindow && o.effMult != null && o.hasBase && o.appliedMult !== o.effMult) return 'transition'
+  if ((!o.inWindow || o.effMult == null) && o.hasBase) return 'exit'
+  return 'none'
+}
+
 export async function runDaypartingOnce(): Promise<{ evaluated: number; changed: number; bidsAdjusted: number }> {
   const schedules = await prisma.adSchedule.findMany({ where: { enabled: true } })
   let changed = 0
@@ -89,8 +103,9 @@ export async function runDaypartingOnce(): Promise<{ evaluated: number; changed:
     const hasBase = Object.keys(baseBids).length > 0
     // 0 / undefined multiplier behaves like "no adjustment".
     const effMult = (multiplier == null || multiplier === 0) ? null : multiplier
+    const action = bidAction({ inWindow, effMult, hasBase, appliedMult })
 
-    if (inWindow && effMult != null && !hasBase) {
+    if (action === 'enter') {
       // ENTER a multiplier window: snapshot base bids + apply scaled.
       const targets = await prisma.adTarget.findMany({
         where: { status: 'ENABLED', isNegative: false, adGroup: { campaignId: s.campaignId } },
@@ -109,7 +124,7 @@ export async function runDaypartingOnce(): Promise<{ evaluated: number; changed:
           logger.info('[dayparting] bid multiplier applied', { scheduleId: s.id, multiplier: effMult, targets: entries.length })
         } catch (e) { logger.warn('[dayparting] bid multiply failed', { scheduleId: s.id, error: (e as Error).message }) }
       }
-    } else if (inWindow && effMult != null && hasBase && appliedMult !== effMult) {
+    } else if (action === 'transition') {
       // TRANSITION between two multiplier windows: re-apply from base at new level.
       const entries = Object.entries(baseBids).map(([adTargetId, base]) => ({ adTargetId, bidCents: Math.max(5, Math.round(base * (1 + effMult / 100))) }))
       try {
@@ -118,7 +133,7 @@ export async function runDaypartingOnce(): Promise<{ evaluated: number; changed:
         bidsAdjusted += entries.length
         logger.info('[dayparting] bid multiplier transitioned', { scheduleId: s.id, from: appliedMult, to: effMult, targets: entries.length })
       } catch (e) { logger.warn('[dayparting] bid transition failed', { scheduleId: s.id, error: (e as Error).message }) }
-    } else if ((!inWindow || effMult == null) && hasBase) {
+    } else if (action === 'exit') {
       // EXIT: restore base bids.
       const entries = Object.entries(baseBids).map(([adTargetId, bidCents]) => ({ adTargetId, bidCents }))
       try {
