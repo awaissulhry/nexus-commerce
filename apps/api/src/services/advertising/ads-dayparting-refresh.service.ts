@@ -78,6 +78,71 @@ export async function familyDemand(productIds: string[], marketplace?: string, w
   return aggregateOrdersDayparting({ channel: 'AMAZON', marketplace, productIds, windowDays, metric: 'revenue' })
 }
 
+// ── RC2.DD1 — accurate per-day×hour demand via market-prior shrinkage ──────
+// A single product's day×hour grid is too sparse to trust (most cells empty), so
+// we shrink its per-cell share toward the robust market-wide pattern, weighted by
+// the family's own order count in each cell (K = prior pseudo-orders). Empty cells
+// fall back to the market shape; cells with real family volume keep their signal.
+export type Confidence = 'high' | 'med' | 'low'
+export interface BlendedCell { orders: number; units: number; revenueCents: number; familyOrders: number; confidence: Confidence }
+export interface BlendProfile { key: number; orders: number; units: number; revenueCents: number; index: number | null }
+export interface BlendedDemand {
+  totals: { orders: number; units: number; revenueCents: number }
+  grid: BlendedCell[][]
+  hourProfile: BlendProfile[]
+  weekdayProfile: BlendProfile[]
+  hasData: boolean
+  familyOrders: number
+  blended: boolean
+}
+
+const SHRINK_K = 2 // a cell needs ~2+ family orders before it outweighs the market shape
+
+export async function blendedFamilyDemand(productIds: string[], marketplace: string | undefined, windowDays = 180): Promise<BlendedDemand> {
+  const fam = await aggregateOrdersDayparting({ channel: 'AMAZON', marketplace, productIds, windowDays, metric: 'revenue' })
+  const mkt = await aggregateOrdersDayparting({ channel: 'AMAZON', marketplace, windowDays, metric: 'revenue' })
+  const fTotRev = fam.totals.revenueCents, fTotOrders = fam.totals.orders, fTotUnits = fam.totals.units
+  const mTotRev = mkt.totals.revenueCents
+  const blended = mTotRev > 0 && fTotOrders > 0
+
+  const rawShare: number[][] = []
+  let shareSum = 0
+  for (let d = 0; d < 7; d++) {
+    rawShare[d] = []
+    for (let h = 0; h < 24; h++) {
+      const fShare = fTotRev > 0 ? (fam.grid[d]?.[h]?.revenueCents ?? 0) / fTotRev : 0
+      const mShare = mTotRev > 0 ? (mkt.grid[d]?.[h]?.revenueCents ?? 0) / mTotRev : 0
+      const w = fam.grid[d]?.[h]?.orders ?? 0
+      const bShare = blended ? (w * fShare + SHRINK_K * mShare) / (w + SHRINK_K) : fShare
+      rawShare[d][h] = bShare; shareSum += bShare
+    }
+  }
+  const grid: BlendedCell[][] = []
+  for (let d = 0; d < 7; d++) {
+    grid[d] = []
+    for (let h = 0; h < 24; h++) {
+      const share = shareSum > 0 ? rawShare[d][h] / shareSum : 0
+      const fo = fam.grid[d]?.[h]?.orders ?? 0
+      grid[d][h] = { revenueCents: Math.round(share * fTotRev), orders: Math.round(share * fTotOrders), units: Math.round(share * fTotUnits), familyOrders: fo, confidence: fo >= 5 ? 'high' : fo >= 2 ? 'med' : 'low' }
+    }
+  }
+  const hourProfile: BlendProfile[] = Array.from({ length: 24 }, (_, h) => {
+    let o = 0, u = 0, r = 0
+    for (let d = 0; d < 7; d++) { o += grid[d][h].orders; u += grid[d][h].units; r += grid[d][h].revenueCents }
+    return { key: h, orders: o, units: u, revenueCents: r, index: null }
+  })
+  const weekdayProfile: BlendProfile[] = Array.from({ length: 7 }, (_, d) => {
+    let o = 0, u = 0, r = 0
+    for (let h = 0; h < 24; h++) { o += grid[d][h].orders; u += grid[d][h].units; r += grid[d][h].revenueCents }
+    return { key: d, orders: o, units: u, revenueCents: r, index: null }
+  })
+  const hMean = hourProfile.reduce((s, x) => s + x.revenueCents, 0) / 24
+  for (const x of hourProfile) x.index = hMean > 0 ? x.revenueCents / hMean : null
+  const wMean = weekdayProfile.reduce((s, x) => s + x.revenueCents, 0) / 7
+  for (const x of weekdayProfile) x.index = wMean > 0 ? x.revenueCents / wMean : null
+  return { totals: fam.totals, grid, hourProfile, weekdayProfile, hasData: fTotOrders > 0, familyOrders: fTotOrders, blended }
+}
+
 interface GenParams { bidUpPct?: number; bidDownPct?: number; pauseOvernight?: boolean }
 export interface DaypartWindow { days: number[]; startHour: number; endHour: number; bidMultiplierPct?: number }
 
@@ -114,7 +179,7 @@ export async function refreshFamilySchedules(opts: { campaignId?: string; parent
   const fam = await resolveProductFamily({ campaignId: opts.campaignId, parentProductId: opts.parentProductId, marketplace: opts.marketplace })
   const base: RefreshResult = { parentName: fam.parentName, marketplace: fam.marketplace ?? null, campaigns: fam.campaigns.length, updated: 0, created: 0, windows: 0, dryRun: !!opts.dryRun }
   if (!fam.parentProductId || fam.campaigns.length === 0) return base
-  const demand = await familyDemand(fam.productIds, fam.marketplace, opts.windowDays ?? 90)
+  const demand = await blendedFamilyDemand(fam.productIds, fam.marketplace, opts.windowDays ?? 180)
   const windows = generateDaypartingWindows(demand.weekdayProfile, demand.hourProfile, { bidUpPct: opts.bidUpPct, bidDownPct: opts.bidDownPct, pauseOvernight: opts.pauseOvernight })
   if (opts.dryRun) return { ...base, windows: windows.length }
   const timezone = MARKET_TZ[fam.marketplace ?? ''] ?? 'Europe/Rome'
