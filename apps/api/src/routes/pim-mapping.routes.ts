@@ -39,6 +39,7 @@ import {
 } from '../services/pim/schema-mapping.service.js'
 import { validatePublish } from '../services/pim/publish-validator.js'
 import { previewPayload } from '../services/pim/payload-preview.js'
+import { suggestMappings } from '../services/pim/mapping-suggest.service.js'
 import { syncSchemaToChannelSchema } from '../services/pim/schema-sync-bridge.js'
 import { CategorySchemaService } from '../services/categories/schema-sync.service.js'
 import { AmazonService } from '../services/marketplaces/amazon.service.js'
@@ -355,6 +356,24 @@ const pimMappingRoutes: FastifyPluginAsync = async (fastify) => {
       }
     },
   )
+
+  // ── GET /pim/mappings/:channel/:code/suggest ────────────────────
+  // FM.13 — suggest a master source for each unmapped field (heuristic
+  // name match). Read-only; the operator applies via PUT.
+  fastify.get<{
+    Params: { channel: string; code: string }
+    Querystring: { productType?: string }
+  }>('/pim/mappings/:channel/:code/suggest', async (request, reply) => {
+    const { channel, code } = request.params
+    const productType = request.query.productType?.trim() || undefined
+    try {
+      const result = await suggestMappings({ channel, code, productType })
+      return reply.send(result)
+    } catch (err: any) {
+      request.log.error({ err }, 'mapping suggest failed')
+      return reply.status(500).send({ error: err?.message ?? 'suggest failed' })
+    }
+  })
 
   // ── DELETE /pim/mappings/:channel/:code/:fieldKey ───────────────
   fastify.delete<{ Params: { channel: string; code: string; fieldKey: string }; Querystring: { productType?: string } }>(
