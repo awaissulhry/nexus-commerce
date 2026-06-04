@@ -24,7 +24,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { DndContext, useDraggable, useDroppable, DragOverlay, type DragEndEvent, type DragStartEvent, PointerSensor, KeyboardSensor, useSensor, useSensors } from '@dnd-kit/core'
 import { GripVertical, Info, ArrowUp, Crosshair, TrendingUp, TrendingDown, Minus, Search, Plus, Loader2, Check, ListPlus, Sparkles, Zap, ShieldCheck, BarChart3, AlertTriangle, Clock, Wallet } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
-import { TimeRankGrid, type Level } from './TimeRankGrid'
+import { TimeRankGrid, compileGrid, type Level } from './TimeRankGrid'
 
 const MARKETS = ['IT', 'DE', 'FR', 'ES', 'NL', 'BE', 'SE', 'PL', 'IE', 'UK']
 const WINDOW_DAYS = 30
@@ -170,9 +170,11 @@ export function RankPlacementCockpit() {
   // T6 — autonomous self-refresh rule
   const [creatingRule, setCreatingRule] = useState(false)
   const [autoMsg, setAutoMsg] = useState('')
-  // TR1 — time × rank grid editor
+  // TR1/TR3 — time × rank grid editor + apply
   const [showGrid, setShowGrid] = useState(false)
   const [trGrid, setTrGrid] = useState<Level[][] | null>(null)
+  const [gridSaving, setGridSaving] = useState(false)
+  const [gridMsg, setGridMsg] = useState('')
   // R3 — bulk keyword manager
   const [targets, setTargets] = useState<Target[]>([])
   const [targetsLoading, setTargetsLoading] = useState(false)
@@ -360,6 +362,28 @@ export function RankPlacementCockpit() {
     } catch { setAutoMsg('error') }
     setCreatingRule(false)
   }, [family, market, bidUpPct, bidDownPct, pauseOvernight])
+
+  // TR3 — compile the painted grid → windows and apply across the whole family
+  // (per-market timezone, disabled-by-default; the Enabled toggle flips them all).
+  const applyGrid = useCallback(async () => {
+    if (!trGrid || !family || family.campaigns.length === 0) return
+    const windows = compileGrid(trGrid)
+    setGridSaving(true); setGridMsg('')
+    const timezone = MARKET_TZ[market] ?? 'Europe/Rome'
+    const existing = new Map(famScheds.map(s => [s.campaignId, s.id]))
+    let ok = 0
+    for (const c of family.campaigns) {
+      try {
+        const sid = existing.get(c.id)
+        if (sid) await fetch(`${getBackendUrl()}/api/advertising/schedules/${sid}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ windows, timezone }) })
+        else await fetch(`${getBackendUrl()}/api/advertising/schedules`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ campaignId: c.id, name: `Time×rank — ${family.parentName ?? 'product'} (${market})`, windows, timezone, enabled: false }) })
+        ok += 1
+      } catch { /* continue */ }
+    }
+    setGridMsg(ok > 0 ? 'saved' : 'error')
+    setGridSaving(false)
+    void loadSchedules()
+  }, [trGrid, family, market, famScheds, loadSchedules])
 
   // R3 — load the campaign's existing keywords (also gives the destination ad group)
   const loadTargets = useCallback(async (signal?: AbortSignal) => {
@@ -824,7 +848,16 @@ export function RankPlacementCockpit() {
             {showGrid && <>
               <div className="az-cockpit-sub" style={{ marginTop: 6 }}>Seeded from {family.parentName ?? 'the family'}&apos;s demand. Paint each hour: <b>Max/Strong</b> push for higher rank, <b>Light</b> eases off, <b>Pause</b> stops spend (e.g. 2am). Applies across all {family.campaigns.length} campaigns ({MARKET_TZ[market] ?? 'Europe/Rome'}). Apply lands in TR3.</div>
               <TimeRankGrid demandGrid={family.demand?.grid ?? null} onChange={setTrGrid} />
-              {trGrid && <div className="az-cockpit-note" style={{ marginTop: 8 }}><Info size={12} /> <b>{trGrid.flat().filter(l => l === 'pause').length}</b> of 168 hours/week paused. One-click apply across the family — plus the effective-cost preview and the over-pause guard — land in TR2/TR3.</div>}
+              <div className="az-sched-actions">
+                <button type="button" className="az-btn dark" disabled={gridSaving || !trGrid || family.campaigns.length === 0} onClick={() => void applyGrid()}>
+                  {gridSaving ? <><Loader2 size={14} className="az-spin" /> Saving…</> : <><Clock size={14} /> Apply grid to {family.campaigns.length} campaign{family.campaigns.length === 1 ? '' : 's'}</>}
+                </button>
+                {famScheds.length > 0 && <label className="az-sched-toggle"><input type="checkbox" checked={famScheds.every(s => s.enabled)} disabled={gridSaving} onChange={e => void toggleAll(e.target.checked)} /> Enabled ({famScheds.filter(s => s.enabled).length}/{famScheds.length})</label>}
+                {trGrid && <span className="az-cockpit-sub" style={{ margin: 0 }}>{trGrid.flat().filter(l => l === 'pause').length}h/week paused</span>}
+                {gridMsg === 'saved' && <span className="az-cockpit-sub" style={{ margin: 0, color: 'var(--green)' }}><Check size={12} style={{ verticalAlign: 'text-bottom' }} /> Saved across the family{famScheds.length && !famScheds.every(s => s.enabled) ? ' — toggle Enabled to run' : ''}</span>}
+                {gridMsg === 'error' && <span className="az-cockpit-sub" style={{ margin: 0, color: '#cc1100' }}>Save failed</span>}
+              </div>
+              <div className="az-cockpit-note" style={{ marginTop: 8 }}><Info size={12} /> Compiles to a delivery schedule across <b>all {family.campaigns.length} campaigns</b> in <b>{MARKET_TZ[market] ?? 'Europe/Rome'}</b> — Pause hours stop spend, Max/Strong/Light scale bids per hour (the cron now transitions cleanly between levels). Starts <b>disabled</b>; writes are gated (sandbox stages locally until the write-gate is live). Enforced at hour boundaries on the cron tick.</div>
             </>}
           </div>
         )}

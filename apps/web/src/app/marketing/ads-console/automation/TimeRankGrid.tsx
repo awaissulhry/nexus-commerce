@@ -30,6 +30,36 @@ export const LEVELS: LevelDef[] = [
 export const LEVEL_BY_KEY: Record<Level, LevelDef> = Object.fromEntries(LEVELS.map(l => [l.k, l])) as Record<Level, LevelDef>
 
 interface Bucket { orders: number; units: number; revenueCents: number }
+export interface DaypartWindow { days: number[]; startHour: number; endHour: number; bidMultiplierPct?: number }
+
+// Compile the 7×24 grid → AdSchedule.windows. Days with identical 24h profiles
+// are merged; Pause hours become gaps (campaign paused outside all windows);
+// Normal hours deliver with no multiplier; Max/Strong/Light carry their bid %.
+export function compileGrid(grid: Level[][]): DaypartWindow[] {
+  const groups = new Map<string, number[]>()
+  for (let d = 0; d < 7; d++) { const s = grid[d].join(''); const arr = groups.get(s); if (arr) arr.push(d); else groups.set(s, [d]) }
+  const windows: DaypartWindow[] = []
+  for (const days of groups.values()) {
+    const row = grid[days[0]]
+    let h = 0
+    while (h < 24) {
+      const lv = row[h]
+      if (lv === 'pause') { h++; continue }
+      let end = h
+      while (end < 24 && row[end] === lv) end++
+      const mult = LEVEL_BY_KEY[lv].mult
+      const win: DaypartWindow = { days: [...days], startHour: h, endHour: end }
+      if (mult != null && mult !== 0) win.bidMultiplierPct = mult
+      windows.push(win)
+      h = end
+    }
+  }
+  // All-pause grid → 0 windows, but the cron reads empty windows as "always on".
+  // Emit a never-match sentinel so an all-pause grid is genuinely always paused.
+  if (windows.length === 0) return [{ days: [], startHour: 0, endHour: 0 }]
+  return windows
+}
+
 const DOW_LABEL = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const DOW_ORDER = [1, 2, 3, 4, 5, 6, 0] // render Mon→Sun; grid is indexed by real dow (0=Sun)
 const emptyGrid = (): Level[][] => Array.from({ length: 7 }, () => Array.from({ length: 24 }, () => 'normal' as Level))
