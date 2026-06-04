@@ -12,6 +12,7 @@
  */
 
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { Clock, Search, X, TrendingUp, TrendingDown, Package, Zap, Plus, Trash2 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useCampaignMap, type CampRef } from './useCampaignMap'
@@ -59,6 +60,10 @@ export function DaypartingTab() {
   const [product, setProduct] = useState<ProductHit | null>(null)
   const [data, setData] = useState<Daypart | null>(null)
   const [loading, setLoading] = useState(true)
+
+  // RC2.T7 — deep-link from the Rank cockpit's "When" panel (?dpMarket=IT).
+  const dpSearch = useSearchParams()
+  useEffect(() => { const m = dpSearch.get('dpMarket'); if (m) setMarket(m) }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // product typeahead
   const [pq, setPq] = useState('')

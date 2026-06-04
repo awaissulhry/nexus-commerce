@@ -303,6 +303,11 @@
 .az-budget-pace.warn svg { color: #c2570f; }
 .az-budget-pace.warn b { color: #7a3e15; }
 
+/* When-panel polish (T7) — cross-link + loading skeletons */
+.az-when-link { font-size: 11px; font-weight: 600; color: var(--navy); text-decoration: none; white-space: nowrap; margin-left: 10px; }
+.az-when-link:hover { text-decoration: underline; }
+.az-dpday .fill.skel, .az-dphour .fill.skel { background: linear-gradient(90deg, var(--bg3), var(--bg2), var(--bg3)); background-size: 200% 100%; animation: az-shimmer 1.3s linear infinite; opacity: .7; }
+
 /* Action chip + per-campaign lines */
 .az-act { display: inline-flex; align-items: center; gap: 3px; font-size: 10px; font-weight: 700; border-radius: 4px; padding: 1px 6px; vertical-align: middle; }
 .az-act.raise { color: #1e7a4f; background: #e8f5ee; }

@@ -766,24 +766,29 @@ export function RankPlacementCockpit() {
           <span style={{ flex: 1 }} />
           {whenLoading && <span className="az-cockpit-status">Loading…</span>}
           {!whenLoading && family && family.campaigns.length > 0 && <span className="az-cockpit-status ok">{family.campaigns.length} campaign{family.campaigns.length === 1 ? '' : 's'} · {family.asins.length} ASIN{family.asins.length === 1 ? '' : 's'} in {market}</span>}
+          <a className="az-when-link" href={`/marketing/ads-console/automation?tab=dayparting&dpMarket=${market}`} title={`Open the full ${market} demand heatmap`}>Full heatmap →</a>
         </div>
 
         <div className="az-when-sub">Family demand by day of week — when the product sells ({market}, 90d orders)</div>
-        <div className="az-when-days">
-          {dayRows.map(d => (
-            <div key={d.weekday} className={`az-dpday ${d.recommend}`} title={`${d.label}: ${euros(d.revenueCents)} · ${d.orders} orders${d.index != null ? ` · ${(d.index).toFixed(2)}× avg` : ''}`}>
-              <div className="lbl">{d.label}</div>
-              <div className="bar"><div className="fill" style={{ height: `${Math.max(3, Math.min(100, (d.index ?? 0) * 55))}%` }} /></div>
-              <div className="val">{d.index != null ? `${d.index.toFixed(1)}×` : '—'}</div>
-              <div className="rec">{d.recommend === 'bid-up' ? <TrendingUp size={11} /> : d.recommend === 'bid-down' ? <TrendingDown size={11} /> : <Minus size={11} />}</div>
-            </div>
-          ))}
+        <div className="az-when-days" role="img" aria-label={dayRows.length ? `Family demand by weekday in ${market}: ${dayRows.map(d => `${d.label} ${d.index != null ? d.index.toFixed(1) + '×' : 'n/a'}`).join(', ')}` : 'Family demand by weekday'}>
+          {whenLoading && dayRows.length === 0
+            ? Array.from({ length: 7 }).map((_, i) => <div key={i} className="az-dpday"><div className="lbl">&nbsp;</div><div className="bar"><div className="fill skel" style={{ height: `${25 + ((i * 17) % 55)}%` }} /></div></div>)
+            : dayRows.map(d => (
+              <div key={d.weekday} className={`az-dpday ${d.recommend}`} title={`${d.label}: ${euros(d.revenueCents)} · ${d.orders} orders${d.index != null ? ` · ${(d.index).toFixed(2)}× avg` : ''}`}>
+                <div className="lbl">{d.label}</div>
+                <div className="bar"><div className="fill" style={{ height: `${Math.max(3, Math.min(100, (d.index ?? 0) * 55))}%` }} /></div>
+                <div className="val">{d.index != null ? `${d.index.toFixed(1)}×` : '—'}</div>
+                <div className="rec">{d.recommend === 'bid-up' ? <TrendingUp size={11} /> : d.recommend === 'bid-down' ? <TrendingDown size={11} /> : <Minus size={11} />}</div>
+              </div>
+            ))}
           {dayRows.length === 0 && !whenLoading && <div className="az-cockpit-sub">No order-demand data for this product family in {market}.</div>}
         </div>
 
         <div className="az-when-sub" style={{ marginTop: 12 }}>Demand by hour ({market}, Europe/Rome) — when customers buy this family</div>
-        <div className="az-when-hours">
-          {(demand ?? []).map(h => (
+        <div className="az-when-hours" role="img" aria-label={demand && demand.length ? `Hourly demand in ${market}; peaks at ${[...demand].sort((a, b) => b.revenueCents - a.revenueCents).slice(0, 3).map(h => pad2(h.key) + ':00').join(', ')}` : 'Hourly demand'}>
+          {whenLoading && !demand
+            ? Array.from({ length: 24 }).map((_, i) => <div key={i} className="az-dphour"><div className="bar"><div className="fill skel" style={{ height: `${10 + ((i * 23) % 70)}%` }} /></div><div className="hr">{i % 6 === 0 ? pad2(i) : ''}</div></div>)
+            : (demand ?? []).map(h => (
             <div key={h.key} className="az-dphour" title={`${pad2(h.key)}:00 — ${euros(h.revenueCents)} · ${h.orders} orders`}>
               <div className="bar"><div className="fill" style={{ height: `${Math.max(2, (h.revenueCents / maxDemand) * 100)}%` }} /></div>
               <div className="hr">{h.key % 6 === 0 ? pad2(h.key) : ''}</div>
