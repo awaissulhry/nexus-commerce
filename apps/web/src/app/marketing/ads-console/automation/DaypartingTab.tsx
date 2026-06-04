@@ -118,6 +118,14 @@ export function DaypartingTab() {
   }, [])
   useEffect(() => { loadSchedules() }, [loadSchedules])
 
+  // ── DP.5: Amazon ad-spend-by-hour overlay (lights up when Marketing Stream is live) ──
+  const overlayDays = useMemo(() => (custom?.from && custom?.to ? Math.max(7, Math.round((new Date(custom.to).getTime() - new Date(custom.from).getTime()) / 86_400_000)) : days), [custom, days])
+  const [overlay, setOverlay] = useState<{ hasData: boolean; hours: { hour: number; costCents: number; salesCents: number; orders: number; acos: number | null }[]; note: string | null } | null>(null)
+  useEffect(() => {
+    void fetch(`${getBackendUrl()}/api/advertising/orders-dayparting/ad-overlay?windowDays=${overlayDays}`, { cache: 'no-store' }).then((r) => r.json()).then(setOverlay).catch(() => {})
+  }, [overlayDays])
+  const maxAdSpend = useMemo(() => (overlay?.hasData ? Math.max(1, ...overlay.hours.map((h) => h.costCents)) : 1), [overlay])
+
   const openCreate = () => {
     const r = data?.recommendedWindow
     setWin(r ? { start: r.startHour, end: r.endHour, days: r.days } : { start: 9, end: 21, days: [0, 1, 2, 3, 4, 5, 6] })
@@ -162,13 +170,13 @@ export function DaypartingTab() {
       <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: 12 }}>
         {/* market */}
         <div style={{ display: 'inline-flex', gap: 4, alignItems: 'center' }}>
-          <button className={`az-chip quick ${market === '' ? 'on' : ''}`} onClick={() => setMarket('')}>All markets</button>
-          {MARKETS.map((m) => <button key={m} className={`az-chip quick ${market === m ? 'on' : ''}`} onClick={() => setMarket(m)}>{m}</button>)}
+          <button className={`az-chip quick ${market === '' ? 'on' : ''}`} aria-pressed={market === ''} onClick={() => setMarket('')}>All markets</button>
+          {MARKETS.map((m) => <button key={m} className={`az-chip quick ${market === m ? 'on' : ''}`} aria-pressed={market === m} onClick={() => setMarket(m)}>{m}</button>)}
         </div>
         <span style={{ width: 1, height: 18, background: 'var(--divider)' }} />
         {/* metric */}
-        <div style={{ display: 'inline-flex', gap: 4 }}>
-          {METRICS.map((m) => <button key={m.k} className={`az-chip quick ${metric === m.k ? 'on' : ''}`} onClick={() => setMetric(m.k)}>{m.label}</button>)}
+        <div style={{ display: 'inline-flex', gap: 4 }} role="group" aria-label="Metric">
+          {METRICS.map((m) => <button key={m.k} className={`az-chip quick ${metric === m.k ? 'on' : ''}`} aria-pressed={metric === m.k} onClick={() => setMetric(m.k)}>{m.label}</button>)}
         </div>
         <span style={{ flex: 1 }} />
         {/* product typeahead */}
@@ -239,7 +247,7 @@ export function DaypartingTab() {
                   const cell = data?.grid?.[dow]?.[h] ?? { orders: 0, units: 0, revenueCents: 0 }
                   const v = metricVal(cell, metric)
                   return (
-                    <div key={h} title={`${DAYS[di]} ${fmtHr(h)} — ${eur(cell.revenueCents)} · ${cell.orders} orders · ${cell.units} units`}
+                    <div key={h} role="img" aria-label={`${DAYS[di]} ${fmtHr(h)}: ${eur(cell.revenueCents)}, ${cell.orders} orders, ${cell.units} units`} title={`${DAYS[di]} ${fmtHr(h)} — ${eur(cell.revenueCents)} · ${cell.orders} orders · ${cell.units} units`}
                       style={{ height: 22, borderRadius: 3, background: heat(v, maxCell), display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, color: heatText(v, maxCell), userSelect: 'none' }}>
                       {v > 0 && maxCell > 0 && v / maxCell > 0.66 ? (metric === 'revenue' ? Math.round(v / 100) : v) : ''}
                     </div>
@@ -288,6 +296,28 @@ export function DaypartingTab() {
           })}
         </div>
       </>}
+
+      {/* ── DP.5: Amazon ad-spend-by-hour overlay ── */}
+      {overlay && (
+        <div style={{ marginTop: 18 }}>
+          <div style={{ fontWeight: 700, fontSize: 12.5, margin: '0 2px 8px' }}>Amazon ad spend by hour <span style={{ fontWeight: 500, color: 'var(--ink3)' }}>· where your ad budget actually goes vs. when demand peaks</span></div>
+          {overlay.hasData ? (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(24, 1fr)', gap: 3, alignItems: 'end', height: 84, border: '1px solid var(--divider)', borderRadius: 8, padding: '8px 8px 4px', overflowX: 'auto', minWidth: 720, background: '#fff' }}>
+              {overlay.hours.map((h) => (
+                <div key={h.hour} title={`${fmtHr(h.hour)} — ${eur(h.costCents)} spend · ${h.orders} orders${h.acos != null ? ` · ${h.acos}% ACOS` : ''}`} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', height: '100%', gap: 2 }}>
+                  <div style={{ width: '100%', height: `${Math.max(2, (h.costCents / maxAdSpend) * 100)}%`, background: 'var(--orange)', borderRadius: '2px 2px 0 0', opacity: 0.85 }} />
+                  <span style={{ fontSize: 8, color: 'var(--ink3)' }}>{h.hour}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, border: '1px dashed var(--border)', borderRadius: 8, padding: '12px 14px', background: 'var(--bg2)', fontSize: 12.5, color: 'var(--ink2)' }}>
+              <Zap size={16} style={{ color: 'var(--orange)', flexShrink: 0 }} />
+              <span>{overlay.note ?? 'Connect Amazon Marketing Stream for an hourly ad-spend overlay.'} Until then, the demand heatmap above (from your orders) is the signal that drives your bid schedules.</span>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ── DP.4: turn a peak window into an Amazon bid schedule ── */}
       <div style={{ marginTop: 24, borderTop: '1px solid var(--divider)', paddingTop: 16 }}>
