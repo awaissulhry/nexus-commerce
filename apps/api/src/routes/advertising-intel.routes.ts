@@ -325,20 +325,10 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
       note: intel.hourlyAvailable ? null : 'Connect Amazon Marketing Stream for an hourly ad-spend overlay.',
     }
   })
-
-  // ── RC2.T1 — full per-campaign dayparting intel for the cockpit "When" panel.
-  // Day-of-week ad conversion (+ hour-of-day when AMS is live), conversion-index
-  // vs the campaign average, and bid-up/keep/bid-down recommendations. Read-only.
-  fastify.get('/advertising/dayparting-intel', async (request, reply) => {
-    const q = request.query as { windowDays?: string; campaignId?: string }
-    const { analyzeDayparting } = await import('../services/advertising/ads-dayparting-intel.service.js')
-    const intel = await analyzeDayparting({
-      windowDays: q.windowDays ? Math.max(7, Math.min(365, Number(q.windowDays))) : 30,
-      campaignId: q.campaignId || undefined,
-    })
-    reply.header('Cache-Control', 'private, max-age=300')
-    return intel
-  })
+  // NB: GET /advertising/dayparting-intel already exists in advertising.routes.ts
+  // (returns the same analyzeDayparting() full intel) — the cockpit "When" panel
+  // (RC2.T1) consumes that one. Do NOT re-declare it here: a duplicate Fastify
+  // route is a BOOT CRASH, not a 4xx.
 }
 
 export default advertisingIntelRoutes
