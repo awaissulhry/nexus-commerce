@@ -134,6 +134,32 @@
 .az-cockpit-panel .row b { color: var(--ink); font-weight: 700; text-align: right; max-width: 170px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .az-cockpit-panel .sep { height: 1px; background: var(--divider); margin: 8px 0; }
 .az-cockpit-note { display: flex; align-items: flex-start; gap: 6px; font-size: 11.5px; color: var(--ink2); line-height: 1.5; margin-top: 10px; padding: 9px 10px; background: var(--bg2); border-radius: 8px; }
+.az-cockpit-status { font-size: 11.5px; color: var(--ink3); font-weight: 600; }
+.az-cockpit-status.ok { color: var(--ink2); }
+.az-cockpit-sub { font-size: 11px; color: var(--ink2); line-height: 1.45; margin: 4px 0 2px; }
+.az-cockpit-sublbl { font-size: 10px; font-weight: 700; letter-spacing: .4px; text-transform: uppercase; color: var(--ink3); margin: 6px 0 5px; }
+
+/* Gauges (P2) */
+.az-gauge-row { display: flex; flex-direction: column; gap: 4px; padding: 7px 0 3px; }
+.az-gauge-lbl { font-size: 11px; color: var(--ink2); font-weight: 600; }
+.az-gauge { display: flex; align-items: center; gap: 8px; }
+.az-gauge-track { position: relative; flex: 1; height: 8px; border-radius: 5px; background: var(--bg3); overflow: hidden; }
+.az-gauge-fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 5px; background: var(--navy); transition: width .35s ease; }
+.az-gauge-fill.is { background: linear-gradient(90deg, #1f6feb, #0a3d91); }
+.az-gauge-fill.sov { background: linear-gradient(90deg, #2e9e6b, #1e7a4f); }
+.az-gauge-mark { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--ink); border-radius: 2px; }
+.az-gauge-mark::after { content: ''; position: absolute; top: -3px; left: -2px; width: 6px; height: 6px; border-radius: 50%; background: var(--ink); }
+.az-gauge-val { font-size: 11.5px; font-weight: 700; color: var(--ink); min-width: 34px; text-align: right; }
+
+/* Action chip + per-campaign lines */
+.az-act { display: inline-flex; align-items: center; gap: 3px; font-size: 10px; font-weight: 700; border-radius: 4px; padding: 1px 6px; vertical-align: middle; }
+.az-act.raise { color: #1e7a4f; background: #e8f5ee; }
+.az-act.lower { color: #b3541e; background: #fbeee3; }
+.az-act.keep { color: var(--ink2); background: var(--bg2); }
+.az-campline { display: flex; align-items: center; gap: 7px; padding: 4px 0; font-size: 11.5px; border-top: 1px solid var(--bg3); }
+.az-campline:first-of-type { border-top: none; }
+.az-campline .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink2); }
+.az-campline .pct { font-weight: 700; color: var(--ink); font-size: 11px; }
 
 /* ── AD-TYPE TABS ──────────────────────────────────────────── */
 .az-tabs { display: flex; flex-wrap: wrap; gap: 6px; padding: 6px 0 14px; max-width: 100%; }
