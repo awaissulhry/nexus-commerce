@@ -30,8 +30,10 @@ import {
   DownloadCloud,
   FileCode,
   Columns,
+  ArrowLeftRight,
 } from 'lucide-react'
 import PayloadPreviewModal from './_shared/PayloadPreviewModal'
+import ValueMapManagerModal from './_shared/ValueMapManagerModal'
 import { getBackendUrl } from '@/lib/backend-url'
 import { Input } from '@/components/ui/Input'
 import { useToast } from '@/components/ui/Toast'
@@ -103,6 +105,9 @@ export default function MappingsClient() {
   const [previewLoading, setPreviewLoading] = useState(false)
   const [previewError, setPreviewError] = useState<string | null>(null)
   const [previewResult, setPreviewResult] = useState<any>(null)
+
+  // FM.9 — value-map / size-scale manager modal
+  const [valueMapOpen, setValueMapOpen] = useState(false)
 
   // ── Load marketplaces ───────────────────────────────────────────
   const fetchMarketplaces = useCallback(async () => {
@@ -541,6 +546,15 @@ export default function MappingsClient() {
                       </button>
                     </div>
                   )}
+                  <button
+                    type="button"
+                    onClick={() => setValueMapOpen(true)}
+                    className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
+                    title="Manage value maps (Rosso→Rot) + size scales for this channel"
+                  >
+                    <ArrowLeftRight className="w-3 h-3" />
+                    Value maps
+                  </button>
                   <Link
                     href={`/settings/mappings/canvas/${active.channel}/${active.code}`}
                     className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20"
@@ -748,6 +762,15 @@ export default function MappingsClient() {
         loading={previewLoading}
         error={previewError}
       />
+
+      {active && (
+        <ValueMapManagerModal
+          open={valueMapOpen}
+          onClose={() => setValueMapOpen(false)}
+          channel={active.channel}
+          code={active.code}
+        />
+      )}
     </div>
   )
 }
