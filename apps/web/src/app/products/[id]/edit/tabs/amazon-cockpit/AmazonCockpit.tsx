@@ -82,6 +82,7 @@ import {
   type PropagatePreview,
   type FieldSource,
 } from '../../_shared/cockpit-shell'
+import ApplyToSiblingsModal from './templates/ApplyToSiblingsModal'
 
 /** A linkable content field surfaced in the Shared-fields card. */
 interface LinkField {
@@ -207,6 +208,8 @@ export default function AmazonCockpit(props: Props) {
   const useDrawer = useCockpitFlag('all-fields-drawer', true)
   const [allFieldsOpen, setAllFieldsOpen] = useState(false)
   const [xChannelOpen, setXChannelOpen] = useState(false)
+  // FM.11 — apply-to-siblings modal (Amazon parity with eBay EC.14).
+  const [applySiblingsOpen, setApplySiblingsOpen] = useState(false)
   // FL.3 / FL.3b / FL — per-field scope control across ALL linkable
   // fields (not just a demo). One popover + one diff-modal serve every
   // field, keyed by the open field. Persisted via FieldLinkGroup;
@@ -533,6 +536,15 @@ export default function AmazonCockpit(props: Props) {
             >
               <Columns className="w-3 h-3" /> {t('products.edit.cockpit.amazon.xchannel')}
             </button>
+            {/* FM.11 — copy this product's Amazon layout onto sibling products. */}
+            <button
+              type="button"
+              onClick={() => setApplySiblingsOpen(true)}
+              className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
+              title="Copy this product's Amazon attributes / condition / category onto similar products"
+            >
+              <ListTree className="w-3 h-3" /> Apply to siblings
+            </button>
             {/* SY.1 — outbound handoff to the bulk flat-file editor,
                 pre-filtered to this product family (new tab). */}
             <a
@@ -827,6 +839,14 @@ export default function AmazonCockpit(props: Props) {
         productId={product.id}
         open={xChannelOpen}
         onClose={() => setXChannelOpen(false)}
+      />
+
+      {/* FM.11 — apply-to-siblings (Amazon parity with eBay EC.14). */}
+      <ApplyToSiblingsModal
+        productId={product.id}
+        marketplace={marketInfo.code}
+        open={applySiblingsOpen}
+        onClose={() => setApplySiblingsOpen(false)}
       />
 
       {/* FL — per-field scope control, generic across all linkable fields. */}
