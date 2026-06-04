@@ -183,6 +183,33 @@
 .az-rankmeter-foot { display: flex; justify-content: space-between; font-size: 10px; color: var(--ink2); }
 .az-rankmeter-foot .leg { color: var(--ink3); }
 
+/* Bulk keyword manager (R3) */
+.az-kwmgr { margin-top: 16px; border: 1px solid var(--divider); border-radius: 12px; background: #fff; padding: 14px 16px; }
+.az-kwmgr-head { display: flex; align-items: center; gap: 7px; font-weight: 700; font-size: 14px; color: var(--navy); margin-bottom: 12px; }
+.az-kwmgr-head .cn { color: var(--ink); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 360px; }
+.az-kwmgr-head .ct { font-size: 11px; font-weight: 600; color: var(--ink3); }
+.az-kwmgr-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; align-items: start; }
+@media (max-width: 860px) { .az-kwmgr-grid { grid-template-columns: 1fr; } }
+.az-kwmgr-sublbl { font-size: 10px; font-weight: 700; letter-spacing: .4px; text-transform: uppercase; color: var(--ink3); margin-bottom: 6px; }
+.az-kwmgr-paste { width: 100%; border: 1px solid var(--border); border-radius: 8px; padding: 9px 10px; font: inherit; font-size: 12.5px; resize: vertical; line-height: 1.5; box-sizing: border-box; }
+.az-kwmgr-paste:focus { outline: none; border-color: var(--navy); }
+.az-kwmgr-row { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+.az-kwmgr-match { font-size: 11.5px; color: var(--ink2); display: inline-flex; align-items: center; gap: 6px; }
+.az-kwmgr-match select { border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; font: inherit; font-size: 12px; cursor: pointer; background: #fff; }
+.az-kwmgr-parsed { margin-top: 12px; }
+.az-kwmgr-list { max-height: 320px; overflow-y: auto; }
+.az-kwline { display: flex; align-items: center; gap: 8px; padding: 5px 0; font-size: 12px; border-top: 1px solid var(--bg3); }
+.az-kwline:first-child { border-top: none; }
+.az-kwline.dim { opacity: .55; }
+.az-kwline .kw { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); }
+.az-kwline .mt { font-size: 9.5px; font-weight: 700; color: var(--ink3); background: var(--bg2); border-radius: 4px; padding: 1px 5px; }
+.az-kwline .bid { font-weight: 700; color: var(--ink); min-width: 52px; text-align: right; }
+.az-kwline .ac { color: var(--ink2); min-width: 38px; text-align: right; }
+.az-kwline .ex { font-size: 9.5px; font-weight: 700; color: var(--ink3); background: var(--bg2); border-radius: 4px; padding: 2px 6px; }
+.az-kwline .bd { font-size: 9px; font-weight: 700; color: #b3541e; background: #fbeee3; border-radius: 4px; padding: 1px 5px; }
+.az-kwline .eur { display: inline-flex; align-items: center; gap: 2px; font-size: 11.5px; color: var(--ink2); }
+.az-kwline .eur input { width: 56px; border: 1px solid var(--border); border-radius: 6px; padding: 4px 6px; font: inherit; font-size: 12px; font-weight: 700; text-align: right; }
+
 /* Action chip + per-campaign lines */
 .az-act { display: inline-flex; align-items: center; gap: 3px; font-size: 10px; font-weight: 700; border-radius: 4px; padding: 1px 6px; vertical-align: middle; }
 .az-act.raise { color: #1e7a4f; background: #e8f5ee; }
