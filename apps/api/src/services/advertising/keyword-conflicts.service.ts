@@ -20,6 +20,7 @@ export type Contender = {
   status: string
   asins: string[]
   isMine: boolean
+  targetIds: string[] // the AdTarget rows for this keyword in this campaign (bid writes)
   bidCents: number
   impressions: number
   clicks: number
@@ -92,6 +93,7 @@ export function pickChampion(contenders: Contender[]): { championId: string; rea
 // ── Prisma-backed detection ────────────────────────────────────────────────
 
 type RawTarget = {
+  id: string
   expressionValue: string
   expressionType: string
   bidCents: number
@@ -101,15 +103,16 @@ type RawTarget = {
   salesCents: number
   ordersCount: number
 }
-type Agg = { raw: string; matchType: string; bidCents: number; impressions: number; clicks: number; spendCents: number; salesCents: number; orders: number }
+type Agg = { ids: string[]; raw: string; matchType: string; bidCents: number; impressions: number; clicks: number; spendCents: number; salesCents: number; orders: number }
 
 function foldTarget(into: Map<string, Agg>, t: RawTarget) {
   const key = normKeyword(t.expressionValue)
   if (!key) return
   const g = into.get(key)
   if (!g) {
-    into.set(key, { raw: t.expressionValue, matchType: t.expressionType, bidCents: t.bidCents, impressions: t.impressions, clicks: t.clicks, spendCents: t.spendCents, salesCents: t.salesCents, orders: t.ordersCount })
+    into.set(key, { ids: [t.id], raw: t.expressionValue, matchType: t.expressionType, bidCents: t.bidCents, impressions: t.impressions, clicks: t.clicks, spendCents: t.spendCents, salesCents: t.salesCents, orders: t.ordersCount })
   } else {
+    g.ids.push(t.id)
     g.bidCents = Math.max(g.bidCents, t.bidCents)
     g.impressions += t.impressions; g.clicks += t.clicks; g.spendCents += t.spendCents; g.salesCents += t.salesCents; g.orders += t.ordersCount
   }
@@ -140,7 +143,7 @@ export async function detectKeywordConflicts(prisma: PrismaLike, campaignId: str
   // 1. My positive keywords, aggregated across ad groups.
   const mine = (await prisma.adTarget.findMany({
     where: { adGroup: { campaignId }, kind: 'KEYWORD', isNegative: false },
-    select: { expressionValue: true, expressionType: true, bidCents: true, impressions: true, clicks: true, spendCents: true, salesCents: true, ordersCount: true },
+    select: { id: true, expressionValue: true, expressionType: true, bidCents: true, impressions: true, clicks: true, spendCents: true, salesCents: true, ordersCount: true },
   })) as RawTarget[]
   const myKeys = new Map<string, Agg>()
   for (const t of mine) foldTarget(myKeys, t)
@@ -149,7 +152,7 @@ export async function detectKeywordConflicts(prisma: PrismaLike, campaignId: str
   // 2. Every enabled positive keyword in the market, with its campaign. Bounded.
   const market = (await prisma.adTarget.findMany({
     where: { kind: 'KEYWORD', isNegative: false, status: 'ENABLED', adGroup: { campaign: { marketplace } } },
-    select: { expressionValue: true, expressionType: true, bidCents: true, impressions: true, clicks: true, spendCents: true, salesCents: true, ordersCount: true, adGroup: { select: { campaignId: true, campaign: { select: { id: true, name: true, status: true, dynamicBidding: true } } } } },
+    select: { id: true, expressionValue: true, expressionType: true, bidCents: true, impressions: true, clicks: true, spendCents: true, salesCents: true, ordersCount: true, adGroup: { select: { campaignId: true, campaign: { select: { id: true, name: true, status: true, dynamicBidding: true } } } } },
     take: 8000,
   })) as Array<RawTarget & { adGroup: { campaignId: string; campaign: { id: string; name: string; status: string; dynamicBidding: unknown } } }>
 
@@ -165,8 +168,8 @@ export async function detectKeywordConflicts(prisma: PrismaLike, campaignId: str
     let byCamp = perKw.get(key)
     if (!byCamp) { byCamp = new Map(); perKw.set(key, byCamp) }
     const g = byCamp.get(c.id)
-    if (!g) byCamp.set(c.id, { raw: t.expressionValue, matchType: t.expressionType, bidCents: t.bidCents, impressions: t.impressions, clicks: t.clicks, spendCents: t.spendCents, salesCents: t.salesCents, orders: t.ordersCount, camp: c })
-    else { g.bidCents = Math.max(g.bidCents, t.bidCents); g.impressions += t.impressions; g.clicks += t.clicks; g.spendCents += t.spendCents; g.salesCents += t.salesCents; g.orders += t.ordersCount }
+    if (!g) byCamp.set(c.id, { ids: [t.id], raw: t.expressionValue, matchType: t.expressionType, bidCents: t.bidCents, impressions: t.impressions, clicks: t.clicks, spendCents: t.spendCents, salesCents: t.salesCents, orders: t.ordersCount, camp: c })
+    else { g.ids.push(t.id); g.bidCents = Math.max(g.bidCents, t.bidCents); g.impressions += t.impressions; g.clicks += t.clicks; g.spendCents += t.spendCents; g.salesCents += t.salesCents; g.orders += t.ordersCount }
   }
 
   // 4. ASINs per involved campaign — to tell cross-product rivals from same-product.
@@ -198,14 +201,14 @@ export async function detectKeywordConflicts(prisma: PrismaLike, campaignId: str
       const rAsins = asinByCamp.get(cid) ?? new Set<string>()
       if (!disjoint(rAsins, myAsins)) continue // same-product overlap → not this check
       rivals.push({
-        campaignId: cid, campaignName: g.camp.name, status: g.camp.status, asins: [...rAsins], isMine: false,
+        campaignId: cid, campaignName: g.camp.name, status: g.camp.status, asins: [...rAsins], isMine: false, targetIds: g.ids,
         bidCents: g.bidCents, impressions: g.impressions, clicks: g.clicks, spendCents: g.spendCents, salesCents: g.salesCents, orders: g.orders,
         acos: acosOf(g.spendCents, g.salesCents), cvr: cvrOf(g.orders, g.clicks), tosBias: tosBiasOf(g.camp.dynamicBidding),
       })
     }
     if (rivals.length === 0) continue
     const mineContender: Contender = {
-      campaignId, campaignName: 'This campaign', status: 'ENABLED', asins: [...myAsins], isMine: true,
+      campaignId, campaignName: 'This campaign', status: 'ENABLED', asins: [...myAsins], isMine: true, targetIds: mineAgg.ids,
       bidCents: mineAgg.bidCents, impressions: mineAgg.impressions, clicks: mineAgg.clicks, spendCents: mineAgg.spendCents, salesCents: mineAgg.salesCents, orders: mineAgg.orders,
       acos: acosOf(mineAgg.spendCents, mineAgg.salesCents), cvr: cvrOf(mineAgg.orders, mineAgg.clicks),
       tosBias: byCamp.get(campaignId) ? tosBiasOf(byCamp.get(campaignId)!.camp.dynamicBidding) : 0,

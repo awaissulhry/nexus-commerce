@@ -38,6 +38,10 @@ interface Target { id: string; text: string; matchType: string; bidCents: number
 interface ParsedKw { keyword: string; bidCents: number; basis: string; exists: boolean }
 interface PlacementRow { placement: PlacementKey; impressions: number; clicks: number; costCents: number; salesCents: number; orders: number; adjustmentPct: number }
 interface SelfComp { campaignId: string; name: string; status: string; asins: string[] }
+// RC3.3 — cross-product keyword-rank collision (different products, same keyword).
+interface KwContender { campaignId: string; campaignName: string; status: string; asins: string[]; isMine: boolean; targetIds: string[]; bidCents: number; impressions: number; clicks: number; spendCents: number; salesCents: number; orders: number; acos: number | null; cvr: number | null; tosBias: number }
+interface KwConflict { keyword: string; keyNorm: string; matchType: string; contenders: KwContender[]; championId: string; championReason: string; bothTop: boolean }
+interface KwConflicts { marketplace: string; campaignId: string; conflicts: KwConflict[]; summary: { contestedKeywords: number; rivalProducts: number; rivalCampaigns: number } }
 // T·product — dayparting scoped to the parent product family (orders demand)
 interface DemandBucket { key: number; orders: number; units: number; revenueCents: number; index: number | null }
 type DemandHour = DemandBucket
@@ -189,6 +193,12 @@ export function RankPlacementCockpit() {
   // R5/R6 — per-placement spend + bias (Top / Rest / Product)
   const [placements, setPlacements] = useState<PlacementRow[]>([])
   const [selfComp, setSelfComp] = useState<SelfComp[]>([]) // R8 — same-ASIN rivals
+  // RC3.3 — keyword collisions: different products of ours on the same keyword.
+  const [kwConflicts, setKwConflicts] = useState<KwConflicts | null>(null)
+  const [kwOpen, setKwOpen] = useState(true)
+  const [kwBusy, setKwBusy] = useState<string | null>(null)
+  const [kwMsg, setKwMsg] = useState<Record<string, string>>({})
+  const [kwDismissed, setKwDismissed] = useState<Set<string>>(new Set())
   // T·product — dayparting scoped to the parent product family
   const [family, setFamily] = useState<ProductFamily | null>(null)
   const [whenLoading, setWhenLoading] = useState(false)
@@ -307,6 +317,17 @@ export function RankPlacementCockpit() {
     return () => ac.abort()
   }, [campaignId, market])
 
+  // RC3.3 — cross-product keyword collisions for the selected campaign + market.
+  useEffect(() => {
+    if (!campaignId) { setKwConflicts(null); return }
+    const ac = new AbortController()
+    setKwMsg({}); setKwDismissed(new Set())
+    fetch(`${getBackendUrl()}/api/advertising/campaigns/${encodeURIComponent(campaignId)}/keyword-conflicts?marketplace=${market}`, { cache: 'no-store', signal: ac.signal })
+      .then(r => r.json()).then(d => { if (!ac.signal.aborted) setKwConflicts(d && Array.isArray(d.conflicts) ? d as KwConflicts : null) })
+      .catch(() => {})
+    return () => ac.abort()
+  }, [campaignId, market])
+
   // T·product — family hour profile (for the budget-peak figure).
   const demand = family?.demand?.hourProfile ?? null
   const maxDemand = demand && demand.length ? Math.max(1, ...demand.map(h => h.revenueCents)) : 1
@@ -339,6 +360,30 @@ export function RankPlacementCockpit() {
     [family, applyScope, campaignId],
   )
   const scopedScheds = useMemo(() => famScheds.filter(s => scopedCampaigns.some(c => c.id === s.campaignId)), [famScheds, scopedCampaigns])
+
+  // RC3.3 — visible (non-dismissed) keyword conflicts + the one-click fixes. Every
+  // write goes through the GATED bulk-bid lever (applyImmediately defaults false),
+  // so it stages locally — nothing changes on Amazon until the write-gate flips.
+  // Lowering only the contested keyword's bid is precise: that one keyword drops
+  // toward rest-of-search without touching the campaign's other keywords.
+  const visibleConflicts = useMemo(() => (kwConflicts?.conflicts ?? []).filter(c => !kwDismissed.has(c.keyNorm)), [kwConflicts, kwDismissed])
+  const dismissConflict = useCallback((keyNorm: string) => setKwDismissed(s => { const n = new Set(s); n.add(keyNorm); return n }), [])
+  const resolveConflict = useCallback(async (c: KwConflict, mode: 'champion' | 'rest' | 'second', who?: KwContender) => {
+    const champ = c.contenders.find(x => x.campaignId === c.championId) ?? null
+    const champBid = champ?.bidCents ?? Math.max(...c.contenders.map(x => x.bidCents), 10)
+    const entries: { adTargetId: string; bidCents: number }[] = []
+    const setFor = (ct: KwContender, frac: number) => { const nb = Math.max(2, Math.round(champBid * frac)); for (const tid of ct.targetIds) entries.push({ adTargetId: tid, bidCents: nb }) }
+    if (mode === 'champion') { for (const ct of c.contenders) if (ct.campaignId !== c.championId) setFor(ct, 0.5) }
+    else if (mode === 'rest' && who) setFor(who, 0.35)
+    else if (mode === 'second' && who) setFor(who, 0.85)
+    if (entries.length === 0) { setKwMsg(m => ({ ...m, [c.keyNorm]: 'No editable keyword bid on that side.' })); return }
+    setKwBusy(c.keyNorm)
+    try {
+      const r = await fetch(`${getBackendUrl()}/api/advertising/ad-targets/bulk-bid`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ entries, reason: `RC3 keyword collision (${mode}) — "${c.keyword}" in ${market}` }) }).then(x => x.json())
+      setKwMsg(m => ({ ...m, [c.keyNorm]: r?.ok ? `Staged ${entries.length} bid change${entries.length === 1 ? '' : 's'} — flip the write-gate to apply on Amazon.` : 'Apply failed.' }))
+    } catch { setKwMsg(m => ({ ...m, [c.keyNorm]: 'Apply failed.' })) }
+    setKwBusy(null)
+  }, [market])
 
   // T3 — the family's persisted schedules (one AdSchedule per campaign).
   const loadSchedules = useCallback(async (signal?: AbortSignal) => {
@@ -832,6 +877,63 @@ export function RankPlacementCockpit() {
         </div>
         <div className="az-cockpit-note"><Info size={12} /> €/day = window spend ÷ {WINDOW_DAYS}. Projection estimates the CPC effect at the chosen bias % — actual spend also depends on how many more impressions you win in the auction.{dailyBudgetCents != null && totalProjPerDay > dailyBudgetCents ? ' Projected daily spend exceeds the daily budget (Amazon will cap at the budget).' : ''}</div>
       </div>
+
+      {/* ── RC3.3: cross-product keyword-rank overlap ─────────────── */}
+      {kwConflicts && visibleConflicts.length > 0 && (
+        <div className="az-kwx">
+          <div className="az-kwx-head">
+            <AlertTriangle size={15} />
+            <b>Keyword overlap</b>
+            <span className="az-kwx-badge">{visibleConflicts.length} contested</span>
+            <span className="cap">your own products bidding on the same keyword in {market} — they bid each other up</span>
+            <span style={{ flex: 1 }} />
+            <button type="button" className="az-tr-toggle" onClick={() => setKwOpen(v => !v)} aria-expanded={kwOpen}>{kwOpen ? 'Hide' : 'Show'} {kwOpen ? '▾' : '▸'}</button>
+          </div>
+          {kwOpen && <div className="az-kwx-body">
+            {visibleConflicts.map(c => {
+              const champ = c.contenders.find(x => x.campaignId === c.championId) ?? null
+              const champName = champ ? (champ.isMine ? 'this campaign' : champ.campaignName) : 'the best performer'
+              return (
+                <div key={c.keyNorm} className="az-kwx-row">
+                  <div className="az-kwx-kw">
+                    <span className="kw">“{c.keyword}”</span>
+                    <span className="mt">{c.matchType}</span>
+                    {c.bothTop && <span className="hot"><AlertTriangle size={11} /> both pushing Top</span>}
+                    <span className="ct">{c.contenders.length} of your products</span>
+                  </div>
+                  <div className="az-kwx-cts">
+                    {c.contenders.map(ct => {
+                      const isChamp = ct.campaignId === c.championId
+                      return (
+                        <div key={ct.campaignId + ct.targetIds.join('')} className={`az-kwx-ct${isChamp ? ' champ' : ''}${ct.isMine ? ' mine' : ''}`}>
+                          <span className="nm">{ct.isMine ? 'This campaign' : ct.campaignName}{ct.isMine ? <span className="you">YOU</span> : null}</span>
+                          {isChamp && <span className="keep">KEEP TOP</span>}
+                          <span className="bid">€{(ct.bidCents / 100).toFixed(2)}</span>
+                          <span className="met">{ct.acos != null ? `ACOS ${Math.round(ct.acos * 100)}%` : ct.orders > 0 ? `${ct.orders} ord` : ct.clicks > 0 ? `${ct.clicks} clk · no sale` : 'no traffic'}</span>
+                          {ct.tosBias > 0 && <span className="tos">Top +{ct.tosBias}%</span>}
+                          {!isChamp && <span className="acts">
+                            <button type="button" onClick={() => void resolveConflict(c, 'rest', ct)} disabled={kwBusy === c.keyNorm || ct.targetIds.length === 0} title="Lower this product's bid on this keyword so it drops to rest of search">→ Rest of search</button>
+                            {ct.isMine && <button type="button" onClick={() => void resolveConflict(c, 'second', ct)} disabled={kwBusy === c.keyNorm || ct.targetIds.length === 0} title="Set this campaign's bid just below the top — aim for 2nd, not a bidding war for 1st">Take 2nd</button>}
+                          </span>}
+                        </div>
+                      )
+                    })}
+                  </div>
+                  <div className="az-kwx-act">
+                    <button type="button" className="az-btn dark" disabled={kwBusy === c.keyNorm} onClick={() => void resolveConflict(c, 'champion')}>
+                      {kwBusy === c.keyNorm ? <><Loader2 size={13} className="az-spin" /> Staging…</> : <><ShieldCheck size={13} /> Let {champName} own Top</>}
+                    </button>
+                    <button type="button" className="az-btn" disabled={kwBusy === c.keyNorm} onClick={() => dismissConflict(c.keyNorm)}>Ignore</button>
+                    <span className="why">Best: <b>{champName}</b> — {c.championReason}</span>
+                    {kwMsg[c.keyNorm] && <span className="msg">{kwMsg[c.keyNorm]}</span>}
+                  </div>
+                </div>
+              )
+            })}
+            <div className="az-cockpit-note"><Info size={12} /> “Let the best own Top” lowers every other product’s bid on just that keyword to half the leader’s — so they ease off and stop bidding it up. All staged: nothing changes on Amazon until you flip the write-gate.</div>
+          </div>}
+        </div>
+      )}
 
       {/* ── T·product: When · dayparting for the product family ──── */}
       <div className="az-when">

@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { normKeyword, tosBiasOf, acosOf, cvrOf, pickChampion, type Contender } from './keyword-conflicts.service.js'
 
 const C = (over: Partial<Contender>): Contender => ({
-  campaignId: 'c', campaignName: 'c', status: 'ENABLED', asins: [], isMine: false,
+  campaignId: 'c', campaignName: 'c', status: 'ENABLED', asins: [], isMine: false, targetIds: [],
   bidCents: 50, impressions: 0, clicks: 0, spendCents: 0, salesCents: 0, orders: 0,
   acos: null, cvr: null, tosBias: 0, ...over,
 })

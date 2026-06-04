@@ -381,6 +381,38 @@
 .az-tr-automate .l { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .3px; color: var(--ink3); }
 .az-tr-automate-note { font-size: 10.5px; color: var(--ink3); flex-basis: 100%; }
 
+/* Cross-product keyword overlap (RC3.3) */
+.az-kwx { margin-top: 14px; border: 1px solid var(--divider); border-left: 3px solid #b3541e; border-radius: 10px; background: #fffaf5; overflow: hidden; }
+.az-kwx-head { display: flex; align-items: center; gap: 8px; padding: 10px 14px; font-size: 13.5px; color: var(--navy); }
+.az-kwx-head b { font-weight: 800; }
+.az-kwx-head .cap { font-size: 11px; color: var(--ink2); font-weight: 500; }
+.az-kwx-badge { font-size: 10.5px; font-weight: 800; color: #b3541e; background: #fbeee3; border-radius: 999px; padding: 2px 9px; }
+.az-kwx-body { padding: 0 14px 12px; }
+.az-kwx-row { border-top: 1px solid var(--divider); padding: 11px 0; }
+.az-kwx-kw { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
+.az-kwx-kw .kw { font-weight: 800; font-size: 13.5px; color: var(--ink); }
+.az-kwx-kw .mt { font-size: 9.5px; font-weight: 700; color: var(--ink3); background: var(--bg3); border-radius: 4px; padding: 1px 6px; text-transform: uppercase; }
+.az-kwx-kw .hot { display: inline-flex; align-items: center; gap: 3px; font-size: 10px; font-weight: 800; color: #cc1100; background: #fde7e7; border-radius: 5px; padding: 2px 7px; }
+.az-kwx-kw .ct { font-size: 11px; color: var(--ink2); }
+.az-kwx-cts { display: flex; flex-direction: column; gap: 4px; margin: 8px 0; }
+.az-kwx-ct { display: flex; align-items: center; gap: 9px; padding: 5px 9px; border: 1px solid var(--divider); border-radius: 7px; background: #fff; font-size: 12px; }
+.az-kwx-ct.champ { border-color: #1e7a4f; background: #eefaf2; }
+.az-kwx-ct.mine { box-shadow: inset 2px 0 0 var(--navy); }
+.az-kwx-ct .nm { font-weight: 700; color: var(--ink); display: inline-flex; align-items: center; gap: 5px; min-width: 150px; }
+.az-kwx-ct .you { font-size: 8px; font-weight: 800; color: #fff; background: var(--navy); border-radius: 3px; padding: 1px 4px; letter-spacing: .4px; }
+.az-kwx-ct .keep { font-size: 9px; font-weight: 800; color: #1e7a4f; background: #d8f0e2; border-radius: 4px; padding: 1px 6px; letter-spacing: .3px; }
+.az-kwx-ct .bid { font-weight: 700; color: var(--ink); font-variant-numeric: tabular-nums; }
+.az-kwx-ct .met { font-size: 11px; color: var(--ink2); }
+.az-kwx-ct .tos { font-size: 10px; font-weight: 700; color: #b3541e; }
+.az-kwx-ct .acts { margin-left: auto; display: inline-flex; gap: 6px; }
+.az-kwx-ct .acts button { font: inherit; font-size: 10.5px; font-weight: 700; border: 1px solid var(--border); background: #fff; border-radius: 6px; padding: 3px 8px; cursor: pointer; color: var(--ink2); white-space: nowrap; }
+.az-kwx-ct .acts button:hover:not(:disabled) { background: var(--bg3); color: var(--navy); }
+.az-kwx-ct .acts button:disabled { opacity: .5; cursor: default; }
+.az-kwx-act { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; margin-top: 4px; }
+.az-kwx-act .why { font-size: 11px; color: var(--ink2); }
+.az-kwx-act .why b { color: #1e7a4f; }
+.az-kwx-act .msg { font-size: 11px; font-weight: 600; color: #1e7a4f; }
+
 /* Plain-English schedule summary (DD5) */
 .az-tr-summary { margin-top: 8px; padding: 8px 10px; background: var(--bg2); border: 1px solid var(--divider); border-radius: 8px; }
 .az-tr-summary .t { font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .3px; color: var(--ink3); display: block; margin-bottom: 3px; }
