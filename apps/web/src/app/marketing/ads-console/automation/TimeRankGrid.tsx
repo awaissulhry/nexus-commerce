@@ -62,6 +62,45 @@ export function compileGrid(grid: Level[][]): DaypartWindow[] {
 
 const DOW_LABEL = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const DOW_ORDER = [1, 2, 3, 4, 5, 6, 0] // render Mon→Sun; grid is indexed by real dow (0=Sun)
+const pad2 = (n: number) => String(n).padStart(2, '0')
+
+// DD5 — a readable day-set label ("Mon–Fri", "Sat, Sun", "Every day").
+function dayGroupLabel(days: number[]): string {
+  const present = DOW_ORDER.filter(d => days.includes(d))
+  if (present.length === 7) return 'Every day'
+  if (present.length === 0) return ''
+  const idx = present.map(d => DOW_ORDER.indexOf(d))
+  const runs: string[] = []
+  let i = 0
+  while (i < idx.length) {
+    let j = i
+    while (j + 1 < idx.length && idx[j + 1] === idx[j] + 1) j++
+    runs.push(i === j ? DOW_LABEL[DOW_ORDER[idx[i]]] : `${DOW_LABEL[DOW_ORDER[idx[i]]]}–${DOW_LABEL[DOW_ORDER[idx[j]]]}`)
+    i = j + 1
+  }
+  return runs.join(', ')
+}
+
+// DD5 — plain-English summary of the grid, per day-group.
+export function describeGrid(grid: Level[][]): string[] {
+  const groups = new Map<string, number[]>()
+  for (let d = 0; d < 7; d++) { const s = grid[d].join(''); const arr = groups.get(s); if (arr) arr.push(d); else groups.set(s, [d]) }
+  const out: string[] = []
+  for (const days of groups.values()) {
+    const row = grid[days[0]]
+    const parts: string[] = []
+    let h = 0
+    while (h < 24) {
+      const lv = row[h]
+      let end = h
+      while (end < 24 && row[end] === lv) end++
+      if (lv !== 'normal') parts.push(`${LEVEL_BY_KEY[lv].label} ${pad2(h)}–${pad2(end % 24)}`)
+      h = end
+    }
+    out.push(`${dayGroupLabel(days)}: ${parts.length ? parts.join(', ') + ', Normal otherwise' : 'Normal all day'}`)
+  }
+  return out
+}
 const emptyGrid = (): Level[][] => Array.from({ length: 7 }, () => Array.from({ length: 24 }, () => 'normal' as Level))
 
 // Seed levels from the family's day×hour demand grid (revenue per cell).
@@ -144,6 +183,8 @@ export function TimeRankGrid({ demandGrid, onChange, pushGrid }: { demandGrid: B
   }, [grid])
   // DD3 — demand overlay scaling (the bar at the bottom of each cell).
   const maxRev = useMemo(() => (demandGrid ? Math.max(1, ...demandGrid.flat().map(c => c?.revenueCents ?? 0)) : 1), [demandGrid])
+  // DD5 — plain-English summary of the current grid.
+  const summary = useMemo(() => describeGrid(grid), [grid])
 
   // TR2 — what share of the family's demand falls under each painted level.
   // The honest preview (no AMS hourly ad-spend yet): are you pushing where it
@@ -229,6 +270,13 @@ export function TimeRankGrid({ demandGrid, onChange, pushGrid }: { demandGrid: B
           {LEVELS.map(l => coverage.pct[l.k] > 0 && <span key={l.k} className="it"><i style={{ background: l.color }} />{l.label} {coverage.pct[l.k]}%</span>)}
           {coverage.pushShare > 0 && <span className="ok">Pushing on {coverage.pushShare}% of sales</span>}
           {coverage.pct.pause >= 8 && <span className="warn">Pausing hours that carry {coverage.pct.pause}% of sales — use Light to ease off instead of stopping</span>}
+        </div>
+      )}
+
+      {summary.length > 0 && (
+        <div className="az-tr-summary">
+          <span className="t">In plain English</span>
+          {summary.map((s, i) => <div key={i} className="line">{s}</div>)}
         </div>
       )}
     </div>
