@@ -175,6 +175,9 @@ export function RankPlacementCockpit() {
   const [trGrid, setTrGrid] = useState<Level[][] | null>(null)
   const [gridSaving, setGridSaving] = useState(false)
   const [gridMsg, setGridMsg] = useState('')
+  // TR5 — defend the rank during the grid's push hours
+  const [gridHolding, setGridHolding] = useState(false)
+  const [gridHoldMsg, setGridHoldMsg] = useState('')
   // R3 — bulk keyword manager
   const [targets, setTargets] = useState<Target[]>([])
   const [targetsLoading, setTargetsLoading] = useState(false)
@@ -384,6 +387,36 @@ export function RankPlacementCockpit() {
     setGridSaving(false)
     void loadSchedules()
   }, [trGrid, family, market, famScheds, loadSchedules])
+
+  // TR5 — defend the top rank during the grid's push hours. The placement % is
+  // constant, so the grid concentrates aggression into Max/Strong hours and this
+  // defense rule holds the IS target (calibrated to the strongest level painted);
+  // the T4b guard keeps it from pushing while a campaign is paused.
+  const createGridHold = useCallback(async () => {
+    if (!family?.parentProductId || !trGrid) return
+    const flat = trGrid.flat()
+    const targetIS = flat.includes('max') ? 60 : flat.includes('strong') ? 45 : 30
+    setGridHolding(true); setGridHoldMsg('')
+    const name = family.parentName ?? 'product'
+    try {
+      const r = await fetch(`${getBackendUrl()}/api/advertising/automation-rules`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: `Hold top rank ≥ ${targetIS}% — ${name} (${market})`,
+          description: `Holds top-of-search impression share ≥ ${targetIS}% in ${market} for the ${name} family — calibrated to the strongest level in your time×rank grid. The grid concentrates the push into your high-demand hours; this defends the slot when ROAS allows and eases off otherwise (won't push a campaign the grid has paused).`,
+          trigger: 'SCHEDULE', conditions: [],
+          actions: [
+            { type: 'defend_top_of_search', targetIS: targetIS / 100, targetAcos: 0.25, marketplace: market },
+            { type: 'notify', target: 'operator', message: `Defending top rank ≥ ${targetIS}% for ${name} (${market})` },
+          ],
+          scopeMarketplace: market,
+          maxExecutionsPerDay: 48,
+        }),
+      })
+      setGridHoldMsg(r.ok ? 'created' : 'error')
+    } catch { setGridHoldMsg('error') }
+    setGridHolding(false)
+  }, [family, trGrid, market])
 
   // R3 — load the campaign's existing keywords (also gives the destination ad group)
   const loadTargets = useCallback(async (signal?: AbortSignal) => {
@@ -858,6 +891,14 @@ export function RankPlacementCockpit() {
                 {gridMsg === 'error' && <span className="az-cockpit-sub" style={{ margin: 0, color: '#cc1100' }}>Save failed</span>}
               </div>
               <div className="az-cockpit-note" style={{ marginTop: 8 }}><Info size={12} /> Compiles to a delivery schedule across <b>all {family.campaigns.length} campaigns</b> in <b>{MARKET_TZ[market] ?? 'Europe/Rome'}</b> — Pause hours stop spend, Max/Strong/Light scale bids per hour (the cron now transitions cleanly between levels). Starts <b>disabled</b>; writes are gated (sandbox stages locally until the write-gate is live). Enforced at hour boundaries on the cron tick.</div>
+              <div className="az-sched-actions" style={{ borderTop: '1px solid var(--divider)', marginTop: 10, paddingTop: 10 }}>
+                <button type="button" className="az-btn" disabled={gridHolding || !family?.parentProductId} onClick={() => void createGridHold()}>
+                  {gridHolding ? <><Loader2 size={14} className="az-spin" /> Creating…</> : <><ShieldCheck size={14} /> Defend top rank in push hours</>}
+                </button>
+                <span className="az-cockpit-sub" style={{ margin: 0 }}>Holds the IS target where you painted Max/Strong</span>
+                {gridHoldMsg === 'created' && <span className="az-cockpit-sub" style={{ margin: 0, color: 'var(--green)' }}><Check size={12} style={{ verticalAlign: 'text-bottom' }} /> Defense rule created (disabled + dry-run) — enable in Active rules.</span>}
+                {gridHoldMsg === 'error' && <span className="az-cockpit-sub" style={{ margin: 0, color: '#cc1100' }}>Could not create the rule.</span>}
+              </div>
             </>}
           </div>
         )}
