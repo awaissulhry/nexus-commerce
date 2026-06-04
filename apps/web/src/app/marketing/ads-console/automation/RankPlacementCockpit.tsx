@@ -305,9 +305,9 @@ export function RankPlacementCockpit() {
       const dayTotal = row.reduce((s, c) => s + c.revenueCents, 0)
       const peakHs = row.map((c, h) => ({ h, rev: c.revenueCents })).filter(x => x.rev >= max * 0.6).map(x => x.h)
       if (peakHs.length === 0) return { d, label: DOW_LABEL[d], range: null as string | null, pct: 0 }
-      const start = Math.min(...peakHs), end = (Math.max(...peakHs) + 1) % 24
+      const start = Math.min(...peakHs), end = Math.max(...peakHs) + 1 // 24 = midnight, shown as 24
       const peakRev = peakHs.reduce((s, h) => s + (row[h]?.revenueCents ?? 0), 0)
-      return { d, label: DOW_LABEL[d], range: `${pad2(start)}–${pad2(end)}`, pct: dayTotal > 0 ? Math.round((peakRev / dayTotal) * 100) : 0 }
+      return { d, label: DOW_LABEL[d], range: `${pad2(start)}:00–${pad2(end)}:00`, pct: dayTotal > 0 ? Math.round((peakRev / dayTotal) * 100) : 0 }
     })
   }, [family])
 
