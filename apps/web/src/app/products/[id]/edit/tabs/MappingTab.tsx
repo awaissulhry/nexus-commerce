@@ -8,12 +8,14 @@
 // Backed by GET /api/products/:id/mapping/matrix (B.1). Rows are virtualized
 // (@tanstack/react-virtual); the header row + the field column are sticky.
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { Loader2 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
+import { useFieldLinks } from '../_shared/cockpit-shell'
 import FieldSourceBadge from '../_shared/cockpit-shell/FieldSourceBadge'
+import FieldScopePopover, { type ScopeMember } from '../_shared/cockpit-shell/FieldScopePopover'
 import type { FieldSource } from '../_shared/cockpit-shell/contracts'
 
 interface MatrixCell {
@@ -76,6 +78,11 @@ function fmt(v: unknown): string {
   return String(v)
 }
 
+// Heuristic: which fields are free text worth auto-translating when linked.
+function isTranslatableField(fieldKey: string): boolean {
+  return /title|name|description|bullet|keyword|feature|search_term|caption/i.test(fieldKey)
+}
+
 const coordKey = (c: MatrixCoordinate) => `${c.channel}:${c.marketplace}`
 const CHANNEL_SHORT: Record<string, string> = { AMAZON: 'AMZ', SHOPIFY: 'Shopify', WOOCOMMERCE: 'Woo' }
 const coordLabel = (c: MatrixCoordinate) => `${CHANNEL_SHORT[c.channel] ?? c.channel}·${c.marketplace}`
@@ -91,30 +98,29 @@ export default function MappingTab({ productId }: { productId: string }) {
   const [error, setError] = useState<string | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const [filter, setFilter] = useState<'all' | 'divergent' | 'gaps'>('all')
+  const [scopeTarget, setScopeTarget] = useState<{ fieldKey: string; channel: string; marketplace: string } | null>(null)
+  const fieldLinks = useFieldLinks(productId)
 
-  useEffect(() => {
-    let alive = true
+  const load = useCallback(async () => {
     setLoading(true)
     setError(null)
-    ;(async () => {
-      try {
-        const res = await fetch(`${getBackendUrl()}/api/products/${productId}/mapping/matrix`, {
-          credentials: 'include',
-        })
-        const json = await res.json()
-        if (!alive) return
-        if (!res.ok) setError(json?.error ?? `HTTP ${res.status}`)
-        else setData(json as MappingMatrix)
-      } catch (e) {
-        if (alive) setError(e instanceof Error ? e.message : String(e))
-      } finally {
-        if (alive) setLoading(false)
-      }
-    })()
-    return () => {
-      alive = false
+    try {
+      const res = await fetch(`${getBackendUrl()}/api/products/${productId}/mapping/matrix`, {
+        credentials: 'include',
+      })
+      const json = await res.json()
+      if (!res.ok) setError(json?.error ?? `HTTP ${res.status}`)
+      else setData(json as MappingMatrix)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setLoading(false)
     }
   }, [productId])
+
+  useEffect(() => {
+    void load()
+  }, [load])
 
   const rows = data?.fields ?? []
   const coords = data?.coordinates ?? []
@@ -125,6 +131,10 @@ export default function MappingTab({ productId }: { productId: string }) {
   }, [rows, filter])
   const gridCols = useMemo(
     () => `${FIELD_COL}px ${MASTER_COL}px ${coords.map(() => `${CELL_COL}px`).join(' ')}`,
+    [coords],
+  )
+  const scopeMembers: ScopeMember[] = useMemo(
+    () => coords.map((c) => ({ key: coordKey(c), channel: c.channel, marketplace: c.marketplace, label: coordLabel(c) })),
     [coords],
   )
 
@@ -286,7 +296,12 @@ export default function MappingTab({ productId }: { productId: string }) {
                       >
                         {fmt(cell.value)}
                       </span>
-                      <FieldSourceBadge source={toFieldSource(cell.provenance, cell.needsTranslation)} />
+                      <FieldSourceBadge
+                        source={toFieldSource(cell.provenance, cell.needsTranslation)}
+                        onClick={() =>
+                          setScopeTarget({ fieldKey: row.fieldKey, channel: c.channel, marketplace: c.marketplace })
+                        }
+                      />
                     </div>
                   )
                 })}
@@ -295,6 +310,20 @@ export default function MappingTab({ productId }: { productId: string }) {
           })}
         </div>
       </div>
+
+      <FieldScopePopover
+        open={scopeTarget !== null}
+        onClose={() => setScopeTarget(null)}
+        fieldLabel={scopeTarget?.fieldKey ?? ''}
+        marketLabel={scopeTarget ? `${scopeTarget.channel} ${scopeTarget.marketplace}` : ''}
+        scope={scopeTarget ? fieldLinks.scopeFor(scopeTarget.fieldKey) : 'master'}
+        selectedMembers={scopeTarget ? fieldLinks.memberKeysFor(scopeTarget.fieldKey) : []}
+        members={scopeMembers}
+        canTranslate={scopeTarget ? isTranslatableField(scopeTarget.fieldKey) : false}
+        onApply={(r) => {
+          if (scopeTarget) void fieldLinks.setScope(scopeTarget.fieldKey, r).then(() => load())
+        }}
+      />
     </div>
   )
 }
