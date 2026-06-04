@@ -153,6 +153,10 @@ export function RankPlacementCockpit() {
   const [intel, setIntel] = useState<DpIntel | null>(null)
   const [demand, setDemand] = useState<DemandHour[] | null>(null)
   const [whenLoading, setWhenLoading] = useState(false)
+  // T2 — smart schedule params (bid-down default; pause only the dead overnight)
+  const [bidUpPct, setBidUpPct] = useState(25)
+  const [bidDownPct, setBidDownPct] = useState(40)
+  const [pauseOvernight, setPauseOvernight] = useState(true)
   // R3 — bulk keyword manager
   const [targets, setTargets] = useState<Target[]>([])
   const [targetsLoading, setTargetsLoading] = useState(false)
@@ -413,6 +417,29 @@ export function RankPlacementCockpit() {
   const maxDemand = demand && demand.length ? Math.max(1, ...demand.map(h => h.revenueCents)) : 1
   const deadDays = intel ? intel.days.filter(d => d.recommend === 'bid-down') : []
   const peakDays = intel ? intel.days.filter(d => d.recommend === 'bid-up') : []
+  const dayLabel = useCallback((wd: number) => intel?.days.find(d => d.weekday === wd)?.label.slice(0, 3) ?? String(wd), [intel])
+
+  // T2 — generate a schedule from the intel: bid-up peak days, bid-down weak
+  // days, keep average days, and (optionally) pause the dead overnight hours
+  // where order demand is ~0. Maps to AdSchedule.windows (cron-enforced).
+  const smartSchedule = useMemo(() => {
+    if (!intel || intel.days.length === 0) return null
+    const peak = intel.days.filter(d => d.recommend === 'bid-up').map(d => d.weekday)
+    const weak = intel.days.filter(d => d.recommend === 'bid-down').map(d => d.weekday)
+    const keep = intel.days.filter(d => d.recommend === 'keep').map(d => d.weekday)
+    let activeStart = 0, activeEnd = 24, deadHours: number[] = []
+    if (pauseOvernight && demand && demand.length) {
+      const max = Math.max(1, ...demand.map(h => h.revenueCents))
+      const thr = max * 0.05
+      const live = demand.filter(h => h.revenueCents >= thr).map(h => h.key)
+      if (live.length && live.length < 24) { activeStart = Math.min(...live); activeEnd = Math.max(...live) + 1; deadHours = demand.filter(h => h.revenueCents < thr).map(h => h.key) }
+    }
+    const windows: Array<{ days: number[]; startHour: number; endHour: number; bidMultiplierPct?: number }> = []
+    if (peak.length) windows.push({ days: peak, startHour: activeStart, endHour: activeEnd, bidMultiplierPct: bidUpPct })
+    if (weak.length) windows.push({ days: weak, startHour: activeStart, endHour: activeEnd, bidMultiplierPct: -bidDownPct })
+    if (keep.length) windows.push({ days: keep, startHour: activeStart, endHour: activeEnd })
+    return { windows, peak, weak, keep, activeStart, activeEnd, deadHours }
+  }, [intel, demand, bidUpPct, bidDownPct, pauseOvernight])
 
   // Honest rank readout: where you're holding vs the target slot.
   const rankReadout = (() => {
@@ -666,10 +693,32 @@ export function RankPlacementCockpit() {
         </div>
 
         {wastedSpendCents > 0 && (
-          <div className="az-when-waste"><AlertTriangle size={13} /> <span><b>{euros(wastedSpendCents)}</b> spent on below-average-converting days{deadDays.length ? ` (${deadDays.map(d => d.label.slice(0, 3)).join(', ')})` : ''} in the last {intel?.windowDays}d{peakDays.length ? `; ${peakDays.map(d => d.label.slice(0, 3)).join(', ')} convert best` : ''}. The smart schedule (T2) will pull bids back there.</span></div>
+          <div className="az-when-waste"><AlertTriangle size={13} /> <span><b>{euros(wastedSpendCents)}</b> spent on below-average-converting days{deadDays.length ? ` (${deadDays.map(d => d.label.slice(0, 3)).join(', ')})` : ''} in the last {intel?.windowDays}d{peakDays.length ? `; ${peakDays.map(d => d.label.slice(0, 3)).join(', ')} convert best` : ''}.</span></div>
         )}
+
+        {/* ── T2: smart schedule generator (preview) ─────────────── */}
+        {smartSchedule && (smartSchedule.peak.length > 0 || smartSchedule.weak.length > 0 || smartSchedule.deadHours.length > 0) ? (
+          <div className="az-sched">
+            <div className="az-sched-head"><Sparkles size={14} /> Smart schedule <span className="tag">preview</span></div>
+            <div className="az-sched-sum">
+              {smartSchedule.peak.length > 0 && <>Bid <b>+{bidUpPct}%</b> on <b>{smartSchedule.peak.map(dayLabel).join(', ')}</b> (best converting). </>}
+              {smartSchedule.weak.length > 0 && <>Bid <b>−{bidDownPct}%</b> on <b>{smartSchedule.weak.map(dayLabel).join(', ')}</b> (weak). </>}
+              {smartSchedule.keep.length > 0 && <>Keep {smartSchedule.keep.map(dayLabel).join(', ')}. </>}
+              {pauseOvernight && smartSchedule.deadHours.length > 0 && <>Pause <b>{pad2(smartSchedule.activeEnd % 24)}:00–{pad2(smartSchedule.activeStart)}:00</b> (≈0 demand). </>}
+            </div>
+            <div className="az-sched-ctls">
+              <label>Bid-up <input type="number" min={0} max={900} value={bidUpPct} onChange={e => setBidUpPct(Math.max(0, Math.min(900, Number(e.target.value) || 0)))} />%</label>
+              <label>Bid-down <input type="number" min={0} max={99} value={bidDownPct} onChange={e => setBidDownPct(Math.max(0, Math.min(99, Number(e.target.value) || 0)))} />%</label>
+              <label className="az-sched-check"><input type="checkbox" checked={pauseOvernight} onChange={e => setPauseOvernight(e.target.checked)} /> Pause dead overnight hours</label>
+            </div>
+            <div className="az-cockpit-note" style={{ marginTop: 8 }}><Info size={12} /> Preview only — this maps to a campaign delivery schedule (cron-enforced in {market === 'IT' ? 'Europe/Rome' : 'the market timezone'}). One-click apply lands in T3. Weak days bid down (keeps ranking); only the ~0-demand overnight block pauses.</div>
+          </div>
+        ) : intel && !whenLoading ? (
+          <div className="az-cockpit-sub" style={{ marginTop: 8 }}>Conversion is even across the week — no day-level schedule needed yet.</div>
+        ) : null}
+
         {intel?.note && <div className="az-cockpit-sub">{intel.note}</div>}
-        <div className="az-cockpit-note"><Info size={12} /> Read-only timing intelligence. The smart schedule generator (T2) and apply (T3) come next. Day-of-week is ad-attributed; hourly demand is order-placed time — a live proxy until Amazon Marketing Stream provides true hourly ad data.</div>
+        <div className="az-cockpit-note"><Info size={12} /> Day-of-week is ad-attributed; hourly demand is order-placed time — a live proxy until Amazon Marketing Stream provides true hourly ad data.</div>
       </div>
 
       {/* ── R3: bulk keyword manager ─────────────────────────────── */}
