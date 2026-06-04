@@ -6,6 +6,7 @@
  */
 
 import { logger } from '../../utils/logger.js'
+import { applyMappingToSyncPayload } from './sync-mapping-merge.js'
 
 interface ShopifyPayload {
   sku: string
@@ -186,7 +187,13 @@ export async function syncProductToShopify(
       imageCount: finalImages.length,
     })
 
-    return payload
+    // FM.7 — flag-gated mapping merge (FM_SYNC_SHOPIFY; off by default).
+    return applyMappingToSyncPayload({
+      productId: product.id,
+      channel: 'SHOPIFY',
+      marketplace: channelListing.marketplace ?? channelListing.region ?? '',
+      legacyPayload: payload,
+    })
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error)
     logger.error('❌ [SHOPIFY SYNC] Failed to generate payload', {

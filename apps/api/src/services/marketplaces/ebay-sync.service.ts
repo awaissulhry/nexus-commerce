@@ -6,6 +6,7 @@
  */
 
 import { logger } from '../../utils/logger.js'
+import { applyMappingToSyncPayload } from './sync-mapping-merge.js'
 
 interface EbayPayload {
   sku: string
@@ -147,7 +148,13 @@ export async function syncProductToEbay(
       title: finalTitle,
     })
 
-    return payload
+    // FM.7 — flag-gated mapping merge (FM_SYNC_EBAY; off by default).
+    return applyMappingToSyncPayload({
+      productId: product.id,
+      channel: 'EBAY',
+      marketplace: channelListing.marketplace ?? channelListing.region ?? '',
+      legacyPayload: payload,
+    })
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error)
     logger.error('❌ [EBAY SYNC] Failed to generate payload', {

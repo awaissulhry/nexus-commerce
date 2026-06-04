@@ -6,6 +6,7 @@
  */
 
 import { logger } from '../../utils/logger.js'
+import { applyMappingToSyncPayload } from './sync-mapping-merge.js'
 
 interface AmazonPayload {
   sku: string
@@ -147,7 +148,14 @@ export async function syncProductToAmazon(
       title: finalTitle,
     })
 
-    return payload
+    // FM.7 — let the catalog mapping shape the payload (flag-gated via
+    // FM_SYNC_AMAZON; off by default → returns `payload` unchanged).
+    return applyMappingToSyncPayload({
+      productId: product.id,
+      channel: 'AMAZON',
+      marketplace: channelListing.marketplace ?? channelListing.region ?? '',
+      legacyPayload: payload,
+    })
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error)
     logger.error('❌ [AMAZON SYNC] Failed to generate payload', {
