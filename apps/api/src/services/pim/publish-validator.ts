@@ -17,9 +17,8 @@
 import prisma from '../../db.js'
 import { resolveAttributes, resolveAttributesFlat } from './attribute-resolver.js'
 import {
-  getMappingForMarketplace,
+  getResolvedRules,
   type FieldMappingRule,
-  type MarketplaceSchemaMapping,
 } from './schema-mapping.service.js'
 
 export interface FieldValidationError {
@@ -143,9 +142,10 @@ export async function validatePublish(input: {
     ? await prisma.product.findUnique({ where: { id: product.parentId } })
     : null
 
-  let mapping: MarketplaceSchemaMapping
+  // FM.1 — resolve the effective rule set for this product's type.
+  let rules: Record<string, FieldMappingRule>
   try {
-    mapping = await getMappingForMarketplace(channel, marketplace)
+    rules = await getResolvedRules(channel, marketplace, product.productType)
   } catch {
     throw new Error(`Marketplace not found: ${channel}/${marketplace}`)
   }
@@ -174,11 +174,11 @@ export async function validatePublish(input: {
   })
 
   const errors: FieldValidationError[] = []
-  const fieldKeys = Object.keys(mapping.fields)
+  const fieldKeys = Object.keys(rules)
   let requiredCount = 0
 
   for (const fieldKey of fieldKeys) {
-    const rule = mapping.fields[fieldKey]
+    const rule = rules[fieldKey]
     if (!rule) continue
 
     const sourceValue = resolveSourcePath(

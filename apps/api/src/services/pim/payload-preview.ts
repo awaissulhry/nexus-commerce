@@ -24,7 +24,7 @@
 import prisma from '../../db.js'
 import { resolveAttributesFlat } from './attribute-resolver.js'
 import {
-  getMappingForMarketplace,
+  getResolvedRules,
   type FieldMappingRule,
   type TransformOp,
 } from './schema-mapping.service.js'
@@ -177,7 +177,9 @@ export async function previewPayload(input: {
     ? await prisma.product.findUnique({ where: { id: product.parentId } })
     : null
 
-  const mapping = await getMappingForMarketplace(channel, marketplace)
+  // FM.1 — resolve the effective rule set for this product's type (the
+  // default bucket overlaid with any productType-specific overlay).
+  const rules = await getResolvedRules(channel, marketplace, product.productType)
   const channelListing = await prisma.channelListing.findFirst({
     where: { productId, channel, marketplace },
   })
@@ -193,9 +195,9 @@ export async function previewPayload(input: {
   const payload: Record<string, unknown> = {}
   const missingRequired: string[] = []
 
-  const fieldKeys = Object.keys(mapping.fields)
+  const fieldKeys = Object.keys(rules)
   for (const fieldKey of fieldKeys) {
-    const rule = mapping.fields[fieldKey]
+    const rule = rules[fieldKey]
     if (!rule) continue
 
     const sourceRaw = resolveSourcePath(rule.source, resolved, product as any, locale)

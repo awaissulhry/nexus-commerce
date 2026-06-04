@@ -28,6 +28,8 @@ import {
   parseMapping,
   validateMapping,
   validateFieldRule,
+  getRulesFor,
+  getResolvedRules,
   getMappingForMarketplace,
   getFieldMapping,
   upsertFieldMapping,
@@ -47,10 +49,11 @@ beforeEach(() => {
 // emptyMapping shape
 // ────────────────────────────────────────────────────────────────────
 describe('emptyMapping', () => {
-  it('returns version 1 with empty fields + null sync metadata', () => {
+  it('returns version 1 with empty fields + overlay + null sync metadata', () => {
     expect(emptyMapping()).toEqual({
       version: 1,
       fields: {},
+      byProductType: {},
       lastSyncedAt: null,
       schemaSnapshotVersion: null,
     })
@@ -80,7 +83,7 @@ describe('parseMapping', () => {
     expect(parseMapping({ version: 'not-a-number' })).toEqual(emptyMapping())
   })
 
-  it('passes through a valid mapping unchanged', () => {
+  it('normalizes a valid legacy mapping (adds an empty byProductType)', () => {
     const valid: MarketplaceSchemaMapping = {
       version: 1,
       fields: {
@@ -89,7 +92,7 @@ describe('parseMapping', () => {
       lastSyncedAt: '2026-05-24T00:00:00Z',
       schemaSnapshotVersion: 'abc123',
     }
-    expect(parseMapping(valid)).toEqual(valid)
+    expect(parseMapping(valid)).toEqual({ ...valid, byProductType: {} })
   })
 })
 
@@ -324,5 +327,272 @@ describe('recordSchemaSync', () => {
     expect(result.schemaSnapshotVersion).toBe('snap-v42')
     expect(result.lastSyncedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/) // ISO
     expect(result.fields.title.source).toBe('t')
+  })
+})
+
+// ════════════════════════════════════════════════════════════════════
+// FM.1 — per-productType overlay
+// ════════════════════════════════════════════════════════════════════
+
+describe('parseMapping — byProductType normalization (FM.1)', () => {
+  it('adds an empty byProductType to a legacy mapping that omits it', () => {
+    const legacy = {
+      version: 1,
+      fields: { title: { source: 'name' } },
+      lastSyncedAt: null,
+      schemaSnapshotVersion: null,
+    }
+    expect(parseMapping(legacy).byProductType).toEqual({})
+  })
+
+  it('preserves a provided byProductType overlay', () => {
+    const withOverlay = {
+      version: 1,
+      fields: { title: { source: 'name' } },
+      byProductType: { OUTERWEAR: { material: { source: 'categoryAttributes.material' } } },
+      lastSyncedAt: null,
+      schemaSnapshotVersion: null,
+    }
+    expect(parseMapping(withOverlay).byProductType).toEqual({
+      OUTERWEAR: { material: { source: 'categoryAttributes.material' } },
+    })
+  })
+})
+
+describe('validateMapping — byProductType (FM.1)', () => {
+  it('accepts a well-formed overlay', () => {
+    const errs = validateMapping({
+      ...emptyMapping(),
+      byProductType: { OUTERWEAR: { material: { source: 'categoryAttributes.material' } } },
+    })
+    expect(errs).toEqual([])
+  })
+
+  it('rejects a non-object byProductType', () => {
+    const errs = validateMapping({ ...emptyMapping(), byProductType: 'nope' })
+    expect(errs.some((e) => e.includes('byProductType'))).toBe(true)
+  })
+
+  it('rejects a non-object bucket', () => {
+    const errs = validateMapping({ ...emptyMapping(), byProductType: { OUTERWEAR: 'nope' } })
+    expect(errs.some((e) => e.includes('byProductType.OUTERWEAR'))).toBe(true)
+  })
+
+  it('reports a bad rule inside an overlay with a byProductType-prefixed path', () => {
+    const errs = validateMapping({
+      ...emptyMapping(),
+      byProductType: { OUTERWEAR: { material: { source: '' } } },
+    })
+    expect(errs.some((e) => e.startsWith('byProductType.OUTERWEAR.material'))).toBe(true)
+  })
+})
+
+describe('getRulesFor (FM.1)', () => {
+  const mapping: MarketplaceSchemaMapping = {
+    version: 1,
+    fields: {
+      title: { source: 'name' },
+      material: { source: 'categoryAttributes.material' },
+    },
+    byProductType: {
+      OUTERWEAR: {
+        material: { source: 'categoryAttributes.shell_material' }, // overrides default
+        fit: { source: 'categoryAttributes.fit' }, // type-only
+      },
+    },
+    lastSyncedAt: null,
+    schemaSnapshotVersion: null,
+  }
+
+  it('returns just the default bucket when no productType is given', () => {
+    expect(getRulesFor(mapping)).toEqual(mapping.fields)
+  })
+
+  it('returns just the default bucket for a type with no overlay', () => {
+    expect(getRulesFor(mapping, 'FOOTWEAR')).toEqual(mapping.fields)
+  })
+
+  it('overlays the productType bucket over defaults (type wins per field)', () => {
+    const rules = getRulesFor(mapping, 'OUTERWEAR')
+    expect(rules.title.source).toBe('name') // inherited default
+    expect(rules.material.source).toBe('categoryAttributes.shell_material') // overridden
+    expect(rules.fit.source).toBe('categoryAttributes.fit') // type-only
+  })
+
+  it('does not mutate the source mapping', () => {
+    getRulesFor(mapping, 'OUTERWEAR')
+    expect(mapping.fields.material.source).toBe('categoryAttributes.material')
+  })
+
+  it('tolerates a legacy mapping with no byProductType', () => {
+    const legacy = {
+      version: 1,
+      fields: { title: { source: 'name' } },
+      lastSyncedAt: null,
+      schemaSnapshotVersion: null,
+    } as MarketplaceSchemaMapping
+    expect(getRulesFor(legacy, 'OUTERWEAR')).toEqual({ title: { source: 'name' } })
+  })
+})
+
+describe('getResolvedRules (FM.1)', () => {
+  it('merges default + productType overlay from the column', async () => {
+    mockPrisma.marketplace.findUnique.mockResolvedValue({
+      schemaMapping: {
+        version: 1,
+        fields: { title: { source: 'name' }, material: { source: 'categoryAttributes.material' } },
+        byProductType: { OUTERWEAR: { material: { source: 'categoryAttributes.shell_material' } } },
+        lastSyncedAt: null,
+        schemaSnapshotVersion: null,
+      },
+    })
+    const rules = await getResolvedRules('AMAZON', 'IT', 'OUTERWEAR')
+    expect(rules.title.source).toBe('name')
+    expect(rules.material.source).toBe('categoryAttributes.shell_material')
+  })
+
+  it('returns only defaults for a type without an overlay', async () => {
+    mockPrisma.marketplace.findUnique.mockResolvedValue({
+      schemaMapping: {
+        version: 1,
+        fields: { title: { source: 'name' } },
+        byProductType: { OUTERWEAR: { fit: { source: 'categoryAttributes.fit' } } },
+        lastSyncedAt: null,
+        schemaSnapshotVersion: null,
+      },
+    })
+    const rules = await getResolvedRules('AMAZON', 'IT', 'FOOTWEAR')
+    expect(Object.keys(rules)).toEqual(['title'])
+  })
+})
+
+describe('getFieldMapping — productType overlay (FM.1)', () => {
+  it('returns the type-specific rule overriding the default', async () => {
+    mockPrisma.marketplace.findUnique.mockResolvedValue({
+      schemaMapping: {
+        version: 1,
+        fields: { material: { source: 'categoryAttributes.material' } },
+        byProductType: { OUTERWEAR: { material: { source: 'categoryAttributes.shell_material' } } },
+        lastSyncedAt: null,
+        schemaSnapshotVersion: null,
+      },
+    })
+    const rule = await getFieldMapping('AMAZON', 'IT', 'material', 'OUTERWEAR')
+    expect(rule?.source).toBe('categoryAttributes.shell_material')
+  })
+
+  it('falls back to the default rule when the type has no overlay for that field', async () => {
+    mockPrisma.marketplace.findUnique.mockResolvedValue({
+      schemaMapping: {
+        version: 1,
+        fields: { material: { source: 'categoryAttributes.material' } },
+        byProductType: {},
+        lastSyncedAt: null,
+        schemaSnapshotVersion: null,
+      },
+    })
+    const rule = await getFieldMapping('AMAZON', 'IT', 'material', 'OUTERWEAR')
+    expect(rule?.source).toBe('categoryAttributes.material')
+  })
+})
+
+describe('upsertFieldMapping — productType overlay (FM.1)', () => {
+  it('writes into byProductType[type], preserving the default bucket', async () => {
+    mockPrisma.marketplace.findUnique.mockResolvedValue({
+      schemaMapping: {
+        version: 1,
+        fields: { title: { source: 'name' } },
+        byProductType: {},
+        lastSyncedAt: null,
+        schemaSnapshotVersion: null,
+      },
+    })
+    mockPrisma.marketplace.update.mockResolvedValue({})
+
+    const result = await upsertFieldMapping(
+      'AMAZON',
+      'IT',
+      'material',
+      { source: 'categoryAttributes.material' },
+      'OUTERWEAR',
+    )
+    expect(result.byProductType?.OUTERWEAR.material.source).toBe('categoryAttributes.material')
+    expect(result.fields.title.source).toBe('name') // default untouched
+  })
+
+  it('preserves other type overlays when writing a new one', async () => {
+    mockPrisma.marketplace.findUnique.mockResolvedValue({
+      schemaMapping: {
+        version: 1,
+        fields: {},
+        byProductType: { FOOTWEAR: { size: { source: 'categoryAttributes.size' } } },
+        lastSyncedAt: null,
+        schemaSnapshotVersion: null,
+      },
+    })
+    mockPrisma.marketplace.update.mockResolvedValue({})
+
+    const result = await upsertFieldMapping(
+      'AMAZON',
+      'IT',
+      'material',
+      { source: 'categoryAttributes.material' },
+      'OUTERWEAR',
+    )
+    expect(result.byProductType?.FOOTWEAR.size.source).toBe('categoryAttributes.size')
+    expect(result.byProductType?.OUTERWEAR.material.source).toBe('categoryAttributes.material')
+  })
+
+  it('still writes the default bucket when no productType is given (back-compat)', async () => {
+    mockPrisma.marketplace.findUnique.mockResolvedValue({ schemaMapping: {} })
+    mockPrisma.marketplace.update.mockResolvedValue({})
+    const result = await upsertFieldMapping('AMAZON', 'IT', 'title', { source: 'name' })
+    expect(result.fields.title.source).toBe('name')
+    expect(result.byProductType).toEqual({})
+  })
+})
+
+describe('removeFieldMapping — productType overlay (FM.1)', () => {
+  it('removes a rule from the type overlay, keeping the default bucket', async () => {
+    mockPrisma.marketplace.findUnique.mockResolvedValue({
+      schemaMapping: {
+        version: 1,
+        fields: { material: { source: 'categoryAttributes.material' } },
+        byProductType: { OUTERWEAR: { material: { source: 'x' }, fit: { source: 'y' } } },
+        lastSyncedAt: null,
+        schemaSnapshotVersion: null,
+      },
+    })
+    mockPrisma.marketplace.update.mockResolvedValue({})
+
+    const result = await removeFieldMapping('AMAZON', 'IT', 'material', 'OUTERWEAR')
+    expect(result.byProductType?.OUTERWEAR.material).toBeUndefined()
+    expect(result.byProductType?.OUTERWEAR.fit.source).toBe('y')
+    expect(result.fields.material.source).toBe('categoryAttributes.material')
+  })
+
+  it('drops the overlay key entirely when its last rule is removed', async () => {
+    mockPrisma.marketplace.findUnique.mockResolvedValue({
+      schemaMapping: {
+        version: 1,
+        fields: {},
+        byProductType: { OUTERWEAR: { material: { source: 'x' } } },
+        lastSyncedAt: null,
+        schemaSnapshotVersion: null,
+      },
+    })
+    mockPrisma.marketplace.update.mockResolvedValue({})
+
+    const result = await removeFieldMapping('AMAZON', 'IT', 'material', 'OUTERWEAR')
+    expect(result.byProductType?.OUTERWEAR).toBeUndefined()
+  })
+
+  it('no-ops when the type overlay lacks the field (no update call)', async () => {
+    mockPrisma.marketplace.findUnique.mockResolvedValue({
+      schemaMapping: { version: 1, fields: {}, byProductType: {}, lastSyncedAt: null, schemaSnapshotVersion: null },
+    })
+    const result = await removeFieldMapping('AMAZON', 'IT', 'material', 'OUTERWEAR')
+    expect(mockPrisma.marketplace.update).not.toHaveBeenCalled()
+    expect(result.byProductType).toEqual({})
   })
 })

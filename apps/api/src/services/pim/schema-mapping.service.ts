@@ -56,9 +56,18 @@ export interface FieldMappingRule {
 /** Top-level shape of Marketplace.schemaMapping. */
 export interface MarketplaceSchemaMapping {
   version: number
-  /** Keyed by external-schema field name (Amazon: 'bullet_point_1',
-   *  eBay: 'ItemSpecifics.Brand', Shopify: 'metafields.material'). */
+  /** Type-agnostic DEFAULT rules, keyed by external-schema field name
+   *  (Amazon: 'bullet_point_1', eBay: 'ItemSpecifics.Brand', Shopify:
+   *  'metafields.material'). Applies to every productType unless a more
+   *  specific byProductType overlay redefines the same field key. */
   fields: Record<string, FieldMappingRule>
+  /** FM.1 — per-productType rule overlays. Keyed by Amazon productType /
+   *  eBay category key, then by external-schema field name. A rule here
+   *  OVERRIDES the same field in `fields` for that productType only
+   *  (resolved via getRulesFor / getResolvedRules). Optional in the type
+   *  so legacy rows (pre-FM.1) type-check; emptyMapping()/parseMapping()
+   *  always normalize it to a present object at runtime. */
+  byProductType?: Record<string, Record<string, FieldMappingRule>>
   /** ISO timestamp of the last D.1 live-schema sync against this
    *  marketplace, or null when never synced. */
   lastSyncedAt: string | null
@@ -73,6 +82,7 @@ export function emptyMapping(): MarketplaceSchemaMapping {
   return {
     version: 1,
     fields: {},
+    byProductType: {},
     lastSyncedAt: null,
     schemaSnapshotVersion: null,
   }
@@ -120,6 +130,24 @@ export function validateMapping(input: unknown): string[] {
     }
   }
 
+  // byProductType: optional per-type overlay (FM.1). Validate only when
+  // present so legacy rows without it stay valid.
+  if (input.byProductType !== undefined) {
+    if (!isPlainObject(input.byProductType)) {
+      errors.push('mapping.byProductType must be an object')
+    } else {
+      for (const [productType, bucket] of Object.entries(input.byProductType)) {
+        if (!isPlainObject(bucket)) {
+          errors.push(`mapping.byProductType.${productType} must be an object`)
+          continue
+        }
+        for (const [fieldKey, rule] of Object.entries(bucket)) {
+          errors.push(...validateRuleShape(rule, `byProductType.${productType}.${fieldKey}`))
+        }
+      }
+    }
+  }
+
   // lastSyncedAt: string | null
   if (input.lastSyncedAt !== null && typeof input.lastSyncedAt !== 'string') {
     errors.push('mapping.lastSyncedAt must be string or null')
@@ -136,8 +164,14 @@ export function validateMapping(input: unknown): string[] {
 /** Validate one field-rule entry. Returned errors are prefixed with the
  *  field key so the caller can locate them. */
 export function validateFieldRule(fieldKey: string, rule: unknown): string[] {
+  return validateRuleShape(rule, `fields.${fieldKey}`)
+}
+
+/** Validate one field-rule entry under a caller-supplied path prefix
+ *  (e.g. `fields.title` or `byProductType.OUTERWEAR.material`) so error
+ *  messages locate the rule regardless of which bucket it lives in. */
+function validateRuleShape(rule: unknown, prefix: string): string[] {
   const errors: string[] = []
-  const prefix = `fields.${fieldKey}`
 
   if (!isPlainObject(rule)) {
     return [`${prefix} must be an object`]
@@ -177,7 +211,31 @@ export function parseMapping(raw: unknown): MarketplaceSchemaMapping {
   if (!isPlainObject(raw)) return emptyMapping()
   const errors = validateMapping(raw)
   if (errors.length > 0) return emptyMapping()
-  return raw as unknown as MarketplaceSchemaMapping
+  const m = raw as unknown as MarketplaceSchemaMapping
+  // FM.1 — normalize the optional overlay so every downstream caller can
+  // rely on mapping.byProductType being a present object.
+  return {
+    ...m,
+    byProductType: isPlainObject(m.byProductType) ? m.byProductType : {},
+  }
+}
+
+// ────────────────────────────────────────────────────────────────────
+// Rule resolution (FM.1)
+// ────────────────────────────────────────────────────────────────────
+
+/** Resolve the effective rule set for a productType: the type-agnostic
+ *  default bucket (`fields`) overlaid with the productType-specific
+ *  bucket (more specific wins per field key). Passing no productType — or
+ *  one with no overlay — returns just the defaults, i.e. the pre-FM.1
+ *  behaviour. Pure: operates on an already-loaded mapping. */
+export function getRulesFor(
+  mapping: MarketplaceSchemaMapping,
+  productType?: string | null,
+): Record<string, FieldMappingRule> {
+  const base = mapping.fields ?? {}
+  const overlay = productType ? mapping.byProductType?.[productType] : undefined
+  return overlay ? { ...base, ...overlay } : { ...base }
 }
 
 // ────────────────────────────────────────────────────────────────────
@@ -217,15 +275,30 @@ export async function getMappingForMarketplace(
   return parseMapping(row.schemaMapping)
 }
 
-/** Read a single field's mapping rule. Returns null when the field
- *  isn't mapped (or the row is empty). */
+/** DB convenience: load a marketplace's mapping and resolve the effective
+ *  rule set for a productType (default bucket overlaid with the type
+ *  overlay). This is the accessor publish / preview / cascade / sync
+ *  should use so productType specificity is honoured everywhere. */
+export async function getResolvedRules(
+  channel: string,
+  code: string,
+  productType?: string | null,
+): Promise<Record<string, FieldMappingRule>> {
+  const mapping = await getMappingForMarketplace(channel, code)
+  return getRulesFor(mapping, productType)
+}
+
+/** Read a single field's effective rule for an optional productType.
+ *  Returns null when the field isn't mapped in either the type overlay
+ *  or the default bucket. */
 export async function getFieldMapping(
   channel: string,
   code: string,
   fieldKey: string,
+  productType?: string | null,
 ): Promise<FieldMappingRule | null> {
-  const mapping = await getMappingForMarketplace(channel, code)
-  return mapping.fields[fieldKey] ?? null
+  const rules = await getResolvedRules(channel, code, productType)
+  return rules[fieldKey] ?? null
 }
 
 /** Upsert one field's rule, preserving every other field already in
@@ -236,14 +309,21 @@ export async function upsertFieldMapping(
   code: string,
   fieldKey: string,
   rule: FieldMappingRule,
+  productType?: string | null,
 ): Promise<MarketplaceSchemaMapping> {
   const ruleErrors = validateFieldRule(fieldKey, rule)
   if (ruleErrors.length > 0) throw new InvalidMappingError(ruleErrors)
 
   const current = await getMappingForMarketplace(channel, code)
-  const next: MarketplaceSchemaMapping = {
-    ...current,
-    fields: { ...current.fields, [fieldKey]: rule },
+  let next: MarketplaceSchemaMapping
+  if (productType) {
+    // FM.1 — write into the per-productType overlay, preserving the
+    // default bucket and every other type's overlay.
+    const byProductType = current.byProductType ?? {}
+    const bucket = { ...(byProductType[productType] ?? {}), [fieldKey]: rule }
+    next = { ...current, byProductType: { ...byProductType, [productType]: bucket } }
+  } else {
+    next = { ...current, fields: { ...current.fields, [fieldKey]: rule } }
   }
 
   await prisma.marketplace.update({
@@ -259,13 +339,32 @@ export async function removeFieldMapping(
   channel: string,
   code: string,
   fieldKey: string,
+  productType?: string | null,
 ): Promise<MarketplaceSchemaMapping> {
   const current = await getMappingForMarketplace(channel, code)
-  if (!(fieldKey in current.fields)) return current
 
-  const nextFields = { ...current.fields }
-  delete nextFields[fieldKey]
-  const next: MarketplaceSchemaMapping = { ...current, fields: nextFields }
+  let next: MarketplaceSchemaMapping
+  if (productType) {
+    const byProductType = current.byProductType ?? {}
+    const bucket = byProductType[productType]
+    if (!bucket || !(fieldKey in bucket)) return current
+    const nextBucket = { ...bucket }
+    delete nextBucket[fieldKey]
+    const nextByProductType = { ...byProductType }
+    if (Object.keys(nextBucket).length === 0) {
+      // Drop the overlay key entirely when its last rule is removed so
+      // empty buckets don't accumulate in the column.
+      delete nextByProductType[productType]
+    } else {
+      nextByProductType[productType] = nextBucket
+    }
+    next = { ...current, byProductType: nextByProductType }
+  } else {
+    if (!(fieldKey in current.fields)) return current
+    const nextFields = { ...current.fields }
+    delete nextFields[fieldKey]
+    next = { ...current, fields: nextFields }
+  }
 
   await prisma.marketplace.update({
     where: { channel_code: { channel, code } },
