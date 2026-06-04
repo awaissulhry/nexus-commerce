@@ -21,6 +21,54 @@ import { loadFieldLinkGroups } from './payload-preview.js'
 import { loadValueMapLookup, loadSizeScaleLookup } from './value-map.service.js'
 import { valuesEqual } from './resolver-shadow.js'
 
+// B.6 — adopt-master: clear a per-coordinate override so the field follows
+// master again. Well-known fields are gated by a followMaster* flag (set it
+// true → the resolver ignores the *Override column); everything else lives in
+// the overrideData JSON bag (delete the key). Mirrors the resolver's own
+// override model in attribute-resolver.ts.
+const WELL_KNOWN_FOLLOW: Record<string, string> = {
+  title: 'followMasterTitle',
+  description: 'followMasterDescription',
+  price: 'followMasterPrice',
+  quantity: 'followMasterQuantity',
+  bulletPoints: 'followMasterBulletPoints',
+}
+
+/** Pure: the ChannelListing update that adopts master for one attribute. */
+export function buildAdoptMasterUpdate(
+  overrideData: Record<string, unknown> | null,
+  attribute: string,
+): Record<string, unknown> {
+  const data: Record<string, unknown> = {}
+  const od = overrideData ?? {}
+  if (attribute in od) {
+    const next = { ...od }
+    delete next[attribute]
+    data.overrideData = next
+  }
+  const followFlag = WELL_KNOWN_FOLLOW[attribute]
+  if (followFlag) data[followFlag] = true
+  return data
+}
+
+/** Clear a coordinate's override for one master attribute (adopt master). */
+export async function adoptMasterForCoordinate(input: {
+  productId: string
+  channel: string
+  marketplace: string
+  attribute: string
+}): Promise<{ ok: true; changed: boolean }> {
+  const listing = await prisma.channelListing.findFirst({
+    where: { productId: input.productId, channel: input.channel, marketplace: input.marketplace },
+    select: { id: true, overrideData: true },
+  })
+  if (!listing) throw new Error('No listing for this coordinate')
+  const data = buildAdoptMasterUpdate(listing.overrideData as Record<string, unknown> | null, input.attribute)
+  if (Object.keys(data).length === 0) return { ok: true, changed: false }
+  await prisma.channelListing.update({ where: { id: listing.id }, data })
+  return { ok: true, changed: true }
+}
+
 export interface DivergenceEntry {
   channel: string
   marketplace: string

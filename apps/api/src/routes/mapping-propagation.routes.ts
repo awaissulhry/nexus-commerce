@@ -12,7 +12,7 @@
 import type { FastifyPluginAsync } from 'fastify'
 import { planMappingPropagation } from '../services/pim/mapping-propagation.service.js'
 import { applyCatalogCascade } from '../services/pim/apply-mapping.service.js'
-import { scanProductDivergence } from '../services/pim/reconcile-divergence.service.js'
+import { scanProductDivergence, adoptMasterForCoordinate } from '../services/pim/reconcile-divergence.service.js'
 import { buildMappingMatrix } from '../services/pim/mapping-matrix.service.js'
 
 const mappingPropagationRoutes: FastifyPluginAsync = async (fastify) => {
@@ -139,6 +139,32 @@ const mappingPropagationRoutes: FastifyPluginAsync = async (fastify) => {
       }
     },
   )
+
+  // FM — adopt master for one coordinate's field: clears the per-coordinate
+  // override (follow flag + overrideData key) so it resolves from master.
+  fastify.post<{
+    Params: { id: string }
+    Body: { channel: string; marketplace: string; attribute: string }
+  }>('/products/:id/mapping/adopt-master', async (request, reply) => {
+    const b = request.body
+    if (!b?.channel || !b?.marketplace || !b?.attribute) {
+      return reply.status(400).send({ error: 'channel, marketplace, attribute are required' })
+    }
+    try {
+      const result = await adoptMasterForCoordinate({
+        productId: request.params.id,
+        channel: b.channel,
+        marketplace: b.marketplace,
+        attribute: b.attribute,
+      })
+      return reply.send(result)
+    } catch (err: any) {
+      const msg = err?.message ?? 'adopt-master failed'
+      if (msg.includes('No listing')) return reply.status(404).send({ error: msg })
+      request.log.error({ err }, 'mapping adopt-master failed')
+      return reply.status(500).send({ error: msg })
+    }
+  })
 }
 
 export default mappingPropagationRoutes

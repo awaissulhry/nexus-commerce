@@ -39,6 +39,8 @@ export interface MatrixRow {
   fieldKey: string
   label: string
   required: boolean
+  /** the master attribute this field's rule reads from (for adopt-master) */
+  sourceAttr?: string
   /** the master-resolved (catalog-mapping, no per-coordinate override) value */
   master: unknown
   cells: Record<string, MatrixCell> // key = `${channel}:${marketplace}`
@@ -88,7 +90,15 @@ export function pivotMatrix(args: {
     for (const f of preview.fields) {
       let row = rows.get(f.fieldKey)
       if (!row) {
-        row = { fieldKey: f.fieldKey, label: f.fieldKey, required: f.required, master: undefined, cells: {} }
+        const src = (f.rule as { source?: unknown } | undefined)?.source
+        row = {
+          fieldKey: f.fieldKey,
+          label: f.fieldKey,
+          required: f.required,
+          sourceAttr: typeof src === 'string' ? src : undefined,
+          master: undefined,
+          cells: {},
+        }
         rows.set(f.fieldKey, row)
       }
       row.required = row.required || f.required

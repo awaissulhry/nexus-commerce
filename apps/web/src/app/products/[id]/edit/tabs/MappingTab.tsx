@@ -32,6 +32,7 @@ interface MatrixRow {
   fieldKey: string
   label: string
   required: boolean
+  sourceAttr?: string
   master: unknown
   cells: Record<string, MatrixCell>
 }
@@ -148,6 +149,25 @@ export default function MappingTab({ product }: { product: MappingTabProduct }) 
   useEffect(() => {
     void load()
   }, [load])
+
+  // B.6 — adopt master for one divergent cell: clears that coordinate's
+  // override so the field follows master, then refetch.
+  const adoptMaster = useCallback(
+    async (attribute: string | undefined, channel: string, marketplace: string) => {
+      if (!attribute) return
+      try {
+        await fetch(`${getBackendUrl()}/api/products/${productId}/mapping/adopt-master`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ channel, marketplace, attribute }),
+        })
+      } finally {
+        await load()
+      }
+    },
+    [productId, load],
+  )
 
   const rows = data?.fields ?? []
   const coords = data?.coordinates ?? []
@@ -337,6 +357,16 @@ export default function MappingTab({ product }: { product: MappingTabProduct }) 
                           setScopeTarget({ fieldKey: row.fieldKey, channel: c.channel, marketplace: c.marketplace })
                         }
                       />
+                      {cell.diverges && (
+                        <button
+                          type="button"
+                          onClick={() => adoptMaster(row.sourceAttr, c.channel, c.marketplace)}
+                          title="Adopt master — drop this override so the field follows master"
+                          className="ml-auto shrink-0 rounded px-1 text-[10px] text-amber-700 hover:bg-amber-100 dark:text-amber-300 dark:hover:bg-amber-900/40"
+                        >
+                          adopt
+                        </button>
+                      )}
                     </div>
                   )
                 })}
