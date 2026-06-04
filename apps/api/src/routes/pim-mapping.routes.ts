@@ -40,6 +40,7 @@ import {
 import { validatePublish } from '../services/pim/publish-validator.js'
 import { previewPayload } from '../services/pim/payload-preview.js'
 import { suggestMappings } from '../services/pim/mapping-suggest.service.js'
+import { recordMappingRevision, listMappingRevisions, rollbackMapping } from '../services/pim/mapping-revision.service.js'
 import { syncSchemaToChannelSchema } from '../services/pim/schema-sync-bridge.js'
 import { CategorySchemaService } from '../services/categories/schema-sync.service.js'
 import { AmazonService } from '../services/marketplaces/amazon.service.js'
@@ -190,6 +191,11 @@ const pimMappingRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       try {
+        // FM.13 — snapshot the pre-edit mapping for version history/rollback.
+        await recordMappingRevision(channel, code, {
+          changedBy: (request as any).user?.id ?? null,
+          reason: `upsert ${fieldKey}${productType ? ` [${productType}]` : ''}`,
+        }).catch((e) => request.log.warn({ e }, 'recordMappingRevision failed (non-blocking)'))
         const next = await upsertFieldMapping(channel, code, fieldKey, rule, productType)
         const saved = productType
           ? next.byProductType?.[productType]?.[fieldKey]
@@ -382,6 +388,11 @@ const pimMappingRoutes: FastifyPluginAsync = async (fastify) => {
       const { channel, code, fieldKey } = request.params
       const productType = request.query.productType?.trim() || undefined
       try {
+        // FM.13 — snapshot the pre-delete mapping for version history/rollback.
+        await recordMappingRevision(channel, code, {
+          changedBy: (request as any).user?.id ?? null,
+          reason: `delete ${fieldKey}${productType ? ` [${productType}]` : ''}`,
+        }).catch((e) => request.log.warn({ e }, 'recordMappingRevision failed (non-blocking)'))
         await removeFieldMapping(channel, code, fieldKey, productType)
         return reply.send({ ok: true })
       } catch (err) {
@@ -389,6 +400,37 @@ const pimMappingRoutes: FastifyPluginAsync = async (fastify) => {
           return reply.status(404).send({ error: err.message })
         }
         throw err
+      }
+    },
+  )
+
+  // ── GET /pim/mappings/:channel/:code/revisions ──────────────────
+  // FM.13 — version history (metadata) for this marketplace's mapping.
+  fastify.get<{ Params: { channel: string; code: string } }>(
+    '/pim/mappings/:channel/:code/revisions',
+    async (request, reply) => {
+      const { channel, code } = request.params
+      const revisions = await listMappingRevisions(channel, code)
+      return reply.send({ revisions })
+    },
+  )
+
+  // ── POST /pim/mappings/:channel/:code/rollback/:revisionId ──────
+  // FM.13 — restore a revision's snapshot (records the current state first,
+  // so the rollback is itself undoable).
+  fastify.post<{ Params: { channel: string; code: string; revisionId: string } }>(
+    '/pim/mappings/:channel/:code/rollback/:revisionId',
+    async (request, reply) => {
+      const { channel, code, revisionId } = request.params
+      try {
+        const restored = await rollbackMapping(channel, code, revisionId)
+        return reply.send({ ok: true, mapping: restored })
+      } catch (err: any) {
+        const msg = err?.message ?? 'rollback failed'
+        if (msg.includes('not found')) return reply.status(404).send({ error: msg })
+        if (msg.includes('invalid')) return reply.status(400).send({ error: msg })
+        request.log.error({ err }, 'mapping rollback failed')
+        return reply.status(500).send({ error: msg })
       }
     },
   )

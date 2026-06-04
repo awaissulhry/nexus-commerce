@@ -1749,6 +1749,27 @@ model SizeScaleMap {
   @@index([scale, fromSystem, toSystem])
 }
 
+// ── FM.13: MappingRevision — version history for Marketplace.schemaMapping ──
+//
+// One row per pre-change snapshot of a marketplace's catalog mapping (the
+// whole schemaMapping JSON). The pim-mapping PUT/DELETE routes record one
+// before each edit; rollback restores a snapshot (recording the current
+// state first, so rollback is itself undoable). Capped to the last ~30 per
+// (channel, code) in the service layer.
+model MappingRevision {
+  id        String   @id @default(cuid())
+  channel   String
+  code      String
+  version   Int
+  snapshot  Json
+  changedBy String?
+  reason    String?
+  createdAt DateTime @default(now())
+
+  @@unique([channel, code, version])
+  @@index([channel, code])
+}
+
 // ── S.4: SyncAttempt — per-listing sync audit ──────────────────────────────
 //
 // One row per sync attempt against a ChannelListing. The drawer's Sync
