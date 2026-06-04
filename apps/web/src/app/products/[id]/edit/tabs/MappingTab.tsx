@@ -16,6 +16,7 @@ import { cn } from '@/lib/utils'
 import { useFieldLinks } from '../_shared/cockpit-shell'
 import FieldSourceBadge from '../_shared/cockpit-shell/FieldSourceBadge'
 import FieldScopePopover, { type ScopeMember } from '../_shared/cockpit-shell/FieldScopePopover'
+import CatalogCascadeDrawer from '../_shared/cockpit-shell/CatalogCascadeDrawer'
 import type { FieldSource } from '../_shared/cockpit-shell/contracts'
 
 interface MatrixCell {
@@ -92,7 +93,18 @@ const MASTER_COL = 150
 const CELL_COL = 150
 const ROW_H = 38
 
-export default function MappingTab({ productId }: { productId: string }) {
+interface MappingTabProduct {
+  id: string
+  name?: string | null
+  brand?: string | null
+  manufacturer?: string | null
+  description?: string | null
+  bulletPoints?: unknown
+  keywords?: unknown
+}
+
+export default function MappingTab({ product }: { product: MappingTabProduct }) {
+  const productId = product.id
   const [data, setData] = useState<MappingMatrix | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -100,6 +112,21 @@ export default function MappingTab({ productId }: { productId: string }) {
   const [filter, setFilter] = useState<'all' | 'divergent' | 'gaps'>('all')
   const [scopeTarget, setScopeTarget] = useState<{ fieldKey: string; channel: string; marketplace: string } | null>(null)
   const fieldLinks = useFieldLinks(productId)
+  // B.5 — "Cascade from master" reuses the FM.10 drawer. Snapshot the
+  // master content on open so the drawer's preview input stays stable.
+  const [cascadeOpen, setCascadeOpen] = useState(false)
+  const [cascadeChanges, setCascadeChanges] = useState<Record<string, unknown>>({})
+  const openCascade = useCallback(() => {
+    const c: Record<string, unknown> = {}
+    if (product.name) c.title = product.name
+    if (product.brand) c.brand = product.brand
+    if (product.manufacturer) c.manufacturer = product.manufacturer
+    if (product.description) c.description = product.description
+    if (Array.isArray(product.bulletPoints) && product.bulletPoints.length) c.bulletPoints = product.bulletPoints
+    if (Array.isArray(product.keywords) && product.keywords.length) c.keywords = product.keywords
+    setCascadeChanges(c)
+    setCascadeOpen(true)
+  }, [product])
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -218,6 +245,14 @@ export default function MappingTab({ productId }: { productId: string }) {
             clear filter
           </button>
         )}
+        <button
+          type="button"
+          onClick={openCascade}
+          title="Preview + apply this product's master content across every mapped channel & market"
+          className="ml-auto inline-flex items-center gap-1 rounded-md border border-blue-200 bg-blue-50 px-2 py-1 font-medium text-blue-700 hover:bg-blue-100 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-300"
+        >
+          Cascade from master →
+        </button>
       </div>
       {filter !== 'all' && visibleRows.length === 0 && (
         <div className="py-8 text-center text-xs text-slate-500">No fields match this filter.</div>
@@ -322,6 +357,17 @@ export default function MappingTab({ productId }: { productId: string }) {
         canTranslate={scopeTarget ? isTranslatableField(scopeTarget.fieldKey) : false}
         onApply={(r) => {
           if (scopeTarget) void fieldLinks.setScope(scopeTarget.fieldKey, r).then(() => load())
+        }}
+      />
+
+      <CatalogCascadeDrawer
+        productId={productId}
+        open={cascadeOpen}
+        changes={cascadeChanges}
+        onClose={() => setCascadeOpen(false)}
+        onApplied={() => {
+          setCascadeOpen(false)
+          void load()
         }}
       />
     </div>

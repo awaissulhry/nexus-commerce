@@ -1372,7 +1372,7 @@ export default function ProductEditClient({
 
         {topTab === 'mapping' && (
           <div role="tabpanel" id="panel-mapping" aria-labelledby="tab-mapping">
-            <MappingTab productId={product.id} />
+            <MappingTab product={product} />
           </div>
         )}
 
