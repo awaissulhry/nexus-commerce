@@ -369,6 +369,9 @@
 .az-mode-seg button + button { border-left: 1px solid var(--border); }
 .az-mode-seg button:hover { background: var(--bg3); color: var(--ink2); }
 .az-mode-seg button.on { background: var(--navy); color: #fff; }
+/* compact variant used inline next to the Apply button (RC3.1 scope) */
+.az-scope-seg button { padding: 6px 10px; font-size: 11.5px; }
+.az-scope-seg { align-self: center; }
 .az-mode-hint { display: flex; align-items: flex-start; gap: 5px; margin-top: 8px; font-size: 11px; line-height: 1.45; color: var(--ink3); }
 .az-tr-reset { display: inline-flex; align-items: center; gap: 5px; margin-top: 8px; background: none; border: 1px solid var(--border); border-radius: 6px; padding: 4px 9px; font: inherit; font-size: 11px; font-weight: 700; color: var(--ink2); cursor: pointer; }
 .az-tr-reset:hover { background: var(--bg3); color: var(--navy); }

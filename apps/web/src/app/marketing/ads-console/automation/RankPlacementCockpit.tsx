@@ -210,6 +210,8 @@ export function RankPlacementCockpit() {
   // DD4 — guided "maintain rank at peak"
   const [guidedLevel, setGuidedLevel] = useState<Level>('strong')
   const [guidedPause, setGuidedPause] = useState(true)
+  // RC3.1 — Apply scope: the whole product family, or just the selected campaign.
+  const [applyScope, setApplyScope] = useState<'family' | 'campaign'>('family')
   const [gridSaving, setGridSaving] = useState(false)
   const [gridMsg, setGridMsg] = useState('')
   // TR5 — defend the rank during the grid's push hours
@@ -330,6 +332,14 @@ export function RankPlacementCockpit() {
   const onGridEdit = useCallback((g: Level[][]) => { setTrGrid(g); setGridEdited(true) }, [])
   const gridSummary = useMemo(() => (trGrid ? describeGrid(trGrid) : []), [trGrid])
 
+  // RC3.1 — the campaigns an Apply/Enable touches, per the scope toggle. With one
+  // campaign in the family the toggle is moot (this campaign === the family).
+  const scopedCampaigns = useMemo(
+    () => (!family ? [] : applyScope === 'campaign' ? family.campaigns.filter(c => c.id === campaignId) : family.campaigns),
+    [family, applyScope, campaignId],
+  )
+  const scopedScheds = useMemo(() => famScheds.filter(s => scopedCampaigns.some(c => c.id === s.campaignId)), [famScheds, scopedCampaigns])
+
   // T3 — the family's persisted schedules (one AdSchedule per campaign).
   const loadSchedules = useCallback(async (signal?: AbortSignal) => {
     if (!family || family.campaigns.length === 0) { setFamScheds([]); return }
@@ -349,12 +359,12 @@ export function RankPlacementCockpit() {
   // Apply the schedule to EVERY campaign in the product family (this market).
   // Enable/disable the whole family's schedules at once.
   const toggleAll = useCallback(async (enabled: boolean) => {
-    if (famScheds.length === 0) return
+    if (scopedScheds.length === 0) return
     setGridSaving(true)
-    for (const s of famScheds) { try { await fetch(`${getBackendUrl()}/api/advertising/schedules/${s.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled }) }) } catch { /* ignore */ } }
+    for (const s of scopedScheds) { try { await fetch(`${getBackendUrl()}/api/advertising/schedules/${s.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled }) }) } catch { /* ignore */ } }
     setGridSaving(false)
     void loadSchedules()
-  }, [famScheds, loadSchedules])
+  }, [scopedScheds, loadSchedules])
 
   // T6 — create the autonomous self-refresh rule: weekly, re-derive the family's
   // windows from fresh demand + update its schedules (refresh_dayparting action).
@@ -385,13 +395,13 @@ export function RankPlacementCockpit() {
   // TR3 — compile the painted grid → windows and apply across the whole family
   // (per-market timezone, disabled-by-default; the Enabled toggle flips them all).
   const applyGrid = useCallback(async () => {
-    if (!trGrid || !family || family.campaigns.length === 0) return
+    if (!trGrid || !family || scopedCampaigns.length === 0) return
     const windows = compileGrid(trGrid)
     setGridSaving(true); setGridMsg('')
     const timezone = MARKET_TZ[market] ?? 'Europe/Rome'
     const existing = new Map(famScheds.map(s => [s.campaignId, s.id]))
     let ok = 0
-    for (const c of family.campaigns) {
+    for (const c of scopedCampaigns) {
       try {
         const sid = existing.get(c.id)
         if (sid) await fetch(`${getBackendUrl()}/api/advertising/schedules/${sid}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ windows, timezone }) })
@@ -402,7 +412,7 @@ export function RankPlacementCockpit() {
     setGridMsg(ok > 0 ? 'saved' : 'error')
     setGridSaving(false)
     void loadSchedules()
-  }, [trGrid, family, market, famScheds, loadSchedules])
+  }, [trGrid, family, market, famScheds, scopedCampaigns, loadSchedules])
 
   // TR5 — defend the top rank during the grid's push hours. The placement % is
   // constant, so the grid concentrates aggression into Max/Strong hours and this
@@ -868,14 +878,22 @@ export function RankPlacementCockpit() {
 
             {gridSummary.length > 0 && <div className="az-tr-summary"><span className="t">This applies</span>{gridSummary.map((s, i) => <div key={i} className="line">{s}</div>)}</div>}
             <div className="az-sched-actions">
-              <button type="button" className="az-btn dark" disabled={gridSaving || !trGrid} onClick={() => void applyGrid()}>
-                {gridSaving ? <><Loader2 size={14} className="az-spin" /> Saving…</> : <><Check size={14} /> Apply to {family.campaigns.length} campaign{family.campaigns.length === 1 ? '' : 's'}</>}
+              {family.campaigns.length > 1 && (
+                <span className="az-mode-seg az-scope-seg" role="tablist" aria-label="Apply scope">
+                  <button type="button" role="tab" aria-selected={applyScope === 'campaign'} className={applyScope === 'campaign' ? 'on' : ''} onClick={() => setApplyScope('campaign')}>This campaign</button>
+                  <button type="button" role="tab" aria-selected={applyScope === 'family'} className={applyScope === 'family' ? 'on' : ''} onClick={() => setApplyScope('family')}>All {family.campaigns.length}</button>
+                </span>
+              )}
+              <button type="button" className="az-btn dark" disabled={gridSaving || !trGrid || scopedCampaigns.length === 0} onClick={() => void applyGrid()}>
+                {gridSaving ? <><Loader2 size={14} className="az-spin" /> Saving…</> : <><Check size={14} /> Apply to {scopedCampaigns.length} campaign{scopedCampaigns.length === 1 ? '' : 's'}</>}
               </button>
-              {famScheds.length > 0 && <label className="az-sched-toggle"><input type="checkbox" checked={famScheds.every(s => s.enabled)} disabled={gridSaving} onChange={e => void toggleAll(e.target.checked)} /> Enabled ({famScheds.filter(s => s.enabled).length}/{famScheds.length})</label>}
-              {gridMsg === 'saved' && <span className="az-cockpit-sub" style={{ margin: 0, color: 'var(--green)' }}><Check size={12} style={{ verticalAlign: 'text-bottom' }} /> Saved{famScheds.length && !famScheds.every(s => s.enabled) ? ' — toggle Enabled to run' : ''}</span>}
+              {scopedScheds.length > 0 && <label className="az-sched-toggle"><input type="checkbox" checked={scopedScheds.every(s => s.enabled)} disabled={gridSaving} onChange={e => void toggleAll(e.target.checked)} /> Enabled ({scopedScheds.filter(s => s.enabled).length}/{scopedScheds.length})</label>}
+              {gridMsg === 'saved' && <span className="az-cockpit-sub" style={{ margin: 0, color: 'var(--green)' }}><Check size={12} style={{ verticalAlign: 'text-bottom' }} /> Saved{scopedScheds.length && !scopedScheds.every(s => s.enabled) ? ' — toggle Enabled to run' : ''}</span>}
               {gridMsg === 'error' && <span className="az-cockpit-sub" style={{ margin: 0, color: '#cc1100' }}>Save failed</span>}
             </div>
-            <div className="az-cockpit-note"><Info size={12} /> One schedule across all <b>{family.campaigns.length} {family.parentName ?? 'product'} campaigns in {market}</b> ({MARKET_TZ[market] ?? 'Europe/Rome'}). Starts <b>disabled</b> — enable to run; writes gated (sandbox stages locally). Disabling auto-resumes a paused campaign.</div>
+            <div className="az-cockpit-note"><Info size={12} /> {applyScope === 'campaign' && family.campaigns.length > 1
+              ? <>This schedule on <b>the selected campaign only</b> ({MARKET_TZ[market] ?? 'Europe/Rome'})</>
+              : <>One schedule across all <b>{family.campaigns.length} {family.parentName ?? 'product'} campaigns in {market}</b> ({MARKET_TZ[market] ?? 'Europe/Rome'})</>}. Starts <b>disabled</b> — enable to run; writes gated (sandbox stages locally). Disabling auto-resumes a paused campaign.</div>
           </div>
 
           {totalDailyBudgetCents > 0 && (
