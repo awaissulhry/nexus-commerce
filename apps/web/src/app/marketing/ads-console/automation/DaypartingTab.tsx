@@ -12,8 +12,9 @@
  */
 
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Clock, Search, X, TrendingUp, TrendingDown, Package } from 'lucide-react'
+import { Clock, Search, X, TrendingUp, TrendingDown, Package, Zap, Plus, Trash2 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
+import { useCampaignMap, type CampRef } from './useCampaignMap'
 
 type Metric = 'revenue' | 'orders' | 'units'
 interface Bucket { orders: number; units: number; revenueCents: number }
@@ -26,6 +27,9 @@ interface Daypart {
   hasData: boolean; currencyNote: string
 }
 interface ProductHit { id: string; sku: string; name: string; imageUrl: string | null }
+interface SchedWindow { days?: number[]; startHour?: number; endHour?: number; bidMultiplierPct?: number }
+interface Sched { id: string; campaignId: string; name: string; windows: SchedWindow[]; timezone: string; enabled: boolean; lastApplied: string | null; lastEvaluatedAt: string | null }
+const BID_LADDER = [-50, -25, 0, 25, 50]
 
 // Display weekdays Mon-first; data dow is 0=Sun..6=Sat → map row i to this dow.
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
@@ -94,6 +98,50 @@ export function DaypartingTab() {
     document.addEventListener('mousedown', onDoc); return () => document.removeEventListener('mousedown', onDoc)
   }, [])
   const pick = useCallback((h: ProductHit) => { setProduct(h); setPq(''); setHits([]); setShowHits(false) }, [])
+
+  // ── DP.4: bid-schedule control ──
+  const campMap = useCampaignMap()
+  const byLocalId = useMemo(() => { const m: Record<string, CampRef> = {}; for (const c of Object.values(campMap)) m[c.id] = c; return m }, [campMap])
+  const marketCampaigns = useMemo(() => Object.values(campMap).filter((c) => !market || c.marketplace === market).sort((a, b) => a.name.localeCompare(b.name)), [campMap, market])
+  const [schedules, setSchedules] = useState<Sched[]>([])
+  const [showCreate, setShowCreate] = useState(false)
+  const [selCampaign, setSelCampaign] = useState('')
+  const [bidPct, setBidPct] = useState(25)
+  const [win, setWin] = useState({ start: 9, end: 21, days: [0, 1, 2, 3, 4, 5, 6] as number[] })
+  const [schedName, setSchedName] = useState('')
+  const [enableNow, setEnableNow] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState('')
+
+  const loadSchedules = useCallback(() => {
+    void fetch(`${getBackendUrl()}/api/advertising/schedules`, { cache: 'no-store' }).then((r) => r.json()).then((d) => setSchedules(d.items ?? [])).catch(() => {})
+  }, [])
+  useEffect(() => { loadSchedules() }, [loadSchedules])
+
+  const openCreate = () => {
+    const r = data?.recommendedWindow
+    setWin(r ? { start: r.startHour, end: r.endHour, days: r.days } : { start: 9, end: 21, days: [0, 1, 2, 3, 4, 5, 6] })
+    setBidPct(25)
+    setSchedName(r ? `Peak ${fmtHr(r.startHour)}–${fmtHr(r.endHour)}${market ? ` · ${market}` : ''}` : `Dayparting${market ? ` · ${market}` : ''}`)
+    setSelCampaign(marketCampaigns.length === 1 ? marketCampaigns[0].id : '')
+    setEnableNow(false); setMsg(''); setShowCreate(true)
+  }
+  const createSchedule = async () => {
+    if (!selCampaign) { setMsg('Pick a campaign first.'); return }
+    if (!win.days.length) { setMsg('Pick at least one day.'); return }
+    setBusy(true); setMsg('')
+    try {
+      const body = { campaignId: selCampaign, name: schedName.trim() || 'Dayparting schedule', windows: [{ days: win.days, startHour: win.start, endHour: win.end, bidMultiplierPct: bidPct }], timezone: 'Europe/Rome', enabled: enableNow }
+      const r = await fetch(`${getBackendUrl()}/api/advertising/schedules`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      if (r.ok) { setShowCreate(false); setMsg(enableNow ? 'Schedule created and enabled.' : 'Schedule created (disabled — enable it below when ready).'); loadSchedules() }
+      else { const e = await r.json().catch(() => null); setMsg(e?.error ? `Could not save: ${e.error}` : `Could not save (HTTP ${r.status}).`) }
+    } catch { setMsg('Could not reach the schedules API.') } finally { setBusy(false) }
+  }
+  const toggleSched = async (s: Sched) => { setBusy(true); try { await fetch(`${getBackendUrl()}/api/advertising/schedules/${s.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled: !s.enabled }) }); loadSchedules() } finally { setBusy(false) } }
+  const delSched = async (s: Sched) => { if (typeof window !== 'undefined' && !window.confirm(`Delete schedule "${s.name}"?`)) return; setBusy(true); try { await fetch(`${getBackendUrl()}/api/advertising/schedules/${s.id}`, { method: 'DELETE' }); loadSchedules() } finally { setBusy(false) } }
+  const toggleDay = (dow: number) => setWin((w) => ({ ...w, days: w.days.includes(dow) ? w.days.filter((d) => d !== dow) : [...w.days, dow].sort((a, b) => a - b) }))
+  const dayLabel = (ds: number[] = []) => (ds.length === 7 ? 'Every day' : DOW_ORDER.filter((d) => ds.includes(d)).map((d) => DAYS[DOW_ORDER.indexOf(d)]).join(', '))
+  const winSummary = (ws: SchedWindow[]) => (Array.isArray(ws) && ws.length ? ws.map((w) => `${dayLabel(w.days ?? [0, 1, 2, 3, 4, 5, 6])} ${fmtHr(w.startHour ?? 0)}–${fmtHr(w.endHour ?? 24)}${w.bidMultiplierPct ? ` ${w.bidMultiplierPct > 0 ? '+' : ''}${w.bidMultiplierPct}%` : ''}`).join(' · ') : 'Always on')
 
   // derived display values
   const maxCell = useMemo(() => (data ? Math.max(0, ...data.grid.flat().map((c) => metricVal(c, metric))) : 0), [data, metric])
@@ -240,6 +288,72 @@ export function DaypartingTab() {
           })}
         </div>
       </>}
+
+      {/* ── DP.4: turn a peak window into an Amazon bid schedule ── */}
+      <div style={{ marginTop: 24, borderTop: '1px solid var(--divider)', paddingTop: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 10 }}>
+          <span style={{ fontWeight: 700 }}><Zap size={15} style={{ verticalAlign: 'text-bottom', marginRight: 5, color: 'var(--orange)' }} />Amazon bid schedules</span>
+          <span style={{ color: 'var(--ink2)', fontSize: 12 }}>Bid up in your peak hours, ease off in the quiet ones — runs every 15 min in Rome time.</span>
+          <span style={{ flex: 1 }} />
+          <button className="az-btn dark" onClick={openCreate}><Plus size={14} />Create from peak window</button>
+        </div>
+
+        {showCreate && (
+          <div className="az-eng-card" style={{ marginBottom: 14 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12, alignItems: 'start' }}>
+              <label style={{ display: 'block' }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--ink2)', display: 'block', marginBottom: 4 }}>Campaign {market ? `(${market})` : ''}</span>
+                <select value={selCampaign} onChange={(e) => setSelCampaign(e.target.value)} style={{ width: '100%', border: '1px solid var(--border)', borderRadius: 6, padding: '6px 8px', font: 'inherit', cursor: 'pointer' }}>
+                  <option value="">{marketCampaigns.length ? 'Select a campaign…' : 'No campaigns in this market'}</option>
+                  {marketCampaigns.map((c) => <option key={c.id} value={c.id}>{c.name}{c.marketplace ? ` · ${c.marketplace}` : ''}</option>)}
+                </select>
+              </label>
+              <label style={{ display: 'block' }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--ink2)', display: 'block', marginBottom: 4 }}>Name</span>
+                <input value={schedName} onChange={(e) => setSchedName(e.target.value)} style={{ width: '100%', border: '1px solid var(--border)', borderRadius: 6, padding: '6px 8px', font: 'inherit' }} />
+              </label>
+              <div>
+                <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--ink2)', display: 'block', marginBottom: 4 }}>Active window (Rome)</span>
+                <div style={{ display: 'inline-flex', gap: 4, alignItems: 'center' }}>
+                  <select value={win.start} onChange={(e) => setWin({ ...win, start: Number(e.target.value) })} style={{ border: '1px solid var(--border)', borderRadius: 6, padding: '6px 6px', font: 'inherit', cursor: 'pointer' }}>{Array.from({ length: 24 }, (_, h) => <option key={h} value={h}>{fmtHr(h)}</option>)}</select>
+                  <span style={{ color: 'var(--ink3)' }}>→</span>
+                  <select value={win.end} onChange={(e) => setWin({ ...win, end: Number(e.target.value) })} style={{ border: '1px solid var(--border)', borderRadius: 6, padding: '6px 6px', font: 'inherit', cursor: 'pointer' }}>{Array.from({ length: 24 }, (_, h) => h + 1).map((h) => <option key={h} value={h}>{fmtHr(h === 24 ? 0 : h)}</option>)}</select>
+                </div>
+              </div>
+              <div>
+                <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--ink2)', display: 'block', marginBottom: 4 }}>Bid modifier in-window</span>
+                <div style={{ display: 'inline-flex', gap: 4 }}>{BID_LADDER.map((m) => <button key={m} className={`az-chip quick ${bidPct === m ? 'on' : ''}`} onClick={() => setBidPct(m)}>{m > 0 ? '+' : ''}{m}%</button>)}</div>
+              </div>
+            </div>
+            <div style={{ marginTop: 10 }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--ink2)', display: 'block', marginBottom: 4 }}>Days</span>
+              <div style={{ display: 'inline-flex', gap: 4, flexWrap: 'wrap' }}>{DOW_ORDER.map((dow, di) => <button key={dow} className={`az-chip quick ${win.days.includes(dow) ? 'on' : ''}`} onClick={() => toggleDay(dow)}>{DAYS[di]}</button>)}</div>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 14, flexWrap: 'wrap' }}>
+              <button className="az-btn dark" disabled={busy} onClick={() => void createSchedule()}>{busy ? 'Saving…' : 'Create schedule'}</button>
+              <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12.5, cursor: 'pointer' }}><input type="checkbox" className="az-check" checked={enableNow} onChange={(e) => setEnableNow(e.target.checked)} />Enable immediately <span style={{ color: 'var(--ink3)' }}>(makes live bid/pause changes)</span></label>
+              <button className="az-btn" disabled={busy} onClick={() => { setShowCreate(false); setMsg('') }}>Cancel</button>
+              {msg && <span style={{ color: 'var(--ink2)', fontSize: 12 }}>{msg}</span>}
+            </div>
+          </div>
+        )}
+        {!showCreate && msg && <div style={{ color: 'var(--ink2)', fontSize: 12, marginBottom: 10 }}>{msg}</div>}
+
+        {schedules.length === 0
+          ? <div className="az-empty" style={{ border: '1px solid var(--divider)', borderRadius: 10 }}>No bid schedules yet — create one from a peak window above. They’re created disabled so you can review before going live.</div>
+          : schedules.map((s) => {
+            const camp = byLocalId[s.campaignId]
+            return (
+              <div key={s.id} className="az-rule">
+                <button className={`az-toggle ${s.enabled ? 'on' : ''}`} disabled={busy} onClick={() => void toggleSched(s)} aria-label="Enable schedule" title={s.enabled ? 'Enabled — applying' : 'Disabled'}><i /></button>
+                <div className="nm"><div className="t">{s.name}</div><div className="d2">{camp ? `${camp.name}${camp.marketplace ? ` · ${camp.marketplace}` : ''}` : s.campaignId} · {winSummary(s.windows)}</div></div>
+                <span className={`az-live ${s.enabled ? 'on' : 'dry'}`}>{s.enabled ? 'LIVE' : 'Off'}</span>
+                {s.lastEvaluatedAt && <div className="stat" title="Last evaluated by the dayparting cron"><b>{s.lastApplied ?? '—'}</b>{new Date(s.lastEvaluatedAt).toLocaleDateString('en-IE')}</div>}
+                <button className="az-kebab" disabled={busy} onClick={() => void delSched(s)} title="Delete" style={{ color: '#cc1100' }}><Trash2 size={15} /></button>
+              </div>
+            )
+          })}
+      </div>
     </div>
   )
 }
