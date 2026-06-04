@@ -42,6 +42,7 @@ import { previewPayload } from '../services/pim/payload-preview.js'
 import { suggestMappings } from '../services/pim/mapping-suggest.service.js'
 import { recordMappingRevision, listMappingRevisions, rollbackMapping } from '../services/pim/mapping-revision.service.js'
 import { computeCoverageMatrix } from '../services/pim/mapping-coverage.service.js'
+import { simulateRuleChange } from '../services/pim/mapping-simulate.service.js'
 import { syncSchemaToChannelSchema } from '../services/pim/schema-sync-bridge.js'
 import { CategorySchemaService } from '../services/categories/schema-sync.service.js'
 import { AmazonService } from '../services/marketplaces/amazon.service.js'
@@ -447,6 +448,34 @@ const pimMappingRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.send(result)
     },
   )
+
+  // ── POST /pim/mappings/:channel/:code/simulate ──────────────────
+  // FM.14 — estimate a proposed rule's blast radius (affected products +
+  // sample before→after diffs) before saving. Read-only.
+  fastify.post<{
+    Params: { channel: string; code: string }
+    Body: { fieldKey: string; rule: any; productType?: string; limit?: number }
+  }>('/pim/mappings/:channel/:code/simulate', async (request, reply) => {
+    const { channel, code } = request.params
+    const b = request.body
+    if (!b?.fieldKey || !b.rule || typeof b.rule.source !== 'string') {
+      return reply.status(400).send({ error: 'fieldKey + rule.source are required' })
+    }
+    try {
+      const result = await simulateRuleChange({
+        channel,
+        code,
+        fieldKey: b.fieldKey,
+        rule: b.rule,
+        productType: b.productType?.trim() || undefined,
+        limit: b.limit,
+      })
+      return reply.send(result)
+    } catch (err: any) {
+      request.log.error({ err }, 'mapping simulate failed')
+      return reply.status(500).send({ error: err?.message ?? 'simulate failed' })
+    }
+  })
 }
 
 export default pimMappingRoutes
