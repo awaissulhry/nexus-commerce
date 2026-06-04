@@ -102,6 +102,7 @@ interface MappingTabProduct {
   description?: string | null
   bulletPoints?: unknown
   keywords?: unknown
+  isParent?: boolean
 }
 
 export default function MappingTab({ product }: { product: MappingTabProduct }) {
@@ -226,7 +227,7 @@ export default function MappingTab({ product }: { product: MappingTabProduct }) 
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+      <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500" aria-live="polite">
         <span className="font-medium text-slate-700 dark:text-slate-300">{data.sku}</span>
         <span>
           · {coords.length} coordinates · {visibleRows.length}
@@ -274,23 +275,33 @@ export default function MappingTab({ product }: { product: MappingTabProduct }) 
           Cascade from master →
         </button>
       </div>
+      {product.isParent && (
+        <div className="text-[11px] text-slate-400">
+          Product-level mapping. For per-variant values, use the Matrix tab.
+        </div>
+      )}
       {filter !== 'all' && visibleRows.length === 0 && (
         <div className="py-8 text-center text-xs text-slate-500">No fields match this filter.</div>
       )}
 
       <div
         ref={scrollRef}
+        role="grid"
+        aria-label="Field mapping matrix"
+        aria-rowcount={visibleRows.length + 1}
+        aria-colcount={coords.length + 2}
         className="max-h-[70vh] overflow-auto rounded-lg border border-slate-200 dark:border-slate-800"
       >
         {/* sticky header */}
         <div
+          role="row"
           className="sticky top-0 z-20 grid border-b border-slate-200 bg-slate-50 text-[11px] font-medium text-slate-500 dark:border-slate-800 dark:bg-slate-900"
           style={{ gridTemplateColumns: gridCols, width: 'max-content', minWidth: '100%' }}
         >
-          <div className="sticky left-0 z-10 bg-slate-50 px-2 py-1.5 dark:bg-slate-900">Field</div>
-          <div className="px-2 py-1.5">Master</div>
+          <div role="columnheader" className="sticky left-0 z-10 bg-slate-50 px-2 py-1.5 dark:bg-slate-900">Field</div>
+          <div role="columnheader" className="px-2 py-1.5">Master</div>
           {coords.map((c) => (
-            <div key={coordKey(c)} className="truncate px-2 py-1.5" title={`${c.channel} · ${c.marketplace}`}>
+            <div key={coordKey(c)} role="columnheader" className="truncate px-2 py-1.5" title={`${c.channel} · ${c.marketplace}`}>
               {coordLabel(c)}
               {!c.isPublished && <span className="opacity-50"> ·draft</span>}
             </div>
@@ -304,6 +315,8 @@ export default function MappingTab({ product }: { product: MappingTabProduct }) 
             return (
               <div
                 key={row.fieldKey}
+                role="row"
+                aria-rowindex={vi.index + 2}
                 className="absolute left-0 grid border-b border-slate-100 text-xs hover:bg-slate-50/60 dark:border-slate-800/60 dark:hover:bg-slate-800/30"
                 style={{
                   gridTemplateColumns: gridCols,
@@ -312,7 +325,7 @@ export default function MappingTab({ product }: { product: MappingTabProduct }) 
                   height: vi.size,
                 }}
               >
-                <div className="sticky left-0 z-10 flex min-w-0 items-center gap-1 bg-white px-2 py-1.5 dark:bg-slate-950">
+                <div role="rowheader" className="sticky left-0 z-10 flex min-w-0 items-center gap-1 bg-white px-2 py-1.5 dark:bg-slate-950">
                   <span className="truncate font-mono text-slate-700 dark:text-slate-300" title={row.fieldKey}>
                     {row.label}
                   </span>
@@ -322,14 +335,14 @@ export default function MappingTab({ product }: { product: MappingTabProduct }) 
                     </span>
                   )}
                 </div>
-                <div className="truncate px-2 py-1.5 text-slate-500" title={fmt(row.master)}>
+                <div role="gridcell" className="truncate px-2 py-1.5 text-slate-500" title={fmt(row.master)}>
                   {fmt(row.master)}
                 </div>
                 {coords.map((c) => {
                   const cell = row.cells[coordKey(c)]
                   if (!cell) {
                     return (
-                      <div key={coordKey(c)} className="px-2 py-1.5 text-slate-300 dark:text-slate-700">
+                      <div key={coordKey(c)} role="gridcell" className="px-2 py-1.5 text-slate-300 dark:text-slate-700">
                         ·
                       </div>
                     )
@@ -337,6 +350,7 @@ export default function MappingTab({ product }: { product: MappingTabProduct }) 
                   return (
                     <div
                       key={coordKey(c)}
+                      role="gridcell"
                       className={cn(
                         'flex min-w-0 items-center gap-1 px-2 py-1.5',
                         cell.diverges && 'bg-amber-50 dark:bg-amber-950/20',
