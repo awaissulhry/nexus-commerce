@@ -22,7 +22,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { DndContext, useDraggable, useDroppable, DragOverlay, type DragEndEvent, type DragStartEvent, PointerSensor, KeyboardSensor, useSensor, useSensors } from '@dnd-kit/core'
-import { GripVertical, Info, ArrowUp, Crosshair, TrendingUp, TrendingDown, Minus, Search, Plus, Loader2, Check, ListPlus, Sparkles, Zap, ShieldCheck } from 'lucide-react'
+import { GripVertical, Info, ArrowUp, Crosshair, TrendingUp, TrendingDown, Minus, Search, Plus, Loader2, Check, ListPlus, Sparkles, Zap, ShieldCheck, BarChart3 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 
 const MARKETS = ['IT', 'DE', 'FR', 'ES', 'NL', 'BE', 'SE', 'PL', 'IE', 'UK']
@@ -32,30 +32,42 @@ interface Camp { id: string; name: string; marketplace: string | null; status: s
 interface TosRow { campaignId: string; name: string; marketplace: string | null; topImpr: number; topSpendCents: number; topSalesCents: number; topAcos: number | null; topIS: number | null; currentPct: number; recommendedPct: number; action: 'raise' | 'lower' | 'keep'; reason: string }
 interface Target { id: string; text: string; matchType: string; bidCents: number; status: string; adGroupId: string; impressions: number; clicks: number; spendCents: number; salesCents: number; acos: number | null }
 interface ParsedKw { keyword: string; bidCents: number; basis: string; exists: boolean }
+interface PlacementRow { placement: PlacementKey; impressions: number; clicks: number; costCents: number; salesCents: number; orders: number; adjustmentPct: number }
 const MATCH_TYPES = ['BROAD', 'PHRASE', 'EXACT'] as const
 
-// ── The numbered rank ladder. isTarget = the top-of-search impression-share
-// band each slot maps to (the honest rank proxy; R2 wires the live feedback). ──
-type SlotKey = 'top1' | 'top2' | 'top3' | 'rest' | 'product'
-interface Slot { k: SlotKey; group: 'top' | 'rest' | 'product'; rank: number | null; isTarget: number | null; short: string }
+// ── The numbered rank ladder. Each slot maps to an Amazon placement + a
+// starting bias % (the hold loop fine-tunes from there). Top-of-search slots
+// also carry an impression-share TARGET (the honest rank proxy). Rest-of-search
+// has no IS metric exposed, so its feedback is the placement's real spend. ──
+type SlotKey = 'top1' | 'top2' | 'top3' | 'rest1' | 'rest2' | 'rest3' | 'product'
+type PlacementKey = 'PLACEMENT_TOP' | 'PLACEMENT_REST_OF_SEARCH' | 'PLACEMENT_PRODUCT_PAGE'
+interface Slot { k: SlotKey; group: 'top' | 'rest' | 'product'; placement: PlacementKey; rank: number | null; isTarget: number | null; push: number; short: string }
 const SLOTS: Slot[] = [
-  { k: 'top1', group: 'top', rank: 1, isTarget: 0.65, short: '1st' },
-  { k: 'top2', group: 'top', rank: 2, isTarget: 0.45, short: '2nd' },
-  { k: 'top3', group: 'top', rank: 3, isTarget: 0.30, short: '3rd' },
-  { k: 'rest', group: 'rest', rank: null, isTarget: null, short: 'Rest of search' },
-  { k: 'product', group: 'product', rank: null, isTarget: null, short: 'Product pages' },
+  { k: 'top1', group: 'top', placement: 'PLACEMENT_TOP', rank: 1, isTarget: 0.65, push: 120, short: '1st' },
+  { k: 'top2', group: 'top', placement: 'PLACEMENT_TOP', rank: 2, isTarget: 0.45, push: 70, short: '2nd' },
+  { k: 'top3', group: 'top', placement: 'PLACEMENT_TOP', rank: 3, isTarget: 0.30, push: 35, short: '3rd' },
+  { k: 'rest1', group: 'rest', placement: 'PLACEMENT_REST_OF_SEARCH', rank: 1, isTarget: null, push: 80, short: '1st' },
+  { k: 'rest2', group: 'rest', placement: 'PLACEMENT_REST_OF_SEARCH', rank: 2, isTarget: null, push: 40, short: '2nd' },
+  { k: 'rest3', group: 'rest', placement: 'PLACEMENT_REST_OF_SEARCH', rank: 3, isTarget: null, push: 15, short: '3rd' },
+  { k: 'product', group: 'product', placement: 'PLACEMENT_PRODUCT_PAGE', rank: null, isTarget: null, push: 30, short: 'Product pages' },
 ]
+// Amazon placement-report row name → canonical placement key.
+const PLACEMENT_RAW: Record<string, PlacementKey> = {
+  'Top of Search on-Amazon': 'PLACEMENT_TOP',
+  'Other on-Amazon': 'PLACEMENT_REST_OF_SEARCH',
+  'Detail Page on-Amazon': 'PLACEMENT_PRODUCT_PAGE',
+}
+const PLACEMENT_SHORT: Record<PlacementKey, string> = { PLACEMENT_TOP: 'Top of search', PLACEMENT_REST_OF_SEARCH: 'Rest of search', PLACEMENT_PRODUCT_PAGE: 'Product pages' }
 const slotLabel = (k: SlotKey) => {
   const s = SLOTS.find(x => x.k === k)
-  return s?.group === 'top' ? `Top of search · ${s.short}` : s?.short ?? '—'
+  if (!s) return '—'
+  return s.group === 'top' ? `Top of search · ${s.short}` : s.group === 'rest' ? `Rest of search · ${s.short}` : s.short
 }
 const euros = (c: number) => `€${(c / 100).toFixed(2)}`
-// Starting top-of-search bias per slot — the hold loop fine-tunes from here.
-const SLOT_PUSH: Record<SlotKey, number> = { top1: 120, top2: 70, top3: 35, rest: 0, product: 0 }
 // Map a campaign's current top-of-search state → the slot it effectively sits in.
 function impliedSlot(topIS: number | null, currentPct: number): SlotKey {
-  if (topIS != null) return topIS >= 0.55 ? 'top1' : topIS >= 0.38 ? 'top2' : topIS >= 0.20 ? 'top3' : 'rest'
-  return currentPct >= 150 ? 'top1' : currentPct >= 60 ? 'top2' : currentPct >= 15 ? 'top3' : 'rest'
+  if (topIS != null) return topIS >= 0.55 ? 'top1' : topIS >= 0.38 ? 'top2' : topIS >= 0.20 ? 'top3' : 'rest3'
+  return currentPct >= 150 ? 'top1' : currentPct >= 60 ? 'top2' : currentPct >= 15 ? 'top3' : 'rest3'
 }
 
 // ── Listing card (the campaign you're placing) ─────────────────────────
@@ -128,6 +140,8 @@ export function RankPlacementCockpit() {
   const [cur, setCur] = useState<TosRow | null>(null)
   const [signalsLoading, setSignalsLoading] = useState(false)
   const [userMoved, setUserMoved] = useState(false)
+  // R5/R6 — per-placement spend + bias (Top / Rest / Product)
+  const [placements, setPlacements] = useState<PlacementRow[]>([])
   // R3 — bulk keyword manager
   const [targets, setTargets] = useState<Target[]>([])
   const [targetsLoading, setTargetsLoading] = useState(false)
@@ -171,16 +185,26 @@ export function RankPlacementCockpit() {
 
   const campaign = useMemo(() => campaigns.find(c => c.id === campaignId) ?? null, [campaigns, campaignId])
 
-  // Per-campaign top-of-search signals (single row from /top-of-search).
+  // Per-campaign signals: top-of-search row (/top-of-search) + per-placement
+  // spend & bias (/campaigns/:id/placements) — the spend data + bidding-%.
   const loadSignals = useCallback(async (signal?: AbortSignal) => {
-    if (!campaignId) { setCur(null); return }
+    if (!campaignId) { setCur(null); setPlacements([]); return }
     setSignalsLoading(true)
     try {
-      const d = await fetch(`${getBackendUrl()}/api/advertising/top-of-search?windowDays=${WINDOW_DAYS}&marketplace=${market}`, { cache: 'no-store', signal }).then(r => r.json()).catch(() => ({ rows: [] }))
+      const [tos, pl] = await Promise.all([
+        fetch(`${getBackendUrl()}/api/advertising/top-of-search?windowDays=${WINDOW_DAYS}&marketplace=${market}`, { cache: 'no-store', signal }).then(r => r.json()).catch(() => ({ rows: [] })),
+        fetch(`${getBackendUrl()}/api/advertising/campaigns/${campaignId}/placements?windowDays=${WINDOW_DAYS}`, { cache: 'no-store', signal }).then(r => r.json()).catch(() => ({ placements: [] })),
+      ])
       if (signal?.aborted) return
-      const row: TosRow | null = (d.rows ?? []).find((r: TosRow) => r.campaignId === campaignId) ?? null
+      const row: TosRow | null = (tos.rows ?? []).find((r: TosRow) => r.campaignId === campaignId) ?? null
       setCur(row)
-      if (!userMoved) setSlot(row ? impliedSlot(row.topIS, row.currentPct) : 'rest')
+      const prows: PlacementRow[] = (pl.placements ?? []).map((p: Record<string, unknown>) => {
+        const key = PLACEMENT_RAW[p.placement as string]
+        if (!key) return null
+        return { placement: key, impressions: Number(p.impressions ?? 0), clicks: Number(p.clicks ?? 0), costCents: Math.round(Number(p.costMicros ?? 0) / 10000), salesCents: Number(p.sales7dCents ?? 0), orders: Number(p.orders7d ?? 0), adjustmentPct: Number(p.adjustmentPct ?? 0) }
+      }).filter(Boolean) as PlacementRow[]
+      setPlacements(prows)
+      if (!userMoved) setSlot(row ? impliedSlot(row.topIS, row.currentPct) : 'rest3')
     } finally { if (!signal?.aborted) setSignalsLoading(false) }
   }, [campaignId, market]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -270,25 +294,37 @@ export function RankPlacementCockpit() {
 
   // R4 — default the apply bias + hold target from the chosen slot.
   useEffect(() => {
-    setApplyPct(SLOT_PUSH[slot])
     const s = SLOTS.find(x => x.k === slot)
+    setApplyPct(s?.push ?? 0)
     if (s?.isTarget != null) setHoldIS(Math.round(s.isTarget * 100))
   }, [slot])
 
-  // Apply the rank target to THIS campaign (single PLACEMENT_TOP write, gated).
+  const pctForPlacement = useCallback((key: PlacementKey) => placements.find(p => p.placement === key)?.adjustmentPct ?? 0, [placements])
+
+  // Apply the rank to THIS campaign — sets the chosen placement's bias, keeps
+  // the other two (merge-write via PATCH /placements, which replaces the array).
   const applyRank = useCallback(async () => {
     if (!campaignId) return
+    const target = SLOTS.find(s => s.k === slot)
+    if (!target) return
     setApplying(true); setApplyResult(null)
+    const next: Record<PlacementKey, number> = {
+      PLACEMENT_TOP: pctForPlacement('PLACEMENT_TOP'),
+      PLACEMENT_REST_OF_SEARCH: pctForPlacement('PLACEMENT_REST_OF_SEARCH'),
+      PLACEMENT_PRODUCT_PAGE: pctForPlacement('PLACEMENT_PRODUCT_PAGE'),
+    }
+    next[target.placement] = applyPct
+    const adjustments = (Object.keys(next) as PlacementKey[]).map(k => ({ placement: k, percentage: next[k] }))
     try {
-      const r = await fetch(`${getBackendUrl()}/api/advertising/top-of-search/apply`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ campaignId, percentage: applyPct }),
+      const r = await fetch(`${getBackendUrl()}/api/advertising/campaigns/${campaignId}/placements`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ adjustments }),
       }).then(r => r.json())
-      setApplyResult({ mode: r?.result?.mode ?? (r?.ok ? 'local' : 'error') })
+      setApplyResult({ mode: r?.mode ?? (r?.ok ? 'local' : 'error') })
     } catch { setApplyResult({ mode: 'error' }) }
     setApplying(false)
     void loadSignals()
-  }, [campaignId, applyPct, loadSignals])
+  }, [campaignId, slot, applyPct, pctForPlacement, loadSignals])
 
   // Create the autonomous hold-the-slot loop (defend_top_of_search), targetIS
   // from the chosen rank. Allowlist-enforced + dry-run; market-scoped engine.
@@ -320,11 +356,35 @@ export function RankPlacementCockpit() {
   const targetIsPct = targetSlot?.isTarget != null ? Math.round(targetSlot.isTarget * 100) : null
   const curRankSlot = cur?.topIS != null ? impliedSlot(cur.topIS, cur.currentPct) : null
   const topSlots = SLOTS.filter(s => s.group === 'top')
+  const restSlots = SLOTS.filter(s => s.group === 'rest')
+  const targetPlacementRow = targetSlot ? placements.find(p => p.placement === targetSlot.placement) ?? null : null
+  const targetCurrentPct = targetSlot ? pctForPlacement(targetSlot.placement) : 0
+
+  // R6 — spend data. dailyBudget + per-placement €/day and a first-order
+  // projection at the chosen bias (CPC effect; auction volume may add more).
+  const dailyBudgetCents = campaign?.dailyBudget != null && String(campaign.dailyBudget) !== '' ? Math.round(parseFloat(String(campaign.dailyBudget)) * 100) : null
+  const PLACEMENT_ORDER: PlacementKey[] = ['PLACEMENT_TOP', 'PLACEMENT_REST_OF_SEARCH', 'PLACEMENT_PRODUCT_PAGE']
+  const spendRows = PLACEMENT_ORDER.map(key => {
+    const r = placements.find(p => p.placement === key)
+    const costCents = r?.costCents ?? 0
+    const curBias = r?.adjustmentPct ?? 0
+    const perDay = costCents / WINDOW_DAYS
+    const newBias = userMoved && targetSlot?.placement === key ? applyPct : curBias
+    const projPerDay = perDay * ((1 + newBias / 100) / (1 + curBias / 100))
+    return { key, row: r, costCents, curBias, newBias, perDay, projPerDay, changed: newBias !== curBias }
+  })
+  const totalPerDay = spendRows.reduce((s, r) => s + r.perDay, 0)
+  const totalProjPerDay = spendRows.reduce((s, r) => s + r.projPerDay, 0)
 
   // Honest rank readout: where you're holding vs the target slot.
   const rankReadout = (() => {
-    if (!cur) return null
-    if (targetSlot?.group !== 'top') return `Targeting ${slotLabel(slot)} — easing off top-of-search to cut cost.`
+    if (!cur && placements.length === 0) return null
+    if (targetSlot?.group === 'rest') {
+      const pr = targetPlacementRow
+      return pr ? `Targeting ${slotLabel(slot)}. Rest-of-search now: ${pr.impressions.toLocaleString()} impr · ${pr.clicks} clicks · ${euros(pr.costCents)} (no IS metric for rest — using spend).` : `Targeting ${slotLabel(slot)} — no rest-of-search data in window yet.`
+    }
+    if (targetSlot?.group === 'product') return `Targeting product pages — bias the PLACEMENT_PRODUCT_PAGE multiplier.`
+    if (!cur) return `Targeting ${slotLabel(slot)} — no top-of-search data in window yet.`
     if (cur.topIS == null) return `Top-of-search IS not ingested yet — targeting ${slotLabel(slot)}; the hold loop uses ACOS until IS data lands.`
     const x = Math.round(cur.topIS * 100)
     const est = curRankSlot ? slotLabel(curRankSlot) : '—'
@@ -371,13 +431,24 @@ export function RankPlacementCockpit() {
               </div>
             </div>
 
-            {SLOTS.filter(s => s.group !== 'top').map(s => (
+            <div className="az-rankgroup">
+              <div className="az-rankgroup-head"><span className="t">Rest of search</span><span className="badge alt">below the top slots</span></div>
+              <div className="az-ranktop">
+                {restSlots.map(s => (
+                  <DropSlot key={s.k} slot={s} numbered active={slot === s.k && !!campaign}>
+                    {campaign && <DraggableCard camp={campaign} />}
+                  </DropSlot>
+                ))}
+              </div>
+            </div>
+
+            {SLOTS.filter(s => s.group === 'product').map(s => (
               <DropSlot key={s.k} slot={s} active={slot === s.k && !!campaign}>
                 {campaign && <DraggableCard camp={campaign} />}
               </DropSlot>
             ))}
 
-            <div className="az-ladder-foot"><Info size={11} /> Drag your listing onto the rank you want. Amazon is a blind auction — this targets &amp; defends the slot via impression-share + bid; it can’t pin a fixed rank.</div>
+            <div className="az-ladder-foot"><Info size={11} /> Drag your listing onto the rank you want. Amazon is a blind auction — this targets &amp; defends the slot via placement bid % + impression share; it can’t pin a fixed rank.</div>
           </div>
           <DragOverlay>{activeId && campaign ? <CampaignCard camp={campaign} dragging /> : null}</DragOverlay>
         </DndContext>
@@ -391,38 +462,45 @@ export function RankPlacementCockpit() {
           <div className="sep" />
           <div className="row"><span>Target rank</span><b>{slotLabel(slot)}{userMoved ? '' : ' (current)'}</b></div>
 
-          <div className="az-rankmeter-wrap">
-            <span className="az-gauge-lbl">Rank · top-of-search impression share</span>
-            <RankMeter isPct={isPct} targetPct={targetIsPct} />
-          </div>
+          {targetSlot?.group === 'top' && (
+            <div className="az-rankmeter-wrap">
+              <span className="az-gauge-lbl">Rank · top-of-search impression share</span>
+              <RankMeter isPct={isPct} targetPct={targetIsPct} />
+            </div>
+          )}
           {rankReadout && <div className="az-cockpit-sub">{rankReadout}</div>}
 
           <div className="sep" />
-          <div className="row"><span>Current top-of-search %</span><b>{cur ? `+${cur.currentPct}%` : '—'}</b></div>
-          <div className="row"><span>Recommended</span><b>{cur ? `+${cur.recommendedPct}%` : '—'} {cur && <ActionChip action={cur.action} />}</b></div>
-          <div className="row"><span>Top ACOS</span><b>{cur?.topAcos != null ? `${(cur.topAcos * 100).toFixed(0)}%` : '—'}</b></div>
-          {cur?.reason && <div className="az-cockpit-sub">{cur.reason}.</div>}
+          <div className="row"><span>Current {targetSlot ? PLACEMENT_SHORT[targetSlot.placement] : 'placement'} bias</span><b>+{targetCurrentPct}%</b></div>
+          {targetSlot?.group === 'top' ? (
+            <>
+              <div className="row"><span>Recommended</span><b>{cur ? `+${cur.recommendedPct}%` : '—'} {cur && <ActionChip action={cur.action} />}</b></div>
+              <div className="row"><span>Top ACOS</span><b>{cur?.topAcos != null ? `${(cur.topAcos * 100).toFixed(0)}%` : '—'}</b></div>
+              {cur?.reason && <div className="az-cockpit-sub">{cur.reason}.</div>}
+            </>
+          ) : targetPlacementRow ? (
+            <>
+              <div className="row"><span>Spend · 30d</span><b>{euros(targetPlacementRow.costCents)}</b></div>
+              <div className="row"><span>Clicks · ACOS</span><b>{targetPlacementRow.clicks} · {targetPlacementRow.salesCents > 0 ? `${Math.round(targetPlacementRow.costCents / targetPlacementRow.salesCents * 100)}%` : '—'}</b></div>
+            </>
+          ) : null}
 
           <div className="sep" />
-          {/* ── R4: apply the rank + hold the slot ───────────────── */}
+          {/* ── R4: apply the rank (any placement) + hold the slot (top) ── */}
           {!userMoved ? (
             <div className="az-cockpit-note"><Info size={12} /> Drag your listing onto a rank to apply it. The card starts where the campaign sits today.</div>
-          ) : !campaign ? null : targetSlot?.group === 'product' ? (
-            <div className="az-cockpit-note"><Info size={12} /> Product-page targeting is read-only for now — its apply lands in a later pass. Top-of-search ranks apply below.</div>
-          ) : (
+          ) : !campaign ? null : (
             <>
-              <div className="az-plan-head">{targetSlot?.group === 'rest' ? 'Remove top-of-search bias' : `Push toward ${slotLabel(slot)}`}</div>
-              {targetSlot?.group === 'top' && (
-                <div className="az-plan-target">
-                  <span className="az-gauge-lbl">Top-of-search bias{cur ? ` · now +${cur.currentPct}%` : ''}</span>
-                  <div className="az-stepper">
-                    <button type="button" onClick={() => setApplyPct(p => Math.max(0, p - 10))} disabled={applying} aria-label="Decrease bias">−</button>
-                    <span className="v">+{applyPct}%</span>
-                    <button type="button" onClick={() => setApplyPct(p => Math.min(900, p + 10))} disabled={applying} aria-label="Increase bias">+</button>
-                  </div>
+              <div className="az-plan-head">Set {targetSlot ? PLACEMENT_SHORT[targetSlot.placement] : ''} bias{targetSlot && targetSlot.group !== 'product' ? ` → ${slotLabel(slot)}` : ''}</div>
+              <div className="az-plan-target">
+                <span className="az-gauge-lbl">Bias · now +{targetCurrentPct}%</span>
+                <div className="az-stepper">
+                  <button type="button" onClick={() => setApplyPct(p => Math.max(0, p - 10))} disabled={applying} aria-label="Decrease bias">−</button>
+                  <span className="v">+{applyPct}%</span>
+                  <button type="button" onClick={() => setApplyPct(p => Math.min(900, p + 10))} disabled={applying} aria-label="Increase bias">+</button>
                 </div>
-              )}
-              <button type="button" className="az-btn dark" style={{ marginTop: 8, width: '100%', justifyContent: 'center' }} disabled={applying || (cur != null && cur.currentPct === applyPct)} onClick={() => void applyRank()}>
+              </div>
+              <button type="button" className="az-btn dark" style={{ marginTop: 8, width: '100%', justifyContent: 'center' }} disabled={applying || targetCurrentPct === applyPct} onClick={() => void applyRank()}>
                 {applying ? <><Loader2 size={14} className="az-spin" /> Applying…</> : <><Zap size={14} /> Apply +{applyPct}% to this campaign</>}
               </button>
               {applyResult && (
@@ -452,6 +530,47 @@ export function RankPlacementCockpit() {
             </>
           )}
         </div>
+      </div>
+
+      {/* ── R6: spend by placement + projection ──────────────────── */}
+      <div className="az-spend">
+        <div className="az-spend-head"><BarChart3 size={15} /> Spend by placement{campaign ? <> · <span className="cn">{campaign.name}</span></> : ''} · {WINDOW_DAYS}d
+          <span style={{ flex: 1 }} />
+          {dailyBudgetCents != null && <span className="az-budget-chip">Daily budget {euros(dailyBudgetCents)}</span>}
+        </div>
+        <div className="az-spend-tablewrap">
+          <table className="az-spend-table">
+            <thead><tr><th className="l">Placement</th><th>Impr</th><th>Clicks</th><th>Spend {WINDOW_DAYS}d</th><th>€/day</th><th>Sales</th><th>ACOS</th><th>Bias %</th><th>Proj €/day</th></tr></thead>
+            <tbody>
+              {spendRows.map(sr => {
+                const r = sr.row
+                const acos = r && r.salesCents > 0 ? Math.round(r.costCents / r.salesCents * 100) : null
+                return (
+                  <tr key={sr.key} className={targetSlot?.placement === sr.key && userMoved ? 'on' : ''}>
+                    <td className="l">{PLACEMENT_SHORT[sr.key]}</td>
+                    <td>{(r?.impressions ?? 0).toLocaleString()}</td>
+                    <td>{r?.clicks ?? 0}</td>
+                    <td>{euros(sr.costCents)}</td>
+                    <td>{euros(Math.round(sr.perDay))}</td>
+                    <td>{euros(r?.salesCents ?? 0)}</td>
+                    <td>{acos != null ? `${acos}%` : '—'}</td>
+                    <td className={sr.changed ? 'chg' : ''}>+{sr.curBias}%{sr.changed ? ` → +${sr.newBias}%` : ''}</td>
+                    <td className={sr.changed ? 'chg' : ''}>{euros(Math.round(sr.projPerDay))}</td>
+                  </tr>
+                )
+              })}
+              <tr className="tot">
+                <td className="l">Total</td>
+                <td></td><td></td>
+                <td>{euros(spendRows.reduce((s, r) => s + r.costCents, 0))}</td>
+                <td>{euros(Math.round(totalPerDay))}</td>
+                <td></td><td></td><td></td>
+                <td className={Math.round(totalProjPerDay) !== Math.round(totalPerDay) ? 'chg' : ''}>{euros(Math.round(totalProjPerDay))}{dailyBudgetCents != null && totalProjPerDay > dailyBudgetCents ? ' ⚠' : ''}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div className="az-cockpit-note"><Info size={12} /> €/day = window spend ÷ {WINDOW_DAYS}. Projection estimates the CPC effect at the chosen bias % — actual spend also depends on how many more impressions you win in the auction.{dailyBudgetCents != null && totalProjPerDay > dailyBudgetCents ? ' Projected daily spend exceeds the daily budget (Amazon will cap at the budget).' : ''}</div>
       </div>
 
       {/* ── R3: bulk keyword manager ─────────────────────────────── */}

@@ -210,6 +210,23 @@
 .az-kwline .eur { display: inline-flex; align-items: center; gap: 2px; font-size: 11.5px; color: var(--ink2); }
 .az-kwline .eur input { width: 56px; border: 1px solid var(--border); border-radius: 6px; padding: 4px 6px; font: inherit; font-size: 12px; font-weight: 700; text-align: right; }
 
+/* Rest-of-search group badge (R5) */
+.az-rankgroup-head .badge.alt { background: var(--ink3); }
+
+/* Spend by placement (R6) */
+.az-spend { margin-top: 16px; border: 1px solid var(--divider); border-radius: 12px; background: #fff; padding: 14px 16px; }
+.az-spend-head { display: flex; align-items: center; gap: 7px; font-weight: 700; font-size: 14px; color: var(--navy); margin-bottom: 10px; }
+.az-spend-head .cn { color: var(--ink); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 320px; }
+.az-budget-chip { font-size: 11px; font-weight: 700; color: var(--ink2); background: var(--bg2); border: 1px solid var(--divider); border-radius: 6px; padding: 3px 8px; }
+.az-spend-tablewrap { overflow-x: auto; }
+.az-spend-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.az-spend-table th { text-align: right; font-size: 10px; font-weight: 700; letter-spacing: .3px; text-transform: uppercase; color: var(--ink3); padding: 6px 10px; border-bottom: 1px solid var(--divider); white-space: nowrap; }
+.az-spend-table th.l, .az-spend-table td.l { text-align: left; }
+.az-spend-table td { text-align: right; padding: 8px 10px; border-bottom: 1px solid var(--bg3); color: var(--ink); white-space: nowrap; }
+.az-spend-table tr.on td { background: var(--bg3); }
+.az-spend-table td.chg { color: var(--navy); font-weight: 700; }
+.az-spend-table tr.tot td { border-top: 2px solid var(--divider); border-bottom: none; font-weight: 700; }
+
 /* Action chip + per-campaign lines */
 .az-act { display: inline-flex; align-items: center; gap: 3px; font-size: 10px; font-weight: 700; border-radius: 4px; padding: 1px 6px; vertical-align: middle; }
 .az-act.raise { color: #1e7a4f; background: #e8f5ee; }
