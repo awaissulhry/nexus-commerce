@@ -102,6 +102,18 @@ export function TimeRankGrid({ demandGrid, onChange }: { demandGrid: Bucket[][] 
     return () => window.removeEventListener('mouseup', up)
   }, [])
 
+  // TR6 — keyboard: number keys 1–5 pick the brush (ignored while typing).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null
+      if (t && /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)) return
+      const n = parseInt(e.key, 10)
+      if (n >= 1 && n <= LEVELS.length) setBrush(LEVELS[n - 1].k)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
   const paint = (d: number, h: number) => {
     setUserEdited(true)
     setGrid(g => { if (g[d][h] === brush) return g; const next = g.map(r => r.slice()); next[d][h] = brush; return next })
@@ -115,6 +127,12 @@ export function TimeRankGrid({ demandGrid, onChange }: { demandGrid: Bucket[][] 
   const pPauseNight = () => setEdited(g => g.map(r => r.map((c, h) => (h < 7 ? 'pause' : c))))
   const pPushEvenings = () => setEdited(g => g.map(r => r.map((c, h) => (h >= 17 && h < 23 ? 'max' : c))))
   const pWeekendsLight = () => setEdited(g => g.map((r, d) => (d === 0 || d === 6 ? r.map(() => 'light') : r)))
+  // TR6 — copy Monday's profile + save/load a reusable template (localStorage).
+  const copyMonWeekdays = () => setEdited(g => g.map((r, d) => (d >= 2 && d <= 5 ? g[1].slice() : r)))
+  const copyMonEveryday = () => setEdited(g => g.map(() => g[1].slice()))
+  const TPL_KEY = 'ads:trgrid:template:v1'
+  const saveTpl = () => { try { localStorage.setItem(TPL_KEY, JSON.stringify(grid)) } catch { /* ignore */ } }
+  const loadTpl = () => { try { const s = localStorage.getItem(TPL_KEY); if (s) { setUserEdited(true); setGrid(JSON.parse(s) as Level[][]) } } catch { /* ignore */ } }
 
   const counts = useMemo(() => {
     const c: Record<Level, number> = { max: 0, strong: 0, normal: 0, light: 0, pause: 0 }
@@ -151,9 +169,14 @@ export function TimeRankGrid({ demandGrid, onChange }: { demandGrid: Bucket[][] 
         <button type="button" className="az-tr-mini" onClick={pPauseNight} title="Pause 00:00–07:00 every day">Pause overnight</button>
         <button type="button" className="az-tr-mini" onClick={pPushEvenings} title="Max push 17:00–23:00 every day">Push evenings</button>
         <button type="button" className="az-tr-mini" onClick={pWeekendsLight} title="Ease off Saturday &amp; Sunday">Weekends light</button>
+        <span style={{ flex: 1 }} />
+        <button type="button" className="az-tr-mini" onClick={copyMonWeekdays} title="Copy Monday to Tue–Fri">Mon→weekdays</button>
+        <button type="button" className="az-tr-mini" onClick={copyMonEveryday} title="Copy Monday to every day">Mon→all</button>
+        <button type="button" className="az-tr-mini" onClick={saveTpl} title="Save this grid as a reusable template">Save</button>
+        <button type="button" className="az-tr-mini" onClick={loadTpl} title="Load your saved template">Load</button>
       </div>
 
-      <div className="az-trgrid-table" onMouseLeave={() => { painting.current = false }}>
+      <div className="az-trgrid-table" role="group" aria-label="Weekly time × rank grid, 7 days by 24 hours. Press 1–5 to pick a level, then click or drag to paint." onMouseLeave={() => { painting.current = false }}>
         <div className="az-tr-hrow">
           <div className="az-tr-corner" />
           {Array.from({ length: 24 }, (_, h) => <div key={h} className="az-tr-hh">{h % 3 === 0 ? String(h).padStart(2, '0') : ''}</div>)}
@@ -189,7 +212,7 @@ export function TimeRankGrid({ demandGrid, onChange }: { demandGrid: Bucket[][] 
           <span key={l.k} className="it"><i style={{ background: l.color }} />{l.label} {counts[l.k]}h{l.mult != null && l.mult !== 0 ? ` (${l.mult > 0 ? '+' : ''}${l.mult}%)` : ''}{l.pause ? '' : ''}</span>
         ))}
         <span style={{ flex: 1 }} />
-        <span className="hint">Click or drag to paint · day/hour headers paint a whole row/column</span>
+        <span className="hint">Click or drag to paint · keys 1–5 pick a level · day/hour headers paint a whole row/column</span>
       </div>
 
       {coverage && (
