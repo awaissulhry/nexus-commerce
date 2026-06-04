@@ -41,6 +41,7 @@ import { validatePublish } from '../services/pim/publish-validator.js'
 import { previewPayload } from '../services/pim/payload-preview.js'
 import { suggestMappings } from '../services/pim/mapping-suggest.service.js'
 import { recordMappingRevision, listMappingRevisions, rollbackMapping } from '../services/pim/mapping-revision.service.js'
+import { computeCoverageMatrix } from '../services/pim/mapping-coverage.service.js'
 import { syncSchemaToChannelSchema } from '../services/pim/schema-sync-bridge.js'
 import { CategorySchemaService } from '../services/categories/schema-sync.service.js'
 import { AmazonService } from '../services/marketplaces/amazon.service.js'
@@ -432,6 +433,18 @@ const pimMappingRoutes: FastifyPluginAsync = async (fastify) => {
         request.log.error({ err }, 'mapping rollback failed')
         return reply.status(500).send({ error: msg })
       }
+    },
+  )
+
+  // ── GET /pim/mappings/coverage ──────────────────────────────────
+  // FM.13 — cross-market coverage matrix (% mapped, required-unmapped per
+  // channel×market×productType).
+  fastify.get<{ Querystring: { channel?: string } }>(
+    '/pim/mappings/coverage',
+    async (request, reply) => {
+      const channel = request.query.channel?.trim() || undefined
+      const result = await computeCoverageMatrix(channel)
+      return reply.send(result)
     },
   )
 }
