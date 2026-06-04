@@ -413,6 +413,18 @@
 .az-kwx-act .why b { color: #1e7a4f; }
 .az-kwx-act .msg { font-size: 11px; font-weight: 600; color: #1e7a4f; }
 
+/* Inline rank-set collision warning in the Strategy panel (RC3.4) */
+.az-rankwarn { margin: 10px 0 0; padding: 10px 11px; border: 1px solid #f0c9a8; border-left: 3px solid #b3541e; border-radius: 9px; background: #fff7f0; }
+.az-rankwarn-msg { display: flex; align-items: flex-start; gap: 6px; font-size: 11.5px; line-height: 1.45; color: var(--ink); }
+.az-rankwarn-msg b { font-weight: 800; }
+.az-rankwarn-acts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 9px; }
+.az-rankwarn-acts .az-btn { font-size: 11px; padding: 5px 9px; }
+.az-rankwarn-acts .az-btn.ghost { border-color: transparent; background: none; color: var(--ink3); }
+.az-rankwarn-acts .az-btn.ghost:hover { color: var(--ink); background: var(--bg3); }
+.az-rankwarn-res { margin-top: 8px; font-size: 11px; font-weight: 600; color: #1e7a4f; }
+.az-rankwarn-link { display: inline-block; margin-top: 7px; font-size: 10.5px; font-weight: 700; color: var(--navy); text-decoration: none; }
+.az-rankwarn-link:hover { text-decoration: underline; }
+
 /* Plain-English schedule summary (DD5) */
 .az-tr-summary { margin-top: 8px; padding: 8px 10px; background: var(--bg2); border: 1px solid var(--divider); border-radius: 8px; }
 .az-tr-summary .t { font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .3px; color: var(--ink3); display: block; margin-bottom: 3px; }

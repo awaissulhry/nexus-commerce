@@ -199,6 +199,10 @@ export function RankPlacementCockpit() {
   const [kwBusy, setKwBusy] = useState<string | null>(null)
   const [kwMsg, setKwMsg] = useState<Record<string, string>>({})
   const [kwDismissed, setKwDismissed] = useState<Set<string>>(new Set())
+  // RC3.4 — the inline rank-set warning (shown when targeting Top of search)
+  const [inlineMsg, setInlineMsg] = useState('')
+  const [inlineBusy, setInlineBusy] = useState(false)
+  const [inlineHidden, setInlineHidden] = useState(false)
   // T·product — dayparting scoped to the parent product family
   const [family, setFamily] = useState<ProductFamily | null>(null)
   const [whenLoading, setWhenLoading] = useState(false)
@@ -321,7 +325,7 @@ export function RankPlacementCockpit() {
   useEffect(() => {
     if (!campaignId) { setKwConflicts(null); return }
     const ac = new AbortController()
-    setKwMsg({}); setKwDismissed(new Set())
+    setKwMsg({}); setKwDismissed(new Set()); setInlineHidden(false); setInlineMsg('')
     fetch(`${getBackendUrl()}/api/advertising/campaigns/${encodeURIComponent(campaignId)}/keyword-conflicts?marketplace=${market}`, { cache: 'no-store', signal: ac.signal })
       .then(r => r.json()).then(d => { if (!ac.signal.aborted) setKwConflicts(d && Array.isArray(d.conflicts) ? d as KwConflicts : null) })
       .catch(() => {})
@@ -384,6 +388,29 @@ export function RankPlacementCockpit() {
     } catch { setKwMsg(m => ({ ...m, [c.keyNorm]: 'Apply failed.' })) }
     setKwBusy(null)
   }, [market])
+
+  // RC3.4 — resolve EVERY contested keyword at once from the inline rank-set
+  // warning. 'champion' lets the best performer own each; 'second'/'rest' step
+  // only THIS campaign down (when it isn't already the best on that keyword).
+  // One combined gated bulk-bid request.
+  const resolveAllTop = useCallback(async (mode: 'champion' | 'second' | 'rest') => {
+    const entries: { adTargetId: string; bidCents: number }[] = []
+    for (const c of visibleConflicts) {
+      const champ = c.contenders.find(x => x.campaignId === c.championId) ?? null
+      const champBid = champ?.bidCents ?? Math.max(...c.contenders.map(x => x.bidCents), 10)
+      const push = (ct: KwContender, frac: number) => { const nb = Math.max(2, Math.round(champBid * frac)); for (const tid of ct.targetIds) entries.push({ adTargetId: tid, bidCents: nb }) }
+      const mineCt = c.contenders.find(x => x.isMine)
+      if (mode === 'champion') { for (const ct of c.contenders) if (ct.campaignId !== c.championId) push(ct, 0.5) }
+      else if (mineCt && mineCt.campaignId !== c.championId) push(mineCt, mode === 'second' ? 0.85 : 0.35)
+    }
+    if (entries.length === 0) { setInlineMsg(mode === 'champion' ? 'This campaign already owns every contested keyword.' : 'Nothing to step down — this campaign is the best on each.'); return }
+    setInlineBusy(true)
+    try {
+      const r = await fetch(`${getBackendUrl()}/api/advertising/ad-targets/bulk-bid`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ entries, reason: `RC3 inline rank-collision (${mode}) — ${visibleConflicts.length} keywords in ${market}` }) }).then(x => x.json())
+      setInlineMsg(r?.ok ? `Staged ${entries.length} bid change${entries.length === 1 ? '' : 's'} across ${visibleConflicts.length} keyword${visibleConflicts.length === 1 ? '' : 's'} — flip the write-gate to apply.` : 'Apply failed.')
+    } catch { setInlineMsg('Apply failed.') }
+    setInlineBusy(false)
+  }, [visibleConflicts, market])
 
   // T3 — the family's persisted schedules (one AdSchedule per campaign).
   const loadSchedules = useCallback(async (signal?: AbortSignal) => {
@@ -761,6 +788,21 @@ export function RankPlacementCockpit() {
           )}
           {rankReadout && <div className="az-cockpit-sub">{rankReadout}</div>}
 
+          {/* RC3.4 — inline collision warning when aiming for the top */}
+          {targetSlot?.group === 'top' && !inlineHidden && visibleConflicts.length > 0 && (
+            <div className="az-rankwarn">
+              <div className="az-rankwarn-msg"><AlertTriangle size={13} /> <b>{visibleConflicts.length} keyword{visibleConflicts.length === 1 ? '' : 's'}</b> you bid on {visibleConflicts.length === 1 ? 'is' : 'are'} also pushed by your other products{visibleConflicts[0]?.contenders.find(x => !x.isMine) ? <> (e.g. <b>{visibleConflicts[0].contenders.find(x => !x.isMine)!.campaignName}</b>)</> : null} — at the top you bid each other up.</div>
+              <div className="az-rankwarn-acts">
+                <button type="button" className="az-btn dark" disabled={inlineBusy} onClick={() => void resolveAllTop('champion')}>{inlineBusy ? <><Loader2 size={12} className="az-spin" /> Staging…</> : <><ShieldCheck size={12} /> Let the best own each</>}</button>
+                <button type="button" className="az-btn" disabled={inlineBusy} onClick={() => void resolveAllTop('second')} title="Step this campaign to just below the leader on these keywords — aim for 2nd, not a war for 1st">Take 2nd here</button>
+                <button type="button" className="az-btn" disabled={inlineBusy} onClick={() => void resolveAllTop('rest')} title="Lower this campaign's bid on these keywords so they fall to rest of search">Move me to Rest</button>
+                <button type="button" className="az-btn ghost" disabled={inlineBusy} onClick={() => setInlineHidden(true)}>Ignore</button>
+              </div>
+              {inlineMsg && <div className="az-rankwarn-res">{inlineMsg}</div>}
+              <a className="az-rankwarn-link" href="#az-kwx" onClick={() => setKwOpen(true)}>Review each in Keyword overlap below ↓</a>
+            </div>
+          )}
+
           <div className="sep" />
           <div className="row"><span>Current {targetSlot ? PLACEMENT_SHORT[targetSlot.placement] : 'placement'} bias</span><b>+{targetCurrentPct}%</b></div>
           {targetSlot?.group === 'top' ? (
@@ -880,7 +922,7 @@ export function RankPlacementCockpit() {
 
       {/* ── RC3.3: cross-product keyword-rank overlap ─────────────── */}
       {kwConflicts && visibleConflicts.length > 0 && (
-        <div className="az-kwx">
+        <div className="az-kwx" id="az-kwx">
           <div className="az-kwx-head">
             <AlertTriangle size={15} />
             <b>Keyword overlap</b>
