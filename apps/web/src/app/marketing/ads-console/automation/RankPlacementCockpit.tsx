@@ -22,7 +22,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { DndContext, useDraggable, useDroppable, DragOverlay, type DragEndEvent, type DragStartEvent, PointerSensor, KeyboardSensor, useSensor, useSensors } from '@dnd-kit/core'
-import { Search, GripVertical, Info, ArrowUp, Crosshair, TrendingUp, TrendingDown, Minus, Check, Loader2, Zap } from 'lucide-react'
+import { Search, GripVertical, Info, ArrowUp, Crosshair, TrendingUp, TrendingDown, Minus, Check, Loader2, Zap, ShieldCheck } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 
 const MARKETS = ['IT', 'DE', 'FR', 'ES', 'NL', 'BE', 'SE', 'PL', 'IE', 'UK', 'All']
@@ -133,6 +133,11 @@ export function RankPlacementCockpit() {
   const [bid, setBid] = useState<Bid | null>(null)
   const [applying, setApplying] = useState(false)
   const [applyResult, setApplyResult] = useState<{ mode: string; count: number } | null>(null)
+  // P4 — hold-the-slot defense loop
+  const [holdIS, setHoldIS] = useState(40)
+  const [holdAcos, setHoldAcos] = useState(25)
+  const [holding, setHolding] = useState(false)
+  const [holdMsg, setHoldMsg] = useState('')
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }), useSensor(KeyboardSensor))
 
@@ -270,6 +275,34 @@ export function RankPlacementCockpit() {
     void loadSignals(undefined, true) // refresh, keep the dragged tier
   }, [plan, planChanges, loadSignals])
 
+  // P4 — create the autonomous "hold the slot" loop. Reuses the existing
+  // defend_top_of_search rule action (allowlist-enforced, dry-run honored): it
+  // tunes PLACEMENT_TOP ±15%/run toward the IS target, bounded by ACOS, to win
+  // the slot for the least cost. Created disabled + dry-run; market-scoped (the
+  // engine's granularity), so it holds top-of-search across the whole market.
+  const createHold = useCallback(async () => {
+    setHolding(true); setHoldMsg('')
+    const mkt = market === 'All' ? '' : ` (${market})`
+    try {
+      const r = await fetch(`${getBackendUrl()}/api/advertising/automation-rules`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: `Hold Top-of-Search IS ≥ ${holdIS}%${mkt}`,
+          description: `Holds top-of-search impression share ≥ ${holdIS}% by tuning the PLACEMENT_TOP multiplier (±15%/run, ≤900%), bounded by ${holdAcos}% ACOS — raise while below target and in budget, ease off once above target or over ACOS (win the slot for the least cost). Created from the Placement Cockpit for ${product?.name ?? 'a product'}.`,
+          trigger: 'SCHEDULE', conditions: [],
+          actions: [
+            { type: 'defend_top_of_search', targetIS: holdIS / 100, targetAcos: holdAcos / 100, ...(market === 'All' ? {} : { marketplace: market }) },
+            { type: 'notify', target: 'operator', message: `Top-of-Search IS defense holding ≥ ${holdIS}%${mkt}` },
+          ],
+          scopeMarketplace: market === 'All' ? null : market,
+          maxExecutionsPerDay: 48,
+        }),
+      })
+      setHoldMsg(r.ok ? 'created' : 'error')
+    } catch { setHoldMsg('error') }
+    finally { setHolding(false) }
+  }, [market, holdIS, holdAcos, product])
+
   const tierLabel = TIERS.find(t => t.k === tier)?.label ?? 'Rest of search'
   const isPct = agg?.topIS != null ? agg.topIS * 100 : null
   const euros = (c: number) => `€${(c / 100).toFixed(2)}`
@@ -401,7 +434,24 @@ export function RankPlacementCockpit() {
                     : `Staged on ${applyResult.count} campaign(s) (${applyResult.mode}) — not live on Amazon. Flip the write-gate to push live.`}
                 </div>
               )}
-              <div className="az-cockpit-note"><Info size={12} /> Apply is gated: with the ads write-gate closed it stages the placement % locally (sandbox); the result says which mode it took. Flipping the gate live needs approval. The hold-the-slot loop lands in P4.</div>
+              <div className="az-cockpit-note"><Info size={12} /> Apply is gated: with the ads write-gate closed it stages the placement % locally (sandbox); the result says which mode it took. Flipping the gate live needs approval.</div>
+
+              {/* ── P4: hold the slot (autonomous IS defense) ──────────── */}
+              {tier === 'top' && (
+                <div className="az-hold">
+                  <div className="az-hold-head"><ShieldCheck size={13} /> Hold this slot</div>
+                  <div className="az-hold-sub">Run an autonomous loop that keeps top-of-search impression share at your target for the least cost — raising the bias while you’re below target and ACOS is in budget, easing off otherwise.</div>
+                  <div className="az-hold-ctls">
+                    <label>Target IS <input type="number" min={1} max={100} value={holdIS} onChange={e => setHoldIS(Math.max(1, Math.min(100, Number(e.target.value))))} disabled={holding} />%</label>
+                    <label>Max ACOS <input type="number" min={1} max={200} value={holdAcos} onChange={e => setHoldAcos(Math.max(1, Math.min(200, Number(e.target.value))))} disabled={holding} />%</label>
+                  </div>
+                  <button type="button" className="az-btn" style={{ marginTop: 8, width: '100%', justifyContent: 'center' }} disabled={holding} onClick={() => void createHold()}>
+                    {holding ? <><Loader2 size={14} className="az-spin" /> Creating…</> : <><ShieldCheck size={14} /> Hold IS ≥ {holdIS}%</>}
+                  </button>
+                  {holdMsg === 'created' && <div className="az-cockpit-sub" style={{ marginTop: 6, color: 'var(--green)' }}><Check size={12} style={{ verticalAlign: 'text-bottom' }} /> Hold rule created (disabled + dry-run). Enable it in Active rules and allowlist campaigns to go live. Holds across {market === 'All' ? 'all markets' : market}.</div>}
+                  {holdMsg === 'error' && <div className="az-cockpit-sub" style={{ marginTop: 6, color: '#cc1100' }}>Could not create the hold rule.</div>}
+                </div>
+              )}
             </div>
           )}
         </div>
