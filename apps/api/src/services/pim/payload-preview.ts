@@ -39,6 +39,7 @@ import {
   type ChannelFieldSource,
   type FieldLinkGroupLike,
 } from './resolve-channel-field.js'
+import { loadValueMapLookup, loadSizeScaleLookup } from './value-map.service.js'
 
 export interface PreviewField {
   fieldKey: string
@@ -120,6 +121,10 @@ export async function previewPayload(input: {
     locale,
   })
   const linkGroups = await loadFieldLinkGroups(productId)
+  // FM.4 — value-map / size-scale lookups for the data-backed transform
+  // ops (cached; inert until a rule uses valueMap/sizeScale).
+  const lookupValueMap = await loadValueMapLookup(channel, marketplace)
+  const lookupSizeScale = await loadSizeScaleLookup()
 
   const fields: PreviewField[] = []
   const payload: Record<string, unknown> = {}
@@ -138,6 +143,7 @@ export async function previewPayload(input: {
       product: product as any,
       locale,
       link,
+      transformCtx: { lookupValueMap, lookupSizeScale },
     })
 
     if (isPresent(r.value)) {

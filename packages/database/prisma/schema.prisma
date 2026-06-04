@@ -1707,6 +1707,48 @@ enum FieldTranslatePolicy {
   NONE
 }
 
+// ── FM.4: FieldValueMap — catalog value maps ────────────────────────────────
+//
+// Canonical/master value → channel/market value (e.g. color "Rosso" → Amazon
+// DE "Rot", eBay UK "Red"). Reference/lookup data, AI-seedable + operator-
+// editable, applied by the `valueMap` transform op. No FK to Product — keyed
+// by channel/marketplace/attribute strings so ONE row applies across every
+// SKU (the catalog-level promise). `marketplace = '*'` means "all markets for
+// the channel"; a specific market overrides '*' at lookup time.
+model FieldValueMap {
+  id          String    @id @default(cuid())
+  channel     String // AMAZON | EBAY | SHOPIFY
+  marketplace String    @default("*") // '*' = all markets for the channel
+  attribute   String // canonical attribute key, e.g. "color", "material"
+  fromValue   String // canonical/master value, e.g. "Rosso"
+  toValue     String // channel/market value, e.g. "Rot"
+  confidence  String    @default("MANUAL") // MANUAL | AI_HIGH | AI_MEDIUM | AI_LOW
+  reviewedAt  DateTime? // null = needs human review (AI-seeded)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([channel, marketplace, attribute, fromValue])
+  @@index([channel, marketplace, attribute])
+}
+
+// ── FM.4: SizeScaleMap — cross-system size conversion ───────────────────────
+//
+// EU ↔ UK ↔ US ↔ ALPHA size conversion per scale family (jacket/helmet/
+// glove …), applied by the `sizeScale` transform op. Reference data seeded
+// in the FM.4 migration; operator/AI-extendable.
+model SizeScaleMap {
+  id         String   @id @default(cuid())
+  scale      String // e.g. "MENS_JACKET" | "HELMET" | "GLOVE"
+  fromSystem String // "EU" | "UK" | "US" | "ALPHA" | "CM"
+  toSystem   String
+  fromValue  String // e.g. "52"
+  toValue    String // e.g. "L"
+  createdAt  DateTime @default(now())
+
+  @@unique([scale, fromSystem, toSystem, fromValue])
+  @@index([scale, fromSystem, toSystem])
+}
+
 // ── S.4: SyncAttempt — per-listing sync audit ──────────────────────────────
 //
 // One row per sync attempt against a ChannelListing. The drawer's Sync

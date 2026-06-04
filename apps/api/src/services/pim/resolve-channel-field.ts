@@ -449,6 +449,10 @@ export interface ResolveChannelFieldInput {
   link?: FieldLinkMembership | null
   /** Identity field pinned to master (GTIN/SKU/brand). */
   locked?: boolean
+  /** FM.4 — value-map / size-scale lookups + manifest maxLength for the
+   *  data-backed transform ops. resolveChannelField fills ctx.values
+   *  (the resolved attributes) itself; the caller supplies the lookups. */
+  transformCtx?: Pick<TransformContext, 'lookupValueMap' | 'lookupSizeScale' | 'maxLength'>
 }
 
 export interface ResolvedChannelField {
@@ -498,7 +502,10 @@ export function resolveChannelField(input: ResolveChannelFieldInput): ResolvedCh
       usedFallback = true
     }
   }
-  const { out, applied } = applyTransforms(value, rule.transforms, warnings, { values: flat })
+  const { out, applied } = applyTransforms(value, rule.transforms, warnings, {
+    values: flat,
+    ...input.transformCtx,
+  })
   value = out
   const defaultFired = applied.includes('default') && !isPresent(sourceRaw)
 

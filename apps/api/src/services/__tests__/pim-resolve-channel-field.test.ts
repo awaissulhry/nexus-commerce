@@ -402,4 +402,16 @@ describe('resolveChannelField — FM.3 integration', () => {
     })
     expect(r.needsTranslation).toBe(true)
   })
+
+  it('FM.4 — a valueMap op resolves through transformCtx.lookupValueMap', () => {
+    const r = resolveChannelField({
+      fieldKey: 'color_name',
+      rule: { source: 'color', transforms: [{ type: 'valueMap', attribute: 'color' }] },
+      resolvedAttrs: attrs({ color: { value: 'Rosso' } }),
+      product: PROD,
+      locale: 'en',
+      transformCtx: { lookupValueMap: (a, f) => (a === 'color' && f === 'Rosso' ? 'Red' : null) },
+    })
+    expect(r.value).toBe('Red')
+  })
 })
