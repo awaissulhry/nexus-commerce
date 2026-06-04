@@ -51,6 +51,7 @@ import { useToast } from '@/components/ui/Toast'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import ListOnChannelDropdown from './ListOnChannelDropdown'
 import MasterDataTab from './tabs/MasterDataTab'
+import dynamic from 'next/dynamic'
 import { AnalyticsTab } from './tabs/AnalyticsTab'
 import { AdsTab } from './tabs/AdsTab'
 import { TimelineTab } from './tabs/TimelineTab'
@@ -116,6 +117,17 @@ interface Props {
 
 const SINGLE_STORE_CHANNELS = new Set(['SHOPIFY', 'WOOCOMMERCE', 'ETSY'])
 const CHANNEL_ORDER = ['AMAZON', 'EBAY', 'SHOPIFY', 'WOOCOMMERCE', 'ETSY']
+
+// Lazy-load the Mapping tab — its matrix grid (+ @tanstack/react-virtual)
+// stays out of the editor's initial bundle until the tab is opened.
+const MappingTab = dynamic(() => import('./tabs/MappingTab'), {
+  ssr: false,
+  loading: () => (
+    <div className="flex items-center justify-center gap-2 py-16 text-sm text-slate-500">
+      Loading mapping…
+    </div>
+  ),
+})
 
 // EH.1 — anchor styling that mirrors Button variant=ghost size=sm. Kept as
 // a string constant so all three "open in new tab" header anchors stay in
@@ -958,6 +970,17 @@ export default function ProductEditClient({
             Ads
           </TopTabButton>
         )
+      case 'mapping':
+        return (
+          <TopTabButton
+            key={key}
+            tabKey={key}
+            active={isActive}
+            onClick={() => goToTab('mapping')}
+          >
+            Mapping
+          </TopTabButton>
+        )
       case 'AMAZON':
       case 'EBAY':
       case 'SHOPIFY':
@@ -1344,6 +1367,12 @@ export default function ProductEditClient({
         {topTab === 'analytics' && (
           <div role="tabpanel" id="panel-analytics" aria-labelledby="tab-analytics">
             <AnalyticsTab productId={product.id} />
+          </div>
+        )}
+
+        {topTab === 'mapping' && (
+          <div role="tabpanel" id="panel-mapping" aria-labelledby="tab-mapping">
+            <MappingTab productId={product.id} />
           </div>
         )}
 
