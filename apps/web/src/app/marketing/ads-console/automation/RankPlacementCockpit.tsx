@@ -22,7 +22,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { DndContext, useDraggable, useDroppable, DragOverlay, type DragEndEvent, type DragStartEvent, PointerSensor, KeyboardSensor, useSensor, useSensors } from '@dnd-kit/core'
-import { GripVertical, Info, ArrowUp, Crosshair, TrendingUp, TrendingDown, Minus, Search, Plus, Loader2, Check, ListPlus, Sparkles, Zap, ShieldCheck, BarChart3, AlertTriangle, Clock } from 'lucide-react'
+import { GripVertical, Info, ArrowUp, Crosshair, TrendingUp, TrendingDown, Minus, Search, Plus, Loader2, Check, ListPlus, Sparkles, Zap, ShieldCheck, BarChart3, AlertTriangle, Clock, Wallet } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 
 const MARKETS = ['IT', 'DE', 'FR', 'ES', 'NL', 'BE', 'SE', 'PL', 'IE', 'UK']
@@ -30,7 +30,7 @@ const WINDOW_DAYS = 30
 // Shopper-local timezone per market (dayparting windows are enforced in this TZ).
 const MARKET_TZ: Record<string, string> = { IT: 'Europe/Rome', DE: 'Europe/Berlin', FR: 'Europe/Paris', ES: 'Europe/Madrid', NL: 'Europe/Amsterdam', BE: 'Europe/Brussels', SE: 'Europe/Stockholm', PL: 'Europe/Warsaw', IE: 'Europe/Dublin', UK: 'Europe/London' }
 
-interface Camp { id: string; name: string; marketplace: string | null; status: string; externalCampaignId: string | null; acos: number | null; dailyBudget: unknown; adProduct: string | null }
+interface Camp { id: string; name: string; marketplace: string | null; status: string; externalCampaignId: string | null; acos: number | null; dailyBudget: unknown; adProduct: string | null; deliveryStatus?: string | null; deliveryReasons?: unknown }
 interface TosRow { campaignId: string; name: string; marketplace: string | null; topImpr: number; topSpendCents: number; topSalesCents: number; topAcos: number | null; topIS: number | null; currentPct: number; recommendedPct: number; action: 'raise' | 'lower' | 'keep'; reason: string }
 interface Target { id: string; text: string; matchType: string; bidCents: number; status: string; adGroupId: string; impressions: number; clicks: number; spendCents: number; salesCents: number; acos: number | null }
 interface ParsedKw { keyword: string; bidCents: number; basis: string; exists: boolean }
@@ -503,6 +503,15 @@ export function RankPlacementCockpit() {
   }) : []
   const maxEff = couplingDays.length ? Math.max(1, ...couplingDays.map(c => c.eff)) : 1
 
+  // T5 — budget pacing. Join the family's campaigns to the loaded list for budget
+  // + Amazon delivery status; size the evening demand peak the budget must reach.
+  const famDetails = (family?.campaigns ?? []).map(fc => campaigns.find(c => c.id === fc.id)).filter(Boolean) as Camp[]
+  const totalDailyBudgetCents = Math.round(famDetails.reduce((s, c) => s + (parseFloat(String(c.dailyBudget ?? '0')) || 0), 0) * 100)
+  const budgetLimited = famDetails.filter(c => (c.deliveryStatus && c.deliveryStatus !== 'DELIVERING') || (Array.isArray(c.deliveryReasons) && (c.deliveryReasons as unknown[]).some(r => String(r).toUpperCase().includes('BUDGET'))))
+  const peakHrs = demand ? demand.filter(h => h.revenueCents >= maxDemand * 0.6) : []
+  const peakRevShare = demand && totalRevenueCents > 0 ? Math.round(peakHrs.reduce((s, h) => s + h.revenueCents, 0) / totalRevenueCents * 100) : 0
+  const peakRange = peakHrs.length ? `${pad2(Math.min(...peakHrs.map(h => h.key)))}:00–${pad2((Math.max(...peakHrs.map(h => h.key)) + 1) % 24)}:00` : null
+
   // Honest rank readout: where you're holding vs the target slot.
   const rankReadout = (() => {
     if (!cur && placements.length === 0) return null
@@ -753,6 +762,20 @@ export function RankPlacementCockpit() {
           ))}
           {!demand && !whenLoading && <div className="az-cockpit-sub">No order-demand data.</div>}
         </div>
+
+        {/* ── T5: budget pacing ────────────────────────────────────── */}
+        {family && family.campaigns.length > 0 && totalDailyBudgetCents > 0 && (
+          <div className={`az-budget-pace ${budgetLimited.length > 0 ? 'warn' : ''}`}>
+            <Wallet size={14} />
+            <span>
+              Family budget <b>{euros(totalDailyBudgetCents)}/day</b> across {family.campaigns.length} campaigns.{' '}
+              {budgetLimited.length > 0
+                ? <><b>{budgetLimited.length} budget-limited</b> — likely exhausting before peak. </>
+                : 'All delivering. '}
+              {peakRange && <>Peak demand <b>{peakRange}</b> carries <b>{peakRevShare}%</b> of revenue{peakRevShare >= 40 ? ' — concentrate the limited budget there: the schedule pauses dead hours so spend survives to peak' : ''}.</>}
+            </span>
+          </div>
+        )}
 
         {/* ── T2/T3: smart schedule generator + apply across the family ── */}
         {smartSchedule && (smartSchedule.peak.length > 0 || smartSchedule.weak.length > 0 || smartSchedule.deadHours.length > 0) ? (
