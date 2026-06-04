@@ -13,6 +13,7 @@ import type { FastifyPluginAsync } from 'fastify'
 import { planMappingPropagation } from '../services/pim/mapping-propagation.service.js'
 import { applyCatalogCascade } from '../services/pim/apply-mapping.service.js'
 import { scanProductDivergence } from '../services/pim/reconcile-divergence.service.js'
+import { buildMappingMatrix } from '../services/pim/mapping-matrix.service.js'
 
 const mappingPropagationRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post<{
@@ -113,6 +114,27 @@ const mappingPropagationRoutes: FastifyPluginAsync = async (fastify) => {
         const msg = err?.message ?? 'divergence scan failed'
         if (msg.startsWith('Product not found')) return reply.status(404).send({ error: msg })
         request.log.error({ err }, 'mapping divergence scan failed')
+        return reply.status(500).send({ error: msg })
+      }
+    },
+  )
+
+  // FM — per-product mapping matrix (read-only): field-rows × coordinate-
+  // columns with value + provenance + divergence, behind the editor's
+  // Mapping tab.
+  fastify.get<{ Params: { id: string }; Querystring: { locale?: string } }>(
+    '/products/:id/mapping/matrix',
+    async (request, reply) => {
+      try {
+        const matrix = await buildMappingMatrix({
+          productId: request.params.id,
+          locale: request.query.locale,
+        })
+        return reply.send(matrix)
+      } catch (err: any) {
+        const msg = err?.message ?? 'matrix failed'
+        if (msg.startsWith('Product not found')) return reply.status(404).send({ error: msg })
+        request.log.error({ err }, 'mapping matrix failed')
         return reply.status(500).send({ error: msg })
       }
     },
