@@ -87,6 +87,19 @@ export function TimeRankGrid({ demandGrid, onChange }: { demandGrid: Bucket[][] 
     return c
   }, [grid])
 
+  // TR2 — what share of the family's demand falls under each painted level.
+  // The honest preview (no AMS hourly ad-spend yet): are you pushing where it
+  // sells, and are your pauses costing real revenue?
+  const coverage = useMemo(() => {
+    if (!demandGrid || demandGrid.length !== 7) return null
+    const total = demandGrid.flat().reduce((s, c) => s + (c?.revenueCents ?? 0), 0)
+    if (total <= 0) return null
+    const by: Record<Level, number> = { max: 0, strong: 0, normal: 0, light: 0, pause: 0 }
+    for (let d = 0; d < 7; d++) for (let h = 0; h < 24; h++) by[grid[d][h]] += demandGrid[d]?.[h]?.revenueCents ?? 0
+    const pct = Object.fromEntries(LEVELS.map(l => [l.k, Math.round((by[l.k] / total) * 100)])) as Record<Level, number>
+    return { pct, pushShare: pct.max + pct.strong }
+  }, [grid, demandGrid])
+
   return (
     <div className="az-trgrid">
       <div className="az-trgrid-bar">
@@ -137,6 +150,15 @@ export function TimeRankGrid({ demandGrid, onChange }: { demandGrid: Bucket[][] 
         <span style={{ flex: 1 }} />
         <span className="hint">Click or drag to paint · day/hour headers paint a whole row/column</span>
       </div>
+
+      {coverage && (
+        <div className="az-tr-preview">
+          <span className="t">Demand covered</span>
+          {LEVELS.map(l => coverage.pct[l.k] > 0 && <span key={l.k} className="it"><i style={{ background: l.color }} />{l.label} {coverage.pct[l.k]}%</span>)}
+          {coverage.pushShare > 0 && <span className="ok">Pushing on {coverage.pushShare}% of sales</span>}
+          {coverage.pct.pause >= 8 && <span className="warn">Pausing hours that carry {coverage.pct.pause}% of sales — use Light to ease off instead of stopping</span>}
+        </div>
+      )}
     </div>
   )
 }

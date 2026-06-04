@@ -335,6 +335,12 @@
 .az-trgrid-legend .it { display: inline-flex; align-items: center; gap: 5px; }
 .az-trgrid-legend .it i { width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
 .az-trgrid-legend .hint { color: var(--ink3); }
+.az-tr-preview { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 8px; padding: 8px 10px; background: var(--bg2); border: 1px solid var(--divider); border-radius: 8px; font-size: 11px; color: var(--ink2); }
+.az-tr-preview .t { font-weight: 700; color: var(--ink3); text-transform: uppercase; font-size: 9.5px; letter-spacing: .3px; }
+.az-tr-preview .it { display: inline-flex; align-items: center; gap: 4px; }
+.az-tr-preview .it i { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+.az-tr-preview .ok { color: #1e7a4f; font-weight: 600; }
+.az-tr-preview .warn { color: #b3541e; font-weight: 600; background: #fbeee3; border-radius: 5px; padding: 2px 7px; }
 
 /* Action chip + per-campaign lines */
 .az-act { display: inline-flex; align-items: center; gap: 3px; font-size: 10px; font-weight: 700; border-radius: 4px; padding: 1px 6px; vertical-align: middle; }
