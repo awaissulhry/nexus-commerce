@@ -1,15 +1,10 @@
 'use client'
 
-import { Crosshair } from 'lucide-react'
-import { RankControlTab } from '../automation/RankControlTab'
+import { UnifiedRankCockpit } from './UnifiedRankCockpit'
 
+// RC4 — /rank now renders the unified cockpit. The legacy mode tabs
+// (keywords/strategy/conquest/tos) stay reachable via the Automation hub until
+// they're absorbed into the cockpit stations (RC4.1–RC4.4) and retired (RC4.9).
 export function RankPage() {
-  return (
-    <div className="az-wrap">
-      <div className="az-listhead">
-        <span className="title"><Crosshair size={18} style={{ marginRight: 6, color: 'var(--orange)' }} />Rank Control</span>
-      </div>
-      <RankControlTab onSaved={() => {}} />
-    </div>
-  )
+  return <UnifiedRankCockpit />
 }

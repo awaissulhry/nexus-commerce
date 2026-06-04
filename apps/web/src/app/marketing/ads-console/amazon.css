@@ -420,6 +420,37 @@
 .az-kwx-clean svg { color: #1e7a4f; }
 .az-kwx-clean .lnk { font: inherit; font-weight: 700; color: var(--navy); background: none; border: none; cursor: pointer; padding: 0; text-decoration: underline; }
 
+/* ── RC4 Unified Rank Control shell ──────────────────────────────────── */
+.az-urc { display: flex; flex-direction: column; gap: 0; }
+.az-urc-bar { position: sticky; top: 0; z-index: 30; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 14px; background: rgba(255,255,255,.92); backdrop-filter: blur(8px); border: 1px solid var(--divider); border-radius: 12px; margin-bottom: 14px; }
+.az-urc-bar .sp { flex: 1; }
+.az-urc-crumb { display: inline-flex; align-items: center; gap: 5px; font-size: 13px; color: var(--ink2); }
+.az-urc-crumb b { color: var(--navy); font-weight: 800; }
+.az-urc-crumb svg { color: var(--ink3); }
+.az-urc-ctl { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; color: var(--ink3); }
+.az-urc-ctl select { border: 1px solid var(--border); border-radius: 7px; padding: 5px 8px; font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; background: #fff; color: var(--ink); }
+.az-urc-search { position: relative; display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--border); border-radius: 8px; padding: 5px 9px; background: #fff; min-width: 230px; }
+.az-urc-search svg { color: var(--ink3); flex: none; }
+.az-urc-search input { border: none; outline: none; font: inherit; font-size: 12.5px; width: 100%; background: none; color: var(--ink); }
+.az-urc-results { position: absolute; top: calc(100% + 4px); left: 0; right: 0; max-height: 320px; overflow-y: auto; background: #fff; border: 1px solid var(--border); border-radius: 9px; box-shadow: 0 8px 28px rgba(0,0,0,.14); z-index: 40; padding: 4px; }
+.az-urc-results button { display: flex; align-items: center; gap: 6px; width: 100%; text-align: left; background: none; border: none; font: inherit; font-size: 12.5px; color: var(--ink); padding: 6px 9px; border-radius: 6px; cursor: pointer; }
+.az-urc-results button:hover { background: var(--bg3); }
+.az-urc-results button.on { background: var(--bg2); font-weight: 700; }
+.az-urc-results button .mk { margin-left: auto; font-size: 10px; color: var(--ink3); }
+.az-urc-chip { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 800; border-radius: 999px; padding: 4px 11px; border: 1px solid transparent; }
+.az-urc-chip.auto { color: #1e7a4f; background: #e8f5ee; border-color: #bfe6cf; }
+.az-urc-chip.suggest { color: #b3541e; background: #fbeee3; border-color: #f0c9a8; }
+.az-urc-chip.off { color: #cc1100; background: #fde7e7; border-color: #f3b9b9; }
+.az-urc-chip.idle { color: var(--ink3); background: var(--bg3); }
+.az-urc-undo { display: inline-flex; gap: 2px; }
+.az-urc-undo button { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border: 1px solid var(--border); background: #fff; border-radius: 7px; cursor: pointer; color: var(--ink2); }
+.az-urc-undo button:hover:not(:disabled) { background: var(--bg3); color: var(--navy); }
+.az-urc-undo button:disabled { opacity: .4; cursor: default; }
+.az-urc-foot { display: flex; align-items: center; gap: 10px; margin-top: 14px; padding: 10px 14px; border: 1px solid var(--divider); border-radius: 12px; background: var(--bg2); }
+.az-urc-staged { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 600; color: var(--ink2); }
+.az-urc-staged.has { color: var(--navy); font-weight: 700; }
+.az-urc-staged.has svg { color: var(--orange); }
+
 /* Inline rank-set collision warning in the Strategy panel (RC3.4) */
 .az-rankwarn { margin: 10px 0 0; padding: 10px 11px; border: 1px solid #f0c9a8; border-left: 3px solid #b3541e; border-radius: 9px; background: #fff7f0; }
 .az-rankwarn-msg { display: flex; align-items: flex-start; gap: 6px; font-size: 11.5px; line-height: 1.45; color: var(--ink); }

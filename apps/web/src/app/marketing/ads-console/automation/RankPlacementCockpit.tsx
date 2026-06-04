@@ -28,7 +28,7 @@ import { TimeRankGrid, compileGrid, describeGrid, type Level } from './TimeRankG
 import { DemandHeatmap } from './DemandHeatmap'
 
 const MARKETS = ['IT', 'DE', 'FR', 'ES', 'NL', 'BE', 'SE', 'PL', 'IE', 'UK']
-const WINDOW_DAYS = 30
+const DEFAULT_WINDOW_DAYS = 30
 // Shopper-local timezone per market (dayparting windows are enforced in this TZ).
 const MARKET_TZ: Record<string, string> = { IT: 'Europe/Rome', DE: 'Europe/Berlin', FR: 'Europe/Paris', ES: 'Europe/Madrid', NL: 'Europe/Amsterdam', BE: 'Europe/Brussels', SE: 'Europe/Stockholm', PL: 'Europe/Warsaw', IE: 'Europe/Dublin', UK: 'Europe/London' }
 
@@ -180,10 +180,25 @@ const ActionChip = ({ action }: { action: TosRow['action'] }) => (
   </span>
 )
 
-export function RankPlacementCockpit() {
+// RC4.0 — the cockpit can run standalone (its own scope bar) OR be driven by the
+// unified shell via these optional props (shared market/campaign/lookback).
+export interface RankCockpitProps {
+  market?: string
+  campaignId?: string
+  lookbackDays?: number
+  onMarketChange?: (m: string) => void
+  onCampaignChange?: (id: string) => void
+  hideScopeBar?: boolean
+}
+export function RankPlacementCockpit({ market: ctxMarket, campaignId: ctxCampaignId, lookbackDays, onMarketChange, onCampaignChange, hideScopeBar }: RankCockpitProps = {}) {
+  const WINDOW_DAYS = lookbackDays ?? DEFAULT_WINDOW_DAYS
   const [campaigns, setCampaigns] = useState<Camp[]>([])
-  const [market, setMarket] = useState('IT')
-  const [campaignId, setCampaignId] = useState('')
+  const [marketState, setMarketState] = useState('IT')
+  const market = ctxMarket ?? marketState
+  const setMarket = useCallback((m: string) => { if (onMarketChange) onMarketChange(m); else setMarketState(m) }, [onMarketChange])
+  const [campaignIdState, setCampaignIdState] = useState('')
+  const campaignId = ctxCampaignId ?? campaignIdState
+  const setCampaignId = useCallback((id: string) => { if (onCampaignChange) onCampaignChange(id); else setCampaignIdState(id) }, [onCampaignChange])
   const [campaignSearch, setCampaignSearch] = useState('')
   const [slot, setSlot] = useState<SlotKey>('top3')
   const [activeId, setActiveId] = useState<string | null>(null)
@@ -718,7 +733,8 @@ export function RankPlacementCockpit() {
 
   return (
     <div className="az-cockpit">
-      {/* ── Campaign-first scope bar ─────────────────────────── */}
+      {/* ── Campaign-first scope bar (hidden when the shell drives context) ── */}
+      {!hideScopeBar && (
       <div className="az-cockpit-bar">
         <label className="ctl"><span className="lbl">Market</span>
           <select value={market} onChange={e => setMarket(e.target.value)}>{MARKETS.map(m => <option key={m}>{m}</option>)}</select>
@@ -736,6 +752,7 @@ export function RankPlacementCockpit() {
         {signalsLoading && <span className="az-cockpit-status">Loading…</span>}
         {!signalsLoading && campaign && <span className="az-cockpit-status ok">{filtered.length} in {market} · {WINDOW_DAYS}d</span>}
       </div>
+      )}
 
       {/* ── R8: self-competition warning ─────────────────────────── */}
       {selfComp.length > 0 && campaign && (
