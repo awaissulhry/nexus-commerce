@@ -90,6 +90,7 @@ export default function MappingTab({ productId }: { productId: string }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
+  const [filter, setFilter] = useState<'all' | 'divergent' | 'gaps'>('all')
 
   useEffect(() => {
     let alive = true
@@ -117,13 +118,18 @@ export default function MappingTab({ productId }: { productId: string }) {
 
   const rows = data?.fields ?? []
   const coords = data?.coordinates ?? []
+  const visibleRows = useMemo(() => {
+    if (filter === 'divergent') return rows.filter((r) => Object.values(r.cells).some((c) => c.diverges))
+    if (filter === 'gaps') return rows.filter((r) => Object.values(r.cells).some((c) => c.missingRequired))
+    return rows
+  }, [rows, filter])
   const gridCols = useMemo(
     () => `${FIELD_COL}px ${MASTER_COL}px ${coords.map(() => `${CELL_COL}px`).join(' ')}`,
     [coords],
   )
 
   const rowVirtualizer = useVirtualizer({
-    count: rows.length,
+    count: visibleRows.length,
     getScrollElement: () => scrollRef.current,
     estimateSize: () => ROW_H,
     overscan: 14,
@@ -165,18 +171,47 @@ export default function MappingTab({ productId }: { productId: string }) {
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
         <span className="font-medium text-slate-700 dark:text-slate-300">{data.sku}</span>
-        <span>· {coords.length} coordinates · {rows.length} fields</span>
+        <span>
+          · {coords.length} coordinates · {visibleRows.length}
+          {filter !== 'all' && `/${rows.length}`} fields
+        </span>
         {data.counts.divergent > 0 && (
-          <span className="rounded bg-amber-100 px-1.5 py-0.5 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
+          <button
+            type="button"
+            onClick={() => setFilter((f) => (f === 'divergent' ? 'all' : 'divergent'))}
+            className={cn(
+              'rounded px-1.5 py-0.5 transition',
+              filter === 'divergent'
+                ? 'bg-amber-500 text-white'
+                : 'bg-amber-100 text-amber-700 hover:brightness-95 dark:bg-amber-950/40 dark:text-amber-300',
+            )}
+          >
             ⚠ {data.counts.divergent} divergent
-          </span>
+          </button>
         )}
         {data.counts.missingRequired > 0 && (
-          <span className="rounded bg-rose-100 px-1.5 py-0.5 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300">
+          <button
+            type="button"
+            onClick={() => setFilter((f) => (f === 'gaps' ? 'all' : 'gaps'))}
+            className={cn(
+              'rounded px-1.5 py-0.5 transition',
+              filter === 'gaps'
+                ? 'bg-rose-500 text-white'
+                : 'bg-rose-100 text-rose-700 hover:brightness-95 dark:bg-rose-950/40 dark:text-rose-300',
+            )}
+          >
             {data.counts.missingRequired} required gaps
-          </span>
+          </button>
+        )}
+        {filter !== 'all' && (
+          <button type="button" onClick={() => setFilter('all')} className="underline hover:text-slate-700 dark:hover:text-slate-300">
+            clear filter
+          </button>
         )}
       </div>
+      {filter !== 'all' && visibleRows.length === 0 && (
+        <div className="py-8 text-center text-xs text-slate-500">No fields match this filter.</div>
+      )}
 
       <div
         ref={scrollRef}
@@ -200,7 +235,7 @@ export default function MappingTab({ productId }: { productId: string }) {
         {/* virtualized rows */}
         <div style={{ height: rowVirtualizer.getTotalSize(), width: 'max-content', minWidth: '100%', position: 'relative' }}>
           {rowVirtualizer.getVirtualItems().map((vi) => {
-            const row = rows[vi.index]
+            const row = visibleRows[vi.index]
             return (
               <div
                 key={row.fieldKey}
@@ -235,7 +270,13 @@ export default function MappingTab({ productId }: { productId: string }) {
                     )
                   }
                   return (
-                    <div key={coordKey(c)} className="flex min-w-0 items-center gap-1 px-2 py-1.5">
+                    <div
+                      key={coordKey(c)}
+                      className={cn(
+                        'flex min-w-0 items-center gap-1 px-2 py-1.5',
+                        cell.diverges && 'bg-amber-50 dark:bg-amber-950/20',
+                      )}
+                    >
                       <span
                         className={cn(
                           'truncate text-slate-700 dark:text-slate-300',
