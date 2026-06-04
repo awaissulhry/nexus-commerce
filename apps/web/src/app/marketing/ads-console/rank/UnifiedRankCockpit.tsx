@@ -22,6 +22,7 @@ import { useRankUndo } from './useRankUndo'
 import { StrategyStation } from './StrategyStation'
 import { ConquestStation } from './ConquestStation'
 import { AutomateStation } from './AutomateStation'
+import { SimpleRankPanel } from './SimpleRankPanel'
 
 const MARKETS = ['IT', 'DE', 'FR', 'ES', 'NL', 'BE', 'SE', 'PL', 'IE', 'UK']
 const LOOKBACKS = [7, 14, 30, 60, 90]
@@ -39,6 +40,7 @@ export function UnifiedRankCockpit() {
   const [pending, setPending] = useState(0)
   const [trayOpen, setTrayOpen] = useState(false)
   const [trayTab, setTrayTab] = useState<'staged' | 'history'>('staged')
+  const [simple, setSimple] = useState(false)
 
   useEffect(() => { void fetch(`${getBackendUrl()}/api/advertising/campaigns?limit=500`, { cache: 'no-store' }).then(r => r.json()).then(d => setCampaigns((d.items ?? []) as Camp[])).catch(() => {}) }, [])
   useEffect(() => { void fetch(`${getBackendUrl()}/api/advertising/autonomy/status`, { cache: 'no-store' }).then(r => r.json()).then(d => setAutonomy(d as Autonomy)).catch(() => {}) }, [])
@@ -104,6 +106,10 @@ export function UnifiedRankCockpit() {
           )}
         </div>
         <span className="sp" />
+        <span className="az-mode-seg az-urc-seg" role="tablist" aria-label="View mode">
+          <button type="button" role="tab" aria-selected={simple} className={simple ? 'on' : ''} onClick={() => setSimple(true)}>Simple</button>
+          <button type="button" role="tab" aria-selected={!simple} className={!simple ? 'on' : ''} onClick={() => setSimple(false)}>Full</button>
+        </span>
         <span className={`az-urc-chip ${tone}`} title="Global automation posture (all advertising rules)">{tone === 'off' ? <AlertTriangle size={12} /> : <Zap size={12} />} {autonomyLabel}</span>
         <div className="az-urc-undo">
           <button type="button" disabled={!canUndo} onClick={() => void undo()} title="Undo last change (⌘Z)" aria-label="Undo"><Undo2 size={15} /></button>
@@ -114,12 +120,16 @@ export function UnifiedRankCockpit() {
 
       {/* ── Body: the existing placement cockpit, driven by the shared context.
             Stations get extracted from here in RC4.1–RC4.4. ── */}
-      <RankPlacementCockpit market={market} campaignId={campaignId} lookbackDays={lookback} onMarketChange={setMarket} onCampaignChange={setCampaignId} hideScopeBar />
+      {simple ? (
+        <SimpleRankPanel market={market} campaignId={campaignId} campaignName={campaign?.name ?? 'this campaign'} onFull={() => setSimple(false)} onChanged={loadPending} />
+      ) : (<>
+        <RankPlacementCockpit market={market} campaignId={campaignId} lookbackDays={lookback} onMarketChange={setMarket} onCampaignChange={setCampaignId} hideScopeBar />
 
-      {/* ── Absorbed modes as progressive stations (RC4.2+) ── */}
-      {campaignId && <StrategyStation campaignId={campaignId} currentStrategy={campaign?.biddingStrategy ?? null} onChanged={loadPending} />}
-      {campaignId && <ConquestStation campaignId={campaignId} onChanged={loadPending} />}
-      <AutomateStation market={market} onChanged={loadPending} />
+        {/* ── Absorbed modes as progressive stations (RC4.2+) ── */}
+        {campaignId && <StrategyStation campaignId={campaignId} currentStrategy={campaign?.biddingStrategy ?? null} onChanged={loadPending} />}
+        {campaignId && <ConquestStation campaignId={campaignId} onChanged={loadPending} />}
+        <AutomateStation market={market} onChanged={loadPending} />
+      </>)}
 
       {/* ── Footer: staged-changes tray + history (RC4.5 / RC4.6) ── */}
       <div className="az-urc-foot">
