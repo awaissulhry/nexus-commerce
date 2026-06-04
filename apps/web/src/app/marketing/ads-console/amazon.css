@@ -161,6 +161,17 @@
 .az-campline .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink2); }
 .az-campline .pct { font-weight: 700; color: var(--ink); font-size: 11px; }
 
+/* Plan + apply (P3) */
+.az-cockpit-plan { display: flex; flex-direction: column; }
+.az-plan-target { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 4px 0 10px; }
+.az-stepper { display: inline-flex; align-items: center; gap: 0; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.az-stepper button { border: none; background: #fff; width: 28px; height: 28px; font-size: 16px; line-height: 1; cursor: pointer; color: var(--ink); font-family: inherit; }
+.az-stepper button:hover:not(:disabled) { background: var(--bg3); }
+.az-stepper button:disabled { opacity: .45; cursor: default; }
+.az-stepper .v { min-width: 52px; text-align: center; font-weight: 700; font-size: 12.5px; border-left: 1px solid var(--divider); border-right: 1px solid var(--divider); padding: 0 4px; }
+.az-plan-head { font-size: 11.5px; font-weight: 700; color: var(--ink); margin-bottom: 4px; }
+.az-btn.dark:disabled { opacity: .5; cursor: default; background: var(--ink3); border-color: var(--ink3); }
+
 /* ── AD-TYPE TABS ──────────────────────────────────────────── */
 .az-tabs { display: flex; flex-wrap: wrap; gap: 6px; padding: 6px 0 14px; max-width: 100%; }
 .az-tab { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--border); background: #fff; border-radius: 16px; padding: 6px 13px; font-weight: 500; font-size: 12.5px; color: var(--ink); cursor: pointer; white-space: nowrap; }
