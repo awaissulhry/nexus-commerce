@@ -539,6 +539,23 @@
 .az-cq-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
 .az-cq-row label { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; color: var(--ink2); }
 .az-cq-row input[type="number"] { width: 74px; border: 1px solid var(--border); border-radius: 6px; padding: 5px 8px; font: inherit; font-weight: 700; text-align: right; }
+/* RC4.7 — automate station */
+.az-auto-halt { display: flex; align-items: center; gap: 6px; margin-bottom: 12px; padding: 8px 11px; border: 1px solid #f3b9b9; border-radius: 8px; background: #fde7e7; font-size: 12px; font-weight: 700; color: #cc1100; }
+.az-auto-card { border: 1px solid var(--divider); border-left: 3px solid var(--navy); border-radius: 10px; background: var(--bg2); padding: 12px 14px; margin-bottom: 14px; }
+.az-auto-title { display: flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 800; color: var(--navy); margin-bottom: 9px; }
+.az-auto-row { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; font-size: 12.5px; color: var(--ink2); }
+.az-auto-row input[type="number"] { width: 58px; border: 1px solid var(--border); border-radius: 6px; padding: 4px 7px; font: inherit; font-weight: 700; text-align: right; }
+.az-auto-rules { display: flex; flex-direction: column; gap: 6px; }
+.az-auto-rule { display: flex; align-items: center; gap: 8px; padding: 7px 11px; border: 1px solid var(--divider); border-radius: 8px; background: #fff; font-size: 12px; }
+.az-auto-rule .nm { font-weight: 700; color: var(--ink); }
+.az-auto-rule .st { font-size: 9px; font-weight: 800; letter-spacing: .3px; border-radius: 4px; padding: 1px 7px; }
+.az-auto-rule .st.off { background: var(--bg3); color: var(--ink3); }
+.az-auto-rule .st.dry { background: #fbeee3; color: #b3541e; }
+.az-auto-rule .st.live { background: #fde7e7; color: #cc1100; }
+.az-auto-rule .mk { font-size: 10px; color: var(--ink3); }
+.az-mini { border: 1px solid var(--border); background: #fff; border-radius: 6px; padding: 3px 9px; font: inherit; font-size: 11px; font-weight: 700; color: var(--ink2); cursor: pointer; display: inline-flex; align-items: center; gap: 4px; }
+.az-mini:hover:not(:disabled) { background: var(--bg3); color: var(--navy); }
+.az-mini:disabled { opacity: .5; cursor: default; }
 
 /* Inline rank-set collision warning in the Strategy panel (RC3.4) */
 .az-rankwarn { margin: 10px 0 0; padding: 10px 11px; border: 1px solid #f0c9a8; border-left: 3px solid #b3541e; border-radius: 9px; background: #fff7f0; }
