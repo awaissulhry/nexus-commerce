@@ -110,6 +110,11 @@ export function TimeRankGrid({ demandGrid, onChange }: { demandGrid: Bucket[][] 
   const paintCol = (h: number) => { setUserEdited(true); setGrid(g => g.map(r => { const nr = r.slice(); nr[h] = brush; return nr })) }
   const fillAll = () => { setUserEdited(true); setGrid(g => g.map(r => r.map(() => brush))) }
   const reseed = () => { setUserEdited(false); setGrid(seedFromDemand(demandGrid)) }
+  // TR4 — presets (compose over the current grid).
+  const setEdited = (fn: (g: Level[][]) => Level[][]) => { setUserEdited(true); setGrid(fn) }
+  const pPauseNight = () => setEdited(g => g.map(r => r.map((c, h) => (h < 7 ? 'pause' : c))))
+  const pPushEvenings = () => setEdited(g => g.map(r => r.map((c, h) => (h >= 17 && h < 23 ? 'max' : c))))
+  const pWeekendsLight = () => setEdited(g => g.map((r, d) => (d === 0 || d === 6 ? r.map(() => 'light') : r)))
 
   const counts = useMemo(() => {
     const c: Record<Level, number> = { max: 0, strong: 0, normal: 0, light: 0, pause: 0 }
@@ -139,7 +144,13 @@ export function TimeRankGrid({ demandGrid, onChange }: { demandGrid: Bucket[][] 
         ))}
         <span style={{ flex: 1 }} />
         <button type="button" className="az-tr-mini" onClick={fillAll}>Fill all</button>
-        <button type="button" className="az-tr-mini" onClick={reseed} title="Reset to the demand-suggested grid">Reset to demand</button>
+        <button type="button" className="az-tr-mini" onClick={reseed} title="Auto-paint from the family's demand">Auto-paint from demand</button>
+      </div>
+      <div className="az-trgrid-bar">
+        <span className="lbl">Presets:</span>
+        <button type="button" className="az-tr-mini" onClick={pPauseNight} title="Pause 00:00–07:00 every day">Pause overnight</button>
+        <button type="button" className="az-tr-mini" onClick={pPushEvenings} title="Max push 17:00–23:00 every day">Push evenings</button>
+        <button type="button" className="az-tr-mini" onClick={pWeekendsLight} title="Ease off Saturday &amp; Sunday">Weekends light</button>
       </div>
 
       <div className="az-trgrid-table" onMouseLeave={() => { painting.current = false }}>
