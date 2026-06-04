@@ -224,10 +224,30 @@ export default function MappingTab({ product }: { product: MappingTabProduct }) 
   }
   if (rows.length === 0) {
     return (
-      <EmptyState
-        title="No mapping rules yet"
-        body="These markets have no field-mapping rules. Set them up in Settings → Mappings."
-      />
+      <div className="space-y-4">
+        <div className="rounded-lg border border-dashed border-slate-300 px-4 py-12 text-center dark:border-slate-700">
+          <div className="text-sm font-medium text-slate-700 dark:text-slate-300">No mapping rules yet</div>
+          <div className="mx-auto mt-1 max-w-md text-xs text-slate-500">
+            {coords.length} {coords.length === 1 ? 'market has' : 'markets have'} no field-mapping rules. Add the
+            first one right here — no need to leave for Settings.
+          </div>
+          <button
+            type="button"
+            onClick={() => setRuleDrawer({ open: true })}
+            className="mt-3 inline-flex items-center gap-1 rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700"
+          >
+            <Plus className="h-3.5 w-3.5" /> Add a rule
+          </button>
+        </div>
+        <RuleEditorDrawer
+          productType={product.productType}
+          coordinates={coords.map((c) => ({ channel: c.channel, marketplace: c.marketplace }))}
+          initial={ruleDrawer.initial}
+          open={ruleDrawer.open}
+          onClose={() => setRuleDrawer({ open: false })}
+          onSaved={() => void load()}
+        />
+      </div>
     )
   }
 

@@ -71,6 +71,8 @@ export default function RuleEditorDrawer({
   const [draft, setDraft] = useState<Draft>(EMPTY_DRAFT)
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [syncing, setSyncing] = useState(false)
+  const [reloadKey, setReloadKey] = useState(0)
   const [error, setError] = useState<string | null>(null)
 
   // Seed coord + field from props each time the drawer opens.
@@ -124,7 +126,7 @@ export default function RuleEditorDrawer({
     return () => {
       alive = false
     }
-  }, [open, coord, productType])
+  }, [open, coord, productType, reloadKey])
 
   const activeField = useMemo(() => fields.find((f) => f.fieldKey === fieldKey) ?? null, [fields, fieldKey])
   const suggestion = useMemo(
@@ -215,6 +217,37 @@ export default function RuleEditorDrawer({
     }
   }, [coord, fieldKey, productType, onSaved, onClose])
 
+  // Seed the channel's field catalog (ChannelSchema) in place when a
+  // coordinate has none yet — so rules can be authored without leaving the
+  // tab. eBay/Shopify seed a built-in schema; Amazon pulls SP-API per
+  // productType.
+  const syncSchema = useCallback(async () => {
+    if (!coord) return
+    setSyncing(true)
+    setError(null)
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/pim/mappings/${coord.channel}/${coord.marketplace}/sync-schema`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify(productType ? { productType } : {}),
+        },
+      )
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setError(json?.error ?? `HTTP ${res.status}`)
+        return
+      }
+      setReloadKey((k) => k + 1) // re-fetch the field catalog
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setSyncing(false)
+    }
+  }, [coord, productType])
+
   if (!open) return null
 
   const scopeLabel = productType
@@ -285,6 +318,25 @@ export default function RuleEditorDrawer({
                   ))}
                 </select>
               </Labeled>
+              {!loading && coord && fields.length === 0 && (
+                <div className="rounded border border-dashed border-slate-300 p-3 text-center text-xs text-slate-500 dark:border-slate-700">
+                  No fields for {coord.channel}·{coord.marketplace} yet — its channel schema isn&apos;t synced.
+                  <button
+                    type="button"
+                    onClick={syncSchema}
+                    disabled={syncing}
+                    className="mt-2 inline-flex items-center gap-1 rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+                  >
+                    {syncing ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
+                    {syncing ? 'Syncing…' : `Sync ${coord.channel} schema`}
+                  </button>
+                </div>
+              )}
+              {!loading && coord && fields.length > 0 && unmappedFields.length === 0 && (
+                <div className="text-xs text-slate-400">
+                  Every field on this coordinate already has a rule — edit them from the matrix cells.
+                </div>
+              )}
             </>
           )}
 
