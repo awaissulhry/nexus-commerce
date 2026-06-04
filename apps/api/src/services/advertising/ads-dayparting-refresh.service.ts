@@ -98,6 +98,13 @@ export interface BlendedDemand {
 
 const SHRINK_K = 2 // a cell needs ~2+ family orders before it outweighs the market shape
 
+// RC2.DD6 — pure per-cell shrinkage (regression-tested): blend the family's cell
+// share toward the market share, weighted by the family's order count in the cell.
+// 0 family orders → market share; many orders → the family's own share dominates.
+export function shrinkShare(fShare: number, mShare: number, familyOrders: number, blended: boolean, k = SHRINK_K): number {
+  return blended ? (familyOrders * fShare + k * mShare) / (familyOrders + k) : fShare
+}
+
 export async function blendedFamilyDemand(productIds: string[], marketplace: string | undefined, windowDays = 180): Promise<BlendedDemand> {
   const fam = await aggregateOrdersDayparting({ channel: 'AMAZON', marketplace, productIds, windowDays, metric: 'revenue' })
   const mkt = await aggregateOrdersDayparting({ channel: 'AMAZON', marketplace, windowDays, metric: 'revenue' })
@@ -113,7 +120,7 @@ export async function blendedFamilyDemand(productIds: string[], marketplace: str
       const fShare = fTotRev > 0 ? (fam.grid[d]?.[h]?.revenueCents ?? 0) / fTotRev : 0
       const mShare = mTotRev > 0 ? (mkt.grid[d]?.[h]?.revenueCents ?? 0) / mTotRev : 0
       const w = fam.grid[d]?.[h]?.orders ?? 0
-      const bShare = blended ? (w * fShare + SHRINK_K * mShare) / (w + SHRINK_K) : fShare
+      const bShare = shrinkShare(fShare, mShare, w, blended)
       rawShare[d][h] = bShare; shareSum += bShare
     }
   }
