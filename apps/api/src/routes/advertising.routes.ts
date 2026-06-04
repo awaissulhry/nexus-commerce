@@ -562,6 +562,50 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     return { marketplace: camp.marketplace, asins, conflicts }
   })
 
+  // ── Product-family dayparting (RC2.T·product) ──────────────────────────
+  // Resolve a campaign to its PARENT product family, the family's campaigns in
+  // this market, and the family's roll-up order demand (when the product sells).
+  // Drives ONE dayparting schedule applied across all the family's campaigns —
+  // conversion timing is a product property, not a per-campaign one. Read-only.
+  fastify.get('/advertising/campaigns/:id/product-dayparting', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const q = request.query as { marketplace?: string; windowDays?: string }
+    const camp = await prisma.campaign.findUnique({ where: { id }, select: { marketplace: true } })
+    if (!camp) { reply.status(404); return { error: 'campaign not found' } }
+    const marketplace = q.marketplace || camp.marketplace || undefined
+    // 1. campaign → the product(s) it advertises
+    const myAds = await prisma.adProductAd.findMany({ where: { adGroup: { campaignId: id }, productId: { not: null } }, select: { productId: true } })
+    const directIds = [...new Set(myAds.map((a) => a.productId).filter((x): x is string => !!x))]
+    if (directIds.length === 0) { reply.header('Cache-Control', 'private, max-age=120'); return { marketplace, parentProductId: null, parentName: null, productIds: [], asins: [], campaigns: [], demand: null } }
+    // 2. resolve each to its parent (or itself), pick the dominant parent
+    const prods = await prisma.product.findMany({ where: { id: { in: directIds } }, select: { id: true, parentId: true } })
+    const parentCount = new Map<string, number>()
+    for (const p of prods) { const par = p.parentId ?? p.id; parentCount.set(par, (parentCount.get(par) ?? 0) + 1) }
+    const parentProductId = [...parentCount.entries()].sort((a, b) => b[1] - a[1])[0][0]
+    // 3. family = parent + its children
+    const family = await prisma.product.findMany({ where: { OR: [{ id: parentProductId }, { parentId: parentProductId }] }, select: { id: true, name: true } })
+    const familyIds = family.map((f) => f.id)
+    const parent = family.find((f) => f.id === parentProductId) ?? family[0]
+    // 4. family campaigns in this market
+    const famAds = await prisma.adProductAd.findMany({
+      where: { productId: { in: familyIds }, ...(marketplace ? { adGroup: { campaign: { marketplace } } } : {}) },
+      select: { asin: true, adGroup: { select: { campaign: { select: { id: true, name: true, status: true, marketplace: true } } } } },
+    })
+    const campMap = new Map<string, { id: string; name: string; status: string; marketplace: string | null }>()
+    const asinSet = new Set<string>()
+    for (const a of famAds) { if (a.asin) asinSet.add(a.asin); const c = a.adGroup?.campaign; if (c && (!marketplace || c.marketplace === marketplace)) campMap.set(c.id, c) }
+    // 5. family demand — roll up the children's orders, market-scoped
+    const { aggregateOrdersDayparting } = await import('../services/advertising/orders-dayparting.service.js')
+    const windowDays = q.windowDays ? Math.max(7, Math.min(365, Number(q.windowDays))) : 90
+    const demand = await aggregateOrdersDayparting({ channel: 'AMAZON', marketplace, productIds: familyIds, windowDays, metric: 'revenue' })
+    reply.header('Cache-Control', 'private, max-age=120')
+    return {
+      marketplace, parentProductId, parentName: parent?.name ?? null, productIds: familyIds, asins: [...asinSet],
+      campaigns: [...campMap.values()].sort((a, b) => (a.status === b.status ? 0 : a.status === 'ENABLED' ? -1 : 1)),
+      demand: { totals: demand.totals, hourProfile: demand.hourProfile, weekdayProfile: demand.weekdayProfile, hasData: demand.hasData },
+    }
+  })
+
   // ── Apex A.2a: per-campaign bid guardrails (max-change-% + writes/day) ──
   // Stored in dynamicBidding JSON alongside cpcCeiling. maxBidChangePct clamps
   // how far any single bid move (manual/bulk/automation) can swing from the

@@ -27,6 +27,7 @@ export interface OrdersDaypartingOpts {
   channel?: string                  // OrderChannel value as text; default 'AMAZON'
   marketplace?: string | string[]   // IT/DE/FR/ES…; omit = all markets
   productId?: string                 // scope to one product (OrderItem.productId)
+  productIds?: string[]              // scope to a product family (parent + variants); rolls up children
   sku?: string                       // scope to one SKU (OrderItem.sku)
   from?: Date                        // explicit range start (inclusive)
   to?: Date                          // explicit range end (exclusive)
@@ -73,7 +74,8 @@ export async function aggregateOrdersDayparting(
   const from = opts.from ?? new Date(to.getTime() - (opts.windowDays ?? 90) * 86_400_000)
 
   const mkts = opts.marketplace == null ? [] : Array.isArray(opts.marketplace) ? opts.marketplace : [opts.marketplace]
-  const needsItemFilter = !!opts.productId || !!opts.sku
+  const hasProductIds = !!(opts.productIds && opts.productIds.length)
+  const needsItemFilter = !!opts.productId || !!opts.sku || hasProductIds
 
   // Inner join when scoping to a product/sku (only count buckets where that item
   // actually sold); LEFT join otherwise so item-less orders still count toward `orders`.
@@ -81,7 +83,9 @@ export async function aggregateOrdersDayparting(
     ? Prisma.sql`JOIN "OrderItem" oi ON oi."orderId" = o.id`
     : Prisma.sql`LEFT JOIN "OrderItem" oi ON oi."orderId" = o.id`
   const mktFrag = mkts.length ? Prisma.sql`AND o."marketplace" IN (${Prisma.join(mkts)})` : Prisma.empty
-  const prodFrag = opts.productId ? Prisma.sql`AND oi."productId" = ${opts.productId}` : Prisma.empty
+  const prodFrag = hasProductIds
+    ? Prisma.sql`AND oi."productId" IN (${Prisma.join(opts.productIds as string[])})`
+    : opts.productId ? Prisma.sql`AND oi."productId" = ${opts.productId}` : Prisma.empty
   const skuFrag = opts.sku ? Prisma.sql`AND oi."sku" = ${opts.sku}` : Prisma.empty
 
   // Single pass: bucket by Rome-local (dow, hour). COALESCE(purchaseDate, createdAt)

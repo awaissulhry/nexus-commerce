@@ -36,12 +36,16 @@ interface Target { id: string; text: string; matchType: string; bidCents: number
 interface ParsedKw { keyword: string; bidCents: number; basis: string; exists: boolean }
 interface PlacementRow { placement: PlacementKey; impressions: number; clicks: number; costCents: number; salesCents: number; orders: number; adjustmentPct: number }
 interface SelfComp { campaignId: string; name: string; status: string; asins: string[] }
-// T1 — dayparting intel (per-campaign ad conversion by weekday/hour)
-interface DpDay { weekday: number; label: string; costCents: number; clicks: number; orders: number; cvr: number | null; acos: number | null; cvrIndex: number | null; recommend: 'bid-up' | 'keep' | 'bid-down' }
-interface DpIntel { windowDays: number; days: DpDay[]; hourlyAvailable: boolean; peakHours: number[]; weakHours: number[]; overallCvr: number | null; note: string }
-interface DemandHour { key: number; orders: number; units: number; revenueCents: number; index: number | null }
+// T·product — dayparting scoped to the parent product family (orders demand)
+interface DemandBucket { key: number; orders: number; units: number; revenueCents: number; index: number | null }
+type DemandHour = DemandBucket
+interface FamCampaign { id: string; name: string; status: string; marketplace: string | null }
+interface ProductFamily { parentProductId: string | null; parentName: string | null; productIds: string[]; asins: string[]; campaigns: FamCampaign[]; demand: { totals: { orders: number; units: number; revenueCents: number }; hourProfile: DemandHour[]; weekdayProfile: DemandBucket[]; hasData: boolean } | null }
+type DayRecommend = 'bid-up' | 'keep' | 'bid-down'
 const MATCH_TYPES = ['BROAD', 'PHRASE', 'EXACT'] as const
 const pad2 = (n: number) => String(n).padStart(2, '0')
+const DOW_LABEL = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+const demandRecommend = (index: number | null): DayRecommend => index == null ? 'keep' : index >= 1.2 ? 'bid-up' : index < 0.6 ? 'bid-down' : 'keep'
 
 // ── The numbered rank ladder. Each slot maps to an Amazon placement + a
 // starting bias % (the hold loop fine-tunes from there). Top-of-search slots
@@ -151,16 +155,15 @@ export function RankPlacementCockpit() {
   // R5/R6 — per-placement spend + bias (Top / Rest / Product)
   const [placements, setPlacements] = useState<PlacementRow[]>([])
   const [selfComp, setSelfComp] = useState<SelfComp[]>([]) // R8 — same-ASIN rivals
-  // T1 — dayparting intel ("when it converts")
-  const [intel, setIntel] = useState<DpIntel | null>(null)
-  const [demand, setDemand] = useState<DemandHour[] | null>(null)
+  // T·product — dayparting scoped to the parent product family
+  const [family, setFamily] = useState<ProductFamily | null>(null)
   const [whenLoading, setWhenLoading] = useState(false)
   // T2 — smart schedule params (bid-down default; pause only the dead overnight)
   const [bidUpPct, setBidUpPct] = useState(25)
   const [bidDownPct, setBidDownPct] = useState(40)
   const [pauseOvernight, setPauseOvernight] = useState(true)
-  // T3 — the campaign's persisted AdSchedule + apply state
-  const [existingSched, setExistingSched] = useState<{ id: string; enabled: boolean; windows: unknown[]; name: string } | null>(null)
+  // T3 — the family's persisted AdSchedules + apply state
+  const [famScheds, setFamScheds] = useState<{ id: string; campaignId: string; enabled: boolean }[]>([])
   const [schedSaving, setSchedSaving] = useState(false)
   const [schedMsg, setSchedMsg] = useState('')
   // R3 — bulk keyword manager
@@ -241,31 +244,31 @@ export function RankPlacementCockpit() {
     return () => ac.abort()
   }, [loadSignals])
 
-  // T1 — dayparting intel (campaign ad conversion by weekday) + orders demand by
-  // hour (when customers actually buy, market-scoped). "When it converts."
+  // T·product — resolve the campaign to its PARENT product family + the family's
+  // roll-up order demand (when the product sells) in this market. One call.
   useEffect(() => {
-    if (!campaignId) { setIntel(null); setDemand(null); return }
+    if (!campaignId) { setFamily(null); return }
     const ac = new AbortController()
     setWhenLoading(true)
-    Promise.all([
-      fetch(`${getBackendUrl()}/api/advertising/dayparting-intel?campaignId=${encodeURIComponent(campaignId)}&windowDays=${WINDOW_DAYS}`, { cache: 'no-store', signal: ac.signal }).then(r => r.json()).catch(() => null),
-      fetch(`${getBackendUrl()}/api/advertising/orders-dayparting?marketplace=${market}&windowDays=90&metric=revenue`, { cache: 'no-store', signal: ac.signal }).then(r => r.json()).catch(() => null),
-    ]).then(([di, od]) => {
-      if (ac.signal.aborted) return
-      setIntel(di && Array.isArray(di.days) ? di as DpIntel : null)
-      setDemand(Array.isArray(od?.hourProfile) ? od.hourProfile as DemandHour[] : null)
-    }).finally(() => { if (!ac.signal.aborted) setWhenLoading(false) })
+    fetch(`${getBackendUrl()}/api/advertising/campaigns/${encodeURIComponent(campaignId)}/product-dayparting?marketplace=${market}&windowDays=90`, { cache: 'no-store', signal: ac.signal })
+      .then(r => r.json()).then(d => { if (!ac.signal.aborted) setFamily(d && Array.isArray(d.campaigns) ? d as ProductFamily : null) })
+      .catch(() => {}).finally(() => { if (!ac.signal.aborted) setWhenLoading(false) })
     return () => ac.abort()
   }, [campaignId, market])
 
-  // T2 — generate a schedule from the intel: bid-up peak days, bid-down weak
-  // days, keep average days, and (optionally) pause the dead overnight hours
-  // where order demand is ~0. Maps to AdSchedule.windows (cron-enforced).
+  // T·product — family demand → weekday rows + hour profile (the schedule signal).
+  const demand = family?.demand?.hourProfile ?? null
+  const dayRows = useMemo(() => (family?.demand?.weekdayProfile ?? []).map(w => ({ weekday: w.key, label: DOW_LABEL[w.key] ?? String(w.key), revenueCents: w.revenueCents, orders: w.orders, index: w.index, recommend: demandRecommend(w.index) })), [family])
+  const maxDemand = demand && demand.length ? Math.max(1, ...demand.map(h => h.revenueCents)) : 1
+  const dayLabel = (wd: number) => DOW_LABEL[wd] ?? String(wd)
+
+  // T2 — generate the family schedule from demand: bid-up high-demand days,
+  // bid-down low-demand days, keep average, pause the dead overnight (≈0 demand).
   const smartSchedule = useMemo(() => {
-    if (!intel || intel.days.length === 0) return null
-    const peak = intel.days.filter(d => d.recommend === 'bid-up').map(d => d.weekday)
-    const weak = intel.days.filter(d => d.recommend === 'bid-down').map(d => d.weekday)
-    const keep = intel.days.filter(d => d.recommend === 'keep').map(d => d.weekday)
+    if (!dayRows.length) return null
+    const peak = dayRows.filter(d => d.recommend === 'bid-up').map(d => d.weekday)
+    const weak = dayRows.filter(d => d.recommend === 'bid-down').map(d => d.weekday)
+    const keep = dayRows.filter(d => d.recommend === 'keep').map(d => d.weekday)
     let activeStart = 0, activeEnd = 24, deadHours: number[] = []
     if (pauseOvernight && demand && demand.length) {
       const max = Math.max(1, ...demand.map(h => h.revenueCents))
@@ -278,50 +281,52 @@ export function RankPlacementCockpit() {
     if (weak.length) windows.push({ days: weak, startHour: activeStart, endHour: activeEnd, bidMultiplierPct: -bidDownPct })
     if (keep.length) windows.push({ days: keep, startHour: activeStart, endHour: activeEnd })
     return { windows, peak, weak, keep, activeStart, activeEnd, deadHours }
-  }, [intel, demand, bidUpPct, bidDownPct, pauseOvernight])
+  }, [dayRows, demand, bidUpPct, bidDownPct, pauseOvernight])
 
-  // T3 — the campaign's persisted dayparting schedule
-  const loadSchedule = useCallback(async (signal?: AbortSignal) => {
-    if (!campaignId) { setExistingSched(null); return }
+  // T3 — the family's persisted schedules (one AdSchedule per campaign).
+  const loadSchedules = useCallback(async (signal?: AbortSignal) => {
+    if (!family || family.campaigns.length === 0) { setFamScheds([]); return }
+    const ids = new Set(family.campaigns.map(c => c.id))
     const d = await fetch(`${getBackendUrl()}/api/advertising/schedules`, { cache: 'no-store', signal }).then(r => r.json()).catch(() => ({ items: [] }))
     if (signal?.aborted) return
-    const mine = (d.items ?? []).find((s: { campaignId: string }) => s.campaignId === campaignId) as { id: string; enabled: boolean; windows: unknown[]; name: string } | undefined
-    setExistingSched(mine ? { id: mine.id, enabled: mine.enabled, windows: mine.windows ?? [], name: mine.name } : null)
-  }, [campaignId])
+    setFamScheds(((d.items ?? []) as { id: string; campaignId: string; enabled: boolean }[]).filter(s => ids.has(s.campaignId)).map(s => ({ id: s.id, campaignId: s.campaignId, enabled: s.enabled })))
+  }, [family])
 
   useEffect(() => {
     const ac = new AbortController()
     setSchedMsg('')
-    void loadSchedule(ac.signal)
+    void loadSchedules(ac.signal)
     return () => ac.abort()
-  }, [loadSchedule])
+  }, [loadSchedules])
 
-  // T3 — apply the generated schedule: create (disabled) or update the campaign's
-  // AdSchedule with per-market timezone. The cron enforces it once enabled.
+  // Apply the schedule to EVERY campaign in the product family (this market).
   const applySchedule = useCallback(async () => {
-    if (!campaignId || !smartSchedule) return
+    if (!smartSchedule || !family || family.campaigns.length === 0) return
     setSchedSaving(true); setSchedMsg('')
     const timezone = MARKET_TZ[market] ?? 'Europe/Rome'
-    try {
-      let r: { id?: string }
-      if (existingSched) {
-        r = await fetch(`${getBackendUrl()}/api/advertising/schedules/${existingSched.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ windows: smartSchedule.windows, timezone }) }).then(r => r.json())
-      } else {
-        r = await fetch(`${getBackendUrl()}/api/advertising/schedules`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ campaignId, name: `Dayparting — ${campaign?.name ?? campaignId}`, windows: smartSchedule.windows, timezone, enabled: false }) }).then(r => r.json())
-      }
-      setSchedMsg(r?.id ? 'saved' : 'error')
-    } catch { setSchedMsg('error') }
+    const existing = new Map(famScheds.map(s => [s.campaignId, s.id]))
+    let ok = 0
+    for (const c of family.campaigns) {
+      try {
+        const sid = existing.get(c.id)
+        if (sid) await fetch(`${getBackendUrl()}/api/advertising/schedules/${sid}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ windows: smartSchedule.windows, timezone }) })
+        else await fetch(`${getBackendUrl()}/api/advertising/schedules`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ campaignId: c.id, name: `Dayparting — ${family.parentName ?? 'product'} (${market})`, windows: smartSchedule.windows, timezone, enabled: false }) })
+        ok += 1
+      } catch { /* continue; partial result surfaced via reload */ }
+    }
+    setSchedMsg(ok > 0 ? 'saved' : 'error')
     setSchedSaving(false)
-    void loadSchedule()
-  }, [campaignId, smartSchedule, existingSched, market, campaign, loadSchedule])
+    void loadSchedules()
+  }, [smartSchedule, family, market, famScheds, loadSchedules])
 
-  const toggleSchedule = useCallback(async (enabled: boolean) => {
-    if (!existingSched) return
+  // Enable/disable the whole family's schedules at once.
+  const toggleAll = useCallback(async (enabled: boolean) => {
+    if (famScheds.length === 0) return
     setSchedSaving(true)
-    try { await fetch(`${getBackendUrl()}/api/advertising/schedules/${existingSched.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled }) }) } catch { /* ignore */ }
+    for (const s of famScheds) { try { await fetch(`${getBackendUrl()}/api/advertising/schedules/${s.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled }) }) } catch { /* ignore */ } }
     setSchedSaving(false)
-    void loadSchedule()
-  }, [existingSched, loadSchedule])
+    void loadSchedules()
+  }, [famScheds, loadSchedules])
 
   // R3 — load the campaign's existing keywords (also gives the destination ad group)
   const loadTargets = useCallback(async (signal?: AbortSignal) => {
@@ -483,12 +488,11 @@ export function RankPlacementCockpit() {
   const totalPerDay = spendRows.reduce((s, r) => s + r.perDay, 0)
   const totalProjPerDay = spendRows.reduce((s, r) => s + r.projPerDay, 0)
 
-  // T1 — wasted spend = ad cost on below-average-converting weekdays; demand scaling.
-  const wastedSpendCents = intel ? intel.days.filter(d => d.recommend === 'bid-down').reduce((s, d) => s + d.costCents, 0) : 0
-  const maxDemand = demand && demand.length ? Math.max(1, ...demand.map(h => h.revenueCents)) : 1
-  const deadDays = intel ? intel.days.filter(d => d.recommend === 'bid-down') : []
-  const peakDays = intel ? intel.days.filter(d => d.recommend === 'bid-up') : []
-  const dayLabel = useCallback((wd: number) => intel?.days.find(d => d.weekday === wd)?.label.slice(0, 3) ?? String(wd), [intel])
+  // Demand coverage: % of revenue in the overnight block the schedule would pause.
+  const totalRevenueCents = family?.demand?.totals?.revenueCents ?? 0
+  const pausedRevenuePct = smartSchedule && totalRevenueCents > 0 && demand
+    ? Math.round((smartSchedule.deadHours.reduce((s, h) => s + (demand.find(d => d.key === h)?.revenueCents ?? 0), 0) / totalRevenueCents) * 100)
+    : 0
 
   // Honest rank readout: where you're holding vs the target slot.
   const rankReadout = (() => {
@@ -709,28 +713,28 @@ export function RankPlacementCockpit() {
         <div className="az-cockpit-note"><Info size={12} /> €/day = window spend ÷ {WINDOW_DAYS}. Projection estimates the CPC effect at the chosen bias % — actual spend also depends on how many more impressions you win in the auction.{dailyBudgetCents != null && totalProjPerDay > dailyBudgetCents ? ' Projected daily spend exceeds the daily budget (Amazon will cap at the budget).' : ''}</div>
       </div>
 
-      {/* ── T1: When · conversion timing (dayparting intel) ──────── */}
+      {/* ── T·product: When · dayparting for the product family ──── */}
       <div className="az-when">
-        <div className="az-when-head"><Clock size={15} /> When · conversion timing{campaign ? <> · <span className="cn">{campaign.name}</span></> : ''}
+        <div className="az-when-head"><Clock size={15} /> When · {family?.parentName ? <span className="cn">{family.parentName}</span> : 'product'} family
           <span style={{ flex: 1 }} />
           {whenLoading && <span className="az-cockpit-status">Loading…</span>}
-          {!whenLoading && intel && <span className="az-cockpit-status ok">{intel.windowDays}d{intel.hourlyAvailable ? ' · hourly (AMS)' : ' · day-level'}</span>}
+          {!whenLoading && family && family.campaigns.length > 0 && <span className="az-cockpit-status ok">{family.campaigns.length} campaign{family.campaigns.length === 1 ? '' : 's'} · {family.asins.length} ASIN{family.asins.length === 1 ? '' : 's'} in {market}</span>}
         </div>
 
-        <div className="az-when-sub">Ad conversion by day of week — relative to this campaign&apos;s average</div>
+        <div className="az-when-sub">Family demand by day of week — when the product sells ({market}, 90d orders)</div>
         <div className="az-when-days">
-          {(intel?.days ?? []).map(d => (
-            <div key={d.weekday} className={`az-dpday ${d.recommend}`} title={`${d.label}: CVR ${d.cvr != null ? (d.cvr * 100).toFixed(1) + '%' : '—'}${d.acos != null ? ` · ACOS ${(d.acos * 100).toFixed(0)}%` : ''} · ${euros(d.costCents)} spend`}>
-              <div className="lbl">{d.label.slice(0, 3)}</div>
-              <div className="bar"><div className="fill" style={{ height: `${Math.max(3, Math.min(100, (d.cvrIndex ?? 0) * 55))}%` }} /></div>
-              <div className="val">{d.cvr != null ? `${(d.cvr * 100).toFixed(1)}%` : '—'}</div>
+          {dayRows.map(d => (
+            <div key={d.weekday} className={`az-dpday ${d.recommend}`} title={`${d.label}: ${euros(d.revenueCents)} · ${d.orders} orders${d.index != null ? ` · ${(d.index).toFixed(2)}× avg` : ''}`}>
+              <div className="lbl">{d.label}</div>
+              <div className="bar"><div className="fill" style={{ height: `${Math.max(3, Math.min(100, (d.index ?? 0) * 55))}%` }} /></div>
+              <div className="val">{d.index != null ? `${d.index.toFixed(1)}×` : '—'}</div>
               <div className="rec">{d.recommend === 'bid-up' ? <TrendingUp size={11} /> : d.recommend === 'bid-down' ? <TrendingDown size={11} /> : <Minus size={11} />}</div>
             </div>
           ))}
-          {!intel && !whenLoading && <div className="az-cockpit-sub">No conversion data for this campaign in the window.</div>}
+          {dayRows.length === 0 && !whenLoading && <div className="az-cockpit-sub">No order-demand data for this product family in {market}.</div>}
         </div>
 
-        <div className="az-when-sub" style={{ marginTop: 12 }}>When your customers buy — demand by hour ({market}, 90d orders, Europe/Rome)</div>
+        <div className="az-when-sub" style={{ marginTop: 12 }}>Demand by hour ({market}, Europe/Rome) — when customers buy this family</div>
         <div className="az-when-hours">
           {(demand ?? []).map(h => (
             <div key={h.key} className="az-dphour" title={`${pad2(h.key)}:00 — ${euros(h.revenueCents)} · ${h.orders} orders`}>
@@ -738,22 +742,18 @@ export function RankPlacementCockpit() {
               <div className="hr">{h.key % 6 === 0 ? pad2(h.key) : ''}</div>
             </div>
           ))}
-          {!demand && !whenLoading && <div className="az-cockpit-sub">No order-demand data for {market}.</div>}
+          {!demand && !whenLoading && <div className="az-cockpit-sub">No order-demand data.</div>}
         </div>
 
-        {wastedSpendCents > 0 && (
-          <div className="az-when-waste"><AlertTriangle size={13} /> <span><b>{euros(wastedSpendCents)}</b> spent on below-average-converting days{deadDays.length ? ` (${deadDays.map(d => d.label.slice(0, 3)).join(', ')})` : ''} in the last {intel?.windowDays}d{peakDays.length ? `; ${peakDays.map(d => d.label.slice(0, 3)).join(', ')} convert best` : ''}.</span></div>
-        )}
-
-        {/* ── T2: smart schedule generator (preview) ─────────────── */}
+        {/* ── T2/T3: smart schedule generator + apply across the family ── */}
         {smartSchedule && (smartSchedule.peak.length > 0 || smartSchedule.weak.length > 0 || smartSchedule.deadHours.length > 0) ? (
           <div className="az-sched">
             <div className="az-sched-head"><Sparkles size={14} /> Smart schedule <span className="tag">preview</span></div>
             <div className="az-sched-sum">
-              {smartSchedule.peak.length > 0 && <>Bid <b>+{bidUpPct}%</b> on <b>{smartSchedule.peak.map(dayLabel).join(', ')}</b> (best converting). </>}
-              {smartSchedule.weak.length > 0 && <>Bid <b>−{bidDownPct}%</b> on <b>{smartSchedule.weak.map(dayLabel).join(', ')}</b> (weak). </>}
+              {smartSchedule.peak.length > 0 && <>Bid <b>+{bidUpPct}%</b> on <b>{smartSchedule.peak.map(dayLabel).join(', ')}</b> (best selling). </>}
+              {smartSchedule.weak.length > 0 && <>Bid <b>−{bidDownPct}%</b> on <b>{smartSchedule.weak.map(dayLabel).join(', ')}</b> (low demand). </>}
               {smartSchedule.keep.length > 0 && <>Keep {smartSchedule.keep.map(dayLabel).join(', ')}. </>}
-              {pauseOvernight && smartSchedule.deadHours.length > 0 && <>Pause <b>{pad2(smartSchedule.activeEnd % 24)}:00–{pad2(smartSchedule.activeStart)}:00</b> (≈0 demand). </>}
+              {pauseOvernight && smartSchedule.deadHours.length > 0 && <>Pause <b>{pad2(smartSchedule.activeEnd % 24)}:00–{pad2(smartSchedule.activeStart)}:00</b> ({pausedRevenuePct <= 1 ? '≈0' : `${pausedRevenuePct}%`} of revenue). </>}
             </div>
             <div className="az-sched-ctls">
               <label>Bid-up <input type="number" min={0} max={900} value={bidUpPct} onChange={e => setBidUpPct(Math.max(0, Math.min(900, Number(e.target.value) || 0)))} />%</label>
@@ -761,21 +761,20 @@ export function RankPlacementCockpit() {
               <label className="az-sched-check"><input type="checkbox" checked={pauseOvernight} onChange={e => setPauseOvernight(e.target.checked)} /> Pause dead overnight hours</label>
             </div>
             <div className="az-sched-actions">
-              <button type="button" className="az-btn dark" disabled={schedSaving || !campaign} onClick={() => void applySchedule()}>
-                {schedSaving ? <><Loader2 size={14} className="az-spin" /> Saving…</> : <><Clock size={14} /> {existingSched ? 'Update schedule' : 'Apply schedule'}</>}
+              <button type="button" className="az-btn dark" disabled={schedSaving || !family || family.campaigns.length === 0} onClick={() => void applySchedule()}>
+                {schedSaving ? <><Loader2 size={14} className="az-spin" /> Saving…</> : <><Clock size={14} /> Apply to {family?.campaigns.length ?? 0} campaign{(family?.campaigns.length ?? 0) === 1 ? '' : 's'}</>}
               </button>
-              {existingSched && <label className="az-sched-toggle"><input type="checkbox" checked={existingSched.enabled} disabled={schedSaving} onChange={e => void toggleSchedule(e.target.checked)} /> Enabled</label>}
-              {schedMsg === 'saved' && <span className="az-cockpit-sub" style={{ margin: 0, color: 'var(--green)' }}><Check size={12} style={{ verticalAlign: 'text-bottom' }} /> Saved{existingSched && !existingSched.enabled ? ' — toggle Enabled to run' : ''}</span>}
+              {famScheds.length > 0 && <label className="az-sched-toggle"><input type="checkbox" checked={famScheds.every(s => s.enabled)} disabled={schedSaving} onChange={e => void toggleAll(e.target.checked)} /> Enabled ({famScheds.filter(s => s.enabled).length}/{famScheds.length})</label>}
+              {schedMsg === 'saved' && <span className="az-cockpit-sub" style={{ margin: 0, color: 'var(--green)' }}><Check size={12} style={{ verticalAlign: 'text-bottom' }} /> Saved across the family{famScheds.length && !famScheds.every(s => s.enabled) ? ' — toggle Enabled to run' : ''}</span>}
               {schedMsg === 'error' && <span className="az-cockpit-sub" style={{ margin: 0, color: '#cc1100' }}>Save failed</span>}
             </div>
-            <div className="az-cockpit-note" style={{ marginTop: 8 }}><Info size={12} /> Enforced in <b>{MARKET_TZ[market] ?? 'Europe/Rome'}</b>. New schedules start <b>disabled</b> — enable to run. Once enabled the cron bid-adjusts weak days &amp; pauses the dead overnight; writes are gated (sandbox stages locally until the ads write-gate is live). Disabling/deleting a schedule auto-resumes a paused campaign.</div>
+            <div className="az-cockpit-note" style={{ marginTop: 8 }}><Info size={12} /> One schedule applied to <b>all {family?.campaigns.length ?? 0} {family?.parentName ?? 'product'} campaigns in {market}</b>, enforced in <b>{MARKET_TZ[market] ?? 'Europe/Rome'}</b>. Starts <b>disabled</b> — enable to run. The cron bid-adjusts low-demand days &amp; pauses the dead overnight; writes are gated (sandbox stages locally until the ads write-gate is live). Disabling/deleting auto-resumes a paused campaign.</div>
           </div>
-        ) : intel && !whenLoading ? (
-          <div className="az-cockpit-sub" style={{ marginTop: 8 }}>Conversion is even across the week — no day-level schedule needed yet.</div>
+        ) : family && family.campaigns.length > 0 && !whenLoading ? (
+          <div className="az-cockpit-sub" style={{ marginTop: 8 }}>Demand is even across the week — no day-level schedule needed yet.</div>
         ) : null}
 
-        {intel?.note && <div className="az-cockpit-sub">{intel.note}</div>}
-        <div className="az-cockpit-note"><Info size={12} /> Day-of-week is ad-attributed; hourly demand is order-placed time — a live proxy until Amazon Marketing Stream provides true hourly ad data.</div>
+        <div className="az-cockpit-note"><Info size={12} /> Timing is a product property, so this covers the whole parent family (all variants &amp; their campaigns) in {market}. Demand is order-placed time (Europe/Rome) — a live proxy until Amazon Marketing Stream provides true hourly ad data.</div>
       </div>
 
       {/* ── R3: bulk keyword manager ─────────────────────────────── */}
