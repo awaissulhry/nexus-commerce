@@ -496,6 +496,28 @@
 .az-tray-reclist .rec.cancel .st { background: var(--bg3); color: var(--ink3); }
 .az-tray-reclist .rec .er { color: #cc1100; font-size: 10.5px; }
 
+/* RC4.6 — tray tabs + history timeline + undo toast */
+.az-tray-tabs { display: inline-flex; gap: 2px; }
+.az-tray-tabs button { display: inline-flex; align-items: center; gap: 5px; background: none; border: none; font: inherit; font-size: 12.5px; font-weight: 700; color: var(--ink3); cursor: pointer; padding: 4px 10px; border-radius: 7px; }
+.az-tray-tabs button:hover { background: var(--bg3); color: var(--ink2); }
+.az-tray-tabs button.on { background: var(--navy); color: #fff; }
+.az-hist-row { display: flex; align-items: center; gap: 9px; padding: 7px 14px; border-bottom: 1px solid var(--divider); font-size: 12px; }
+.az-hist-row.undo { opacity: .6; }
+.az-hist-row .who { font-size: 9px; font-weight: 800; letter-spacing: .3px; border-radius: 4px; padding: 1px 6px; flex: none; }
+.az-hist-row .who.you { background: var(--bg2); color: var(--navy); }
+.az-hist-row .who.automation { background: #fbeee3; color: #b3541e; }
+.az-hist-row .chg { flex: 1; color: var(--ink2); min-width: 0; }
+.az-hist-row .chg b { color: var(--ink3); font-weight: 700; }
+.az-hist-row .chg .nv { color: var(--ink); }
+.az-hist-row .chg .arr { color: var(--ink3); }
+.az-hist-row .chg .rsn { color: var(--ink3); font-size: 11px; }
+.az-hist-row .when { font-size: 10.5px; color: var(--ink3); white-space: nowrap; flex: none; }
+.az-urc-foot .sp { flex: 1; }
+.az-urc-histbtn { display: inline-flex; align-items: center; gap: 6px; background: none; border: none; font: inherit; font-size: 12px; font-weight: 700; color: var(--ink2); cursor: pointer; padding: 0; }
+.az-urc-histbtn:hover { color: var(--navy); }
+.az-urc-toast { position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%); z-index: 60; display: inline-flex; align-items: center; gap: 7px; background: var(--ink); color: #fff; font-size: 12.5px; font-weight: 600; padding: 9px 16px; border-radius: 10px; box-shadow: 0 8px 28px rgba(0,0,0,.28); }
+.az-urc-toast svg { opacity: .8; }
+
 /* Inline rank-set collision warning in the Strategy panel (RC3.4) */
 .az-rankwarn { margin: 10px 0 0; padding: 10px 11px; border: 1px solid #f0c9a8; border-left: 3px solid #b3541e; border-radius: 9px; background: #fff7f0; }
 .az-rankwarn-msg { display: flex; align-items: flex-start; gap: 6px; font-size: 11.5px; line-height: 1.45; color: var(--ink); }

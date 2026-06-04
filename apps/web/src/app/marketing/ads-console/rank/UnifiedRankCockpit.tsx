@@ -14,10 +14,11 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Crosshair, Search, ChevronRight, Undo2, Redo2, Layers, Zap, AlertTriangle } from 'lucide-react'
+import { Crosshair, Search, ChevronRight, Undo2, Redo2, Layers, Zap, AlertTriangle, History as HistoryIcon } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { RankPlacementCockpit } from '../automation/RankPlacementCockpit'
 import { StagedChangesTray } from './StagedChangesTray'
+import { useRankUndo } from './useRankUndo'
 
 const MARKETS = ['IT', 'DE', 'FR', 'ES', 'NL', 'BE', 'SE', 'PL', 'IE', 'UK']
 const LOOKBACKS = [7, 14, 30, 60, 90]
@@ -34,6 +35,7 @@ export function UnifiedRankCockpit() {
   const [autonomy, setAutonomy] = useState<Autonomy | null>(null)
   const [pending, setPending] = useState(0)
   const [trayOpen, setTrayOpen] = useState(false)
+  const [trayTab, setTrayTab] = useState<'staged' | 'history'>('staged')
 
   useEffect(() => { void fetch(`${getBackendUrl()}/api/advertising/campaigns?limit=500`, { cache: 'no-store' }).then(r => r.json()).then(d => setCampaigns((d.items ?? []) as Camp[])).catch(() => {}) }, [])
   useEffect(() => { void fetch(`${getBackendUrl()}/api/advertising/autonomy/status`, { cache: 'no-store' }).then(r => r.json()).then(d => setAutonomy(d as Autonomy)).catch(() => {}) }, [])
@@ -42,6 +44,23 @@ export function UnifiedRankCockpit() {
     void fetch(`${getBackendUrl()}/api/advertising/campaigns/${campaignId}/pending-writes`, { cache: 'no-store' }).then(r => r.json()).then(d => setPending((d.pending ?? []).length)).catch(() => {})
   }, [campaignId])
   useEffect(() => { loadPending() }, [loadPending, market])
+
+  // RC4.6 — history + undo/redo (Cmd+Z / Cmd+Shift+Z). Undo re-stages the prior
+  // value through the gated bid path; it refreshes the staged count on change.
+  const undoApi = useRankUndo(campaignId, loadPending)
+  const { undo, redo, canUndo, canRedo, toast, setToast } = undoApi
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== 'z') return
+      const t = e.target as HTMLElement | null
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return
+      e.preventDefault()
+      if (e.shiftKey) { if (canRedo) void redo() } else if (canUndo) void undo()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [undo, redo, canUndo, canRedo])
+  useEffect(() => { if (!toast) return; const t = setTimeout(() => setToast(''), 4000); return () => clearTimeout(t) }, [toast, setToast])
 
   const inMarket = useMemo(() => campaigns.filter(c => c.marketplace === market), [campaigns, market])
   useEffect(() => {
@@ -56,11 +75,6 @@ export function UnifiedRankCockpit() {
   }, [inMarket, search])
 
   const pickCampaign = useCallback((id: string) => { setCampaignId(id); setSearch(''); setSearchOpen(false) }, [])
-
-  // Undo/redo are scaffolded here; the stack is populated once the stations emit
-  // changes (RC4.6). Buttons stay disabled until then.
-  const canUndo = false
-  const canRedo = false
 
   const tone = autonomy?.killSwitch ? 'off' : (autonomy?.rules.live ?? 0) > 0 ? 'auto' : (autonomy?.rules.enabled ?? 0) > 0 ? 'suggest' : 'idle'
   const autonomyLabel = !autonomy ? '…'
@@ -89,22 +103,27 @@ export function UnifiedRankCockpit() {
         <span className="sp" />
         <span className={`az-urc-chip ${tone}`} title="Global automation posture (all advertising rules)">{tone === 'off' ? <AlertTriangle size={12} /> : <Zap size={12} />} {autonomyLabel}</span>
         <div className="az-urc-undo">
-          <button type="button" disabled={!canUndo} title="Undo (⌘Z)" aria-label="Undo"><Undo2 size={15} /></button>
-          <button type="button" disabled={!canRedo} title="Redo (⇧⌘Z)" aria-label="Redo"><Redo2 size={15} /></button>
+          <button type="button" disabled={!canUndo} onClick={() => void undo()} title="Undo last change (⌘Z)" aria-label="Undo"><Undo2 size={15} /></button>
+          <button type="button" disabled={!canRedo} onClick={() => void redo()} title="Redo (⇧⌘Z)" aria-label="Redo"><Redo2 size={15} /></button>
         </div>
       </div>
+      {toast && <div className="az-urc-toast" role="status" aria-live="polite"><Undo2 size={13} /> {toast}</div>}
 
       {/* ── Body: the existing placement cockpit, driven by the shared context.
             Stations get extracted from here in RC4.1–RC4.4. ── */}
       <RankPlacementCockpit market={market} campaignId={campaignId} lookbackDays={lookback} onMarketChange={setMarket} onCampaignChange={setCampaignId} hideScopeBar />
 
-      {/* ── Footer: opens the staged-changes tray (RC4.5) ── */}
+      {/* ── Footer: staged-changes tray + history (RC4.5 / RC4.6) ── */}
       <div className="az-urc-foot">
-        <button type="button" className={`az-urc-staged ${pending > 0 ? 'has' : ''}`} onClick={() => setTrayOpen(v => !v)} aria-expanded={trayOpen}>
-          <Layers size={14} /> {pending > 0 ? `${pending} staged change${pending === 1 ? '' : 's'}` : 'No staged changes'} · Review &amp; write-gate {trayOpen ? '▾' : '▸'}
+        <button type="button" className={`az-urc-staged ${pending > 0 ? 'has' : ''}`} onClick={() => { setTrayOpen(o => !(o && trayTab === 'staged')); setTrayTab('staged') }} aria-expanded={trayOpen && trayTab === 'staged'}>
+          <Layers size={14} /> {pending > 0 ? `${pending} staged change${pending === 1 ? '' : 's'}` : 'No staged changes'} · Review &amp; write-gate {trayOpen && trayTab === 'staged' ? '▾' : '▸'}
+        </button>
+        <span className="sp" />
+        <button type="button" className="az-urc-histbtn" onClick={() => { setTrayOpen(o => !(o && trayTab === 'history')); setTrayTab('history') }} aria-expanded={trayOpen && trayTab === 'history'}>
+          <HistoryIcon size={14} /> History &amp; undo{undoApi.entries.length ? ` (${undoApi.entries.length})` : ''} {trayOpen && trayTab === 'history' ? '▾' : '▸'}
         </button>
       </div>
-      <StagedChangesTray campaignId={campaignId} open={trayOpen} onClose={() => setTrayOpen(false)} onChanged={loadPending} />
+      <StagedChangesTray campaignId={campaignId} open={trayOpen} tab={trayTab} onTab={setTrayTab} onClose={() => setTrayOpen(false)} onChanged={loadPending} undoApi={undoApi} />
     </div>
   )
 }

@@ -10,8 +10,9 @@
  */
 
 import { useCallback, useEffect, useState } from 'react'
-import { X, Loader2, Check, AlertTriangle, Clock, Trash2, History } from 'lucide-react'
+import { X, Loader2, Check, AlertTriangle, Clock, Trash2, History, Undo2, Layers } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
+import type { RankUndoApi } from './useRankUndo'
 
 interface FieldChange { field: string; oldValue: string | null; newValue: string | null }
 interface PendingWrite { queueId: string; syncType: string; entityType: string | null; entityId: string; externalId: string | null; fieldChanges: FieldChange[]; holdUntil: string | null; graceExpired: boolean }
@@ -30,8 +31,9 @@ const isMoney = (f: string) => /bid|budget|cents/i.test(f)
 const fmtVal = (f: string, v: string | null) => { if (v == null || v === '') return '—'; if (isMoney(f)) { const n = Number(v); return Number.isFinite(n) ? `€${(n / 100).toFixed(2)}` : v } return v }
 const fieldLabel = (f: string) => f.replace(/Cents$/, '').replace(/([A-Z])/g, ' $1').replace(/^./, c => c.toUpperCase()).trim()
 const entityLabel = (e: string | null) => e === 'AD_TARGET' ? 'Keyword/target' : e === 'CAMPAIGN' ? 'Campaign' : e === 'AD_GROUP' ? 'Ad group' : e === 'PRODUCT_AD' ? 'Product ad' : (e ?? 'Change')
+const relTime = (iso: string) => { const s = (Date.now() - new Date(iso).getTime()) / 1000; return s < 60 ? 'just now' : s < 3600 ? `${Math.floor(s / 60)}m ago` : s < 86400 ? `${Math.floor(s / 3600)}h ago` : `${Math.floor(s / 86400)}d ago` }
 
-export function StagedChangesTray({ campaignId, open, onClose, onChanged }: { campaignId: string; open: boolean; onClose: () => void; onChanged: () => void }) {
+export function StagedChangesTray({ campaignId, open, tab, onTab, onClose, onChanged, undoApi }: { campaignId: string; open: boolean; tab: 'staged' | 'history'; onTab: (t: 'staged' | 'history') => void; onClose: () => void; onChanged: () => void; undoApi: RankUndoApi }) {
   const [data, setData] = useState<PendingResp | null>(null)
   const [loading, setLoading] = useState(false)
   const [busy, setBusy] = useState<string | null>(null)
@@ -78,12 +80,17 @@ export function StagedChangesTray({ campaignId, open, onClose, onChanged }: { ca
   return (
     <div className="az-tray" role="region" aria-label="Staged changes">
       <div className="az-tray-head">
-        <b>Staged changes</b>{data?.campaign ? <span className="cn">· {data.campaign.name}</span> : null}
+        <div className="az-tray-tabs">
+          <button type="button" className={tab === 'staged' ? 'on' : ''} onClick={() => onTab('staged')}><Layers size={13} /> Staged{data && data.pending.length > 0 ? ` (${data.pending.length})` : ''}</button>
+          <button type="button" className={tab === 'history' ? 'on' : ''} onClick={() => onTab('history')}><History size={13} /> History{undoApi.entries.length ? ` (${undoApi.entries.length})` : ''}</button>
+        </div>
         <span className="sp" />
+        {data?.campaign ? <span className="cn">{data.campaign.name}</span> : null}
         {loading && <Loader2 size={14} className="az-spin" />}
         <button type="button" className="az-tray-x" onClick={onClose} aria-label="Close"><X size={15} /></button>
       </div>
 
+      {tab === 'staged' && (<>
       {data && (
         <div className="az-tray-gate">
           <label className="az-tray-toggle">
@@ -142,6 +149,24 @@ export function StagedChangesTray({ campaignId, open, onClose, onChanged }: { ca
               </div>
             ))}
           </div>}
+        </div>
+      )}
+      </>)}
+
+      {tab === 'history' && (
+        <div className="az-tray-body az-hist">
+          {undoApi.entries.length === 0
+            ? <div className="az-tray-empty"><History size={14} /> No changes recorded yet for this campaign.</div>
+            : undoApi.entries.map(e => (
+              <div key={e.id} className={`az-hist-row ${e.isUndo ? 'undo' : ''}`}>
+                <span className={`who ${e.actor}`}>{e.actor === 'automation' ? 'AUTO' : 'YOU'}</span>
+                <span className="chg"><b>{fieldLabel(e.field)}</b> {fmtVal(e.field, e.oldValue)} <span className="arr">→</span> <b className="nv">{fmtVal(e.field, e.newValue)}</b>{e.reason ? <span className="rsn"> · {e.reason}</span> : null}</span>
+                <span className="when">{relTime(e.at)}</span>
+                {e.undoable && !e.isUndo
+                  ? <button type="button" className="az-tray-cancel" disabled={undoApi.busy} title="Undo this change — re-stages the old bid" onClick={() => void undoApi.undoEntry(e)}><Undo2 size={12} /></button>
+                  : <span style={{ width: 24, flex: 'none' }} />}
+              </div>
+            ))}
         </div>
       )}
     </div>

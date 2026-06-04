@@ -778,6 +778,44 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     return { ok: true }
   })
 
+  // ── RC4.6: change-history timeline for a campaign (manual + automation) ──
+  // The audit trail behind the History tab + undo/redo. CampaignBidHistory is the
+  // scalar before→after record; a keyword/target bid change is "undoable" because
+  // re-staging its oldValue through the gated bid path reverses it cleanly.
+  fastify.get('/advertising/campaigns/:id/history', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const { limit } = request.query as { limit?: string }
+    const take = Math.min(200, Math.max(1, Number(limit) || 60))
+    const campaign = await prisma.campaign.findUnique({ where: { id }, select: { id: true } })
+    if (!campaign) { reply.status(404); return { error: 'campaign not found' } }
+    const adGroups = await prisma.adGroup.findMany({ where: { campaignId: id }, select: { id: true, targets: { select: { id: true } } } })
+    const entityIds = new Set<string>([id])
+    for (const g of adGroups) { entityIds.add(g.id); for (const t of g.targets) entityIds.add(t.id) }
+    const rows = await prisma.campaignBidHistory.findMany({
+      where: { OR: [{ campaignId: id }, { entityId: { in: [...entityIds] } }] },
+      orderBy: { changedAt: 'desc' },
+      take,
+      select: { id: true, entityType: true, entityId: true, field: true, oldValue: true, newValue: true, changedAt: true, changedBy: true, reason: true },
+    })
+    const dayMs = 24 * 3600 * 1000
+    const now = Date.now()
+    const entries = rows.map((r) => ({
+      id: r.id,
+      at: r.changedAt,
+      actor: r.changedBy.startsWith('automation:') ? 'automation' as const : 'you' as const,
+      entityType: r.entityType,
+      entityId: r.entityId,
+      field: r.field,
+      oldValue: r.oldValue,
+      newValue: r.newValue,
+      reason: r.reason,
+      isUndo: (r.reason ?? '').startsWith('Undo:') || (r.reason ?? '').startsWith('Redo'),
+      undoable: r.entityType === 'AD_TARGET' && r.field === 'bid' && r.oldValue != null && now - new Date(r.changedAt).getTime() < dayMs,
+    }))
+    reply.header('Cache-Control', 'private, max-age=10')
+    return { campaignId: id, entries }
+  })
+
   // ── GET /advertising/fba-storage-age/:productId ─────────────────────
   fastify.get('/advertising/fba-storage-age/:productId', async (request, _reply) => {
     const { productId } = request.params as { productId: string }
