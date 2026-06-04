@@ -326,8 +326,9 @@
 .az-tr-drow { display: flex; align-items: center; gap: 2px; margin-top: 2px; }
 .az-tr-dlbl { width: 40px; flex: none; text-align: right; padding-right: 6px; font-size: 10.5px; font-weight: 700; color: var(--ink2); background: none; border: none; cursor: pointer; font-family: inherit; }
 .az-tr-dlbl:hover { color: var(--navy); text-decoration: underline; }
-.az-tr-cell { width: 18px; height: 20px; flex: none; border-radius: 3px; cursor: pointer; }
+.az-tr-cell { position: relative; overflow: hidden; width: 18px; height: 20px; flex: none; border-radius: 3px; cursor: pointer; }
 .az-tr-cell:hover { outline: 2px solid var(--ink); outline-offset: -1px; }
+.az-tr-cell .dmd { position: absolute; left: 0; right: 0; bottom: 0; background: rgba(10, 61, 145, .5); pointer-events: none; }
 .az-tr-hrow.foot { margin-top: 2px; }
 .az-tr-collbl { width: 18px; height: 14px; flex: none; background: none; border: none; cursor: pointer; font-size: 9px; color: var(--ink3); padding: 0; line-height: 1; }
 .az-tr-collbl:hover { color: var(--navy); }

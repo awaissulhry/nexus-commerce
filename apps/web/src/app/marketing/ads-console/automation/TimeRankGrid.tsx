@@ -139,6 +139,8 @@ export function TimeRankGrid({ demandGrid, onChange }: { demandGrid: Bucket[][] 
     for (const row of grid) for (const cell of row) c[cell]++
     return c
   }, [grid])
+  // DD3 — demand overlay scaling (the bar at the bottom of each cell).
+  const maxRev = useMemo(() => (demandGrid ? Math.max(1, ...demandGrid.flat().map(c => c?.revenueCents ?? 0)) : 1), [demandGrid])
 
   // TR2 — what share of the family's demand falls under each painted level.
   // The honest preview (no AMS hourly ad-spend yet): are you pushing where it
@@ -187,16 +189,19 @@ export function TimeRankGrid({ demandGrid, onChange }: { demandGrid: Bucket[][] 
             {Array.from({ length: 24 }, (_, h) => {
               const lv = grid[d][h]
               const def = LEVEL_BY_KEY[lv]
+              const rev = demandGrid?.[d]?.[h]?.revenueCents ?? 0
               return (
                 <div
                   key={h}
                   className="az-tr-cell"
                   style={{ background: def.color }}
-                  title={`${DOW_LABEL[d]} ${String(h).padStart(2, '0')}:00 — ${def.label}`}
+                  title={`${DOW_LABEL[d]} ${String(h).padStart(2, '0')}:00 — ${def.label}${demandGrid ? ` · ${demandGrid[d]?.[h]?.orders ?? 0} orders` : ''}`}
                   onMouseDown={(e) => { e.preventDefault(); painting.current = true; paint(d, h) }}
                   onMouseEnter={() => { if (painting.current) paint(d, h) }}
                   onClick={() => paint(d, h)}
-                />
+                >
+                  {demandGrid && rev > 0 && <span className="dmd" style={{ height: `${Math.min(100, (rev / maxRev) * 100)}%` }} />}
+                </div>
               )
             })}
           </div>
@@ -212,7 +217,7 @@ export function TimeRankGrid({ demandGrid, onChange }: { demandGrid: Bucket[][] 
           <span key={l.k} className="it"><i style={{ background: l.color }} />{l.label} {counts[l.k]}h{l.mult != null && l.mult !== 0 ? ` (${l.mult > 0 ? '+' : ''}${l.mult}%)` : ''}{l.pause ? '' : ''}</span>
         ))}
         <span style={{ flex: 1 }} />
-        <span className="hint">Click or drag to paint · keys 1–5 pick a level · day/hour headers paint a whole row/column</span>
+        <span className="hint">Cell colour = your rank · bar at the bottom = sales then (taller = more) · keys 1–5 pick a level · drag to paint</span>
       </div>
 
       {coverage && (
