@@ -55,7 +55,7 @@ export function RankTrend({ campaignId, lookback }: { campaignId: string; lookba
         <Spark data={data.is} color="#1f6feb" />
       </div>
       <div className="az-trend-item">
-        <div className="hd"><span className="cap">Top-of-search ACOS</span><span className="val">{lastAcos != null ? `${Math.round(lastAcos * 100)}%` : '—'}</span>{dAcos != null && Math.abs(dAcos) >= 0.01 && <span className={`dl ${dAcos <= 0 ? 'up' : 'dn'}`}>{dAcos >= 0 ? '▲' : '▼'} {Math.abs(Math.round(dAcos * 100))}pt</span>}</div>
+        <div className="hd"><span className="cap">Campaign ACOS</span><span className="val">{lastAcos != null ? `${Math.round(lastAcos * 100)}%` : '—'}</span>{dAcos != null && Math.abs(dAcos) >= 0.01 && <span className={`dl ${dAcos <= 0 ? 'up' : 'dn'}`}>{dAcos >= 0 ? '▲' : '▼'} {Math.abs(Math.round(dAcos * 100))}pt</span>}</div>
         <Spark data={data.acos} color="#b3541e" />
       </div>
       <span className="az-trend-win">{lookback}d</span>

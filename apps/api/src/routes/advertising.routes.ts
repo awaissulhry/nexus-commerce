@@ -823,25 +823,34 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const days = Math.max(7, Math.min(90, Number(windowDays) || 30))
     const campaign = await prisma.campaign.findUnique({ where: { id }, select: { externalCampaignId: true } })
     reply.header('Cache-Control', 'private, max-age=300')
-    if (!campaign?.externalCampaignId) return { axis: [], is: [], acos: [], windowDays: days }
+    if (!campaign) return { axis: [], is: [], acos: [], windowDays: days }
     const since = new Date(); since.setUTCDate(since.getUTCDate() - (days - 1)); since.setUTCHours(0, 0, 0, 0)
-    const rows = await prisma.amazonAdsPlacementReport.groupBy({
-      by: ['date'],
-      where: { campaignId: campaign.externalCampaignId, placement: 'Top of Search on-Amazon', date: { gte: since } },
-      _avg: { topOfSearchIS: true },
-      _sum: { costMicros: true, sales7dCents: true },
-    })
     const axis: string[] = []
     for (let i = 0; i < days; i++) { const d = new Date(since); d.setUTCDate(since.getUTCDate() + i); axis.push(d.toISOString().slice(0, 10)) }
     const idx = new Map(axis.map((d, i) => [d, i]))
     const is: (number | null)[] = new Array(days).fill(null)
     const acos: (number | null)[] = new Array(days).fill(null)
-    for (const r of rows) {
+    // IS: avg Top-of-search impression share per day — sparse (Amazon only reports
+    // it when you actually compete at the top), so it's gappy by nature.
+    if (campaign.externalCampaignId) {
+      const isRows = await prisma.amazonAdsPlacementReport.groupBy({
+        by: ['date'],
+        where: { campaignId: campaign.externalCampaignId, placement: 'Top of Search on-Amazon', date: { gte: since } },
+        _avg: { topOfSearchIS: true },
+      })
+      for (const r of isRows) { const i = idx.get(r.date.toISOString().slice(0, 10)); if (i != null && r._avg.topOfSearchIS != null) is[i] = Number(r._avg.topOfSearchIS) }
+    }
+    // ACOS: the campaign's daily spend ÷ sales across all placements — far denser.
+    const acosRows = await prisma.amazonAdsDailyPerformance.groupBy({
+      by: ['date'],
+      where: { entityType: 'CAMPAIGN', localEntityId: id, date: { gte: since } },
+      _sum: { costMicros: true, sales7dCents: true },
+    })
+    for (const r of acosRows) {
       const i = idx.get(r.date.toISOString().slice(0, 10)); if (i == null) continue
-      is[i] = r._avg.topOfSearchIS != null ? Number(r._avg.topOfSearchIS) : null
-      const costCents = microsToCents(r._sum.costMicros ?? 0n)
+      const cost = microsToCents(r._sum.costMicros ?? 0n)
       const sales = r._sum.sales7dCents ?? 0
-      acos[i] = sales > 0 ? costCents / sales : null
+      acos[i] = sales > 0 ? cost / sales : null
     }
     return { axis, is, acos, windowDays: days }
   })
