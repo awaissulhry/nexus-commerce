@@ -54,6 +54,8 @@ interface MarketplaceRow {
 interface MarketplaceView {
   channel: string
   code: string
+  productType?: string | null
+  productTypes?: string[]
   version: number
   lastSyncedAt: string | null
   schemaSnapshotVersion: string | null
@@ -75,6 +77,10 @@ export default function MappingsClient() {
   // D.1 — Amazon live-schema sync state
   const [syncing, setSyncing] = useState(false)
   const [productType, setProductType] = useState('')
+
+  // FM.9 — which overlay the editor targets: '' = default bucket (all
+  // product types), or a specific productType's overlay.
+  const [editProductType, setEditProductType] = useState('')
 
   // D.5 — validate-against-product state
   const [validateProductId, setValidateProductId] = useState('')
@@ -131,8 +137,9 @@ export default function MappingsClient() {
     setViewLoading(true)
     setViewError(null)
     try {
+      const qs = editProductType ? `?productType=${encodeURIComponent(editProductType)}` : ''
       const r = await fetch(
-        `${getBackendUrl()}/api/pim/mappings/${active.channel}/${active.code}`,
+        `${getBackendUrl()}/api/pim/mappings/${active.channel}/${active.code}${qs}`,
         { cache: 'no-store' },
       )
       if (!r.ok) throw new Error(`HTTP ${r.status}`)
@@ -143,7 +150,7 @@ export default function MappingsClient() {
     } finally {
       setViewLoading(false)
     }
-  }, [active])
+  }, [active, editProductType])
 
   useEffect(() => {
     void fetchView()
@@ -154,10 +161,11 @@ export default function MappingsClient() {
     async (fieldKey: string, rule: FieldMappingRule) => {
       if (!active) return
       try {
+        const qs = editProductType ? `?productType=${encodeURIComponent(editProductType)}` : ''
         const r = await fetch(
           `${getBackendUrl()}/api/pim/mappings/${active.channel}/${active.code}/${encodeURIComponent(
             fieldKey,
-          )}`,
+          )}${qs}`,
           {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
@@ -181,17 +189,18 @@ export default function MappingsClient() {
         throw e
       }
     },
-    [active, fetchView, fetchMarketplaces, toast],
+    [active, editProductType, fetchView, fetchMarketplaces, toast],
   )
 
   const handleDelete = useCallback(
     async (fieldKey: string) => {
       if (!active) return
       try {
+        const qs = editProductType ? `?productType=${encodeURIComponent(editProductType)}` : ''
         const r = await fetch(
           `${getBackendUrl()}/api/pim/mappings/${active.channel}/${active.code}/${encodeURIComponent(
             fieldKey,
-          )}`,
+          )}${qs}`,
           { method: 'DELETE' },
         )
         if (!r.ok) {
@@ -205,7 +214,7 @@ export default function MappingsClient() {
         throw e
       }
     },
-    [active, fetchView, fetchMarketplaces, toast],
+    [active, editProductType, fetchView, fetchMarketplaces, toast],
   )
 
   // ── D.2b — Seed built-in Amazon/eBay/Shopify field definitions ──
@@ -341,6 +350,19 @@ export default function MappingsClient() {
     )
   }, [marketplaces, search])
 
+  // ── FM.9 — coverage + overlay-type options for the active view ───
+  const coverage = useMemo(() => {
+    const fields = view?.fields ?? []
+    const total = fields.length
+    const mapped = fields.filter((f) => f.rule).length
+    const requiredUnmapped = fields.filter((f) => f.required && !f.rule).length
+    return { total, mapped, requiredUnmapped }
+  }, [view])
+  const typeOptions = useMemo(
+    () => Array.from(new Set([editProductType, ...(view?.productTypes ?? [])].filter(Boolean))),
+    [editProductType, view],
+  )
+
   // ── Render ──────────────────────────────────────────────────────
   return (
     <div className="flex h-[calc(100vh-3.5rem)]">
@@ -404,7 +426,10 @@ export default function MappingsClient() {
               <button
                 key={`${m.channel}:${m.code}`}
                 type="button"
-                onClick={() => setActive({ channel: m.channel, code: m.code })}
+                onClick={() => {
+                  setActive({ channel: m.channel, code: m.code })
+                  setEditProductType('')
+                }}
                 className={cn(
                   'w-full px-4 py-2.5 text-left border-b border-zinc-100 dark:border-zinc-800/60',
                   isActive
@@ -532,6 +557,69 @@ export default function MappingsClient() {
                     <RefreshCw className="w-3 h-3" />
                     Refresh
                   </button>
+                </div>
+              </div>
+              {/* FM.9 — productType overlay selector + coverage */}
+              <div className="flex items-center gap-3 mt-2">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] uppercase tracking-wide text-zinc-400">Overlay</span>
+                  <select
+                    value={editProductType}
+                    onChange={(e) => setEditProductType(e.target.value)}
+                    className="px-1.5 py-1 text-xs rounded border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 focus:outline-none focus:ring-1 focus:ring-blue-400"
+                    title="Edit the default bucket (all product types) or one productType's overlay"
+                  >
+                    <option value="">Default · all product types</option>
+                    {typeOptions.map((t) => (
+                      <option key={t} value={t}>
+                        {t}
+                      </option>
+                    ))}
+                  </select>
+                  <Input
+                    placeholder="+ productType"
+                    className="w-32 text-xs font-mono"
+                    aria-label="add productType overlay"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        const v = (e.currentTarget.value || '').trim().toUpperCase()
+                        if (v) {
+                          setEditProductType(v)
+                          e.currentTarget.value = ''
+                        }
+                      }
+                    }}
+                  />
+                  {editProductType && (
+                    <span
+                      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300"
+                      title="Editing this productType's overlay; fields without an overlay rule inherit the default bucket"
+                    >
+                      editing {editProductType} overlay
+                    </span>
+                  )}
+                </div>
+                <div className="ml-auto flex items-center gap-2 text-[11px]">
+                  <span
+                    className={cn(
+                      'font-medium',
+                      coverage.mapped === 0
+                        ? 'text-zinc-400'
+                        : coverage.mapped < coverage.total
+                          ? 'text-amber-600 dark:text-amber-400'
+                          : 'text-emerald-600 dark:text-emerald-400',
+                    )}
+                  >
+                    {coverage.mapped}/{coverage.total} mapped
+                    {coverage.total > 0
+                      ? ` · ${Math.round((coverage.mapped / coverage.total) * 100)}%`
+                      : ''}
+                  </span>
+                  {coverage.requiredUnmapped > 0 && (
+                    <span className="text-red-600 dark:text-red-300">
+                      {coverage.requiredUnmapped} required unmapped
+                    </span>
+                  )}
                 </div>
               </div>
             </header>
