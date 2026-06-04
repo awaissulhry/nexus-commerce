@@ -166,6 +166,9 @@ export function RankPlacementCockpit() {
   const [famScheds, setFamScheds] = useState<{ id: string; campaignId: string; enabled: boolean }[]>([])
   const [schedSaving, setSchedSaving] = useState(false)
   const [schedMsg, setSchedMsg] = useState('')
+  // T6 — autonomous self-refresh rule
+  const [creatingRule, setCreatingRule] = useState(false)
+  const [autoMsg, setAutoMsg] = useState('')
   // R3 — bulk keyword manager
   const [targets, setTargets] = useState<Target[]>([])
   const [targetsLoading, setTargetsLoading] = useState(false)
@@ -327,6 +330,32 @@ export function RankPlacementCockpit() {
     setSchedSaving(false)
     void loadSchedules()
   }, [famScheds, loadSchedules])
+
+  // T6 — create the autonomous self-refresh rule: weekly, re-derive the family's
+  // windows from fresh demand + update its schedules (refresh_dayparting action).
+  const createRefreshRule = useCallback(async () => {
+    if (!family?.parentProductId) return
+    setCreatingRule(true); setAutoMsg('')
+    const name = family.parentName ?? 'product'
+    try {
+      const r = await fetch(`${getBackendUrl()}/api/advertising/automation-rules`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: `Auto-maintain dayparting — ${name} (${market})`,
+          description: `Weekly: re-derive the ${name} family's dayparting windows from fresh order demand and update its schedules — bid-up high-demand days +${bidUpPct}%, bid-down low −${bidDownPct}%${pauseOvernight ? ', pause the dead overnight' : ''}. Keeps the schedule current as demand shifts.`,
+          trigger: 'SCHEDULE', conditions: [],
+          actions: [
+            { type: 'refresh_dayparting', parentProductId: family.parentProductId, marketplace: market, bidUpPct, bidDownPct, pauseOvernight },
+            { type: 'notify', target: 'operator', message: `Dayparting refreshed for ${name} (${market})` },
+          ],
+          scopeMarketplace: market,
+          maxExecutionsPerDay: 1,
+        }),
+      })
+      setAutoMsg(r.ok ? 'created' : 'error')
+    } catch { setAutoMsg('error') }
+    setCreatingRule(false)
+  }, [family, market, bidUpPct, bidDownPct, pauseOvernight])
 
   // R3 — load the campaign's existing keywords (also gives the destination ad group)
   const loadTargets = useCallback(async (signal?: AbortSignal) => {
@@ -801,6 +830,16 @@ export function RankPlacementCockpit() {
               {schedMsg === 'error' && <span className="az-cockpit-sub" style={{ margin: 0, color: '#cc1100' }}>Save failed</span>}
             </div>
             <div className="az-cockpit-note" style={{ marginTop: 8 }}><Info size={12} /> One schedule applied to <b>all {family?.campaigns.length ?? 0} {family?.parentName ?? 'product'} campaigns in {market}</b>, enforced in <b>{MARKET_TZ[market] ?? 'Europe/Rome'}</b>. Starts <b>disabled</b> — enable to run. The cron bid-adjusts low-demand days &amp; pauses the dead overnight; writes are gated (sandbox stages locally until the ads write-gate is live). Disabling/deleting auto-resumes a paused campaign.</div>
+
+            {/* ── T6: autonomous self-refresh ─────────────────────── */}
+            <div className="az-sched-actions" style={{ borderTop: '1px solid var(--divider)', marginTop: 10, paddingTop: 10 }}>
+              <button type="button" className="az-btn" disabled={creatingRule || !family?.parentProductId} onClick={() => void createRefreshRule()}>
+                {creatingRule ? <><Loader2 size={14} className="az-spin" /> Creating…</> : <><Sparkles size={14} /> Auto-maintain weekly</>}
+              </button>
+              <span className="az-cockpit-sub" style={{ margin: 0 }}>Self-refresh the schedule from fresh demand as it shifts</span>
+              {autoMsg === 'created' && <span className="az-cockpit-sub" style={{ margin: 0, color: 'var(--green)' }}><Check size={12} style={{ verticalAlign: 'text-bottom' }} /> Auto-maintain rule created (disabled + dry-run) — enable it in Active rules.</span>}
+              {autoMsg === 'error' && <span className="az-cockpit-sub" style={{ margin: 0, color: '#cc1100' }}>Could not create the rule.</span>}
+            </div>
           </div>
         ) : family && family.campaigns.length > 0 && !whenLoading ? (
           <div className="az-cockpit-sub" style={{ marginTop: 8 }}>Demand is even across the week — no day-level schedule needed yet.</div>

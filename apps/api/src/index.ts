@@ -1117,6 +1117,9 @@ async function start() {
       // Apex D.2 — registers the defend_top_of_search handler.
       markCronStep('ads:import ads-top-of-search');
       await import('./services/advertising/ads-top-of-search.service.js');
+      // RC2.T6 — registers the refresh_dayparting handler.
+      markCronStep('ads:import ads-dayparting-refresh');
+      await import('./services/advertising/ads-dayparting-refresh.service.js');
       markCronStep('ads:import marketing-action-handlers');
       await import('./services/marketing/marketing-action-handlers.js');
       markCronStep('ads:import marketing-rule-evaluator.job');
