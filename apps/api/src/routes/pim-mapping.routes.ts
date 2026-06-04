@@ -29,6 +29,7 @@ import type { FastifyPluginAsync } from 'fastify'
 import prisma from '../db.js'
 import {
   getMappingForMarketplace,
+  getRulesFor,
   upsertFieldMapping,
   removeFieldMapping,
   validateFieldRule,
@@ -102,10 +103,13 @@ const pimMappingRoutes: FastifyPluginAsync = async (fastify) => {
 
   // ── GET /pim/mappings/:channel/:code ────────────────────────────
   // Every schema field for the marketplace + the current rule (or null).
-  fastify.get<{ Params: { channel: string; code: string } }>(
+  fastify.get<{ Params: { channel: string; code: string }; Querystring: { productType?: string } }>(
     '/pim/mappings/:channel/:code',
     async (request, reply) => {
       const { channel, code } = request.params
+      // FM.9 — when a productType is selected, the canvas edits + shows the
+      // per-productType overlay merged over the default bucket.
+      const productType = request.query.productType?.trim() || undefined
 
       // Verify marketplace exists. Throws → 404.
       let mapping
@@ -117,6 +121,9 @@ const pimMappingRoutes: FastifyPluginAsync = async (fastify) => {
         }
         throw err
       }
+
+      const resolved = getRulesFor(mapping, productType)
+      const overlay = productType ? (mapping.byProductType?.[productType] ?? {}) : {}
 
       // Pull schema fields: anything for this specific marketplace
       // OR marketplace-agnostic (null) entries for this channel.
@@ -135,12 +142,20 @@ const pimMappingRoutes: FastifyPluginAsync = async (fastify) => {
         required: f.required,
         allowedValues: f.allowedValues,
         notes: f.notes,
-        rule: mapping.fields[f.fieldKey] ?? null,
+        rule: resolved[f.fieldKey] ?? null,
+        // FM.9 — true when this rule comes from the productType overlay
+        // (vs inherited from the default bucket) so the UI can badge it.
+        overlay: productType
+          ? Object.prototype.hasOwnProperty.call(overlay, f.fieldKey)
+          : false,
       }))
 
       return reply.send({
         channel,
         code,
+        productType: productType ?? null,
+        // Known overlay productTypes so the UI selector can list them.
+        productTypes: Object.keys(mapping.byProductType ?? {}).sort(),
         version: mapping.version,
         lastSyncedAt: mapping.lastSyncedAt,
         schemaSnapshotVersion: mapping.schemaSnapshotVersion,
@@ -154,11 +169,13 @@ const pimMappingRoutes: FastifyPluginAsync = async (fastify) => {
   // shapes with InvalidMappingError (→ 400).
   fastify.put<{
     Params: { channel: string; code: string; fieldKey: string }
+    Querystring: { productType?: string }
     Body: FieldMappingRule
   }>(
     '/pim/mappings/:channel/:code/:fieldKey',
     async (request, reply) => {
       const { channel, code, fieldKey } = request.params
+      const productType = request.query.productType?.trim() || undefined
       const rule = request.body
 
       // Cheap pre-check so the API returns 400 with rich error info
@@ -172,8 +189,11 @@ const pimMappingRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       try {
-        const next = await upsertFieldMapping(channel, code, fieldKey, rule)
-        return reply.send({ ok: true, rule: next.fields[fieldKey] })
+        const next = await upsertFieldMapping(channel, code, fieldKey, rule, productType)
+        const saved = productType
+          ? next.byProductType?.[productType]?.[fieldKey]
+          : next.fields[fieldKey]
+        return reply.send({ ok: true, rule: saved })
       } catch (err) {
         if (err instanceof MarketplaceNotFoundError) {
           return reply.status(404).send({ error: err.message })
@@ -337,12 +357,13 @@ const pimMappingRoutes: FastifyPluginAsync = async (fastify) => {
   )
 
   // ── DELETE /pim/mappings/:channel/:code/:fieldKey ───────────────
-  fastify.delete<{ Params: { channel: string; code: string; fieldKey: string } }>(
+  fastify.delete<{ Params: { channel: string; code: string; fieldKey: string }; Querystring: { productType?: string } }>(
     '/pim/mappings/:channel/:code/:fieldKey',
     async (request, reply) => {
       const { channel, code, fieldKey } = request.params
+      const productType = request.query.productType?.trim() || undefined
       try {
-        await removeFieldMapping(channel, code, fieldKey)
+        await removeFieldMapping(channel, code, fieldKey, productType)
         return reply.send({ ok: true })
       } catch (err) {
         if (err instanceof MarketplaceNotFoundError) {
