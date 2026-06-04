@@ -272,27 +272,47 @@ export default function ProductEditClient({
     if (next && next !== topTab) {
       setTopTab(next as TopTab)
     }
+    // A.3 — reconcile the market too, so back/forward + deep-links restore
+    // the full coordinate. Read fresh; validate against the channel's markets.
+    const mkt = searchParams?.get('market')
+    if (next && mkt && marketplaces[next]?.some((m) => m.code === mkt)) {
+      setMarketSelection((s) => (s[next] === mkt ? s : { ...s, [next]: mkt }))
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams])
 
-  // W14.1 — wrap setTopTab so every tab click updates the URL too.
-  // router.replace (not push) so the back button doesn't have to
-  // step through 12 history entries to leave the page. scroll:
-  // false because the tab strip is sticky; jumping to top would be
-  // visually disorienting. master → drop the param entirely so the
-  // canonical URL stays clean.
-  const goToTab = useCallback(
-    (tab: TopTab) => {
+  // A.2/A.3 — the URL is the single canonical cursor for the coordinate
+  // (tab + market). goToCoordinate writes BOTH; market is attached only for
+  // multi-market channel tabs (dropped for master + single-store). push when
+  // the coordinate actually changes so back/forward walks tabs+markets;
+  // replace on a no-op/canonicalisation so we don't pile up junk history or
+  // loop. scroll:false because the tab strip is sticky.
+  const goToCoordinate = useCallback(
+    (tab: TopTab, market?: string) => {
       setTopTab(tab)
+      const attachMarket =
+        !!market && tab !== 'master' && !SINGLE_STORE_CHANNELS.has(tab as string)
+      if (attachMarket) {
+        setMarketSelection((s) => ({ ...s, [tab as string]: market! }))
+      }
       const params = new URLSearchParams(searchParams?.toString() ?? '')
       if (tab === 'master') params.delete('tab')
       else params.set('tab', tab)
+      if (attachMarket) params.set('market', market!)
+      else params.delete('market')
       const qs = params.toString()
       const target = qs ? `?${qs}` : window.location.pathname
-      router.replace(target, { scroll: false })
+      const cur = new URLSearchParams(searchParams?.toString() ?? '')
+      const changed =
+        cur.get('tab') !== params.get('tab') || cur.get('market') !== params.get('market')
+      if (changed) router.push(target, { scroll: false })
+      else router.replace(target, { scroll: false })
     },
     [router, searchParams],
   )
+  // Non-channel tabs carry no market — thin wrapper so the cursor logic
+  // lives in one place (also clears a stale ?market when leaving a channel).
+  const goToTab = useCallback((tab: TopTab) => goToCoordinate(tab), [goToCoordinate])
 
   // W14.1 — Cmd+K's "Jump to <tab>" actions dispatch the same event
   // name with a `tab` detail. Listening here keeps CommandPalette
@@ -340,7 +360,18 @@ export default function ProductEditClient({
       )
   }, [router, product.id, product.isParent])
   // Per-channel selected marketplace (key by channel)
-  const [marketSelection, setMarketSelection] = useState<Record<string, string>>({})
+  // A.1 — seed the active channel's market from ?market= so deep-links +
+  // refresh land on the right coordinate. Validate against the channel's
+  // real markets (a shared link may carry a market this product/channel
+  // doesn't have) — fall through to preferredMarketCode otherwise.
+  const [marketSelection, setMarketSelection] = useState<Record<string, string>>(() => {
+    const tab = searchParams?.get('tab')
+    const market = searchParams?.get('market')
+    if (tab && market && marketplaces[tab]?.some((m) => m.code === market)) {
+      return { [tab]: market }
+    }
+    return {}
+  })
 
   // Client-side listings cache — seeded from SSR prop, refreshed whenever
   // the flat file (or any other source) writes to ChannelListing. This
@@ -735,13 +766,15 @@ export default function ProductEditClient({
       // Channel tabs need their first market preselected before the
       // panel renders, mirroring the click handler below.
       if (orderedChannels.includes(nextKey)) {
+        // A.2 — channel tabs carry their market in the URL too.
         if (SINGLE_STORE_CHANNELS.has(nextKey)) {
-          setMarketSelection((s) => ({ ...s, [nextKey]: 'GLOBAL' }))
+          goToCoordinate(nextKey)
         } else {
-          ensureMarketSelected(nextKey)
+          goToCoordinate(nextKey, ensureMarketSelected(nextKey))
         }
+      } else {
+        goToTab(nextKey)
       }
-      goToTab(nextKey)
       // Move DOM focus to the freshly-active tab so screen readers
       // announce it. requestAnimationFrame waits one paint so the
       // tabIndex prop has flipped to 0 before we focus.
@@ -749,7 +782,7 @@ export default function ProductEditClient({
         document.getElementById(`tab-${nextKey}`)?.focus()
       })
     },
-    [tabKeys, topTab, orderedChannels, goToTab],
+    [tabKeys, topTab, orderedChannels, goToTab, goToCoordinate],
   )
 
   const hasListing = (channel: string, marketplace: string) =>
@@ -946,12 +979,12 @@ export default function ProductEditClient({
             tabKey={channel}
             active={isActive}
             onClick={() => {
+              // A.2 — write tab + market to the URL in one move.
               if (SINGLE_STORE_CHANNELS.has(channel)) {
-                setMarketSelection((s) => ({ ...s, [channel]: 'GLOBAL' }))
+                goToCoordinate(channel)
               } else {
-                ensureMarketSelected(channel)
+                goToCoordinate(channel, ensureMarketSelected(channel))
               }
-              goToTab(channel)
             }}
             count={channelListings.length || undefined}
             readiness={readiness}
@@ -1367,9 +1400,7 @@ export default function ProductEditClient({
                   marketplaces={channelMarkets}
                   selected={selectedMarket}
                   hasListing={hasListing}
-                  onSelect={(code) =>
-                    setMarketSelection((s) => ({ ...s, [channel]: code }))
-                  }
+                  onSelect={(code) => goToCoordinate(channel, code)}
                 />
               )}
               {/* EC.1 — Route eBay through the Listing Cockpit when the
@@ -1404,9 +1435,7 @@ export default function ProductEditClient({
                     })
                   }
                   childrenList={childrenList}
-                  onMarketSwitch={(code) =>
-                    setMarketSelection((s) => ({ ...s, [channel]: code }))
-                  }
+                  onMarketSwitch={(code) => goToCoordinate(channel, code)}
                   getDirtyForMarket={(code) =>
                     dirtyByTab[`channel:${channel}:${code}`] ?? 0
                   }
@@ -1452,9 +1481,7 @@ export default function ProductEditClient({
                   }
                   childrenList={childrenList}
                   /* AC.3 — chip-strip wiring. */
-                  onMarketSwitch={(code) =>
-                    setMarketSelection((s) => ({ ...s, [channel]: code }))
-                  }
+                  onMarketSwitch={(code) => goToCoordinate(channel, code)}
                   getDirtyForMarket={(code) =>
                     dirtyByTab[`channel:${channel}:${code}`] ?? 0
                   }
