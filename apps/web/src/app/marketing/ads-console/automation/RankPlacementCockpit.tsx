@@ -22,7 +22,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { DndContext, useDraggable, useDroppable, DragOverlay, type DragEndEvent, type DragStartEvent, PointerSensor, KeyboardSensor, useSensor, useSensors } from '@dnd-kit/core'
-import { GripVertical, Info, ArrowUp, Crosshair, TrendingUp, TrendingDown, Minus, Search, Plus, Loader2, Check, ListPlus, Sparkles, Zap, ShieldCheck, BarChart3, AlertTriangle } from 'lucide-react'
+import { GripVertical, Info, ArrowUp, Crosshair, TrendingUp, TrendingDown, Minus, Search, Plus, Loader2, Check, ListPlus, Sparkles, Zap, ShieldCheck, BarChart3, AlertTriangle, Clock } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 
 const MARKETS = ['IT', 'DE', 'FR', 'ES', 'NL', 'BE', 'SE', 'PL', 'IE', 'UK']
@@ -34,7 +34,12 @@ interface Target { id: string; text: string; matchType: string; bidCents: number
 interface ParsedKw { keyword: string; bidCents: number; basis: string; exists: boolean }
 interface PlacementRow { placement: PlacementKey; impressions: number; clicks: number; costCents: number; salesCents: number; orders: number; adjustmentPct: number }
 interface SelfComp { campaignId: string; name: string; status: string; asins: string[] }
+// T1 — dayparting intel (per-campaign ad conversion by weekday/hour)
+interface DpDay { weekday: number; label: string; costCents: number; clicks: number; orders: number; cvr: number | null; acos: number | null; cvrIndex: number | null; recommend: 'bid-up' | 'keep' | 'bid-down' }
+interface DpIntel { windowDays: number; days: DpDay[]; hourlyAvailable: boolean; peakHours: number[]; weakHours: number[]; overallCvr: number | null; note: string }
+interface DemandHour { key: number; orders: number; units: number; revenueCents: number; index: number | null }
 const MATCH_TYPES = ['BROAD', 'PHRASE', 'EXACT'] as const
+const pad2 = (n: number) => String(n).padStart(2, '0')
 
 // ── The numbered rank ladder. Each slot maps to an Amazon placement + a
 // starting bias % (the hold loop fine-tunes from there). Top-of-search slots
@@ -144,6 +149,10 @@ export function RankPlacementCockpit() {
   // R5/R6 — per-placement spend + bias (Top / Rest / Product)
   const [placements, setPlacements] = useState<PlacementRow[]>([])
   const [selfComp, setSelfComp] = useState<SelfComp[]>([]) // R8 — same-ASIN rivals
+  // T1 — dayparting intel ("when it converts")
+  const [intel, setIntel] = useState<DpIntel | null>(null)
+  const [demand, setDemand] = useState<DemandHour[] | null>(null)
+  const [whenLoading, setWhenLoading] = useState(false)
   // R3 — bulk keyword manager
   const [targets, setTargets] = useState<Target[]>([])
   const [targetsLoading, setTargetsLoading] = useState(false)
@@ -221,6 +230,23 @@ export function RankPlacementCockpit() {
     void loadSignals(ac.signal)
     return () => ac.abort()
   }, [loadSignals])
+
+  // T1 — dayparting intel (campaign ad conversion by weekday) + orders demand by
+  // hour (when customers actually buy, market-scoped). "When it converts."
+  useEffect(() => {
+    if (!campaignId) { setIntel(null); setDemand(null); return }
+    const ac = new AbortController()
+    setWhenLoading(true)
+    Promise.all([
+      fetch(`${getBackendUrl()}/api/advertising/dayparting-intel?campaignId=${encodeURIComponent(campaignId)}&windowDays=${WINDOW_DAYS}`, { cache: 'no-store', signal: ac.signal }).then(r => r.json()).catch(() => null),
+      fetch(`${getBackendUrl()}/api/advertising/orders-dayparting?marketplace=${market}&windowDays=90&metric=revenue`, { cache: 'no-store', signal: ac.signal }).then(r => r.json()).catch(() => null),
+    ]).then(([di, od]) => {
+      if (ac.signal.aborted) return
+      setIntel(di && Array.isArray(di.days) ? di as DpIntel : null)
+      setDemand(Array.isArray(od?.hourProfile) ? od.hourProfile as DemandHour[] : null)
+    }).finally(() => { if (!ac.signal.aborted) setWhenLoading(false) })
+    return () => ac.abort()
+  }, [campaignId, market])
 
   // R3 — load the campaign's existing keywords (also gives the destination ad group)
   const loadTargets = useCallback(async (signal?: AbortSignal) => {
@@ -381,6 +407,12 @@ export function RankPlacementCockpit() {
   })
   const totalPerDay = spendRows.reduce((s, r) => s + r.perDay, 0)
   const totalProjPerDay = spendRows.reduce((s, r) => s + r.projPerDay, 0)
+
+  // T1 — wasted spend = ad cost on below-average-converting weekdays; demand scaling.
+  const wastedSpendCents = intel ? intel.days.filter(d => d.recommend === 'bid-down').reduce((s, d) => s + d.costCents, 0) : 0
+  const maxDemand = demand && demand.length ? Math.max(1, ...demand.map(h => h.revenueCents)) : 1
+  const deadDays = intel ? intel.days.filter(d => d.recommend === 'bid-down') : []
+  const peakDays = intel ? intel.days.filter(d => d.recommend === 'bid-up') : []
 
   // Honest rank readout: where you're holding vs the target slot.
   const rankReadout = (() => {
@@ -599,6 +631,45 @@ export function RankPlacementCockpit() {
           {applyResult && <span className="az-cockpit-sub" style={{ color: applyResult.mode === 'live' ? 'var(--green)' : applyResult.mode === 'error' ? '#cc1100' : 'var(--ink2)' }}>{applyResult.mode === 'error' ? 'Apply failed.' : applyResult.mode === 'live' ? 'Applied live on Amazon.' : `Staged (${applyResult.mode}) — not live; flip the write-gate.`}</span>}
         </div>
         <div className="az-cockpit-note"><Info size={12} /> €/day = window spend ÷ {WINDOW_DAYS}. Projection estimates the CPC effect at the chosen bias % — actual spend also depends on how many more impressions you win in the auction.{dailyBudgetCents != null && totalProjPerDay > dailyBudgetCents ? ' Projected daily spend exceeds the daily budget (Amazon will cap at the budget).' : ''}</div>
+      </div>
+
+      {/* ── T1: When · conversion timing (dayparting intel) ──────── */}
+      <div className="az-when">
+        <div className="az-when-head"><Clock size={15} /> When · conversion timing{campaign ? <> · <span className="cn">{campaign.name}</span></> : ''}
+          <span style={{ flex: 1 }} />
+          {whenLoading && <span className="az-cockpit-status">Loading…</span>}
+          {!whenLoading && intel && <span className="az-cockpit-status ok">{intel.windowDays}d{intel.hourlyAvailable ? ' · hourly (AMS)' : ' · day-level'}</span>}
+        </div>
+
+        <div className="az-when-sub">Ad conversion by day of week — relative to this campaign&apos;s average</div>
+        <div className="az-when-days">
+          {(intel?.days ?? []).map(d => (
+            <div key={d.weekday} className={`az-dpday ${d.recommend}`} title={`${d.label}: CVR ${d.cvr != null ? (d.cvr * 100).toFixed(1) + '%' : '—'}${d.acos != null ? ` · ACOS ${(d.acos * 100).toFixed(0)}%` : ''} · ${euros(d.costCents)} spend`}>
+              <div className="lbl">{d.label.slice(0, 3)}</div>
+              <div className="bar"><div className="fill" style={{ height: `${Math.max(3, Math.min(100, (d.cvrIndex ?? 0) * 55))}%` }} /></div>
+              <div className="val">{d.cvr != null ? `${(d.cvr * 100).toFixed(1)}%` : '—'}</div>
+              <div className="rec">{d.recommend === 'bid-up' ? <TrendingUp size={11} /> : d.recommend === 'bid-down' ? <TrendingDown size={11} /> : <Minus size={11} />}</div>
+            </div>
+          ))}
+          {!intel && !whenLoading && <div className="az-cockpit-sub">No conversion data for this campaign in the window.</div>}
+        </div>
+
+        <div className="az-when-sub" style={{ marginTop: 12 }}>When your customers buy — demand by hour ({market}, 90d orders, Europe/Rome)</div>
+        <div className="az-when-hours">
+          {(demand ?? []).map(h => (
+            <div key={h.key} className="az-dphour" title={`${pad2(h.key)}:00 — ${euros(h.revenueCents)} · ${h.orders} orders`}>
+              <div className="bar"><div className="fill" style={{ height: `${Math.max(2, (h.revenueCents / maxDemand) * 100)}%` }} /></div>
+              <div className="hr">{h.key % 6 === 0 ? pad2(h.key) : ''}</div>
+            </div>
+          ))}
+          {!demand && !whenLoading && <div className="az-cockpit-sub">No order-demand data for {market}.</div>}
+        </div>
+
+        {wastedSpendCents > 0 && (
+          <div className="az-when-waste"><AlertTriangle size={13} /> <span><b>{euros(wastedSpendCents)}</b> spent on below-average-converting days{deadDays.length ? ` (${deadDays.map(d => d.label.slice(0, 3)).join(', ')})` : ''} in the last {intel?.windowDays}d{peakDays.length ? `; ${peakDays.map(d => d.label.slice(0, 3)).join(', ')} convert best` : ''}. The smart schedule (T2) will pull bids back there.</span></div>
+        )}
+        {intel?.note && <div className="az-cockpit-sub">{intel.note}</div>}
+        <div className="az-cockpit-note"><Info size={12} /> Read-only timing intelligence. The smart schedule generator (T2) and apply (T3) come next. Day-of-week is ad-attributed; hourly demand is order-placed time — a live proxy until Amazon Marketing Stream provides true hourly ad data.</div>
       </div>
 
       {/* ── R3: bulk keyword manager ─────────────────────────────── */}

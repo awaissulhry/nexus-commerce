@@ -242,6 +242,33 @@
 .az-selfcomp svg { flex-shrink: 0; margin-top: 1px; color: #c2570f; }
 .az-selfcomp b { color: #7a3e15; }
 
+/* When · conversion timing (T1) */
+.az-when { margin-top: 16px; border: 1px solid var(--divider); border-radius: 12px; background: #fff; padding: 14px 16px; }
+.az-when-head { display: flex; align-items: center; gap: 7px; font-weight: 700; font-size: 14px; color: var(--navy); margin-bottom: 10px; }
+.az-when-head .cn { color: var(--ink); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 320px; }
+.az-when-sub { font-size: 10.5px; font-weight: 700; letter-spacing: .3px; text-transform: uppercase; color: var(--ink3); margin-bottom: 7px; }
+.az-when-days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
+.az-dpday { display: flex; flex-direction: column; align-items: center; gap: 3px; border: 1px solid var(--divider); border-radius: 8px; padding: 7px 4px; background: var(--bg2); }
+.az-dpday.bid-up { border-color: #bfe6cf; background: #f0f9f3; }
+.az-dpday.bid-down { border-color: #f0c9a8; background: #fdf3ec; }
+.az-dpday .lbl { font-size: 10px; font-weight: 700; color: var(--ink2); }
+.az-dpday .bar { width: 100%; height: 44px; display: flex; align-items: flex-end; justify-content: center; }
+.az-dpday .fill { width: 70%; min-height: 3px; border-radius: 3px 3px 0 0; background: var(--navy); }
+.az-dpday.bid-up .fill { background: #2e9e6b; }
+.az-dpday.bid-down .fill { background: #d4843b; }
+.az-dpday .val { font-size: 10.5px; font-weight: 700; color: var(--ink); }
+.az-dpday .rec { color: var(--ink3); height: 14px; }
+.az-dpday.bid-up .rec { color: #1e7a4f; }
+.az-dpday.bid-down .rec { color: #b3541e; }
+.az-when-hours { display: grid; grid-template-columns: repeat(24, 1fr); gap: 2px; align-items: end; }
+.az-dphour { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.az-dphour .bar { width: 100%; height: 40px; display: flex; align-items: flex-end; }
+.az-dphour .fill { width: 100%; min-height: 2px; border-radius: 2px 2px 0 0; background: linear-gradient(0deg, #c9d6ea, #1f6feb); }
+.az-dphour .hr { font-size: 8.5px; color: var(--ink3); height: 10px; }
+.az-when-waste { display: flex; align-items: flex-start; gap: 7px; margin-top: 12px; padding: 9px 11px; background: #fdf3ec; border: 1px solid #f0c9a8; border-radius: 8px; font-size: 12px; line-height: 1.5; color: #8a4a1a; }
+.az-when-waste svg { flex-shrink: 0; margin-top: 1px; color: #c2570f; }
+.az-when-waste b { color: #7a3e15; }
+
 /* Action chip + per-campaign lines */
 .az-act { display: inline-flex; align-items: center; gap: 3px; font-size: 10px; font-weight: 700; border-radius: 4px; padding: 1px 6px; vertical-align: middle; }
 .az-act.raise { color: #1e7a4f; background: #e8f5ee; }

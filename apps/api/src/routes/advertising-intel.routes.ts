@@ -325,6 +325,20 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
       note: intel.hourlyAvailable ? null : 'Connect Amazon Marketing Stream for an hourly ad-spend overlay.',
     }
   })
+
+  // ── RC2.T1 — full per-campaign dayparting intel for the cockpit "When" panel.
+  // Day-of-week ad conversion (+ hour-of-day when AMS is live), conversion-index
+  // vs the campaign average, and bid-up/keep/bid-down recommendations. Read-only.
+  fastify.get('/advertising/dayparting-intel', async (request, reply) => {
+    const q = request.query as { windowDays?: string; campaignId?: string }
+    const { analyzeDayparting } = await import('../services/advertising/ads-dayparting-intel.service.js')
+    const intel = await analyzeDayparting({
+      windowDays: q.windowDays ? Math.max(7, Math.min(365, Number(q.windowDays))) : 30,
+      campaignId: q.campaignId || undefined,
+    })
+    reply.header('Cache-Control', 'private, max-age=300')
+    return intel
+  })
 }
 
 export default advertisingIntelRoutes
