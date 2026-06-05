@@ -23,6 +23,7 @@ import type { FastifyPluginAsync } from 'fastify'
 import prisma from '../db.js'
 import { resolveAttributes } from '../services/pim/attribute-resolver.js'
 import { applyCatalogCascade } from '../services/pim/apply-mapping.service.js'
+import { getMasterAttributeSchema } from '../services/pim/master-schema.service.js'
 
 // ────────────────────────────────────────────────────────────────────
 // Types
@@ -219,6 +220,24 @@ const pimGlobalRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       return reply.send(view)
+    },
+  )
+
+  // ── GET /products/:id/master-schema ─────────────────────────────
+  // MA.1 — the attribute set the master SHOULD hold for its productType
+  // (category attrs from the Amazon schema + mapping-rule sources), so the
+  // Master tab can render typed fields instead of a blank key/value bag.
+  fastify.get<{ Params: { id: string } }>(
+    '/products/:id/master-schema',
+    async (request, reply) => {
+      try {
+        const result = await getMasterAttributeSchema(request.params.id)
+        return reply.send(result)
+      } catch (err: any) {
+        if (/not found/i.test(err?.message ?? '')) return reply.status(404).send({ error: err.message })
+        request.log.error({ err }, 'master-schema failed')
+        return reply.status(500).send({ error: err?.message ?? 'master-schema failed' })
+      }
     },
   )
 
