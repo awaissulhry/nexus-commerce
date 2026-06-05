@@ -1681,6 +1681,71 @@ const reviewsRoutes: FastifyPluginAsync = async (fastify) => {
     reply.header('Cache-Control', 'no-store')
     return insightsDebugState
   })
+
+  // ── D.4 — Amazon insights: read + rollup + manual ingest ──
+  // GET /api/reviews/insights?productId&marketplace&asin — raw insight rows.
+  fastify.get('/reviews/insights', async (request, reply) => {
+    const q = request.query as { productId?: string; marketplace?: string; asin?: string }
+    const where: Record<string, unknown> = {}
+    if (q.productId) where.productId = q.productId
+    if (q.marketplace) where.marketplace = q.marketplace
+    if (q.asin) where.asin = q.asin
+    reply.header('Cache-Control', 'private, max-age=120')
+    const items = await prisma.amazonReviewInsight.findMany({ where, orderBy: { fetchedAt: 'desc' }, take: 300 })
+    return { items, count: items.length }
+  })
+
+  // GET /api/reviews/insights/rollup?marketplace — merged Overview signal:
+  // review-weighted avg rating + total count + merged top topics + worst access.
+  fastify.get('/reviews/insights/rollup', async (request, reply) => {
+    const q = request.query as { marketplace?: string }
+    const rows = await prisma.amazonReviewInsight.findMany({ where: q.marketplace ? { marketplace: q.marketplace } : {} })
+    type Topic = { topic: string; mentionCount: number | null; ratingImpact: number | null; snippets: string[] }
+    const mergeTopics = (key: 'positiveTopics' | 'negativeTopics') => {
+      const m = new Map<string, Topic>()
+      for (const r of rows) {
+        for (const t of (r[key] as unknown as Topic[]) ?? []) {
+          if (!t?.topic) continue
+          const e = m.get(t.topic) ?? { topic: t.topic, mentionCount: 0, ratingImpact: null, snippets: [] }
+          e.mentionCount = (e.mentionCount ?? 0) + (t.mentionCount ?? 0)
+          if (t.ratingImpact != null && (e.ratingImpact == null || Math.abs(t.ratingImpact) > Math.abs(e.ratingImpact))) e.ratingImpact = t.ratingImpact
+          for (const s of t.snippets ?? []) if (e.snippets.length < 4 && !e.snippets.includes(s)) e.snippets.push(s)
+          m.set(t.topic, e)
+        }
+      }
+      return [...m.values()].sort((a, b) => (b.mentionCount ?? 0) - (a.mentionCount ?? 0)).slice(0, 6)
+    }
+    let weightedSum = 0, weight = 0, totalReviews = 0
+    for (const r of rows) {
+      if (r.starRating != null) { const w = r.reviewCount ?? 1; weightedSum += r.starRating * w; weight += w }
+      totalReviews += r.reviewCount ?? 0
+    }
+    const anyOk = rows.some((r) => r.accessStatus === 'OK')
+    const accessStatus = rows.length === 0 ? 'NO_DATA' : anyOk ? 'OK' : rows.some((r) => r.accessStatus === 'NEEDS_BRAND_ANALYTICS_ROLE') ? 'NEEDS_BRAND_ANALYTICS_ROLE' : rows[0].accessStatus
+    reply.header('Cache-Control', 'private, max-age=120')
+    return {
+      marketplace: q.marketplace ?? null,
+      asins: rows.length,
+      starRating: weight > 0 ? Math.round((weightedSum / weight) * 100) / 100 : null,
+      reviewCount: totalReviews,
+      positiveTopics: mergeTopics('positiveTopics'),
+      negativeTopics: mergeTopics('negativeTopics'),
+      accessStatus,
+      lastFetchedAt: rows.reduce<string | null>((acc, r) => (!acc || r.fetchedAt > new Date(acc) ? r.fetchedAt.toISOString() : acc), null),
+    }
+  })
+
+  // POST /api/reviews/insights/ingest { marketplace, limit } — fire-and-forget.
+  fastify.post('/reviews/insights/ingest', async (request, reply) => {
+    const b = (request.body ?? {}) as { marketplace?: string; limit?: number }
+    if (!b.marketplace) { reply.status(400); return { error: 'marketplace required' } }
+    const { ingestAmazonReviewInsights } = await import('../services/reviews/amazon-review-insights.service.js')
+    void ingestAmazonReviewInsights({ marketplaceCode: b.marketplace, limit: b.limit })
+      .then((r) => fastify.log.info({ insights: r }, '[review-insights] manual ingest complete'))
+      .catch((e) => fastify.log.error({ err: e }, '[review-insights] manual ingest failed'))
+    reply.header('Cache-Control', 'no-store')
+    return { ok: true, started: true, marketplace: b.marketplace, note: 'ingest running in background; poll GET /reviews/insights for results' }
+  })
 }
 
 export default reviewsRoutes

@@ -1187,6 +1187,15 @@ async function start() {
       startReviewAttributionCron();
     }
 
+    // D.4 — Amazon official Customer Feedback API insights. Independently gated
+    // (needs the SP-API Brand Analytics role, not the general review ingest) —
+    // opt in via NEXUS_ENABLE_AMAZON_REVIEW_INSIGHTS=1. Stays dark until the role
+    // is confirmed via POST /api/reviews/insights/probe. Weekly schedule.
+    if (process.env.NEXUS_ENABLE_AMAZON_REVIEW_INSIGHTS === '1') {
+      const { startAmazonReviewInsightsCron } = await import('./jobs/review-pipeline.job.js');
+      startAmazonReviewInsightsCron();
+    }
+
     // RV.9.2 — Stale CronRun sweeper. Always-on (not gated). Marks
     // status='RUNNING' rows stuck for >2h as FAILED so the dashboard
     // doesn't show false-positive "still running" states after a crash.

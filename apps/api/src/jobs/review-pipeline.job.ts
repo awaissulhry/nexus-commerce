@@ -9,6 +9,7 @@
  */
 
 import cron from 'node-cron'
+import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
 import { recordCronRun } from '../utils/cron-observability.js'
 import {
@@ -27,6 +28,40 @@ import {
 let ingestTask: ReturnType<typeof cron.schedule> | null = null
 let spikeTask: ReturnType<typeof cron.schedule> | null = null
 let digestTask: ReturnType<typeof cron.schedule> | null = null
+let insightsTask: ReturnType<typeof cron.schedule> | null = null
+
+// D.4 — Amazon official Customer Feedback API insights. Weekly (the data
+// refreshes weekly). Sweeps every active Amazon market from the Marketplace
+// table (not the IT,DE-only ingest env). Per-ASIN 403 → accessStatus, never a
+// throw — the summary reports denied counts so the health strip stays honest.
+export async function runAmazonReviewInsightsCron(): Promise<void> {
+  try {
+    await recordCronRun('amazon-review-insights', async () => {
+      const { ingestAmazonReviewInsights } = await import('../services/reviews/amazon-review-insights.service.js')
+      const markets = await prisma.marketplace.findMany({ where: { channel: 'AMAZON', isActive: true }, select: { code: true } })
+      let upserted = 0, denied = 0, failed = 0, noAsin = 0
+      const parts: string[] = []
+      for (const m of markets) {
+        const r = await ingestAmazonReviewInsights({ marketplaceCode: m.code })
+        upserted += r.upserted; denied += r.deniedAsins; failed += r.failedAsins; if (r.noAsin) noAsin += 1
+        parts.push(`${m.code}:${r.upserted}${r.deniedAsins ? `(denied ${r.deniedAsins})` : ''}`)
+      }
+      const summary = `markets=${markets.length} upserted=${upserted} denied=${denied} failed=${failed} noAsin=${noAsin} · ${parts.join(' ')}`
+      logger.info('amazon-review-insights cron: completed', { summary })
+      return summary
+    })
+  } catch (err) {
+    logger.error('amazon-review-insights cron: failure', { error: err instanceof Error ? err.message : String(err) })
+  }
+}
+
+export function startAmazonReviewInsightsCron(): void {
+  if (insightsTask) { logger.warn('amazon-review-insights cron already started'); return }
+  const schedule = process.env.NEXUS_AMAZON_REVIEW_INSIGHTS_SCHEDULE ?? '0 6 * * 1' // Mon 06:00 UTC
+  if (!cron.validate(schedule)) { logger.error('amazon-review-insights cron: invalid schedule', { schedule }); return }
+  insightsTask = cron.schedule(schedule, () => { void runAmazonReviewInsightsCron() })
+  logger.info('amazon-review-insights cron: scheduled', { schedule })
+}
 
 export async function runReviewIngestCron(): Promise<void> {
   try {
