@@ -925,6 +925,14 @@ const reviewsRoutes: FastifyPluginAsync = async (fastify) => {
     return { ok: true, sent: r.sent, skipped: r.skipped, digest: r.digest }
   })
 
+  // RV.7.3 — manual orders-delivered-backfill trigger (runs the FBA+FBM delivery
+  // heuristic that unblocks the review scheduler). Returns the run result.
+  fastify.post('/reviews/cron/orders-delivered-backfill/trigger', async (_request, _reply) => {
+    const { runOrdersDeliveredBackfill } = await import('../services/reviews/orders-delivered-backfill.service.js')
+    const result = await runOrdersDeliveredBackfill({})
+    return { ok: true, result }
+  })
+
   // ── Review Spotlight (RX.4) ─────────────────────────────────────────
   fastify.get<{
     Querystring: { productId?: string; marketplace?: string }

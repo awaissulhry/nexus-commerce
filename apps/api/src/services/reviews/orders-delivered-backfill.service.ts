@@ -24,6 +24,29 @@ import { fetchSpApiReport } from '../sp-api-reports.service.js'
 
 const REPORT_TYPE = 'GET_FLAT_FILE_ALL_ORDERS_DATA_BY_LAST_UPDATE_GENERAL'
 
+// RV.7.3 — delivery-estimate heuristic. The report almost never returns
+// order-status='Delivered' (FBM never, FBA rarely), so the report pass updates
+// ~0 rows and the review pipeline stalls. We estimate delivery as shippedAt + N
+// business days so it isn't permanently blocked. FBA is fast (Amazon logistics);
+// FBM rides a carrier so it gets a longer default. Real AMAZON_API / AMAZON_REPORT
+// / CARRIER_WEBHOOK values still override these when they actually arrive.
+const FBA_HEURISTIC_DAYS = Math.max(1, Number(process.env.NEXUS_DELIVERY_HEURISTIC_FBA_DAYS) || 3)
+const FBM_HEURISTIC_DAYS = Math.max(1, Number(process.env.NEXUS_DELIVERY_HEURISTIC_FBM_DAYS) || 5)
+// Only estimate for orders shipped within this window — older orders are well
+// outside the Solicitations 4–30d window, so estimating them is pointless churn.
+const HEURISTIC_MAX_SHIP_AGE_DAYS = 60
+
+function addBusinessDays(date: Date, days: number): Date {
+  const d = new Date(date)
+  let added = 0
+  while (added < days) {
+    d.setUTCDate(d.getUTCDate() + 1)
+    const dow = d.getUTCDay()
+    if (dow !== 0 && dow !== 6) added++
+  }
+  return d
+}
+
 // Lower-rank sources (heuristic / null) get replaced when the report
 // returns a real Delivered timestamp. Higher-rank sources are preserved.
 const HIGHER_AUTHORITY_SOURCES = new Set([
@@ -41,6 +64,8 @@ export interface OrdersDeliveredBackfillResult {
   ordersUpdated: number
   ordersAlreadyAuthoritative: number
   ordersNotFound: number
+  heuristicScanned: number
+  heuristicUpdated: number
   errors: number
   durationMs: number
 }
@@ -126,6 +151,42 @@ async function applyDeliveredRows(rows: DeliveredRow[]): Promise<{
 }
 
 /**
+ * RV.7.3 — Delivery-estimate pass. For SHIPPED Amazon orders with a shippedAt
+ * but no authoritative deliveredAt, set deliveredAt = shippedAt + N business days
+ * (FBA 3 / FBM 5 by default). This is what actually keeps the review pipeline
+ * moving, since the report pass above returns ~0 Delivered rows. Runs
+ * independently of the (flaky) report fetch. Idempotent — recomputes the same
+ * value for already-heuristic rows and skips the write.
+ */
+async function applyShipDeliveryHeuristic(): Promise<{ scanned: number; updated: number }> {
+  const since = new Date(Date.now() - HEURISTIC_MAX_SHIP_AGE_DAYS * 24 * 60 * 60 * 1000)
+  const candidates = await prisma.order.findMany({
+    where: {
+      channel: 'AMAZON',
+      deletedAt: null,
+      status: 'SHIPPED',
+      shippedAt: { not: null, gte: since },
+      // Only fill where we don't already have an authoritative date.
+      OR: [{ deliveredAtSource: null }, { deliveredAtSource: { in: ['HEURISTIC_FBA_3D', 'HEURISTIC_FBM_5D'] } }],
+    },
+    select: { id: true, shippedAt: true, fulfillmentMethod: true, deliveredAt: true, deliveredAtSource: true },
+  })
+  const now = Date.now()
+  let updated = 0
+  for (const o of candidates) {
+    if (!o.shippedAt) continue
+    const isFba = o.fulfillmentMethod === 'FBA'
+    const projected = addBusinessDays(o.shippedAt, isFba ? FBA_HEURISTIC_DAYS : FBM_HEURISTIC_DAYS)
+    if (projected.getTime() > now) continue // estimated delivery still in the future
+    const source = isFba ? 'HEURISTIC_FBA_3D' : 'HEURISTIC_FBM_5D'
+    if (o.deliveredAt && o.deliveredAtSource === source && Math.abs(o.deliveredAt.getTime() - projected.getTime()) < 60_000) continue
+    await prisma.order.update({ where: { id: o.id }, data: { deliveredAt: projected, deliveredAtSource: source } })
+    updated++
+  }
+  return { scanned: candidates.length, updated }
+}
+
+/**
  * Public entrypoint. Iterates all active Amazon marketplaces with a
  * marketplaceId set, fetches the orders-delivered report covering the
  * last `daysBack` days, parses Delivered rows, applies updates.
@@ -146,8 +207,23 @@ export async function runOrdersDeliveredBackfill(
     ordersUpdated: 0,
     ordersAlreadyAuthoritative: 0,
     ordersNotFound: 0,
+    heuristicScanned: 0,
+    heuristicUpdated: 0,
     errors: 0,
     durationMs: 0,
+  }
+
+  // RV.7.3 — run the delivery-estimate heuristic FIRST, independent of the
+  // report fetch below (which intermittently hangs + auto-fails). This is what
+  // unblocks the review scheduler day-to-day.
+  try {
+    const h = await applyShipDeliveryHeuristic()
+    result.heuristicScanned = h.scanned
+    result.heuristicUpdated = h.updated
+    logger.info('[orders-delivered-backfill] heuristic pass', h)
+  } catch (err) {
+    result.errors++
+    logger.warn('[orders-delivered-backfill] heuristic pass failed', { error: err instanceof Error ? err.message : String(err) })
   }
 
   // Find every Amazon marketplace we should query. Active rows with a
