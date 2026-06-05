@@ -12464,6 +12464,10 @@ model RankTarget {
   maxCpcCents Int? // hard bid ceiling the loop may set; null = use CPC-ceiling guardrail
   biasPct     Int? // starting placement-bias % (0-900) applied on entry
   pause       Boolean  @default(false) // this target = pause delivery in the window
+  // RS.1.1 — "all-out": the defend loop IGNORES acosCapPct and holds the slot at
+  // any cost up to maxCpcCents (null maxCpc = truly unbounded). For windows where
+  // winning the rank matters more than margin. maxCpcCents stays a runaway guard.
+  allOut      Boolean  @default(false)
   color       String? // UI swatch (hex)
   builtIn     Boolean  @default(false) // seeded preset — not user-deletable
   sortOrder   Int      @default(0)

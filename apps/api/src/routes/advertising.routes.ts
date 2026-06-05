@@ -4611,6 +4611,9 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     { key: 'defend-top', name: 'Defend Top', placement: 'PLACEMENT_TOP', targetISPct: 35, acosCapPct: 35, biasPct: 50, pause: false, color: '#3aa873', builtIn: true, sortOrder: 2 },
     { key: 'rest-of-search', name: 'Rest of Search', placement: 'PLACEMENT_REST_OF_SEARCH', targetISPct: 10, acosCapPct: 30, biasPct: 0, pause: false, color: '#e6b067', builtIn: true, sortOrder: 3 },
     { key: 'pause', name: 'Pause', placement: 'PLACEMENT_TOP', pause: true, color: '#d97757', builtIn: true, sortOrder: 4 },
+    // RS.1.1 — all-out: ignore ACOS, hold the slot at any cost (up to maxCpc). For
+    // must-win windows; maxCpcCents stays null here (operator sets a runaway guard).
+    { key: 'own-top-allout', name: 'Own Top — All-Out', placement: 'PLACEMENT_TOP', targetISPct: 90, acosCapPct: null, maxCpcCents: null, biasPct: 150, pause: false, allOut: true, color: '#b91c1c', builtIn: true, sortOrder: 5 },
   ]
   fastify.get('/advertising/rank-targets', async (_request, reply) => {
     reply.header('Cache-Control', 'private, max-age=15')
@@ -4632,7 +4635,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       acosCapPct: (b.acosCapPct as number | null) ?? null,
       maxCpcCents: (b.maxCpcCents as number | null) ?? null,
       biasPct: (b.biasPct as number | null) ?? null,
-      pause: !!b.pause, color: (b.color as string | null) ?? null,
+      pause: !!b.pause, allOut: !!b.allOut, color: (b.color as string | null) ?? null,
       builtIn: false, sortOrder: (b.sortOrder as number) ?? 50,
     }
     try { return await prisma.rankTarget.create({ data: data as never }) } catch { reply.status(409); return { error: 'key_taken' } }
@@ -4641,7 +4644,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const { id } = request.params as { id: string }
     const b = request.body as Record<string, unknown>
     const data: Record<string, unknown> = {}
-    for (const k of ['name', 'placement', 'targetISPct', 'acosCapPct', 'maxCpcCents', 'biasPct', 'pause', 'color', 'sortOrder']) if (b[k] !== undefined) data[k] = b[k]
+    for (const k of ['name', 'placement', 'targetISPct', 'acosCapPct', 'maxCpcCents', 'biasPct', 'pause', 'allOut', 'color', 'sortOrder']) if (b[k] !== undefined) data[k] = b[k]
     try { return await prisma.rankTarget.update({ where: { id }, data }) } catch { reply.status(404); return { error: 'not found' } }
   })
   fastify.delete('/advertising/rank-targets/:id', async (request, reply) => {
