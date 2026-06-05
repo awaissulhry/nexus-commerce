@@ -42,6 +42,7 @@ import {
 import { validatePublish } from '../services/pim/publish-validator.js'
 import { previewPayload } from '../services/pim/payload-preview.js'
 import { suggestMappings } from '../services/pim/mapping-suggest.service.js'
+import { suggestMappingsAI } from '../services/pim/mapping-suggest-ai.service.js'
 import { recordMappingRevision, listMappingRevisions, rollbackMapping } from '../services/pim/mapping-revision.service.js'
 import { computeCoverageMatrix } from '../services/pim/mapping-coverage.service.js'
 import { simulateRuleChange } from '../services/pim/mapping-simulate.service.js'
@@ -408,6 +409,24 @@ const pimMappingRoutes: FastifyPluginAsync = async (fastify) => {
     } catch (err: any) {
       request.log.error({ err }, 'mapping suggest failed')
       return reply.status(500).send({ error: err?.message ?? 'suggest failed' })
+    }
+  })
+
+  // ── POST /pim/mappings/:channel/:code/suggest-ai ────────────────
+  // BM.2 — AI maps the long-tail fields the heuristic can't. Opt-in,
+  // budget/kill-switch-aware, review-gated (caller confirms before write).
+  fastify.post<{
+    Params: { channel: string; code: string }
+    Querystring: { productType?: string }
+  }>('/pim/mappings/:channel/:code/suggest-ai', async (request, reply) => {
+    const { channel, code } = request.params
+    const productType = request.query.productType?.trim() || undefined
+    try {
+      const result = await suggestMappingsAI({ channel, code, productType })
+      return reply.send(result)
+    } catch (err: any) {
+      request.log.error({ err }, 'mapping suggest-ai failed')
+      return reply.status(500).send({ error: err?.message ?? 'suggest-ai failed' })
     }
   })
 
