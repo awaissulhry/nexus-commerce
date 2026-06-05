@@ -24,6 +24,7 @@ import prisma from '../db.js'
 import { resolveAttributes } from '../services/pim/attribute-resolver.js'
 import { applyCatalogCascade } from '../services/pim/apply-mapping.service.js'
 import { getMasterAttributeSchema } from '../services/pim/master-schema.service.js'
+import { proposeImportFromChannel } from '../services/pim/reverse-mapping.service.js'
 
 // ────────────────────────────────────────────────────────────────────
 // Types
@@ -237,6 +238,27 @@ const pimGlobalRoutes: FastifyPluginAsync = async (fastify) => {
         if (/not found/i.test(err?.message ?? '')) return reply.status(404).send({ error: err.message })
         request.log.error({ err }, 'master-schema failed')
         return reply.status(500).send({ error: err?.message ?? 'master-schema failed' })
+      }
+    },
+  )
+
+  // ── POST /products/:id/master/import-from-channel ────────────────
+  // MA.3 — propose master values reverse-mapped from a channel listing (the
+  // Amazon parent). Read-only; the caller applies accepted proposals via
+  // PATCH /global.
+  fastify.post<{ Params: { id: string }; Body: { channel?: string; marketplace?: string } }>(
+    '/products/:id/master/import-from-channel',
+    async (request, reply) => {
+      const channel = (request.body?.channel ?? 'AMAZON').toUpperCase()
+      const marketplace = request.body?.marketplace?.trim()
+      if (!marketplace) return reply.status(400).send({ error: 'marketplace is required' })
+      try {
+        const result = await proposeImportFromChannel({ productId: request.params.id, channel, marketplace })
+        return reply.send(result)
+      } catch (err: any) {
+        if (/not found|no .* listing/i.test(err?.message ?? '')) return reply.status(404).send({ error: err.message })
+        request.log.error({ err }, 'import-from-channel failed')
+        return reply.status(500).send({ error: err?.message ?? 'import-from-channel failed' })
       }
     },
   )
