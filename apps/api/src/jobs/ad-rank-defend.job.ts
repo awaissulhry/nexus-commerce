@@ -18,7 +18,7 @@ import cron from 'node-cron'
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
 import { recordCronRun } from '../utils/cron-observability.js'
-import { computeStep, resolveActiveTargetKey, type RankTargetSpec, type ScheduleWindow } from '../services/advertising/rank-controller.js'
+import { computeStep, resolveActiveTargetKey, isRankLoss, type RankTargetSpec, type ScheduleWindow } from '../services/advertising/rank-controller.js'
 import { analyzeTopOfSearch, applyTopOfSearch } from '../services/advertising/ads-top-of-search.service.js'
 import { updateCampaignWithSync, type AdsActor } from '../services/advertising/ads-mutation.service.js'
 
@@ -39,7 +39,7 @@ const isGoalMode = (windows: unknown, defaultTargetKey: string | null): boolean 
 
 export interface RankDefendDecision {
   campaignId: string; campaignName: string; targetKey: string; action: string; reason: string
-  currentPct: number; nextPct: number; achievedISPct: number | null; achievedAcosPct: number | null; applied: boolean
+  currentPct: number; nextPct: number; achievedISPct: number | null; achievedAcosPct: number | null; lossDetected: boolean; applied: boolean
 }
 export interface RankDefendSummary { evaluated: number; applied: number; decisions: RankDefendDecision[] }
 
@@ -53,7 +53,7 @@ export async function runRankDefendOnce(opts: { dryRun?: boolean } = {}): Promis
   const targetByKey = new Map(targets.map((t) => [t.key, t as unknown as RankTargetRow]))
 
   const campaignIds = [...new Set(schedules.map((s) => s.campaignId))]
-  const campaigns = await prisma.campaign.findMany({ where: { id: { in: campaignIds } }, select: { id: true, name: true, marketplace: true, status: true } })
+  const campaigns = await prisma.campaign.findMany({ where: { id: { in: campaignIds } }, select: { id: true, name: true, marketplace: true, status: true, externalCampaignId: true } })
   const campById = new Map(campaigns.map((c) => [c.id, c]))
 
   // One analyzeTopOfSearch call per marketplace gives every campaign's currentPct + topIS + topAcos.
@@ -64,6 +64,30 @@ export async function runRankDefendOnce(opts: { dryRun?: boolean } = {}): Promis
       const { rows } = await analyzeTopOfSearch({ marketplace: mk, windowDays: 14 })
       for (const r of rows) sigByCampaign.set(r.campaignId, { currentPct: r.currentPct, topIS: r.topIS, topAcos: r.topAcos })
     } catch (e) { logger.warn('[rank-defend] signal read failed', { marketplace: mk, error: (e as Error).message }) }
+  }
+
+  // RS.6 — loss proxy: the latest hour's impressions cratering vs the campaign's
+  // own ~2-day baseline is the fastest "we're slipping" signal (no live rank on
+  // Amazon). Conservative threshold → sparse/low-volume campaigns simply never
+  // trip it (baseline below the floor), so no false snap-backs.
+  const lossByCampaign = new Map<string, boolean>()
+  const extIds = campaigns.map((c) => c.externalCampaignId).filter(Boolean) as string[]
+  if (extIds.length > 0) {
+    try {
+      const since = new Date(Date.now() - 2 * 24 * 3600 * 1000)
+      const hourly = await prisma.amazonAdsHourlyPerformance.findMany({ where: { entityType: 'CAMPAIGN', entityId: { in: extIds }, date: { gte: since } }, select: { entityId: true, date: true, hour: true, impressions: true } })
+      const byExt = new Map<string, { ts: number; impr: number }[]>()
+      for (const h of hourly) { const ts = h.date.getTime() + (h.hour ?? 0) * 3600_000; const arr = byExt.get(h.entityId) ?? []; arr.push({ ts, impr: h.impressions ?? 0 }); byExt.set(h.entityId, arr) }
+      for (const c of campaigns) {
+        if (!c.externalCampaignId) continue
+        const series = (byExt.get(c.externalCampaignId) ?? []).sort((a, b) => a.ts - b.ts)
+        if (series.length < 3) continue
+        const latest = series[series.length - 1].impr
+        const prior = series.slice(0, -1)
+        const baseline = prior.reduce((s, x) => s + x.impr, 0) / prior.length
+        lossByCampaign.set(c.id, isRankLoss(latest, baseline))
+      }
+    } catch (e) { logger.warn('[rank-defend] loss-proxy read failed', { error: (e as Error).message }) }
   }
 
   const decisions: RankDefendDecision[] = []
@@ -80,16 +104,17 @@ export async function runRankDefendOnce(opts: { dryRun?: boolean } = {}): Promis
     // Pause target → ensure the campaign is paused.
     if (spec.pause) {
       const pausing = camp.status !== 'PAUSED' && camp.status !== 'ARCHIVED'
-      decisions.push({ campaignId: s.campaignId, campaignName: camp.name, targetKey: key, action: 'pause', reason: 'target = pause', currentPct: sig.currentPct, nextPct: sig.currentPct, achievedISPct: sig.topIS != null ? Math.round(sig.topIS * 100) : null, achievedAcosPct: sig.topAcos != null ? Math.round(sig.topAcos * 100) : null, applied: !dryRun && pausing })
+      decisions.push({ campaignId: s.campaignId, campaignName: camp.name, targetKey: key, action: 'pause', reason: 'target = pause', currentPct: sig.currentPct, nextPct: sig.currentPct, achievedISPct: sig.topIS != null ? Math.round(sig.topIS * 100) : null, achievedAcosPct: sig.topAcos != null ? Math.round(sig.topAcos * 100) : null, lossDetected: false, applied: !dryRun && pausing })
       if (!dryRun && pausing) {
         try { await updateCampaignWithSync({ campaignId: s.campaignId, patch: { status: 'PAUSED' }, actor: `automation:rank-defend-${s.id}` as AdsActor, reason: 'rank schedule — pause target', applyImmediately: true } as never); applied++ } catch (e) { logger.warn('[rank-defend] pause failed', { scheduleId: s.id, error: (e as Error).message }) }
       }
       continue
     }
 
-    const decision = computeStep(spec, { currentPct: sig.currentPct, achievedISFraction: sig.topIS, achievedAcosFraction: sig.topAcos, lossDetected: false })
+    const loss = lossByCampaign.get(s.campaignId) ?? false
+    const decision = computeStep(spec, { currentPct: sig.currentPct, achievedISFraction: sig.topIS, achievedAcosFraction: sig.topAcos, lossDetected: loss })
     const willApply = !dryRun && (decision.action === 'raise' || decision.action === 'lower') && decision.nextPct !== sig.currentPct
-    decisions.push({ campaignId: s.campaignId, campaignName: camp.name, targetKey: key, action: decision.action, reason: decision.reason, currentPct: sig.currentPct, nextPct: decision.nextPct, achievedISPct: sig.topIS != null ? Math.round(sig.topIS * 100) : null, achievedAcosPct: sig.topAcos != null ? Math.round(sig.topAcos * 100) : null, applied: willApply })
+    decisions.push({ campaignId: s.campaignId, campaignName: camp.name, targetKey: key, action: decision.action, reason: decision.reason, currentPct: sig.currentPct, nextPct: decision.nextPct, achievedISPct: sig.topIS != null ? Math.round(sig.topIS * 100) : null, achievedAcosPct: sig.topAcos != null ? Math.round(sig.topAcos * 100) : null, lossDetected: loss, applied: willApply })
     if (willApply) {
       try { await applyTopOfSearch(s.campaignId, decision.nextPct); applied++ } catch (e) { logger.warn('[rank-defend] apply failed', { scheduleId: s.id, error: (e as Error).message }) }
     }

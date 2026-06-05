@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { resolveActiveTargetKey, computeStep, stepFor, type RankTargetSpec } from './rank-controller.js'
+import { resolveActiveTargetKey, computeStep, stepFor, isRankLoss, type RankTargetSpec } from './rank-controller.js'
 
 const T = (over: Partial<RankTargetSpec> = {}): RankTargetSpec => ({
   key: 'own-top', placement: 'PLACEMENT_TOP', targetISPct: 70, acosCapPct: 45,
@@ -102,4 +102,11 @@ describe('computeStep', () => {
     expect(stepFor(T())).toBe(15)
     expect(stepFor(T({ allOut: true }))).toBe(25)
   })
+})
+
+describe('isRankLoss (RS.6 hourly proxy)', () => {
+  it('sharp drop vs a meaningful baseline → loss', () => { expect(isRankLoss(1, 20)).toBe(true) })
+  it('within band → no loss', () => { expect(isRankLoss(15, 20)).toBe(false) })
+  it('tiny baseline → no loss (not enough confidence to act)', () => { expect(isRankLoss(0, 3)).toBe(false) })
+  it('exactly at the threshold → no loss (strict <)', () => { expect(isRankLoss(8, 20)).toBe(false) }) // 8 == 20*0.4
 })

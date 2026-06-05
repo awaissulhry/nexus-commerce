@@ -53,6 +53,16 @@ export function stepFor(target: RankTargetSpec): number {
   return target.allOut ? 25 : 15
 }
 
+// RS.6 — loss proxy. Amazon exposes no live rank, and TOS-IS is daily/sparse, so
+// the fastest "we're slipping" fingerprint is the campaign's own hourly
+// impressions cratering vs its recent baseline. Conservative on purpose: it needs
+// a meaningful baseline AND a sharp drop, so noise/low-volume hours don't trip it.
+export const LOSS_MIN_BASELINE = 5
+export const LOSS_THRESHOLD = 0.4
+export function isRankLoss(latestImpr: number, baselineImpr: number): boolean {
+  return baselineImpr >= LOSS_MIN_BASELINE && latestImpr < baselineImpr * LOSS_THRESHOLD
+}
+
 /**
  * The controller. Given the active target + observed signals, return the next
  * placement-bias %. allOut (or a null acosCap) => the ACOS ceiling is ignored.
