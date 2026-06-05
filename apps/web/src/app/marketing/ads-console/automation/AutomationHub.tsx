@@ -20,19 +20,15 @@ import { AUTOMATIONS, AUTOMATION_COUNT, buildRule, type AutomationDef } from './
 import { Configurator } from './Configurator'
 import { PLAYBOOKS, playbookAutomations } from './playbooks'
 import { cleanName } from './_icons'
-import { AnomalyTab } from './AnomalyTab'
+import { InsightsTab } from './InsightsTab'
 import { HarvestTab } from './HarvestTab'
 import { NegativeMiningTab } from './NegativeMiningTab'
-import { AnalyticsTab } from './AnalyticsTab'
 import { BuilderTab } from './BuilderTab'
 import { AutomationHome } from './AutomationHome'
 import { LibraryTab } from './LibraryTab'
-import { EfficiencyTab } from './EfficiencyTab'
 import { campaignHref } from './useCampaignMap'
 import { type CustomPlaybook } from './customPlaybooks'
 import { DaypartingTab } from './DaypartingTab'
-import { HealthTab } from './HealthTab'
-import { SovTab } from './SovTab'
 import { RetailTab } from './RetailTab'
 import { GuardrailsTab } from './GuardrailsTab'
 import { BudgetPacingTab } from './BudgetPacingTab'
@@ -309,17 +305,13 @@ export function AutomationHub({ initialRules, initialState }: { initialRules: Ru
         <div style={{ color: 'var(--ink2)', fontSize: 12, padding: '14px 2px' }}>Manual runs honour each rule’s dry-run setting — a dry-run rule only previews. Set targets &amp; thresholds per rule in the Active rules tab.</div>
       </div>}
 
+      {['insights', 'analytics', 'efficiency', 'anomaly', 'health', 'competitive'].includes(tab) && <InsightsTab initialView={tab === 'anomaly' ? 'anomalies' : (tab === 'analytics' || tab === 'insights') ? 'performance' : tab} />}
       {tab === 'dayparting' && <DaypartingTab />}
-      {tab === 'competitive' && <SovTab />}
       {tab === 'retail' && <RetailTab />}
       {tab === 'budget' && <BudgetPacingTab />}
       {tab === 'guardrails' && <GuardrailsTab />}
-      {tab === 'health' && <HealthTab />}
-      {(tab === 'analytics' || tab === 'insights') && <AnalyticsTab />}
-      {tab === 'efficiency' && <EfficiencyTab />}
       {(tab === 'composer' || tab === 'builder') && <BuilderTab onSaved={() => { void refetchRules() }} onGoActive={() => setTab('active')} />}
       {tab === 'rank' && <div className="az-empty" style={{ border: '1px solid var(--divider)', borderRadius: 10 }}>Rank Control now has its own workspace. <a className="az-link" href="/marketing/ads-console/rank">Open Rank Control →</a></div>}
-      {tab === 'anomaly' && <AnomalyTab />}
       {tab === 'harvest' && <HarvestTab />}
       {tab === 'negatives' && <NegativeMiningTab />}
 
