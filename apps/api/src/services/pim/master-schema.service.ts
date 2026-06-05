@@ -32,6 +32,9 @@ export interface MasterAttribute {
   type: 'text' | 'number' | 'select' | 'boolean'
   required: boolean
   allowedValues?: string[]
+  /** VL.1 — wire value → English display label, for enum/select attributes
+   *  (Amazon enum wire is canonical; this is the operator-facing English). */
+  optionLabels?: Record<string, string>
   group: string
   helpText?: string
   /** 'schema' = from the channel/category schema; 'mapping' = surfaced
@@ -119,18 +122,18 @@ export async function getMasterAttributeSchema(productId: string): Promise<{
   })
   if (!product) throw new Error(`Product ${productId} not found`)
   const productType = product.productType ?? null
+  const amazonMarkets = [
+    ...new Set(
+      product.channelListings
+        .filter((l) => l.channel === 'AMAZON' && l.marketplace)
+        .map((l) => l.marketplace as string),
+    ),
+  ]
 
   // Category fields from the registry (Amazon dynamic schema across the
   // product's Amazon markets, de-duped; hardcoded fallback merges in).
   const categoryFields: FieldDefinition[] = []
   if (productType) {
-    const amazonMarkets = [
-      ...new Set(
-        product.channelListings
-          .filter((l) => l.channel === 'AMAZON' && l.marketplace)
-          .map((l) => l.marketplace as string),
-      ),
-    ]
     const markets: (string | null)[] = amazonMarkets.length > 0 ? amazonMarkets : [null]
     const seen = new Set<string>()
     for (const mkt of markets) {
@@ -164,10 +167,32 @@ export async function getMasterAttributeSchema(productId: string): Promise<{
     }
   }
 
+  const attributes = buildMasterAttributes(categoryFields, ruleSources)
+
+  // VL.1 — attach English option labels to enum attributes. Amazon enum WIRE
+  // values are canonical across markets; the en_US enumNames give the
+  // operator-facing English label. Best-effort (SP-API may be unavailable →
+  // the UI falls back to the wire value).
+  const market = amazonMarkets[0]
+  if (productType && market && attributes.some((a) => a.allowedValues && a.allowedValues.length > 0)) {
+    try {
+      const { AmazonService } = await import('../marketplaces/amazon.service.js')
+      const { CategorySchemaService } = await import('../categories/schema-sync.service.js')
+      const svc = new CategorySchemaService(prisma as any, new AmazonService())
+      const labels = await svc.getEnglishEnumLabels(market, productType)
+      for (const a of attributes) {
+        const m = labels[a.key]
+        if (m && a.allowedValues && a.allowedValues.length > 0) a.optionLabels = m
+      }
+    } catch {
+      /* graceful — UI falls back to the wire value */
+    }
+  }
+
   return {
     productId: product.id,
     productType,
-    attributes: buildMasterAttributes(categoryFields, ruleSources),
+    attributes,
     hiddenKeys: [...NON_ATTRIBUTE_KEYS],
   }
 }

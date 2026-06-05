@@ -19,6 +19,7 @@ interface MasterAttribute {
   type: 'text' | 'number' | 'select' | 'boolean'
   required: boolean
   allowedValues?: string[]
+  optionLabels?: Record<string, string>
   group: string
   helpText?: string
   source: 'schema' | 'mapping'
@@ -284,7 +285,7 @@ function AttrField({ attr, value, onChange }: { attr: MasterAttribute; value: un
           <option value="">—</option>
           {attr.allowedValues.map((o) => (
             <option key={o} value={o}>
-              {o}
+              {attr.optionLabels?.[o] ?? o}
             </option>
           ))}
         </select>

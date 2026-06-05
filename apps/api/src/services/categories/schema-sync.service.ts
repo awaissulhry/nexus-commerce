@@ -62,6 +62,24 @@ interface AmazonProductTypeMeta {
   }>
 }
 
+/** VL.1 — extract {fieldKey: {wireValue: enumName}} from an Amazon JSON schema
+ *  (the array-wrapped `items.properties.value` enum/enumNames pattern). */
+function extractEnumLabels(schema: Record<string, unknown>): Record<string, Record<string, string>> {
+  const props = (schema?.properties ?? {}) as Record<string, any>
+  const out: Record<string, Record<string, string>> = {}
+  for (const [name, fs] of Object.entries(props)) {
+    const v = (fs?.items?.properties ?? {})?.value
+    const en = v?.enum
+    const names = v?.enumNames
+    if (Array.isArray(en) && Array.isArray(names) && en.length === names.length && en.length > 0) {
+      const m: Record<string, string> = {}
+      for (let i = 0; i < en.length; i++) m[String(en[i])] = String(names[i])
+      out[name] = m
+    }
+  }
+  return out
+}
+
 export class CategorySchemaService {
   constructor(
     private readonly prisma: PrismaClient,
@@ -92,6 +110,49 @@ export class CategorySchemaService {
   /** Force-refresh — bypasses cache, always hits the provider. */
   async refreshSchema(query: SchemaQuery) {
     return this.getSchema(query, { force: true })
+  }
+
+  // VL.1 — in-memory wire→English enum-label cache per (marketplace, productType).
+  private static enLabelCache = new Map<string, { at: number; labels: Record<string, Record<string, string>> }>()
+
+  /**
+   * VL.1 — wire→English enum-label map per field, fetched from the en_US schema.
+   * Amazon enum WIRE values are canonical (identical across markets); only the
+   * display (`enumNames`) localizes. So the en_US enumNames give the
+   * operator-facing English label for each canonical wire value. In-memory
+   * cached (24h); returns {} when SP-API is unavailable (caller falls back to
+   * the wire value).
+   */
+  async getEnglishEnumLabels(
+    marketplace: string,
+    productType: string,
+  ): Promise<Record<string, Record<string, string>>> {
+    const key = `${marketplace}:${productType}`
+    const hit = CategorySchemaService.enLabelCache.get(key)
+    if (hit && Date.now() - hit.at < TWENTY_FOUR_HOURS_MS) return hit.labels
+
+    let labels: Record<string, Record<string, string>> = {}
+    if (this.amazon.isConfigured()) {
+      try {
+        const sp = await (this.amazon as any).getClient()
+        const envelope = (await sp.callAPI({
+          operation: 'getDefinitionsProductType',
+          endpoint: 'productTypeDefinitions',
+          version: '2020-09-01',
+          path: { productType },
+          query: { marketplaceIds: [amazonMarketplaceId(marketplace)], requirements: 'LISTING', locale: 'en_US' },
+        })) as AmazonProductTypeMeta
+        const link = envelope?.schema?.link?.resource
+        if (link) {
+          const res = await fetch(link)
+          if (res.ok) labels = extractEnumLabels((await res.json()) as Record<string, unknown>)
+        }
+      } catch {
+        labels = {}
+      }
+    }
+    CategorySchemaService.enLabelCache.set(key, { at: Date.now(), labels })
+    return labels
   }
 
   // ── Internals ─────────────────────────────────────────────────────
