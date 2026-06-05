@@ -10,7 +10,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { Loader2, SlidersHorizontal, Plus, Wand2 } from 'lucide-react'
+import { Loader2, SlidersHorizontal, Plus, Wand2, Copy } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
 import { useFieldLinks } from '../_shared/cockpit-shell'
@@ -19,6 +19,7 @@ import FieldScopePopover, { type ScopeMember } from '../_shared/cockpit-shell/Fi
 import CatalogCascadeDrawer from '../_shared/cockpit-shell/CatalogCascadeDrawer'
 import RuleEditorDrawer from '../_shared/cockpit-shell/RuleEditorDrawer'
 import AutoMapModal from '../_shared/cockpit-shell/AutoMapModal'
+import CloneMappingModal from '../_shared/cockpit-shell/CloneMappingModal'
 import type { FieldSource } from '../_shared/cockpit-shell/contracts'
 
 interface MatrixCell {
@@ -126,6 +127,7 @@ export default function MappingTab({ product }: { product: MappingTabProduct }) 
     initial?: { channel: string; marketplace: string; fieldKey: string }
   }>({ open: false })
   const [autoMapOpen, setAutoMapOpen] = useState(false)
+  const [cloneOpen, setCloneOpen] = useState(false)
   const openCascade = useCallback(() => {
     const c: Record<string, unknown> = {}
     if (product.name) c.title = product.name
@@ -328,6 +330,14 @@ export default function MappingTab({ product }: { product: MappingTabProduct }) 
         </button>
         <button
           type="button"
+          onClick={() => setCloneOpen(true)}
+          title="Clone this product's mapping to other markets"
+          className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-2 py-1 font-medium text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800"
+        >
+          <Copy className="h-3 w-3" /> Clone
+        </button>
+        <button
+          type="button"
           onClick={openCascade}
           title="Preview + apply this product's master content across every mapped channel & market"
           className="inline-flex items-center gap-1 rounded-md border border-blue-200 bg-blue-50 px-2 py-1 font-medium text-blue-700 hover:bg-blue-100 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-300"
@@ -502,6 +512,14 @@ export default function MappingTab({ product }: { product: MappingTabProduct }) 
         productType={product.productType}
         open={autoMapOpen}
         onClose={() => setAutoMapOpen(false)}
+        onApplied={() => void load()}
+      />
+
+      <CloneMappingModal
+        coordinates={coords.map((c) => ({ channel: c.channel, marketplace: c.marketplace }))}
+        productType={product.productType}
+        open={cloneOpen}
+        onClose={() => setCloneOpen(false)}
         onApplied={() => void load()}
       />
     </div>
