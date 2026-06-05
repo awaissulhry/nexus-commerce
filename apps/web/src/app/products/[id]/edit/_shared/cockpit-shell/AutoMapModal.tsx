@@ -52,6 +52,9 @@ export default function AutoMapModal({ coordinates, productType, open, onClose, 
   const [aiBusy, setAiBusy] = useState(false)
   const [applying, setApplying] = useState(false)
   const [translate, setTranslate] = useState(true)
+  // BM.5 — write to the productType overlay (default) or the channel-wide
+  // default bucket (every productType then inherits these rules).
+  const [scope, setScope] = useState<'productType' | 'channel'>('productType')
   const [error, setError] = useState<string | null>(null)
 
   const qs = productType ? `?productType=${encodeURIComponent(productType)}` : ''
@@ -156,9 +159,10 @@ export default function AutoMapModal({ coordinates, productType, open, onClose, 
         ...(translate && TEXT_FIELD_RE.test(r.fieldKey) ? { transforms: [{ type: 'translate' }] } : {}),
       },
     }))
+    const applyQs = scope === 'channel' ? '' : qs // channel-wide → default bucket
     try {
       const res = await fetch(
-        `${getBackendUrl()}/api/pim/mappings/${coord.channel}/${coord.marketplace}/bulk${qs}`,
+        `${getBackendUrl()}/api/pim/mappings/${coord.channel}/${coord.marketplace}/bulk${applyQs}`,
         { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ rules }) },
       )
       const json = await res.json().catch(() => ({}))
@@ -174,7 +178,7 @@ export default function AutoMapModal({ coordinates, productType, open, onClose, 
     } finally {
       setApplying(false)
     }
-  }, [coord, rows, translate, qs, onApplied, onClose])
+  }, [coord, rows, translate, scope, qs, onApplied, onClose])
 
   if (!open) return null
 
@@ -193,7 +197,8 @@ export default function AutoMapModal({ coordinates, productType, open, onClose, 
               <Wand2 className="h-4 w-4 text-blue-500" /> Auto-map fields
             </div>
             <div className="mt-0.5 text-xs text-slate-500">
-              Review suggested rules + apply in one go{productType ? ` · for all ${productType}` : ''}.
+              Review suggested rules + apply in one go
+              {scope === 'channel' ? ' · channel-wide (all product types inherit)' : productType ? ` · for all ${productType}` : ''}.
             </div>
           </div>
           <button type="button" onClick={onClose} disabled={applying} aria-label="Close" className="rounded p-1 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200">
@@ -235,6 +240,20 @@ export default function AutoMapModal({ coordinates, productType, open, onClose, 
           <button type="button" onClick={() => setAll(() => false)} className="rounded px-1.5 py-1 text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800">
             Clear
           </button>
+          {productType && (
+            <>
+              <span className="mx-1 h-4 w-px bg-slate-200 dark:bg-slate-700" />
+              <select
+                value={scope}
+                onChange={(e) => setScope(e.target.value as 'productType' | 'channel')}
+                title="Where to write the accepted rules"
+                className="rounded border border-slate-300 bg-white px-1.5 py-1 dark:border-slate-700 dark:bg-slate-900"
+              >
+                <option value="productType">Apply to: {productType}</option>
+                <option value="channel">Apply to: all product types (channel-wide)</option>
+              </select>
+            </>
+          )}
           <label className="ml-auto inline-flex items-center gap-1.5 text-slate-600 dark:text-slate-400">
             <input type="checkbox" checked={translate} onChange={(e) => setTranslate(e.target.checked)} /> Auto-translate text fields
           </label>
