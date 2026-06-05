@@ -459,6 +459,8 @@
 .az-cr-sechd .x { display: flex; flex-direction: column; }
 .az-cr-sechd .x b { font-size: 14.5px; font-weight: 800; line-height: 1.2; }
 .az-cr-sechd .x span { color: var(--ink2); font-size: 12px; }
+.az-cr-note { display: flex; align-items: flex-start; gap: 6px; color: var(--ink2); font-size: 11.5px; line-height: 1.5; margin: 8px 2px 0; }
+.az-cr-note > svg { flex: none; margin-top: 2px; color: var(--ink3); }
 /* CR.2 — one quick placement-set (replaces the Simple-mode preset duplication) */
 .az-qrs { margin-bottom: 12px; }
 .az-qrs-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }

@@ -19,7 +19,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
-import { Crosshair, Search, ChevronRight, Undo2, Redo2, Layers, Zap, AlertTriangle, History as HistoryIcon } from 'lucide-react'
+import { Crosshair, Search, ChevronRight, Undo2, Redo2, Layers, Zap, AlertTriangle, History as HistoryIcon, Info } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { RankPlacementCockpit } from '../automation/RankPlacementCockpit'
 import { StagedChangesTray } from './StagedChangesTray'
@@ -180,6 +180,7 @@ export function UnifiedRankCockpit() {
             <div className="az-cr-sechd"><span className="n">1</span><div className="x"><b>Where you rank</b><span>Top-of-Search share + trend, and any self-competition to clear first.</span></div></div>
             <IntelligenceBanner campaignId={campaignId} market={market} />
             <RankTrend campaignId={campaignId} lookback={lookback} />
+            <div className="az-cr-note"><Info size={12} /> This is your Top-of-Search <b>share</b> — how often your ad wins a top slot — <b>not a fixed position</b>. Amazon&apos;s auction runs per search, so judge it on the trend over days, not a single search.</div>
           </section>
         )}
         {campaignId && (
