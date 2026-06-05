@@ -4569,13 +4569,13 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post('/advertising/schedules', async (request, reply) => {
     const b = request.body as Record<string, unknown>
     if (!b?.campaignId || !b?.name) { reply.status(400); return { error: 'campaignId, name required' } }
-    return prisma.adSchedule.create({ data: { campaignId: b.campaignId as string, name: b.name as string, windows: (b.windows as object) ?? [], timezone: (b.timezone as string) ?? 'Europe/Rome', enabled: (b.enabled as boolean) ?? true } })
+    return prisma.adSchedule.create({ data: { campaignId: b.campaignId as string, name: b.name as string, windows: (b.windows as object) ?? [], timezone: (b.timezone as string) ?? 'Europe/Rome', enabled: (b.enabled as boolean) ?? true, defaultTargetKey: (b.defaultTargetKey as string | null) ?? null } })
   })
   fastify.patch('/advertising/schedules/:id', async (request, reply) => {
     const { id } = request.params as { id: string }
     const b = request.body as Record<string, unknown>
     const data: Record<string, unknown> = {}
-    for (const k of ['name', 'windows', 'timezone', 'enabled']) if (b[k] !== undefined) data[k] = b[k]
+    for (const k of ['name', 'windows', 'timezone', 'enabled', 'defaultTargetKey']) if (b[k] !== undefined) data[k] = b[k]
     const before = await prisma.adSchedule.findUnique({ where: { id }, select: { campaignId: true, lastApplied: true } })
     if (!before) { reply.status(404); return { error: 'not found' } }
     // RC2.T3 reactivation safety: disabling a schedule that currently has the
@@ -4601,6 +4601,58 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     }
     try { await prisma.adSchedule.delete({ where: { id } }); return { ok: true } } catch { reply.status(404); return { error: 'not found' } }
   })
+
+  // ── RS.1 — Rank Targets (reusable rank GOALS for the schedule + baseline) ──
+  // "Rank" on Amazon = a Top-of-Search impression-share target held by bid-to-win.
+  // A target = placement + targetISPct + ACOS/CPC guardrails; the RS defend loop
+  // (RS.5) converges bids toward targetISPct, re-taking the slot if we lose it.
+  const BUILTIN_RANK_TARGETS = [
+    { key: 'own-top', name: 'Own Top of Search', placement: 'PLACEMENT_TOP', targetISPct: 70, acosCapPct: 45, biasPct: 100, pause: false, color: '#0a7d48', builtIn: true, sortOrder: 1 },
+    { key: 'defend-top', name: 'Defend Top', placement: 'PLACEMENT_TOP', targetISPct: 35, acosCapPct: 35, biasPct: 50, pause: false, color: '#3aa873', builtIn: true, sortOrder: 2 },
+    { key: 'rest-of-search', name: 'Rest of Search', placement: 'PLACEMENT_REST_OF_SEARCH', targetISPct: 10, acosCapPct: 30, biasPct: 0, pause: false, color: '#e6b067', builtIn: true, sortOrder: 3 },
+    { key: 'pause', name: 'Pause', placement: 'PLACEMENT_TOP', pause: true, color: '#d97757', builtIn: true, sortOrder: 4 },
+  ]
+  fastify.get('/advertising/rank-targets', async (_request, reply) => {
+    reply.header('Cache-Control', 'private, max-age=15')
+    // Lazy-seed the built-ins (idempotent; update never overwrites operator tuning).
+    for (const t of BUILTIN_RANK_TARGETS) {
+      try { await prisma.rankTarget.upsert({ where: { key: t.key }, update: { builtIn: true }, create: t as never }) } catch { /* race-safe */ }
+    }
+    const items = await prisma.rankTarget.findMany({ orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }] })
+    return { items, count: items.length }
+  })
+  fastify.post('/advertising/rank-targets', async (request, reply) => {
+    const b = request.body as Record<string, unknown>
+    if (!b?.name) { reply.status(400); return { error: 'name required' } }
+    const key = (b.key as string) || `custom-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`
+    const data = {
+      key, name: b.name as string,
+      placement: (b.placement as string) ?? 'PLACEMENT_TOP',
+      targetISPct: (b.targetISPct as number | null) ?? null,
+      acosCapPct: (b.acosCapPct as number | null) ?? null,
+      maxCpcCents: (b.maxCpcCents as number | null) ?? null,
+      biasPct: (b.biasPct as number | null) ?? null,
+      pause: !!b.pause, color: (b.color as string | null) ?? null,
+      builtIn: false, sortOrder: (b.sortOrder as number) ?? 50,
+    }
+    try { return await prisma.rankTarget.create({ data: data as never }) } catch { reply.status(409); return { error: 'key_taken' } }
+  })
+  fastify.patch('/advertising/rank-targets/:id', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const b = request.body as Record<string, unknown>
+    const data: Record<string, unknown> = {}
+    for (const k of ['name', 'placement', 'targetISPct', 'acosCapPct', 'maxCpcCents', 'biasPct', 'pause', 'color', 'sortOrder']) if (b[k] !== undefined) data[k] = b[k]
+    try { return await prisma.rankTarget.update({ where: { id }, data }) } catch { reply.status(404); return { error: 'not found' } }
+  })
+  fastify.delete('/advertising/rank-targets/:id', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const t = await prisma.rankTarget.findUnique({ where: { id }, select: { builtIn: true } })
+    if (!t) { reply.status(404); return { error: 'not found' } }
+    if (t.builtIn) { reply.status(409); return { error: 'builtin_protected' } }
+    await prisma.rankTarget.delete({ where: { id } })
+    return { ok: true }
+  })
+
   fastify.post('/advertising/dayparting/run-now', async (_request, reply) => {
     const { runDaypartingOnce } = await import('../jobs/ad-dayparting.job.js')
     try { return await runDaypartingOnce() } catch (e) { reply.status(500); return { error: (e as Error)?.message } }

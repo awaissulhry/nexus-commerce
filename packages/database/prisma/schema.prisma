@@ -12423,12 +12423,17 @@ model AdSchedule {
   campaignId      String // local Campaign.id
   name            String
   // Active windows the campaign SHOULD deliver in. JSON:
-  // [{ days:[0-6], startHour:0-23, endHour:0-23, bidMultiplierPct?:number }]
-  // bidMultiplierPct: +30 raises bids 30% on window-enter, restores on exit.
+  // [{ days:[0-6], startHour:0-23, endHour:0-23, bidMultiplierPct?:number, targetKey?:string }]
+  // bidMultiplierPct: +30 raises bids 30% on window-enter, restores on exit (legacy intensity mode).
+  // RS.1 — targetKey: references a RankTarget.key (goal mode); the engine holds that
+  // target's impression-share during the window. A window may carry either form.
   // Empty = always on (no-op schedule).
   windows         Json      @default("[]")
   timezone        String    @default("Europe/Rome")
   enabled         Boolean   @default(true)
+  // RS.1 — baseline RankTarget.key for time OUTSIDE every window ("for the rest, hold Y").
+  // null = legacy behaviour (no baseline; gaps mean paused).
+  defaultTargetKey String?
   // Last status the cron applied, to avoid redundant writes/churn.
   lastApplied     String? // ENABLED | PAUSED
   lastEvaluatedAt DateTime?
@@ -12441,6 +12446,30 @@ model AdSchedule {
 
   @@index([campaignId])
   @@index([enabled])
+}
+
+// RS.1 — a named, reusable rank GOAL ("Own Top of Search", "Defend", "Rest of
+// Search", "Pause"). Dropped onto AdSchedule windows (by key) and used as a
+// schedule baseline. "Rank" on Amazon = a Top-of-Search impression-share target
+// held by bid-to-win, so a target is {placement + targetIS + ACOS/CPC guardrails};
+// the RS closed loop (RS.5) converges bids toward targetISPct within the caps.
+model RankTarget {
+  id          String   @id @default(cuid())
+  key         String   @unique // slug: own-top | defend-top | rest-of-search | pause | custom-…
+  name        String
+  // PLACEMENT_TOP | PLACEMENT_REST_OF_SEARCH | PLACEMENT_PRODUCT_PAGE
+  placement   String   @default("PLACEMENT_TOP")
+  targetISPct Int? // target Top-of-Search impression share % (0-100); null = no IS target
+  acosCapPct  Int? // ACOS ceiling % the loop must respect; null = use campaign/global default
+  maxCpcCents Int? // hard bid ceiling the loop may set; null = use CPC-ceiling guardrail
+  biasPct     Int? // starting placement-bias % (0-900) applied on entry
+  pause       Boolean  @default(false) // this target = pause delivery in the window
+  color       String? // UI swatch (hex)
+  builtIn     Boolean  @default(false) // seeded preset — not user-deletable
+  sortOrder   Int      @default(0)
+  createdBy   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
 
 // AX3.4 — AMC-style no-SQL audience definitions. Operators compose audiences
