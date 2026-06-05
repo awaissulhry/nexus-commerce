@@ -29,7 +29,7 @@ import { ConquestStation } from './ConquestStation'
 import { AutomateStation } from './AutomateStation'
 import { KeywordBidStation } from './KeywordBidStation'
 import { BulkApplyStation } from './BulkApplyStation'
-import { SimpleRankPanel } from './SimpleRankPanel'
+import { QuickRankSet } from './QuickRankSet'
 import { CommandPalette, type CmdAction } from './CommandPalette'
 import { IntelligenceBanner } from './IntelligenceBanner'
 import { RankTrend } from './RankTrend'
@@ -51,7 +51,6 @@ export function UnifiedRankCockpit() {
   const [pending, setPending] = useState(0)
   const [trayOpen, setTrayOpen] = useState(false)
   const [trayTab, setTrayTab] = useState<'staged' | 'history'>('staged')
-  const [simple, setSimple] = useState(false)
   const [cmdkOpen, setCmdkOpen] = useState(false)
   const [statusFilter, setStatusFilter] = useState<'active' | 'inactive' | 'all'>('active')
 
@@ -160,12 +159,6 @@ export function UnifiedRankCockpit() {
           </div>
         </>)}
         <span className="sp" />
-        {view === 'cockpit' && (
-          <span className="az-mode-seg az-urc-seg" role="tablist" aria-label="View mode">
-            <button type="button" role="tab" aria-selected={simple} className={simple ? 'on' : ''} onClick={() => setSimple(true)}>Simple</button>
-            <button type="button" role="tab" aria-selected={!simple} className={!simple ? 'on' : ''} onClick={() => setSimple(false)}>Full</button>
-          </span>
-        )}
         <span className={`az-urc-chip ${tone}`} title="Global automation posture (all advertising rules)">{tone === 'off' ? <AlertTriangle size={12} /> : <Zap size={12} />} {autonomyLabel}</span>
         {view === 'cockpit' && (
           <div className="az-urc-undo">
@@ -196,22 +189,19 @@ export function UnifiedRankCockpit() {
           </section>
         )}
 
-        {simple ? (
-          <SimpleRankPanel market={market} campaignId={campaignId} campaignName={campaign?.name ?? 'this campaign'} onFull={() => setSimple(false)} onChanged={loadPending} />
-        ) : (<>
-          <section className="az-cr-sec">
-            <div className="az-cr-sechd"><span className="n">3</span><div className="x"><b>Adjust placement &amp; bids</b><span>Fine-tune where this campaign competes and what it pays.</span></div></div>
-            <RankPlacementCockpit market={market} campaignId={campaignId} lookbackDays={lookback} onMarketChange={setMarket} onCampaignChange={setCampaignId} hideScopeBar hideKeywordManager />
-            {campaignId && <StrategyStation campaignId={campaignId} currentStrategy={campaign?.biddingStrategy ?? null} onChanged={loadPending} />}
-            {campaignId && <KeywordBidStation campaignId={campaignId} onChanged={loadPending} />}
-            {campaignId && <ConquestStation campaignId={campaignId} onChanged={loadPending} />}
-          </section>
-          <section className="az-cr-sec">
-            <div className="az-cr-sechd"><span className="n">4</span><div className="x"><b>Automate &amp; apply</b><span>Hands-off rules, and apply across multiple campaigns at once.</span></div></div>
-            <AutomateStation market={market} onChanged={loadPending} />
-            <BulkApplyStation campaigns={inMarketStatus} market={market} onChanged={loadPending} />
-          </section>
-        </>)}
+        <section className="az-cr-sec">
+          <div className="az-cr-sechd"><span className="n">3</span><div className="x"><b>Adjust placement &amp; bids</b><span>Quick-set the push, or fine-tune the placement ladder &amp; bids below.</span></div></div>
+          {campaignId && <QuickRankSet campaignId={campaignId} onChanged={loadPending} />}
+          <RankPlacementCockpit market={market} campaignId={campaignId} lookbackDays={lookback} onMarketChange={setMarket} onCampaignChange={setCampaignId} hideScopeBar hideKeywordManager />
+          {campaignId && <StrategyStation campaignId={campaignId} currentStrategy={campaign?.biddingStrategy ?? null} onChanged={loadPending} />}
+          {campaignId && <KeywordBidStation campaignId={campaignId} onChanged={loadPending} />}
+          {campaignId && <ConquestStation campaignId={campaignId} onChanged={loadPending} />}
+        </section>
+        <section className="az-cr-sec">
+          <div className="az-cr-sechd"><span className="n">4</span><div className="x"><b>Automate &amp; apply</b><span>Hands-off rules, and apply across multiple campaigns at once.</span></div></div>
+          <AutomateStation market={market} onChanged={loadPending} />
+          <BulkApplyStation campaigns={inMarketStatus} market={market} onChanged={loadPending} />
+        </section>
 
         {/* ── Footer: staged-changes tray + history (RC4.5 / RC4.6) ── */}
         <div className="az-urc-foot">
@@ -231,7 +221,6 @@ export function UnifiedRankCockpit() {
         campaigns={inMarketStatus}
         onPick={(id, mk) => setParams(mk ? { market: mk, campaignId: id } : { campaignId: id })}
         actions={[
-          { id: 'simple', label: simple ? 'Switch to Full view' : 'Switch to Simple view', run: () => setSimple(v => !v) },
           { id: 'staged', label: 'Open staged changes', run: () => { setTrayTab('staged'); setTrayOpen(true) } },
           { id: 'history', label: 'Open change history', run: () => { setTrayTab('history'); setTrayOpen(true) } },
           { id: 'undo', label: 'Undo last change', run: () => void undo() },
