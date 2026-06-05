@@ -20,6 +20,7 @@ interface MasterAttribute {
   required: boolean
   allowedValues?: string[]
   optionLabels?: Record<string, string>
+  localizedByMarket?: Record<string, Record<string, string>>
   group: string
   helpText?: string
   source: 'schema' | 'mapping'
@@ -307,6 +308,15 @@ function AttrField({ attr, value, onChange }: { attr: MasterAttribute; value: un
           className="h-8 text-sm"
         />
       )}
+      {attr.type === 'select' && attr.localizedByMarket && value ? (
+        <div className="flex flex-wrap gap-x-2 gap-y-0.5 text-[10px] text-zinc-400 dark:text-zinc-500" title="What each market displays for this value (Amazon auto-localizes)">
+          {Object.entries(attr.localizedByMarket).map(([mkt, m]) => (
+            <span key={mkt}>
+              {mkt} → {m[String(value)] ?? String(value)}
+            </span>
+          ))}
+        </div>
+      ) : null}
     </div>
   )
 }

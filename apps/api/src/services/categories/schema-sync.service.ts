@@ -155,6 +155,18 @@ export class CategorySchemaService {
     return labels
   }
 
+  /** VL.2 — wire→localized enum-label map per field, from the CACHED market
+   *  schema (no SP-API fetch). Powers the per-market display preview
+   *  ("IT → Impermeabile"). Returns {} when the market schema isn't cached. */
+  async getLocalizedEnumLabels(
+    marketplace: string,
+    productType: string,
+  ): Promise<Record<string, Record<string, string>>> {
+    const row = await this.findLatestCache({ channel: 'AMAZON', marketplace, productType })
+    const def = (row?.schemaDefinition ?? null) as Record<string, unknown> | null
+    return def ? extractEnumLabels(def) : {}
+  }
+
   // ── Internals ─────────────────────────────────────────────────────
 
   private async findFreshCache(query: SchemaQuery) {

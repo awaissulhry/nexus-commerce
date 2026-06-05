@@ -35,6 +35,9 @@ export interface MasterAttribute {
   /** VL.1 — wire value → English display label, for enum/select attributes
    *  (Amazon enum wire is canonical; this is the operator-facing English). */
   optionLabels?: Record<string, string>
+  /** VL.2 — per-market localized display: { IT: { wire: "Impermeabile" } } —
+   *  for the "each market shows…" preview. Small enums only. */
+  localizedByMarket?: Record<string, Record<string, string>>
   group: string
   helpText?: string
   /** 'schema' = from the channel/category schema; 'mapping' = surfaced
@@ -179,10 +182,23 @@ export async function getMasterAttributeSchema(productId: string): Promise<{
       const { AmazonService } = await import('../marketplaces/amazon.service.js')
       const { CategorySchemaService } = await import('../categories/schema-sync.service.js')
       const svc = new CategorySchemaService(prisma as any, new AmazonService())
-      const labels = await svc.getEnglishEnumLabels(market, productType)
+      // VL.1 — English option labels (en_US enumNames; wire is canonical).
+      const english = await svc.getEnglishEnumLabels(market, productType)
       for (const a of attributes) {
-        const m = labels[a.key]
-        if (m && a.allowedValues && a.allowedValues.length > 0) a.optionLabels = m
+        if (a.allowedValues && a.allowedValues.length > 0 && english[a.key]) a.optionLabels = english[a.key]
+      }
+      // VL.2 — per-market localized display preview (cached schemas, no fetch;
+      // small enums only to keep the payload lean).
+      for (const mkt of amazonMarkets) {
+        const loc = await svc.getLocalizedEnumLabels(mkt, productType)
+        for (const a of attributes) {
+          if (!a.allowedValues || a.allowedValues.length === 0 || a.allowedValues.length > 40) continue
+          const m = loc[a.key]
+          if (m) {
+            a.localizedByMarket = a.localizedByMarket ?? {}
+            a.localizedByMarket[mkt] = m
+          }
+        }
       }
     } catch {
       /* graceful — UI falls back to the wire value */
