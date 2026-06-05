@@ -393,6 +393,79 @@ export async function upsertFieldMapping(
   return next
 }
 
+/** BM.1 — Pure: merge N rules into a mapping (default bucket or productType
+ *  overlay), preserving every other field/type. Exposed for unit tests. */
+export function mergeRulesIntoMapping(
+  current: MarketplaceSchemaMapping,
+  rules: Array<{ fieldKey: string; rule: FieldMappingRule }>,
+  productType?: string | null,
+): MarketplaceSchemaMapping {
+  if (productType) {
+    const byProductType = current.byProductType ?? {}
+    const bucket = { ...(byProductType[productType] ?? {}) }
+    for (const { fieldKey, rule } of rules) bucket[fieldKey] = rule
+    return { ...current, byProductType: { ...byProductType, [productType]: bucket } }
+  }
+  const fields = { ...current.fields }
+  for (const { fieldKey, rule } of rules) fields[fieldKey] = rule
+  return { ...current, fields }
+}
+
+/** BM.1 — Pure: remove N fieldKeys from a mapping bucket. */
+export function removeRulesFromMapping(
+  current: MarketplaceSchemaMapping,
+  fieldKeys: string[],
+  productType?: string | null,
+): MarketplaceSchemaMapping {
+  const drop = new Set(fieldKeys)
+  if (productType) {
+    const byProductType = current.byProductType ?? {}
+    const bucket = { ...(byProductType[productType] ?? {}) }
+    for (const k of drop) delete bucket[k]
+    return { ...current, byProductType: { ...byProductType, [productType]: bucket } }
+  }
+  const fields = { ...current.fields }
+  for (const k of drop) delete fields[k]
+  return { ...current, fields }
+}
+
+/** BM.1 — Upsert N field rules in ONE row update (one revision). Validates
+ *  all upfront; throws InvalidMappingError naming every offending field. */
+export async function bulkUpsertFieldMappings(
+  channel: string,
+  code: string,
+  rules: Array<{ fieldKey: string; rule: FieldMappingRule }>,
+  productType?: string | null,
+): Promise<{ count: number; mapping: MarketplaceSchemaMapping }> {
+  const errors: string[] = []
+  for (const { fieldKey, rule } of rules) errors.push(...validateFieldRule(fieldKey, rule))
+  if (errors.length > 0) throw new InvalidMappingError(errors)
+
+  const current = await getMappingForMarketplace(channel, code)
+  const next = mergeRulesIntoMapping(current, rules, productType)
+  await prisma.marketplace.update({
+    where: { channel_code: { channel, code } },
+    data: { schemaMapping: next as unknown as object },
+  })
+  return { count: rules.length, mapping: next }
+}
+
+/** BM.1 — Remove N field rules in one row update. */
+export async function bulkRemoveFieldMappings(
+  channel: string,
+  code: string,
+  fieldKeys: string[],
+  productType?: string | null,
+): Promise<{ count: number; mapping: MarketplaceSchemaMapping }> {
+  const current = await getMappingForMarketplace(channel, code)
+  const next = removeRulesFromMapping(current, fieldKeys, productType)
+  await prisma.marketplace.update({
+    where: { channel_code: { channel, code } },
+    data: { schemaMapping: next as unknown as object },
+  })
+  return { count: fieldKeys.length, mapping: next }
+}
+
 /** Remove one field's mapping rule. No-op if the field wasn't mapped.
  *  Returns the post-removal mapping. */
 export async function removeFieldMapping(

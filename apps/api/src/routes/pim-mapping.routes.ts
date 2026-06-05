@@ -32,6 +32,8 @@ import {
   getRulesFor,
   upsertFieldMapping,
   removeFieldMapping,
+  bulkUpsertFieldMappings,
+  bulkRemoveFieldMappings,
   validateFieldRule,
   MarketplaceNotFoundError,
   InvalidMappingError,
@@ -462,6 +464,64 @@ const pimMappingRoutes: FastifyPluginAsync = async (fastify) => {
       }
     },
   )
+
+  // ── POST /pim/mappings/:channel/:code/bulk ──────────────────────
+  // BM.1 — upsert many rules in one revision (the auto-map apply path).
+  fastify.post<{
+    Params: { channel: string; code: string }
+    Querystring: { productType?: string }
+    Body: { rules: Array<{ fieldKey: string; rule: FieldMappingRule }> }
+  }>('/pim/mappings/:channel/:code/bulk', async (request, reply) => {
+    const { channel, code } = request.params
+    const productType = request.query.productType?.trim() || undefined
+    const rules = request.body?.rules
+    if (!Array.isArray(rules) || rules.length === 0) {
+      return reply.status(400).send({ error: 'rules (non-empty array of { fieldKey, rule }) is required' })
+    }
+    if (rules.length > 500) return reply.status(400).send({ error: 'Max 500 rules per call' })
+    try {
+      await recordMappingRevision(channel, code, {
+        changedBy: (request as any).user?.id ?? null,
+        reason: `bulk upsert ${rules.length}${productType ? ` [${productType}]` : ''}`,
+      }).catch((e) => request.log.warn({ e }, 'recordMappingRevision failed (non-blocking)'))
+      const result = await bulkUpsertFieldMappings(channel, code, rules, productType)
+      return reply.send({ ok: true, count: result.count })
+    } catch (err: any) {
+      if (err instanceof InvalidMappingError) {
+        return reply.status(400).send({ error: 'invalid_rules', details: err.errors })
+      }
+      if (err instanceof MarketplaceNotFoundError) return reply.status(404).send({ error: err.message })
+      request.log.error({ err }, 'bulk mapping upsert failed')
+      return reply.status(500).send({ error: err?.message ?? 'bulk upsert failed' })
+    }
+  })
+
+  // ── DELETE /pim/mappings/:channel/:code/bulk ────────────────────
+  // BM.1 — remove many rules in one revision (bulk clear).
+  fastify.delete<{
+    Params: { channel: string; code: string }
+    Querystring: { productType?: string }
+    Body: { fieldKeys: string[] }
+  }>('/pim/mappings/:channel/:code/bulk', async (request, reply) => {
+    const { channel, code } = request.params
+    const productType = request.query.productType?.trim() || undefined
+    const fieldKeys = request.body?.fieldKeys
+    if (!Array.isArray(fieldKeys) || fieldKeys.length === 0) {
+      return reply.status(400).send({ error: 'fieldKeys (non-empty array) is required' })
+    }
+    try {
+      await recordMappingRevision(channel, code, {
+        changedBy: (request as any).user?.id ?? null,
+        reason: `bulk remove ${fieldKeys.length}${productType ? ` [${productType}]` : ''}`,
+      }).catch((e) => request.log.warn({ e }, 'recordMappingRevision failed (non-blocking)'))
+      const result = await bulkRemoveFieldMappings(channel, code, fieldKeys, productType)
+      return reply.send({ ok: true, count: result.count })
+    } catch (err: any) {
+      if (err instanceof MarketplaceNotFoundError) return reply.status(404).send({ error: err.message })
+      request.log.error({ err }, 'bulk mapping remove failed')
+      return reply.status(500).send({ error: err?.message ?? 'bulk remove failed' })
+    }
+  })
 
   // ── GET /pim/mappings/coverage ──────────────────────────────────
   // FM.13 — cross-market coverage matrix (% mapped, required-unmapped per
