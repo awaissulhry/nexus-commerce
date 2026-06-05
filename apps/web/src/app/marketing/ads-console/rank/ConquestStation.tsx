@@ -75,6 +75,7 @@ export function ConquestStation({ campaignId, onChanged }: { campaignId: string;
                 <button type="button" className="az-btn dark" disabled={busy || !adGroupId || parsed.valid.length === 0} onClick={() => void create()}>{busy ? <><Loader2 size={14} className="az-spin" /> …</> : <><Check size={14} /> Target {parsed.valid.length || ''}</>}</button>
               </div>
               {msg && <div className="az-cockpit-sub" style={{ marginTop: 6 }}>{msg}</div>}
+              <div className="az-cockpit-note" style={{ marginTop: 8 }}>How it works: each ASIN becomes a <b>Product target</b> in the chosen ad group, so your ad shows on that competitor&apos;s product page (the Sponsored slot) and you pay per click at the bid above. Staged until you open the write-gate.</div>
             </>)}
         </div>
       )}

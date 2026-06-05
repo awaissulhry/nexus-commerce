@@ -189,8 +189,9 @@ export interface RankCockpitProps {
   onMarketChange?: (m: string) => void
   onCampaignChange?: (id: string) => void
   hideScopeBar?: boolean
+  hideKeywordManager?: boolean
 }
-export function RankPlacementCockpit({ market: ctxMarket, campaignId: ctxCampaignId, lookbackDays, onMarketChange, onCampaignChange, hideScopeBar }: RankCockpitProps = {}) {
+export function RankPlacementCockpit({ market: ctxMarket, campaignId: ctxCampaignId, lookbackDays, onMarketChange, onCampaignChange, hideScopeBar, hideKeywordManager }: RankCockpitProps = {}) {
   const WINDOW_DAYS = lookbackDays ?? DEFAULT_WINDOW_DAYS
   const [campaigns, setCampaigns] = useState<Camp[]>([])
   const [marketState, setMarketState] = useState('IT')
@@ -1108,7 +1109,7 @@ export function RankPlacementCockpit({ market: ctxMarket, campaignId: ctxCampaig
       </div>
 
       {/* ── R3: bulk keyword manager ─────────────────────────────── */}
-      <div className="az-kwmgr">
+      {!hideKeywordManager && (<div className="az-kwmgr">
         <div className="az-kwmgr-head"><ListPlus size={15} /> Keywords{campaign ? <> · <span className="cn">{campaign.name}</span></> : ''}<span style={{ flex: 1 }} /><span className="ct">{targetsLoading ? 'Loading…' : `${targets.length} active`}</span></div>
         <div className="az-kwmgr-grid">
           {/* Add — paste → bid-to-win → add */}
@@ -1164,7 +1165,7 @@ export function RankPlacementCockpit({ market: ctxMarket, campaignId: ctxCampaig
             </div>
           </div>
         </div>
-      </div>
+      </div>)}
     </div>
   )
 }

@@ -618,6 +618,17 @@
 .az-kwb-table td.l { color: var(--ink); font-weight: 500; }
 .az-kwb-table td.up { color: #1e7a4f; font-weight: 700; }
 .az-kwb-table td.e { text-align: center; color: var(--ink3); padding: 14px; }
+.az-kwb-table .sub2 { font-size: 10.5px; color: var(--ink3); text-transform: capitalize; }
+.az-kwb-table td .dim { color: var(--ink3); }
+/* RC4.14 — add-keyword sub-section */
+.az-kwb-add { border: 1px solid var(--divider); border-radius: 9px; background: var(--bg2); padding: 12px; margin-bottom: 14px; }
+.az-kwb-addhd { display: flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 800; color: var(--navy); margin-bottom: 8px; }
+.az-kwb-add .az-cq-ta { background: #fff; }
+.az-kwb-addrow { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 10px; }
+.az-kwb-addrow label { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; color: var(--ink2); }
+.az-kwb-addrow label input[type="number"] { width: 64px; border: 1px solid var(--border); border-radius: 6px; padding: 4px 7px; font: inherit; font-weight: 700; text-align: right; }
+.az-kwb-addrow label select { border: 1px solid var(--border); border-radius: 6px; padding: 5px 8px; font: inherit; cursor: pointer; }
+.az-kwb-addrow .az-strat-btn { padding: 4px 9px; font-size: 11.5px; }
 
 /* RC4.11 — bulk apply station */
 .az-bulk-camps { margin-bottom: 12px; }
