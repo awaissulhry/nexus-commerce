@@ -92,7 +92,7 @@ export default function MasterAttributesEditor({ productId, value, onChange, onR
   }, [filtered])
 
   const filledCount = (schema ?? []).filter((a) => isFilled(value[a.key])).length
-  const requiredMissing = (schema ?? []).filter((a) => a.required && !isFilled(value[a.key])).length
+  const missingRequired = (schema ?? []).filter((a) => a.required && !isFilled(value[a.key]))
 
   if (loading) {
     return (
@@ -113,9 +113,27 @@ export default function MasterAttributesEditor({ productId, value, onChange, onR
             </div>
             <span className="text-xs text-zinc-500">
               {filledCount}/{schema!.length} filled
-              {requiredMissing > 0 && <span className="ml-1 text-rose-500">· {requiredMissing} required missing</span>}
+              {missingRequired.length > 0 && <span className="ml-1 text-rose-500">· {missingRequired.length} required missing</span>}
             </span>
           </div>
+          {missingRequired.length > 0 ? (
+            <div className="flex flex-wrap items-center gap-1 text-[11px]">
+              <span className="text-rose-500">Required missing:</span>
+              {missingRequired.map((a) => (
+                <button
+                  key={a.key}
+                  type="button"
+                  onClick={() => setQ(a.label)}
+                  title="Jump to this field"
+                  className="rounded bg-rose-50 px-1.5 py-0.5 text-rose-600 hover:bg-rose-100 dark:bg-rose-950/40 dark:text-rose-300"
+                >
+                  {a.label}
+                </button>
+              ))}
+            </div>
+          ) : (
+            filledCount > 0 && <div className="text-[11px] text-emerald-600 dark:text-emerald-400">✓ All required attributes filled</div>
+          )}
           {groups.map(([group, attrs]) => (
             <div key={group} className="space-y-2">
               <div className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400">{group}</div>

@@ -25,6 +25,7 @@ import { resolveAttributes } from '../services/pim/attribute-resolver.js'
 import { applyCatalogCascade } from '../services/pim/apply-mapping.service.js'
 import { getMasterAttributeSchema } from '../services/pim/master-schema.service.js'
 import { proposeImportFromChannel } from '../services/pim/reverse-mapping.service.js'
+import { getMasterCompleteness } from '../services/pim/master-completeness.service.js'
 
 // ────────────────────────────────────────────────────────────────────
 // Types
@@ -259,6 +260,21 @@ const pimGlobalRoutes: FastifyPluginAsync = async (fastify) => {
         if (/not found|no .* listing/i.test(err?.message ?? '')) return reply.status(404).send({ error: err.message })
         request.log.error({ err }, 'import-from-channel failed')
         return reply.status(500).send({ error: err?.message ?? 'import-from-channel failed' })
+      }
+    },
+  )
+
+  // ── GET /products/:id/master/completeness ───────────────────────
+  // MA.4 — overall + required-attribute completeness for governance.
+  fastify.get<{ Params: { id: string } }>(
+    '/products/:id/master/completeness',
+    async (request, reply) => {
+      try {
+        return reply.send(await getMasterCompleteness(request.params.id))
+      } catch (err: any) {
+        if (/not found/i.test(err?.message ?? '')) return reply.status(404).send({ error: err.message })
+        request.log.error({ err }, 'master completeness failed')
+        return reply.status(500).send({ error: err?.message ?? 'completeness failed' })
       }
     },
   )
