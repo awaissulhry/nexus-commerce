@@ -26,6 +26,7 @@ import { applyCatalogCascade } from '../services/pim/apply-mapping.service.js'
 import { getMasterAttributeSchema } from '../services/pim/master-schema.service.js'
 import { proposeImportFromChannel } from '../services/pim/reverse-mapping.service.js'
 import { getMasterCompleteness } from '../services/pim/master-completeness.service.js'
+import { suggestMasterAttributes } from '../services/pim/master-ai-fill.service.js'
 
 // ────────────────────────────────────────────────────────────────────
 // Types
@@ -275,6 +276,22 @@ const pimGlobalRoutes: FastifyPluginAsync = async (fastify) => {
         if (/not found/i.test(err?.message ?? '')) return reply.status(404).send({ error: err.message })
         request.log.error({ err }, 'master completeness failed')
         return reply.status(500).send({ error: err?.message ?? 'completeness failed' })
+      }
+    },
+  )
+
+  // ── POST /products/:id/master/ai-fill ───────────────────────────
+  // MA.5 — AI-infer empty master attributes from the product context.
+  // Review-gated; caller applies accepted values via PATCH /global.
+  fastify.post<{ Params: { id: string } }>(
+    '/products/:id/master/ai-fill',
+    async (request, reply) => {
+      try {
+        return reply.send(await suggestMasterAttributes(request.params.id))
+      } catch (err: any) {
+        if (/not found/i.test(err?.message ?? '')) return reply.status(404).send({ error: err.message })
+        request.log.error({ err }, 'master ai-fill failed')
+        return reply.status(500).send({ error: err?.message ?? 'ai-fill failed' })
       }
     },
   )

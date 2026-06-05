@@ -8,7 +8,7 @@
 // keys stay editable via the embedded TechAttrsEditor escape hatch.
 
 import { useEffect, useMemo, useState } from 'react'
-import { Loader2, Search } from 'lucide-react'
+import { Loader2, Search, Sparkles } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { Input } from '@/components/ui/Input'
 import TechAttrsEditor from './TechAttrsEditor'
@@ -39,6 +39,10 @@ export default function MasterAttributesEditor({ productId, value, onChange, onR
   const [schema, setSchema] = useState<MasterAttribute[] | null>(null)
   const [loading, setLoading] = useState(true)
   const [q, setQ] = useState('')
+  const [aiBusy, setAiBusy] = useState(false)
+  const [aiSugg, setAiSugg] = useState<{ key: string; label: string; value: string; confidence: string; reason: string }[] | null>(null)
+  const [aiAccept, setAiAccept] = useState<Set<string>>(new Set())
+  const [aiErr, setAiErr] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -66,6 +70,44 @@ export default function MasterAttributesEditor({ productId, value, onChange, onR
     if (!isFilled(v)) delete next[key]
     else next[key] = v
     onChange(next)
+  }
+
+  const runAiFill = async () => {
+    setAiBusy(true)
+    setAiErr(null)
+    setAiSugg(null)
+    try {
+      const res = await fetch(`${getBackendUrl()}/api/products/${productId}/master/ai-fill`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: '{}',
+      })
+      const json = await res.json()
+      if (!res.ok) {
+        setAiErr(json?.error ?? `HTTP ${res.status}`)
+        return
+      }
+      const s = json.suggestions ?? []
+      if (s.length === 0) {
+        setAiErr(json.reason ?? 'No suggestions.')
+        return
+      }
+      setAiSugg(s)
+      setAiAccept(new Set(s.filter((x: { confidence: string }) => x.confidence === 'high').map((x: { key: string }) => x.key)))
+    } catch (e) {
+      setAiErr(e instanceof Error ? e.message : String(e))
+    } finally {
+      setAiBusy(false)
+    }
+  }
+
+  const applyAi = () => {
+    if (!aiSugg) return
+    const next = { ...value }
+    for (const s of aiSugg) if (aiAccept.has(s.key)) next[s.key] = s.value
+    onChange(next)
+    setAiSugg(null)
   }
 
   const customEntries = useMemo(() => {
@@ -115,6 +157,15 @@ export default function MasterAttributesEditor({ productId, value, onChange, onR
               {filledCount}/{schema!.length} filled
               {missingRequired.length > 0 && <span className="ml-1 text-rose-500">· {missingRequired.length} required missing</span>}
             </span>
+            <button
+              type="button"
+              onClick={runAiFill}
+              disabled={aiBusy}
+              title="Infer empty attributes from the title/description with AI"
+              className="ml-auto inline-flex items-center gap-1 rounded border border-blue-200 bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 hover:bg-blue-100 disabled:opacity-50 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-300"
+            >
+              {aiBusy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />} Suggest with AI
+            </button>
           </div>
           {missingRequired.length > 0 ? (
             <div className="flex flex-wrap items-center gap-1 text-[11px]">
@@ -133,6 +184,47 @@ export default function MasterAttributesEditor({ productId, value, onChange, onR
             </div>
           ) : (
             filledCount > 0 && <div className="text-[11px] text-emerald-600 dark:text-emerald-400">✓ All required attributes filled</div>
+          )}
+          {aiErr && <div className="rounded bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">{aiErr}</div>}
+          {aiSugg && aiSugg.length > 0 && (
+            <div className="rounded border border-blue-200 bg-blue-50/40 p-2 dark:border-blue-900 dark:bg-blue-950/20">
+              <div className="mb-1 flex items-center justify-between">
+                <span className="text-[11px] font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-300">AI suggestions</span>
+                <button
+                  type="button"
+                  onClick={applyAi}
+                  disabled={aiAccept.size === 0}
+                  className="rounded bg-blue-600 px-2 py-0.5 text-[11px] font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+                >
+                  Apply {aiAccept.size}
+                </button>
+              </div>
+              <div className="space-y-1">
+                {aiSugg.map((s) => (
+                  <label key={s.key} className="flex items-center gap-2 text-xs">
+                    <input
+                      type="checkbox"
+                      checked={aiAccept.has(s.key)}
+                      onChange={() =>
+                        setAiAccept((prev) => {
+                          const n = new Set(prev)
+                          if (n.has(s.key)) n.delete(s.key)
+                          else n.add(s.key)
+                          return n
+                        })
+                      }
+                    />
+                    <span className="font-medium text-zinc-700 dark:text-zinc-300">{s.label}:</span>
+                    <span className="text-zinc-600 dark:text-zinc-400">{s.value}</span>
+                    <span
+                      className={`rounded px-1 text-[9px] ${s.confidence === 'high' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300' : 'bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300'}`}
+                    >
+                      {s.confidence}
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </div>
           )}
           {groups.map(([group, attrs]) => (
             <div key={group} className="space-y-2">
