@@ -83,6 +83,16 @@ describe('computeStep', () => {
     expect(d.action).toBe('raise'); expect(d.nextPct).toBe(25)
   })
 
+  it('RS.5.1: fresh own-top campaign with no signal ramps to the entry bias', () => {
+    const d = computeStep(T(), obs({ currentPct: 0 })) // biasPct 100, no IS/ACOS
+    expect(d.action).toBe('raise'); expect(d.nextPct).toBe(30); expect(d.reason).toMatch(/entry bias/)
+  })
+
+  it('RS.5.1: at the entry bias with no signal → hold (does not overshoot)', () => {
+    const d = computeStep(T(), obs({ currentPct: 100 }))
+    expect(d.action).toBe('hold')
+  })
+
   it('clamps at maxPct — already maxed holds', () => {
     const d = computeStep(T(), obs({ currentPct: 900, achievedISFraction: 0.4, achievedAcosFraction: 0.3 }))
     expect(d.action).toBe('hold'); expect(d.nextPct).toBe(900)

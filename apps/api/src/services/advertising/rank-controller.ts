@@ -65,6 +65,18 @@ export function computeStep(target: RankTargetSpec, obs: Observed, opts: { maxPc
   const acosCap = target.allOut ? null : (target.acosCapPct != null ? target.acosCapPct / 100 : null)
   const acosOk = acosCap == null || obs.achievedAcosFraction == null || obs.achievedAcosFraction <= acosCap * 1.1
 
+  // RS.5.1 — starting-bias floor. With no signal pushing us down, ramp the
+  // campaign up to the target's entry bias so it actually COMPETES for the slot
+  // (a fresh own-top campaign at 0% would otherwise just "hold" at 0 forever,
+  // since Top-of-Search IS data is sparse). Once it's at the floor, hold there
+  // until IS data arrives to refine. Skipped when we're easing off for ACOS.
+  const holdOrFloor = (reason: string): StepDecision => {
+    if (target.biasPct != null && obs.currentPct < target.biasPct && acosOk) {
+      return { action: 'raise', nextPct: clamp(Math.min(target.biasPct, obs.currentPct + step * 2), 0, maxPct), reason: `ramping to ${target.biasPct}% entry bias` }
+    }
+    return { action: 'hold', nextPct: obs.currentPct, reason }
+  }
+
   // 1) Loss reaction — re-take the slot FAST when the proxy says we're slipping.
   if (obs.lossDetected && acosOk && obs.currentPct < maxPct) {
     return { action: 'raise', nextPct: clamp(obs.currentPct + step * 2, 0, maxPct), reason: 'rank slipping — re-take aggressively' }
@@ -92,10 +104,10 @@ export function computeStep(target: RankTargetSpec, obs: Observed, opts: { maxPc
     if (obs.achievedAcosFraction >= acosCap * 1.2 && obs.currentPct > 0) {
       return { action: 'lower', nextPct: clamp(obs.currentPct - step, 0, maxPct), reason: `ACOS ${pctStr(obs.achievedAcosFraction)} over cap — ease off` }
     }
-    return { action: 'hold', nextPct: obs.currentPct, reason: 'ACOS in band' }
+    return holdOrFloor('ACOS in band')
   }
   if (acosCap == null && obs.currentPct < maxPct) {
     return { action: 'raise', nextPct: clamp(obs.currentPct + step, 0, maxPct), reason: 'all-out — push for the slot' }
   }
-  return { action: 'hold', nextPct: obs.currentPct, reason: 'no signal — hold' }
+  return holdOrFloor('no signal — hold')
 }
