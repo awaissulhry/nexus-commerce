@@ -1662,6 +1662,25 @@ const reviewsRoutes: FastifyPluginAsync = async (fastify) => {
       return { ok: true, response: 'NEGATIVE' }
     },
   )
+
+  // ── D.3 — Amazon official Customer Feedback API: access probe + debug ──
+  // The honest gate: does the SP-API app hold the Brand Analytics / Selling
+  // Partner Insights role? Mirrors /advertising/sqp/probe.
+  fastify.post('/reviews/insights/probe', async (request, reply) => {
+    const b = (request.body ?? {}) as { marketplace?: string }
+    if (!b.marketplace) { reply.status(400); return { error: 'marketplace required' } }
+    const { probeAmazonReviewInsightsAccess } = await import('../services/reviews/amazon-review-insights.service.js')
+    reply.header('Cache-Control', 'no-store')
+    return probeAmazonReviewInsightsAccess(b.marketplace)
+  })
+
+  // Last raw API shapes (topics/trends) — finalise the defensive parsers against
+  // Amazon's real fields without needing Railway log access.
+  fastify.get('/reviews/insights/debug', async (_request, reply) => {
+    const { insightsDebugState } = await import('../services/reviews/amazon-review-insights.service.js')
+    reply.header('Cache-Control', 'no-store')
+    return insightsDebugState
+  })
 }
 
 export default reviewsRoutes
