@@ -35,6 +35,7 @@ import { IntelligenceBanner } from './IntelligenceBanner'
 import { RankTrend } from './RankTrend'
 import { ManagedCampaigns } from './ManagedCampaigns'
 import { RankOverview } from './RankOverview'
+import { RankPlanPanel } from './RankPlanPanel'
 
 const MARKETS = ['IT', 'DE', 'FR', 'ES', 'NL', 'BE', 'SE', 'PL', 'IE', 'UK']
 const LOOKBACKS = [7, 14, 30, 60, 90]
@@ -181,6 +182,7 @@ export function UnifiedRankCockpit() {
       {view === 'cockpit' && (<>
         {campaignId && <IntelligenceBanner campaignId={campaignId} market={market} />}
         {campaignId && <RankTrend campaignId={campaignId} lookback={lookback} />}
+        {campaignId && <RankPlanPanel campaignId={campaignId} campaignName={campaign?.name ?? 'this campaign'} />}
 
         {simple ? (
           <SimpleRankPanel market={market} campaignId={campaignId} campaignName={campaign?.name ?? 'this campaign'} onFull={() => setSimple(false)} onChanged={loadPending} />
