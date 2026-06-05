@@ -927,10 +927,18 @@ const reviewsRoutes: FastifyPluginAsync = async (fastify) => {
 
   // RV.7.3 — manual orders-delivered-backfill trigger (runs the FBA+FBM delivery
   // heuristic that unblocks the review scheduler). Returns the run result.
-  fastify.post('/reviews/cron/orders-delivered-backfill/trigger', async (_request, _reply) => {
+  // Fire-and-forget + recorded as a CronRun, so the manual trigger (a) returns
+  // instantly instead of timing out on the synchronous heuristic, and (b) updates
+  // the orders-delivered-backfill cron status (clears a lingering FAILED).
+  fastify.post('/reviews/cron/orders-delivered-backfill/trigger', async (_request, reply) => {
     const { runOrdersDeliveredBackfill } = await import('../services/reviews/orders-delivered-backfill.service.js')
-    const result = await runOrdersDeliveredBackfill({})
-    return { ok: true, result }
+    const { recordCronRun } = await import('../utils/cron-observability.js')
+    void recordCronRun('orders-delivered-backfill', async () => {
+      const r = await runOrdersDeliveredBackfill({})
+      return `heuristic=${r.heuristicUpdated}/${r.heuristicScanned} reports=${r.reports} reportUpdated=${r.ordersUpdated}`
+    }).catch((e) => fastify.log.error({ err: e }, '[orders-delivered-backfill] manual trigger failed'))
+    reply.header('Cache-Control', 'no-store')
+    return { ok: true, started: true, note: 'running in background; poll CronRun / ingest-health for the result' }
   })
 
   // ── Review Spotlight (RX.4) ─────────────────────────────────────────
