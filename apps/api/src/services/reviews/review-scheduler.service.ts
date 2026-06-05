@@ -19,6 +19,7 @@
 import { randomBytes } from 'node:crypto'
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
+import { resolveSendTiming, type TimingDefaultRow } from './review-timing.service.js'
 
 // Active-return statuses suppress review requests — mirrored from
 // orders-reviews.routes.ts. Refunds suppress too (financialTransactions).
@@ -34,38 +35,10 @@ function newSentimentToken(): string {
   return randomBytes(24).toString('base64url')
 }
 
-// ── Timing table ──────────────────────────────────────────────────────────
-
-const AMAZON_MAX_DAYS = 25 // keep inside 4–30d Solicitations window
-
-interface TimingRule {
-  match: string[]   // case-insensitive substrings of productType
-  days: number
-}
-
-const TIMING_RULES: TimingRule[] = [
-  { match: ['casco', 'helmet'],                          days: 21 },
-  { match: ['combinat', 'tuta', 'suit'],                 days: 16 },
-  { match: ['giacca', 'giubbotto', 'jacket'],            days: 14 },
-  { match: ['stival', 'scarpe', 'boot'],                 days: 14 },
-  { match: ['pantalon', 'trouser'],                      days: 12 },
-  { match: ['guant', 'glove'],                           days: 10 },
-]
-const DEFAULT_DAYS = 12
-
-export function optimalSendDelayDays(productType: string | null): number {
-  if (!productType) return DEFAULT_DAYS
-  const t = productType.toLowerCase()
-  for (const rule of TIMING_RULES) {
-    if (rule.match.some((m) => t.includes(m))) return rule.days
-  }
-  return DEFAULT_DAYS
-}
-
-/** Clamp delay to Amazon's Solicitations API window (4–25 days). */
-function clampForAmazon(days: number): number {
-  return Math.min(Math.max(days, 4), AMAZON_MAX_DAYS)
-}
+// Timing resolution (per-product-type delay, anchor, preferred hour, weekend
+// skip, Amazon 4–25d clamp) lives in review-timing.service.ts (resolveSendTiming).
+// The hardcoded per-product defaults moved to the editable ReviewTimingDefault DB
+// table (RRT.1). This file just matches the rule and asks the resolver for a date.
 
 // ── Review URL builders ───────────────────────────────────────────────────
 
@@ -174,6 +147,8 @@ export async function schedulePendingOrders(): Promise<ScheduleResult> {
   // RV.3.4 — load all active rules once; we match per-order in JS to avoid
   // an explosion of per-order rule queries.
   const activeRules = await prisma.reviewRule.findMany({ where: { isActive: true } })
+  // RRT.2 — load the editable per-product-type timing table once for the batch.
+  const timingDefaults: TimingDefaultRow[] = await prisma.reviewTimingDefault.findMany({ where: { isActive: true } })
 
   // Find delivered orders in the last 30 days with no ReviewRequest yet.
   // RV.2.5 — key off deliveredAt alone, not status. The deliveredAt field
@@ -197,6 +172,8 @@ export async function schedulePendingOrders(): Promise<ScheduleResult> {
       channelOrderId: true,
       marketplace: true,
       deliveredAt: true,
+      shippedAt: true,
+      purchaseDate: true,
       customerEmail: true,
       totalPrice: true,
       fulfillmentMethod: true,
@@ -235,14 +212,16 @@ export async function schedulePendingOrders(): Promise<ScheduleResult> {
       }
       const matchedRule = pickBestRule(activeRules, matchable)
 
-      let delayDays = matchedRule
-        ? Math.max(4, matchedRule.minDaysSinceDelivery)
-        : optimalSendDelayDays(productType)
-      if (order.channel === 'AMAZON') {
-        delayDays = clampForAmazon(delayDays)
-      }
-
-      const scheduledFor = new Date(order.deliveredAt.getTime() + delayDays * 24 * 60 * 60 * 1000)
+      // RRT.2 — delegate timing to the shared resolver (delay table / rule
+      // override → anchor → preferred hour → weekend skip → Amazon clamp).
+      const resolved = resolveSendTiming(
+        { channel: order.channel, marketplace: order.marketplace, deliveredAt: order.deliveredAt, shippedAt: order.shippedAt, purchaseDate: order.purchaseDate, productType },
+        matchedRule,
+        timingDefaults,
+      )
+      if (!resolved.scheduledFor) { result.skipped += 1; continue }
+      const scheduledFor = resolved.scheduledFor
+      const delayDays = resolved.effectiveDelayDays ?? resolved.delayDays
 
       // Skip if scheduled time is already past the 30d window for Amazon
       if (order.channel === 'AMAZON') {

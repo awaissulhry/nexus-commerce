@@ -10197,6 +10197,21 @@ model ReviewRule {
   // customer). Only meaningful when useSentimentDiversion = true.
   fallbackOnNoResponse Boolean @default(true)
 
+  // ── RRT.2 — operator-configurable send timing ──
+  // Product-type targeting (RRT.3). Empty = applies to all types. Each entry is
+  // a case-insensitive substring of Product.productType (e.g. "casco","glove").
+  productTypes  String[] @default([])
+  // Per-rule send-delay override, in days after the anchor. null = use the
+  // editable ReviewTimingDefault table (then DEFAULT). Backfilled to
+  // minDaysSinceDelivery for pre-existing rows so their timing is unchanged.
+  sendDelayDays Int?
+  // Anchor the delay counts from (RRT.4). Amazon forced to DELIVERY at resolve.
+  anchor        String   @default("DELIVERY") // DELIVERY | SHIP | PURCHASE
+  // Preferred local send hour 0-23 in the marketplace timezone (RRT.5). null = any.
+  sendHourLocal Int?
+  // Roll Sat/Sun sends forward to Monday (RRT.5).
+  skipWeekends  Boolean  @default(false)
+
   @@unique([name, scope, marketplace])
   @@index([scope, isActive])
 }

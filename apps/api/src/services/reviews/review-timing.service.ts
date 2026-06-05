@@ -1,0 +1,163 @@
+/**
+ * RRT — review-request send-timing resolver. Single source of truth shared by the
+ * scheduler, the rule dry-run, and the editor live-preview.
+ *
+ * Resolves the send delay (rule override → editable ReviewTimingDefault table →
+ * DEFAULT), picks the anchor date (delivery / ship / purchase; Amazon forced to
+ * delivery), optionally pins a preferred local hour (in the marketplace timezone)
+ * and skips weekends, then clamps to the rule window and Amazon's 4–25d hard cap.
+ *
+ * Parity: with the migration backfill `sendDelayDays = minDaysSinceDelivery` and
+ * the new fields defaulting to today's behaviour (anchor=DELIVERY, no hour, no
+ * weekend skip), this reproduces the old `deliveredAt + max(4,minDays)` exactly —
+ * because minDays is always ≥4 (write-clamped) and the hour/weekend window-clamp
+ * is gated off unless those features are used.
+ */
+
+const DAY = 24 * 60 * 60 * 1000
+export const DEFAULT_DELAY_DAYS = 12 // last resort if the timing table has no match
+const AMAZON_MIN_DAYS = 4
+const AMAZON_MAX_DAYS = 25 // inside the 4–30d Solicitations window, margin for the send-time re-check
+
+// Marketplace → IANA timezone (mirrors AMAZON_MARKETPLACE_ID_MAP). Default Rome.
+const MARKETPLACE_TZ: Record<string, string> = {
+  IT: 'Europe/Rome', DE: 'Europe/Berlin', FR: 'Europe/Paris', ES: 'Europe/Madrid',
+  NL: 'Europe/Amsterdam', BE: 'Europe/Brussels', PL: 'Europe/Warsaw', SE: 'Europe/Stockholm',
+  UK: 'Europe/London', GB: 'Europe/London', IE: 'Europe/Dublin', TR: 'Europe/Istanbul',
+  US: 'America/New_York', AE: 'Asia/Dubai', SA: 'Asia/Riyadh', EG: 'Africa/Cairo',
+  JP: 'Asia/Tokyo', AU: 'Australia/Sydney', SG: 'Asia/Singapore', IN: 'Asia/Kolkata',
+}
+export function timezoneForMarketplace(code: string | null | undefined): string {
+  return (code && MARKETPLACE_TZ[code.toUpperCase()]) || 'Europe/Rome'
+}
+
+// ── Intl-based wall-clock helpers (repo idiom from dashboard-digest.service.ts;
+// no luxon/dayjs — they're undeclared in package.json). DST-correct per-instant. ──
+function zoneParts(instant: Date, tz: string) {
+  const p = new Intl.DateTimeFormat('en-US', {
+    timeZone: tz, hour12: false, year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', weekday: 'short',
+  }).formatToParts(instant)
+  const g = (t: string) => p.find((x) => x.type === t)?.value ?? ''
+  const hour = Number(g('hour')) === 24 ? 0 : Number(g('hour'))
+  return { y: Number(g('year')), m: Number(g('month')), d: Number(g('day')), hour, minute: Number(g('minute')), weekday: g('weekday') }
+}
+const DOW = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 } as const
+function dowInZone(instant: Date, tz: string): number {
+  return DOW[zoneParts(instant, tz).weekday as keyof typeof DOW] ?? 0
+}
+/** UTC Date whose wall-clock time in `tz` is exactly y-(m0+1)-d hh:00 local. */
+function zonedDateTime(y: number, m0: number, d: number, hour: number, tz: string): Date {
+  const probe = new Date(Date.UTC(y, m0, d, 12, 0, 0))
+  const o = zoneParts(probe, tz)
+  const offsetMs = Date.UTC(o.y, o.m - 1, o.d, o.hour, o.minute) - probe.getTime()
+  return new Date(Date.UTC(y, m0, d, hour, 0, 0) - offsetMs)
+}
+
+export interface TimingDefaultRow { pattern: string; delayDays: number; isActive: boolean; sortOrder: number }
+export interface TimingOrderInput {
+  channel: string
+  marketplace: string | null
+  deliveredAt: Date | null
+  shippedAt: Date | null
+  purchaseDate: Date | null
+  productType: string | null
+}
+export interface TimingRuleInput {
+  sendDelayDays: number | null
+  anchor: string
+  sendHourLocal: number | null
+  skipWeekends: boolean
+  minDaysSinceDelivery: number
+  maxDaysSinceDelivery: number
+}
+export interface ResolvedTiming {
+  scheduledFor: Date | null // null = no usable anchor date → caller skips
+  anchorUsed: 'DELIVERY' | 'SHIP' | 'PURCHASE'
+  anchorDate: Date | null
+  delayDays: number
+  effectiveDelayDays: number | null
+  source: 'rule-override' | 'timing-table' | 'default'
+}
+
+/** First active table row (by sortOrder) whose pattern is a substring of productType. */
+export function lookupTimingTable(productType: string | null, defaults: TimingDefaultRow[]): number | null {
+  if (!productType) return null
+  const t = productType.toLowerCase()
+  const row = [...defaults].filter((r) => r.isActive).sort((a, b) => a.sortOrder - b.sortOrder)
+    .find((r) => t.includes(r.pattern.toLowerCase()))
+  return row ? row.delayDays : null
+}
+
+export function resolveSendTiming(
+  order: TimingOrderInput,
+  rule: TimingRuleInput | null,
+  timingDefaults: TimingDefaultRow[],
+): ResolvedTiming {
+  // 1. delay
+  let delayDays: number
+  let source: ResolvedTiming['source']
+  if (rule?.sendDelayDays != null) { delayDays = rule.sendDelayDays; source = 'rule-override' }
+  else {
+    const t = lookupTimingTable(order.productType, timingDefaults)
+    if (t != null) { delayDays = t; source = 'timing-table' } else { delayDays = DEFAULT_DELAY_DAYS; source = 'default' }
+  }
+
+  // 2. anchor (Amazon forced to DELIVERY — Solicitations is delivery-based)
+  const anchorUsed: ResolvedTiming['anchorUsed'] =
+    order.channel === 'AMAZON' ? 'DELIVERY'
+      : rule?.anchor === 'SHIP' ? 'SHIP'
+        : rule?.anchor === 'PURCHASE' ? 'PURCHASE' : 'DELIVERY'
+  const anchorDate =
+    anchorUsed === 'SHIP' ? (order.shippedAt ?? order.deliveredAt ?? order.purchaseDate)
+      : anchorUsed === 'PURCHASE' ? (order.purchaseDate ?? order.shippedAt ?? order.deliveredAt)
+        : (order.deliveredAt ?? order.shippedAt ?? order.purchaseDate)
+  if (!anchorDate) return { scheduledFor: null, anchorUsed, anchorDate: null, delayDays, effectiveDelayDays: null, source }
+
+  // 3. base
+  let scheduled = new Date(anchorDate.getTime() + delayDays * DAY)
+  const tz = timezoneForMarketplace(order.marketplace)
+
+  // 4. pin to a preferred local hour
+  if (rule?.sendHourLocal != null) {
+    const z = zoneParts(scheduled, tz)
+    scheduled = zonedDateTime(z.y, z.m - 1, z.d, rule.sendHourLocal, tz)
+  }
+  // 5. skip weekends (roll Sat/Sun forward to Monday; re-pin the hour)
+  if (rule?.skipWeekends) {
+    let guard = 0
+    while ((dowInZone(scheduled, tz) === 0 || dowInZone(scheduled, tz) === 6) && guard++ < 3) {
+      const z = zoneParts(new Date(scheduled.getTime() + DAY), tz)
+      scheduled = rule.sendHourLocal != null
+        ? zonedDateTime(z.y, z.m - 1, z.d, rule.sendHourLocal, tz)
+        : new Date(scheduled.getTime() + DAY)
+    }
+  }
+  // 6. clamp into the rule's eligibility window [min,max] days from the anchor.
+  // Parity-safe: existing rules have delay == minDaysSinceDelivery, so this is a
+  // no-op for them; it bounds operator delays + any hour/weekend drift.
+  if (rule) {
+    const lo = new Date(anchorDate.getTime() + rule.minDaysSinceDelivery * DAY)
+    const hi = new Date(anchorDate.getTime() + rule.maxDaysSinceDelivery * DAY)
+    if (lo <= hi) {
+      if (scheduled < lo) scheduled = lo
+      if (scheduled > hi) scheduled = hi
+    }
+  }
+  // 7. Amazon hard cap ALWAYS wins (legality beats the hour nicety at the boundary)
+  if (order.channel === 'AMAZON' && order.deliveredAt) {
+    const aLo = new Date(order.deliveredAt.getTime() + AMAZON_MIN_DAYS * DAY)
+    const aHi = new Date(order.deliveredAt.getTime() + AMAZON_MAX_DAYS * DAY)
+    if (scheduled < aLo) scheduled = aLo
+    if (scheduled > aHi) scheduled = aHi
+  }
+
+  return {
+    scheduledFor: scheduled,
+    anchorUsed,
+    anchorDate,
+    delayDays,
+    effectiveDelayDays: Math.round((scheduled.getTime() - anchorDate.getTime()) / DAY),
+    source,
+  }
+}
