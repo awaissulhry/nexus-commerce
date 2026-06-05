@@ -1109,6 +1109,14 @@ const reviewsRoutes: FastifyPluginAsync = async (fastify) => {
       prisma.reviewRequest.count({ where: { status: 'FAILED' } }),
       prisma.reviewRequest.count({ where: { status: 'SKIPPED' } }),
     ])
+    // Breakdown of WHY requests were skipped (e.g. "Amazon already solicited a
+    // review for this order") so the Skipped KPI explains itself.
+    const skippedReasonRows = skipped > 0
+      ? await prisma.reviewRequest.groupBy({ by: ['suppressedReason'], where: { status: 'SKIPPED' }, _count: { _all: true } })
+      : []
+    const skippedReasons = skippedReasonRows
+      .map((r) => ({ reason: r.suppressedReason ?? 'Unknown', count: r._count._all }))
+      .sort((a, b) => b.count - a.count)
     const due = await prisma.reviewRequest.count({
       where: { status: 'SCHEDULED', scheduledFor: { lte: new Date() } },
     })
@@ -1200,7 +1208,7 @@ const reviewsRoutes: FastifyPluginAsync = async (fastify) => {
     })
     reply.header('Cache-Control', 'private, max-age=30')
     return {
-      scheduled, sent, failed, skipped, due, retrying, upcoming,
+      scheduled, sent, failed, skipped, skippedReasons, due, retrying, upcoming,
       sentiment: {
         pending: sentimentPending,
         positive: sentimentPositive,

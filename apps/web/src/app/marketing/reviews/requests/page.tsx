@@ -53,6 +53,7 @@ interface Stats {
   sent: number
   failed: number
   skipped: number
+  skippedReasons?: Array<{ reason: string; count: number }>
   due: number
   retrying?: number
   upcoming: Array<{
@@ -128,7 +129,7 @@ export default async function ReviewRequestsPage() {
         <Stat label="Retrying" value={stats.retrying ?? 0} tone={(stats.retrying ?? 0) > 0 ? 'amber' : null} />
         <Stat label="Sent" value={stats.sent} tone="emerald" />
         <Stat label="Failed" value={stats.failed} tone={stats.failed > 0 ? 'rose' : null} />
-        <Stat label="Skipped" value={stats.skipped} />
+        <Stat label="Skipped" value={stats.skipped} {...skipSummary(stats.skippedReasons)} />
       </div>
 
       <RequestsActionsClient mailer={stats.mailer} />
@@ -418,10 +419,14 @@ function Stat({
   label,
   value,
   tone,
+  sub,
+  hint,
 }: {
   label: string
   value: number
   tone?: 'emerald' | 'amber' | 'rose' | null
+  sub?: string
+  hint?: string
 }) {
   const valueClass =
     tone === 'emerald'
@@ -432,13 +437,34 @@ function Stat({
           ? 'text-rose-700 dark:text-rose-300'
           : 'text-slate-900 dark:text-slate-100'
   return (
-    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md px-3 py-2">
+    <div title={hint} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md px-3 py-2">
       <div className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400">
         {label}
       </div>
       <div className={`text-base font-semibold tabular-nums ${valueClass}`}>{value}</div>
+      {sub && <div className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5 leading-tight">{sub}</div>}
     </div>
   )
+}
+
+// Compact, self-explaining summary for the Skipped KPI: a short sub-line + a
+// full per-reason breakdown on hover. "Skipped" is benign (e.g. Amazon already
+// solicited the order) — this stops it reading as an error.
+function skipSummary(reasons?: Array<{ reason: string; count: number }>): { sub?: string; hint?: string } {
+  if (!reasons || reasons.length === 0) return {}
+  const hint = reasons.map((r) => `${r.count} · ${r.reason}`).join('\n')
+  const SHORT: Record<string, string> = {
+    'Amazon already solicited a review for this order': 'already solicited by Amazon',
+    'Diverted to support (negative sentiment)': 'diverted — negative',
+    'No customer email on order': 'no customer email',
+    'No channelOrderId for Amazon solicitation': 'missing order id',
+    'No diversion response in 5d; rule fallback disabled': 'no diversion reply',
+  }
+  const top = reasons[0]
+  let sub = SHORT[top.reason]
+    ?? top.reason.replace(/^Outside Amazon.*$/i, 'outside send window').replace(/^Suppressed:.*$/i, 'suppressed / unsubscribed')
+  if (sub.length > 26) sub = `${sub.slice(0, 25)}…`
+  return { sub: reasons.length > 1 ? `mostly ${sub}` : sub, hint }
 }
 
 function PerRuleTable({
