@@ -31,6 +31,12 @@ type Rule = {
   requestCount: number
   useSentimentDiversion?: boolean
   fallbackOnNoResponse?: boolean
+  // RRT.8 — operator-configurable timing
+  productTypes?: string[]
+  sendDelayDays?: number | null
+  anchor?: string
+  sendHourLocal?: number | null
+  skipWeekends?: boolean
 }
 
 const SCOPES: Array<{ value: string; label: string; helpText: string }> = [
@@ -411,6 +417,43 @@ function RuleEditor({ rule, onClose, onSaved }: { rule: Rule | null; onClose: ()
   const [fallbackOnNoResponse, setFallbackOnNoResponse] = useState<boolean>(rule?.fallbackOnNoResponse ?? true)
   const [lintIssues, setLintIssues] = useState<{ severity: string; message: string; match?: string }[]>([])
   const [busy, setBusy] = useState(false)
+  // RRT.8 — timing controls
+  const [productTypes, setProductTypes] = useState<string[]>(rule?.productTypes ?? [])
+  const [ptInput, setPtInput] = useState('')
+  const [ptSuggestions, setPtSuggestions] = useState<string[]>([])
+  const [delayMode, setDelayMode] = useState<'table' | 'custom'>(rule?.sendDelayDays != null ? 'custom' : 'table')
+  const [sendDelayDays, setSendDelayDays] = useState<number>(rule?.sendDelayDays ?? 12)
+  const [anchor, setAnchor] = useState<string>(rule?.anchor ?? 'DELIVERY')
+  const [sendHourLocal, setSendHourLocal] = useState<number | null>(rule?.sendHourLocal ?? null)
+  const [skipWeekends, setSkipWeekends] = useState<boolean>(rule?.skipWeekends ?? false)
+  const [preview, setPreview] = useState<{ scheduledFor: string | null; effectiveDelayDays: number | null; anchorUsed: string; source: string; tz: string } | null>(null)
+  const isAmazonScope = scope === 'AMAZON_PER_MARKETPLACE' || scope === 'AMAZON_GLOBAL'
+
+  // product-type suggestions from the timing table
+  useEffect(() => {
+    fetch(`${getBackendUrl()}/api/review-timing-defaults`).then((r) => r.json())
+      .then((d) => setPtSuggestions(Array.from(new Set((d.items ?? []).map((x: { pattern: string }) => x.pattern)))))
+      .catch(() => {})
+  }, [])
+
+  // RRT.8 — live "when would this fire" preview (debounced).
+  useEffect(() => {
+    const t = setTimeout(() => {
+      fetch(`${getBackendUrl()}/api/review-rules/preview-timing`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          scope, marketplace: scope === 'AMAZON_PER_MARKETPLACE' ? marketplace : 'IT',
+          productType: productTypes[0] || 'casco',
+          sendDelayDays: delayMode === 'custom' ? sendDelayDays : null,
+          anchor: isAmazonScope ? 'DELIVERY' : anchor,
+          sendHourLocal, skipWeekends, minDaysSinceDelivery: minDays, maxDaysSinceDelivery: maxDays,
+        }),
+      }).then((r) => (r.ok ? r.json() : null)).then(setPreview).catch(() => {})
+    }, 400)
+    return () => clearTimeout(t)
+  }, [scope, marketplace, productTypes, delayMode, sendDelayDays, anchor, sendHourLocal, skipWeekends, minDays, maxDays, isAmazonScope])
+
+  const addPt = (p: string) => { const v = p.trim().toLowerCase(); if (v && !productTypes.includes(v)) setProductTypes([...productTypes, v]); setPtInput('') }
 
   // RX.6 — ToS-compliance lint of the notes copy (debounced).
   useEffect(() => {
@@ -447,6 +490,12 @@ function RuleEditor({ rule, onClose, onSaved }: { rule: Rule | null; onClose: ()
         notes: notes || null,
         useSentimentDiversion,
         fallbackOnNoResponse,
+        // RRT.8 — timing
+        productTypes,
+        sendDelayDays: delayMode === 'custom' ? sendDelayDays : null,
+        anchor: isAmazonScope ? 'DELIVERY' : anchor,
+        sendHourLocal,
+        skipWeekends,
       }
       const res = await fetch(`${getBackendUrl()}/api/review-rules${rule ? `/${rule.id}` : ''}`, {
         method: rule ? 'PATCH' : 'POST',
@@ -530,8 +579,80 @@ function RuleEditor({ rule, onClose, onSaved }: { rule: Rule | null; onClose: ()
               <input type="number" min="4" max="30" value={minDays} onChange={(e) => setMinDays(Math.max(4, Math.min(30, Number(e.target.value) || 7)))} className="w-20 h-8 px-2 text-right tabular-nums border border-slate-200 dark:border-slate-700 rounded text-md" />
               <span className="text-sm text-slate-500 dark:text-slate-400">to</span>
               <input type="number" min="4" max="30" value={maxDays} onChange={(e) => setMaxDays(Math.max(4, Math.min(30, Number(e.target.value) || 25)))} className="w-20 h-8 px-2 text-right tabular-nums border border-slate-200 dark:border-slate-700 rounded text-md" />
-              <span className="text-xs text-slate-500 dark:text-slate-400">Amazon caps at 4–30 days</span>
+              <span className="text-xs text-slate-500 dark:text-slate-400">Amazon caps at 4–30 days (the eligibility window)</span>
             </div>
+          </div>
+
+          {/* RRT.8 — Send timing (delay / anchor / product-type / hour / weekends + live preview) */}
+          <div className="border-t border-slate-200 dark:border-slate-800 pt-3 space-y-3">
+            <label className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">Send timing</label>
+
+            <div className="flex items-center gap-2 flex-wrap">
+              <div className="inline-flex rounded-md border border-slate-200 dark:border-slate-700 overflow-hidden">
+                <button type="button" onClick={() => setDelayMode('table')} className={`h-8 px-3 text-sm ${delayMode === 'table' ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900' : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300'}`}>Use baseline table</button>
+                <button type="button" onClick={() => setDelayMode('custom')} className={`h-8 px-3 text-sm border-l border-slate-200 dark:border-slate-700 ${delayMode === 'custom' ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900' : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300'}`}>Custom delay</button>
+              </div>
+              {delayMode === 'custom' ? (
+                <span className="inline-flex items-center gap-1.5 text-sm text-slate-600 dark:text-slate-300">
+                  Send <input type="number" min={1} max={60} value={sendDelayDays} onChange={(e) => setSendDelayDays(Math.max(1, Math.min(60, Number(e.target.value) || 12)))} className="w-16 h-8 px-2 text-right tabular-nums border border-slate-200 dark:border-slate-700 rounded" /> days after {(isAmazonScope ? 'delivery' : anchor.toLowerCase())}
+                </span>
+              ) : (
+                <Link href="/orders/reviews/rules/timing" className="text-sm text-blue-600 hover:underline">uses the per-product-type baseline →</Link>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs text-slate-500 dark:text-slate-400 w-16 shrink-0">Anchor</span>
+              <select value={isAmazonScope ? 'DELIVERY' : anchor} disabled={isAmazonScope} onChange={(e) => setAnchor(e.target.value)} className="h-8 px-2 text-sm border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 disabled:opacity-60">
+                <option value="DELIVERY">After delivery</option>
+                <option value="SHIP">After ship</option>
+                <option value="PURCHASE">After purchase</option>
+              </select>
+              {isAmazonScope && <span className="text-xs text-slate-400">Amazon Solicitations is delivery-based</span>}
+            </div>
+
+            <div>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="text-xs text-slate-500 dark:text-slate-400 w-16 shrink-0">Products</span>
+                {productTypes.length === 0 && <span className="text-xs text-slate-400">All product types</span>}
+                {productTypes.map((p) => (
+                  <span key={p} className="inline-flex items-center gap-1 h-6 px-2 text-xs rounded bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-900">
+                    {p}<button type="button" onClick={() => setProductTypes(productTypes.filter((x) => x !== p))} aria-label={`Remove ${p}`}>×</button>
+                  </span>
+                ))}
+                <input value={ptInput} onChange={(e) => setPtInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addPt(ptInput) } }} placeholder="add pattern…" className="h-6 px-2 text-xs border border-slate-200 dark:border-slate-700 rounded w-28 bg-white dark:bg-slate-900" />
+              </div>
+              {ptSuggestions.filter((s) => !productTypes.includes(s)).length > 0 && (
+                <div className="flex items-center gap-1 flex-wrap mt-1 ml-[4.5rem]">
+                  {ptSuggestions.filter((s) => !productTypes.includes(s)).slice(0, 12).map((s) => (
+                    <button key={s} type="button" onClick={() => addPt(s)} className="h-5 px-1.5 text-[11px] rounded border border-slate-200 dark:border-slate-700 text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800">+ {s}</button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center gap-4 flex-wrap">
+              <label className="inline-flex items-center gap-1.5 text-sm text-slate-600 dark:text-slate-300">
+                <input type="checkbox" checked={sendHourLocal != null} onChange={(e) => setSendHourLocal(e.target.checked ? 11 : null)} /> Preferred hour
+                {sendHourLocal != null && (
+                  <select value={sendHourLocal} onChange={(e) => setSendHourLocal(Number(e.target.value))} className="h-7 px-1 text-sm border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900">
+                    {Array.from({ length: 24 }, (_, h) => <option key={h} value={h}>{String(h).padStart(2, '0')}:00</option>)}
+                  </select>
+                )}
+                {sendHourLocal != null && preview?.tz && <span className="text-xs text-slate-400">{preview.tz}</span>}
+              </label>
+              <label className="inline-flex items-center gap-1.5 text-sm text-slate-600 dark:text-slate-300">
+                <input type="checkbox" checked={skipWeekends} onChange={(e) => setSkipWeekends(e.target.checked)} /> Skip weekends
+              </label>
+            </div>
+
+            {preview?.scheduledFor && (
+              <div className="text-xs rounded-md bg-slate-50 dark:bg-slate-950/40 border border-slate-200 dark:border-slate-800 px-3 py-2 text-slate-600 dark:text-slate-300">
+                <span className="font-medium text-slate-800 dark:text-slate-200">Preview:</span> a {productTypes[0] || 'helmet'} {preview.anchorUsed.toLowerCase()} today → asked{' '}
+                <span className="font-semibold">{new Date(preview.scheduledFor).toLocaleString('en-GB', { weekday: 'short', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>{' '}
+                <span className="text-slate-400">({preview.anchorUsed.toLowerCase()} + {preview.effectiveDelayDays}d{preview.source === 'timing-table' ? ' · baseline' : preview.source === 'rule-override' ? ' · custom' : ''})</span>
+              </div>
+            )}
           </div>
 
           <div>
@@ -714,6 +835,9 @@ function PreviewModal({ rule, onClose, onRun }: { rule: Rule; onClose: () => voi
                       <Link href={`/orders/${s.orderId}`} className="text-base font-mono text-blue-600 dark:text-blue-400 hover:underline">{s.channelOrderId}</Link>
                       <span className="text-sm text-slate-500 dark:text-slate-400">{s.customerEmail}</span>
                       <span className="text-sm tabular-nums text-slate-700 dark:text-slate-300">€{Number(s.totalPrice).toFixed(2)}</span>
+                      <span className="text-sm tabular-nums text-emerald-700 dark:text-emerald-300 whitespace-nowrap" title={`${s.anchorUsed ?? ''} + ${s.effectiveDelayDays ?? '?'}d · ${s.source ?? ''}`}>
+                        {s.scheduledFor ? `→ ${new Date(s.scheduledFor).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}` : '—'}
+                      </span>
                     </li>
                   ))}
                 </ul>

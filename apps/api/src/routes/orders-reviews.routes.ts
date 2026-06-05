@@ -220,6 +220,11 @@ const ordersReviewsRoutes: FastifyPluginAsync = async (fastify) => {
       exclusions: r.exclusions,
       minOrderTotalCents: r.minOrderTotalCents,
       notes: r.notes,
+      productTypes: r.productTypes,
+      sendDelayDays: r.sendDelayDays,
+      anchor: r.anchor,
+      sendHourLocal: r.sendHourLocal,
+      skipWeekends: r.skipWeekends,
       useSentimentDiversion: r.useSentimentDiversion,
       fallbackOnNoResponse: r.fallbackOnNoResponse,
     }))
@@ -260,6 +265,8 @@ const ordersReviewsRoutes: FastifyPluginAsync = async (fastify) => {
           exclusions: Array.isArray(r.exclusions) ? r.exclusions : [],
           minOrderTotalCents: r.minOrderTotalCents ?? null,
           notes: r.notes ?? null,
+          ...timingFieldsFromBody(r), // RRT.8 — round-trip timing fields
+
           useSentimentDiversion: r.useSentimentDiversion === true,
           fallbackOnNoResponse: r.fallbackOnNoResponse !== false,
         }
