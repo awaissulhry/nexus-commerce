@@ -92,6 +92,7 @@ interface MatchableOrder {
   fulfillmentMethod: string | null
   hasActiveReturn: boolean
   hasRefund: boolean
+  productType: string | null // RRT.3 — for product-type-targeted rules
 }
 
 function ruleMatchesOrder(rule: any, order: MatchableOrder): boolean {
@@ -109,6 +110,13 @@ function ruleMatchesOrder(rule: any, order: MatchableOrder): boolean {
     case 'WOOCOMMERCE': if (order.channel !== 'WOOCOMMERCE') return false; break
     case 'ETSY': if (order.channel !== 'ETSY') return false; break
     case 'MANUAL': if (order.channel !== 'MANUAL') return false; break
+  }
+  // RRT.3 — product-type targeting. Empty = applies to all types; otherwise the
+  // order's productType must contain one of the rule's patterns (case-insensitive).
+  const pts: string[] = rule.productTypes ?? []
+  if (pts.length > 0) {
+    const t = (order.productType ?? '').toLowerCase()
+    if (!pts.some((p: string) => t.includes(String(p).toLowerCase()))) return false
   }
   // Exclusions
   const exclusions: string[] = rule.exclusions ?? []
@@ -136,6 +144,10 @@ function pickBestRule(rules: any[], order: MatchableOrder): any | null {
     const pa = SCOPE_PRIORITY[a.scope] ?? 100
     const pb = SCOPE_PRIORITY[b.scope] ?? 100
     if (pa !== pb) return pa - pb
+    // RRT.3 — within a scope, a product-type-targeted rule beats a general one.
+    const ta = (a.productTypes?.length ?? 0) > 0 ? 0 : 1
+    const tb = (b.productTypes?.length ?? 0) > 0 ? 0 : 1
+    if (ta !== tb) return ta - tb
     return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
   })
   return candidates[0]
@@ -209,6 +221,7 @@ export async function schedulePendingOrders(): Promise<ScheduleResult> {
         fulfillmentMethod: order.fulfillmentMethod,
         hasActiveReturn: order.returns.some(r => (ACTIVE_RETURN_STATUSES as readonly string[]).includes(r.status)),
         hasRefund: order.financialTransactions.length > 0,
+        productType,
       }
       const matchedRule = pickBestRule(activeRules, matchable)
 

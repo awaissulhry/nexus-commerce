@@ -57,6 +57,18 @@ function extractAmazonOrderId(order: any): string | null {
   return order.channel === 'AMAZON' ? order.channelOrderId : null
 }
 
+// RRT.4 — validate + normalize the operator-configurable timing fields shared by
+// POST/PATCH. anchor is advisory (the resolver forces Amazon→DELIVERY at send).
+function timingFieldsFromBody(body: any): Record<string, any> {
+  const out: Record<string, any> = {}
+  if (Array.isArray(body.productTypes)) out.productTypes = body.productTypes.map((p: any) => String(p).trim()).filter(Boolean)
+  if (body.sendDelayDays !== undefined) out.sendDelayDays = body.sendDelayDays == null ? null : Math.max(1, Math.min(60, Math.floor(Number(body.sendDelayDays))))
+  if (body.anchor !== undefined) out.anchor = ['DELIVERY', 'SHIP', 'PURCHASE'].includes(body.anchor) ? body.anchor : 'DELIVERY'
+  if (body.sendHourLocal !== undefined) out.sendHourLocal = body.sendHourLocal == null ? null : Math.max(0, Math.min(23, Math.floor(Number(body.sendHourLocal))))
+  if (body.skipWeekends !== undefined) out.skipWeekends = body.skipWeekends === true
+  return out
+}
+
 const ordersReviewsRoutes: FastifyPluginAsync = async (fastify) => {
   // ═══════════════════════════════════════════════════════════════════
   // RULES — CRUD
@@ -78,6 +90,11 @@ const ordersReviewsRoutes: FastifyPluginAsync = async (fastify) => {
           notes: r.notes,
           useSentimentDiversion: r.useSentimentDiversion,
           fallbackOnNoResponse: r.fallbackOnNoResponse,
+          productTypes: r.productTypes,
+          sendDelayDays: r.sendDelayDays,
+          anchor: r.anchor,
+          sendHourLocal: r.sendHourLocal,
+          skipWeekends: r.skipWeekends,
           requestCount: r._count.requests,
           updatedAt: r.updatedAt,
         })),
@@ -109,6 +126,7 @@ const ordersReviewsRoutes: FastifyPluginAsync = async (fastify) => {
           notes: body.notes ?? null,
           useSentimentDiversion: body.useSentimentDiversion === true,
           fallbackOnNoResponse: body.fallbackOnNoResponse !== false,
+          ...timingFieldsFromBody(body),
           createdBy: 'default-user',
         },
       })
@@ -159,6 +177,7 @@ const ordersReviewsRoutes: FastifyPluginAsync = async (fastify) => {
       }
       if (body.useSentimentDiversion !== undefined) data.useSentimentDiversion = body.useSentimentDiversion === true
       if (body.fallbackOnNoResponse !== undefined) data.fallbackOnNoResponse = body.fallbackOnNoResponse === true
+      Object.assign(data, timingFieldsFromBody(body)) // RRT.4 — timing fields
       // RV.9.1 follow-up — surface the (name, scope, marketplace) unique
       // violation as a 409 with a useful message; this used to bubble up
       // as a plain 500.
@@ -296,6 +315,11 @@ const ordersReviewsRoutes: FastifyPluginAsync = async (fastify) => {
         notes: src.notes,
         useSentimentDiversion: src.useSentimentDiversion,
         fallbackOnNoResponse: src.fallbackOnNoResponse,
+        productTypes: src.productTypes,
+        sendDelayDays: src.sendDelayDays,
+        anchor: src.anchor,
+        sendHourLocal: src.sendHourLocal,
+        skipWeekends: src.skipWeekends,
         createdBy: 'ab-variant',
       },
     })
@@ -422,18 +446,57 @@ const ordersReviewsRoutes: FastifyPluginAsync = async (fastify) => {
       const rule = await prisma.reviewRule.findUnique({ where: { id } })
       if (!rule) return reply.status(404).send({ error: 'Rule not found' })
       const matches = await findOrdersMatchingRule(rule)
+      // RRT.6 — compute the real scheduledFor per sample so the preview shows WHEN.
+      const { resolveSendTiming } = await import('../services/reviews/review-timing.service.js')
+      const timingDefaults = await prisma.reviewTimingDefault.findMany({ where: { isActive: true } })
       return {
         rule: { id: rule.id, name: rule.name, scope: rule.scope, marketplace: rule.marketplace },
         matchCount: matches.length,
-        sample: matches.slice(0, 25).map((m) => ({
-          orderId: m.id, channelOrderId: m.channelOrderId, channel: m.channel, marketplace: m.marketplace,
-          totalPrice: Number(m.totalPrice), customerEmail: m.customerEmail, deliveredAt: m.deliveredAt,
-        })),
+        sample: matches.slice(0, 25).map((m: any) => {
+          const r = resolveSendTiming(
+            { channel: m.channel, marketplace: m.marketplace, deliveredAt: m.deliveredAt, shippedAt: m.shippedAt, purchaseDate: m.purchaseDate, productType: m.items?.[0]?.product?.productType ?? null },
+            rule,
+            timingDefaults,
+          )
+          return {
+            orderId: m.id, channelOrderId: m.channelOrderId, channel: m.channel, marketplace: m.marketplace,
+            totalPrice: Number(m.totalPrice), customerEmail: m.customerEmail, deliveredAt: m.deliveredAt,
+            scheduledFor: r.scheduledFor, anchorUsed: r.anchorUsed, effectiveDelayDays: r.effectiveDelayDays, source: r.source,
+          }
+        }),
       }
     } catch (err: any) {
       logger.error('[REVIEW ENGINE] dry-run failed', { message: err.message })
       return reply.status(500).send({ error: err.message })
     }
+  })
+
+  // RRT.6 — stateless timing preview for the rule editor's live line. Synthesizes
+  // an order delivered/shipped/purchased "now" and resolves the send date for the
+  // in-flight (unsaved) rule fields.
+  fastify.post('/review-rules/preview-timing', async (request, reply) => {
+    const b = (request.body ?? {}) as any
+    const { resolveSendTiming, timezoneForMarketplace } = await import('../services/reviews/review-timing.service.js')
+    const timingDefaults = await prisma.reviewTimingDefault.findMany({ where: { isActive: true } })
+    const now = new Date()
+    const previewRule = {
+      sendDelayDays: b.sendDelayDays == null ? null : Math.max(1, Math.min(60, Math.floor(Number(b.sendDelayDays)))),
+      anchor: ['DELIVERY', 'SHIP', 'PURCHASE'].includes(b.anchor) ? b.anchor : 'DELIVERY',
+      sendHourLocal: b.sendHourLocal == null ? null : Math.max(0, Math.min(23, Math.floor(Number(b.sendHourLocal)))),
+      skipWeekends: b.skipWeekends === true,
+      minDaysSinceDelivery: Math.max(4, Math.floor(b.minDaysSinceDelivery ?? 7)),
+      maxDaysSinceDelivery: Math.min(30, Math.floor(b.maxDaysSinceDelivery ?? 25)),
+    }
+    const channel = b.scope === 'EBAY' ? 'EBAY' : b.scope === 'SHOPIFY' ? 'SHOPIFY' : 'AMAZON'
+    const marketplace = b.marketplace ?? 'IT'
+    const productType = b.productType ?? 'casco'
+    const r = resolveSendTiming(
+      { channel, marketplace, deliveredAt: now, shippedAt: now, purchaseDate: now, productType },
+      previewRule,
+      timingDefaults,
+    )
+    reply.header('Cache-Control', 'no-store')
+    return { ...r, tz: timezoneForMarketplace(marketplace), productType, channel }
   })
 
   fastify.post('/review-rules/:id/run', async (request, reply) => {
@@ -859,6 +922,12 @@ async function findOrdersMatchingRule(rule: any) {
   if (rule.minOrderTotalCents != null) {
     ANDs.push({ totalPrice: { gte: rule.minOrderTotalCents / 100 } })
   }
+  // RRT.3 — product-type targeting (case-insensitive substring on the order's
+  // items' productType), consistent with the JS matcher's t.includes(pattern).
+  const productTypes: string[] = rule.productTypes ?? []
+  if (productTypes.length > 0) {
+    ANDs.push({ OR: productTypes.map((p: string) => ({ items: { some: { product: { productType: { contains: String(p), mode: 'insensitive' } } } } })) })
+  }
   if (ANDs.length > 0) where.AND = ANDs
 
   return prisma.order.findMany({
@@ -866,6 +935,9 @@ async function findOrdersMatchingRule(rule: any) {
     select: {
       id: true, channel: true, marketplace: true, channelOrderId: true,
       totalPrice: true, customerEmail: true, deliveredAt: true,
+      // RRT.6 — extra fields so dry-run can preview the resolved scheduledFor.
+      shippedAt: true, purchaseDate: true,
+      items: { take: 1, select: { product: { select: { productType: true } } } },
     },
     orderBy: { deliveredAt: 'asc' },
     take: 5000,
