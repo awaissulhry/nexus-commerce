@@ -365,6 +365,7 @@ model Product {
   productProfitDailies      ProductProfitDaily[] // AD.1: per-day True Profit roll-up
   reviews                   Review[] // SR.1: ingested customer reviews
   reviewSpikes              ReviewSpike[] // SR.1: detected category spikes
+  amazonReviewInsights      AmazonReviewInsight[] // D.2: official Customer Feedback API insights
   qualitySnapshots          ListingQualitySnapshot[] // PA.2: listing quality history
   fieldLinkGroups           FieldLinkGroup[] // FL.1: cross-channel/market field-sharing groups
 
@@ -10078,6 +10079,34 @@ model ReviewSpike {
 
   @@index([productId, marketplace, category, detectedAt(sort: Desc)])
   @@index([status, detectedAt(sort: Desc)])
+}
+
+// D.2 — Amazon official Customer Feedback API (v2024-06-01) insights.
+// AGGREGATE per ASIN × marketplace (NOT per individual review — Amazon exposes
+// no review TEXT via API, only topics/snippets/trend, refreshed weekly). This is
+// the real Amazon review signal the app surfaces; individual review text still
+// arrives only via eBay feedback or manual import (→ the Review model).
+model AmazonReviewInsight {
+  id             String   @id @default(cuid())
+  asin           String
+  marketplace    String // 'IT' | 'DE' | 'FR' | 'ES' …
+  productId      String? // resolved via ChannelListing / Product.amazonAsin
+  product        Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+  starRating     Float? // current average from itemReviewTrends
+  reviewCount    Int?
+  positiveTopics Json     @default("[]") // [{ topic, mentionCount, ratingImpact, snippets[] }]
+  negativeTopics Json     @default("[]")
+  snippets       Json     @default("[]") // flat fallback list of customer review snippets
+  trend          Json     @default("[]") // [{ month:'2026-05', starRating, reviewCount }]
+  // OK | NEEDS_BRAND_ANALYTICS_ROLE | NO_ASIN | ERROR — surfaced honestly in the UI.
+  accessStatus   String   @default("OK")
+  fetchedAt      DateTime @default(now())
+  raw            Json? // last raw API payload, for re-parse without re-fetch
+
+  @@unique([asin, marketplace])
+  @@index([productId])
+  @@index([marketplace, fetchedAt])
+  @@index([accessStatus])
 }
 
 model ReviewRequest {
