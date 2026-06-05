@@ -228,6 +228,18 @@ export async function runOrdersDeliveredBackfill(
     logger.warn('[orders-delivered-backfill] heuristic pass failed', { error: err instanceof Error ? err.message : String(err) })
   }
 
+  // The SP-API report fetch below returns ~0 Delivered rows (Amazon rarely marks
+  // orders Delivered, FBM never) AND intermittently hangs — keeping the cron run
+  // RUNNING until the orphan-sweeper marks it FAILED after ~2.5h (a false FAILED,
+  // since the heuristic above already advanced deliveredAt + committed). So the
+  // report phase is opt-in; by default we return right after the heuristic for a
+  // fast, reliable SUCCESS.
+  if (process.env.NEXUS_ENABLE_DELIVERED_REPORT_FETCH !== '1') {
+    result.durationMs = Date.now() - startedAt
+    logger.info('[orders-delivered-backfill] heuristic-only tick complete', result)
+    return result
+  }
+
   // Find every Amazon marketplace we should query. Active rows with a
   // marketplaceId set — Amazon-only since the Solicitations + report flow
   // is Amazon-specific.
