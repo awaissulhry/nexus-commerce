@@ -4656,6 +4656,16 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     return { ok: true }
   })
 
+  // RS.4 — preview the pure rank controller's next move for a given target +
+  // observed signals (no writes). Lets the cockpit show "what would the defend
+  // loop do right now", and is how RS.4 is verified end-to-end.
+  fastify.post('/advertising/rank-controller/simulate', async (request, reply) => {
+    const b = request.body as { target?: unknown; observed?: unknown; maxPct?: number }
+    if (!b?.target || !b?.observed) { reply.status(400); return { error: 'target + observed required' } }
+    const { computeStep } = await import('../services/advertising/rank-controller.js')
+    try { return { decision: computeStep(b.target as never, b.observed as never, { maxPct: b.maxPct }) } } catch (e) { reply.status(400); return { error: (e as Error)?.message } }
+  })
+
   fastify.post('/advertising/dayparting/run-now', async (_request, reply) => {
     const { runDaypartingOnce } = await import('../jobs/ad-dayparting.job.js')
     try { return await runDaypartingOnce() } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
