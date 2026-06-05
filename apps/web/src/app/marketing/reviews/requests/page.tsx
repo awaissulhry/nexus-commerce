@@ -11,6 +11,7 @@
  */
 
 import { Mail, AlertCircle, TrendingUp } from 'lucide-react'
+import Link from 'next/link'
 import { getBackendUrl } from '@/lib/backend-url'
 import { ReviewsNav } from '../_shared/ReviewsNav'
 import { RequestsActionsClient } from './RequestsActionsClient'
@@ -97,15 +98,6 @@ async function fetchStats(): Promise<Stats> {
 }
 
 // Optimal delay reference (mirrored from review-scheduler.service.ts for display)
-const TIMING_DISPLAY: Array<{ match: string[]; days: number; label: string }> = [
-  { match: ['Casco', 'Helmet'], days: 21, label: 'Helmet' },
-  { match: ['Combinat', 'Suit'], days: 16, label: 'Suit' },
-  { match: ['Giacca', 'Giubbotto', 'Jacket'], days: 14, label: 'Jacket' },
-  { match: ['Stivali', 'Boot'], days: 14, label: 'Boots' },
-  { match: ['Pantalon'], days: 12, label: 'Trousers' },
-  { match: ['Guanti', 'Glove'], days: 10, label: 'Gloves' },
-]
-
 export default async function ReviewRequestsPage() {
   const [stats, analytics] = await Promise.all([fetchStats(), fetchAnalytics()])
 
@@ -330,42 +322,18 @@ export default async function ReviewRequestsPage() {
           Settings, timing reference &amp; test mode
         </summary>
         <div className="px-4 pb-4 pt-3 space-y-6 border-t border-slate-200 dark:border-slate-800">
-      {/* Timing reference */}
+      {/* Timing — the old hardcoded reference table is retired; timing is now set
+          by rules + the editable per-product-type baseline (RRT-series). */}
       <section>
-        <h2 className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-          Optimal timing by product type
-        </h2>
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md overflow-hidden">
-          <table className="w-full text-xs">
-            <thead className="bg-slate-50 dark:bg-slate-950/50 border-b border-slate-200 dark:border-slate-800">
-              <tr className="text-left uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                <th className="px-3 py-2">Product type</th>
-                <th className="px-3 py-2">Keywords matched</th>
-                <th className="px-3 py-2 text-right">Delay (days post-delivery)</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
-              {TIMING_DISPLAY.map((t) => (
-                <tr key={t.label}>
-                  <td className="px-3 py-2 font-medium text-slate-900 dark:text-slate-100">{t.label}</td>
-                  <td className="px-3 py-2 text-slate-500 font-mono">{t.match.join(', ')}</td>
-                  <td className="px-3 py-2 text-right tabular-nums font-semibold text-blue-700 dark:text-blue-300">
-                    {t.days}d
-                  </td>
-                </tr>
-              ))}
-              <tr className="bg-slate-50 dark:bg-slate-950/40">
-                <td className="px-3 py-2 text-slate-500">All other types</td>
-                <td className="px-3 py-2 text-slate-400 italic">default</td>
-                <td className="px-3 py-2 text-right tabular-nums text-slate-600 dark:text-slate-400">12d</td>
-              </tr>
-            </tbody>
-          </table>
+        <h2 className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Timing</h2>
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md px-4 py-3 text-sm text-slate-600 dark:text-slate-300">
+          When each request is sent is set by your{' '}
+          <Link href="/orders/reviews/rules" className="text-blue-600 dark:text-blue-400 hover:underline">request rules</Link>{' '}
+          and the editable{' '}
+          <Link href="/orders/reviews/rules/timing" className="text-blue-600 dark:text-blue-400 hover:underline">per-product-type timing defaults</Link>.
+          A rule’s delay (or, when it has none, the baseline table) is the “days after delivery”; Amazon orders are clamped to the 4–25 day Solicitations window.
+          With the timing table empty, rules govern and anything unmatched uses the 12-day default.
         </div>
-        <p className="mt-1 text-[11px] text-slate-400 dark:text-slate-500">
-          Amazon orders are clamped to 4–25 days (Solicitations API window). eBay/Shopify orders
-          use the raw delay above with no cap.
-        </p>
       </section>
 
       {/* RV.9.6 — Test mode */}
