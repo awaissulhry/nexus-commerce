@@ -38,8 +38,6 @@ interface Camp { id: string; name: string; marketplace: string | null; status: s
 interface Autonomy { killSwitch: boolean; rules: { total: number; enabled: number; live: number; dryRun: number; disabled: number } }
 
 export function UnifiedRankCockpit() {
-  const [market, setMarket] = useState('IT')
-  const [campaignId, setCampaignId] = useState('')
   const [lookback, setLookback] = useState(30)
   const [campaigns, setCampaigns] = useState<Camp[]>([])
   const [search, setSearch] = useState('')
@@ -51,6 +49,24 @@ export function UnifiedRankCockpit() {
   const [simple, setSimple] = useState(false)
   const [cmdkOpen, setCmdkOpen] = useState(false)
   const [statusFilter, setStatusFilter] = useState<'active' | 'inactive' | 'all'>('active')
+
+  // RK.1 — campaign + market are URL-driven (source of truth) so the cockpit is
+  // reload-safe, shareable and deep-linkable (e.g. the Managed "Cockpit" jump).
+  const sp = useSearchParams()
+  const router = useRouter()
+  const RANK_PATH = '/marketing/ads-console/rank'
+  const setParams = useCallback((patch: Record<string, string | null>) => {
+    const next = new URLSearchParams(sp.toString())
+    for (const [k, v] of Object.entries(patch)) { if (v == null || v === '') next.delete(k); else next.set(k, v) }
+    router.replace(`${RANK_PATH}?${next.toString()}`, { scroll: false })
+  }, [sp, router])
+  const market = sp.get('market') ?? 'IT'
+  const campaignId = sp.get('campaignId') ?? ''
+  const mode = sp.get('mode') ?? 'cockpit'
+  const view: 'cockpit' | 'managed' | 'overview' = mode === 'managed' ? 'managed' : mode === 'overview' ? 'overview' : 'cockpit'
+  const viewLabel = view === 'managed' ? 'Managed campaigns' : view === 'overview' ? 'Overview' : 'Cockpit'
+  const setMarket = useCallback((m: string) => setParams({ market: m, campaignId: null }), [setParams])
+  const setCampaignId = useCallback((id: string) => setParams({ campaignId: id || null }), [setParams])
 
   useEffect(() => { void fetch(`${getBackendUrl()}/api/advertising/campaigns?limit=500`, { cache: 'no-store' }).then(r => r.json()).then(d => setCampaigns((d.items ?? []) as Camp[])).catch(() => {}) }, [])
   useEffect(() => { void fetch(`${getBackendUrl()}/api/advertising/autonomy/status`, { cache: 'no-store' }).then(r => r.json()).then(d => setAutonomy(d as Autonomy)).catch(() => {}) }, [])
@@ -83,10 +99,15 @@ export function UnifiedRankCockpit() {
   // campaign list (search, palette, bulk). Picker stays market-specific via inMarket.
   const matchStatus = useCallback((c: Camp) => (statusFilter === 'all' ? true : statusFilter === 'active' ? c.status === 'ENABLED' : c.status !== 'ENABLED'), [statusFilter])
   const inMarketStatus = useMemo(() => inMarket.filter(matchStatus), [inMarket, matchStatus])
+  // RK.1 — pick a sensible default ONLY when the URL has no valid in-market
+  // campaign; honor an explicit URL campaign even if it's paused/archived.
   useEffect(() => {
-    if (inMarket.length === 0) { setCampaignId(''); return }
-    setCampaignId(prev => (inMarket.some(c => c.id === prev) ? prev : (inMarketStatus[0]?.id ?? inMarket[0]!.id)))
-  }, [inMarket]) // eslint-disable-line react-hooks/exhaustive-deps
+    if (view !== 'cockpit' || campaigns.length === 0) return
+    if (inMarket.length === 0) { if (campaignId) setCampaignId(''); return }
+    if (campaignId && inMarket.some(c => c.id === campaignId)) return
+    const def = inMarketStatus[0]?.id ?? inMarket[0]?.id ?? ''
+    if (def && def !== campaignId) setCampaignId(def)
+  }, [view, campaigns, inMarket, inMarketStatus, campaignId, setCampaignId])
   const campaign = useMemo(() => campaigns.find(c => c.id === campaignId) ?? null, [campaigns, campaignId])
   const searchResults = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -96,13 +117,14 @@ export function UnifiedRankCockpit() {
 
   const pickCampaign = useCallback((id: string) => { setCampaignId(id); setSearch(''); setSearchOpen(false) }, [])
 
-  // RC5.1 — sub-nav mode routing: Overview · Cockpit · Managed campaigns.
-  const sp = useSearchParams()
-  const router = useRouter()
-  const mode = sp.get('mode') ?? 'cockpit'
-  const view: 'cockpit' | 'managed' | 'overview' = mode === 'managed' ? 'managed' : mode === 'overview' ? 'overview' : 'cockpit'
-  const viewLabel = view === 'managed' ? 'Managed campaigns' : view === 'overview' ? 'Overview' : 'Cockpit'
-  const goCockpit = useCallback((id: string) => { setCampaignId(id); router.push('/marketing/ads-console/rank?mode=cockpit') }, [router])
+  // RC5.1 / RK.1 — jump to a specific campaign in the cockpit via the URL (reliable
+  // deep-link). Widen the status filter if the target is paused/archived so it's
+  // visible + selected rather than silently filtered out.
+  const goCockpit = useCallback((id: string) => {
+    const c = campaigns.find(x => x.id === id)
+    if (c && c.status !== 'ENABLED') setStatusFilter('all')
+    setParams({ mode: 'cockpit', campaignId: id })
+  }, [campaigns, setParams])
 
   const tone = autonomy?.killSwitch ? 'off' : (autonomy?.rules.live ?? 0) > 0 ? 'auto' : (autonomy?.rules.enabled ?? 0) > 0 ? 'suggest' : 'idle'
   const autonomyLabel = !autonomy ? '…'
@@ -185,7 +207,7 @@ export function UnifiedRankCockpit() {
         open={cmdkOpen}
         onClose={() => setCmdkOpen(false)}
         campaigns={inMarketStatus}
-        onPick={(id, mk) => { if (mk) setMarket(mk); setCampaignId(id) }}
+        onPick={(id, mk) => setParams(mk ? { market: mk, campaignId: id } : { campaignId: id })}
         actions={[
           { id: 'simple', label: simple ? 'Switch to Full view' : 'Switch to Simple view', run: () => setSimple(v => !v) },
           { id: 'staged', label: 'Open staged changes', run: () => { setTrayTab('staged'); setTrayOpen(true) } },
