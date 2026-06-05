@@ -73,11 +73,12 @@ export function AutomateStation({ market, onChanged }: { market: string; onChang
   return (
     <div className="az-station">
       <button type="button" className="az-station-head" onClick={() => setOpen(v => !v)} aria-expanded={open}>
-        {open ? <ChevronDown size={15} /> : <ChevronRight size={15} />} <Bot size={15} /> <b>Automate</b>
-        <span className="sub">rules that hold your rank automatically · {posture}</span>
+        {open ? <ChevronDown size={15} /> : <ChevronRight size={15} />} <Bot size={15} /> <b>Advanced rules</b>
+        <span className="sub">custom hands-off automation · {posture}</span>
       </button>
       {open && (
         <div className="az-station-body">
+          <div className="az-auto-pointer">Set your <b>rank goal</b> in the <b>Rank plan</b> (§② above) — that owns the goal, the schedule, and Auto-defend. These are custom rules for power users.</div>
           {status?.killSwitch && <div className="az-auto-halt"><AlertTriangle size={13} /> Automation kill-switch is ON — no rule will act until it&apos;s cleared.</div>}
           <div className="az-auto-card">
             <div className="az-auto-title"><ShieldCheck size={14} /> Hold Top-of-Search rank ({market})</div>

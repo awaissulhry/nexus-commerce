@@ -11,7 +11,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react'
-import { Crosshair, Plus, Trash2, Save, UploadCloud, Undo2, Sparkles } from 'lucide-react'
+import { Crosshair, Plus, Trash2, Save, UploadCloud, Undo2, Sparkles, Power } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 
 interface RankTarget { id: string; key: string; name: string; placement: string; targetISPct: number | null; acosCapPct: number | null; pause: boolean; allOut: boolean; color: string | null }
@@ -92,6 +92,18 @@ export function RankPlanPanel({ campaignId, campaignName }: { campaignId: string
     } finally { setBusy('') }
   }
   const discard = () => { setBaseline(serverBaseline); setWindows(serverWindows.map(w => ({ ...w }))); setMsg('') }
+  // CR.3 — §2 owns the goal AND whether the engine auto-holds it (the schedule's
+  // enabled flag). Advanced custom rules live separately under §4.
+  const toggleDefend = async () => {
+    if (!sched) return
+    const next = !sched.enabled
+    setMsg('')
+    try {
+      const r = await fetch(api(`/schedules/${sched.id}`), { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled: next }) }).then(x => x.json())
+      if (r?.id) setSched(r)
+      setMsg(next ? 'Auto-defend ON — the engine holds this plan on its cadence (live pushes still need the write-gate).' : 'Auto-defend OFF — plan saved but not auto-held.')
+    } catch { setMsg('Could not toggle auto-defend.') }
+  }
 
   if (!campaignId) return null
 
@@ -99,6 +111,7 @@ export function RankPlanPanel({ campaignId, campaignName }: { campaignId: string
     <div className="az-rp">
       <div className="az-rp-head">
         <span className="t"><Crosshair size={15} /> Rank plan <span className="sub">· {campaignName}</span></span>
+        {sched && <button type="button" className={`az-rp-defend ${sched.enabled ? 'on' : ''}`} onClick={() => void toggleDefend()} title="When ON, the engine continuously holds this plan on its cadence"><Power size={12} /> Auto-defend {sched.enabled ? 'ON' : 'OFF'}</button>}
         <span className="grow" />
         {dirty && <span className="az-rp-dirty">Unsaved</span>}
         <button type="button" className="az-btn" disabled={!dirty || busy !== ''} onClick={discard}><Undo2 size={13} /> Discard</button>

@@ -428,6 +428,9 @@
 .az-rp-head .t .sub { color: var(--ink2); font-weight: 500; font-size: 12.5px; }
 .az-rp-head .grow { flex: 1; }
 .az-rp-dirty { font-size: 10.5px; font-weight: 800; letter-spacing: .3px; text-transform: uppercase; color: var(--amber); background: #fbeed7; border-radius: 5px; padding: 2px 7px; }
+.az-rp-defend { display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--border); border-radius: 999px; background: #fff; padding: 4px 11px; font: inherit; font-size: 11.5px; font-weight: 700; color: var(--ink2); cursor: pointer; }
+.az-rp-defend.on { background: #e7f5ec; color: var(--green); border-color: #b6e0c4; }
+.az-auto-pointer { background: #f4f8ff; border: 1px solid #d8e6ff; border-radius: 8px; padding: 8px 12px; font-size: 12px; color: var(--ink); margin-bottom: 10px; }
 .az-rp-load, .az-rp-empty { color: var(--ink2); font-size: 12.5px; padding: 8px 0; }
 .az-rp-empty { padding: 6px 0 2px; }
 .az-rp-sec { padding: 10px 0; border-top: 1px solid var(--divider); }
