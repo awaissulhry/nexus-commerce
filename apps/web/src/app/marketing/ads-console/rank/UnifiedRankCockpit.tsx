@@ -180,21 +180,37 @@ export function UnifiedRankCockpit() {
       {view === 'managed' && <ManagedCampaigns market={market} onJump={goCockpit} onChanged={loadPending} />}
 
       {view === 'cockpit' && (<>
-        {campaignId && <IntelligenceBanner campaignId={campaignId} market={market} />}
-        {campaignId && <RankTrend campaignId={campaignId} lookback={lookback} />}
-        {campaignId && <RankPlanPanel campaignId={campaignId} campaignName={campaign?.name ?? 'this campaign'} />}
+        {/* CR.1 — one guided journey: ① see where you rank → ② set the goal →
+            ③ adjust → ④ automate. (Later phases de-duplicate the controls inside.) */}
+        {campaignId && (
+          <section className="az-cr-sec">
+            <div className="az-cr-sechd"><span className="n">1</span><div className="x"><b>Where you rank</b><span>Top-of-Search share + trend, and any self-competition to clear first.</span></div></div>
+            <IntelligenceBanner campaignId={campaignId} market={market} />
+            <RankTrend campaignId={campaignId} lookback={lookback} />
+          </section>
+        )}
+        {campaignId && (
+          <section className="az-cr-sec">
+            <div className="az-cr-sechd"><span className="n">2</span><div className="x"><b>Your rank goal &amp; schedule</b><span>Hold this rank, on this schedule — Save, Publish, or Discard.</span></div></div>
+            <RankPlanPanel campaignId={campaignId} campaignName={campaign?.name ?? 'this campaign'} />
+          </section>
+        )}
 
         {simple ? (
           <SimpleRankPanel market={market} campaignId={campaignId} campaignName={campaign?.name ?? 'this campaign'} onFull={() => setSimple(false)} onChanged={loadPending} />
         ) : (<>
-          <RankPlacementCockpit market={market} campaignId={campaignId} lookbackDays={lookback} onMarketChange={setMarket} onCampaignChange={setCampaignId} hideScopeBar hideKeywordManager />
-
-          {/* ── Absorbed modes as progressive stations (RC4.2+) ── */}
-          {campaignId && <StrategyStation campaignId={campaignId} currentStrategy={campaign?.biddingStrategy ?? null} onChanged={loadPending} />}
-          {campaignId && <KeywordBidStation campaignId={campaignId} onChanged={loadPending} />}
-          {campaignId && <ConquestStation campaignId={campaignId} onChanged={loadPending} />}
-          <AutomateStation market={market} onChanged={loadPending} />
-          <BulkApplyStation campaigns={inMarketStatus} market={market} onChanged={loadPending} />
+          <section className="az-cr-sec">
+            <div className="az-cr-sechd"><span className="n">3</span><div className="x"><b>Adjust placement &amp; bids</b><span>Fine-tune where this campaign competes and what it pays.</span></div></div>
+            <RankPlacementCockpit market={market} campaignId={campaignId} lookbackDays={lookback} onMarketChange={setMarket} onCampaignChange={setCampaignId} hideScopeBar hideKeywordManager />
+            {campaignId && <StrategyStation campaignId={campaignId} currentStrategy={campaign?.biddingStrategy ?? null} onChanged={loadPending} />}
+            {campaignId && <KeywordBidStation campaignId={campaignId} onChanged={loadPending} />}
+            {campaignId && <ConquestStation campaignId={campaignId} onChanged={loadPending} />}
+          </section>
+          <section className="az-cr-sec">
+            <div className="az-cr-sechd"><span className="n">4</span><div className="x"><b>Automate &amp; apply</b><span>Hands-off rules, and apply across multiple campaigns at once.</span></div></div>
+            <AutomateStation market={market} onChanged={loadPending} />
+            <BulkApplyStation campaigns={inMarketStatus} market={market} onChanged={loadPending} />
+          </section>
         </>)}
 
         {/* ── Footer: staged-changes tray + history (RC4.5 / RC4.6) ── */}
