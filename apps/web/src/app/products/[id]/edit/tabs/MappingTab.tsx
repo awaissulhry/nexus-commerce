@@ -10,7 +10,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { Loader2, SlidersHorizontal, Plus } from 'lucide-react'
+import { Loader2, SlidersHorizontal, Plus, Wand2 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
 import { useFieldLinks } from '../_shared/cockpit-shell'
@@ -18,6 +18,7 @@ import FieldSourceBadge from '../_shared/cockpit-shell/FieldSourceBadge'
 import FieldScopePopover, { type ScopeMember } from '../_shared/cockpit-shell/FieldScopePopover'
 import CatalogCascadeDrawer from '../_shared/cockpit-shell/CatalogCascadeDrawer'
 import RuleEditorDrawer from '../_shared/cockpit-shell/RuleEditorDrawer'
+import AutoMapModal from '../_shared/cockpit-shell/AutoMapModal'
 import type { FieldSource } from '../_shared/cockpit-shell/contracts'
 
 interface MatrixCell {
@@ -124,6 +125,7 @@ export default function MappingTab({ product }: { product: MappingTabProduct }) 
     open: boolean
     initial?: { channel: string; marketplace: string; fieldKey: string }
   }>({ open: false })
+  const [autoMapOpen, setAutoMapOpen] = useState(false)
   const openCascade = useCallback(() => {
     const c: Record<string, unknown> = {}
     if (product.name) c.title = product.name
@@ -228,16 +230,25 @@ export default function MappingTab({ product }: { product: MappingTabProduct }) 
         <div className="rounded-lg border border-dashed border-slate-300 px-4 py-12 text-center dark:border-slate-700">
           <div className="text-sm font-medium text-slate-700 dark:text-slate-300">No mapping rules yet</div>
           <div className="mx-auto mt-1 max-w-md text-xs text-slate-500">
-            {coords.length} {coords.length === 1 ? 'market has' : 'markets have'} no field-mapping rules. Add the
-            first one right here — no need to leave for Settings.
+            {coords.length} {coords.length === 1 ? 'market has' : 'markets have'} no field-mapping rules. Auto-map them
+            in one pass, or add rules one at a time — no need to leave for Settings.
           </div>
-          <button
-            type="button"
-            onClick={() => setRuleDrawer({ open: true })}
-            className="mt-3 inline-flex items-center gap-1 rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700"
-          >
-            <Plus className="h-3.5 w-3.5" /> Add a rule
-          </button>
+          <div className="mt-3 flex items-center justify-center gap-2">
+            <button
+              type="button"
+              onClick={() => setAutoMapOpen(true)}
+              className="inline-flex items-center gap-1 rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700"
+            >
+              <Wand2 className="h-3.5 w-3.5" /> Auto-map fields
+            </button>
+            <button
+              type="button"
+              onClick={() => setRuleDrawer({ open: true })}
+              className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+            >
+              <Plus className="h-3.5 w-3.5" /> Add a rule
+            </button>
+          </div>
         </div>
         <RuleEditorDrawer
           productType={product.productType}
@@ -246,6 +257,13 @@ export default function MappingTab({ product }: { product: MappingTabProduct }) 
           open={ruleDrawer.open}
           onClose={() => setRuleDrawer({ open: false })}
           onSaved={() => void load()}
+        />
+        <AutoMapModal
+          coordinates={coords.map((c) => ({ channel: c.channel, marketplace: c.marketplace }))}
+          productType={product.productType}
+          open={autoMapOpen}
+          onClose={() => setAutoMapOpen(false)}
+          onApplied={() => void load()}
         />
       </div>
     )
@@ -294,9 +312,17 @@ export default function MappingTab({ product }: { product: MappingTabProduct }) 
         )}
         <button
           type="button"
+          onClick={() => setAutoMapOpen(true)}
+          title="Auto-map unmapped fields (heuristic + AI), review, apply in one go"
+          className="ml-auto inline-flex items-center gap-1 rounded-md border border-blue-200 bg-blue-50 px-2 py-1 font-medium text-blue-700 hover:bg-blue-100 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-300"
+        >
+          <Wand2 className="h-3 w-3" /> Auto-map
+        </button>
+        <button
+          type="button"
           onClick={() => setRuleDrawer({ open: true })}
           title="Add a mapping rule for an unmapped field"
-          className="ml-auto inline-flex items-center gap-1 rounded-md border border-slate-200 px-2 py-1 font-medium text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800"
+          className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-2 py-1 font-medium text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800"
         >
           <Plus className="h-3 w-3" /> Add rule
         </button>
@@ -469,6 +495,14 @@ export default function MappingTab({ product }: { product: MappingTabProduct }) 
         open={ruleDrawer.open}
         onClose={() => setRuleDrawer({ open: false })}
         onSaved={() => void load()}
+      />
+
+      <AutoMapModal
+        coordinates={coords.map((c) => ({ channel: c.channel, marketplace: c.marketplace }))}
+        productType={product.productType}
+        open={autoMapOpen}
+        onClose={() => setAutoMapOpen(false)}
+        onApplied={() => void load()}
       />
     </div>
   )
