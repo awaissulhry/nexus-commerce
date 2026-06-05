@@ -4666,6 +4666,16 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     try { return { decision: computeStep(b.target as never, b.observed as never, { maxPct: b.maxPct }) } } catch (e) { reply.status(400); return { error: (e as Error)?.message } }
   })
 
+  // RS.5 — run the rank-defend loop once across every enabled goal-mode schedule.
+  // ?dryRun=1 (or body {dryRun:true}) previews decisions with NO writes; otherwise
+  // it applies (honouring the live-write gate — sandbox writes stay local).
+  fastify.post('/advertising/rank-defend/run-now', async (request, reply) => {
+    const body = (request.body ?? {}) as { dryRun?: boolean }
+    const dryRun = body.dryRun === true || (request.query as { dryRun?: string })?.dryRun === '1'
+    const { runRankDefendOnce } = await import('../jobs/ad-rank-defend.job.js')
+    try { return await runRankDefendOnce({ dryRun }) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
+  })
+
   fastify.post('/advertising/dayparting/run-now', async (_request, reply) => {
     const { runDaypartingOnce } = await import('../jobs/ad-dayparting.job.js')
     try { return await runDaypartingOnce() } catch (e) { reply.status(500); return { error: (e as Error)?.message } }

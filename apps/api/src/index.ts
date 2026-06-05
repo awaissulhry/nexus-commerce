@@ -1116,6 +1116,8 @@ async function start() {
       await import('./services/advertising/ads-bid-optimizer.service.js');
       markCronStep('ads:import ad-dayparting.job');
       const { startDaypartingCron } = await import('./jobs/ad-dayparting.job.js');
+      // RS.5 — rank-defend loop (self-gated on NEXUS_ENABLE_RANK_DEFEND=1).
+      const { startRankDefendCron } = await import('./jobs/ad-rank-defend.job.js');
       markCronStep('ads:import ads-budget-pacing');
       await import('./services/advertising/ads-budget-pacing.service.js');
       // Apex D.2 — registers the defend_top_of_search handler.
@@ -1142,6 +1144,7 @@ async function start() {
       // Register all schedules (these are synchronous node-cron registrations).
       markCronStep('ads:register schedules');
       startDaypartingCron();
+      startRankDefendCron();
       startAllAdvertisingCrons();
       startAdvertisingRuleEvaluatorCron();
       startBudgetPoolRebalanceCron();
