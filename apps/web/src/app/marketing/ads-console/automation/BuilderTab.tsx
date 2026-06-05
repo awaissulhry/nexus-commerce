@@ -19,6 +19,7 @@ import {
   TRIGGERS, OPS, ACTIONS, triggerDef, fieldDef, actionDef,
   suggestedFields, fieldSuffix, paramSuffix, condToRaw, paramToRaw, actionPhrase,
 } from './vocab'
+import { checkRuleLogic } from './synthetic-test'
 
 interface CondRow { field: string; op: string; value: string }
 interface ActRow { type: string; params: Record<string, string> }
@@ -119,9 +120,10 @@ export function BuilderTab({ onSaved, onGoActive }: { onSaved: () => void; onGoA
       const ruleId: string | undefined = json?.rule?.id
       if (!res.ok || !ruleId) { setMsg('Could not create the rule — check the inputs and try again.'); return }
       if (runTest) {
-        const t = await fetch(`${getBackendUrl()}/api/advertising/automation-rules/${ruleId}/test`, { method: 'POST', headers: { 'Content-Type': 'application/json' } }).then((x) => x.json()).catch(() => null)
-        const n = t?.matched ?? t?.matches ?? 0
-        setTestMsg(`Tested against current data — ${n} match${n === 1 ? '' : 'es'}. It’s dry-run, so nothing changed.`)
+        const { matched } = await checkRuleLogic(ruleId, conditions)
+        setTestMsg(matched === true ? 'Engine check ✓ — fires correctly on a matching entity (dry-run, nothing changed).'
+          : matched === false ? 'Engine check — a sample matching entity didn’t trigger; review your conditions.'
+          : 'Engine check couldn’t run just now — the rule was still created.')
       }
       setMsg('Created — disabled + dry-run. Turn it on from Active rules when you’re ready.')
       onSaved()
