@@ -283,11 +283,16 @@ export function RankPlacementCockpit({ market: ctxMarket, campaignId: ctxCampaig
     return [...rows].sort((a, b) => (a.status === b.status ? a.name.localeCompare(b.name) : a.status === 'ENABLED' ? -1 : 1))
   }, [inMarket, campaignSearch])
 
-  // Keep a valid selection as the market/filter changes.
+  // Keep a valid selection as the market/filter changes — but ONLY when this
+  // cockpit owns selection (standalone). RK.1.1: when embedded in the unified
+  // cockpit (onCampaignChange provided), the PARENT owns the URL-driven campaign;
+  // auto-picking filtered[0] here clobbered deep links (e.g. the Managed → Cockpit
+  // jump and ?campaignId=… reloads always fell back to the first campaign).
   useEffect(() => {
+    if (onCampaignChange) return
     if (filtered.length === 0) { setCampaignId(''); return }
     if (!filtered.some(c => c.id === campaignId)) setCampaignId(filtered[0].id)
-  }, [filtered, campaignId])
+  }, [filtered, campaignId, onCampaignChange])
 
   const campaign = useMemo(() => campaigns.find(c => c.id === campaignId) ?? null, [campaigns, campaignId])
 
