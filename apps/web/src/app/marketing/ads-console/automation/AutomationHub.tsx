@@ -75,6 +75,7 @@ export function AutomationHub({ initialRules, initialState }: { initialRules: Ru
   const [selRecs, setSelRecs] = useState<Set<string>>(new Set())   // recommendations multi-select
   const [groupBy, setGroupBy] = useState<'none' | 'trigger' | 'status'>('none') // RC6.4
   const [expanded, setExpanded] = useState<Set<string>>(new Set())              // RC6.4 drill-through
+  const [safetyView, setSafetyView] = useState<'controls' | 'guardrails' | 'retail' | 'budget'>('controls') // RC6.7
 
   const refetchRules = useCallback(async () => {
     const d = await fetch(`${getBackendUrl()}/api/advertising/automation-rules`, { cache: 'no-store' }).then((r) => r.json()).catch(() => ({ items: [] }))
@@ -86,6 +87,7 @@ export function AutomationHub({ initialRules, initialState }: { initialRules: Ru
   }, [])
   useEffect(() => { void fetch(`${getBackendUrl()}/api/advertising/recommendations?limit=80`, { cache: 'no-store' }).then((r) => r.json()).then(setRecs).catch(() => {}) }, [])
   useEffect(() => { if (tab === 'rank') router.replace('/marketing/ads-console/rank') }, [tab, router])  // RC6.5 — legacy ?tab=rank → /rank
+  useEffect(() => { const m: Record<string, 'controls' | 'guardrails' | 'retail' | 'budget'> = { guardrails: 'guardrails', retail: 'retail', budget: 'budget', engine: 'controls', safety: 'controls' }; if (m[tab]) setSafetyView(m[tab]) }, [tab])  // RC6.7 — sync Safety sub-view from deep-link
 
   const ruleNames = useMemo(() => new Set(rules.map((r) => r.name)), [rules])
   const liveCount = rules.filter((r) => r.enabled && !r.dryRun).length
@@ -276,7 +278,11 @@ export function AutomationHub({ initialRules, initialState }: { initialRules: Ru
         ) })}
       </div>}
 
-      {(tab === 'engine' || tab === 'safety') && <div style={{ paddingTop: 4 }}>
+      {['safety', 'engine', 'guardrails', 'retail', 'budget'].includes(tab) && <div style={{ paddingTop: 4 }}>
+        <div className="az-ins-nav">
+          {([['controls', 'Controls & kill-switch'], ['guardrails', 'Guardrails'], ['retail', 'Retail guard'], ['budget', 'Budget pacing']] as const).map(([k, l]) => <button key={k} className={`az-ins-tab ${safetyView === k ? 'on' : ''}`} onClick={() => setSafetyView(k)}>{l}</button>)}
+        </div>
+        {safetyView === 'controls' && <>
         <div className="az-eng-card" style={{ marginBottom: 16, borderColor: state?.effectivelyStopped ? '#f4c7c0' : undefined }}>
           <h4><ShieldAlert size={15} style={{ marginRight: 6, verticalAlign: 'text-bottom' }} />Autonomy &amp; kill-switch</h4>
           <p>Engine state: <b style={{ color: state?.effectivelyStopped ? '#cc1100' : 'var(--green)' }}>{state?.effectivelyStopped ? 'HALTED' : state?.autonomy ?? 'AUTO'}</b>{state?.haltReason ? ` — ${state.haltReason}` : ''}. The kill-switch instantly stops every automation from acting.</p>
@@ -303,13 +309,14 @@ export function AutomationHub({ initialRules, initialState }: { initialRules: Ru
           ))}
         </div>
         <div style={{ color: 'var(--ink2)', fontSize: 12, padding: '14px 2px' }}>Manual runs honour each rule’s dry-run setting — a dry-run rule only previews. Set targets &amp; thresholds per rule in the Active rules tab.</div>
+        </>}
+        {safetyView === 'guardrails' && <GuardrailsTab />}
+        {safetyView === 'retail' && <RetailTab />}
+        {safetyView === 'budget' && <BudgetPacingTab />}
       </div>}
 
       {['insights', 'analytics', 'efficiency', 'anomaly', 'health', 'competitive'].includes(tab) && <InsightsTab initialView={tab === 'anomaly' ? 'anomalies' : (tab === 'analytics' || tab === 'insights') ? 'performance' : tab} />}
       {tab === 'dayparting' && <DaypartingTab />}
-      {tab === 'retail' && <RetailTab />}
-      {tab === 'budget' && <BudgetPacingTab />}
-      {tab === 'guardrails' && <GuardrailsTab />}
       {(tab === 'composer' || tab === 'builder') && <BuilderTab onSaved={() => { void refetchRules() }} onGoActive={() => setTab('active')} />}
       {tab === 'rank' && <div className="az-empty" style={{ border: '1px solid var(--divider)', borderRadius: 10 }}>Rank Control now has its own workspace. <a className="az-link" href="/marketing/ads-console/rank">Open Rank Control →</a></div>}
       {tab === 'harvest' && <HarvestTab />}
