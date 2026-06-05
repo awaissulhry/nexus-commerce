@@ -19,6 +19,7 @@
 import type { PrismaClient } from '@prisma/client'
 import { AmazonService } from '../marketplaces/amazon.service.js'
 import { amazonMarketplaceId, amazonLocale } from './marketplace-ids.js'
+import { extractEnumLabels } from './enum-labels.js'
 
 const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000
 
@@ -60,24 +61,6 @@ interface AmazonProductTypeMeta {
     title: string
     propertyNames: string[]
   }>
-}
-
-/** VL.1 — extract {fieldKey: {wireValue: enumName}} from an Amazon JSON schema
- *  (the array-wrapped `items.properties.value` enum/enumNames pattern). */
-function extractEnumLabels(schema: Record<string, unknown>): Record<string, Record<string, string>> {
-  const props = (schema?.properties ?? {}) as Record<string, any>
-  const out: Record<string, Record<string, string>> = {}
-  for (const [name, fs] of Object.entries(props)) {
-    const v = (fs?.items?.properties ?? {})?.value
-    const en = v?.enum
-    const names = v?.enumNames
-    if (Array.isArray(en) && Array.isArray(names) && en.length === names.length && en.length > 0) {
-      const m: Record<string, string> = {}
-      for (let i = 0; i < en.length; i++) m[String(en[i])] = String(names[i])
-      out[name] = m
-    }
-  }
-  return out
 }
 
 export class CategorySchemaService {
