@@ -34,6 +34,7 @@ import {
   removeFieldMapping,
   bulkUpsertFieldMappings,
   bulkRemoveFieldMappings,
+  cloneMapping,
   validateFieldRule,
   MarketplaceNotFoundError,
   InvalidMappingError,
@@ -539,6 +540,40 @@ const pimMappingRoutes: FastifyPluginAsync = async (fastify) => {
       if (err instanceof MarketplaceNotFoundError) return reply.status(404).send({ error: err.message })
       request.log.error({ err }, 'bulk mapping remove failed')
       return reply.status(500).send({ error: err?.message ?? 'bulk remove failed' })
+    }
+  })
+
+  // ── POST /pim/mappings/clone ────────────────────────────────────
+  // BM.4 — clone a coordinate's rules to other markets/types (filtered to
+  // each target's fields; optional auto-translate for text fields).
+  fastify.post<{
+    Body: {
+      from: { channel: string; code: string }
+      targets: Array<{ channel: string; code: string }>
+      productType?: string
+      addTranslate?: boolean
+    }
+  }>('/pim/mappings/clone', async (request, reply) => {
+    const b = request.body
+    if (!b?.from?.channel || !b?.from?.code || !Array.isArray(b.targets) || b.targets.length === 0) {
+      return reply.status(400).send({ error: 'from {channel, code} + non-empty targets[] are required' })
+    }
+    const productType = b.productType?.trim() || undefined
+    try {
+      // Snapshot each target before clone (FM.13 rollback).
+      for (const t of b.targets) {
+        await recordMappingRevision(t.channel, t.code, {
+          changedBy: (request as any).user?.id ?? null,
+          reason: `clone from ${b.from.channel}/${b.from.code}${productType ? ` [${productType}]` : ''}`,
+        }).catch(() => {})
+      }
+      const result = await cloneMapping({ from: b.from, targets: b.targets, productType, addTranslate: b.addTranslate })
+      return reply.send(result)
+    } catch (err: any) {
+      const msg = err?.message ?? 'clone failed'
+      if (err instanceof MarketplaceNotFoundError) return reply.status(404).send({ error: msg })
+      request.log.error({ err }, 'mapping clone failed')
+      return reply.status(500).send({ error: msg })
     }
   })
 

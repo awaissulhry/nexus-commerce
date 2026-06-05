@@ -466,6 +466,61 @@ export async function bulkRemoveFieldMappings(
   return { count: fieldKeys.length, mapping: next }
 }
 
+const CLONE_TEXT_FIELD_RE = /title|name|description|bullet|keyword|feature|search_term|caption/i
+
+/** BM.4 — Pure: build the rules to clone into a target, filtered to the
+ *  target's field catalog, optionally adding a `translate` transform to text
+ *  fields (for cross-language markets). */
+export function buildClonedRules(
+  sourceRules: Record<string, FieldMappingRule>,
+  targetFieldKeys: Set<string>,
+  addTranslate: boolean,
+): { rules: Array<{ fieldKey: string; rule: FieldMappingRule }>; skipped: number } {
+  const rules: Array<{ fieldKey: string; rule: FieldMappingRule }> = []
+  let skipped = 0
+  for (const [fieldKey, rule] of Object.entries(sourceRules)) {
+    if (!targetFieldKeys.has(fieldKey)) {
+      skipped++
+      continue
+    }
+    let r = rule
+    if (addTranslate && CLONE_TEXT_FIELD_RE.test(fieldKey)) {
+      const transforms = Array.isArray(rule.transforms) ? rule.transforms : []
+      if (!transforms.some((t) => t.type === 'translate')) {
+        r = { ...rule, transforms: [...transforms, { type: 'translate' }] }
+      }
+    }
+    rules.push({ fieldKey, rule: r })
+  }
+  return { rules, skipped }
+}
+
+/** BM.4 — Clone one coordinate's resolved rules to one or more targets,
+ *  filtered to each target's ChannelSchema (skips fields a market lacks). */
+export async function cloneMapping(input: {
+  from: { channel: string; code: string }
+  targets: Array<{ channel: string; code: string }>
+  productType?: string | null
+  addTranslate?: boolean
+}): Promise<{ results: Array<{ channel: string; code: string; cloned: number; skipped: number; error?: string }> }> {
+  const sourceRules = await getResolvedRules(input.from.channel, input.from.code, input.productType ?? undefined)
+  const results: Array<{ channel: string; code: string; cloned: number; skipped: number; error?: string }> = []
+  for (const t of input.targets) {
+    try {
+      const fields = await prisma.channelSchema.findMany({
+        where: { channel: t.channel, OR: [{ marketplace: t.code }, { marketplace: null }] },
+        select: { fieldKey: true },
+      })
+      const { rules, skipped } = buildClonedRules(sourceRules, new Set(fields.map((f) => f.fieldKey)), !!input.addTranslate)
+      if (rules.length > 0) await bulkUpsertFieldMappings(t.channel, t.code, rules, input.productType ?? undefined)
+      results.push({ channel: t.channel, code: t.code, cloned: rules.length, skipped })
+    } catch (e) {
+      results.push({ channel: t.channel, code: t.code, cloned: 0, skipped: 0, error: e instanceof Error ? e.message : String(e) })
+    }
+  }
+  return { results }
+}
+
 /** Remove one field's mapping rule. No-op if the field wasn't mapped.
  *  Returns the post-removal mapping. */
 export async function removeFieldMapping(
