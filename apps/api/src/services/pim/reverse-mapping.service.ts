@@ -61,8 +61,13 @@ export function readChannelValue(attrs: Record<string, unknown>, field: string):
   return raw
 }
 
-function localeForMarket(marketplace: string): 'en' | 'it' {
-  return marketplace.toUpperCase() === 'IT' ? 'it' : 'en'
+function localeForMarket(marketplace: string): 'en' | 'it' | null {
+  const m = marketplace.toUpperCase()
+  if (m === 'IT') return 'it'
+  if (['US', 'GB', 'UK', 'CA', 'AU', 'IE'].includes(m)) return 'en'
+  // No modelled locale slot (DE/ES/FR/NL/…) — skip content so we don't file
+  // foreign-language content under the wrong slot; attributes still import.
+  return null
 }
 
 function hasValue(v: unknown): boolean {
@@ -75,7 +80,7 @@ export async function proposeImportFromChannel(input: {
   productId: string
   channel: string
   marketplace: string
-}): Promise<{ productType: string | null; locale: string; proposals: ReverseProposal[]; skipped: SkippedField[] }> {
+}): Promise<{ productType: string | null; locale: string | null; proposals: ReverseProposal[]; skipped: SkippedField[] }> {
   const product = await prisma.product.findUnique({
     where: { id: input.productId },
     select: {
@@ -130,6 +135,10 @@ export async function proposeImportFromChannel(input: {
         conflict: hasValue(currentAttrs[key]),
       })
     } else if (CONTENT_SOURCES[source]) {
+      if (!locale) {
+        skipped.push({ sourceField: channelField, reason: `no master content slot for ${input.marketplace}` })
+        continue
+      }
       const field = CONTENT_SOURCES[source]
       proposals.push({
         masterPath: `localizedContent.${locale}.${field}`,
@@ -169,7 +178,7 @@ const FLATFILE_CONTENT: Record<string, string> = {
 export async function proposeImportFromFlatFile(input: {
   productId: string
   marketplace: string
-}): Promise<{ productType: string | null; locale: string; proposals: ReverseProposal[]; skipped: SkippedField[] }> {
+}): Promise<{ productType: string | null; locale: string | null; proposals: ReverseProposal[]; skipped: SkippedField[] }> {
   const product = await prisma.product.findUnique({
     where: { id: input.productId },
     select: {
@@ -209,18 +218,21 @@ export async function proposeImportFromFlatFile(input: {
     })
   }
 
-  // Well-known content columns → localizedContent.
-  for (const [col, field] of Object.entries(FLATFILE_CONTENT)) {
-    const value = readChannelValue(attrs, col)
-    if (!hasValue(value)) continue
-    proposals.push({
-      masterPath: `localizedContent.${locale}.${field}`,
-      group: 'content',
-      label: `${field} (${locale})`,
-      sourceField: col,
-      value,
-      conflict: hasValue(currentContent?.[locale]?.[field]),
-    })
+  // Well-known content columns → localizedContent (only when the market maps
+  // to a modelled locale slot; otherwise skip content, keep attributes).
+  if (locale) {
+    for (const [col, field] of Object.entries(FLATFILE_CONTENT)) {
+      const value = readChannelValue(attrs, col)
+      if (!hasValue(value)) continue
+      proposals.push({
+        masterPath: `localizedContent.${locale}.${field}`,
+        group: 'content',
+        label: `${field} (${locale})`,
+        sourceField: col,
+        value,
+        conflict: hasValue(currentContent?.[locale]?.[field]),
+      })
+    }
   }
 
   return { productType, locale, proposals, skipped: [] }
