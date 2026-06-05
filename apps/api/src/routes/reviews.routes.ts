@@ -278,6 +278,17 @@ const reviewsRoutes: FastifyPluginAsync = async (fastify) => {
       }
     })
 
+    // D.5 — Amazon official Customer Feedback API status (distinct from the
+    // feed/import path above). OK once any insight resolves; NEEDS_ROLE when the
+    // Brand Analytics role is missing; PENDING when enabled but not yet fetched.
+    const [insightsAgg, insightsOk, insightsNeedsRole] = await Promise.all([
+      prisma.amazonReviewInsight.aggregate({ _count: { _all: true }, _max: { fetchedAt: true } }),
+      prisma.amazonReviewInsight.count({ where: { accessStatus: 'OK' } }),
+      prisma.amazonReviewInsight.count({ where: { accessStatus: 'NEEDS_BRAND_ANALYTICS_ROLE' } }),
+    ])
+    const insightsEnabled = process.env.NEXUS_ENABLE_AMAZON_REVIEW_INSIGHTS === '1'
+    const amazonInsights = insightsOk > 0 ? 'OK' : insightsNeedsRole > 0 ? 'NEEDS_ROLE' : insightsAgg._count._all > 0 ? 'ERROR' : insightsEnabled ? 'PENDING' : 'OFF'
+
     reply.header('Cache-Control', 'private, max-age=30')
     return {
       channels: byChannel,
@@ -286,6 +297,8 @@ const reviewsRoutes: FastifyPluginAsync = async (fastify) => {
         mode: process.env.NEXUS_REVIEW_INGEST_MODE === 'live' ? 'live' : 'sandbox',
         ebayLiveEnabled: process.env.NEXUS_EBAY_REAL_API === 'true',
         amazonFeedConfigured: Boolean(process.env.NEXUS_AMAZON_REVIEW_FEED_URL),
+        amazonInsights,
+        lastInsightsSync: insightsAgg._max.fetchedAt ?? null,
       },
       generatedAt: new Date().toISOString(),
     }
@@ -1745,6 +1758,72 @@ const reviewsRoutes: FastifyPluginAsync = async (fastify) => {
       .catch((e) => fastify.log.error({ err: e }, '[review-insights] manual ingest failed'))
     reply.header('Cache-Control', 'no-store')
     return { ok: true, started: true, marketplace: b.marketplace, note: 'ingest running in background; poll GET /reviews/insights for results' }
+  })
+
+  // ── D.5 — Overview blend: ONE call for the kid-simple Tab 1, channel+market scoped.
+  // Amazon → official insights (themes/rating, no per-review text); eBay/import →
+  // individual reviews (rating + recent list). 'ALL' merges both.
+  fastify.get('/reviews/overview', async (request, reply) => {
+    const q = request.query as { channel?: string; marketplace?: string }
+    const channel = q.channel && q.channel !== 'ALL' ? q.channel : null
+    const marketplace = q.marketplace && q.marketplace !== 'ALL' ? q.marketplace : null
+    const wantAmazon = !channel || channel === 'AMAZON'
+
+    type Topic = { topic: string; mentionCount: number | null; ratingImpact: number | null; snippets: string[] }
+    let insights: { starRating: number | null; reviewCount: number; positiveTopics: Topic[]; negativeTopics: Topic[]; accessStatus: string; asins: number } | null = null
+    if (wantAmazon) {
+      const rows = await prisma.amazonReviewInsight.findMany({ where: marketplace ? { marketplace } : {} })
+      const merge = (key: 'positiveTopics' | 'negativeTopics') => {
+        const m = new Map<string, Topic>()
+        for (const r of rows) for (const t of (r[key] as unknown as Topic[]) ?? []) {
+          if (!t?.topic) continue
+          const e = m.get(t.topic) ?? { topic: t.topic, mentionCount: 0, ratingImpact: null, snippets: [] }
+          e.mentionCount = (e.mentionCount ?? 0) + (t.mentionCount ?? 0)
+          for (const s of t.snippets ?? []) if (e.snippets.length < 4 && !e.snippets.includes(s)) e.snippets.push(s)
+          m.set(t.topic, e)
+        }
+        return [...m.values()].sort((a, b) => (b.mentionCount ?? 0) - (a.mentionCount ?? 0)).slice(0, 6)
+      }
+      let ws = 0, w = 0, tot = 0
+      for (const r of rows) { if (r.starRating != null) { const ww = r.reviewCount ?? 1; ws += r.starRating * ww; w += ww } tot += r.reviewCount ?? 0 }
+      const anyOk = rows.some((r) => r.accessStatus === 'OK')
+      const accessStatus = rows.length === 0 ? (process.env.NEXUS_ENABLE_AMAZON_REVIEW_INSIGHTS === '1' ? 'PENDING' : 'OFF') : anyOk ? 'OK' : rows.some((r) => r.accessStatus === 'NEEDS_BRAND_ANALYTICS_ROLE') ? 'NEEDS_BRAND_ANALYTICS_ROLE' : rows[0].accessStatus
+      insights = { starRating: w > 0 ? Math.round((ws / w) * 100) / 100 : null, reviewCount: tot, positiveTopics: merge('positiveTopics'), negativeTopics: merge('negativeTopics'), accessStatus, asins: rows.length }
+    }
+
+    const rw: Record<string, unknown> = {}
+    if (channel) rw.channel = channel
+    if (marketplace) rw.marketplace = marketplace
+    const since = new Date(Date.now() - 90 * 86_400_000)
+    const [ratingRows, recent, total] = await Promise.all([
+      prisma.review.findMany({ where: { ...rw, rating: { not: null }, postedAt: { gte: since } }, select: { rating: true, postedAt: true }, orderBy: { postedAt: 'asc' } }),
+      prisma.review.findMany({ where: rw, orderBy: { postedAt: 'desc' }, take: 20, include: { sentiment: true, product: { select: { id: true, sku: true, name: true } } } }),
+      prisma.review.count({ where: rw }),
+    ])
+    const distribution: Record<number, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }
+    let sum = 0, count = 0
+    const dayMap = new Map<string, { sum: number; count: number }>()
+    for (const r of ratingRows) {
+      if (r.rating == null) continue
+      const star = Math.min(5, Math.max(1, Math.round(r.rating)))
+      distribution[star] += 1; sum += r.rating; count += 1
+      const day = r.postedAt.toISOString().slice(0, 10)
+      const d = dayMap.get(day) ?? { sum: 0, count: 0 }; d.sum += r.rating; d.count += 1; dayMap.set(day, d)
+    }
+    const trend = [...dayMap.entries()].map(([date, v]) => ({ date, avg: v.count > 0 ? v.sum / v.count : null, count: v.count })).sort((a, b) => a.date.localeCompare(b.date))
+
+    reply.header('Cache-Control', 'private, max-age=60')
+    return {
+      channel: channel ?? 'ALL',
+      marketplace: marketplace ?? 'ALL',
+      insights,
+      reviews: { average: count > 0 ? sum / count : null, count, distribution, trend, recent, total },
+      status: {
+        amazonInsights: insights?.accessStatus ?? null,
+        ebayLiveEnabled: process.env.NEXUS_EBAY_REAL_API === 'true',
+        mode: process.env.NEXUS_REVIEW_INGEST_MODE === 'live' ? 'live' : 'sandbox',
+      },
+    }
   })
 }
 
