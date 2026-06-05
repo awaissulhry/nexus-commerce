@@ -1190,10 +1190,20 @@ const reviewsRoutes: FastifyPluginAsync = async (fastify) => {
     const mailerHealthy =
       !!mailerSummary.lastSuccessAt &&
       Date.now() - mailerSummary.lastSuccessAt.getTime() < 8 * 60 * 60 * 1000
+    // Output-freshness guards — catch silent stalls (a cron runs SUCCESS but
+    // produces nothing, like the deliveredAt freeze). Watches the OUTPUT, not
+    // just "did the cron tick".
+    const { computeReviewPipelineFreshness } = await import('../services/reviews/review-pipeline-health.service.js')
+    const freshness = await computeReviewPipelineFreshness()
     const pipelineHealth = {
       mailerHealthy,
       hasStuckCron: summaries.some((s) => s.stuckRunning),
       crons: summaries,
+      deliveryStale: freshness.deliveryStale,
+      schedulingStalled: freshness.schedulingStalled,
+      maxDeliveredAgeDays: freshness.maxDeliveredAgeDays,
+      schedulingBacklog: freshness.schedulingBacklog,
+      warnings: freshness.warnings,
     }
     const upcoming = await prisma.reviewRequest.findMany({
       where: { status: 'SCHEDULED', scheduledFor: { gt: new Date() } },

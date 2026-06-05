@@ -37,6 +37,8 @@ export interface ReviewDigest {
   openDeskItems: number
   negativesAwaiting: number
   openSpikes: number
+  // Output-freshness warnings (silent-stall guard) — empty when healthy.
+  pipelineWarnings: string[]
 }
 
 export async function buildReviewDigest(windowHours = 24): Promise<ReviewDigest> {
@@ -80,6 +82,9 @@ export async function buildReviewDigest(windowHours = 24): Promise<ReviewDigest>
     }),
   ])
 
+  const { computeReviewPipelineFreshness } = await import('./review-pipeline-health.service.js')
+  const freshness = await computeReviewPipelineFreshness()
+
   return {
     windowHours,
     newReviews: recent.length,
@@ -89,6 +94,7 @@ export async function buildReviewDigest(windowHours = 24): Promise<ReviewDigest>
     openDeskItems,
     negativesAwaiting,
     openSpikes,
+    pipelineWarnings: freshness.warnings,
   }
 }
 
@@ -102,6 +108,7 @@ function renderDigestHtml(d: ReviewDigest): string {
   return `<!doctype html><html><body style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#0f172a;max-width:560px;margin:0 auto;padding:16px">
   <h2 style="margin:0 0 4px">Daily review digest</h2>
   <p style="color:#64748b;margin:0 0 16px">Last ${d.windowHours}h across Amazon · eBay · Shopify</p>
+  ${d.pipelineWarnings.length > 0 ? `<div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:12px;margin:0 0 16px"><strong style="color:#b91c1c">⚠ Pipeline needs attention</strong><ul style="margin:6px 0 0;color:#7f1d1d">${d.pipelineWarnings.map((w) => `<li>${w}</li>`).join('')}</ul></div>` : ''}
   <table style="width:100%;border-collapse:collapse;margin-bottom:16px">
     <tr>
       <td style="padding:8px;border:1px solid #e2e8f0"><strong>${d.newReviews}</strong><br>new reviews</td>
@@ -131,7 +138,7 @@ export async function sendReviewDigestOnce(): Promise<{
   if (process.env.NEXUS_ENABLE_REVIEW_DIGEST !== '1') {
     return { sent: false, skipped: 'NEXUS_ENABLE_REVIEW_DIGEST not set', digest }
   }
-  if (digest.newReviews === 0 && digest.negativesAwaiting === 0 && digest.openSpikes === 0) {
+  if (digest.newReviews === 0 && digest.negativesAwaiting === 0 && digest.openSpikes === 0 && digest.pipelineWarnings.length === 0) {
     return { sent: false, skipped: 'nothing to report', digest }
   }
   const to = (process.env.NEXUS_REVIEW_DIGEST_TO ?? process.env.NEXUS_SUPPORT_INBOX ?? 'support@xavia.it')
@@ -141,7 +148,7 @@ export async function sendReviewDigestOnce(): Promise<{
   try {
     await sendEmail({
       to,
-      subject: `Daily review digest — ${digest.newReviews} new · ${digest.negativesAwaiting} to answer`,
+      subject: `${digest.pipelineWarnings.length > 0 ? '⚠ ' : ''}Daily review digest — ${digest.newReviews} new · ${digest.negativesAwaiting} to answer`,
       html: renderDigestHtml(digest),
     })
     return { sent: true, digest }

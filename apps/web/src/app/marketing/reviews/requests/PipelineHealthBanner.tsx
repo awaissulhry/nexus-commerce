@@ -34,6 +34,12 @@ export interface PipelineHealth {
   mailerHealthy: boolean
   hasStuckCron: boolean
   crons: PipelineCronSummary[]
+  // Output-freshness guards — catch silent stalls (cron green but producing nothing).
+  deliveryStale?: boolean
+  schedulingStalled?: boolean
+  maxDeliveredAgeDays?: number | null
+  schedulingBacklog?: number
+  warnings?: string[]
 }
 
 function relativeHoursAgo(iso: string | null): string {
@@ -58,8 +64,10 @@ export function PipelineHealthBanner({ health }: { health: PipelineHealth }) {
     return new Date(c.lastFailureAt) > new Date(c.lastSuccessAt)
   })
 
+  const freshnessWarnings = health.warnings ?? []
   const isHealthy =
-    health.mailerHealthy && !health.hasStuckCron && recentlyFailed.length === 0
+    health.mailerHealthy && !health.hasStuckCron && recentlyFailed.length === 0 &&
+    freshnessWarnings.length === 0
 
   const handleSweep = async () => {
     setSweeping(true)
@@ -127,6 +135,11 @@ export function PipelineHealthBanner({ health }: { health: PipelineHealth }) {
                 . The orphan-sweeper auto-marks these FAILED every 30 min.
               </li>
             )}
+            {freshnessWarnings.map((w, i) => (
+              <li key={`fresh-${i}`}>
+                <strong>Output stalled</strong> — {w}
+              </li>
+            ))}
             {recentlyFailed.map((c) => (
               <li key={c.jobName}>
                 <strong>{c.jobName}</strong> last run failed {relativeHoursAgo(c.lastFailureAt)}
