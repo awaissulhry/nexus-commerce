@@ -11,6 +11,10 @@
  * into clean stations (① Where you rank · ② Set · ③ When · ④ Keywords · ⑤
  * Automate), add the staged-changes tray (RC4.5) and the history/undo timeline
  * (RC4.6). The old modes stay reachable via /automation during the migration.
+ *
+ * RK.1 — campaign + market are URL-driven (?campaignId=, ?market=) so the cockpit
+ * is reload-safe, shareable and deep-linkable (the Managed → "Cockpit" jump lands
+ * on the clicked campaign, not the default).
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
