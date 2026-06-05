@@ -47,6 +47,7 @@ export function UnifiedRankCockpit() {
   const [trayTab, setTrayTab] = useState<'staged' | 'history'>('staged')
   const [simple, setSimple] = useState(false)
   const [cmdkOpen, setCmdkOpen] = useState(false)
+  const [statusFilter, setStatusFilter] = useState<'active' | 'inactive' | 'all'>('active')
 
   useEffect(() => { void fetch(`${getBackendUrl()}/api/advertising/campaigns?limit=500`, { cache: 'no-store' }).then(r => r.json()).then(d => setCampaigns((d.items ?? []) as Camp[])).catch(() => {}) }, [])
   useEffect(() => { void fetch(`${getBackendUrl()}/api/advertising/autonomy/status`, { cache: 'no-store' }).then(r => r.json()).then(d => setAutonomy(d as Autonomy)).catch(() => {}) }, [])
@@ -75,16 +76,20 @@ export function UnifiedRankCockpit() {
   useEffect(() => { if (!toast) return; const t = setTimeout(() => setToast(''), 4000); return () => clearTimeout(t) }, [toast, setToast])
 
   const inMarket = useMemo(() => campaigns.filter(c => c.marketplace === market), [campaigns, market])
+  // RC4.13 — Active (ENABLED) / Inactive (paused or archived) / All. Drives every
+  // campaign list (search, palette, bulk). Picker stays market-specific via inMarket.
+  const matchStatus = useCallback((c: Camp) => (statusFilter === 'all' ? true : statusFilter === 'active' ? c.status === 'ENABLED' : c.status !== 'ENABLED'), [statusFilter])
+  const inMarketStatus = useMemo(() => inMarket.filter(matchStatus), [inMarket, matchStatus])
   useEffect(() => {
     if (inMarket.length === 0) { setCampaignId(''); return }
-    setCampaignId(prev => (inMarket.some(c => c.id === prev) ? prev : inMarket[0]!.id))
-  }, [inMarket])
+    setCampaignId(prev => (inMarket.some(c => c.id === prev) ? prev : (inMarketStatus[0]?.id ?? inMarket[0]!.id)))
+  }, [inMarket]) // eslint-disable-line react-hooks/exhaustive-deps
   const campaign = useMemo(() => campaigns.find(c => c.id === campaignId) ?? null, [campaigns, campaignId])
   const searchResults = useMemo(() => {
     const q = search.trim().toLowerCase()
-    const rows = q ? inMarket.filter(c => c.name.toLowerCase().includes(q)) : inMarket
+    const rows = q ? inMarketStatus.filter(c => c.name.toLowerCase().includes(q)) : inMarketStatus
     return [...rows].sort((a, b) => (a.status === b.status ? a.name.localeCompare(b.name) : a.status === 'ENABLED' ? -1 : 1)).slice(0, 12)
-  }, [inMarket, search])
+  }, [inMarketStatus, search])
 
   const pickCampaign = useCallback((id: string) => { setCampaignId(id); setSearch(''); setSearchOpen(false) }, [])
 
@@ -103,9 +108,10 @@ export function UnifiedRankCockpit() {
         <span className="sp" />
         <label className="az-urc-ctl"><span>Market</span><select value={market} onChange={e => setMarket(e.target.value)}>{MARKETS.map(m => <option key={m}>{m}</option>)}</select></label>
         <label className="az-urc-ctl"><span>Window</span><select value={lookback} onChange={e => setLookback(Number(e.target.value))}>{LOOKBACKS.map(d => <option key={d} value={d}>{d}d</option>)}</select></label>
+        <label className="az-urc-ctl"><span>Show</span><select value={statusFilter} onChange={e => setStatusFilter(e.target.value as 'active' | 'inactive' | 'all')}><option value="active">Active</option><option value="inactive">Inactive</option><option value="all">All</option></select></label>
         <div className="az-urc-search">
           <Search size={13} />
-          <input value={search} onChange={e => { setSearch(e.target.value); setSearchOpen(true) }} onFocus={() => setSearchOpen(true)} onBlur={() => setTimeout(() => setSearchOpen(false), 150)} placeholder={`Search ${inMarket.length} campaigns…`} aria-label="Search campaigns" />
+          <input value={search} onChange={e => { setSearch(e.target.value); setSearchOpen(true) }} onFocus={() => setSearchOpen(true)} onBlur={() => setTimeout(() => setSearchOpen(false), 150)} placeholder={`Search ${inMarketStatus.length} campaigns…`} aria-label="Search campaigns" />
           {!searchOpen && <kbd title="Command palette">⌘K</kbd>}
           {searchOpen && searchResults.length > 0 && (
             <div className="az-urc-results" role="listbox">
@@ -141,7 +147,7 @@ export function UnifiedRankCockpit() {
         {campaignId && <KeywordBidStation campaignId={campaignId} onChanged={loadPending} />}
         {campaignId && <ConquestStation campaignId={campaignId} onChanged={loadPending} />}
         <AutomateStation market={market} onChanged={loadPending} />
-        <BulkApplyStation campaigns={inMarket} market={market} onChanged={loadPending} />
+        <BulkApplyStation campaigns={inMarketStatus} market={market} onChanged={loadPending} />
       </>)}
 
       {/* ── Footer: staged-changes tray + history (RC4.5 / RC4.6) ── */}
@@ -158,7 +164,7 @@ export function UnifiedRankCockpit() {
       <CommandPalette
         open={cmdkOpen}
         onClose={() => setCmdkOpen(false)}
-        campaigns={campaigns}
+        campaigns={inMarketStatus}
         onPick={(id, mk) => { if (mk) setMarket(mk); setCampaignId(id) }}
         actions={[
           { id: 'simple', label: simple ? 'Switch to Full view' : 'Switch to Simple view', run: () => setSimple(v => !v) },

@@ -151,7 +151,7 @@ export async function detectKeywordConflicts(prisma: PrismaLike, campaignId: str
 
   // 2. Every enabled positive keyword in the market, with its campaign. Bounded.
   const market = (await prisma.adTarget.findMany({
-    where: { kind: 'KEYWORD', isNegative: false, status: 'ENABLED', adGroup: { campaign: { marketplace } } },
+    where: { kind: 'KEYWORD', isNegative: false, status: 'ENABLED', adGroup: { campaign: { marketplace, status: 'ENABLED' } } },
     select: { id: true, expressionValue: true, expressionType: true, bidCents: true, impressions: true, clicks: true, spendCents: true, salesCents: true, ordersCount: true, adGroup: { select: { campaignId: true, campaign: { select: { id: true, name: true, status: true, dynamicBidding: true } } } } },
     take: 8000,
   })) as Array<RawTarget & { adGroup: { campaignId: string; campaign: { id: string; name: string; status: string; dynamicBidding: unknown } } }>

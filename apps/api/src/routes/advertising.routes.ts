@@ -546,7 +546,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     reply.header('Cache-Control', 'private, max-age=120')
     if (asins.length === 0) return { marketplace: camp.marketplace, asins: [], conflicts: [] }
     const others = await prisma.adProductAd.findMany({
-      where: { asin: { in: asins }, adGroup: { campaign: { marketplace: camp.marketplace, id: { not: id } } } },
+      where: { asin: { in: asins }, adGroup: { campaign: { marketplace: camp.marketplace, id: { not: id }, status: 'ENABLED' } } },
       select: { asin: true, adGroup: { select: { campaign: { select: { id: true, name: true, status: true } } } } },
     })
     const byCamp = new Map<string, { campaignId: string; name: string; status: string; asins: Set<string> }>()
