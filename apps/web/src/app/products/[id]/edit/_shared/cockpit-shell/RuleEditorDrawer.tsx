@@ -312,7 +312,9 @@ export default function RuleEditorDrawer({
                   <option value="">Select a field…</option>
                   {unmappedFields.map((f) => (
                     <option key={f.fieldKey} value={f.fieldKey}>
-                      {f.label || f.fieldKey}
+                      {/* Operators read English — show the English fieldKey (matches
+                          the matrix), not the marketplace-localized label. */}
+                      {f.fieldKey}
                       {suggestFor(f.fieldKey) ? ` → ${suggestFor(f.fieldKey)}` : ''}
                     </option>
                   ))}
