@@ -44,6 +44,7 @@ import { recordMappingRevision, listMappingRevisions, rollbackMapping } from '..
 import { computeCoverageMatrix } from '../services/pim/mapping-coverage.service.js'
 import { simulateRuleChange } from '../services/pim/mapping-simulate.service.js'
 import { syncSchemaToChannelSchema } from '../services/pim/schema-sync-bridge.js'
+import { syncEbayCategoryAspects } from '../services/pim/ebay-schema-sync.service.js'
 import { CategorySchemaService } from '../services/categories/schema-sync.service.js'
 import { AmazonService } from '../services/marketplaces/amazon.service.js'
 import { seedBuiltInSchemasForChannel } from '../services/feed/channel-schema.service.js'
@@ -243,21 +244,46 @@ const pimMappingRoutes: FastifyPluginAsync = async (fastify) => {
     //   - Shopify: metafield definitions per resource
     if (channel === 'EBAY' || channel === 'SHOPIFY') {
       try {
-        const seed = await seedBuiltInSchemasForChannel(prisma as any, channel)
-        const snapshot = `${channel}:built-in:${new Date().toISOString()}`
+        // Built-in listing fields are channel-wide (marketplace=null). Seed
+        // once — the (channel, marketplace, fieldKey) unique treats NULL
+        // marketplaces as distinct, so a blind re-upsert would duplicate them.
+        const builtInCount = await prisma.channelSchema.count({
+          where: { channel, marketplace: null },
+        })
+        let builtIn = 0
+        if (builtInCount === 0) {
+          const seed = await seedBuiltInSchemasForChannel(prisma as any, channel)
+          builtIn = seed.upserted
+        }
+
+        // eBay: also pull real per-category Item Aspects (Taxonomy API) for the
+        // categories this marketplace's listings use. Best-effort — the
+        // built-in fields are still seeded if the aspect fetch fails.
+        let aspectFields = 0
+        let categories = 0
+        if (channel === 'EBAY') {
+          const r = await syncEbayCategoryAspects(code).catch((e) => {
+            request.log.warn({ e }, '[pim-mapping] eBay aspect sync failed (built-in still seeded)')
+            return { upserted: 0, categories: 0, aspects: 0 }
+          })
+          aspectFields = r.upserted
+          categories = r.categories
+        }
+
+        const snapshot = `${channel}:${channel === 'EBAY' ? 'taxonomy' : 'built-in'}:${new Date().toISOString()}`
         await recordSchemaSync(channel, code, snapshot).catch(() => {
-          /* recordSchemaSync needs the marketplace to exist; quietly
-           * fall through when it doesn't — the seed itself succeeded. */
+          /* marketplace row may not exist; the seed itself succeeded */
         })
         return reply.send({
           channel,
           marketplace: code,
-          productType: 'built-in',
+          productType: channel === 'EBAY' ? 'ebay-aspects' : 'built-in',
           schemaSnapshotVersion: snapshot,
-          upserted: seed.upserted,
+          upserted: builtIn + aspectFields,
           skipped: 0,
-          totalProperties: seed.upserted,
-          source: 'built-in',
+          totalProperties: builtIn + aspectFields,
+          source: channel === 'EBAY' ? 'built-in+taxonomy' : 'built-in',
+          ...(channel === 'EBAY' ? { aspectFields, categories } : {}),
         })
       } catch (err: any) {
         request.log.error({ err }, '[pim-mapping] sync-schema (built-in) failed')
