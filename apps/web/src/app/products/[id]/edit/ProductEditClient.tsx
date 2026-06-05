@@ -313,7 +313,9 @@ export default function ProductEditClient({
       if (attachMarket) params.set('market', market!)
       else params.delete('market')
       const qs = params.toString()
-      const target = qs ? `?${qs}` : window.location.pathname
+      // Absolute path — the App Router doesn't reliably push a bare relative
+      // query string (`?tab=…`), so the URL bar wouldn't update on tab clicks.
+      const target = qs ? `${window.location.pathname}?${qs}` : window.location.pathname
       const cur = new URLSearchParams(searchParams?.toString() ?? '')
       const changed =
         cur.get('tab') !== params.get('tab') || cur.get('market') !== params.get('market')
