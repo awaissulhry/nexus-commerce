@@ -18,6 +18,7 @@
 
 import prisma from '../../db.js'
 import { getResolvedRules } from './schema-mapping.service.js'
+import { getMasterAttributeSchema } from './master-schema.service.js'
 
 // Transforms whose output can't be reliably reversed to the master value.
 const NON_INVERTIBLE = new Set(['valueMap', 'sizeScale', 'template', 'translate', 'unit', 'numberFormat'])
@@ -144,4 +145,83 @@ export async function proposeImportFromChannel(input: {
   }
 
   return { productType, locale, proposals, skipped }
+}
+
+// MA.7 — well-known Amazon flat-file content columns → master content fields.
+const FLATFILE_CONTENT: Record<string, string> = {
+  item_name: 'title',
+  product_description: 'description',
+  bullet_point: 'bulletPoints',
+  generic_keyword: 'keywords',
+}
+
+/**
+ * MA.7 — Propose master values from the FLAT-FILE data (read-only).
+ *
+ * The Amazon flat-file editor persists straight to
+ * `ChannelListing.platformAttributes` — we read that store directly (Prisma; no
+ * flat-file route/page/service-write code is touched) and IDENTITY-match it
+ * against the master schema (MA.1): every schema attribute the flat file has a
+ * value for is proposed. Unlike the rule-inversion import (proposeImportFrom
+ * Channel) this fills ALL entered attributes, not just mapped ones. ZERO writes
+ * to the flat file.
+ */
+export async function proposeImportFromFlatFile(input: {
+  productId: string
+  marketplace: string
+}): Promise<{ productType: string | null; locale: string; proposals: ReverseProposal[]; skipped: SkippedField[] }> {
+  const product = await prisma.product.findUnique({
+    where: { id: input.productId },
+    select: {
+      id: true,
+      productType: true,
+      categoryAttributes: true,
+      localizedContent: true,
+      channelListings: {
+        where: { channel: 'AMAZON', marketplace: input.marketplace },
+        select: { platformAttributes: true },
+      },
+    },
+  })
+  if (!product) throw new Error(`Product ${input.productId} not found`)
+  const listing = product.channelListings[0]
+  if (!listing) throw new Error(`No AMAZON ${input.marketplace} flat-file data on this product`)
+
+  const attrs = (((listing.platformAttributes as Record<string, unknown> | null)?.attributes ?? {}) as Record<string, unknown>)
+  const locale = localeForMarket(input.marketplace)
+  const { attributes: schema, productType } = await getMasterAttributeSchema(input.productId)
+  const currentAttrs = (product.categoryAttributes as Record<string, unknown> | null) ?? {}
+  const currentContent = (product.localizedContent as Record<string, Record<string, unknown>> | null) ?? {}
+
+  const proposals: ReverseProposal[] = []
+
+  // Category attributes — identity-match each master schema key to a flat-file column.
+  for (const a of schema) {
+    const value = readChannelValue(attrs, a.key)
+    if (!hasValue(value)) continue
+    proposals.push({
+      masterPath: `categoryAttributes.${a.key}`,
+      group: 'attribute',
+      label: a.label,
+      sourceField: a.key,
+      value,
+      conflict: hasValue(currentAttrs[a.key]),
+    })
+  }
+
+  // Well-known content columns → localizedContent.
+  for (const [col, field] of Object.entries(FLATFILE_CONTENT)) {
+    const value = readChannelValue(attrs, col)
+    if (!hasValue(value)) continue
+    proposals.push({
+      masterPath: `localizedContent.${locale}.${field}`,
+      group: 'content',
+      label: `${field} (${locale})`,
+      sourceField: col,
+      value,
+      conflict: hasValue(currentContent?.[locale]?.[field]),
+    })
+  }
+
+  return { productType, locale, proposals, skipped: [] }
 }

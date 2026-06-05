@@ -42,6 +42,7 @@ function preview(v: unknown): string {
 export default function ImportFromAmazonModal({ productId, amazonMarkets, open, onClose, onApplied }: Props) {
   const markets = amazonMarkets && amazonMarkets.length > 0 ? amazonMarkets : EU_DEFAULTS
   const [market, setMarket] = useState(markets[0] ?? 'IT')
+  const [mode, setMode] = useState<'flatfile' | 'amazon'>('flatfile')
   const [loading, setLoading] = useState(false)
   const [applying, setApplying] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -54,7 +55,8 @@ export default function ImportFromAmazonModal({ productId, amazonMarkets, open, 
     setError(null)
     setProposals(null)
     try {
-      const res = await fetch(`${getBackendUrl()}/api/products/${productId}/master/import-from-channel`, {
+      const endpoint = mode === 'flatfile' ? 'import-from-flat-file' : 'import-from-channel'
+      const res = await fetch(`${getBackendUrl()}/api/products/${productId}/master/${endpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -143,9 +145,13 @@ export default function ImportFromAmazonModal({ productId, amazonMarkets, open, 
         <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3 dark:border-slate-800">
           <div>
             <div className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-slate-100">
-              <DownloadCloud className="h-4 w-4 text-blue-500" /> Import from Amazon parent
+              <DownloadCloud className="h-4 w-4 text-blue-500" /> Import attributes to master
             </div>
-            <div className="mt-0.5 text-xs text-slate-500">Pull the parent listing's attributes up into the master (reverse-maps your rules).</div>
+            <div className="mt-0.5 text-xs text-slate-500">
+              {mode === 'flatfile'
+                ? 'Fill the master from your flat-file data (read-only — nothing is written back to the flat file).'
+                : "Pull the parent listing's attributes up via your mapping rules."}
+            </div>
           </div>
           <button type="button" onClick={onClose} disabled={applying} aria-label="Close" className="rounded p-1 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200">
             <X className="h-4 w-4" />
@@ -153,6 +159,28 @@ export default function ImportFromAmazonModal({ productId, amazonMarkets, open, 
         </div>
 
         <div className="flex flex-wrap items-center gap-2 border-b border-slate-100 px-4 py-2 text-xs dark:border-slate-800">
+          <div className="inline-flex overflow-hidden rounded border border-slate-300 dark:border-slate-700">
+            <button
+              type="button"
+              onClick={() => {
+                setMode('flatfile')
+                setProposals(null)
+              }}
+              className={mode === 'flatfile' ? 'bg-blue-600 px-2 py-1 font-medium text-white' : 'px-2 py-1 text-slate-600 dark:text-slate-300'}
+            >
+              Flat file
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setMode('amazon')
+                setProposals(null)
+              }}
+              className={mode === 'amazon' ? 'bg-blue-600 px-2 py-1 font-medium text-white' : 'px-2 py-1 text-slate-600 dark:text-slate-300'}
+            >
+              Amazon rules
+            </button>
+          </div>
           <label className="text-slate-500">Source market</label>
           <select
             value={market}

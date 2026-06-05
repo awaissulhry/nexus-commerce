@@ -425,11 +425,11 @@ export default function MasterDataTab({
         <button
           type="button"
           onClick={() => setImportOpen(true)}
-          title="Import the Amazon parent listing's attributes into the master (reverse-maps your rules)"
+          title="Fill the master attributes from your flat-file data (read-only) — or from the Amazon listing via mapping rules"
           className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-blue-200 bg-blue-50 text-xs font-medium text-blue-700 hover:bg-blue-100 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-300"
         >
           <DownloadCloud className="w-3.5 h-3.5" />
-          Import from Amazon
+          Import from flat file
         </button>
         <button
           type="button"

@@ -24,7 +24,7 @@ import prisma from '../db.js'
 import { resolveAttributes } from '../services/pim/attribute-resolver.js'
 import { applyCatalogCascade } from '../services/pim/apply-mapping.service.js'
 import { getMasterAttributeSchema } from '../services/pim/master-schema.service.js'
-import { proposeImportFromChannel } from '../services/pim/reverse-mapping.service.js'
+import { proposeImportFromChannel, proposeImportFromFlatFile } from '../services/pim/reverse-mapping.service.js'
 import { getMasterCompleteness } from '../services/pim/master-completeness.service.js'
 import { suggestMasterAttributes } from '../services/pim/master-ai-fill.service.js'
 
@@ -261,6 +261,25 @@ const pimGlobalRoutes: FastifyPluginAsync = async (fastify) => {
         if (/not found|no .* listing/i.test(err?.message ?? '')) return reply.status(404).send({ error: err.message })
         request.log.error({ err }, 'import-from-channel failed')
         return reply.status(500).send({ error: err?.message ?? 'import-from-channel failed' })
+      }
+    },
+  )
+
+  // ── POST /products/:id/master/import-from-flat-file ─────────────
+  // MA.7 — propose master values from the flat-file data (READ-ONLY; identity-
+  // match against the master schema). Zero flat-file writes/code touched.
+  fastify.post<{ Params: { id: string }; Body: { marketplace?: string } }>(
+    '/products/:id/master/import-from-flat-file',
+    async (request, reply) => {
+      const marketplace = request.body?.marketplace?.trim()
+      if (!marketplace) return reply.status(400).send({ error: 'marketplace is required' })
+      try {
+        const result = await proposeImportFromFlatFile({ productId: request.params.id, marketplace })
+        return reply.send(result)
+      } catch (err: any) {
+        if (/not found|no .* flat-file/i.test(err?.message ?? '')) return reply.status(404).send({ error: err.message })
+        request.log.error({ err }, 'import-from-flat-file failed')
+        return reply.status(500).send({ error: err?.message ?? 'import-from-flat-file failed' })
       }
     },
   )
