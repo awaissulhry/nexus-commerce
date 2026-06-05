@@ -190,8 +190,9 @@ export interface RankCockpitProps {
   onCampaignChange?: (id: string) => void
   hideScopeBar?: boolean
   hideKeywordManager?: boolean
+  hideDayparting?: boolean
 }
-export function RankPlacementCockpit({ market: ctxMarket, campaignId: ctxCampaignId, lookbackDays, onMarketChange, onCampaignChange, hideScopeBar, hideKeywordManager }: RankCockpitProps = {}) {
+export function RankPlacementCockpit({ market: ctxMarket, campaignId: ctxCampaignId, lookbackDays, onMarketChange, onCampaignChange, hideScopeBar, hideKeywordManager, hideDayparting }: RankCockpitProps = {}) {
   const WINDOW_DAYS = lookbackDays ?? DEFAULT_WINDOW_DAYS
   const [campaigns, setCampaigns] = useState<Camp[]>([])
   const [marketState, setMarketState] = useState('IT')
@@ -1026,8 +1027,9 @@ export function RankPlacementCockpit({ market: ctxMarket, campaignId: ctxCampaig
         <div className="az-kwx-clean"><Check size={13} /> All {kwConflicts.conflicts.length} keyword overlap{kwConflicts.conflicts.length === 1 ? '' : 's'} ignored for this campaign. <button type="button" className="lnk" onClick={restoreDismissed}>Show again</button></div>
       )}
 
-      {/* ── T·product: When · dayparting for the product family ──── */}
-      <div className="az-when">
+      {/* ── T·product: When · dayparting (CR.6 — hidden in the embedded cockpit;
+          §2 Rank Plan owns scheduling now. Full demand heatmap stays in Insights → Dayparting). ──── */}
+      {!hideDayparting && (<div className="az-when">
         <div className="az-when-head"><Clock size={15} /> When · {family?.parentName ? <span className="cn">{family.parentName}</span> : 'product'} family
           <span style={{ flex: 1 }} />
           {whenLoading && <span className="az-cockpit-status">Loading…</span>}
@@ -1113,7 +1115,7 @@ export function RankPlacementCockpit({ market: ctxMarket, campaignId: ctxCampaig
         </>)}
 
         <div className="az-cockpit-note"><Info size={12} /> Timing is a product property, so this covers the whole parent family (all variants &amp; their campaigns) in {market}. Demand is order-placed time (Europe/Rome) — a live proxy until Amazon Marketing Stream provides true hourly ad data.</div>
-      </div>
+      </div>)}
 
       {/* ── R3: bulk keyword manager ─────────────────────────────── */}
       {!hideKeywordManager && (<div className="az-kwmgr">

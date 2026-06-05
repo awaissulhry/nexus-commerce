@@ -194,7 +194,7 @@ export function UnifiedRankCockpit() {
         <section className="az-cr-sec">
           <div className="az-cr-sechd"><span className="n">3</span><div className="x"><b>Adjust placement &amp; bids</b><span>Quick-set the push, or fine-tune the placement ladder &amp; bids below.</span></div></div>
           {campaignId && <QuickRankSet campaignId={campaignId} onChanged={loadPending} />}
-          <RankPlacementCockpit market={market} campaignId={campaignId} lookbackDays={lookback} onMarketChange={setMarket} onCampaignChange={setCampaignId} hideScopeBar hideKeywordManager />
+          <RankPlacementCockpit market={market} campaignId={campaignId} lookbackDays={lookback} onMarketChange={setMarket} onCampaignChange={setCampaignId} hideScopeBar hideKeywordManager hideDayparting />
           {campaignId && <StrategyStation campaignId={campaignId} currentStrategy={campaign?.biddingStrategy ?? null} onChanged={loadPending} />}
           {campaignId && <KeywordBidStation campaignId={campaignId} onChanged={loadPending} />}
           {campaignId && <ConquestStation campaignId={campaignId} onChanged={loadPending} />}
