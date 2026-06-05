@@ -5,7 +5,7 @@
  */
 
 import Link from 'next/link'
-import { AlertTriangle, Grid, Package, Wrench, Bot, Lightbulb, Upload, SlidersHorizontal, type LucideIcon } from 'lucide-react'
+import { AlertTriangle, Grid, Package, Wrench, Bot, Lightbulb, Upload, SlidersHorizontal, Clock, type LucideIcon } from 'lucide-react'
 import { ReviewsNav } from '../_shared/ReviewsNav'
 
 export const dynamic = 'force-dynamic'
@@ -19,6 +19,7 @@ const FEATURES: { href: string; label: string; desc: string; icon: LucideIcon }[
   { href: '/marketing/reviews/automation', label: 'Automation', desc: 'Rule-driven review automation (added disabled + dry-run).', icon: Bot },
   { href: '/marketing/reviews/import', label: 'Import reviews', desc: 'Upload CSV / JSON / XLSX exports (Seller Central, Judge.me, Loox).', icon: Upload },
   { href: '/orders/reviews/rules', label: 'Request rules', desc: 'Define when post-purchase review requests are sent.', icon: SlidersHorizontal },
+  { href: '/orders/reviews/rules/timing', label: 'Timing defaults', desc: 'Edit the per-product-type “days after delivery” baseline.', icon: Clock },
 ]
 
 export default function AdvancedPage() {
