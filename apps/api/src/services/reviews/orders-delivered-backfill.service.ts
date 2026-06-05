@@ -27,11 +27,12 @@ const REPORT_TYPE = 'GET_FLAT_FILE_ALL_ORDERS_DATA_BY_LAST_UPDATE_GENERAL'
 // RV.7.3 — delivery-estimate heuristic. The report almost never returns
 // order-status='Delivered' (FBM never, FBA rarely), so the report pass updates
 // ~0 rows and the review pipeline stalls. We estimate delivery as shippedAt + N
-// business days so it isn't permanently blocked. FBA is fast (Amazon logistics);
-// FBM rides a carrier so it gets a longer default. Real AMAZON_API / AMAZON_REPORT
-// / CARRIER_WEBHOOK values still override these when they actually arrive.
+// business days so it isn't permanently blocked. FBA + FBM both default to 3
+// business days (operator preference); each stays independently env-tunable so
+// they can diverge later. Real AMAZON_API / AMAZON_REPORT / CARRIER_WEBHOOK
+// values still override these when they actually arrive.
 const FBA_HEURISTIC_DAYS = Math.max(1, Number(process.env.NEXUS_DELIVERY_HEURISTIC_FBA_DAYS) || 3)
-const FBM_HEURISTIC_DAYS = Math.max(1, Number(process.env.NEXUS_DELIVERY_HEURISTIC_FBM_DAYS) || 5)
+const FBM_HEURISTIC_DAYS = Math.max(1, Number(process.env.NEXUS_DELIVERY_HEURISTIC_FBM_DAYS) || 3)
 // Only estimate for orders shipped within this window — older orders are well
 // outside the Solicitations 4–30d window, so estimating them is pointless churn.
 const HEURISTIC_MAX_SHIP_AGE_DAYS = 60
@@ -166,8 +167,9 @@ async function applyShipDeliveryHeuristic(): Promise<{ scanned: number; updated:
       deletedAt: null,
       status: 'SHIPPED',
       shippedAt: { not: null, gte: since },
-      // Only fill where we don't already have an authoritative date.
-      OR: [{ deliveredAtSource: null }, { deliveredAtSource: { in: ['HEURISTIC_FBA_3D', 'HEURISTIC_FBM_5D'] } }],
+      // Only fill where we don't already have an authoritative date. Legacy
+      // HEURISTIC_FBM_5D rows are included so they recompute to the new 3d value.
+      OR: [{ deliveredAtSource: null }, { deliveredAtSource: { in: ['HEURISTIC_FBA_3D', 'HEURISTIC_FBM_3D', 'HEURISTIC_FBM_5D'] } }],
     },
     select: { id: true, shippedAt: true, fulfillmentMethod: true, deliveredAt: true, deliveredAtSource: true },
   })
@@ -178,7 +180,7 @@ async function applyShipDeliveryHeuristic(): Promise<{ scanned: number; updated:
     const isFba = o.fulfillmentMethod === 'FBA'
     const projected = addBusinessDays(o.shippedAt, isFba ? FBA_HEURISTIC_DAYS : FBM_HEURISTIC_DAYS)
     if (projected.getTime() > now) continue // estimated delivery still in the future
-    const source = isFba ? 'HEURISTIC_FBA_3D' : 'HEURISTIC_FBM_5D'
+    const source = isFba ? 'HEURISTIC_FBA_3D' : 'HEURISTIC_FBM_3D'
     if (o.deliveredAt && o.deliveredAtSource === source && Math.abs(o.deliveredAt.getTime() - projected.getTime()) < 60_000) continue
     await prisma.order.update({ where: { id: o.id }, data: { deliveredAt: projected, deliveredAtSource: source } })
     updated++
