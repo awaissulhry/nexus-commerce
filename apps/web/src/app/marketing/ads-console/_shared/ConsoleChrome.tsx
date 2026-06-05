@@ -14,9 +14,8 @@ import {
   LayoutDashboard, Zap, Crosshair, Activity, FileSpreadsheet, Settings,
   ExternalLink, Bell, HelpCircle, User, Megaphone, ChevronLeft, ChevronRight, Menu,
   type LucideIcon,
-  BookOpen, Layers, PenTool, BarChart3, CheckSquare, LineChart, TrendingUp,
-  Clock, Swords, Sprout, Ban, ShoppingCart, DollarSign, Shield, Heart, Radio,
-  Gauge, Download, Upload, History, Filter,
+  BookOpen, PenTool, BarChart3, CheckSquare, Ban, Shield,
+  Download, Upload, History, Filter,
 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { amazonCampaignsHref, marketLabel } from './amazonLinks'
@@ -36,28 +35,15 @@ const NAV: NavItem[] = [
 ]
 
 interface SubItem { k: string; label: string; Icon?: LucideIcon; countKey?: string; sep?: boolean }
+// RC6.1 — the 18 tabs collapsed to a guided lifecycle. Old ?tab= keys still
+// deep-link (the hub maps them); Rank Control moved to /rank.
 const AUTOMATION_ITEMS: SubItem[] = [
-  { k: 'library',    label: 'Library',          Icon: BookOpen },
-  { k: 'playbooks',  label: 'Playbooks',         Icon: Layers },
-  { k: 'composer',   label: 'Composer',          Icon: PenTool },
-  { k: 'rank',       label: 'Rank Control',      Icon: Crosshair },
-  { k: 'active',     label: 'Active rules',      Icon: CheckSquare, countKey: 'rules' },
-  { sep: true, k: 's1', label: '' },
-  { k: 'analytics',  label: 'Analytics',         Icon: BarChart3 },
-  { k: 'efficiency', label: 'Efficiency',        Icon: LineChart },
-  { k: 'dayparting', label: 'Dayparting',        Icon: Clock },
-  { k: 'recs',       label: 'Recommendations',   Icon: TrendingUp, countKey: 'recs' },
-  { k: 'anomaly',    label: 'Anomalies',         Icon: Radio },
-  { k: 'competitive',label: 'Competitive',       Icon: Swords },
-  { sep: true, k: 's2', label: '' },
-  { k: 'harvest',    label: 'Harvest',           Icon: Sprout },
-  { k: 'negatives',  label: 'Negatives',         Icon: Ban },
-  { k: 'retail',     label: 'Retail',            Icon: ShoppingCart },
-  { k: 'budget',     label: 'Budgets',           Icon: DollarSign },
-  { sep: true, k: 's3', label: '' },
-  { k: 'engine',     label: 'Engine & autonomy', Icon: Gauge },
-  { k: 'guardrails', label: 'Guardrails',        Icon: Shield },
-  { k: 'health',     label: 'Health',            Icon: Heart },
+  { k: 'home',     label: 'Home',         Icon: LayoutDashboard },
+  { k: 'library',  label: 'Library',      Icon: BookOpen },
+  { k: 'builder',  label: 'Builder',      Icon: PenTool },
+  { k: 'active',   label: 'Active rules', Icon: CheckSquare, countKey: 'rules' },
+  { k: 'insights', label: 'Insights',     Icon: BarChart3 },
+  { k: 'safety',   label: 'Safety',       Icon: Shield },
 ]
 // RC5.1 — the keyword/strategy/conquest/tos modes are now absorbed into the one
 // cockpit, so the sub-nav is just Overview · Cockpit · Managed campaigns.
@@ -80,7 +66,7 @@ const BULK_ITEMS: SubItem[] = [
 
 interface SubNavDef { title: string; paramKey: string; items: SubItem[]; defaultKey: string }
 const SUB_NAVS: Record<string, SubNavDef> = {
-  [`${BASE}/automation`]: { title: 'Automation',   paramKey: 'tab',    items: AUTOMATION_ITEMS, defaultKey: 'library'   },
+  [`${BASE}/automation`]: { title: 'Automation',   paramKey: 'tab',    items: AUTOMATION_ITEMS, defaultKey: 'home'      },
   [`${BASE}/rank`]:       { title: 'Rank Control', paramKey: 'mode',   items: RANK_ITEMS,       defaultKey: 'cockpit'   },
   [`${BASE}/activity`]:   { title: 'Activity',     paramKey: 'filter', items: ACTIVITY_ITEMS,   defaultKey: 'all'       },
   [`${BASE}/bulk`]:       { title: 'Bulk',         paramKey: 'tab',    items: BULK_ITEMS,       defaultKey: 'download'  },

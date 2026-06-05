@@ -24,6 +24,7 @@ import { HarvestTab } from './HarvestTab'
 import { NegativeMiningTab } from './NegativeMiningTab'
 import { AnalyticsTab } from './AnalyticsTab'
 import { ComposerTab } from './ComposerTab'
+import { AutomationHome } from './AutomationHome'
 import { EfficiencyTab } from './EfficiencyTab'
 import { RankControlTab } from './RankControlTab'
 import { campaignHref } from './useCampaignMap'
@@ -49,7 +50,7 @@ const patch = (id: string, body: Record<string, unknown>) => fetch(`${getBackend
 export function AutomationHub({ initialRules, initialState }: { initialRules: Rule[]; initialState: State | null }) {
   const searchParams = useSearchParams()
   const router = useRouter()
-  const tab = searchParams.get('tab') ?? 'library'
+  const tab = searchParams.get('tab') ?? 'home'
   const setTab = (k: string) => router.replace(`/marketing/ads-console/automation?tab=${k}`, { scroll: false })
   const [rules, setRules] = useState<Rule[]>(initialRules.filter((r) => r.domain === 'advertising'))
   const [state, setState] = useState<State | null>(initialState)
@@ -130,12 +131,16 @@ export function AutomationHub({ initialRules, initialState }: { initialRules: Ru
     <div className="az-wrap">
       <div className="az-listhead"><span className="title"><Zap size={18} style={{ marginRight: 6, color: 'var(--orange)' }} />Automation</span><span style={{ flex: 1 }} /></div>
 
+      {tab !== 'home' && (
       <div className="az-hero">
         <div className="az-stat"><div className="k">Automations</div><div className="v">{AUTOMATION_COUNT}</div><div className="s">distinct · each fully configurable</div></div>
         <div className="az-stat"><div className="k">Active rules</div><div className="v">{activeCount}</div><div className="s">{liveCount} live · {activeCount - liveCount} dry-run</div></div>
         <div className="az-stat"><div className="k">Opportunity / mo</div><div className="v" style={{ color: 'var(--green)' }}>{recs ? eur(recs.potentialMonthlyImpactCents) : '…'}</div><div className="s">{recs?.recommendations?.length ?? 0} recommendations</div></div>
         <div className="az-stat"><div className="k">Engine</div><div className="v" style={{ color: state?.effectivelyStopped ? '#cc1100' : 'var(--green)' }}>{state?.effectivelyStopped ? 'Halted' : state?.autonomy ?? 'AUTO'}</div><div className="s">{state?.halted ? 'kill-switch on' : 'running'}</div></div>
       </div>
+      )}
+
+      {tab === 'home' && <AutomationHome rules={rules} recs={recs?.recommendations ?? []} state={state} onTab={setTab} />}
 
       {tab === 'library' && <>
         <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap', marginBottom: 4 }}>
@@ -275,7 +280,7 @@ export function AutomationHub({ initialRules, initialState }: { initialRules: Ru
         ) })}
       </div>}
 
-      {tab === 'engine' && <div style={{ paddingTop: 4 }}>
+      {(tab === 'engine' || tab === 'safety') && <div style={{ paddingTop: 4 }}>
         <div className="az-eng-card" style={{ marginBottom: 16, borderColor: state?.effectivelyStopped ? '#f4c7c0' : undefined }}>
           <h4><ShieldAlert size={15} style={{ marginRight: 6, verticalAlign: 'text-bottom' }} />Autonomy &amp; kill-switch</h4>
           <p>Engine state: <b style={{ color: state?.effectivelyStopped ? '#cc1100' : 'var(--green)' }}>{state?.effectivelyStopped ? 'HALTED' : state?.autonomy ?? 'AUTO'}</b>{state?.haltReason ? ` — ${state.haltReason}` : ''}. The kill-switch instantly stops every automation from acting.</p>
@@ -310,9 +315,9 @@ export function AutomationHub({ initialRules, initialState }: { initialRules: Ru
       {tab === 'budget' && <BudgetPacingTab />}
       {tab === 'guardrails' && <GuardrailsTab />}
       {tab === 'health' && <HealthTab />}
-      {tab === 'analytics' && <AnalyticsTab />}
+      {(tab === 'analytics' || tab === 'insights') && <AnalyticsTab />}
       {tab === 'efficiency' && <EfficiencyTab />}
-      {tab === 'composer' && <ComposerTab onSaved={() => { void refetchRules() }} />}
+      {(tab === 'composer' || tab === 'builder') && <ComposerTab onSaved={() => { void refetchRules() }} />}
       {tab === 'rank' && <RankControlTab onSaved={() => { void refetchRules() }} />}
       {tab === 'anomaly' && <AnomalyTab />}
       {tab === 'harvest' && <HarvestTab />}

@@ -682,6 +682,30 @@ button.az-rovw-card:hover { border-color: var(--navy); background: var(--bg2); }
 .az-btn.danger { border-color: #f0c9a8; color: #b3541e; }
 .az-btn.danger:hover:not(:disabled) { background: #fbeee3; }
 
+/* RC6.1 — Automation Home */
+.az-ah { display: flex; flex-direction: column; gap: 22px; }
+.az-ah-h { display: flex; align-items: center; gap: 7px; font-size: 14px; font-weight: 800; color: var(--navy); margin: 0 0 12px; }
+.az-ah-start { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.az-ah-card { position: relative; display: flex; flex-direction: column; gap: 6px; align-items: flex-start; text-align: left; padding: 18px; border: 1px solid var(--divider); border-radius: 14px; background: #fff; font: inherit; cursor: pointer; }
+.az-ah-card:hover { border-color: var(--navy); background: var(--bg2); }
+.az-ah-card > svg:first-child { color: var(--navy); }
+.az-ah-card .t { font-size: 14.5px; font-weight: 800; color: var(--ink); }
+.az-ah-card .d { font-size: 12px; color: var(--ink2); line-height: 1.45; padding-right: 14px; }
+.az-ah-card .go { position: absolute; top: 16px; right: 14px; color: var(--ink3); }
+.az-ah-running { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.az-ah-running .pill { font-size: 11px; font-weight: 800; border-radius: 999px; padding: 3px 11px; }
+.az-ah-running .pill.live { background: #fde7e7; color: #cc1100; }
+.az-ah-running .pill.dry { background: #fbeee3; color: #b3541e; }
+.az-ah-running .pill.posture { background: var(--bg2); color: var(--navy); }
+.az-ah-running .pill.halt { background: #fde7e7; color: #cc1100; }
+.az-ah-empty { font-size: 13px; color: var(--ink2); padding: 14px 16px; border: 1px dashed var(--divider); border-radius: 12px; line-height: 1.5; }
+.az-ah-wins { display: flex; flex-direction: column; gap: 6px; }
+.az-ah-win { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border: 1px solid var(--divider); border-radius: 9px; background: #fff; font-size: 12.5px; }
+.az-ah-win .t { flex: 1; color: var(--ink); }
+.az-ah-win .v { font-weight: 800; color: #1e7a4f; }
+.az-ah-safe { display: flex; align-items: center; gap: 7px; font-size: 12px; color: var(--ink2); padding: 10px 14px; background: var(--bg2); border-radius: 10px; }
+.az-ah-safe svg { color: #1e7a4f; flex: none; }
+
 /* RC4.12 — IS/ACOS trend sparklines */
 .az-trend { position: relative; display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; padding: 12px 16px; border: 1px solid var(--divider); border-radius: 12px; background: #fff; }
 .az-trend-item { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
