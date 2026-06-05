@@ -153,14 +153,23 @@ export default async function ReviewRequestsPage() {
         </div>
       )}
 
-      {/* RV.8.2 — Analytics */}
-      {analytics && analytics.overall.sent > 0 && (
+      {/* RV.8.2 — Analytics. UX.5: render whenever analytics is loaded (not only
+          when there are sends in-window). The whole block used to vanish if the
+          only requests were older than the 30-day window, making a working page
+          (126 sent all-time) look empty. */}
+      {analytics && (
         <section className="mb-6">
           <h2 className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2 flex items-center gap-1.5">
             <TrendingUp className="h-4 w-4 text-emerald-500" />
             Conversion analytics — last {analytics.window.days} days
           </h2>
 
+          {analytics.overall.sent === 0 ? (
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md p-4 mb-3 text-sm text-slate-500 dark:text-slate-400">
+              No review requests sent in the last {analytics.window.days} days.{' '}
+              <span className="font-semibold text-slate-700 dark:text-slate-300">{stats.sent.toLocaleString()}</span> sent all-time — these analytics track only the last {analytics.window.days} days.
+            </div>
+          ) : (<>
           {/* Overall headline */}
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md p-4 mb-3">
             <div className="flex items-baseline gap-4 flex-wrap">
@@ -235,6 +244,12 @@ export default async function ReviewRequestsPage() {
               <PerRuleTable rows={analytics.perRule} />
             </div>
           )}
+          {analytics.overall.reviewedAfter === 0 && (
+            <div className="mt-3 rounded-md border border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/30 px-3 py-2 text-xs text-amber-800 dark:text-amber-200">
+              Conversion reads 0% because there are no ingested reviews to attribute yet — connect Amazon insights (Brand Analytics role) or turn on eBay / import so we can measure whether requests actually convert.
+            </div>
+          )}
+          </>)}
         </section>
       )}
 
