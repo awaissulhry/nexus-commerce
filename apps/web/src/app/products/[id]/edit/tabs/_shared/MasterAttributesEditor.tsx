@@ -37,6 +37,7 @@ function isFilled(v: unknown): boolean {
 
 export default function MasterAttributesEditor({ productId, value, onChange, onRemoveKey }: Props) {
   const [schema, setSchema] = useState<MasterAttribute[] | null>(null)
+  const [hiddenKeys, setHiddenKeys] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(true)
   const [q, setQ] = useState('')
   const [aiBusy, setAiBusy] = useState(false)
@@ -50,7 +51,10 @@ export default function MasterAttributesEditor({ productId, value, onChange, onR
     fetch(`${getBackendUrl()}/api/products/${productId}/master-schema`, { cache: 'no-store' })
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
       .then((d) => {
-        if (!cancelled) setSchema(d.attributes ?? [])
+        if (!cancelled) {
+          setSchema(d.attributes ?? [])
+          setHiddenKeys(new Set<string>(d.hiddenKeys ?? []))
+        }
       })
       .catch(() => {
         if (!cancelled) setSchema([])
@@ -110,11 +114,14 @@ export default function MasterAttributesEditor({ productId, value, onChange, onR
     setAiSugg(null)
   }
 
+  // Off-schema keys the operator added — but NOT the Amazon plumbing keys
+  // (hiddenKeys), which may sit in categoryAttributes yet aren't real
+  // attributes (e.g. item_name holding the localized title).
   const customEntries = useMemo(() => {
     const out: Record<string, unknown> = {}
-    for (const k of Object.keys(value)) if (!schemaKeys.has(k)) out[k] = value[k]
+    for (const k of Object.keys(value)) if (!schemaKeys.has(k) && !hiddenKeys.has(k)) out[k] = value[k]
     return out
-  }, [value, schemaKeys])
+  }, [value, schemaKeys, hiddenKeys])
 
   const filtered = useMemo(() => {
     const s = schema ?? []
@@ -244,9 +251,11 @@ export default function MasterAttributesEditor({ productId, value, onChange, onR
         <TechAttrsEditor
           value={customEntries}
           onChange={(nextCustom) => {
-            const schemaPart: Record<string, unknown> = {}
-            for (const k of Object.keys(value)) if (schemaKeys.has(k)) schemaPart[k] = value[k]
-            onChange({ ...schemaPart, ...nextCustom })
+            // Preserve schema values AND hidden plumbing keys (don't silently
+            // drop them) while applying the custom-section edits.
+            const preserved: Record<string, unknown> = {}
+            for (const k of Object.keys(value)) if (schemaKeys.has(k) || hiddenKeys.has(k)) preserved[k] = value[k]
+            onChange({ ...preserved, ...nextCustom })
           }}
           onRemoveKey={onRemoveKey}
         />

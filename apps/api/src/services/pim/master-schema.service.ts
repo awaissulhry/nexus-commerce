@@ -105,6 +105,9 @@ export async function getMasterAttributeSchema(productId: string): Promise<{
   productId: string
   productType: string | null
   attributes: MasterAttribute[]
+  /** Amazon plumbing keys that may sit in categoryAttributes but are NOT
+   *  product attributes — the editor hides them from "Custom attributes". */
+  hiddenKeys: string[]
 }> {
   const product = await prisma.product.findUnique({
     where: { id: productId },
@@ -161,5 +164,10 @@ export async function getMasterAttributeSchema(productId: string): Promise<{
     }
   }
 
-  return { productId: product.id, productType, attributes: buildMasterAttributes(categoryFields, ruleSources) }
+  return {
+    productId: product.id,
+    productType,
+    attributes: buildMasterAttributes(categoryFields, ruleSources),
+    hiddenKeys: [...NON_ATTRIBUTE_KEYS],
+  }
 }
