@@ -28,7 +28,6 @@ import { BuilderTab } from './BuilderTab'
 import { AutomationHome } from './AutomationHome'
 import { LibraryTab } from './LibraryTab'
 import { EfficiencyTab } from './EfficiencyTab'
-import { RankControlTab } from './RankControlTab'
 import { campaignHref } from './useCampaignMap'
 import { type CustomPlaybook } from './customPlaybooks'
 import { DaypartingTab } from './DaypartingTab'
@@ -90,6 +89,7 @@ export function AutomationHub({ initialRules, initialState }: { initialRules: Ru
     setState(d)
   }, [])
   useEffect(() => { void fetch(`${getBackendUrl()}/api/advertising/recommendations?limit=80`, { cache: 'no-store' }).then((r) => r.json()).then(setRecs).catch(() => {}) }, [])
+  useEffect(() => { if (tab === 'rank') router.replace('/marketing/ads-console/rank') }, [tab, router])  // RC6.5 — legacy ?tab=rank → /rank
 
   const ruleNames = useMemo(() => new Set(rules.map((r) => r.name)), [rules])
   const liveCount = rules.filter((r) => r.enabled && !r.dryRun).length
@@ -318,7 +318,7 @@ export function AutomationHub({ initialRules, initialState }: { initialRules: Ru
       {(tab === 'analytics' || tab === 'insights') && <AnalyticsTab />}
       {tab === 'efficiency' && <EfficiencyTab />}
       {(tab === 'composer' || tab === 'builder') && <BuilderTab onSaved={() => { void refetchRules() }} onGoActive={() => setTab('active')} />}
-      {tab === 'rank' && <RankControlTab onSaved={() => { void refetchRules() }} />}
+      {tab === 'rank' && <div className="az-empty" style={{ border: '1px solid var(--divider)', borderRadius: 10 }}>Rank Control now has its own workspace. <a className="az-link" href="/marketing/ads-console/rank">Open Rank Control →</a></div>}
       {tab === 'anomaly' && <AnomalyTab />}
       {tab === 'harvest' && <HarvestTab />}
       {tab === 'negatives' && <NegativeMiningTab />}

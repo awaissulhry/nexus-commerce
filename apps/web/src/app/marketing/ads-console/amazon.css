@@ -1119,12 +1119,12 @@ button.az-rovw-card:hover { border-color: var(--navy); background: var(--bg2); }
 .az-bld-seg button.on { background: var(--navy); color: #fff; }
 .az-bld-sub { color: var(--ink2); font-size: 12.5px; }
 .az-bld-steps { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
-.az-bld-steps .st { display: inline-flex; align-items: center; gap: 7px; border: 1px solid var(--divider); border-radius: 999px; padding: 5px 13px 5px 8px; font-size: 12px; color: var(--ink2); }
-.az-bld-steps .st b { font-weight: 600; }
-.az-bld-steps .st > :first-child { width: 18px; height: 18px; border-radius: 50%; background: var(--bg3); display: grid; place-items: center; font-size: 11px; font-weight: 700; color: var(--ink2); }
+.az-bld-steps .st { display: inline-flex; align-items: center; gap: 7px; border: 1px solid var(--divider); border-radius: 999px; padding: 5px 14px 5px 6px; font-size: 12px; color: var(--ink2); white-space: nowrap; }
+.az-bld-steps .st b { font-weight: 600; white-space: nowrap; }
+.az-bld-steps .st .n { width: 18px; height: 18px; border-radius: 50%; background: var(--bg3); display: grid; place-items: center; font-size: 11px; font-weight: 700; color: var(--ink2); flex: none; }
 .az-bld-steps .st.on { border-color: var(--navy); color: var(--ink); }
-.az-bld-steps .st.on > :first-child { background: var(--navy); color: #fff; }
-.az-bld-steps .st.done > :first-child { background: var(--green); color: #fff; }
+.az-bld-steps .st.on .n { background: var(--navy); color: #fff; }
+.az-bld-steps .st.done .n { background: var(--green); color: #fff; }
 .az-bld-goals { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
 .az-bld-goal { text-align: left; display: flex; flex-direction: column; gap: 3px; position: relative; border: 1px solid var(--divider); border-radius: 11px; background: #fff; padding: 15px 40px 15px 16px; cursor: pointer; transition: border-color .12s, box-shadow .12s; }
 .az-bld-goal:hover { border-color: var(--navy); box-shadow: 0 1px 4px rgba(0,0,0,.06); }

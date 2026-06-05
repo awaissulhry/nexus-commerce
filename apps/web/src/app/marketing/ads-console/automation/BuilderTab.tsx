@@ -181,7 +181,7 @@ export function BuilderTab({ onSaved, onGoActive }: { onSaved: () => void; onGoA
       {/* ── GUIDED ─────────────────────────────────────────────── */}
       {mode === 'guided' && <>
         <div className="az-bld-steps">
-          {['Choose a goal', 'Tune it', 'Name & ship'].map((s, i) => <span key={s} className={`st ${step === i + 1 ? 'on' : ''} ${step > i + 1 ? 'done' : ''}`}>{step > i + 1 ? <Check size={12} /> : i + 1}<b>{s}</b></span>)}
+          {['Choose a goal', 'Tune it', 'Name & ship'].map((s, i) => <span key={s} className={`st ${step === i + 1 ? 'on' : ''} ${step > i + 1 ? 'done' : ''}`}><span className="n">{step > i + 1 ? <Check size={12} /> : i + 1}</span><b>{s}</b></span>)}
         </div>
 
         {step === 1 && (
