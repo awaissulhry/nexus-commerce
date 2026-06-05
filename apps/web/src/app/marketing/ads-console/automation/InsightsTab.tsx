@@ -9,7 +9,7 @@
  * navigation. Legacy ?tab= keys deep-link straight to the matching pane.
  */
 
-import { Fragment, useState } from 'react'
+import { Fragment, useEffect, useState } from 'react'
 import { BarChart3, Gauge, AlertTriangle, HeartPulse, Swords, Clock, Sprout, Ban } from 'lucide-react'
 import { AnalyticsTab } from './AnalyticsTab'
 import { EfficiencyTab } from './EfficiencyTab'
@@ -33,6 +33,10 @@ const VIEWS = [
 
 export function InsightsTab({ initialView = 'performance' }: { initialView?: string }) {
   const [view, setView] = useState(VIEWS.some((v) => v.k === initialView) ? initialView : 'performance')
+  // Sync the pane when the URL-driven initialView changes (e.g. a legacy deep-link
+  // → clicking the left "Insights" nav). Internal sub-tab clicks don't change
+  // initialView, so they're preserved.
+  useEffect(() => { if (VIEWS.some((v) => v.k === initialView)) setView(initialView) }, [initialView])
   const active = VIEWS.find((v) => v.k === view) ?? VIEWS[0]
   const Active = active.Comp
 
