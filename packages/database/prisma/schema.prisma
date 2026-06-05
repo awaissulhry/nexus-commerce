@@ -10201,6 +10201,26 @@ model ReviewRule {
   @@index([scope, isActive])
 }
 
+// RRT.1 — Operator-editable per-product-type review-request timing baseline.
+// Replaces the hardcoded TIMING_RULES (review-scheduler.service.ts) as the
+// PRIMARY per-product-type delay source. `pattern` is a case-insensitive
+// substring of Product.productType; the first active row (by sortOrder) whose
+// pattern matches the order's productType wins. A rule's sendDelayDays overrides
+// this per market/channel; if the table is emptied, the hardcoded list is a
+// last-resort fallback.
+model ReviewTimingDefault {
+  id        String   @id @default(cuid())
+  pattern   String   @unique // case-insensitive substring of productType, e.g. "casco"
+  label     String // operator-facing display name, e.g. "Helmets (casco)"
+  delayDays Int // days after the anchor (delivery) to ask
+  sortOrder Int      @default(0)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([isActive, sortOrder])
+}
+
 // RV.6.1 — Negative-feedback diversion state machine.
 //
 // One row per (order, rule) pair. Lifecycle:

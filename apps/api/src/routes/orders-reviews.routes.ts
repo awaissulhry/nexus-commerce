@@ -736,6 +736,77 @@ const ordersReviewsRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.status(500).send({ error: err.message })
     }
   })
+
+  // ── RRT.1 — ReviewTimingDefault CRUD (the editable per-product-type baseline) ──
+  // GET list (ordered by sortOrder).
+  fastify.get('/review-timing-defaults', async (_request, reply) => {
+    reply.header('Cache-Control', 'private, max-age=30')
+    const items = await prisma.reviewTimingDefault.findMany({ orderBy: { sortOrder: 'asc' } })
+    return { items, count: items.length }
+  })
+
+  // PUT — whole-list upsert + delete (drives the inline grid in one round-trip).
+  // Empty list is allowed (operator empties the table → resolver falls back to the
+  // hardcoded TIMING_RULES). delayDays clamped 1–60; pattern unique + lowercased.
+  fastify.put('/review-timing-defaults', async (request, reply) => {
+    const b = (request.body ?? {}) as { items?: Array<{ pattern?: string; label?: string; delayDays?: number; sortOrder?: number; isActive?: boolean }> }
+    const clean = (Array.isArray(b.items) ? b.items : []).map((it) => ({
+      pattern: String(it.pattern ?? '').trim().toLowerCase(),
+      label: String(it.label ?? '').trim(),
+      delayDays: Math.max(1, Math.min(60, Math.floor(Number(it.delayDays) || 1))),
+      sortOrder: Math.floor(Number(it.sortOrder) || 0),
+      isActive: it.isActive !== false,
+    })).filter((it) => it.pattern && it.label)
+    const byPattern = new Map(clean.map((it) => [it.pattern, it]))
+    const final = [...byPattern.values()]
+    const patterns = final.map((f) => f.pattern)
+    await prisma.$transaction([
+      patterns.length ? prisma.reviewTimingDefault.deleteMany({ where: { pattern: { notIn: patterns } } }) : prisma.reviewTimingDefault.deleteMany({}),
+      ...final.map((f) => prisma.reviewTimingDefault.upsert({
+        where: { pattern: f.pattern },
+        create: f,
+        update: { label: f.label, delayDays: f.delayDays, sortOrder: f.sortOrder, isActive: f.isActive },
+      })),
+    ])
+    const items = await prisma.reviewTimingDefault.findMany({ orderBy: { sortOrder: 'asc' } })
+    reply.header('Cache-Control', 'no-store')
+    return { ok: true, items, count: items.length }
+  })
+
+  // POST /seed — idempotent seed from the canonical TIMING_RULES; ?reset=1 also
+  // overwrites existing rows back to canonical ("Reset to defaults").
+  fastify.post<{ Querystring: { reset?: string } }>('/review-timing-defaults/seed', async (request, reply) => {
+    const reset = request.query.reset === '1' || request.query.reset === 'true'
+    const existing = await prisma.reviewTimingDefault.count()
+    if (existing > 0 && !reset) { reply.header('Cache-Control', 'no-store'); return { ok: true, action: 'noop', count: existing } }
+    const SEED = [
+      { pattern: 'casco', label: 'Helmets (casco)', delayDays: 21, sortOrder: 10 },
+      { pattern: 'helmet', label: 'Helmets', delayDays: 21, sortOrder: 11 },
+      { pattern: 'combinat', label: 'Suits (combinato)', delayDays: 16, sortOrder: 20 },
+      { pattern: 'tuta', label: 'Suits (tuta)', delayDays: 16, sortOrder: 21 },
+      { pattern: 'suit', label: 'Suits', delayDays: 16, sortOrder: 22 },
+      { pattern: 'giacca', label: 'Jackets (giacca)', delayDays: 14, sortOrder: 30 },
+      { pattern: 'giubbotto', label: 'Jackets (giubbotto)', delayDays: 14, sortOrder: 31 },
+      { pattern: 'jacket', label: 'Jackets', delayDays: 14, sortOrder: 32 },
+      { pattern: 'stival', label: 'Boots (stivali)', delayDays: 14, sortOrder: 40 },
+      { pattern: 'scarpe', label: 'Shoes (scarpe)', delayDays: 14, sortOrder: 41 },
+      { pattern: 'boot', label: 'Boots', delayDays: 14, sortOrder: 42 },
+      { pattern: 'pantalon', label: 'Trousers (pantaloni)', delayDays: 12, sortOrder: 50 },
+      { pattern: 'trouser', label: 'Trousers', delayDays: 12, sortOrder: 51 },
+      { pattern: 'guant', label: 'Gloves (guanti)', delayDays: 10, sortOrder: 60 },
+      { pattern: 'glove', label: 'Gloves', delayDays: 10, sortOrder: 61 },
+    ]
+    for (const s of SEED) {
+      await prisma.reviewTimingDefault.upsert({
+        where: { pattern: s.pattern },
+        create: s,
+        update: reset ? { label: s.label, delayDays: s.delayDays, sortOrder: s.sortOrder, isActive: true } : {},
+      })
+    }
+    const items = await prisma.reviewTimingDefault.findMany({ orderBy: { sortOrder: 'asc' } })
+    reply.header('Cache-Control', 'no-store')
+    return { ok: true, action: reset ? 'reset' : 'seeded', items, count: items.length }
+  })
 }
 
 // ────────────────────────────────────────────────────────────────────
