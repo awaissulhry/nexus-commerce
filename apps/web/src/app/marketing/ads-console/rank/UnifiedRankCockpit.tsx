@@ -49,6 +49,7 @@ export function UnifiedRankCockpit() {
   const [searchOpen, setSearchOpen] = useState(false)
   const [autonomy, setAutonomy] = useState<Autonomy | null>(null)
   const [pending, setPending] = useState(0)
+  const [gateOpen, setGateOpen] = useState<boolean | null>(null)
   const [trayOpen, setTrayOpen] = useState(false)
   const [trayTab, setTrayTab] = useState<'staged' | 'history'>('staged')
   const [cmdkOpen, setCmdkOpen] = useState(false)
@@ -75,8 +76,8 @@ export function UnifiedRankCockpit() {
   useEffect(() => { void fetch(`${getBackendUrl()}/api/advertising/campaigns?limit=500`, { cache: 'no-store' }).then(r => r.json()).then(d => setCampaigns((d.items ?? []) as Camp[])).catch(() => {}) }, [])
   useEffect(() => { void fetch(`${getBackendUrl()}/api/advertising/autonomy/status`, { cache: 'no-store' }).then(r => r.json()).then(d => setAutonomy(d as Autonomy)).catch(() => {}) }, [])
   const loadPending = useCallback(() => {
-    if (!campaignId) { setPending(0); return }
-    void fetch(`${getBackendUrl()}/api/advertising/campaigns/${campaignId}/pending-writes`, { cache: 'no-store' }).then(r => r.json()).then(d => setPending((d.pending ?? []).length)).catch(() => {})
+    if (!campaignId) { setPending(0); setGateOpen(null); return }
+    void fetch(`${getBackendUrl()}/api/advertising/campaigns/${campaignId}/pending-writes`, { cache: 'no-store' }).then(r => r.json()).then(d => { setPending((d.pending ?? []).length); setGateOpen(d.gate?.allowed ?? d.campaign?.liveBidWritesEnabled ?? false) }).catch(() => {})
   }, [campaignId])
   useEffect(() => { loadPending() }, [loadPending, market])
 
@@ -209,6 +210,7 @@ export function UnifiedRankCockpit() {
           <button type="button" className={`az-urc-staged ${pending > 0 ? 'has' : ''}`} onClick={() => { setTrayOpen(o => !(o && trayTab === 'staged')); setTrayTab('staged') }} aria-expanded={trayOpen && trayTab === 'staged'}>
             <Layers size={14} /> {pending > 0 ? `${pending} staged change${pending === 1 ? '' : 's'}` : 'No staged changes'} · Review &amp; write-gate {trayOpen && trayTab === 'staged' ? '▾' : '▸'}
           </button>
+          {campaignId && gateOpen != null && <span className={`az-urc-gate ${gateOpen ? 'open' : 'closed'}`} title={gateOpen ? 'Live writes ON — published changes reach Amazon' : 'Live writes gated — changes stay in Nexus until you open the gate'}>{gateOpen ? 'Write-gate OPEN' : 'Write-gate closed'}</span>}
           <span className="sp" />
           <button type="button" className="az-urc-histbtn" onClick={() => { setTrayOpen(o => !(o && trayTab === 'history')); setTrayTab('history') }} aria-expanded={trayOpen && trayTab === 'history'}>
             <HistoryIcon size={14} /> History &amp; undo{undoApi.entries.length ? ` (${undoApi.entries.length})` : ''} {trayOpen && trayTab === 'history' ? '▾' : '▸'}
