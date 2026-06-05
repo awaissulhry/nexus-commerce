@@ -21,14 +21,11 @@ import { Configurator } from './Configurator'
 import { PLAYBOOKS, playbookAutomations } from './playbooks'
 import { cleanName } from './_icons'
 import { InsightsTab } from './InsightsTab'
-import { HarvestTab } from './HarvestTab'
-import { NegativeMiningTab } from './NegativeMiningTab'
 import { BuilderTab } from './BuilderTab'
 import { AutomationHome } from './AutomationHome'
 import { LibraryTab } from './LibraryTab'
 import { campaignHref } from './useCampaignMap'
 import { type CustomPlaybook } from './customPlaybooks'
-import { DaypartingTab } from './DaypartingTab'
 import { RetailTab } from './RetailTab'
 import { GuardrailsTab } from './GuardrailsTab'
 import { BudgetPacingTab } from './BudgetPacingTab'
@@ -315,12 +312,9 @@ export function AutomationHub({ initialRules, initialState }: { initialRules: Ru
         {safetyView === 'budget' && <BudgetPacingTab />}
       </div>}
 
-      {['insights', 'analytics', 'efficiency', 'anomaly', 'health', 'competitive'].includes(tab) && <InsightsTab initialView={tab === 'anomaly' ? 'anomalies' : (tab === 'analytics' || tab === 'insights') ? 'performance' : tab} />}
-      {tab === 'dayparting' && <DaypartingTab />}
+      {['insights', 'analytics', 'efficiency', 'anomaly', 'health', 'competitive', 'dayparting', 'harvest', 'negatives'].includes(tab) && <InsightsTab initialView={tab === 'anomaly' ? 'anomalies' : (tab === 'analytics' || tab === 'insights') ? 'performance' : tab} />}
       {(tab === 'composer' || tab === 'builder') && <BuilderTab onSaved={() => { void refetchRules() }} onGoActive={() => setTab('active')} />}
       {tab === 'rank' && <div className="az-empty" style={{ border: '1px solid var(--divider)', borderRadius: 10 }}>Rank Control now has its own workspace. <a className="az-link" href="/marketing/ads-console/rank">Open Rank Control →</a></div>}
-      {tab === 'harvest' && <HarvestTab />}
-      {tab === 'negatives' && <NegativeMiningTab />}
 
       {configuring && <Configurator def={configuring} onClose={() => setConfiguring(null)} onSaved={() => { void refetchRules() }} />}
     </div>
