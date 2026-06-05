@@ -13,6 +13,7 @@ import {
   Loader2,
   RefreshCw,
   Share2,
+  DownloadCloud,
   Sparkles,
   Upload,
   X,
@@ -39,6 +40,7 @@ import { useToast } from '@/components/ui/Toast'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { cn } from '@/lib/utils'
 import MasterGlobalSections from './_shared/MasterGlobalSections'
+import ImportFromAmazonModal from '../_shared/cockpit-shell/ImportFromAmazonModal'
 
 interface Props {
   product: any
@@ -133,6 +135,8 @@ export default function MasterDataTab({
   const canCascade = product.isParent && childCount > 0
   const [cascadeField, setCascadeField] = useState<MasterField | null>(null)
   const [cascading, setCascading] = useState(false)
+  const [importOpen, setImportOpen] = useState(false)
+  const [globalReloadKey, setGlobalReloadKey] = useState(0)
   const [cascadeAllOpen, setCascadeAllOpen] = useState(false)
   // FM.10 — edit-once catalog cascade drawer. Snapshot the (edited) master
   // values on open so the drawer's preview input stays stable until reopened.
@@ -420,6 +424,15 @@ export default function MasterDataTab({
         )}
         <button
           type="button"
+          onClick={() => setImportOpen(true)}
+          title="Import the Amazon parent listing's attributes into the master (reverse-maps your rules)"
+          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-blue-200 bg-blue-50 text-xs font-medium text-blue-700 hover:bg-blue-100 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-300"
+        >
+          <DownloadCloud className="w-3.5 h-3.5" />
+          Import from Amazon
+        </button>
+        <button
+          type="button"
           onClick={openCascade}
           title="Preview + apply this product's master content across every mapped channel & market (translate + transform via the catalog mapping)"
           className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800"
@@ -437,6 +450,19 @@ export default function MasterDataTab({
         onApplied={() =>
           emitInvalidation({ type: 'product.updated', id: product.id, meta: { source: 'catalog-cascade' } })
         }
+      />
+
+      <ImportFromAmazonModal
+        productId={product.id}
+        amazonMarkets={(product.channelListings ?? [])
+          .filter((l: any) => l.channel === 'AMAZON' && l.marketplace)
+          .map((l: any) => l.marketplace as string)}
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        onApplied={() => {
+          setGlobalReloadKey((k) => k + 1)
+          emitInvalidation({ type: 'product.updated', id: product.id, meta: { source: 'master-import' } })
+        }}
       />
 
       <Card
@@ -531,6 +557,7 @@ export default function MasterDataTab({
           state but reports flush/discard/dirty up to MasterDataTab so
           the registry still sees one entry under "master". */}
       <MasterGlobalSections
+        key={`gs-${globalReloadKey}`}
         productId={product.id}
         discardSignal={discardSignal}
         onDirtyChange={(count) => {
