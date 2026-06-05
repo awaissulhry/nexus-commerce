@@ -22,6 +22,7 @@ import {
   upsertSizeScale,
   seedValueMapsFromAI,
 } from '../services/pim/value-map.service.js'
+import { seedEbayValueMaps } from '../services/pim/ebay-value-map.service.js'
 
 const valueMapRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get<{ Querystring: { channel?: string; marketplace?: string; attribute?: string } }>(
@@ -72,6 +73,23 @@ const valueMapRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.status(500).send({ error: err?.message ?? 'seed failed' })
     }
   })
+
+  // VL.3 — eBay value-map seed: AI-translate a product's eBay aspect values
+  // (per market) to English canonicals → FieldValueMap (review-gated).
+  fastify.post<{ Body: { productId: string; marketplaces?: string[] } }>(
+    '/pim/value-maps/seed-ebay',
+    async (request, reply) => {
+      const b = request.body
+      if (!b?.productId) return reply.status(400).send({ error: 'productId is required' })
+      try {
+        const r = await seedEbayValueMaps({ productId: b.productId, marketplaces: b.marketplaces })
+        return reply.send({ ok: true, ...r })
+      } catch (err: any) {
+        request.log.error({ err }, 'value-map seed-ebay failed')
+        return reply.status(500).send({ error: err?.message ?? 'seed-ebay failed' })
+      }
+    },
+  )
 
   fastify.get<{ Querystring: { scale?: string } }>('/pim/size-scales', async (request, reply) => {
     const sizeScales = await listSizeScales({ scale: request.query.scale })
