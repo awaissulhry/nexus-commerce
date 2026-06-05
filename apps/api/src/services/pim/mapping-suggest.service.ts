@@ -85,6 +85,8 @@ export interface MappingSuggestion {
   suggestedSource: string
   confidence: SuggestConfidence
   reason: string
+  /** BM.6 — whether the channel marks this field required (governance). */
+  required?: boolean
 }
 
 /** Suggest sources for every UNMAPPED field on a (channel, marketplace) for
@@ -98,7 +100,7 @@ export async function suggestMappings(input: {
   const fields = await prisma.channelSchema.findMany({
     where: { channel: input.channel, OR: [{ marketplace: input.code }, { marketplace: null }] },
     orderBy: { fieldKey: 'asc' },
-    select: { fieldKey: true, label: true },
+    select: { fieldKey: true, label: true, required: true },
   })
 
   const suggestions: MappingSuggestion[] = []
@@ -114,6 +116,7 @@ export async function suggestMappings(input: {
         suggestedSource: s.source,
         confidence: s.confidence,
         reason: s.reason,
+        required: f.required,
       })
     }
   }

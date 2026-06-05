@@ -20,6 +20,7 @@ interface Suggestion {
   suggestedSource: string
   confidence: 'high' | 'medium'
   reason: string
+  required?: boolean
 }
 interface Row {
   fieldKey: string
@@ -27,6 +28,7 @@ interface Row {
   confidence: 'high' | 'medium'
   reason: string
   ai: boolean
+  required: boolean
   accepted: boolean
 }
 interface Coordinate {
@@ -90,6 +92,7 @@ export default function AutoMapModal({ coordinates, productType, open, onClose, 
             confidence: s.confidence,
             reason: s.reason,
             ai: false,
+            required: !!s.required,
             accepted: s.confidence === 'high', // default-accept the confident ones
           })),
         )
@@ -131,6 +134,7 @@ export default function AutoMapModal({ coordinates, productType, open, onClose, 
             confidence: s.confidence,
             reason: s.reason,
             ai: true,
+            required: !!s.required,
             accepted: false, // AI guesses default to unchecked — review first
           }))
         if (add.length === 0 && !json.aiUsed) setError(json.reason ?? 'AI added no new suggestions.')
@@ -144,6 +148,7 @@ export default function AutoMapModal({ coordinates, productType, open, onClose, 
   }, [coord, qs])
 
   const acceptedCount = rows.filter((r) => r.accepted && r.source.trim()).length
+  const requiredUnaccepted = rows.filter((r) => r.required && !r.accepted).length
   const setAll = (pred: (r: Row) => boolean) => setRows((rs) => rs.map((r) => ({ ...r, accepted: pred(r) })))
 
   const apply = useCallback(async () => {
@@ -294,6 +299,11 @@ export default function AutoMapModal({ coordinates, productType, open, onClose, 
                     </td>
                     <td className="py-1 pr-2 font-mono text-slate-700 dark:text-slate-300" title={r.reason}>
                       {r.fieldKey}
+                      {r.required && (
+                        <span className="ml-0.5 text-rose-500" title="required field">
+                          *
+                        </span>
+                      )}
                     </td>
                     <td className="py-1 pr-2">
                       <input
@@ -324,7 +334,12 @@ export default function AutoMapModal({ coordinates, productType, open, onClose, 
         </div>
 
         <div className="flex items-center justify-end gap-2 border-t border-slate-100 px-4 py-3 dark:border-slate-800">
-          <span className="mr-auto text-xs text-slate-500">{acceptedCount} of {rows.length} selected</span>
+          <span className="mr-auto text-xs text-slate-500">
+            {acceptedCount} of {rows.length} selected
+            {requiredUnaccepted > 0 && (
+              <span className="ml-2 text-rose-500">· {requiredUnaccepted} required not yet accepted</span>
+            )}
+          </span>
           <button type="button" onClick={onClose} disabled={applying} className="rounded border border-slate-200 px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800">
             Cancel
           </button>
