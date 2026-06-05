@@ -1,279 +1,137 @@
+'use client'
+
 /**
- * SR.1 — Sentient Review Loop workspace.
+ * UX.3 — Reviews Overview (the kid-simple hero).
  *
- * Three-column layout:
- *   - left/main: review feed with sentiment + category chips, filters
- *   - top: KPI strip (counts, top categories, open spikes)
- *   - right rail (md+): open-spike feed with acknowledge/resolve
+ * One screen, channel + market scoped (from the global filter in ReviewsNav):
+ *   • big star rating + distribution + trend (RatingPanel)
+ *   • "What customers love" / "What needs fixing" — Amazon official review THEMES
+ *     with customer snippets (Amazon shares themes, not full text)
+ *   • recent individual reviews (eBay / imported) below
+ *   • an honest data-source banner when a channel needs setup (e.g. Amazon needs
+ *     the Brand Analytics role) — never a fake "0 reviews".
  *
- * AD-pattern compliance: sandbox/live mode chip, Italian-first strings,
- * Salesforce density.
+ * Client component: the global filter updates the URL client-side, so this reads
+ * useSearchParams and re-fetches /reviews/overview on change. The 8 power-tools
+ * (spikes, heatmap, automation, …) live under Advanced.
  */
 
-import { Star, AlertTriangle } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
+import { Star, ThumbsUp, ThumbsDown, Info } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { ReviewsList } from './ReviewsList'
-import { SpikeFeed } from './SpikeFeed'
 import { RatingPanel, type RatingsPayload } from './RatingPanel'
-import { IngestHealthStrip, type IngestHealthPayload } from './IngestHealthStrip'
 import { ReviewsNav } from './_shared/ReviewsNav'
-import { ReviewLiveChip } from './_shared/ReviewLiveChip'
 
-export const dynamic = 'force-dynamic'
-
-interface SummaryPayload {
-  sinceDays: number
-  marketplace: string | null
-  totalReviews: number
-  pendingExtract: number
-  counts: { POSITIVE: number; NEUTRAL: number; NEGATIVE: number }
-  negativePct: number | null
-  topCategories: { category: string; count: number }[]
-  openSpikes: number
-}
-
-interface ReviewRow {
-  id: string
+interface Topic { topic: string; mentionCount: number | null; ratingImpact: number | null; snippets: string[] }
+interface Overview {
   channel: string
-  marketplace: string | null
-  rating: number | null
-  title: string | null
-  body: string
-  authorName: string | null
-  verifiedPurchase: boolean
-  postedAt: string
-  sentiment: {
-    label: 'POSITIVE' | 'NEUTRAL' | 'NEGATIVE'
-    score: string
-    categories: string[]
-    topPhrases: string[]
-  } | null
-  product: { id: string; sku: string; name: string; productType: string | null } | null
-}
-
-interface SpikeRow {
-  id: string
   marketplace: string
-  category: string
-  rate7dNumerator: number
-  rate7dDenominator: number
-  rate28dNumerator: number
-  rate28dDenominator: number
-  spikeMultiplier: string | null
-  sampleTopPhrases: string[]
-  status: 'OPEN' | 'ACKNOWLEDGED' | 'RESOLVED'
-  detectedAt: string
-  acknowledgedAt: string | null
-  product: { id: string; sku: string; name: string } | null
+  insights: { starRating: number | null; reviewCount: number; positiveTopics: Topic[]; negativeTopics: Topic[]; accessStatus: string; asins: number } | null
+  reviews: { average: number | null; count: number; distribution: Record<string, number>; trend: { date: string; avg: number | null; count: number }[]; total: number }
+  status: { amazonInsights: string | null; ebayLiveEnabled: boolean; mode: string }
 }
 
-async function fetchJson<T>(url: string, fallback: T): Promise<T> {
-  try {
-    const res = await fetch(url, { cache: 'no-store' })
-    if (!res.ok) return fallback
-    return (await res.json()) as T
-  } catch {
-    return fallback
+export default function ReviewsOverviewPage() {
+  const params = useSearchParams()
+  const channel = params.get('channel') ?? 'ALL'
+  const market = params.get('market') ?? 'ALL'
+  const [data, setData] = useState<Overview | null>(null)
+
+  useEffect(() => {
+    let alive = true
+    const qs = new URLSearchParams()
+    if (channel !== 'ALL') qs.set('channel', channel)
+    if (market !== 'ALL') qs.set('market', market)
+    void fetch(`${getBackendUrl()}/api/reviews/overview?${qs.toString()}`, { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((d) => { if (alive) setData(d) })
+      .catch(() => {})
+    return () => { alive = false }
+  }, [channel, market])
+
+  const showAmazon = channel === 'ALL' || channel === 'AMAZON'
+  const insights = data?.insights ?? null
+  const access = insights?.accessStatus
+  const needsRole = access === 'NEEDS_BRAND_ANALYTICS_ROLE'
+  const insightsOff = access === 'OFF' || access === 'PENDING'
+  const ebayOff = channel === 'EBAY' && data ? !data.status.ebayLiveEnabled : false
+
+  // RatingPanel: Amazon-only → use the official insight rating; otherwise the
+  // individual-review rating (eBay/imported).
+  const ratings: RatingsPayload = {
+    sinceDays: 90,
+    marketplace: market === 'ALL' ? null : market,
+    average: channel === 'AMAZON' && insights?.starRating != null ? insights.starRating : data?.reviews.average ?? null,
+    count: channel === 'AMAZON' && insights ? insights.reviewCount : data?.reviews.count ?? 0,
+    distribution: data?.reviews.distribution ?? { '1': 0, '2': 0, '3': 0, '4': 0, '5': 0 },
+    trend: data?.reviews.trend ?? [],
   }
-}
-
-const CATEGORY_LABEL: Record<string, string> = {
-  FIT_SIZING: 'Fit / Sizing',
-  DURABILITY: 'Durability',
-  SHIPPING: 'Shipping',
-  VALUE: 'Value',
-  DESIGN: 'Design',
-  QUALITY: 'Quality',
-  SAFETY: 'Safety',
-  COMFORT: 'Comfort',
-  OTHER: 'Other',
-}
-
-export default async function ReviewsPage() {
-  const backend = getBackendUrl()
-  const [summary, reviews, spikes, ratings, health] = await Promise.all([
-    fetchJson<SummaryPayload>(`${backend}/api/reviews/summary?sinceDays=30`, {
-      sinceDays: 30,
-      marketplace: null,
-      totalReviews: 0,
-      pendingExtract: 0,
-      counts: { POSITIVE: 0, NEUTRAL: 0, NEGATIVE: 0 },
-      negativePct: null,
-      topCategories: [],
-      openSpikes: 0,
-    }),
-    fetchJson<{ items: ReviewRow[] }>(`${backend}/api/reviews?sinceDays=30&limit=100`, {
-      items: [],
-    }),
-    fetchJson<{ items: SpikeRow[] }>(`${backend}/api/reviews/spikes?status=OPEN&limit=20`, {
-      items: [],
-    }),
-    fetchJson<RatingsPayload>(`${backend}/api/reviews/ratings?sinceDays=30`, {
-      sinceDays: 30,
-      marketplace: null,
-      average: null,
-      count: 0,
-      distribution: { '1': 0, '2': 0, '3': 0, '4': 0, '5': 0 },
-      trend: [],
-    }),
-    fetchJson<IngestHealthPayload>(`${backend}/api/reviews/ingest-health`, {
-      channels: [],
-      lastIngestCron: null,
-      generatedAt: '',
-    }),
-  ])
 
   return (
     <div className="px-4 py-4">
-      <div className="flex items-start gap-3 mb-3">
-        <Star className="h-6 w-6 text-amber-500 dark:text-amber-400 mt-0.5" />
-        <div className="flex-1">
-          <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100">
-            Sentient Review Loop
-          </h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400">
-            AI sentiment + categorization (Anthropic Haiku with prompt caching) on every
-            review. The spike detector compares the last 7d vs 28d baseline per category —
-            spikes feed the automation rule engine (SR.3+).
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <ReviewLiveChip />
-          <span
-            className={`text-[10px] uppercase tracking-wider px-2 py-1 rounded ring-1 ring-inset ${
-              health.config?.mode === 'live'
-                ? 'bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:ring-emerald-900'
-                : 'bg-amber-50 text-amber-700 ring-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:ring-amber-900'
-            }`}
-          >
-            {health.config?.mode ?? 'sandbox'}
-          </span>
-        </div>
-      </div>
-
+      <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-2 flex items-center gap-2">
+        <Star className="h-5 w-5 text-amber-500" aria-hidden="true" /> Reviews
+      </h1>
       <ReviewsNav />
 
-      {/* KPI strip */}
-      <div className="grid grid-cols-2 md:grid-cols-6 gap-3 mb-4">
-        <Stat
-          label="Reviews 30d"
-          value={summary.totalReviews}
-        />
-        <Stat
-          label="Avg rating"
-          value={ratings.average != null ? `${ratings.average.toFixed(2)}★` : '—'}
-          tone={
-            ratings.average == null
-              ? null
-              : ratings.average >= 4.3
-                ? 'emerald'
-                : ratings.average < 3.5
-                  ? 'rose'
-                  : 'amber'
-          }
-        />
-        <Stat
-          label="Positive"
-          value={summary.counts.POSITIVE}
-          tone="emerald"
-        />
-        <Stat
-          label="Negative"
-          value={summary.counts.NEGATIVE}
-          tone={summary.counts.NEGATIVE > 0 ? 'rose' : null}
-        />
-        <Stat
-          label="% negative"
-          value={
-            summary.negativePct != null ? `${(summary.negativePct * 100).toFixed(1)}%` : '—'
-          }
-          tone={
-            summary.negativePct != null && summary.negativePct > 0.15
-              ? 'rose'
-              : summary.negativePct != null && summary.negativePct > 0.05
-                ? 'amber'
-                : null
-          }
-        />
-        <Stat
-          label="Open Spikes"
-          value={summary.openSpikes}
-          tone={summary.openSpikes > 0 ? 'rose' : null}
-        />
-      </div>
-
-      {/* Top negative categories strip */}
-      {summary.topCategories.length > 0 && (
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md px-3 py-2 mb-4">
-          <div className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">
-            Top negative categories (30d)
-          </div>
-          <div className="flex items-center gap-2 flex-wrap">
-            {summary.topCategories.map((c) => (
-              <span
-                key={c.category}
-                className="text-xs px-2 py-0.5 rounded ring-1 ring-inset bg-rose-50 text-rose-700 ring-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:ring-rose-900"
-              >
-                {CATEGORY_LABEL[c.category] ?? c.category} · {c.count}
-              </span>
-            ))}
-          </div>
+      {(needsRole || insightsOff || ebayOff) && (
+        <div className="mb-4 flex items-start gap-2 rounded-lg border border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/30 px-3 py-2 text-sm text-amber-800 dark:text-amber-200">
+          <Info className="h-4 w-4 mt-0.5 shrink-0" aria-hidden="true" />
+          <span>
+            {needsRole
+              ? 'Amazon review insights need the Brand Analytics role on your SP-API app. Once granted, the rating and “what customers love / needs fixing” populate automatically — official, no scraping.'
+              : insightsOff
+                ? 'Amazon review insights are off. Enable them (set NEXUS_ENABLE_AMAZON_REVIEW_INSIGHTS=1) once the Brand Analytics role is granted.'
+                : 'eBay feedback sync is off. Turn it on (NEXUS_EBAY_REAL_API=true) to pull buyer feedback automatically.'}
+          </span>
         </div>
       )}
 
-      {/* RX.1 — per-channel ingestion health */}
-      <IngestHealthStrip health={health} />
-
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4">
-        {/* Reviews feed */}
-        <section>
-          <ReviewsList initial={reviews.items} />
-        </section>
-
-        {/* Spike feed (right rail) */}
-        <aside className="space-y-3">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md">
-            <div className="px-3 py-2 border-b border-slate-200 dark:border-slate-800 flex items-center gap-2">
-              <AlertTriangle className="h-4 w-4 text-rose-500 dark:text-rose-400" />
-              <div className="text-sm font-medium text-slate-900 dark:text-slate-100">
-                Open Spikes
-              </div>
-              <span className="text-xs text-slate-500 dark:text-slate-400">
-                {spikes.items.length}
-              </span>
-            </div>
-            <SpikeFeed initial={spikes.items} />
+      <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-4 mb-3">
+        <RatingPanel ratings={ratings} />
+        {showAmazon && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <TopicCard kind="love" topics={insights?.positiveTopics ?? []} ok={access === 'OK'} />
+            <TopicCard kind="fix" topics={insights?.negativeTopics ?? []} ok={access === 'OK'} />
           </div>
-          <RatingPanel ratings={ratings} />
-        </aside>
+        )}
       </div>
+
+      {showAmazon && (
+        <p className="text-xs text-slate-400 dark:text-slate-500 mb-4">
+          Amazon shares review <em>themes</em>, not full text. For individual reviews, enable eBay or import from Advanced.
+        </p>
+      )}
+
+      <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Recent reviews</h2>
+      <ReviewsList initial={[]} />
     </div>
   )
 }
 
-function Stat({
-  label,
-  value,
-  tone,
-}: {
-  label: string
-  value: number | string
-  tone?: 'emerald' | 'amber' | 'rose' | null
-}) {
-  const valueClass =
-    tone === 'emerald'
-      ? 'text-emerald-700 dark:text-emerald-300'
-      : tone === 'amber'
-        ? 'text-amber-700 dark:text-amber-300'
-        : tone === 'rose'
-          ? 'text-rose-700 dark:text-rose-300'
-          : 'text-slate-900 dark:text-slate-100'
+function TopicCard({ kind, topics, ok }: { kind: 'love' | 'fix'; topics: Topic[]; ok: boolean }) {
+  const isLove = kind === 'love'
   return (
-    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md px-3 py-2">
-      <div className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400">
-        {label}
+    <div className="rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3">
+      <div className={`flex items-center gap-1.5 mb-2 text-sm font-medium ${isLove ? 'text-emerald-700 dark:text-emerald-300' : 'text-rose-700 dark:text-rose-300'}`}>
+        {isLove ? <ThumbsUp className="h-4 w-4" aria-hidden="true" /> : <ThumbsDown className="h-4 w-4" aria-hidden="true" />}
+        {isLove ? 'What customers love' : 'What needs fixing'}
       </div>
-      <div className={`text-base font-semibold tabular-nums ${valueClass}`}>{value}</div>
+      {!ok || topics.length === 0 ? (
+        <p className="text-xs text-slate-400">{ok ? 'No themes yet.' : 'Needs Amazon Brand Analytics access.'}</p>
+      ) : (
+        <ul className="space-y-2">
+          {topics.map((t) => (
+            <li key={t.topic} className="text-sm">
+              <span className="font-medium text-slate-800 dark:text-slate-200">{t.topic}</span>
+              {t.mentionCount != null && <span className="text-xs text-slate-400 ml-1">· {t.mentionCount}</span>}
+              {t.snippets[0] && <span className="block text-xs text-slate-500 dark:text-slate-400 italic truncate">“{t.snippets[0]}”</span>}
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   )
 }

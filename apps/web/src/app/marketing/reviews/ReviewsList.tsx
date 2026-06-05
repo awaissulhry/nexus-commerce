@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { CheckCircle2, MinusCircle, AlertCircle, Star } from 'lucide-react'
+import { useSearchParams } from 'next/navigation'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useReviewEventsRefresh } from '@/hooks/use-review-events-refresh'
 
@@ -38,25 +39,30 @@ const CATEGORY_LABEL: Record<string, string> = {
 }
 
 export function ReviewsList({ initial }: { initial: ReviewRow[] }) {
+  // UX.3 — scope to the global channel + market filter (the local marketplace
+  // select is gone; the workspace-wide filter in ReviewsNav owns that now).
+  const params = useSearchParams()
+  const channel = params.get('channel')
+  const market = params.get('market')
   const [items, setItems] = useState<ReviewRow[]>(initial)
   const [labelFilter, setLabelFilter] = useState<string>('')
   const [categoryFilter, setCategoryFilter] = useState<string>('')
-  const [marketplaceFilter, setMarketplaceFilter] = useState<string>('')
 
   const loadItems = useCallback(() => {
     const url = new URL(`${getBackendUrl()}/api/reviews`)
-    url.searchParams.set('sinceDays', '30')
+    url.searchParams.set('sinceDays', '90')
     url.searchParams.set('limit', '100')
     if (labelFilter) url.searchParams.set('label', labelFilter)
     if (categoryFilter) url.searchParams.set('category', categoryFilter)
-    if (marketplaceFilter) url.searchParams.set('marketplace', marketplaceFilter)
+    if (channel && channel !== 'ALL') url.searchParams.set('channel', channel)
+    if (market && market !== 'ALL') url.searchParams.set('marketplace', market)
     fetch(url.toString(), { cache: 'no-store' })
       .then((r) => (r.ok ? r.json() : null))
       .then((json: { items: ReviewRow[] } | null) => {
         if (json) setItems(json.items)
       })
       .catch(() => {})
-  }, [labelFilter, categoryFilter, marketplaceFilter])
+  }, [labelFilter, categoryFilter, channel, market])
 
   useEffect(() => {
     loadItems()
@@ -65,11 +71,6 @@ export function ReviewsList({ initial }: { initial: ReviewRow[] }) {
   // RX.3 — live-refresh the feed when new reviews land / are answered.
   useReviewEventsRefresh(loadItems, { debounceMs: 1500 })
 
-  const marketplaces = useMemo(
-    () =>
-      Array.from(new Set(initial.map((r) => r.marketplace).filter((m): m is string => !!m))).sort(),
-    [initial],
-  )
   const categories = useMemo(
     () =>
       Array.from(
@@ -108,18 +109,6 @@ export function ReviewsList({ initial }: { initial: ReviewRow[] }) {
             </option>
           ))}
         </select>
-        <select
-          value={marketplaceFilter}
-          onChange={(e) => setMarketplaceFilter(e.target.value)}
-          className="text-sm rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1"
-        >
-          <option value="">All marketplaces</option>
-          {marketplaces.map((m) => (
-            <option key={m} value={m}>
-              {m}
-            </option>
-          ))}
-        </select>
         <span className="ml-auto text-xs text-slate-500 dark:text-slate-400">
           {items.length} reviews
         </span>
@@ -127,10 +116,11 @@ export function ReviewsList({ initial }: { initial: ReviewRow[] }) {
 
       {items.length === 0 ? (
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md px-4 py-6 text-center text-sm text-slate-500">
-          No reviews. Run the ingest:{' '}
-          <code className="px-1 py-0.5 rounded bg-slate-100 dark:bg-slate-800">
-            POST /api/reviews/cron/ingest/trigger
-          </code>
+          {channel === 'AMAZON'
+            ? 'Amazon doesn’t share full review text by API — the themes above come from Amazon’s official insights. For full reviews, import your Seller Central export from Advanced → Import reviews.'
+            : channel === 'EBAY'
+              ? 'No eBay feedback yet. Turn on eBay sync to pull buyer feedback automatically.'
+              : 'No individual reviews here yet. eBay feedback flows in once enabled; import Amazon/Shopify reviews from Advanced → Import reviews.'}
         </div>
       ) : (
         <ul className="space-y-2">
