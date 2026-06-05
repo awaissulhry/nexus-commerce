@@ -706,6 +706,12 @@ button.az-rovw-card:hover { border-color: var(--navy); background: var(--bg2); }
 .az-rankwarn-res { margin-top: 8px; font-size: 11px; font-weight: 600; color: #1e7a4f; }
 .az-rankwarn-link { display: inline-block; margin-top: 7px; font-size: 10.5px; font-weight: 700; color: var(--navy); text-decoration: none; }
 .az-rankwarn-link:hover { text-decoration: underline; }
+/* RC5.4 — full-width variant (relocated out of the narrow Strategy panel) */
+.az-rankwarn.full { margin: 0 0 14px; }
+.az-rankwarn.full .az-rankwarn-msg { font-size: 12.5px; }
+.az-rankwarn.full .az-rankwarn-acts { align-items: center; }
+.az-rankwarn.full .az-rankwarn-res { margin-top: 0; font-size: 11.5px; }
+.az-rankwarn.full .az-rankwarn-link { margin-top: 0; margin-left: auto; }
 
 /* Plain-English schedule summary (DD5) */
 .az-tr-summary { margin-top: 8px; padding: 8px 10px; background: var(--bg2); border: 1px solid var(--divider); border-radius: 8px; }

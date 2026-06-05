@@ -819,20 +819,7 @@ export function RankPlacementCockpit({ market: ctxMarket, campaignId: ctxCampaig
           )}
           {rankReadout && <div className="az-cockpit-sub">{rankReadout}</div>}
 
-          {/* RC3.4 — inline collision warning when aiming for the top */}
-          {targetSlot?.group === 'top' && !inlineHidden && visibleConflicts.length > 0 && (
-            <div className="az-rankwarn" role="region" aria-label="Keyword rank-collision warning">
-              <div className="az-rankwarn-msg"><AlertTriangle size={13} /> <b>{visibleConflicts.length} keyword{visibleConflicts.length === 1 ? '' : 's'}</b> you bid on {visibleConflicts.length === 1 ? 'is' : 'are'} also pushed by your other products{visibleConflicts[0]?.contenders.find(x => !x.isMine) ? <> (e.g. <b>{visibleConflicts[0].contenders.find(x => !x.isMine)!.campaignName}</b>)</> : null} — at the top you bid each other up.</div>
-              <div className="az-rankwarn-acts">
-                <button type="button" className="az-btn dark" disabled={inlineBusy} onClick={() => void resolveAllTop('champion')}>{inlineBusy ? <><Loader2 size={12} className="az-spin" /> Staging…</> : <><ShieldCheck size={12} /> Let the best own each</>}</button>
-                <button type="button" className="az-btn" disabled={inlineBusy} onClick={() => void resolveAllTop('second')} title="Step this campaign to just below the leader on these keywords — aim for 2nd, not a war for 1st">Take 2nd here</button>
-                <button type="button" className="az-btn" disabled={inlineBusy} onClick={() => void resolveAllTop('rest')} title="Lower this campaign's bid on these keywords so they fall to rest of search">Move me to Rest</button>
-                <button type="button" className="az-btn ghost" disabled={inlineBusy} onClick={() => setInlineHidden(true)}>Ignore</button>
-              </div>
-              {inlineMsg && <div className="az-rankwarn-res" role="status" aria-live="polite">{inlineMsg}</div>}
-              <a className="az-rankwarn-link" href="#az-kwx" onClick={() => setKwOpen(true)}>Review each in Keyword overlap below ↓</a>
-            </div>
-          )}
+          {/* RC5.4 — collision warning relocated full-width below the ladder row */}
 
           <div className="sep" />
           <div className="row"><span>Current {targetSlot ? PLACEMENT_SHORT[targetSlot.placement] : 'placement'} bias</span><b>+{targetCurrentPct}%</b></div>
@@ -895,6 +882,21 @@ export function RankPlacementCockpit({ market: ctxMarket, campaignId: ctxCampaig
           )}
         </div>
       </div>
+
+      {/* RC5.4 — keyword-collision warning, full-width (was cramped in the Strategy panel) */}
+      {targetSlot?.group === 'top' && !inlineHidden && visibleConflicts.length > 0 && (
+        <div className="az-rankwarn full" role="region" aria-label="Keyword rank-collision warning">
+          <div className="az-rankwarn-msg"><AlertTriangle size={13} /> <b>{visibleConflicts.length} keyword{visibleConflicts.length === 1 ? '' : 's'}</b> you bid on {visibleConflicts.length === 1 ? 'is' : 'are'} also pushed by your other products{visibleConflicts[0]?.contenders.find(x => !x.isMine) ? <> (e.g. <b>{visibleConflicts[0].contenders.find(x => !x.isMine)!.campaignName}</b>)</> : null} — at the top you bid each other up.</div>
+          <div className="az-rankwarn-acts">
+            <button type="button" className="az-btn dark" disabled={inlineBusy} onClick={() => void resolveAllTop('champion')}>{inlineBusy ? <><Loader2 size={12} className="az-spin" /> Staging…</> : <><ShieldCheck size={12} /> Let the best own each</>}</button>
+            <button type="button" className="az-btn" disabled={inlineBusy} onClick={() => void resolveAllTop('second')} title="Step this campaign to just below the leader on these keywords — aim for 2nd, not a war for 1st">Take 2nd here</button>
+            <button type="button" className="az-btn" disabled={inlineBusy} onClick={() => void resolveAllTop('rest')} title="Lower this campaign's bid on these keywords so they fall to rest of search">Move me to Rest</button>
+            <button type="button" className="az-btn ghost" disabled={inlineBusy} onClick={() => setInlineHidden(true)}>Ignore</button>
+            {inlineMsg && <span className="az-rankwarn-res" role="status" aria-live="polite">{inlineMsg}</span>}
+            <a className="az-rankwarn-link" href="#az-kwx" onClick={() => setKwOpen(true)}>Review each in Keyword overlap ↓</a>
+          </div>
+        </div>
+      )}
 
       {/* ── R6: spend by placement + projection ──────────────────── */}
       <div className="az-spend">
