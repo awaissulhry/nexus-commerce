@@ -26,7 +26,7 @@ import { getBackendUrl } from '@/lib/backend-url'
 import { Card } from '@/components/ui/Card'
 import { Input } from '@/components/ui/Input'
 import LocaleColumn, { type LocaleSlot } from './LocaleColumn'
-import TechAttrsEditor from './TechAttrsEditor'
+import MasterAttributesEditor from './MasterAttributesEditor'
 
 export interface GlobalSectionsView {
   productId: string
@@ -320,10 +320,11 @@ export default function MasterGlobalSections({
       </Card>
 
       <Card
-        title="Technical attributes"
-        description="Free-form key/value pairs stored in categoryAttributes. Channel mappings pull from these (e.g. `material` → Amazon attribute `outer_material_type`)."
+        title="Attributes"
+        description="Category attributes for this product type. Channel mappings pull from these — fill them so listings publish complete."
       >
-        <TechAttrsEditor
+        <MasterAttributesEditor
+          productId={productId}
           value={view.technical}
           onChange={updateTechnical}
           onRemoveKey={removeTechnicalKey}
