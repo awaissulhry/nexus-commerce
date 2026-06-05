@@ -1111,6 +1111,66 @@ button.az-rovw-card:hover { border-color: var(--navy); background: var(--bg2); }
 .az-pbcard .chips .chip { background: var(--bg2); border-radius: 5px; padding: 2px 7px; font-size: 10.5px; font-weight: 600; color: var(--ink2); }
 .az-pbcard .chips .chip.on { background: #e7f5ec; color: var(--green); }
 .az-pbcard .foot { display: flex; align-items: center; gap: 8px; margin-top: auto; }
+/* RC6.3 — unified Builder (guided + advanced) */
+.az-bld { display: flex; flex-direction: column; }
+.az-bld-head { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 14px; }
+.az-bld-seg { display: inline-flex; border: 1px solid var(--border); border-radius: 9px; overflow: hidden; background: var(--bg2); }
+.az-bld-seg button { display: inline-flex; align-items: center; gap: 6px; border: 0; background: transparent; padding: 8px 16px; font: inherit; font-weight: 600; font-size: 13px; color: var(--ink2); cursor: pointer; }
+.az-bld-seg button.on { background: var(--navy); color: #fff; }
+.az-bld-sub { color: var(--ink2); font-size: 12.5px; }
+.az-bld-steps { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+.az-bld-steps .st { display: inline-flex; align-items: center; gap: 7px; border: 1px solid var(--divider); border-radius: 999px; padding: 5px 13px 5px 8px; font-size: 12px; color: var(--ink2); }
+.az-bld-steps .st b { font-weight: 600; }
+.az-bld-steps .st > :first-child { width: 18px; height: 18px; border-radius: 50%; background: var(--bg3); display: grid; place-items: center; font-size: 11px; font-weight: 700; color: var(--ink2); }
+.az-bld-steps .st.on { border-color: var(--navy); color: var(--ink); }
+.az-bld-steps .st.on > :first-child { background: var(--navy); color: #fff; }
+.az-bld-steps .st.done > :first-child { background: var(--green); color: #fff; }
+.az-bld-goals { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+.az-bld-goal { text-align: left; display: flex; flex-direction: column; gap: 3px; position: relative; border: 1px solid var(--divider); border-radius: 11px; background: #fff; padding: 15px 40px 15px 16px; cursor: pointer; transition: border-color .12s, box-shadow .12s; }
+.az-bld-goal:hover { border-color: var(--navy); box-shadow: 0 1px 4px rgba(0,0,0,.06); }
+.az-bld-goal.on { border-color: var(--navy); box-shadow: 0 0 0 1px var(--navy) inset; }
+.az-bld-goal .t { font-weight: 700; font-size: 14px; }
+.az-bld-goal .d { color: var(--ink2); font-size: 12px; line-height: 1.45; }
+.az-bld-goal .go { position: absolute; right: 14px; top: 50%; transform: translateY(-50%); color: var(--ink3); }
+.az-bld-goal.scratch { border-style: dashed; background: #fafbfc; }
+.az-bld-tune { display: flex; flex-direction: column; gap: 14px; }
+.az-bld-trg { background: var(--bg2); border-radius: 9px; padding: 11px 14px; font-size: 12.5px; color: var(--ink2); }
+.az-bld-trg b { color: var(--ink); }
+.az-knobs { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+.az-knob { display: flex; flex-direction: column; gap: 5px; }
+.az-knob > span { font-size: 12px; font-weight: 600; color: var(--ink); }
+.az-knob .in { display: inline-flex; align-items: center; gap: 6px; }
+.az-knob .in input { width: 110px; border: 1px solid var(--border); border-radius: 7px; padding: 9px 11px; font: inherit; font-size: 15px; font-weight: 600; }
+.az-knob .in i { font-style: normal; color: var(--ink2); font-size: 13px; }
+.az-knob select { border: 1px solid var(--border); border-radius: 7px; padding: 9px 11px; font: inherit; cursor: pointer; }
+.az-bld-nilknob { color: var(--ink2); font-size: 12.5px; padding: 8px 0; grid-column: 1 / -1; }
+.az-bld-nav { display: flex; align-items: center; gap: 10px; margin-top: 4px; }
+.az-bld-select { border: 1px solid var(--border); border-radius: 7px; padding: 8px 11px; font: inherit; cursor: pointer; min-width: 280px; }
+.az-bld-hint { color: var(--ink2); font-size: 12px; margin-top: 6px; }
+.az-bld-h4sub { font-weight: 500; color: var(--ink2); font-size: 11px; }
+.az-bld-group { border: 1px solid var(--divider); border-radius: 9px; padding: 10px 12px; margin-top: 10px; position: relative; }
+.az-bld-or { position: absolute; top: -9px; left: 12px; background: var(--amber); color: #fff; font-size: 9.5px; font-weight: 800; letter-spacing: .5px; border-radius: 4px; padding: 1px 7px; }
+.az-bld-orbtn { margin-top: 10px; display: inline-block; }
+.az-bld-unit { color: var(--ink2); font-size: 12px; min-width: 12px; }
+.az-bld-num { display: inline-flex; align-items: center; gap: 5px; }
+.az-bld-num input { width: 74px; }
+.az-bld-num i { font-style: normal; color: var(--ink2); font-size: 12px; }
+.az-bld-caps { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; margin-top: 8px; }
+.az-bld-caps label { display: flex; flex-direction: column; gap: 5px; font-size: 12px; color: var(--ink2); }
+.az-bld-caps label span i { font-style: normal; opacity: .7; }
+.az-bld-caps input, .az-bld-caps select { border: 1px solid var(--border); border-radius: 7px; padding: 8px 10px; font: inherit; background: #fff; color: var(--ink); }
+.az-bld-caps select { cursor: pointer; }
+.az-bld-foot { margin-top: 18px; border-top: 1px solid var(--divider); padding-top: 14px; display: flex; flex-direction: column; gap: 12px; }
+.az-bld-preview { display: flex; gap: 9px; align-items: flex-start; background: #f4f8ff; border: 1px solid #d8e6ff; border-radius: 9px; padding: 11px 14px; font-size: 13px; line-height: 1.5; color: var(--ink); }
+.az-bld-preview > svg { color: var(--blue); flex: none; margin-top: 2px; }
+.az-bld-actions { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; }
+.az-bld-name { display: flex; flex-direction: column; gap: 5px; flex: 1; min-width: 240px; font-size: 12px; color: var(--ink2); }
+.az-bld-name input { border: 1px solid var(--border); border-radius: 7px; padding: 9px 12px; font: inherit; }
+.az-bld-msg { display: flex; flex-direction: column; gap: 5px; font-size: 12.5px; }
+.az-bld-msg .ok { color: var(--green); font-weight: 600; display: inline-flex; align-items: center; gap: 6px; }
+.az-bld-msg .test { color: var(--ink2); }
+.az-bld-safe { display: flex; align-items: center; gap: 7px; color: var(--ink2); font-size: 11.5px; }
+.az-bld-safe > svg { color: var(--green); }
 .az-rule { display: flex; align-items: center; gap: 14px; border: 1px solid var(--divider); border-radius: 10px; background: #fff; padding: 12px 16px; margin-bottom: 8px; }
 .az-rule .nm { flex: 1; min-width: 0; }
 .az-rule .nm .t { font-weight: 700; }

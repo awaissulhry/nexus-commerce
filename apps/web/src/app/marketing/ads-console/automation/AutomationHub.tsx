@@ -15,7 +15,6 @@ import { useSearchParams, useRouter } from 'next/navigation'
 import { Search, Zap, FlaskConical, Trash2, TrendingUp, ShieldAlert, RefreshCw, Play, Pause, Sparkles } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { AUTOMATIONS, AUTOMATION_COUNT, buildRule, type AutomationDef } from './automations'
-import { RuleBuilder } from './RuleBuilder'
 import { Configurator } from './Configurator'
 import { PLAYBOOKS, playbookAutomations } from './playbooks'
 import { cleanName } from './_icons'
@@ -23,7 +22,7 @@ import { AnomalyTab } from './AnomalyTab'
 import { HarvestTab } from './HarvestTab'
 import { NegativeMiningTab } from './NegativeMiningTab'
 import { AnalyticsTab } from './AnalyticsTab'
-import { ComposerTab } from './ComposerTab'
+import { BuilderTab } from './BuilderTab'
 import { AutomationHome } from './AutomationHome'
 import { LibraryTab } from './LibraryTab'
 import { EfficiencyTab } from './EfficiencyTab'
@@ -60,7 +59,6 @@ export function AutomationHub({ initialRules, initialState }: { initialRules: Ru
   const [busy, setBusy] = useState<string | null>(null)
   const [recs, setRecs] = useState<RecResp | null>(null)
   const [engineMsg, setEngineMsg] = useState<Record<string, string>>({})
-  const [showBuilder, setShowBuilder] = useState(false)
   const [configuring, setConfiguring] = useState<AutomationDef | null>(null)
   const [selRules, setSelRules] = useState<Set<string>>(new Set()) // active-rules multi-select
   const [selRecs, setSelRecs] = useState<Set<string>>(new Set())   // recommendations multi-select
@@ -138,7 +136,7 @@ export function AutomationHub({ initialRules, initialState }: { initialRules: Ru
           onEnablePlaybook={enablePlaybook}
           onActivateCustom={activateCustom}
           onConfigure={setConfiguring}
-          onBuildCustom={() => setShowBuilder(true)}
+          onBuildCustom={() => setTab('builder')}
           onGoActive={() => setTab('active')}
         />
       )}
@@ -244,14 +242,13 @@ export function AutomationHub({ initialRules, initialState }: { initialRules: Ru
       {tab === 'health' && <HealthTab />}
       {(tab === 'analytics' || tab === 'insights') && <AnalyticsTab />}
       {tab === 'efficiency' && <EfficiencyTab />}
-      {(tab === 'composer' || tab === 'builder') && <ComposerTab onSaved={() => { void refetchRules() }} />}
+      {(tab === 'composer' || tab === 'builder') && <BuilderTab onSaved={() => { void refetchRules() }} onGoActive={() => setTab('active')} />}
       {tab === 'rank' && <RankControlTab onSaved={() => { void refetchRules() }} />}
       {tab === 'anomaly' && <AnomalyTab />}
       {tab === 'harvest' && <HarvestTab />}
       {tab === 'negatives' && <NegativeMiningTab />}
 
       {configuring && <Configurator def={configuring} onClose={() => setConfiguring(null)} onSaved={() => { void refetchRules() }} />}
-      {showBuilder && <RuleBuilder onClose={() => setShowBuilder(false)} onSaved={() => { void refetchRules() }} />}
     </div>
   )
 }
