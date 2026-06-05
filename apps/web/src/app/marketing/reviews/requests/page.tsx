@@ -321,8 +321,16 @@ export default async function ReviewRequestsPage() {
         </div>
       </section>
 
+      {/* UX.5b — settings, timing reference & test mode tucked into a collapsed
+          disclosure so the daily view stays simple (KPIs · run/pause · health ·
+          analytics · upcoming). One click away, fully functional. */}
+      <details className="mb-6 rounded-md border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+        <summary className="cursor-pointer select-none px-4 py-2.5 text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-950/40">
+          Settings, timing reference &amp; test mode
+        </summary>
+        <div className="px-4 pb-4 pt-3 space-y-6 border-t border-slate-200 dark:border-slate-800">
       {/* Timing reference */}
-      <section className="mb-6">
+      <section>
         <h2 className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
           Optimal timing by product type
         </h2>
@@ -400,6 +408,8 @@ export default async function ReviewRequestsPage() {
           </div>
         </div>
       </div>
+        </div>
+      </details>
     </div>
   )
 }
