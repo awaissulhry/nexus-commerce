@@ -317,7 +317,7 @@ export function RankPlacementCockpit({ market: ctxMarket, campaignId: ctxCampaig
       setBiasDraft(draft)
       if (!userMoved) setSlot(row ? impliedSlot(row.topIS, row.currentPct) : 'rest3')
     } finally { if (!signal?.aborted) setSignalsLoading(false) }
-  }, [campaignId, market]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [campaignId, market, WINDOW_DAYS]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const ac = new AbortController()
@@ -554,7 +554,7 @@ export function RankPlacementCockpit({ market: ctxMarket, campaignId: ctxCampaig
       if (signal?.aborted) return
       setTargets((d.rows ?? []) as Target[])
     } finally { if (!signal?.aborted) setTargetsLoading(false) }
-  }, [campaignId])
+  }, [campaignId, WINDOW_DAYS])
 
   useEffect(() => {
     const ac = new AbortController()
