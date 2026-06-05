@@ -23,7 +23,7 @@ describe('buildMasterAttributes', () => {
     )
     expect(attrs.find((a) => a.key === 'material_type')).toMatchObject({
       key: 'material_type',
-      label: 'Material',
+      label: 'Material Type', // humanized from the English key, not the localized title
       type: 'select',
       allowedValues: ['Leather', 'Textile'],
       required: true,

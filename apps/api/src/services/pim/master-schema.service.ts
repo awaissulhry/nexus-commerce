@@ -58,12 +58,15 @@ export function buildMasterAttributes(categoryFields: FieldDefinition[], ruleSou
       f.type === 'number' ? 'number' : f.type === 'select' ? 'select' : f.type === 'boolean' ? 'boolean' : 'text'
     byKey.set(key, {
       key,
-      label: f.label,
+      // Operators read English only — label from the (English) attribute key,
+      // NOT the marketplace-localized schema title (IT/DE/ES/FR come back
+      // translated, e.g. "Marca"/"Materiale"). The dropped helpText was the
+      // same localized Amazon description.
+      label: humanize(key),
       type,
       required: !!f.required,
       allowedValues: f.options && f.options.length > 0 ? f.options : undefined,
       group: 'Category attributes',
-      helpText: f.helpText,
       source: 'schema',
     })
   }
