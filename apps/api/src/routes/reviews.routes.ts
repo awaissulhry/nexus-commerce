@@ -1825,6 +1825,21 @@ const reviewsRoutes: FastifyPluginAsync = async (fastify) => {
       },
     }
   })
+
+  // ── UX.1 — Global channel + market filter options (from the Marketplace table,
+  // not hardcoded). Channels limited to the active review scope (Amazon + eBay).
+  fastify.get('/reviews/filter-options', async (_request, reply) => {
+    const rows = await prisma.marketplace.findMany({
+      where: { channel: { in: ['AMAZON', 'EBAY'] }, isActive: true },
+      select: { channel: true, code: true, name: true },
+      orderBy: [{ channel: 'asc' }, { code: 'asc' }],
+    })
+    const channels = [...new Set(rows.map((r) => r.channel))]
+    // Distinct market codes (a market can exist on >1 channel); skip GLOBAL/aggregate codes.
+    const markets = [...new Map(rows.filter((r) => r.code && r.code !== 'GLOBAL').map((r) => [r.code, { code: r.code, name: r.name }])).values()]
+    reply.header('Cache-Control', 'private, max-age=300')
+    return { channels, markets }
+  })
 }
 
 export default reviewsRoutes
