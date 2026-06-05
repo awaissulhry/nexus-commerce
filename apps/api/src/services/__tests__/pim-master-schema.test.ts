@@ -56,4 +56,22 @@ describe('buildMasterAttributes', () => {
     // non-categoryAttributes source ignored
     expect(attrs.find((a) => a.key === 'title')).toBeUndefined()
   })
+
+  it('excludes non-attribute plumbing keys (content/identity/offer/envelope)', () => {
+    const attrs = buildMasterAttributes(
+      [
+        fd({ id: 'attr_item_name', label: 'Item Name' }),
+        fd({ id: 'attr_brand', label: 'Brand' }),
+        fd({ id: 'attr_parentage_level', label: 'Parentage Level' }),
+        fd({ id: 'attr_material_type', label: 'Material' }),
+        fd({ id: 'attr_care_instructions', label: 'Care' }),
+      ],
+      ['categoryAttributes.brand', 'categoryAttributes.closure_type'],
+    )
+    const keys = attrs.map((a) => a.key)
+    expect(keys).toEqual(expect.arrayContaining(['material_type', 'care_instructions', 'closure_type']))
+    expect(keys).not.toContain('item_name')
+    expect(keys).not.toContain('brand')
+    expect(keys).not.toContain('parentage_level')
+  })
 })

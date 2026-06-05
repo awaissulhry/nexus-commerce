@@ -46,6 +46,26 @@ function humanize(s: string): string {
     .join(' ')
 }
 
+// Amazon's schema includes plumbing that is NOT a product attribute the master
+// should hold: content (handled by the locale section), identity (identity
+// card), and offer/fulfillment/variation/envelope keys. Exclude them so the
+// master schema only surfaces genuine product attributes (material, color,
+// size, care, armor, …). Content keys still import as content via MA.7's
+// FLATFILE_CONTENT map.
+const NON_ATTRIBUTE_KEYS = new Set([
+  // content → locale/content section
+  'item_name', 'product_description', 'bullet_point', 'generic_keyword',
+  // identity → identity card
+  'brand', 'manufacturer',
+  'externally_assigned_product_identifier', 'supplier_declared_has_product_identifier_exemption', 'merchant_suggested_asin',
+  // offer / price / fulfillment plumbing
+  'purchasable_offer', 'list_price', 'condition_type', 'condition_note',
+  'fulfillment_availability', 'merchant_shipping_group', 'max_order_quantity', 'main_offer_image_locator',
+  // variation / browse / envelope plumbing
+  'parentage_level', 'child_parent_sku_relationship', 'variation_theme', 'skip_offer',
+  'recommended_browse_nodes', 'browse_node', 'item_type_keyword', 'product_tax_code',
+])
+
 /** Pure: fold the registry's category FieldDefinitions + the mapping-rule
  *  `categoryAttributes.*` sources into the master attribute schema. Schema
  *  wins on key collision; required-first then alpha. Exposed for tests. */
@@ -53,7 +73,7 @@ export function buildMasterAttributes(categoryFields: FieldDefinition[], ruleSou
   const byKey = new Map<string, MasterAttribute>()
   for (const f of categoryFields) {
     const key = f.id.startsWith('attr_') ? f.id.slice(5) : f.id
-    if (!key || byKey.has(key)) continue
+    if (!key || NON_ATTRIBUTE_KEYS.has(key) || byKey.has(key)) continue
     const type: MasterAttribute['type'] =
       f.type === 'number' ? 'number' : f.type === 'select' ? 'select' : f.type === 'boolean' ? 'boolean' : 'text'
     byKey.set(key, {
@@ -73,7 +93,7 @@ export function buildMasterAttributes(categoryFields: FieldDefinition[], ruleSou
   for (const src of ruleSources) {
     if (typeof src !== 'string' || !src.startsWith('categoryAttributes.')) continue
     const key = src.slice('categoryAttributes.'.length)
-    if (!key || byKey.has(key)) continue
+    if (!key || NON_ATTRIBUTE_KEYS.has(key) || byKey.has(key)) continue
     byKey.set(key, { key, label: humanize(key), type: 'text', required: false, group: 'Mapped attributes', source: 'mapping' })
   }
   return [...byKey.values()].sort(
