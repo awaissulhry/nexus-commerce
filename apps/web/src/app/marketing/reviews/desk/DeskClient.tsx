@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { useReviewEventsRefresh } from '@/hooks/use-review-events-refresh'
 import {
@@ -60,9 +61,13 @@ export function DeskClient({
   initialStats: DeskStats
   initialReviews: DeskReview[]
 }) {
+  // UX.4 — channel + market come from the workspace-wide filter (ReviewsNav),
+  // not a local select; status tabs stay local to the triage queue.
+  const sp = useSearchParams()
+  const channel = sp.get('channel') && sp.get('channel') !== 'ALL' ? (sp.get('channel') as string) : ''
+  const market = sp.get('market') && sp.get('market') !== 'ALL' ? (sp.get('market') as string) : ''
   const [stats, setStats] = useState<DeskStats>(initialStats)
   const [status, setStatus] = useState('NEW')
-  const [channel, setChannel] = useState('')
   const [reviews, setReviews] = useState<DeskReview[]>(initialReviews)
   const [loading, setLoading] = useState(false)
 
@@ -75,11 +80,12 @@ export function DeskClient({
     }
   }, [])
 
-  const load = useCallback(async (st: string, ch: string) => {
+  const load = useCallback(async (st: string, ch: string, mk: string) => {
     setLoading(true)
     try {
       const params = new URLSearchParams({ triageStatus: st, limit: '100' })
       if (ch) params.set('channel', ch)
+      if (mk) params.set('marketplace', mk)
       const res = await fetch(`/api/reviews?${params.toString()}`, { cache: 'no-store' })
       const json = await res.json()
       setReviews(json.items ?? [])
@@ -91,15 +97,15 @@ export function DeskClient({
   }, [])
 
   useEffect(() => {
-    load(status, channel)
-  }, [status, channel, load])
+    load(status, channel, market)
+  }, [status, channel, market, load])
 
   // RX.3 — live-refresh the queue + counters as reviews land / are answered.
   useReviewEventsRefresh(
     useCallback(() => {
-      load(status, channel)
+      load(status, channel, market)
       refreshStats()
-    }, [load, status, channel, refreshStats]),
+    }, [load, status, channel, market, refreshStats]),
     { debounceMs: 1500 },
   )
 
@@ -138,18 +144,6 @@ export function DeskClient({
             </button>
           )
         })}
-        <div className="ml-auto">
-          <select
-            value={channel}
-            onChange={(e) => setChannel(e.target.value)} aria-label="Filter by channel"
-            className="text-sm rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1.5"
-          >
-            <option value="">All channels</option>
-            <option value="AMAZON">Amazon</option>
-            <option value="EBAY">eBay</option>
-            <option value="SHOPIFY">Shopify</option>
-          </select>
-        </div>
       </div>
 
       {/* List */}
