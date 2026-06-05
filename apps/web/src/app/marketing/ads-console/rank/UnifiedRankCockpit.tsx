@@ -14,6 +14,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useSearchParams, useRouter } from 'next/navigation'
 import { Crosshair, Search, ChevronRight, Undo2, Redo2, Layers, Zap, AlertTriangle, History as HistoryIcon } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { RankPlacementCockpit } from '../automation/RankPlacementCockpit'
@@ -28,6 +29,8 @@ import { SimpleRankPanel } from './SimpleRankPanel'
 import { CommandPalette, type CmdAction } from './CommandPalette'
 import { IntelligenceBanner } from './IntelligenceBanner'
 import { RankTrend } from './RankTrend'
+import { ManagedCampaigns } from './ManagedCampaigns'
+import { RankOverview } from './RankOverview'
 
 const MARKETS = ['IT', 'DE', 'FR', 'ES', 'NL', 'BE', 'SE', 'PL', 'IE', 'UK']
 const LOOKBACKS = [7, 14, 30, 60, 90]
@@ -93,6 +96,14 @@ export function UnifiedRankCockpit() {
 
   const pickCampaign = useCallback((id: string) => { setCampaignId(id); setSearch(''); setSearchOpen(false) }, [])
 
+  // RC5.1 — sub-nav mode routing: Overview · Cockpit · Managed campaigns.
+  const sp = useSearchParams()
+  const router = useRouter()
+  const mode = sp.get('mode') ?? 'cockpit'
+  const view: 'cockpit' | 'managed' | 'overview' = mode === 'managed' ? 'managed' : mode === 'overview' ? 'overview' : 'cockpit'
+  const viewLabel = view === 'managed' ? 'Managed campaigns' : view === 'overview' ? 'Overview' : 'Cockpit'
+  const goCockpit = useCallback((id: string) => { setCampaignId(id); router.push('/marketing/ads-console/rank?mode=cockpit') }, [router])
+
   const tone = autonomy?.killSwitch ? 'off' : (autonomy?.rules.live ?? 0) > 0 ? 'auto' : (autonomy?.rules.enabled ?? 0) > 0 ? 'suggest' : 'idle'
   const autonomyLabel = !autonomy ? '…'
     : autonomy.killSwitch ? 'Automation OFF'
@@ -104,63 +115,72 @@ export function UnifiedRankCockpit() {
     <div className="az-wrap az-urc">
       {/* ── Sticky context bar — one source of truth for the whole page ── */}
       <div className="az-urc-bar">
-        <span className="az-urc-crumb"><Crosshair size={15} /> Cockpit <ChevronRight size={11} /> Rank Control{campaign ? <> <ChevronRight size={11} /> <b>{campaign.name}</b></> : ''}</span>
+        <span className="az-urc-crumb"><Crosshair size={15} /> Rank Control <ChevronRight size={11} /> <b>{viewLabel}</b>{view === 'cockpit' && campaign ? <> <ChevronRight size={11} /> {campaign.name}</> : ''}</span>
         <span className="sp" />
         <label className="az-urc-ctl"><span>Market</span><select value={market} onChange={e => setMarket(e.target.value)}>{MARKETS.map(m => <option key={m}>{m}</option>)}</select></label>
-        <label className="az-urc-ctl"><span>Window</span><select value={lookback} onChange={e => setLookback(Number(e.target.value))}>{LOOKBACKS.map(d => <option key={d} value={d}>{d}d</option>)}</select></label>
-        <label className="az-urc-ctl"><span>Show</span><select value={statusFilter} onChange={e => setStatusFilter(e.target.value as 'active' | 'inactive' | 'all')}><option value="active">Active</option><option value="inactive">Inactive</option><option value="all">All</option></select></label>
-        <div className="az-urc-search">
-          <Search size={13} />
-          <input value={search} onChange={e => { setSearch(e.target.value); setSearchOpen(true) }} onFocus={() => setSearchOpen(true)} onBlur={() => setTimeout(() => setSearchOpen(false), 150)} placeholder={`Search ${inMarketStatus.length} campaigns…`} aria-label="Search campaigns" />
-          {!searchOpen && <kbd title="Command palette">⌘K</kbd>}
-          {searchOpen && searchResults.length > 0 && (
-            <div className="az-urc-results" role="listbox">
-              {searchResults.map(c => <button key={c.id} type="button" role="option" aria-selected={c.id === campaignId} className={c.id === campaignId ? 'on' : ''} onMouseDown={() => pickCampaign(c.id)}>{c.status === 'ENABLED' ? '● ' : '○ '}{c.name}{c.marketplace ? <span className="mk">{c.marketplace}</span> : null}</button>)}
-            </div>
-          )}
-        </div>
+        {view === 'cockpit' && (<>
+          <label className="az-urc-ctl"><span>Window</span><select value={lookback} onChange={e => setLookback(Number(e.target.value))}>{LOOKBACKS.map(d => <option key={d} value={d}>{d}d</option>)}</select></label>
+          <label className="az-urc-ctl"><span>Show</span><select value={statusFilter} onChange={e => setStatusFilter(e.target.value as 'active' | 'inactive' | 'all')}><option value="active">Active</option><option value="inactive">Inactive</option><option value="all">All</option></select></label>
+          <div className="az-urc-search">
+            <Search size={13} />
+            <input value={search} onChange={e => { setSearch(e.target.value); setSearchOpen(true) }} onFocus={() => setSearchOpen(true)} onBlur={() => setTimeout(() => setSearchOpen(false), 150)} placeholder={`Search ${inMarketStatus.length} campaigns…`} aria-label="Search campaigns" />
+            {!searchOpen && <kbd title="Command palette">⌘K</kbd>}
+            {searchOpen && searchResults.length > 0 && (
+              <div className="az-urc-results" role="listbox">
+                {searchResults.map(c => <button key={c.id} type="button" role="option" aria-selected={c.id === campaignId} className={c.id === campaignId ? 'on' : ''} onMouseDown={() => pickCampaign(c.id)}>{c.status === 'ENABLED' ? '● ' : '○ '}{c.name}{c.marketplace ? <span className="mk">{c.marketplace}</span> : null}</button>)}
+              </div>
+            )}
+          </div>
+        </>)}
         <span className="sp" />
-        <span className="az-mode-seg az-urc-seg" role="tablist" aria-label="View mode">
-          <button type="button" role="tab" aria-selected={simple} className={simple ? 'on' : ''} onClick={() => setSimple(true)}>Simple</button>
-          <button type="button" role="tab" aria-selected={!simple} className={!simple ? 'on' : ''} onClick={() => setSimple(false)}>Full</button>
-        </span>
+        {view === 'cockpit' && (
+          <span className="az-mode-seg az-urc-seg" role="tablist" aria-label="View mode">
+            <button type="button" role="tab" aria-selected={simple} className={simple ? 'on' : ''} onClick={() => setSimple(true)}>Simple</button>
+            <button type="button" role="tab" aria-selected={!simple} className={!simple ? 'on' : ''} onClick={() => setSimple(false)}>Full</button>
+          </span>
+        )}
         <span className={`az-urc-chip ${tone}`} title="Global automation posture (all advertising rules)">{tone === 'off' ? <AlertTriangle size={12} /> : <Zap size={12} />} {autonomyLabel}</span>
-        <div className="az-urc-undo">
-          <button type="button" disabled={!canUndo} onClick={() => void undo()} title="Undo last change (⌘Z)" aria-label="Undo"><Undo2 size={15} /></button>
-          <button type="button" disabled={!canRedo} onClick={() => void redo()} title="Redo (⇧⌘Z)" aria-label="Redo"><Redo2 size={15} /></button>
-        </div>
+        {view === 'cockpit' && (
+          <div className="az-urc-undo">
+            <button type="button" disabled={!canUndo} onClick={() => void undo()} title="Undo last change (⌘Z)" aria-label="Undo"><Undo2 size={15} /></button>
+            <button type="button" disabled={!canRedo} onClick={() => void redo()} title="Redo (⇧⌘Z)" aria-label="Redo"><Redo2 size={15} /></button>
+          </div>
+        )}
       </div>
       {toast && <div className="az-urc-toast" role="status" aria-live="polite"><Undo2 size={13} /> {toast}</div>}
 
-      {campaignId && <IntelligenceBanner campaignId={campaignId} market={market} />}
-      {campaignId && <RankTrend campaignId={campaignId} lookback={lookback} />}
+      {view === 'overview' && <RankOverview market={market} onMode={m => router.push(`/marketing/ads-console/rank?mode=${m}`)} />}
+      {view === 'managed' && <ManagedCampaigns market={market} onJump={goCockpit} onChanged={loadPending} />}
 
-      {/* ── Body: the existing placement cockpit, driven by the shared context.
-            Stations get extracted from here in RC4.1–RC4.4. ── */}
-      {simple ? (
-        <SimpleRankPanel market={market} campaignId={campaignId} campaignName={campaign?.name ?? 'this campaign'} onFull={() => setSimple(false)} onChanged={loadPending} />
-      ) : (<>
-        <RankPlacementCockpit market={market} campaignId={campaignId} lookbackDays={lookback} onMarketChange={setMarket} onCampaignChange={setCampaignId} hideScopeBar hideKeywordManager />
+      {view === 'cockpit' && (<>
+        {campaignId && <IntelligenceBanner campaignId={campaignId} market={market} />}
+        {campaignId && <RankTrend campaignId={campaignId} lookback={lookback} />}
 
-        {/* ── Absorbed modes as progressive stations (RC4.2+) ── */}
-        {campaignId && <StrategyStation campaignId={campaignId} currentStrategy={campaign?.biddingStrategy ?? null} onChanged={loadPending} />}
-        {campaignId && <KeywordBidStation campaignId={campaignId} onChanged={loadPending} />}
-        {campaignId && <ConquestStation campaignId={campaignId} onChanged={loadPending} />}
-        <AutomateStation market={market} onChanged={loadPending} />
-        <BulkApplyStation campaigns={inMarketStatus} market={market} onChanged={loadPending} />
+        {simple ? (
+          <SimpleRankPanel market={market} campaignId={campaignId} campaignName={campaign?.name ?? 'this campaign'} onFull={() => setSimple(false)} onChanged={loadPending} />
+        ) : (<>
+          <RankPlacementCockpit market={market} campaignId={campaignId} lookbackDays={lookback} onMarketChange={setMarket} onCampaignChange={setCampaignId} hideScopeBar hideKeywordManager />
+
+          {/* ── Absorbed modes as progressive stations (RC4.2+) ── */}
+          {campaignId && <StrategyStation campaignId={campaignId} currentStrategy={campaign?.biddingStrategy ?? null} onChanged={loadPending} />}
+          {campaignId && <KeywordBidStation campaignId={campaignId} onChanged={loadPending} />}
+          {campaignId && <ConquestStation campaignId={campaignId} onChanged={loadPending} />}
+          <AutomateStation market={market} onChanged={loadPending} />
+          <BulkApplyStation campaigns={inMarketStatus} market={market} onChanged={loadPending} />
+        </>)}
+
+        {/* ── Footer: staged-changes tray + history (RC4.5 / RC4.6) ── */}
+        <div className="az-urc-foot">
+          <button type="button" className={`az-urc-staged ${pending > 0 ? 'has' : ''}`} onClick={() => { setTrayOpen(o => !(o && trayTab === 'staged')); setTrayTab('staged') }} aria-expanded={trayOpen && trayTab === 'staged'}>
+            <Layers size={14} /> {pending > 0 ? `${pending} staged change${pending === 1 ? '' : 's'}` : 'No staged changes'} · Review &amp; write-gate {trayOpen && trayTab === 'staged' ? '▾' : '▸'}
+          </button>
+          <span className="sp" />
+          <button type="button" className="az-urc-histbtn" onClick={() => { setTrayOpen(o => !(o && trayTab === 'history')); setTrayTab('history') }} aria-expanded={trayOpen && trayTab === 'history'}>
+            <HistoryIcon size={14} /> History &amp; undo{undoApi.entries.length ? ` (${undoApi.entries.length})` : ''} {trayOpen && trayTab === 'history' ? '▾' : '▸'}
+          </button>
+        </div>
+        <StagedChangesTray campaignId={campaignId} open={trayOpen} tab={trayTab} onTab={setTrayTab} onClose={() => setTrayOpen(false)} onChanged={loadPending} undoApi={undoApi} />
       </>)}
-
-      {/* ── Footer: staged-changes tray + history (RC4.5 / RC4.6) ── */}
-      <div className="az-urc-foot">
-        <button type="button" className={`az-urc-staged ${pending > 0 ? 'has' : ''}`} onClick={() => { setTrayOpen(o => !(o && trayTab === 'staged')); setTrayTab('staged') }} aria-expanded={trayOpen && trayTab === 'staged'}>
-          <Layers size={14} /> {pending > 0 ? `${pending} staged change${pending === 1 ? '' : 's'}` : 'No staged changes'} · Review &amp; write-gate {trayOpen && trayTab === 'staged' ? '▾' : '▸'}
-        </button>
-        <span className="sp" />
-        <button type="button" className="az-urc-histbtn" onClick={() => { setTrayOpen(o => !(o && trayTab === 'history')); setTrayTab('history') }} aria-expanded={trayOpen && trayTab === 'history'}>
-          <HistoryIcon size={14} /> History &amp; undo{undoApi.entries.length ? ` (${undoApi.entries.length})` : ''} {trayOpen && trayTab === 'history' ? '▾' : '▸'}
-        </button>
-      </div>
-      <StagedChangesTray campaignId={campaignId} open={trayOpen} tab={trayTab} onTab={setTrayTab} onClose={() => setTrayOpen(false)} onChanged={loadPending} undoApi={undoApi} />
       <CommandPalette
         open={cmdkOpen}
         onClose={() => setCmdkOpen(false)}

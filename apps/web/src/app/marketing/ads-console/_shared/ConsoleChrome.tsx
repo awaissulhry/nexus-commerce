@@ -16,8 +16,7 @@ import {
   type LucideIcon,
   BookOpen, Layers, PenTool, BarChart3, CheckSquare, LineChart, TrendingUp,
   Clock, Swords, Sprout, Ban, ShoppingCart, DollarSign, Shield, Heart, Radio,
-  Target, Gauge, Anchor, Download, Upload, History, Filter,
-  BarChart2, SlidersHorizontal, Percent,
+  Gauge, Download, Upload, History, Filter,
 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { amazonCampaignsHref, marketLabel } from './amazonLinks'
@@ -60,12 +59,12 @@ const AUTOMATION_ITEMS: SubItem[] = [
   { k: 'guardrails', label: 'Guardrails',        Icon: Shield },
   { k: 'health',     label: 'Health',            Icon: Heart },
 ]
+// RC5.1 — the keyword/strategy/conquest/tos modes are now absorbed into the one
+// cockpit, so the sub-nav is just Overview · Cockpit · Managed campaigns.
 const RANK_ITEMS: SubItem[] = [
-  { k: 'placement', label: 'Placement %',       Icon: Percent },
-  { k: 'keywords',  label: 'Keyword targeting', Icon: Target },
-  { k: 'strategy',  label: 'Strategy & cost',   Icon: SlidersHorizontal },
-  { k: 'conquest',  label: 'Conquesting',       Icon: Anchor },
-  { k: 'tos',       label: 'Top-of-Search IS',  Icon: BarChart2 },
+  { k: 'overview', label: 'Overview',          Icon: LayoutDashboard },
+  { k: 'cockpit',  label: 'Cockpit',           Icon: Crosshair },
+  { k: 'managed',  label: 'Managed campaigns',  Icon: History },
 ]
 const ACTIVITY_ITEMS: SubItem[] = [
   { k: 'all',    label: 'All executions',   Icon: Activity },
@@ -82,7 +81,7 @@ const BULK_ITEMS: SubItem[] = [
 interface SubNavDef { title: string; paramKey: string; items: SubItem[]; defaultKey: string }
 const SUB_NAVS: Record<string, SubNavDef> = {
   [`${BASE}/automation`]: { title: 'Automation',   paramKey: 'tab',    items: AUTOMATION_ITEMS, defaultKey: 'library'   },
-  [`${BASE}/rank`]:       { title: 'Rank Control', paramKey: 'mode',   items: RANK_ITEMS,       defaultKey: 'placement' },
+  [`${BASE}/rank`]:       { title: 'Rank Control', paramKey: 'mode',   items: RANK_ITEMS,       defaultKey: 'cockpit'   },
   [`${BASE}/activity`]:   { title: 'Activity',     paramKey: 'filter', items: ACTIVITY_ITEMS,   defaultKey: 'all'       },
   [`${BASE}/bulk`]:       { title: 'Bulk',         paramKey: 'tab',    items: BULK_ITEMS,       defaultKey: 'download'  },
 }
