@@ -13,6 +13,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Crosshair, Plus, Trash2, Save, UploadCloud, Undo2, Sparkles, Power } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
+import { DemandHeatmap, type HeatCell } from '../automation/DemandHeatmap'
 
 interface RankTarget { id: string; key: string; name: string; placement: string; targetISPct: number | null; acosCapPct: number | null; pause: boolean; allOut: boolean; color: string | null }
 interface Win { days: number[]; startHour: number; endHour: number; targetKey?: string }
@@ -32,6 +33,10 @@ export function RankPlanPanel({ campaignId, campaignName }: { campaignId: string
   const [busy, setBusy] = useState<'' | 'save' | 'publish'>('')
   const [msg, setMsg] = useState('')
   const [decision, setDecision] = useState<Decision | null>(null)
+  // RD.10b — the product family's by-hour demand, so you set rank windows where the
+  // product actually sells (same fusion as the By-product view, scoped to this campaign).
+  const [demand, setDemand] = useState<{ grid: HeatCell[][]; hasData: boolean; familyOrders: number } | null>(null)
+  const [famName, setFamName] = useState<string>('')
 
   // server snapshot for dirty + discard
   const [serverBaseline, setServerBaseline] = useState('')
@@ -60,6 +65,13 @@ export function RankPlanPanel({ campaignId, campaignName }: { campaignId: string
     void fetch(api('/rank-defend/run-now?dryRun=1'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
       .then(r => r.json()).then(d => setDecision((d.decisions ?? []).find((x: { campaignId: string }) => x.campaignId === campaignId) ?? null)).catch(() => {})
   }, [campaignId, serverBaseline, serverWindows])
+
+  // RD.10b — family demand for this campaign's product (the dayparting heatmap).
+  useEffect(() => {
+    if (!campaignId) { setDemand(null); setFamName(''); return }
+    void fetch(api(`/campaigns/${campaignId}/product-dayparting`), { cache: 'no-store' })
+      .then(r => r.json()).then(d => { setDemand(d.demand ?? null); setFamName(d.parentName ?? '') }).catch(() => { setDemand(null) })
+  }, [campaignId])
 
   const dirty = baseline !== serverBaseline || JSON.stringify(windows) !== JSON.stringify(serverWindows)
 
@@ -129,6 +141,14 @@ export function RankPlanPanel({ campaignId, campaignName }: { campaignId: string
             </button>)}
           </div>
         </div>
+
+        {/* RD.10b — when the product family actually sells (the dayparting heatmap) */}
+        {demand?.hasData && (
+          <div className="az-rp-sec">
+            <div className="az-rp-lbl">When this product&apos;s family sells (Europe/Rome){famName ? ` · ${famName.slice(0, 38)}` : ''} — hold the top slot in the busy hours:</div>
+            <DemandHeatmap grid={demand.grid} />
+          </div>
+        )}
 
         {/* Target windows — "these hours, hold X" */}
         <div className="az-rp-sec">
