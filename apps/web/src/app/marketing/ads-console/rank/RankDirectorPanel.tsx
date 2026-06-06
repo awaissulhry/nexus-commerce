@@ -19,13 +19,21 @@ import { RankTimeGrid } from './RankTimeGrid'
 
 interface RankTarget { id: string; key: string; name: string; targetISPct: number | null; acosCapPct: number | null; pause: boolean; allOut: boolean; color: string | null }
 interface Win { days: number[]; startHour: number; endHour: number; targetKey?: string }
-interface Plan { id: string; productId: string; parentAsin: string | null; marketplace: string; windows: Win[]; defaultTargetKey: string | null; familyDailyBudgetCents: number | null; familyAcosCapPct: number | null; maxCampaigns: number | null; leadTimeMinutes: number; enabled: boolean; manualOnly: boolean }
+interface Plan { id: string; productId: string; parentAsin: string | null; marketplace: string; windows: Win[]; defaultTargetKey: string | null; familyDailyBudgetCents: number | null; familyAcosCapPct: number | null; maxCampaigns: number | null; leadTimeMinutes: number; excludeCampaignIds?: string[]; enabled: boolean; manualOnly: boolean }
 interface Product { productId: string; name: string; parentAsin?: string | null; campaignCount?: number }
 interface Fam { parentName: string | null; campaignCount: number; demand: { grid: DemandCell[][]; hourProfile: DemandProfile[]; weekdayProfile: DemandProfile[]; hasData: boolean; familyOrders: number }; smoothed?: { grid: DemandCell[][]; hourProfile: DemandProfile[]; weekdayProfile: DemandProfile[] }; recommended: { windows: Win[]; baselineTargetKey: string; peakHours: number[] } }
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const hh = (h: number) => `${String(h).padStart(2, '0')}:00`
 const api = (p: string) => `${getBackendUrl()}/api/advertising${p}`
+// RD.12 — delivery recency helpers (distinguish "running recently" from "paused long ago").
+const recentlyDelivered = (iso: string | null | undefined, days: number) => { if (!iso) return false; return Date.now() - new Date(iso).getTime() <= days * 86400000 }
+const recencyLabel = (iso: string | null | undefined, cents?: number) => {
+  if (!iso) return 'no recent delivery'
+  const d = Math.floor((Date.now() - new Date(iso).getTime()) / 86400000)
+  const when = d <= 0 ? 'today' : d === 1 ? 'yesterday' : `${d}d ago`
+  return cents && cents > 0 ? `ran ${when} · €${(cents / 100).toFixed(0)}/30d` : `ran ${when}`
+}
 
 export function RankDirectorPanel({ market, productId, onPickProduct }: { market: string; productId: string; onPickProduct: (id: string) => void }) {
   const [products, setProducts] = useState<Product[]>([])
@@ -43,13 +51,14 @@ export function RankDirectorPanel({ market, productId, onPickProduct }: { market
   const [acosCap, setAcosCap] = useState('')
   const [maxCamp, setMaxCamp] = useState('')
   const [lead, setLead] = useState('15')
+  const [excludeIds, setExcludeIds] = useState<Set<string>>(() => new Set()) // RD.12 — campaigns excluded from this plan
   // server snapshot for dirty tracking
-  const [srv, setSrv] = useState<{ baseline: string; windows: Win[]; budget: string; acosCap: string; maxCamp: string; lead: string } | null>(null)
+  const [srv, setSrv] = useState<{ baseline: string; windows: Win[]; budget: string; acosCap: string; maxCamp: string; lead: string; exclude: string } | null>(null)
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState('')
   // RD.10 — live preview + family detail + arm/apply controls (once a plan exists)
   const [preview, setPreview] = useState<{ decisions: Array<{ campaignId: string; action: string; nextPct: number }>; selfCompetition?: Array<{ on: string; demoted: string[] }> } | null>(null)
-  const [famDetail, setFamDetail] = useState<{ campaigns: Array<{ id: string; name: string; status: string; attributionPct: number | null; readiness: { verdict: string } | null }>; attribution: { overallPct: number | null } } | null>(null)
+  const [famDetail, setFamDetail] = useState<{ campaigns: Array<{ id: string; name: string; status: string; attributionPct: number | null; readiness: { verdict: string } | null; excluded?: boolean; lastDeliveredAt?: string | null; recentSpendCents?: number }>; attribution: { overallPct: number | null } } | null>(null)
   const [arming, setArming] = useState(false)
   const [armMsg, setArmMsg] = useState('')
   // RG.4 — copy this painted schedule onto other products' plans (bulk across products)
@@ -95,8 +104,9 @@ export function RankDirectorPanel({ market, productId, onPickProduct }: { market
       const ac = p?.familyAcosCapPct != null ? String(p.familyAcosCapPct) : ''
       const mc = p?.maxCampaigns != null ? String(p.maxCampaigns) : ''
       const ld = p?.leadTimeMinutes != null ? String(p.leadTimeMinutes) : '15'
-      setBaseline(b); setWindows(w); setBudget(bud); setAcosCap(ac); setMaxCamp(mc); setLead(ld)
-      setSrv({ baseline: b, windows: w, budget: bud, acosCap: ac, maxCamp: mc, lead: ld })
+      const ex = Array.isArray(p?.excludeCampaignIds) ? (p!.excludeCampaignIds as string[]) : []
+      setBaseline(b); setWindows(w); setBudget(bud); setAcosCap(ac); setMaxCamp(mc); setLead(ld); setExcludeIds(new Set(ex))
+      setSrv({ baseline: b, windows: w, budget: bud, acosCap: ac, maxCamp: mc, lead: ld, exclude: JSON.stringify([...ex].sort()) })
     }).catch(() => {})
   }, [productId, market])
 
@@ -109,7 +119,8 @@ export function RankDirectorPanel({ market, productId, onPickProduct }: { market
   }, [plan?.id])
   useEffect(() => { reloadLive() }, [reloadLive])
 
-  const dirty = srv ? (baseline !== srv.baseline || JSON.stringify(windows) !== JSON.stringify(srv.windows) || budget !== srv.budget || acosCap !== srv.acosCap || maxCamp !== srv.maxCamp || lead !== srv.lead) : (!!baseline || windows.length > 0)
+  const excludeKey = JSON.stringify([...excludeIds].sort())
+  const dirty = srv ? (baseline !== srv.baseline || JSON.stringify(windows) !== JSON.stringify(srv.windows) || budget !== srv.budget || acosCap !== srv.acosCap || maxCamp !== srv.maxCamp || lead !== srv.lead || excludeKey !== srv.exclude) : (!!baseline || windows.length > 0)
 
   const addWindow = () => setWindows(w => [...w, { days: [1, 2, 3, 4, 5], startHour: 18, endHour: 22, targetKey: targets.find(t => !t.pause)?.key }])
   const setWin = (i: number, patch: Partial<Win>) => setWindows(w => w.map((x, j) => j === i ? { ...x, ...patch } : x))
@@ -126,17 +137,18 @@ export function RankDirectorPanel({ market, productId, onPickProduct }: { market
       familyAcosCapPct: acosCap ? Number(acosCap) : null,
       maxCampaigns: maxCamp ? Number(maxCamp) : null,
       leadTimeMinutes: lead ? Number(lead) : 0,
+      excludeCampaignIds: [...excludeIds],
     }
     try {
       const sel = products.find(p => p.productId === productId)
       const r = plan
         ? await fetch(api(`/rank-plans/${plan.id}`), { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(x => x.json())
         : await fetch(api('/rank-plans'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ productId, marketplace: market, parentAsin: sel?.parentAsin ?? null, ...body }) }).then(x => x.json())
-      if (r?.id) { setPlan(r); setSrv({ baseline, windows, budget, acosCap, maxCamp, lead }); setMsg('Saved — the rank plan is stored. Arm it (next) to let the loop hold rank across all family campaigns automatically.') }
+      if (r?.id) { setPlan(r); setSrv({ baseline, windows, budget, acosCap, maxCamp, lead, exclude: JSON.stringify([...excludeIds].sort()) }); setMsg('Saved — the rank plan is stored. Arm it (next) to let the loop hold rank across all family campaigns automatically.') }
       else setMsg('Could not save — try again.')
     } finally { setBusy(false) }
   }
-  const discard = () => { if (!srv) return; setBaseline(srv.baseline); setWindows(srv.windows.map(w => ({ ...w }))); setBudget(srv.budget); setAcosCap(srv.acosCap); setMaxCamp(srv.maxCamp); setLead(srv.lead) }
+  const discard = () => { if (!srv) return; setBaseline(srv.baseline); setWindows(srv.windows.map(w => ({ ...w }))); setBudget(srv.budget); setAcosCap(srv.acosCap); setMaxCamp(srv.maxCamp); setLead(srv.lead); setExcludeIds(new Set(JSON.parse(srv.exclude) as string[])) }
 
   // RD.10 — arm / manual / apply-now / revert. Apply-now + revert are real (gated)
   // pushes across the family; the loop also runs them automatically once armed.
@@ -239,7 +251,7 @@ export function RankDirectorPanel({ market, productId, onPickProduct }: { market
           {/* RD.10 — live preview + family campaign list + arm / apply controls */}
           {plan && (
             <div className="az-rp-sec az-rd-live">
-              <div className="az-rp-lbl">This plan drives {famDetail?.campaigns?.length ?? fam?.campaignCount ?? 0} campaigns{famDetail?.attribution?.overallPct != null ? ` · ${famDetail.attribution.overallPct}% attribution health` : ''}:</div>
+              <div className="az-rp-lbl">This plan controls {(famDetail?.campaigns ?? []).filter(c => !excludeIds.has(c.id)).length} of {famDetail?.campaigns?.length ?? fam?.campaignCount ?? 0} campaigns{famDetail?.attribution?.overallPct != null ? ` · ${famDetail.attribution.overallPct}% attribution health` : ''}:</div>
               <div className="az-rd-arm">
                 <button type="button" className={`az-rp-defend ${plan.enabled ? 'on' : ''}`} onClick={() => void armToggle()} disabled={arming} title="When ON, the loop continuously holds this plan across the family on its cadence"><Power size={12} /> Fully automatic {plan.enabled ? 'ON' : 'OFF'}</button>
                 <label className="az-rd-manual"><input type="checkbox" checked={plan.manualOnly} onChange={e => void setManual(e.target.checked)} /> Manual only</label>
@@ -251,24 +263,34 @@ export function RankDirectorPanel({ market, productId, onPickProduct }: { market
               {preview?.selfCompetition && preview.selfCompetition.length > 0 && (
                 <div className="az-cr-note"><Info size={12} /> {preview.selfCompetition.length} self-competition contest(s) found — redundant campaigns are auto-demoted to the baseline so you don&apos;t outbid yourself.</div>
               )}
-              {famDetail && (
-                <div className="az-rd-camps">
-                  {famDetail.campaigns.slice(0, 14).map(c => {
+              {famDetail && famDetail.campaigns.length > 0 && (<>
+                <div className="az-rd-scopebar">
+                  <span className="lbl">Untick a campaign to exclude it from this plan:</span>
+                  <span className="grow" />
+                  <button type="button" className="az-tr-mini" onClick={() => setExcludeIds(new Set())} title="Control every campaign in the family">Include all</button>
+                  <button type="button" className="az-tr-mini" onClick={() => setExcludeIds(new Set(famDetail.campaigns.filter(c => c.status !== 'ENABLED').map(c => c.id)))} title="Exclude every paused / archived campaign">Active only</button>
+                  <button type="button" className="az-tr-mini" onClick={() => setExcludeIds(new Set(famDetail.campaigns.filter(c => !recentlyDelivered(c.lastDeliveredAt, 7)).map(c => c.id)))} title="Keep only campaigns that delivered in the last 7 days">Delivered ≤7d</button>
+                  {dirty && <button type="button" className="az-btn dark sm" disabled={busy} onClick={() => void save()}><Save size={12} /> {busy ? 'Saving…' : 'Save scope'}</button>}
+                </div>
+                <div className="az-rd-camps" style={{ maxHeight: 360, overflowY: 'auto' }}>
+                  {famDetail.campaigns.map(c => {
                     const dec = preview?.decisions.find(d => d.campaignId === c.id)
+                    const inc = !excludeIds.has(c.id)
                     return (
-                      <div key={c.id} className="az-rd-camp">
-                        <span className="st">{c.status === 'ENABLED' ? '●' : '○'}</span>
+                      <label key={c.id} className={`az-rd-camp scope ${inc ? '' : 'excl'}`}>
+                        <input type="checkbox" checked={inc} onChange={() => setExcludeIds(s => { const n = new Set(s); if (n.has(c.id)) n.delete(c.id); else n.add(c.id); return n })} />
+                        <span className="st" style={{ color: c.status === 'ENABLED' ? undefined : '#94a3b8' }}>{c.status === 'ENABLED' ? '●' : '○'}</span>
                         <span className="nm" title={c.name}>{c.name}</span>
+                        <span className="rec">{recencyLabel(c.lastDeliveredAt, c.recentSpendCents)}</span>
                         <span className="grow" />
                         {c.readiness && c.readiness.verdict !== 'ok' && <span className={`vd ${c.readiness.verdict}`}>{c.readiness.verdict}</span>}
-                        {dec && <span className="dec">{dec.action}{dec.action === 'raise' || dec.action === 'lower' ? ` → ${dec.nextPct}%` : ''}</span>}
-                        <span className="att" title="ad-row attribution health">{c.attributionPct != null ? `${c.attributionPct}%` : '—'}</span>
-                      </div>
+                        {inc && dec && <span className="dec">{dec.action}{dec.action === 'raise' || dec.action === 'lower' ? ` → ${dec.nextPct}%` : ''}</span>}
+                      </label>
                     )
                   })}
-                  {famDetail.campaigns.length > 14 && <div className="az-rd-more">+{famDetail.campaigns.length - 14} more</div>}
                 </div>
-              )}
+                <div className="az-rp-note" style={{ marginTop: 6 }}>Unticked campaigns are left alone by this plan — never held, counted, or reverted. New campaigns for this family are auto-included.</div>
+              </>)}
             </div>
           )}
         </>
