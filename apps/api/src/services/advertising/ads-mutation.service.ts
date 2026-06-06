@@ -341,6 +341,7 @@ export async function updateAdGroupWithSync(args: {
   actor: AdsActor
   reason?: string | null
   applyImmediately?: boolean
+  force?: boolean // NP — bypass the 5¢ floor for deliberate bid suppression/restore
 }): Promise<MutationOutcome> {
   const existing = await prisma.adGroup.findUnique({
     where: { id: args.adGroupId },
@@ -379,7 +380,7 @@ export async function updateAdGroupWithSync(args: {
 
   // Floor clamp on bid — AD.3's automation handler reuses this; same
   // safety belongs in the user path so a slip-up can't zero impressions.
-  if (args.patch.defaultBidCents != null && args.patch.defaultBidCents < 5) {
+  if (!args.force && args.patch.defaultBidCents != null && args.patch.defaultBidCents < 5) {
     return {
       ok: false,
       outboundQueueId: null,
@@ -492,6 +493,7 @@ export async function updateAdTargetWithSync(args: {
   actor: AdsActor
   reason?: string | null
   applyImmediately?: boolean
+  force?: boolean // NP — bypass the change-clamp + 5¢ floor for deliberate bid suppression/restore
 }): Promise<MutationOutcome> {
   const existing = await prisma.adTarget.findUnique({
     where: { id: args.adTargetId },
@@ -513,7 +515,7 @@ export async function updateAdTargetWithSync(args: {
   // (when set). Caps how far a single bid move (manual, bulk, or automation) can
   // swing from the current bid, so a runaway rule can't 10× a bid in one step.
   // Applied before the diff so the audit trail records the clamped value.
-  if (args.patch.bidCents != null && existing.bidCents > 0) {
+  if (!args.force && args.patch.bidCents != null && existing.bidCents > 0) {
     const guards = (existing.adGroup?.campaign?.dynamicBidding ?? {}) as { maxBidChangePct?: number }
     const pct = Number(guards.maxBidChangePct)
     if (Number.isFinite(pct) && pct > 0) {
@@ -544,7 +546,7 @@ export async function updateAdTargetWithSync(args: {
   if (changes.length === 0) {
     return { ok: true, outboundQueueId: null, bidHistoryIds: [], actionLogId: null, error: 'no_changes' }
   }
-  if (args.patch.bidCents != null && args.patch.bidCents < 5) {
+  if (!args.force && args.patch.bidCents != null && args.patch.bidCents < 5) {
     return {
       ok: false,
       outboundQueueId: null,

@@ -21,6 +21,7 @@ import { recordCronRun } from '../utils/cron-observability.js'
 import { computeStep, resolveActiveTargetKey, isRankLoss, type RankTargetSpec, type ScheduleWindow } from '../services/advertising/rank-controller.js'
 import { analyzeTopOfSearch, applyTopOfSearch } from '../services/advertising/ads-top-of-search.service.js'
 import { updateCampaignWithSync, type AdsActor } from '../services/advertising/ads-mutation.service.js'
+import { suppressCampaignBids, restoreCampaignBids } from '../services/advertising/ads-bid-suppression.service.js'
 import { detectSelfCompetition, type CampaignTargeting, type SelfCompetitionConflict } from '../services/advertising/rank-self-competition.js'
 
 // RD.8 — leadMinutes shifts the evaluation clock forward so a plan starts converging
@@ -54,7 +55,7 @@ export interface RankDefendSummary { evaluated: number; applied: number; decisio
 
 const pctOf = (f: number | null): number | null => (f != null ? Math.round(f * 100) : null)
 type SigMap = Map<string, { currentPct: number; topIS: number | null; topAcos: number | null }>
-interface CampRow { id: string; name: string; status: string; dynamicBidding: unknown }
+interface CampRow { id: string; name: string; status: string; dynamicBidding: unknown; bidsSuppressedAt?: Date | null }
 
 // RD.4 — one per-campaign decision body, shared by the schedule loop and the
 // product-plan fan-out. `write` gates ALL actuation (pause / resume / placement
@@ -70,15 +71,22 @@ async function decideAndMaybeApply(
   const currentPct = cdb.placementBidding?.find((x) => x.placement === 'PLACEMENT_TOP')?.percentage ?? 0
   const base = { campaignId: camp.id, campaignName: camp.name, targetKey: key, currentPct, achievedISPct: pctOf(sigRaw.topIS), achievedAcosPct: pctOf(sigRaw.topAcos), planId }
   let applied = 0
-  // Pause target → ensure the campaign is paused.
+  // NP — no-pause: a Pause target (or OOS/lost-buybox via effectiveSpec) drops every
+  // bid to the floor (~2¢) and keeps the campaign ENABLED — NEVER status=PAUSED, which
+  // disrupts Amazon's algorithm. Prior bids are remembered for exact restore. Idempotent.
   if (spec.pause) {
-    const pausing = camp.status !== 'PAUSED' && camp.status !== 'ARCHIVED'
-    if (ctx.write && pausing) {
-      try { await updateCampaignWithSync({ campaignId: camp.id, patch: { status: 'PAUSED' }, actor: ctx.actor as AdsActor, reason: 'rank — pause target', applyImmediately: true } as never); applied++ } catch (e) { logger.warn('[rank-defend] pause failed', { campaignId: camp.id, error: (e as Error).message }) }
+    let suppressed = 0
+    if (ctx.write && !camp.bidsSuppressedAt) {
+      try { suppressed = await suppressCampaignBids(camp.id, { actor: ctx.actor as AdsActor, reason: 'rank — pause target → bids floored (no-pause)' }) } catch (e) { logger.warn('[rank-defend] bid-suppress failed', { campaignId: camp.id, error: (e as Error).message }) }
     }
-    return { decision: { ...base, action: 'pause', reason: 'target = pause', nextPct: currentPct, lossDetected: false, applied: ctx.write && pausing }, applied }
+    applied += suppressed
+    return { decision: { ...base, action: 'pause', reason: 'target = pause → bids floored (no-pause, restorable)', nextPct: currentPct, lossDetected: false, applied: suppressed > 0 || (ctx.write && !!camp.bidsSuppressedAt) }, applied }
   }
-  // Defend semantics: a serve target must actually SERVE — resume if something left it paused. Never touch ARCHIVED.
+  // Serve target → first restore any no-pause bid suppression (exact prior bids).
+  if (ctx.write && camp.bidsSuppressedAt) {
+    try { applied += await restoreCampaignBids(camp.id, { actor: ctx.actor as AdsActor, reason: 'rank — serve target → restore prior bids' }) } catch (e) { logger.warn('[rank-defend] bid-restore failed', { campaignId: camp.id, error: (e as Error).message }) }
+  }
+  // Defend semantics: resume only if something ELSE left it paused (we never pause). Never touch ARCHIVED.
   if (ctx.write && camp.status === 'PAUSED') {
     try { await updateCampaignWithSync({ campaignId: camp.id, patch: { status: 'ENABLED' }, actor: ctx.actor as AdsActor, reason: 'rank defend — resume to hold the slot', applyImmediately: true } as never); applied++ } catch (e) { logger.warn('[rank-defend] resume failed', { campaignId: camp.id, error: (e as Error).message }) }
   }
@@ -188,7 +196,7 @@ export async function runRankDefendOnce(opts: { dryRun?: boolean; onlyPlanId?: s
 
   // Union of schedule + plan campaigns → one campaign load + one signal pass.
   const unionIds = [...new Set([...schedules.map((s) => s.campaignId), ...governed])]
-  const campaigns = await prisma.campaign.findMany({ where: { id: { in: unionIds } }, select: { id: true, name: true, marketplace: true, status: true, externalCampaignId: true, dynamicBidding: true, acos: true, spend: true } })
+  const campaigns = await prisma.campaign.findMany({ where: { id: { in: unionIds } }, select: { id: true, name: true, marketplace: true, status: true, externalCampaignId: true, dynamicBidding: true, acos: true, spend: true, bidsSuppressedAt: true } })
   const campById = new Map(campaigns.map((c) => [c.id, c]))
 
   // One analyzeTopOfSearch call per marketplace gives every campaign's topIS + topAcos signals.

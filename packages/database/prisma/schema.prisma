@@ -2507,6 +2507,9 @@ model Campaign {
   roas                Decimal?        @db.Decimal(8, 4)
   trueProfitCents     Int             @default(0)
   trueProfitMarginPct Decimal?        @db.Decimal(8, 4)
+  // NP — set while the campaign is bid-suppressed (no-pause: bids at the floor
+  // instead of status=PAUSED). Fast "is suppressed" flag + when it started.
+  bidsSuppressedAt    DateTime?
   lastSyncedAt        DateTime?
   lastSyncStatus      AdSyncStatus?
   lastSyncError       String?
@@ -2578,6 +2581,7 @@ model AdGroup {
   externalAdGroupId String?
   name              String
   defaultBidCents   Int            @default(50)
+  suppressedFromBidCents Int? // NP — default bid before no-pause suppression; restored on resume
   status            CampaignStatus @default(ENABLED)
   targetingType     String         @default("MANUAL") // AUTO | MANUAL
   impressions       Int            @default(0)
@@ -2617,6 +2621,9 @@ model AdTarget {
   expressionType   String // EXACT | PHRASE | BROAD | ASIN | CATEGORY_REFINEMENT
   expressionValue  String
   bidCents         Int            @default(50)
+  // NP — the bid this target held BEFORE no-pause suppression dropped it to the
+  // floor (~2¢). null = not suppressed. Restored verbatim when the campaign resumes.
+  suppressedFromBidCents Int?
   status           CampaignStatus @default(ENABLED)
   impressions      Int            @default(0)
   clicks           Int            @default(0)
