@@ -59,7 +59,7 @@ interface CampRow { id: string; name: string; status: string; dynamicBidding: un
 // placement report — else the loop is blind to its own prior changes.
 async function decideAndMaybeApply(
   camp: CampRow, key: string, spec: RankTargetSpec, planId: string | null,
-  ctx: { write: boolean; actor: string; sigByCampaign: SigMap; lossByCampaign: Map<string, boolean> },
+  ctx: { write: boolean; actor: string; sigByCampaign: SigMap; lossByCampaign: Map<string, boolean>; suppressRaise?: boolean },
 ): Promise<{ decision: RankDefendDecision; applied: number }> {
   const sigRaw = ctx.sigByCampaign.get(camp.id) ?? { currentPct: 0, topIS: null, topAcos: null }
   const cdb = (camp.dynamicBidding ?? {}) as { placementBidding?: Array<{ placement: string; percentage: number }> }
@@ -80,11 +80,42 @@ async function decideAndMaybeApply(
   }
   const loss = ctx.lossByCampaign.get(camp.id) ?? false
   const d = computeStep(spec, { currentPct, achievedISFraction: sigRaw.topIS, achievedAcosFraction: sigRaw.topAcos, lossDetected: loss })
-  const willApply = ctx.write && (d.action === 'raise' || d.action === 'lower') && d.nextPct !== currentPct
+  // RD.5 — family daily-budget cap: suppress raises (still allow holds/lowers) so a
+  // must-win window can't push the whole family over its shared budget.
+  let action = d.action, nextPct = d.nextPct, reason = d.reason
+  if (ctx.suppressRaise && action === 'raise') { action = 'hold'; nextPct = currentPct; reason = 'family daily budget reached — holding (no raise)' }
+  const willApply = ctx.write && (action === 'raise' || action === 'lower') && nextPct !== currentPct
   if (willApply) {
-    try { await applyTopOfSearch(camp.id, d.nextPct); applied++ } catch (e) { logger.warn('[rank-defend] apply failed', { campaignId: camp.id, error: (e as Error).message }) }
+    try { await applyTopOfSearch(camp.id, nextPct); applied++ } catch (e) { logger.warn('[rank-defend] apply failed', { campaignId: camp.id, error: (e as Error).message }) }
   }
-  return { decision: { ...base, action: d.action, reason: d.reason, nextPct: d.nextPct, lossDetected: loss, applied: willApply }, applied }
+  return { decision: { ...base, action, reason, nextPct, lossDetected: loss, applied: willApply }, applied }
+}
+
+// RD.5 — family guardrails. effectiveSpec transforms the window target before the
+// controller sees it: OOS/lost-buybox → pause (stop wasting spend); family over
+// its ACOS cap → drop all-out so even a must-win window respects a profit ceiling.
+export function effectiveSpec(spec: RankTargetSpec, flags: { oos?: boolean; overAcos?: boolean; familyAcosCapPct?: number | null }): RankTargetSpec {
+  if (flags.oos) return { ...spec, pause: true }
+  if (flags.overAcos && spec.allOut) return { ...spec, allOut: false, acosCapPct: spec.acosCapPct ?? flags.familyAcosCapPct ?? null }
+  return spec
+}
+
+// Family-aggregate spend (most recent day with data) + ACOS (window) over a set of
+// campaigns. localEntityId = Campaign.id; costMicros → cents (÷10000).
+async function familySpendRecentCents(campaignIds: string[]): Promise<number> {
+  if (!campaignIds.length) return 0
+  const latest = await prisma.amazonAdsDailyPerformance.findFirst({ where: { entityType: 'CAMPAIGN', localEntityId: { in: campaignIds } }, orderBy: { date: 'desc' }, select: { date: true } })
+  if (!latest) return 0
+  const agg = await prisma.amazonAdsDailyPerformance.aggregate({ where: { entityType: 'CAMPAIGN', localEntityId: { in: campaignIds }, date: latest.date }, _sum: { costMicros: true } })
+  return Math.round(Number(agg._sum.costMicros ?? 0n) / 10000)
+}
+async function familyAcosFraction(campaignIds: string[], windowDays = 14): Promise<number | null> {
+  if (!campaignIds.length) return null
+  const since = new Date(Date.now() - windowDays * 86_400_000)
+  const agg = await prisma.amazonAdsDailyPerformance.aggregate({ where: { entityType: 'CAMPAIGN', localEntityId: { in: campaignIds }, date: { gte: since } }, _sum: { costMicros: true, sales7dCents: true } })
+  const spend = Math.round(Number(agg._sum.costMicros ?? 0n) / 10000)
+  const sales = agg._sum.sales7dCents ?? 0
+  return sales > 0 ? spend / sales : null
 }
 
 // RD.4 — plan actuation is OFF until RD.7. Plans compute + persist decisions
@@ -156,6 +187,16 @@ export async function runRankDefendOnce(opts: { dryRun?: boolean } = {}): Promis
   const planSummaries: RankPlanRunSummary[] = []
   let applied = 0
 
+  // RD.5 — retail-readiness (OOS/lost-buybox) per market, memoised across plans.
+  const { analyzeRetailReadiness } = await import('../services/advertising/ads-retail-readiness.service.js')
+  const readinessMemo = new Map<string, Map<string, string>>()
+  const getReadiness = async (mk: string): Promise<Map<string, string>> => {
+    const hit = readinessMemo.get(mk); if (hit) return hit
+    const map = new Map<string, string>()
+    try { const rr = await analyzeRetailReadiness({ marketplace: mk }); for (const c of rr.campaigns) map.set(c.campaignId, c.verdict) } catch { /* best-effort */ }
+    readinessMemo.set(mk, map); return map
+  }
+
   // ── Plans first (governed). Dry-only actuation until RD.7. ──
   for (const { plan, campaigns: famCamps } of planFamilies) {
     const { day, hour } = nowInTz(plan.timezone || 'Europe/Rome')
@@ -166,9 +207,19 @@ export async function runRankDefendOnce(opts: { dryRun?: boolean } = {}): Promis
       if (target) {
         const spec = toSpec(target)
         const write = !dryRun && PLAN_ALLOW_APPLY && !plan.manualOnly
+        // RD.5 — family pre-flight guards, computed once per plan + shared by every
+        // campaign: retail-readiness (OOS/lost-buybox), family daily spend vs budget
+        // cap, family ACOS vs cap.
+        const famCampIds = famCamps.map((c) => c.id)
+        const readinessByCamp = await getReadiness(plan.marketplace)
+        const overBudget = plan.familyDailyBudgetCents != null && (await familySpendRecentCents(famCampIds)) >= plan.familyDailyBudgetCents
+        const acosFrac = plan.familyAcosCapPct != null ? await familyAcosFraction(famCampIds) : null
+        const overAcos = plan.familyAcosCapPct != null && acosFrac != null && acosFrac > plan.familyAcosCapPct / 100
         for (const fc of famCamps) {
           const camp = campById.get(fc.id); if (!camp) continue
-          const { decision, applied: a } = await decideAndMaybeApply(camp, key, spec, plan.id, { write, actor: `automation:rank-plan-${plan.id}`, sigByCampaign, lossByCampaign })
+          const oos = readinessByCamp.get(fc.id) === 'pause'
+          const eff = effectiveSpec(spec, { oos, overAcos, familyAcosCapPct: plan.familyAcosCapPct })
+          const { decision, applied: a } = await decideAndMaybeApply(camp, key, eff, plan.id, { write, actor: `automation:rank-plan-${plan.id}`, sigByCampaign, lossByCampaign, suppressRaise: overBudget })
           planDecisions.push(decision); decisions.push(decision); applied += a
         }
       }
