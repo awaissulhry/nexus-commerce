@@ -126,6 +126,19 @@ describe('shift to best day (STO.6)', () => {
     const r = resolveSendTiming(ebay(), rule({ sendDelayDays: 2, minDaysSinceDelivery: 1, maxDaysSinceDelivery: 30 }), TABLE, windows)
     expect(localDow(r.scheduledFor!)).toBe('Fri')
   })
+  it('does not shift between equal-rank days (real rank, not list index)', () => {
+    // DELIV is Wed; Tue & Wed both rank 1 → a Wed base must stay on Wed, not jump
+    // forward to the next equally-ranked Tuesday.
+    const windows = allDays(12, { 2: 1, 3: 1 })
+    const r = resolveSendTiming(ebay(), rule({ sendDelayDays: 0, shiftToBestDay: true, minDaysSinceDelivery: 0, maxDaysSinceDelivery: 30 }), TABLE, windows)
+    expect(localDow(r.scheduledFor!)).toBe('Wed')
+  })
+  it('shifts to the genuinely best day, not just the first improvement', () => {
+    // DELIV Wed; from Wed(rank 4) reachable: Thu5,Fri5,Sat3,Sun5,Mon5,Tue1 → pick Tue(1)
+    const windows = allDays(12, { 3: 4, 6: 3, 2: 1 })
+    const r = resolveSendTiming(ebay(), rule({ sendDelayDays: 0, shiftToBestDay: true, minDaysSinceDelivery: 0, maxDaysSinceDelivery: 30 }), TABLE, windows)
+    expect(localDow(r.scheduledFor!)).toBe('Tue')
+  })
 })
 
 describe('windowHourFor', () => {

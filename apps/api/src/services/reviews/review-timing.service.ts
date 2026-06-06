@@ -68,16 +68,17 @@ export function windowHourFor(marketplace: string | null | undefined, weekday: n
   return global ? global.hourLocal : null
 }
 
-/** Best (lowest dayRank) weekday from the windows for a market, falling back to global. */
-export function rankedWeekdays(marketplace: string | null | undefined, windows: SendWindowRow[]): number[] {
-  if (!windows.length) return []
+/** Weekday → effective dayRank (lower = better); a per-market row beats the global '*'. */
+export function rankByWeekday(marketplace: string | null | undefined, windows: SendWindowRow[]): Map<number, number> {
   const code = (marketplace || '').toUpperCase()
   const byDay = new Map<number, SendWindowRow>()
   for (const w of windows.filter((x) => x.isActive)) {
     if (w.marketplace === '*' && !byDay.has(w.dayOfWeek)) byDay.set(w.dayOfWeek, w)
     if (code && w.marketplace.toUpperCase() === code) byDay.set(w.dayOfWeek, w) // per-market overrides
   }
-  return [...byDay.values()].sort((a, b) => a.dayRank - b.dayRank).map((w) => w.dayOfWeek)
+  const out = new Map<number, number>()
+  for (const [dow, w] of byDay) out.set(dow, w.dayRank)
+  return out
 }
 export interface TimingOrderInput {
   channel: string
@@ -181,20 +182,23 @@ export function resolveSendTiming(
   // 4c. Amazon day cap
   scheduled = amazonClamp(scheduled)
 
-  // 4d. STO.6 — optionally shift forward within the same week to the best-ranked
-  //     weekday (only if it stays inside every clamp above).
+  // 4d. STO.6 — optionally shift forward (within the next week, staying inside the
+  //     clamps above) to the lowest-dayRank weekday. Compares real ranks (NOT list
+  //     position, which made tied days look better); a day no better than today
+  //     never moves, and the earliest day wins ties.
   if (rule?.shiftToBestDay) {
-    const order2 = rankedWeekdays(order.marketplace, sendWindows)
-    if (order2.length) {
-      const curDow = dowInZone(scheduled, tz)
-      const curRank = order2.indexOf(curDow)
+    const rankByDow = rankByWeekday(order.marketplace, sendWindows)
+    if (rankByDow.size) {
+      let best = scheduled
+      let bestRank = rankByDow.get(dowInZone(scheduled, tz)) ?? Infinity
       for (let add = 1; add <= 6; add++) {
         const cand = new Date(scheduled.getTime() + add * DAY)
-        if (amazonClamp(cand).getTime() !== cand.getTime()) break // would leave the legal window
+        if (amazonClamp(cand).getTime() !== cand.getTime()) break // left the legal window
         if (rule.skipWeekends && (dowInZone(cand, tz) === 0 || dowInZone(cand, tz) === 6)) continue
-        const candRank = order2.indexOf(dowInZone(cand, tz))
-        if (candRank !== -1 && (curRank === -1 || candRank < curRank)) { scheduled = cand; break }
+        const candRank = rankByDow.get(dowInZone(cand, tz)) ?? Infinity
+        if (candRank < bestRank) { best = cand; bestRank = candRank }
       }
+      scheduled = best
     }
   }
 
