@@ -21,6 +21,7 @@ import { recordCronRun } from '../utils/cron-observability.js'
 import { computeStep, resolveActiveTargetKey, isRankLoss, type RankTargetSpec, type ScheduleWindow } from '../services/advertising/rank-controller.js'
 import { analyzeTopOfSearch, applyTopOfSearch } from '../services/advertising/ads-top-of-search.service.js'
 import { updateCampaignWithSync, type AdsActor } from '../services/advertising/ads-mutation.service.js'
+import { detectSelfCompetition, type CampaignTargeting, type SelfCompetitionConflict } from '../services/advertising/rank-self-competition.js'
 
 function nowInTz(tz: string): { day: number; hour: number } {
   const parts = new Intl.DateTimeFormat('en-US', { timeZone: tz, weekday: 'short', hour: 'numeric', hour12: false }).formatToParts(new Date())
@@ -45,7 +46,7 @@ export interface RankDefendDecision {
   currentPct: number; nextPct: number; achievedISPct: number | null; achievedAcosPct: number | null; lossDetected: boolean; applied: boolean
   planId?: string | null
 }
-export interface RankPlanRunSummary { planId: string; productId: string; marketplace: string; campaigns: number; decisions: RankDefendDecision[] }
+export interface RankPlanRunSummary { planId: string; productId: string; marketplace: string; campaigns: number; decisions: RankDefendDecision[]; selfCompetition?: SelfCompetitionConflict[] }
 export interface RankDefendSummary { evaluated: number; applied: number; decisions: RankDefendDecision[]; plans?: RankPlanRunSummary[] }
 
 const pctOf = (f: number | null): number | null => (f != null ? Math.round(f * 100) : null)
@@ -118,6 +119,27 @@ async function familyAcosFraction(campaignIds: string[], windowDays = 14): Promi
   return sales > 0 ? spend / sales : null
 }
 
+// RD.6 — load each family campaign's positive EXACT/PHRASE keywords + AUTO flag +
+// efficiency (Campaign.acos / spendCents) for the self-competition detector.
+async function loadFamilyTargeting(famCampIds: string[], campById: Map<string, { acos?: unknown; spend?: unknown }>): Promise<CampaignTargeting[]> {
+  if (!famCampIds.length) return []
+  const [autoGroups, kws] = await Promise.all([
+    prisma.adGroup.findMany({ where: { campaignId: { in: famCampIds }, targetingType: 'AUTO' }, select: { campaignId: true } }),
+    prisma.adTarget.findMany({ where: { adGroup: { campaignId: { in: famCampIds } }, kind: 'KEYWORD', isNegative: false, expressionType: { in: ['EXACT', 'PHRASE'] } }, select: { expressionValue: true, expressionType: true, adGroup: { select: { campaignId: true } } } }),
+  ])
+  const autoSet = new Set(autoGroups.map((g) => g.campaignId))
+  const kwByCamp = new Map<string, Set<string>>()
+  for (const k of kws) {
+    const cid = k.adGroup?.campaignId; if (!cid) continue
+    const s = kwByCamp.get(cid) ?? new Set<string>(); s.add(`${k.expressionValue.trim().toLowerCase()}|${k.expressionType}`); kwByCamp.set(cid, s)
+  }
+  return famCampIds.map((id) => {
+    const camp = campById.get(id)
+    const acosNum = camp?.acos != null ? Number(camp.acos) : NaN
+    return { campaignId: id, keywords: [...(kwByCamp.get(id) ?? [])], isAuto: autoSet.has(id), acos: Number.isFinite(acosNum) ? acosNum : null, spendCents: Math.round(Number(camp?.spend ?? 0) * 100) }
+  })
+}
+
 // RD.4 — plan actuation is OFF until RD.7. Plans compute + persist decisions
 // (so the UI can preview the fan-out) but do NOT touch campaigns yet.
 const PLAN_ALLOW_APPLY = false
@@ -147,7 +169,7 @@ export async function runRankDefendOnce(opts: { dryRun?: boolean } = {}): Promis
 
   // Union of schedule + plan campaigns → one campaign load + one signal pass.
   const unionIds = [...new Set([...schedules.map((s) => s.campaignId), ...governed])]
-  const campaigns = await prisma.campaign.findMany({ where: { id: { in: unionIds } }, select: { id: true, name: true, marketplace: true, status: true, externalCampaignId: true, dynamicBidding: true } })
+  const campaigns = await prisma.campaign.findMany({ where: { id: { in: unionIds } }, select: { id: true, name: true, marketplace: true, status: true, externalCampaignId: true, dynamicBidding: true, acos: true, spend: true } })
   const campById = new Map(campaigns.map((c) => [c.id, c]))
 
   // One analyzeTopOfSearch call per marketplace gives every campaign's topIS + topAcos signals.
@@ -202,31 +224,38 @@ export async function runRankDefendOnce(opts: { dryRun?: boolean } = {}): Promis
     const { day, hour } = nowInTz(plan.timezone || 'Europe/Rome')
     const key = resolveActiveTargetKey(plan.windows as ScheduleWindow[], plan.defaultTargetKey, day, hour)
     const planDecisions: RankDefendDecision[] = []
+    let planConflicts: SelfCompetitionConflict[] = []
     if (key) {
       const target = targetByKey.get(key)
       if (target) {
-        const spec = toSpec(target)
         const write = !dryRun && PLAN_ALLOW_APPLY && !plan.manualOnly
-        // RD.5 — family pre-flight guards, computed once per plan + shared by every
-        // campaign: retail-readiness (OOS/lost-buybox), family daily spend vs budget
-        // cap, family ACOS vs cap.
+        // RD.5 — family pre-flight guards (once per plan, shared by every campaign):
+        // retail-readiness (OOS/lost-buybox), family daily spend vs budget cap,
+        // family ACOS vs cap.
         const famCampIds = famCamps.map((c) => c.id)
         const readinessByCamp = await getReadiness(plan.marketplace)
         const overBudget = plan.familyDailyBudgetCents != null && (await familySpendRecentCents(famCampIds)) >= plan.familyDailyBudgetCents
         const acosFrac = plan.familyAcosCapPct != null ? await familyAcosFraction(famCampIds) : null
         const overAcos = plan.familyAcosCapPct != null && acosFrac != null && acosFrac > plan.familyAcosCapPct / 100
+        // RD.6 — self-competition: demote redundant family campaigns (lose a keyword/
+        // auto contest and win none) to the plan baseline so we stop outbidding ourselves.
+        const sc = detectSelfCompetition(await loadFamilyTargeting(famCampIds, campById))
+        planConflicts = sc.conflicts
+        const baselineTarget = plan.defaultTargetKey ? targetByKey.get(plan.defaultTargetKey) : undefined
         for (const fc of famCamps) {
           const camp = campById.get(fc.id); if (!camp) continue
           const oos = readinessByCamp.get(fc.id) === 'pause'
-          const eff = effectiveSpec(spec, { oos, overAcos, familyAcosCapPct: plan.familyAcosCapPct })
-          const { decision, applied: a } = await decideAndMaybeApply(camp, key, eff, plan.id, { write, actor: `automation:rank-plan-${plan.id}`, sigByCampaign, lossByCampaign, suppressRaise: overBudget })
+          const demote = sc.demoted.has(fc.id) && !!baselineTarget && plan.defaultTargetKey !== key
+          const useKey = demote ? plan.defaultTargetKey! : key
+          const eff = effectiveSpec(toSpec(demote ? baselineTarget! : target), { oos, overAcos, familyAcosCapPct: plan.familyAcosCapPct })
+          const { decision, applied: a } = await decideAndMaybeApply(camp, useKey, eff, plan.id, { write, actor: `automation:rank-plan-${plan.id}`, sigByCampaign, lossByCampaign, suppressRaise: overBudget })
           planDecisions.push(decision); decisions.push(decision); applied += a
         }
       }
     }
-    planSummaries.push({ planId: plan.id, productId: plan.productId, marketplace: plan.marketplace, campaigns: planDecisions.length, decisions: planDecisions })
+    planSummaries.push({ planId: plan.id, productId: plan.productId, marketplace: plan.marketplace, campaigns: planDecisions.length, decisions: planDecisions, selfCompetition: planConflicts })
     if (!dryRun) {
-      try { await prisma.productRankPlan.update({ where: { id: plan.id }, data: { lastEvaluatedAt: new Date(), lastSummary: { at: new Date().toISOString(), activeTargetKey: key ?? null, campaigns: planDecisions.length, decisions: planDecisions } as never } }) } catch { /* best-effort */ }
+      try { await prisma.productRankPlan.update({ where: { id: plan.id }, data: { lastEvaluatedAt: new Date(), lastSummary: { at: new Date().toISOString(), activeTargetKey: key ?? null, campaigns: planDecisions.length, decisions: planDecisions, selfCompetition: planConflicts } as never } }) } catch { /* best-effort */ }
     }
   }
 
