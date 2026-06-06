@@ -69,7 +69,22 @@ Nexus precisely.
 - `routes/images/amazon-images.routes.ts` — adopt/reconcile/mirror-diff/fill/publish
 - HARD CONSTRAINT: `/products/amazon-flat-file` is untouched throughout.
 
+## Cross-market copy (CM-series)
+Replicate one Amazon market's images onto others quickly, **staged** (then publish via Mirror):
+- **Copy this market → markets** — in the Amazon Mirror panel (active market only). Copies all slots.
+- **Copy slot → markets** — the small copy icon on each matrix column header. Copies just that slot to the **same slot** in the targets (the "certain image at a certain place" case).
+- Targets = other Amazon markets and/or **"All Markets (shared)"** (writes PLATFORM scope → applies everywhere).
+- **Edit once for all** — the "All Markets" tab edits PLATFORM scope, applying to every market unless a market overrides.
+
+Mechanics (frontend, no backend change): `buildCrossMarketUpserts`
+(`amazon/crossMarketCopy.ts`) reads the source market's effective cells via
+`resolveCell`, then stages `addPendingUpsert`s; `bulk-save` upserts by
+(productId, variationId, scope, platform, marketplace, amazonSlot) so a copy
+**replaces the target's same slot in place** (no duplicate). Copy stages as
+DRAFT → operator Saves → Mirror to Amazon.
+
 ## Tests
 Pure verifiers (vitest): slot taxonomy (incl. PS naming + fallback), reconcile
 categorization, exact-mirror plan + the wire JSON (replace/delete/MAIN-guard),
-mirror-diff categorization, gallery-fill mapping. ~33 cases.
+mirror-diff categorization, gallery-fill mapping, cross-market copy
+(whole/per-slot, shared→PLATFORM, replace-by-id, skip-self). ~38 cases.
