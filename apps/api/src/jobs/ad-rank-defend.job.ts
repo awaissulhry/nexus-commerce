@@ -34,7 +34,10 @@ function nowInTz(tz: string): { day: number; hour: number } {
 
 interface RankTargetRow { key: string; placement: string; targetISPct: number | null; acosCapPct: number | null; maxCpcCents: number | null; biasPct: number | null; pause: boolean; allOut: boolean }
 const toSpec = (t: RankTargetRow): RankTargetSpec => ({ key: t.key, placement: t.placement, targetISPct: t.targetISPct, acosCapPct: t.acosCapPct, maxCpcCents: t.maxCpcCents, biasPct: t.biasPct, pause: t.pause, allOut: t.allOut })
-const isGoalMode = (windows: unknown, defaultTargetKey: string | null): boolean =>
+// A schedule is goal-mode (owned by the rank-defend loop, NOT dayparting) once it
+// carries a baseline targetKey or any window targetKey. Exported so the dayparting
+// cron can skip these — otherwise both crons fight over the same campaign.
+export const isGoalMode = (windows: unknown, defaultTargetKey: string | null): boolean =>
   !!defaultTargetKey || (Array.isArray(windows) && windows.some((w) => w && typeof w === 'object' && (w as { targetKey?: string }).targetKey))
 
 export interface RankDefendDecision {
@@ -115,6 +118,14 @@ export async function runRankDefendOnce(opts: { dryRun?: boolean } = {}): Promis
         try { await updateCampaignWithSync({ campaignId: s.campaignId, patch: { status: 'PAUSED' }, actor: `automation:rank-defend-${s.id}` as AdsActor, reason: 'rank schedule — pause target', applyImmediately: true } as never); applied++ } catch (e) { logger.warn('[rank-defend] pause failed', { scheduleId: s.id, error: (e as Error).message }) }
       }
       continue
+    }
+
+    // Defend semantics: a serve target must actually SERVE. We're past the pause
+    // branch, so the active target wants delivery — if anything (dayparting, a manual
+    // pause) left the campaign paused, resume it so the rank hold is real. Never
+    // touch ARCHIVED.
+    if (!dryRun && camp.status === 'PAUSED') {
+      try { await updateCampaignWithSync({ campaignId: s.campaignId, patch: { status: 'ENABLED' }, actor: `automation:rank-defend-${s.id}` as AdsActor, reason: 'rank defend — resume to hold the slot', applyImmediately: true } as never); applied++ } catch (e) { logger.warn('[rank-defend] resume failed', { scheduleId: s.id, error: (e as Error).message }) }
     }
 
     const loss = lossByCampaign.get(s.campaignId) ?? false

@@ -12,6 +12,7 @@ import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
 import { recordCronRun } from '../utils/cron-observability.js'
 import { updateCampaignWithSync, bulkUpdateAdTargetBids, type AdsActor } from '../services/advertising/ads-mutation.service.js'
+import { isGoalMode } from './ad-rank-defend.job.js'
 
 // AU.3 — bid multiplier per window. A window can optionally carry a
 // bidMultiplierPct (e.g. +30 to raise bids 30% during peak hours, -50 to
@@ -71,7 +72,13 @@ export function bidAction(o: { inWindow: boolean; effMult: number | null; hasBas
 }
 
 export async function runDaypartingOnce(): Promise<{ evaluated: number; changed: number; bidsAdjusted: number }> {
-  const schedules = await prisma.adSchedule.findMany({ where: { enabled: true } })
+  // Goal-mode schedules (a baseline/window rank target) are owned by the
+  // rank-defend loop — it sets placement bias + keeps the campaign serving.
+  // Dayparting must skip them or the two crons fight (one pauses, one pushes).
+  // The legacy windows stay intact but inert; drop defaultTargetKey to hand
+  // control back to dayparting.
+  const schedules = (await prisma.adSchedule.findMany({ where: { enabled: true } }))
+    .filter((s) => !isGoalMode(s.windows, s.defaultTargetKey))
   let changed = 0
   let bidsAdjusted = 0
   for (const s of schedules) {
