@@ -41,6 +41,21 @@ describe('buildSlotTaxonomy', () => {
     expect(tax.slots.filter((s) => s.kind === 'SAFETY').map((s) => s.slot)).toEqual(['PS01', 'PS02'])
   })
 
+  it('maps Amazon live image_locator_psNN naming to PS slots, ordered after PT, before SWCH', () => {
+    // Confirmed live on IT/DE OUTERWEAR: image_locator_ps01..ps06.
+    const tax = buildSlotTaxonomy({
+      main_product_image_locator: {},
+      other_product_image_locator_1: {},
+      swatch_product_image_locator: {},
+      image_locator_ps01: {},
+      image_locator_ps02: {},
+      image_locator_ps06: {},
+    })
+    expect(tax.slots.map((s) => s.slot)).toEqual(['MAIN', 'PT01', 'PS01', 'PS02', 'PS06', 'SWCH'])
+    expect(tax.slotToAttribute.PS06).toBe('image_locator_ps06')
+    expect(tax.slots.find((s) => s.slot === 'PS01')?.kind).toBe('SAFETY')
+  })
+
   it('flags read-only locators as not writable', () => {
     const tax = buildSlotTaxonomy({
       main_product_image_locator: {},

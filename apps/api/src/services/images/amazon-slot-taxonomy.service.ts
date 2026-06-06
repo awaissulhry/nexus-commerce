@@ -87,15 +87,25 @@ export function buildSlotTaxonomy(properties: Record<string, unknown>): SlotTaxo
       slots.push({ slot: 'SWCH', attribute: name, kind: 'SWATCH', order: 900, writable })
       continue
     }
-    // Unknown image locator — could be product-safety (PS / GPSR) or a
-    // category-specific view. Discover by name; safety keywords → SAFETY.
+    // Product-safety (PS / GPSR) image locators. Amazon names these
+    // `image_locator_ps01..ps06` (confirmed live on IT/DE OUTERWEAR) — also
+    // accept `product_safety_image_locator_N` / `ps_image_locator_N`. The
+    // trailing number is the PS index, so PS order matches Amazon's.
+    const psNum = name.match(/(?:image_locator_ps|product_safety_image_locator_?|ps_image_locator_?)0*(\d+)/i)
+    if (psNum) {
+      const n = Number(psNum[1])
+      slots.push({ slot: `PS${String(n).padStart(2, '0')}`, attribute: name, kind: 'SAFETY', order: 800 + n, writable })
+      continue
+    }
+    // Other safety-ish locators without a clear index → sequential PS codes.
     if (/safety|hazard|warning|gpsr|compliance/i.test(name)) {
       safetyCount += 1
       slots.push({ slot: `PS${String(safetyCount).padStart(2, '0')}`, attribute: name, kind: 'SAFETY', order: 800 + safetyCount, writable })
-    } else {
-      namedCount += 1
-      slots.push({ slot: `IMG${String(namedCount).padStart(2, '0')}`, attribute: name, kind: 'NAMED', order: 850 + namedCount, writable })
+      continue
     }
+    // Anything else that is an image locator but unrecognised.
+    namedCount += 1
+    slots.push({ slot: `IMG${String(namedCount).padStart(2, '0')}`, attribute: name, kind: 'NAMED', order: 850 + namedCount, writable })
   }
 
   slots.sort((a, b) => a.order - b.order || a.slot.localeCompare(b.slot))
