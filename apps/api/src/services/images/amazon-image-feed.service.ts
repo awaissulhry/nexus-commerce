@@ -144,8 +144,9 @@ export async function resolveAmazonImages(
   const allImagesRaw = await prisma.listingImage.findMany({
     where: {
       productId,
-      platform: { in: [platform, null] },
       amazonSlot: { not: null },
+      // Prisma rejects null inside `in`; match the platform OR global (null).
+      OR: [{ platform }, { platform: null }],
     },
     select: {
       id: true,
