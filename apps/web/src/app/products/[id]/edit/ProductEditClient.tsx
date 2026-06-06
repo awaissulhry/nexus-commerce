@@ -321,14 +321,21 @@ export default function ProductEditClient({
       // in-app nav). push on a real coordinate change so back/forward walks
       // tabs+markets; replace on a no-op/canonicalisation.
       const target = qs ? `${pathname}?${qs}` : pathname
-      // Always router.replace — the PROVEN OrdersWorkspace cursor form. It
-      // reliably updates the URL bar AND keeps Next's history in sync (so
-      // sidebar/<Link> navigation keeps working — a manual history.pushState
-      // corrupted that). Tabs needn't pile browser history, so replace (not
-      // push) is the right call.
-      router.replace(target, { scroll: false })
+      const cur = new URLSearchParams(searchParams?.toString() ?? '')
+      const changed =
+        cur.get('tab') !== params.get('tab') || cur.get('market') !== params.get('market')
+      // Update the URL bar via the History API — router.push/replace did NOT
+      // move the address bar for a same-route query change on this page (only
+      // history.* does). CRITICAL: preserve window.history.state (Next's App
+      // Router stores its internal tree/key there) — passing null clobbered it
+      // and broke <Link>/sidebar navigation. Next 16 syncs useSearchParams off
+      // history.*. push on a real coordinate change (back/forward walks
+      // tabs+markets); replace on a no-op/canonicalisation.
+      const st = window.history.state
+      if (changed) window.history.pushState(st, '', target)
+      else window.history.replaceState(st, '', target)
     },
-    [router, pathname, searchParams],
+    [pathname, searchParams],
   )
   // Non-channel tabs carry no market — thin wrapper so the cursor logic
   // lives in one place (also clears a stale ?market when leaving a channel).
