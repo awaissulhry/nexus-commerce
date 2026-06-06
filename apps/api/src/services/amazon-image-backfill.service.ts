@@ -21,6 +21,7 @@
  */
 
 import prisma from '../db.js'
+import { normalizeAmazonImageUrl } from './images/normalize-amazon-image-url.js'
 import { logger } from '../utils/logger.js'
 import { AmazonService, AMAZON_MARKETPLACE_CODE_TO_ID } from './marketplaces/amazon.service.js'
 import { productEventService } from './product-event.service.js'
@@ -172,8 +173,14 @@ export async function backfillProductImagesFromCatalog(opts: {
       let perProductUpdated = 0
       for (let idx = 0; idx < imgList.length; idx++) {
         const img = imgList[idx]!
-        const url = img.link ?? img.url ?? ''
-        if (!url) continue
+        const rawUrl = img.link ?? img.url ?? ''
+        if (!rawUrl) continue
+        // Strip Amazon size modifiers (e.g. _SL75_) → full-res. When the source
+        // was a sized variant, its width/height describe the thumbnail, so drop
+        // them (the resolver / next sync re-derives the true dims).
+        const url = normalizeAmazonImageUrl(rawUrl)
+        const dimW = url === rawUrl ? (img.width ?? null) : null
+        const dimH = url === rawUrl ? (img.height ?? null) : null
         const type = inferType(img.variant, idx)
         const alt = img.variant ?? null
 
@@ -191,8 +198,8 @@ export async function backfillProductImagesFromCatalog(opts: {
               alt,
               type,
               sortOrder: idx,
-              width: img.width ?? null,
-              height: img.height ?? null,
+              width: dimW,
+              height: dimH,
             },
           })
           imagesUpdated++
@@ -205,8 +212,8 @@ export async function backfillProductImagesFromCatalog(opts: {
               alt,
               type,
               sortOrder: idx,
-              width: img.width ?? null,
-              height: img.height ?? null,
+              width: dimW,
+              height: dimH,
             },
           })
           imagesCreated++

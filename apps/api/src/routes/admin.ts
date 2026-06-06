@@ -20,6 +20,7 @@ import {
   isShadowEnabled,
 } from '../services/pim/resolver-shadow.js'
 import { productSearchIndexerService } from '../services/product-search-indexer.service.js'
+import { backfillNormalizeProductImageUrls } from '../services/images/normalize-image-urls-backfill.service.js'
 import {
   isSearchConfigured,
   searchHealthy,
@@ -186,6 +187,22 @@ export async function adminRoutes(app: FastifyInstance) {
         success: false,
         error: message,
       })
+    }
+  })
+
+  /**
+   * POST /admin/normalize-image-urls?dryRun=1
+   * Strip Amazon size modifiers (e.g. _SL75_) from ProductImage URLs →
+   * full-res, across ALL products. dryRun reports counts without writing.
+   */
+  app.post<{ Querystring: { dryRun?: string } }>('/admin/normalize-image-urls', async (request, reply) => {
+    const dryRun = request.query.dryRun === '1' || request.query.dryRun === 'true'
+    try {
+      const result = await backfillNormalizeProductImageUrls({ dryRun })
+      return reply.send({ success: true, data: result })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error'
+      return reply.status(500).send({ success: false, error: message })
     }
   })
 
