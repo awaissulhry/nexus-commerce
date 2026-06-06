@@ -39,6 +39,25 @@ function nowInTz(tz: string, leadMinutes = 0): { day: number; hour: number } {
 
 interface RankTargetRow { key: string; placement: string; targetISPct: number | null; acosCapPct: number | null; maxCpcCents: number | null; biasPct: number | null; pause: boolean; allOut: boolean }
 const toSpec = (t: RankTargetRow): RankTargetSpec => ({ key: t.key, placement: t.placement, targetISPct: t.targetISPct, acosCapPct: t.acosCapPct, maxCpcCents: t.maxCpcCents, biasPct: t.biasPct, pause: t.pause, allOut: t.allOut })
+
+// RTC — merge per-scope target overrides onto a spec, keyed by the spec's own target
+// key. Maps apply in order, so later (more specific) wins: product then campaign.
+type TargetOverrideMap = Record<string, { biasPct?: number; targetISPct?: number; acosCapPct?: number; maxCpcCents?: number }> | null | undefined
+function applyTargetOverrides(spec: RankTargetSpec, ...maps: TargetOverrideMap[]): RankTargetSpec {
+  let out = spec
+  for (const m of maps) {
+    const o = m?.[out.key]
+    if (!o) continue
+    out = {
+      ...out,
+      ...(o.biasPct != null ? { biasPct: o.biasPct } : {}),
+      ...(o.targetISPct != null ? { targetISPct: o.targetISPct } : {}),
+      ...(o.acosCapPct != null ? { acosCapPct: o.acosCapPct } : {}),
+      ...(o.maxCpcCents != null ? { maxCpcCents: o.maxCpcCents } : {}),
+    }
+  }
+  return out
+}
 // A schedule is goal-mode (owned by the rank-defend loop, NOT dayparting) once it
 // carries a baseline targetKey or any window targetKey. Exported so the dayparting
 // cron can skip these — otherwise both crons fight over the same campaign.
@@ -198,6 +217,12 @@ export async function runRankDefendOnce(opts: { dryRun?: boolean; onlyPlanId?: s
   const unionIds = [...new Set([...schedules.map((s) => s.campaignId), ...governed])]
   const campaigns = await prisma.campaign.findMany({ where: { id: { in: unionIds } }, select: { id: true, name: true, marketplace: true, status: true, externalCampaignId: true, dynamicBidding: true, acos: true, spend: true, bidsSuppressedAt: true } })
   const campById = new Map(campaigns.map((c) => [c.id, c]))
+  // RTC — per-campaign (campaign-scope) target overrides for every campaign in play.
+  const schedOverrides = new Map<string, TargetOverrideMap>()
+  try {
+    const so = await prisma.adSchedule.findMany({ where: { campaignId: { in: unionIds } }, select: { campaignId: true, targetOverrides: true } })
+    for (const s of so) { const m = s.targetOverrides as TargetOverrideMap; if (m && Object.keys(m).length) schedOverrides.set(s.campaignId, m) }
+  } catch { /* best-effort */ }
 
   // One analyzeTopOfSearch call per marketplace gives every campaign's topIS + topAcos signals.
   const markets = [...new Set(campaigns.map((c) => c.marketplace).filter(Boolean) as string[])]
@@ -274,7 +299,7 @@ export async function runRankDefendOnce(opts: { dryRun?: boolean; onlyPlanId?: s
           const oos = readinessByCamp.get(fc.id) === 'pause'
           const demote = sc.demoted.has(fc.id) && !!baselineTarget && plan.defaultTargetKey !== key
           const useKey = demote ? plan.defaultTargetKey! : key
-          const eff = effectiveSpec(toSpec(demote ? baselineTarget! : target), { oos, overAcos, familyAcosCapPct: plan.familyAcosCapPct })
+          const eff = effectiveSpec(applyTargetOverrides(toSpec(demote ? baselineTarget! : target), plan.targetOverrides as TargetOverrideMap, schedOverrides.get(fc.id)), { oos, overAcos, familyAcosCapPct: plan.familyAcosCapPct })
           const { decision, applied: a } = await decideAndMaybeApply(camp, useKey, eff, plan.id, { write, actor: `automation:rank-plan-${plan.id}`, sigByCampaign, lossByCampaign, suppressRaise: overBudget })
           planDecisions.push(decision); decisions.push(decision); applied += a
         }
@@ -294,7 +319,7 @@ export async function runRankDefendOnce(opts: { dryRun?: boolean; onlyPlanId?: s
     const key = resolveActiveTargetKey(s.windows as ScheduleWindow[], s.defaultTargetKey, day, hour)
     if (!key) continue
     const target = targetByKey.get(key); if (!target) continue
-    const { decision, applied: a } = await decideAndMaybeApply(camp, key, toSpec(target), null, { write: !dryRun, actor: `automation:rank-defend-${s.id}`, sigByCampaign, lossByCampaign })
+    const { decision, applied: a } = await decideAndMaybeApply(camp, key, applyTargetOverrides(toSpec(target), s.targetOverrides as TargetOverrideMap), null, { write: !dryRun, actor: `automation:rank-defend-${s.id}`, sigByCampaign, lossByCampaign })
     decisions.push(decision); applied += a
   }
 
