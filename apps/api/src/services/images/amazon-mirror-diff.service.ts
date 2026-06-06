@@ -14,6 +14,8 @@
  * sees before publishing.
  */
 
+// deploy-sync(image-mirror): touches apps/api so Railway redeploys the API
+// alongside the Vercel web build. Safe no-op marker.
 import prisma from '../../db.js'
 import { resolveAmazonImages } from './amazon-image-feed.service.js'
 import { resolveSlotTaxonomy } from './amazon-slot-taxonomy.service.js'

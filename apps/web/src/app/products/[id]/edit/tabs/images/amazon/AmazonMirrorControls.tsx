@@ -1,4 +1,6 @@
 'use client'
+// deploy-sync(image-mirror): touches apps/web so Vercel rebuilds the web app
+// alongside the Railway API redeploy. Safe no-op marker.
 
 // M6 — "Amazon Mirror" control. Additive panel (does not touch the matrix):
 //   • Fill from gallery  → map the master gallery onto Amazon slots
