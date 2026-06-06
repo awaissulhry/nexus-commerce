@@ -54,7 +54,11 @@ export function RankTargetEditor({ open, onClose, scopeKind, scopeLabel, scopeOv
     if (campaignId) qs.set('campaignId', campaignId)
     fetch(api(`/rank-targets?${qs.toString()}`), { cache: 'no-store' }).then(r => r.json()).then(j => setTargets(j.items || [])).catch(() => {})
   }, [productId, campaignId])
-  useEffect(() => { if (open) { load(); setOv({ ...(scopeOverrides || {}) }); setLib({}); setView(onSaveScopeOverrides ? 'scope' : 'global'); setMsg(''); setChanged(false); setAdding(false) } }, [open, load, scopeOverrides, onSaveScopeOverrides])
+  // Init ONLY when the modal opens (or its scope/product changes). scopeOverrides is a
+  // fresh `{}` and onSaveScopeOverrides a fresh fn on every parent render — keeping them
+  // in deps would re-run this on each parent re-render and wipe the operator's in-modal
+  // edits. They're read here at open-time (and onSave is read live in save()).
+  useEffect(() => { if (open) { load(); setOv({ ...(scopeOverrides || {}) }); setLib({}); setView(onSaveScopeOverrides ? 'scope' : 'global'); setMsg(''); setChanged(false); setAdding(false) } }, [open, load]) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!open) return null
 
