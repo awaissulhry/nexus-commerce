@@ -607,12 +607,23 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     // numbers are true + self-consistent. `smoothed` (market-blended) is an optional
     // overlay for sparse families. Recommendation derives from RAW so it matches what's shown.
     const recommended = recommendRankWindows(d.raw.weekdayProfile, d.raw.hourProfile)
+    // RD.10g diag (?diag=1) — see how each match key counts the family's orders.
+    let _diag: Record<string, unknown> | undefined
+    if ((request.query as { diag?: string }).diag === '1') {
+      const { aggregateOrdersDayparting } = await import('../services/advertising/orders-dayparting.service.js')
+      const [byPid, bySku] = await Promise.all([
+        aggregateOrdersDayparting({ channel: 'AMAZON', marketplace: fam.marketplace, productIds: fam.productIds, windowDays }),
+        fam.skus.length ? aggregateOrdersDayparting({ channel: 'AMAZON', marketplace: fam.marketplace, skus: fam.skus, windowDays }) : Promise.resolve({ totals: { orders: 0 } }),
+      ])
+      _diag = { skuCount: fam.skus.length, sampleSkus: fam.skus.slice(0, 4), sampleAsins: fam.asins.slice(0, 4), byProductId: byPid.totals.orders, bySku: bySku.totals.orders, combined: d.raw.totals.orders }
+    }
     return {
       marketplace: fam.marketplace ?? marketplace, parentProductId: fam.parentProductId, parentName: fam.parentName, productIds: fam.productIds, asins: fam.asins,
       campaigns: fam.campaigns,
       demand: { totals: d.raw.totals, hourProfile: d.raw.hourProfile, weekdayProfile: d.raw.weekdayProfile, grid: d.raw.grid, hasData: d.hasData, familyOrders: d.familyOrders, windowDays },
       smoothed: { totals: d.totals, hourProfile: d.hourProfile, weekdayProfile: d.weekdayProfile, grid: d.grid, blended: d.blended },
       recommended,
+      ...(_diag ? { _diag } : {}),
     }
   })
 
