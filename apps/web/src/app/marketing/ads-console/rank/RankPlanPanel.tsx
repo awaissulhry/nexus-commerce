@@ -10,7 +10,7 @@
  * loop would do right now.
  */
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Crosshair, Plus, Trash2, Save, UploadCloud, Undo2, Sparkles, Power, Wand2 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { DemandReadout, type DemandProfile, type DemandCell } from './DemandReadout'
@@ -46,6 +46,12 @@ export function RankPlanPanel({ campaignId, campaignName, onAutoDefend, reloadSi
   const [serverBaseline, setServerBaseline] = useState('')
   const [serverWindows, setServerWindows] = useState<Win[]>([])
 
+  // CR.3b — keep onAutoDefend in a ref so `load` doesn't depend on it. The parent
+  // passes a fresh callback each render; depending on it would re-create `load` every
+  // render and infinite-loop the load effect (the "glitchy" constant refetch).
+  const onAutoDefendRef = useRef(onAutoDefend)
+  useEffect(() => { onAutoDefendRef.current = onAutoDefend }, [onAutoDefend])
+
   const load = useCallback(async () => {
     setLoaded(false)
     const [ts, ss] = await Promise.all([
@@ -60,9 +66,9 @@ export function RankPlanPanel({ campaignId, campaignName, onAutoDefend, reloadSi
     setBaseline(bk); setServerBaseline(bk)
     setWindows(wins.map(w => ({ ...w }))); setServerWindows(wins.map(w => ({ ...w })))
     // CR.3b — tell the cockpit whether auto-defend owns the Top-of-Search dial right now.
-    onAutoDefend?.({ enabled: !!mine?.enabled && (!!bk || wins.length > 0), scheduleId: mine?.id ?? null })
+    onAutoDefendRef.current?.({ enabled: !!mine?.enabled && (!!bk || wins.length > 0), scheduleId: mine?.id ?? null })
     setLoaded(true)
-  }, [campaignId, onAutoDefend])
+  }, [campaignId])
   useEffect(() => { void load() }, [load, reloadSignal])
 
   // live "what would the loop do right now" — only meaningful once a goal exists
@@ -120,7 +126,7 @@ export function RankPlanPanel({ campaignId, campaignName, onAutoDefend, reloadSi
     setMsg('')
     try {
       const r = await fetch(api(`/schedules/${sched.id}`), { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled: next }) }).then(x => x.json())
-      if (r?.id) { setSched(r); onAutoDefend?.({ enabled: r.enabled && (!!serverBaseline || serverWindows.length > 0), scheduleId: r.id }) }
+      if (r?.id) { setSched(r); onAutoDefendRef.current?.({ enabled: r.enabled && (!!serverBaseline || serverWindows.length > 0), scheduleId: r.id }) }
       setMsg(next ? 'Auto-defend ON — the engine holds this plan on its cadence (live pushes still need the write-gate).' : 'Auto-defend OFF — plan saved but not auto-held.')
     } catch { setMsg('Could not toggle auto-defend.') }
   }
