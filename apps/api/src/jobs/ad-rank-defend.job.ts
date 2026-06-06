@@ -43,7 +43,7 @@ const toSpec = (t: RankTargetRow): RankTargetSpec => ({ key: t.key, placement: t
 // RTC — merge per-scope target overrides onto a spec, keyed by the spec's own target
 // key. Maps apply in order, so later (more specific) wins: product then campaign.
 type TargetOverrideMap = Record<string, { biasPct?: number; targetISPct?: number; acosCapPct?: number; maxCpcCents?: number }> | null | undefined
-function applyTargetOverrides(spec: RankTargetSpec, ...maps: TargetOverrideMap[]): RankTargetSpec {
+export function applyTargetOverrides(spec: RankTargetSpec, ...maps: TargetOverrideMap[]): RankTargetSpec {
   let out = spec
   for (const m of maps) {
     const o = m?.[out.key]
