@@ -11,8 +11,8 @@
  * apply-now / revert controls.
  */
 
-import { useEffect, useMemo, useState } from 'react'
-import { Crosshair, Plus, Trash2, Save, Undo2, Wand2, Package, ShieldCheck } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Crosshair, Plus, Trash2, Save, Undo2, Wand2, Package, ShieldCheck, Power, Play, RotateCcw, Info } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { DemandHeatmap, type HeatCell } from '../automation/DemandHeatmap'
 
@@ -43,6 +43,11 @@ export function RankDirectorPanel({ market, productId, onPickProduct }: { market
   const [srv, setSrv] = useState<{ baseline: string; windows: Win[]; budget: string; acosCap: string; maxCamp: string; lead: string } | null>(null)
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState('')
+  // RD.10 — live preview + family detail + arm/apply controls (once a plan exists)
+  const [preview, setPreview] = useState<{ decisions: Array<{ campaignId: string; action: string; nextPct: number }>; selfCompetition?: Array<{ on: string; demoted: string[] }> } | null>(null)
+  const [famDetail, setFamDetail] = useState<{ campaigns: Array<{ id: string; name: string; status: string; attributionPct: number | null; readiness: { verdict: string } | null }>; attribution: { overallPct: number | null } } | null>(null)
+  const [arming, setArming] = useState(false)
+  const [armMsg, setArmMsg] = useState('')
 
   // product list + rank targets (once per market)
   useEffect(() => {
@@ -69,6 +74,15 @@ export function RankDirectorPanel({ market, productId, onPickProduct }: { market
       setSrv({ baseline: b, windows: w, budget: bud, acosCap: ac, maxCamp: mc, lead: ld })
     }).catch(() => {})
   }, [productId, market])
+
+  // RD.10 — live preview (what the loop would do now) + family detail (attribution
+  // health + readiness), refreshed whenever the saved plan changes.
+  const reloadLive = useCallback(() => {
+    if (!plan?.id) { setPreview(null); setFamDetail(null); return }
+    fetch(api(`/rank-plans/${plan.id}/run-now?dryRun=1`), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }).then(r => r.json()).then(j => setPreview((j.plans || [])[0] ?? null)).catch(() => {})
+    fetch(api(`/rank-plans/${plan.id}/family`), { cache: 'no-store' }).then(r => r.json()).then(setFamDetail).catch(() => {})
+  }, [plan?.id])
+  useEffect(() => { reloadLive() }, [reloadLive])
 
   const dirty = srv ? (baseline !== srv.baseline || JSON.stringify(windows) !== JSON.stringify(srv.windows) || budget !== srv.budget || acosCap !== srv.acosCap || maxCamp !== srv.maxCamp || lead !== srv.lead) : (!!baseline || windows.length > 0)
 
@@ -98,6 +112,13 @@ export function RankDirectorPanel({ market, productId, onPickProduct }: { market
     } finally { setBusy(false) }
   }
   const discard = () => { if (!srv) return; setBaseline(srv.baseline); setWindows(srv.windows.map(w => ({ ...w }))); setBudget(srv.budget); setAcosCap(srv.acosCap); setMaxCamp(srv.maxCamp); setLead(srv.lead) }
+
+  // RD.10 — arm / manual / apply-now / revert. Apply-now + revert are real (gated)
+  // pushes across the family; the loop also runs them automatically once armed.
+  const setManual = async (v: boolean) => { if (!plan) return; const r = await fetch(api(`/rank-plans/${plan.id}`), { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ manualOnly: v }) }).then(x => x.json()); setPlan(r) }
+  const armToggle = async () => { if (!plan) return; setArming(true); setArmMsg(''); try { const r = await fetch(api(`/rank-plans/${plan.id}`), { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled: !plan.enabled }) }).then(x => x.json()); setPlan(r); setArmMsg(r.enabled ? 'Armed — the loop now holds rank automatically across the family (gated).' : 'Disarmed — the loop no longer acts on this plan.') } finally { setArming(false) } }
+  const applyNow = async () => { if (!plan) return; setArming(true); setArmMsg(''); try { const r = await fetch(api(`/rank-plans/${plan.id}/run-now`), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }).then(x => x.json()); setArmMsg(`Applied now — ${r.applied ?? 0} change(s) pushed (write-gate honoured).`); reloadLive() } finally { setArming(false) } }
+  const revertAll = async () => { if (!plan) return; setArming(true); setArmMsg(''); try { const r = await fetch(api(`/rank-plans/${plan.id}/revert`), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }).then(x => x.json()); setArmMsg(`Reverted ${r.reverted ?? 0} campaign(s) to baseline.`); reloadLive() } finally { setArming(false) } }
 
   const selName = useMemo(() => products.find(p => p.productId === productId)?.name ?? '', [products, productId])
 
@@ -176,6 +197,42 @@ export function RankDirectorPanel({ market, productId, onPickProduct }: { market
           </div>
           {msg && <div className="az-rp-msg">{msg}</div>}
           <div className="az-rp-note">Saving stores the plan in Nexus. One plan drives every campaign advertising this product family — winners hold the slot during your windows, redundant campaigns fall to the baseline (no self-competition), and OOS / over-budget / over-ACOS are guarded automatically. Real Amazon pushes still honour the write-gate.</div>
+
+          {/* RD.10 — live preview + family campaign list + arm / apply controls */}
+          {plan && (
+            <div className="az-rp-sec az-rd-live">
+              <div className="az-rp-lbl">This plan drives {famDetail?.campaigns?.length ?? fam?.campaignCount ?? 0} campaigns{famDetail?.attribution?.overallPct != null ? ` · ${famDetail.attribution.overallPct}% attribution health` : ''}:</div>
+              <div className="az-rd-arm">
+                <button type="button" className={`az-rp-defend ${plan.enabled ? 'on' : ''}`} onClick={() => void armToggle()} disabled={arming} title="When ON, the loop continuously holds this plan across the family on its cadence"><Power size={12} /> Fully automatic {plan.enabled ? 'ON' : 'OFF'}</button>
+                <label className="az-rd-manual"><input type="checkbox" checked={plan.manualOnly} onChange={e => void setManual(e.target.checked)} /> Manual only</label>
+                <span className="grow" />
+                <button type="button" className="az-btn" onClick={() => void applyNow()} disabled={arming}><Play size={12} /> Apply now</button>
+                <button type="button" className="az-btn" onClick={() => void revertAll()} disabled={arming}><RotateCcw size={12} /> Revert all</button>
+              </div>
+              {armMsg && <div className="az-rp-msg">{armMsg}</div>}
+              {preview?.selfCompetition && preview.selfCompetition.length > 0 && (
+                <div className="az-cr-note"><Info size={12} /> {preview.selfCompetition.length} self-competition contest(s) found — redundant campaigns are auto-demoted to the baseline so you don&apos;t outbid yourself.</div>
+              )}
+              {famDetail && (
+                <div className="az-rd-camps">
+                  {famDetail.campaigns.slice(0, 14).map(c => {
+                    const dec = preview?.decisions.find(d => d.campaignId === c.id)
+                    return (
+                      <div key={c.id} className="az-rd-camp">
+                        <span className="st">{c.status === 'ENABLED' ? '●' : '○'}</span>
+                        <span className="nm" title={c.name}>{c.name}</span>
+                        <span className="grow" />
+                        {c.readiness && c.readiness.verdict !== 'ok' && <span className={`vd ${c.readiness.verdict}`}>{c.readiness.verdict}</span>}
+                        {dec && <span className="dec">{dec.action}{dec.action === 'raise' || dec.action === 'lower' ? ` → ${dec.nextPct}%` : ''}</span>}
+                        <span className="att" title="ad-row attribution health">{c.attributionPct != null ? `${c.attributionPct}%` : '—'}</span>
+                      </div>
+                    )
+                  })}
+                  {famDetail.campaigns.length > 14 && <div className="az-rd-more">+{famDetail.campaigns.length - 14} more</div>}
+                </div>
+              )}
+            </div>
+          )}
         </>
       )}
     </div>

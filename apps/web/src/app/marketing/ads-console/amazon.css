@@ -471,6 +471,22 @@
 .az-rd-guards span { color: var(--ink3); font-weight: 700; }
 .az-rd-foot { display: flex; align-items: center; gap: 8px; padding-top: 4px; border-top: 1px solid var(--border); }
 .az-rd-foot .grow { flex: 1; }
+.az-rd-live { border-top: 1px solid var(--border); padding-top: 12px; }
+.az-rd-arm { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.az-rd-arm .grow { flex: 1; }
+.az-rd-manual { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; color: var(--ink2); cursor: pointer; }
+.az-rd-camps { display: flex; flex-direction: column; gap: 1px; border: 1px solid var(--border); border-radius: 9px; overflow: hidden; }
+.az-rd-camp { display: flex; align-items: center; gap: 8px; padding: 6px 11px; font-size: 12.5px; background: #fff; border-bottom: 1px solid var(--border); }
+.az-rd-camp:last-child { border-bottom: none; }
+.az-rd-camp .st { color: var(--green); font-size: 9px; }
+.az-rd-camp .nm { font-weight: 600; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 320px; }
+.az-rd-camp .grow { flex: 1; }
+.az-rd-camp .vd { font-size: 10px; font-weight: 800; text-transform: uppercase; padding: 1px 6px; border-radius: 999px; }
+.az-rd-camp .vd.watch { background: #fff4e0; color: #9a6700; }
+.az-rd-camp .vd.pause { background: #ffe0e0; color: #b91c1c; }
+.az-rd-camp .dec { font-size: 11px; font-weight: 700; color: var(--blue); }
+.az-rd-camp .att { font-size: 11px; color: var(--ink3); min-width: 34px; text-align: right; }
+.az-rd-more { padding: 6px 11px; font-size: 11px; color: var(--ink2); background: var(--bg2, #f7f8fa); }
 /* CR.1 — lean cockpit section IA (one guided journey, numbered) */
 .az-cr-sec { margin-bottom: 18px; }
 .az-cr-sechd { display: flex; align-items: center; gap: 11px; margin: 6px 2px 10px; }
