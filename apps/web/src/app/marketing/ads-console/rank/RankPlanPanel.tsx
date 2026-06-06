@@ -14,6 +14,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Crosshair, Plus, Trash2, Save, UploadCloud, Undo2, Sparkles, Power, Wand2 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { DemandReadout, type DemandProfile, type DemandCell } from './DemandReadout'
+import { RankTimeGrid } from './RankTimeGrid'
 
 interface RankTarget { id: string; key: string; name: string; placement: string; targetISPct: number | null; acosCapPct: number | null; pause: boolean; allOut: boolean; color: string | null }
 interface Win { days: number[]; startHour: number; endHour: number; targetKey?: string }
@@ -41,6 +42,7 @@ export function RankPlanPanel({ campaignId, campaignName, onAutoDefend, reloadSi
   const [rec, setRec] = useState<{ windows: Win[]; baselineTargetKey: string; peakHours: number[] } | null>(null)
   const [smoothed, setSmoothed] = useState<{ grid: DemandCell[][]; hourProfile: DemandProfile[]; weekdayProfile: DemandProfile[] } | null>(null)
   const [smooth, setSmooth] = useState(false) // false = RAW actual sales (default); true = market-smoothed
+  const [winView, setWinView] = useState<'grid' | 'list'>('grid') // RG.3 — paint grid (default) vs precise list
 
   // server snapshot for dirty + discard
   const [serverBaseline, setServerBaseline] = useState('')
@@ -174,20 +176,30 @@ export function RankPlanPanel({ campaignId, campaignName, onAutoDefend, reloadSi
 
         {/* Target windows — "these hours, hold X" */}
         <div className="az-rp-sec">
-          <div className="az-rp-lbl">During these windows, hold a different rank: <button type="button" className="az-link" onClick={addWindow}><Plus size={12} /> Add window</button></div>
-          {windows.length === 0 && <div className="az-rp-empty">No time windows — the baseline applies all week. Add one to push harder during peak hours.</div>}
-          {windows.map((w, i) => (
-            <div key={i} className="az-rp-win">
-              <div className="days">{DAYS.map((d, di) => <button key={di} type="button" className={w.days.includes(di) ? 'on' : ''} onClick={() => toggleDay(i, di)}>{d[0]}</button>)}</div>
-              <select value={w.startHour} onChange={e => setWin(i, { startHour: Number(e.target.value) })} aria-label="Start hour">{Array.from({ length: 24 }, (_, h) => <option key={h} value={h}>{hh(h)}</option>)}</select>
-              <span className="to">to</span>
-              <select value={w.endHour} onChange={e => setWin(i, { endHour: Number(e.target.value) })} aria-label="End hour">{Array.from({ length: 25 }, (_, h) => <option key={h} value={h}>{hh(h % 24)}{h === 24 ? ' (24)' : ''}</option>)}</select>
-              <span className="arrow">→</span>
-              <select value={w.targetKey ?? ''} onChange={e => setWin(i, { targetKey: e.target.value })} aria-label="Rank target">{targets.map(t => <option key={t.key} value={t.key}>{t.name}</option>)}</select>
-              <span className="grow" />
-              <button type="button" className="az-kebab" onClick={() => removeWin(i)} style={{ color: '#cc1100' }} aria-label="Remove window"><Trash2 size={13} /></button>
-            </div>
-          ))}
+          <div className="az-rp-lbl" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>During these windows, hold a different rank:<span className="grow" />
+            <span className="az-mode-seg az-scope-seg" role="tablist" aria-label="Window editor view" style={{ display: 'inline-flex', border: '1px solid var(--border)', borderRadius: 6, overflow: 'hidden' }}>
+              <button type="button" role="tab" aria-selected={winView === 'grid'} className={winView === 'grid' ? 'on' : ''} onClick={() => setWinView('grid')}>Grid</button>
+              <button type="button" role="tab" aria-selected={winView === 'list'} className={winView === 'list' ? 'on' : ''} onClick={() => setWinView('list')}>List</button>
+            </span>
+            {winView === 'list' && <button type="button" className="az-link" onClick={addWindow}><Plus size={12} /> Add window</button>}
+          </div>
+          {winView === 'grid' ? (
+            <RankTimeGrid windows={windows} onWindowsChange={setWindows} targets={targets} baselineKey={baseline} demandGrid={(smooth && smoothed ? smoothed : demand)?.grid ?? null} onUseDemandPeaks={rec?.windows?.length ? applyRecommended : undefined} />
+          ) : (<>
+            {windows.length === 0 && <div className="az-rp-empty">No time windows — the baseline applies all week. Add one to push harder during peak hours.</div>}
+            {windows.map((w, i) => (
+              <div key={i} className="az-rp-win">
+                <div className="days">{DAYS.map((d, di) => <button key={di} type="button" className={w.days.includes(di) ? 'on' : ''} onClick={() => toggleDay(i, di)}>{d[0]}</button>)}</div>
+                <select value={w.startHour} onChange={e => setWin(i, { startHour: Number(e.target.value) })} aria-label="Start hour">{Array.from({ length: 24 }, (_, h) => <option key={h} value={h}>{hh(h)}</option>)}</select>
+                <span className="to">to</span>
+                <select value={w.endHour} onChange={e => setWin(i, { endHour: Number(e.target.value) })} aria-label="End hour">{Array.from({ length: 25 }, (_, h) => <option key={h} value={h}>{hh(h % 24)}{h === 24 ? ' (24)' : ''}</option>)}</select>
+                <span className="arrow">→</span>
+                <select value={w.targetKey ?? ''} onChange={e => setWin(i, { targetKey: e.target.value })} aria-label="Rank target">{targets.map(t => <option key={t.key} value={t.key}>{t.name}</option>)}</select>
+                <span className="grow" />
+                <button type="button" className="az-kebab" onClick={() => removeWin(i)} style={{ color: '#cc1100' }} aria-label="Remove window"><Trash2 size={13} /></button>
+              </div>
+            ))}
+          </>)}
         </div>
 
         {/* Live defend preview */}
