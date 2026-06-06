@@ -33,6 +33,8 @@ import { findStaleListingImages } from '../../services/images/amazon-stale.servi
 import { recordImagePublishAudit } from '../../utils/image-publish-audit.js'
 import { adoptAmazonImages, reconcileAmazonImages } from '../../services/images/amazon-adopt.service.js'
 import { buildMirrorDiff } from '../../services/images/amazon-mirror-diff.service.js'
+import { fillSlotsFromGallery } from '../../services/images/amazon-fill-gallery.service.js'
+import { marketplaceCodeToId } from '../../utils/marketplace-code.js'
 import prisma from '../../db.js'
 
 const VALID_MARKETPLACES = new Set(['IT', 'DE', 'FR', 'ES', 'UK'])
@@ -64,9 +66,10 @@ const amazonImagesRoutes: FastifyPluginAsync = async (fastify) => {
       const { marketplace, variantIds, activeAxis, dryRun = false, force = false } = request.body ?? ({} as any)
 
       const mkt = (marketplace ?? '').toUpperCase()
-      if (!VALID_MARKETPLACES.has(mkt)) {
+      // M6 — accept ALL configured EU Amazon markets (not just the legacy 5).
+      if (!marketplaceCodeToId(mkt)) {
         return reply.code(400).send({
-          error: `Invalid marketplace: ${marketplace}. Valid: IT, DE, FR, ES, UK`,
+          error: `Invalid/unconfigured Amazon marketplace: ${marketplace}`,
         })
       }
 
@@ -209,6 +212,31 @@ const amazonImagesRoutes: FastifyPluginAsync = async (fastify) => {
         activeAxis: request.query.activeAxis,
       })
       return diff
+    } catch (err) {
+      return reply.code(500).send({ error: err instanceof Error ? err.message : String(err) })
+    }
+  })
+
+  // ── POST /api/products/:productId/amazon-images/fill-from-gallery ──
+  // M6 — one-click "gallery = Amazon": map the master gallery onto Amazon
+  // slots (MAIN + PT in order) as product-level Amazon assignments, so the
+  // exact-mirror publish makes Amazon match the Nexus gallery. dryRun returns
+  // the plan; overwrite rewires existing product-level slots.
+  fastify.post<{
+    Params: { productId: string }
+    Body: { dryRun?: boolean; overwrite?: boolean; marketplace?: string }
+  }>('/products/:productId/amazon-images/fill-from-gallery', async (request, reply) => {
+    const { productId } = request.params
+    const product = await prisma.product.findUnique({ where: { id: productId }, select: { id: true } })
+    if (!product) return reply.code(404).send({ error: 'Product not found' })
+    try {
+      const result = await fillSlotsFromGallery({
+        productId,
+        dryRun: request.body?.dryRun ?? false,
+        overwrite: request.body?.overwrite ?? false,
+        marketplace: request.body?.marketplace,
+      })
+      return result
     } catch (err) {
       return reply.code(500).send({ error: err instanceof Error ? err.message : String(err) })
     }

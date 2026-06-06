@@ -34,6 +34,7 @@
 
 import type { FastifyPluginAsync } from 'fastify'
 import prisma from '../../db.js'
+import { resolveSlotTaxonomy } from '../../services/images/amazon-slot-taxonomy.service.js'
 
 type ImageScope = 'GLOBAL' | 'PLATFORM' | 'MARKETPLACE'
 
@@ -238,6 +239,14 @@ const imagesWorkspaceRoutes: FastifyPluginAsync = async (fastify) => {
         }
       }
 
+      // M6 — schema-discovered Amazon slot taxonomy (MAIN/PT../PS../SWCH) so
+      // the Images tab renders the real slots incl. Product-Safety (GPSR),
+      // not a hardcoded 10. Slot codes are market-agnostic; the cached
+      // resolver makes this ~free.
+      const amazonSlotTaxonomy = (
+        await resolveSlotTaxonomy('IT', (product as { productType?: string | null })?.productType ?? 'PRODUCT')
+      ).slots
+
       return {
         product,
         master,
@@ -247,6 +256,7 @@ const imagesWorkspaceRoutes: FastifyPluginAsync = async (fastify) => {
         amazonJobs: recentJobs,
         damLinks,
         channelLiveImages: liveImages,
+        amazonSlotTaxonomy,
       }
     },
   )
