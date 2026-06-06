@@ -100,11 +100,41 @@ export async function resolveAmazonImages(
     ? { productId, id: { in: variantIds } }
     : { productId }
 
-  const variants = await prisma.productVariation.findMany({
-    where: variantWhere,
-    select: { id: true, sku: true, amazonAsin: true, variationAttributes: true },
+  // M3.1 — resolve the buyable variants for BOTH variation models. Parent/
+  // child Products take precedence (mirrors images-workspace), else
+  // ProductVariation rows, else the product itself (single, no variants).
+  // Without this the mirror is a no-op for child-Product products (the
+  // common model here — e.g. GALE-JACKET has 18 child SKUs, 0 ProductVariation).
+  type ResolvableVariant = { id: string; sku: string; amazonAsin: string | null; variationAttributes: unknown }
+  const childWhere = variantIds?.length
+    ? { parentId: productId, id: { in: variantIds } }
+    : { parentId: productId }
+  const children = await prisma.product.findMany({
+    where: childWhere,
+    select: { id: true, sku: true, amazonAsin: true },
     orderBy: { sku: 'asc' },
   })
+
+  let variants: ResolvableVariant[]
+  if (children.length > 0) {
+    variants = children.map((c) => ({ id: c.id, sku: c.sku, amazonAsin: c.amazonAsin, variationAttributes: null }))
+  } else {
+    variants = await prisma.productVariation.findMany({
+      where: variantWhere,
+      select: { id: true, sku: true, amazonAsin: true, variationAttributes: true },
+      orderBy: { sku: 'asc' },
+    })
+  }
+
+  if (variants.length === 0) {
+    const self = await prisma.product.findUnique({
+      where: { id: productId },
+      select: { sku: true, amazonAsin: true },
+    })
+    if (self && (self.amazonAsin || self.sku)) {
+      variants = [{ id: productId, sku: self.sku, amazonAsin: self.amazonAsin ?? null, variationAttributes: null }]
+    }
+  }
 
   if (variants.length === 0) return []
 
