@@ -15,10 +15,11 @@ import { Crosshair, Plus, Trash2, Save, UploadCloud, Undo2, Sparkles, Power, Wan
 import { getBackendUrl } from '@/lib/backend-url'
 import { DemandReadout, type DemandProfile, type DemandCell } from './DemandReadout'
 import { RankTimeGrid } from './RankTimeGrid'
+import { RankTargetEditor } from './RankTargetEditor'
 
 interface RankTarget { id: string; key: string; name: string; placement: string; targetISPct: number | null; acosCapPct: number | null; pause: boolean; allOut: boolean; color: string | null }
 interface Win { days: number[]; startHour: number; endHour: number; targetKey?: string }
-interface Sched { id: string; campaignId: string; name: string; windows: Win[]; timezone: string; enabled: boolean; defaultTargetKey?: string | null }
+interface Sched { id: string; campaignId: string; name: string; windows: Win[]; timezone: string; enabled: boolean; defaultTargetKey?: string | null; targetOverrides?: Record<string, { biasPct?: number; targetISPct?: number; acosCapPct?: number; maxCpcCents?: number }> }
 interface Decision { action: string; reason: string; currentPct: number; nextPct: number; achievedISPct: number | null; lossDetected: boolean }
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
@@ -43,6 +44,7 @@ export function RankPlanPanel({ campaignId, campaignName, onAutoDefend, reloadSi
   const [smoothed, setSmoothed] = useState<{ grid: DemandCell[][]; hourProfile: DemandProfile[]; weekdayProfile: DemandProfile[] } | null>(null)
   const [smooth, setSmooth] = useState(false) // false = RAW actual sales (default); true = market-smoothed
   const [winView, setWinView] = useState<'grid' | 'list'>('grid') // RG.3 — paint grid (default) vs precise list
+  const [editorOpen, setEditorOpen] = useState(false) // RTC — rank-target customizer modal
 
   // server snapshot for dirty + discard
   const [serverBaseline, setServerBaseline] = useState('')
@@ -57,7 +59,7 @@ export function RankPlanPanel({ campaignId, campaignName, onAutoDefend, reloadSi
   const load = useCallback(async () => {
     setLoaded(false)
     const [ts, ss] = await Promise.all([
-      fetch(api('/rank-targets'), { cache: 'no-store' }).then(r => r.json()).catch(() => ({ items: [] })),
+      fetch(api(`/rank-targets?campaignId=${campaignId}`), { cache: 'no-store' }).then(r => r.json()).catch(() => ({ items: [] })),
       fetch(api('/schedules'), { cache: 'no-store' }).then(r => r.json()).catch(() => ({ items: [] })),
     ])
     setTargets(ts.items ?? [])
@@ -184,7 +186,7 @@ export function RankPlanPanel({ campaignId, campaignName, onAutoDefend, reloadSi
             {winView === 'list' && <button type="button" className="az-link" onClick={addWindow}><Plus size={12} /> Add window</button>}
           </div>
           {winView === 'grid' ? (
-            <RankTimeGrid windows={windows} onWindowsChange={setWindows} targets={targets} baselineKey={baseline} demandGrid={(smooth && smoothed ? smoothed : demand)?.grid ?? null} onUseDemandPeaks={rec?.windows?.length ? applyRecommended : undefined} />
+            <RankTimeGrid windows={windows} onWindowsChange={setWindows} targets={targets} baselineKey={baseline} demandGrid={(smooth && smoothed ? smoothed : demand)?.grid ?? null} onUseDemandPeaks={rec?.windows?.length ? applyRecommended : undefined} onEditTargets={() => setEditorOpen(true)} />
           ) : (<>
             {windows.length === 0 && <div className="az-rp-empty">No time windows — the baseline applies all week. Add one to push harder during peak hours.</div>}
             {windows.map((w, i) => (
@@ -212,6 +214,16 @@ export function RankPlanPanel({ campaignId, campaignName, onAutoDefend, reloadSi
         {msg && <div className="az-rp-msg">{msg}</div>}
         <div className="az-rp-note">Save stores the plan in Nexus (survives reload). Publish runs the defend loop now; real Amazon pushes still honour the write-gate (sandbox stays local). The loop also runs on its own once armed.</div>
       </>}
+
+      <RankTargetEditor
+        open={editorOpen}
+        onClose={(c) => { setEditorOpen(false); if (c) void load() }}
+        scopeKind="campaign"
+        scopeLabel={campaignName}
+        scopeOverrides={(sched?.targetOverrides as Record<string, { biasPct?: number; targetISPct?: number; acosCapPct?: number; maxCpcCents?: number }>) ?? {}}
+        onSaveScopeOverrides={sched ? async (map) => { const r = await fetch(api(`/schedules/${sched.id}`), { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ targetOverrides: map }) }).then(x => x.json()); if (r?.id) setSched(r) } : undefined}
+        campaignId={campaignId}
+      />
     </div>
   )
 }

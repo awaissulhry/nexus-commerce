@@ -28,13 +28,14 @@ interface DemandCell { revenueCents: number; orders: number }
 const DOW_LABEL = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const DOW_ORDER = [1, 2, 3, 4, 5, 6, 0] // render Mon→Sun; grid indexed by real dow (0=Sun)
 
-export function RankTimeGrid({ windows, onWindowsChange, targets, baselineKey, demandGrid, onUseDemandPeaks }: {
+export function RankTimeGrid({ windows, onWindowsChange, targets, baselineKey, demandGrid, onUseDemandPeaks, onEditTargets }: {
   windows: RankWin[]
   onWindowsChange: (w: RankWin[]) => void
   targets: RankTarget[]
   baselineKey: string
   demandGrid: DemandCell[][] | null
   onUseDemandPeaks?: () => void
+  onEditTargets?: () => void
 }) {
   const grid = useMemo(() => gridFromWindows(windows), [windows])
 
@@ -103,6 +104,7 @@ export function RankTimeGrid({ windows, onWindowsChange, targets, baselineKey, d
           <button key={p.key || 'baseline'} type="button" className={`az-tr-swatch ${brush === p.key ? 'on' : ''}`} style={{ background: p.color, color: p.text }} onClick={() => setBrush(p.key)} title={p.key === BASELINE ? 'Clear back to the baseline (no window)' : `Hold ${p.name} during painted hours`}>{p.name}</button>
         ))}
         <span style={{ flex: 1 }} />
+        {onEditTargets && <button type="button" className="az-tr-mini" onClick={onEditTargets} title="Customize what each colour does (placement %, bids), or add your own">✎ Edit targets</button>}
         {onUseDemandPeaks && <button type="button" className="az-tr-mini" onClick={onUseDemandPeaks} title="Auto-paint the recommended rank windows from where the family actually sells">✨ Use demand peaks</button>}
         <button type="button" className="az-tr-mini" onClick={fillAll} title="Fill the whole week with the current brush">Fill all</button>
         <button type="button" className="az-tr-mini" onClick={clearAll} title="Clear every window back to baseline">Clear</button>

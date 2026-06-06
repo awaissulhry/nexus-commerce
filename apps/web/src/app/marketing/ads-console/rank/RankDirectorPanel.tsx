@@ -16,10 +16,11 @@ import { Crosshair, Plus, Trash2, Save, Undo2, Wand2, Package, ShieldCheck, Powe
 import { getBackendUrl } from '@/lib/backend-url'
 import { DemandReadout, type DemandProfile, type DemandCell } from './DemandReadout'
 import { RankTimeGrid } from './RankTimeGrid'
+import { RankTargetEditor } from './RankTargetEditor'
 
 interface RankTarget { id: string; key: string; name: string; targetISPct: number | null; acosCapPct: number | null; pause: boolean; allOut: boolean; color: string | null }
 interface Win { days: number[]; startHour: number; endHour: number; targetKey?: string }
-interface Plan { id: string; productId: string; parentAsin: string | null; marketplace: string; windows: Win[]; defaultTargetKey: string | null; familyDailyBudgetCents: number | null; familyAcosCapPct: number | null; maxCampaigns: number | null; leadTimeMinutes: number; excludeCampaignIds?: string[]; enabled: boolean; manualOnly: boolean }
+interface Plan { id: string; productId: string; parentAsin: string | null; marketplace: string; windows: Win[]; defaultTargetKey: string | null; familyDailyBudgetCents: number | null; familyAcosCapPct: number | null; maxCampaigns: number | null; leadTimeMinutes: number; excludeCampaignIds?: string[]; targetOverrides?: Record<string, { biasPct?: number; targetISPct?: number; acosCapPct?: number; maxCpcCents?: number }>; enabled: boolean; manualOnly: boolean }
 interface Product { productId: string; name: string; parentAsin?: string | null; campaignCount?: number }
 interface Fam { parentName: string | null; campaignCount: number; demand: { grid: DemandCell[][]; hourProfile: DemandProfile[]; weekdayProfile: DemandProfile[]; hasData: boolean; familyOrders: number }; smoothed?: { grid: DemandCell[][]; hourProfile: DemandProfile[]; weekdayProfile: DemandProfile[] }; recommended: { windows: Win[]; baselineTargetKey: string; peakHours: number[] } }
 
@@ -77,13 +78,18 @@ export function RankDirectorPanel({ market, productId, onPickProduct }: { market
     } catch { setCopyMsg('Copy failed') } finally { setCopyBusy(false) }
   }
 
-  // product list + rank targets (once per market)
+  // product list (once per market)
   useEffect(() => {
     fetch(api(`/by-product?marketplace=${market}`), { cache: 'no-store' }).then(r => r.json())
       .then(j => setProducts((j.rows || j.items || []).map((r: Record<string, unknown>) => ({ productId: (r.productId || r.id) as string, name: (r.name || r.title || '') as string, parentAsin: r.parentAsin as string, campaignCount: r.campaignCount as number }))))
       .catch(() => {})
-    fetch(api('/rank-targets'), { cache: 'no-store' }).then(r => r.json()).then(j => setTargets(j.items || [])).catch(() => {})
   }, [market])
+  // RTC — rank targets, scope-aware (global ∪ this product's custom swatches); refetchable.
+  const loadTargets = useCallback(() => {
+    fetch(api(`/rank-targets${productId ? `?productId=${productId}` : ''}`), { cache: 'no-store' }).then(r => r.json()).then(j => setTargets(j.items || [])).catch(() => {})
+  }, [productId])
+  useEffect(() => { loadTargets() }, [loadTargets])
+  const [editorOpen, setEditorOpen] = useState(false)
 
   // RD.10c — family demand over the chosen timeframe (separate effect so changing
   // the timeframe doesn't reload the plan / reset unsaved edits).
@@ -208,7 +214,7 @@ export function RankDirectorPanel({ market, productId, onPickProduct }: { market
               {winView === 'list' && <button type="button" className="az-link" onClick={addWindow}><Plus size={12} /> Add window</button>}
             </div>
             {winView === 'grid' ? (
-              <RankTimeGrid windows={windows} onWindowsChange={setWindows} targets={targets} baselineKey={baseline} demandGrid={(smooth && fam?.smoothed ? fam.smoothed : fam?.demand)?.grid ?? null} onUseDemandPeaks={fam?.recommended?.windows?.length ? useRecommended : undefined} />
+              <RankTimeGrid windows={windows} onWindowsChange={setWindows} targets={targets} baselineKey={baseline} demandGrid={(smooth && fam?.smoothed ? fam.smoothed : fam?.demand)?.grid ?? null} onUseDemandPeaks={fam?.recommended?.windows?.length ? useRecommended : undefined} onEditTargets={() => setEditorOpen(true)} />
             ) : (<>
               {windows.length === 0 && <div className="az-rp-empty">No windows — the baseline holds all week. Add one (or use the recommended) to push the top slot during peak hours.</div>}
               {windows.map((w, i) => (
@@ -324,6 +330,16 @@ export function RankDirectorPanel({ market, productId, onPickProduct }: { market
           </div>
         </div>
       )}
+
+      <RankTargetEditor
+        open={editorOpen}
+        onClose={(c) => { setEditorOpen(false); if (c) { loadTargets(); reloadLive() } }}
+        scopeKind="product"
+        scopeLabel={selName || 'this product'}
+        scopeOverrides={(plan?.targetOverrides as Record<string, { biasPct?: number; targetISPct?: number; acosCapPct?: number; maxCpcCents?: number }>) ?? {}}
+        onSaveScopeOverrides={plan ? async (map) => { const r = await fetch(api(`/rank-plans/${plan.id}`), { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ targetOverrides: map }) }).then(x => x.json()); setPlan(r) } : undefined}
+        productId={productId}
+      />
     </div>
   )
 }
