@@ -12,7 +12,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Crosshair, Plus, Trash2, Save, Undo2, Wand2, Package, ShieldCheck, Power, Play, RotateCcw, Info } from 'lucide-react'
+import { Crosshair, Plus, Trash2, Save, Undo2, Wand2, Package, ShieldCheck, Power, Play, RotateCcw, Info, Copy } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { DemandReadout, type DemandProfile, type DemandCell } from './DemandReadout'
 import { RankTimeGrid } from './RankTimeGrid'
@@ -52,6 +52,21 @@ export function RankDirectorPanel({ market, productId, onPickProduct }: { market
   const [famDetail, setFamDetail] = useState<{ campaigns: Array<{ id: string; name: string; status: string; attributionPct: number | null; readiness: { verdict: string } | null }>; attribution: { overallPct: number | null } } | null>(null)
   const [arming, setArming] = useState(false)
   const [armMsg, setArmMsg] = useState('')
+  // RG.4 — copy this painted schedule onto other products' plans (bulk across products)
+  const [copyOpen, setCopyOpen] = useState(false)
+  const [copySel, setCopySel] = useState<Set<string>>(() => new Set())
+  const [copyBusy, setCopyBusy] = useState(false)
+  const [copyMsg, setCopyMsg] = useState('')
+  const doCopy = async () => {
+    const toProductIds = [...copySel]
+    if (!toProductIds.length) return
+    setCopyBusy(true); setCopyMsg('')
+    try {
+      const r = await fetch(api('/rank-plans/copy-schedule'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ windows, defaultTargetKey: baseline || null, toProductIds, marketplace: market }) }).then(x => x.json())
+      if (r?.ok) { setCopyMsg(`Applied to ${r.applied} product(s) — ${r.created} new, ${r.updated} updated. Saved but not armed.`); setCopySel(new Set()) }
+      else setCopyMsg(r?.error || 'Copy failed')
+    } catch { setCopyMsg('Copy failed') } finally { setCopyBusy(false) }
+  }
 
   // product list + rank targets (once per market)
   useEffect(() => {
@@ -213,6 +228,7 @@ export function RankDirectorPanel({ market, productId, onPickProduct }: { market
           {/* Save / Discard */}
           <div className="az-rd-foot">
             {dirty && <span className="az-rp-dirty">Unsaved</span>}
+            <button type="button" className="az-btn" disabled={!windows.length} onClick={() => { setCopyMsg(''); setCopySel(new Set()); setCopyOpen(true) }} title="Copy this week's rank schedule onto other products' plans"><Copy size={13} /> Copy to products…</button>
             <span className="grow" />
             <button type="button" className="az-btn" disabled={!dirty || busy} onClick={discard}><Undo2 size={13} /> Discard</button>
             <button type="button" className="az-btn dark" disabled={!dirty || busy} onClick={() => void save()}><Save size={13} /> {busy ? 'Saving…' : plan ? 'Save plan' : 'Create plan'}</button>
@@ -256,6 +272,35 @@ export function RankDirectorPanel({ market, productId, onPickProduct }: { market
             </div>
           )}
         </>
+      )}
+
+      {copyOpen && (
+        <div className="az-rd-copymodal" role="dialog" aria-modal="true" aria-label="Copy schedule to other products" onClick={() => setCopyOpen(false)}>
+          <div className="box" onClick={e => e.stopPropagation()}>
+            <div className="hd"><Copy size={14} /> Copy this schedule to other products<span className="grow" /><button type="button" className="az-kebab" onClick={() => setCopyOpen(false)} aria-label="Close">✕</button></div>
+            <div className="sub">Applies the painted windows + baseline to each selected product&apos;s plan in {market} (creates a disabled plan where none exists). Guardrails and armed state are left untouched.</div>
+            <div className="list">
+              {products.filter(p => p.productId !== productId).map(p => {
+                const on = copySel.has(p.productId)
+                return (
+                  <label key={p.productId} className={`row ${on ? 'on' : ''}`}>
+                    <input type="checkbox" checked={on} onChange={() => setCopySel(s => { const n = new Set(s); if (n.has(p.productId)) n.delete(p.productId); else n.add(p.productId); return n })} />
+                    <span className="nm" title={p.name}>{p.name || p.parentAsin || p.productId}</span>
+                    <span className="cc">{p.campaignCount ?? 0} camp</span>
+                  </label>
+                )
+              })}
+              {products.filter(p => p.productId !== productId).length === 0 && <div className="az-rp-empty">No other products in {market}.</div>}
+            </div>
+            {copyMsg && <div className="az-rp-msg" style={{ margin: '0 15px' }}>{copyMsg}</div>}
+            <div className="ft">
+              <span className="cnt">{copySel.size} selected</span>
+              <span className="grow" />
+              <button type="button" className="az-btn" onClick={() => setCopyOpen(false)}>Close</button>
+              <button type="button" className="az-btn dark" disabled={!copySel.size || copyBusy} onClick={() => void doCopy()}>{copyBusy ? 'Copying…' : `Copy to ${copySel.size || 0} product${copySel.size === 1 ? '' : 's'}`}</button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

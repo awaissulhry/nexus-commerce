@@ -4878,6 +4878,39 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     return { ok: true, applied, pct: clamped, campaigns: fam.campaigns.length }
   })
 
+  // ── RG.4 — copy one schedule (windows + baseline) onto many products' plans ──
+  // Paint a rank schedule once, then bulk-apply it across other products in the same
+  // market. Upserts each target product's ProductRankPlan: sets windows + baseline,
+  // leaves guardrails + enabled untouched on existing plans (new plans land DISABLED
+  // so each is armed deliberately). The cron resolves each family live, so the same
+  // time-of-day rank shape fans across many products without per-window hand-editing.
+  fastify.post('/advertising/rank-plans/copy-schedule', async (request, reply) => {
+    const b = (request.body ?? {}) as { windows?: unknown; defaultTargetKey?: string | null; toProductIds?: string[]; marketplace?: string; fromPlanId?: string }
+    let windows = Array.isArray(b.windows) ? (b.windows as unknown[]) : undefined
+    let baseline = (b.defaultTargetKey ?? null) as string | null
+    const marketplace = b.marketplace
+    const toProductIds = Array.isArray(b.toProductIds) ? [...new Set(b.toProductIds.filter(Boolean))] : []
+    // Source can be inline (windows/baseline from the painter) or pulled from a plan.
+    if (!windows && b.fromPlanId) {
+      const src = await prisma.productRankPlan.findUnique({ where: { id: b.fromPlanId } })
+      if (src) { windows = (src.windows as unknown[]) ?? []; baseline = src.defaultTargetKey ?? baseline }
+    }
+    if (!marketplace || !toProductIds.length || !Array.isArray(windows)) { reply.status(400); return { error: 'marketplace, toProductIds[], windows required' } }
+    const prods = await prisma.product.findMany({ where: { id: { in: toProductIds } }, select: { id: true, amazonAsin: true } })
+    const asinOf = new Map(prods.map((p) => [p.id, p.amazonAsin]))
+    const results: { productId: string; planId: string; created: boolean }[] = []
+    for (const productId of toProductIds) {
+      const existing = await prisma.productRankPlan.findUnique({ where: { productId_marketplace: { productId, marketplace } } }).catch(() => null)
+      const plan = await prisma.productRankPlan.upsert({
+        where: { productId_marketplace: { productId, marketplace } },
+        create: { productId, marketplace, parentAsin: asinOf.get(productId) ?? null, windows: windows as never, defaultTargetKey: baseline, enabled: false },
+        update: { windows: windows as never, defaultTargetKey: baseline },
+      })
+      results.push({ productId, planId: plan.id, created: !existing })
+    }
+    return { ok: true, applied: results.length, created: results.filter((r) => r.created).length, updated: results.filter((r) => !r.created).length, results }
+  })
+
   // RS.4 — preview the pure rank controller's next move for a given target +
   // observed signals (no writes). Lets the cockpit show "what would the defend
   // loop do right now", and is how RS.4 is verified end-to-end.
