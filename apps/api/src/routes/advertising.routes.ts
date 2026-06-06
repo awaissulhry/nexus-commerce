@@ -595,7 +595,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const marketplace = q.marketplace || camp.marketplace || undefined
     // Single source of truth: resolve campaign → parent family + the family's
     // campaigns (ASIN-centric, since AdProductAd.productId is often null).
-    const { resolveProductFamily, blendedFamilyDemand } = await import('../services/advertising/ads-dayparting-refresh.service.js')
+    const { resolveProductFamily, blendedFamilyDemand, recommendRankWindows } = await import('../services/advertising/ads-dayparting-refresh.service.js')
     const fam = await resolveProductFamily({ campaignId: id, marketplace })
     reply.header('Cache-Control', 'private, max-age=120')
     if (!fam.parentProductId || fam.campaigns.length === 0) {
@@ -603,10 +603,12 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     }
     const windowDays = q.windowDays ? Math.max(7, Math.min(365, Number(q.windowDays))) : 180
     const demand = await blendedFamilyDemand(fam.productIds, fam.marketplace, windowDays)
+    const recommended = recommendRankWindows(demand.weekdayProfile, demand.hourProfile)
     return {
       marketplace: fam.marketplace ?? marketplace, parentProductId: fam.parentProductId, parentName: fam.parentName, productIds: fam.productIds, asins: fam.asins,
       campaigns: fam.campaigns,
       demand: { totals: demand.totals, hourProfile: demand.hourProfile, weekdayProfile: demand.weekdayProfile, grid: demand.grid, hasData: demand.hasData, blended: demand.blended, familyOrders: demand.familyOrders, windowDays },
+      recommended,
     }
   })
 
