@@ -11,7 +11,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react'
-import { Crosshair, Plus, Trash2, Save, UploadCloud, Undo2, Sparkles, Power } from 'lucide-react'
+import { Crosshair, Plus, Trash2, Save, UploadCloud, Undo2, Sparkles, Power, Wand2 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { DemandHeatmap, type HeatCell } from '../automation/DemandHeatmap'
 
@@ -37,6 +37,8 @@ export function RankPlanPanel({ campaignId, campaignName }: { campaignId: string
   // product actually sells (same fusion as the By-product view, scoped to this campaign).
   const [demand, setDemand] = useState<{ grid: HeatCell[][]; hasData: boolean; familyOrders: number } | null>(null)
   const [famName, setFamName] = useState<string>('')
+  const [demandDays, setDemandDays] = useState(180) // chosen timeframe for the heatmap data
+  const [rec, setRec] = useState<{ windows: Win[]; baselineTargetKey: string; peakHours: number[] } | null>(null)
 
   // server snapshot for dirty + discard
   const [serverBaseline, setServerBaseline] = useState('')
@@ -66,12 +68,14 @@ export function RankPlanPanel({ campaignId, campaignName }: { campaignId: string
       .then(r => r.json()).then(d => setDecision((d.decisions ?? []).find((x: { campaignId: string }) => x.campaignId === campaignId) ?? null)).catch(() => {})
   }, [campaignId, serverBaseline, serverWindows])
 
-  // RD.10b — family demand for this campaign's product (the dayparting heatmap).
+  // RD.10b/c — family demand for this campaign's product over the chosen timeframe
+  // (the dayparting heatmap) + a recommended set of rank windows from that demand.
   useEffect(() => {
-    if (!campaignId) { setDemand(null); setFamName(''); return }
-    void fetch(api(`/campaigns/${campaignId}/product-dayparting`), { cache: 'no-store' })
-      .then(r => r.json()).then(d => { setDemand(d.demand ?? null); setFamName(d.parentName ?? '') }).catch(() => { setDemand(null) })
-  }, [campaignId])
+    if (!campaignId) { setDemand(null); setFamName(''); setRec(null); return }
+    void fetch(api(`/campaigns/${campaignId}/product-dayparting?windowDays=${demandDays}`), { cache: 'no-store' })
+      .then(r => r.json()).then(d => { setDemand(d.demand ?? null); setFamName(d.parentName ?? ''); setRec(d.recommended ?? null) }).catch(() => { setDemand(null) })
+  }, [campaignId, demandDays])
+  const applyRecommended = () => { if (!rec) return; setWindows(rec.windows.map(w => ({ ...w }))); if (rec.baselineTargetKey) setBaseline(rec.baselineTargetKey) }
 
   const dirty = baseline !== serverBaseline || JSON.stringify(windows) !== JSON.stringify(serverWindows)
 
@@ -145,7 +149,14 @@ export function RankPlanPanel({ campaignId, campaignName }: { campaignId: string
         {/* RD.10b — when the product family actually sells (the dayparting heatmap) */}
         {demand?.hasData && (
           <div className="az-rp-sec">
-            <div className="az-rp-lbl">When this product&apos;s family sells (Europe/Rome){famName ? ` · ${famName.slice(0, 38)}` : ''} — hold the top slot in the busy hours:</div>
+            <div className="az-rp-lbl az-rp-dphd">
+              <span>When this product&apos;s family sells{famName ? ` · ${famName.slice(0, 32)}` : ''} — hold the top slot in the busy hours:</span>
+              <span className="grow" />
+              <select className="az-rp-tf" value={demandDays} onChange={e => setDemandDays(Number(e.target.value))} aria-label="Demand timeframe" title="Timeframe for the demand data">
+                {[7, 14, 30, 60, 90, 180].map(d => <option key={d} value={d}>last {d}d</option>)}
+              </select>
+              {rec && rec.windows.length > 0 && <button type="button" className="az-link" onClick={applyRecommended} title="Set windows from the demand peaks"><Wand2 size={12} /> Recommend windows</button>}
+            </div>
             <DemandHeatmap grid={demand.grid} />
           </div>
         )}

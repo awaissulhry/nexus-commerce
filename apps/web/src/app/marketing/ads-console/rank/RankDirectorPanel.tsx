@@ -32,6 +32,7 @@ export function RankDirectorPanel({ market, productId, onPickProduct }: { market
   const [fam, setFam] = useState<Fam | null>(null)
   const [plan, setPlan] = useState<Plan | null>(null)
   const [loadingFam, setLoadingFam] = useState(false)
+  const [demandDays, setDemandDays] = useState(180) // chosen timeframe for the heatmap data
   // working draft
   const [baseline, setBaseline] = useState('')
   const [windows, setWindows] = useState<Win[]>([])
@@ -57,11 +58,17 @@ export function RankDirectorPanel({ market, productId, onPickProduct }: { market
     fetch(api('/rank-targets'), { cache: 'no-store' }).then(r => r.json()).then(j => setTargets(j.items || [])).catch(() => {})
   }, [market])
 
-  // on product change: family dayparting + existing plan
+  // RD.10c — family demand over the chosen timeframe (separate effect so changing
+  // the timeframe doesn't reload the plan / reset unsaved edits).
   useEffect(() => {
-    if (!productId) { setFam(null); setPlan(null); setSrv(null); return }
+    if (!productId) { setFam(null); return }
     setLoadingFam(true)
-    fetch(api(`/by-product/family-dayparting?productId=${productId}&marketplace=${market}`), { cache: 'no-store' }).then(r => r.json()).then(setFam).catch(() => setFam(null)).finally(() => setLoadingFam(false))
+    fetch(api(`/by-product/family-dayparting?productId=${productId}&marketplace=${market}&windowDays=${demandDays}`), { cache: 'no-store' }).then(r => r.json()).then(setFam).catch(() => setFam(null)).finally(() => setLoadingFam(false))
+  }, [productId, market, demandDays])
+
+  // on product change: existing plan + draft
+  useEffect(() => {
+    if (!productId) { setPlan(null); setSrv(null); return }
     fetch(api(`/rank-plans?marketplace=${market}`), { cache: 'no-store' }).then(r => r.json()).then(j => {
       const p: Plan | null = (j.items || []).find((x: Plan) => x.productId === productId) || null
       setPlan(p)
@@ -145,6 +152,7 @@ export function RankDirectorPanel({ market, productId, onPickProduct }: { market
             <span className="t"><Crosshair size={14} /> {fam?.parentName?.slice(0, 48) ?? selName.slice(0, 48)}</span>
             <span className="sub">{fam?.campaignCount ?? 0} campaigns · {fam?.demand.familyOrders ?? 0} family orders</span>
             <span className="grow" />
+            <select className="az-rp-tf" value={demandDays} onChange={e => setDemandDays(Number(e.target.value))} aria-label="Demand timeframe" title="Timeframe for the demand data">{[7, 14, 30, 60, 90, 180].map(d => <option key={d} value={d}>last {d}d</option>)}</select>
             <button type="button" className="az-btn" onClick={useRecommended} disabled={!fam?.recommended?.windows?.length}><Wand2 size={13} /> Use recommended windows</button>
           </div>
           {fam?.demand?.hasData ? <DemandHeatmap grid={fam.demand.grid} /> : <div className="az-rd-empty">Not enough order history to show a demand shape yet.</div>}
