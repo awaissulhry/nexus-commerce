@@ -14,13 +14,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Crosshair, Plus, Trash2, Save, Undo2, Wand2, Package, ShieldCheck, Power, Play, RotateCcw, Info } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
-import { DemandReadout, type DemandProfile } from './DemandReadout'
+import { DemandReadout, type DemandProfile, type DemandCell } from './DemandReadout'
 
 interface RankTarget { id: string; key: string; name: string; targetISPct: number | null; acosCapPct: number | null; pause: boolean; allOut: boolean; color: string | null }
 interface Win { days: number[]; startHour: number; endHour: number; targetKey?: string }
 interface Plan { id: string; productId: string; parentAsin: string | null; marketplace: string; windows: Win[]; defaultTargetKey: string | null; familyDailyBudgetCents: number | null; familyAcosCapPct: number | null; maxCampaigns: number | null; leadTimeMinutes: number; enabled: boolean; manualOnly: boolean }
 interface Product { productId: string; name: string; parentAsin?: string | null; campaignCount?: number }
-interface Fam { parentName: string | null; campaignCount: number; demand: { hourProfile: DemandProfile[]; weekdayProfile: DemandProfile[]; hasData: boolean; familyOrders: number }; recommended: { windows: Win[]; baselineTargetKey: string; peakHours: number[] } }
+interface Fam { parentName: string | null; campaignCount: number; demand: { grid: DemandCell[][]; hourProfile: DemandProfile[]; weekdayProfile: DemandProfile[]; hasData: boolean; familyOrders: number }; recommended: { windows: Win[]; baselineTargetKey: string; peakHours: number[] } }
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const hh = (h: number) => `${String(h).padStart(2, '0')}:00`
@@ -155,7 +155,7 @@ export function RankDirectorPanel({ market, productId, onPickProduct }: { market
             <select className="az-rp-tf" value={demandDays} onChange={e => setDemandDays(Number(e.target.value))} aria-label="Demand timeframe" title="Timeframe for the demand data">{[7, 14, 30, 60, 90, 180].map(d => <option key={d} value={d}>last {d}d</option>)}</select>
             <button type="button" className="az-btn" onClick={useRecommended} disabled={!fam?.recommended?.windows?.length}><Wand2 size={13} /> Use recommended windows</button>
           </div>
-          {fam?.demand?.hasData ? <DemandReadout hourProfile={fam.demand.hourProfile} weekdayProfile={fam.demand.weekdayProfile} /> : <div className="az-rd-empty">Not enough order history to show a demand shape yet.</div>}
+          {fam?.demand?.hasData ? <DemandReadout grid={fam.demand.grid} hourProfile={fam.demand.hourProfile} weekdayProfile={fam.demand.weekdayProfile} /> : <div className="az-rd-empty">Not enough order history to show a demand shape yet.</div>}
 
           {/* Baseline */}
           <div className="az-rp-sec">

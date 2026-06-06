@@ -1,68 +1,77 @@
 'use client'
 
 /**
- * RD.10d — readable demand readout for rank decisions.
+ * RD.10e — readable day×hour demand heatmap.
  *
- * The 7×24 micro-heatmap was hard to read. Since you set rank windows BY HOUR, the
- * decision view is an hour-of-day demand curve (24 bars) with the busy hours called
- * out in plain language, plus a day-of-week strip. Peak hours (≥1.2× the daily mean)
- * are the ones worth holding the top slot in; quiet hours (<0.6×) you can ease off.
+ * The grid form (back by request), rebuilt for legibility: bigger cells, a stepped
+ * high-contrast colour scale with a legend, clear hour/day labels, the per-row peak
+ * ringed, AND marginal totals — a bar per day down the right, a bar per hour along
+ * the bottom — so "which hours/days are busy" reads at a glance while the day×hour
+ * detail stays in the grid. Darker = more sales that hour (Europe/Rome).
  */
 
 import { useMemo } from 'react'
 
+export interface DemandCell { revenueCents: number; orders: number; units?: number; familyOrders?: number; confidence?: 'high' | 'med' | 'low' }
 export interface DemandProfile { key: number; orders: number; units: number; revenueCents: number; index: number | null }
 
 const DOW_LABEL = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const DOW_ORDER = [1, 2, 3, 4, 5, 6, 0]
-const hh = (h: number) => `${String(h).padStart(2, '0')}`
+const hh = (h: number) => String(h).padStart(2, '0')
 const eur = (c: number) => `€${(c / 100).toFixed(0)}`
-const tone = (idx: number | null) => (idx == null ? '' : idx >= 1.2 ? 'peak' : idx < 0.6 ? 'low' : 'mid')
+// Stepped 0–4 bucket with tuned thresholds so the busy cells stand out clearly.
+const bucket = (v: number, max: number): number => { if (v <= 0 || max <= 0) return 0; const r = v / max; return r < 0.12 ? 1 : r < 0.3 ? 2 : r < 0.6 ? 3 : 4 }
 
-// Plain-language busiest span from the peak hours (≥1.2×). Handles the common
-// contiguous evening peak; if it wraps oddly, just show min–max.
-function peakLabel(hours: DemandProfile[]): string {
-  const peaks = hours.filter((h) => h.index != null && h.index >= 1.2).map((h) => h.key).sort((a, b) => a - b)
-  if (peaks.length === 0) return 'no clear peak'
-  return `${hh(peaks[0])}:00–${hh((peaks[peaks.length - 1] + 1) % 24)}:00`
-}
-
-export function DemandReadout({ hourProfile, weekdayProfile }: { hourProfile: DemandProfile[]; weekdayProfile: DemandProfile[] }) {
+export function DemandReadout({ grid, hourProfile, weekdayProfile }: { grid: DemandCell[][]; hourProfile: DemandProfile[]; weekdayProfile: DemandProfile[] }) {
+  const cellMax = useMemo(() => Math.max(1, ...grid.flat().map((c) => c.revenueCents)), [grid])
   const hMax = useMemo(() => Math.max(1, ...hourProfile.map((h) => h.revenueCents)), [hourProfile])
   const wMax = useMemo(() => Math.max(1, ...weekdayProfile.map((w) => w.revenueCents)), [weekdayProfile])
-  if (!hourProfile?.length) return null
-  const busiest = peakLabel(hourProfile)
+  if (!grid || grid.length !== 7) return null
 
   return (
-    <div className="az-dr2">
-      <div className="az-dr2-hd">
-        <span className="ttl">Sales by hour of day <span className="tz">· Europe/Rome</span></span>
+    <div className="az-hm2">
+      <div className="az-hm2-hd">
+        <span className="ttl">When the family sells · day × hour <span className="tz">(Europe/Rome)</span></span>
         <span className="grow" />
-        <span className="az-dr2-key"><i className="peak" /> busy <i className="mid" /> normal <i className="low" /> quiet</span>
+        <span className="az-hm2-legend">less <i className="L0" /><i className="L1" /><i className="L2" /><i className="L3" /><i className="L4" /> more</span>
       </div>
-      <div className="az-dr2-bars">
-        {hourProfile.map((h) => (
-          <div key={h.key} className="az-dr2-col" title={`${hh(h.key)}:00 — ${eur(h.revenueCents)} · ${h.orders} orders${h.index != null ? ` · ${h.index.toFixed(1)}× the daily average` : ''}`}>
-            <div className="wrap"><div className={`bar ${tone(h.index)}`} style={{ height: `${Math.max(3, (h.revenueCents / hMax) * 100)}%` }} /></div>
-            <div className="hlbl">{h.key % 3 === 0 ? hh(h.key) : ''}</div>
-          </div>
-        ))}
-      </div>
-      <div className="az-dr2-callout">Busiest hours: <b>{busiest}</b> — best place to hold the top slot.</div>
 
-      <div className="az-dr2-week">
-        <span className="wlead">By day</span>
+      <div className="az-hm2-grid">
+        {/* hour header */}
+        <div className="az-hm2-row head">
+          <div className="az-hm2-dlbl" />
+          {Array.from({ length: 24 }, (_, h) => <div key={h} className="az-hm2-hh">{h % 2 === 0 ? hh(h) : ''}</div>)}
+          <div className="az-hm2-tot head">day</div>
+        </div>
+
+        {/* one row per day (Mon→Sun) */}
         {DOW_ORDER.map((d) => {
+          const row = grid[d] ?? []
+          const peakH = row.reduce((bi, c, i, arr) => (c.revenueCents > (arr[bi]?.revenueCents ?? 0) ? i : bi), 0)
+          const hasPeak = (row[peakH]?.revenueCents ?? 0) > 0
           const w = weekdayProfile[d]
-          if (!w) return null
           return (
-            <div key={d} className="az-dr2-wcol" title={`${DOW_LABEL[d]} — ${eur(w.revenueCents)} · ${w.orders} orders${w.index != null ? ` · ${w.index.toFixed(1)}×` : ''}`}>
-              <div className="wwrap"><div className={`wbar ${tone(w.index)}`} style={{ height: `${Math.max(6, (w.revenueCents / wMax) * 100)}%` }} /></div>
-              <div className="wlbl">{DOW_LABEL[d][0]}</div>
+            <div key={d} className="az-hm2-row">
+              <div className="az-hm2-dlbl">{DOW_LABEL[d]}</div>
+              {row.map((c, h) => (
+                <div key={h} className={`az-hm2-cell L${bucket(c.revenueCents, cellMax)}${h === peakH && hasPeak ? ' peak' : ''}`}
+                  title={`${DOW_LABEL[d]} ${hh(h)}:00 — ${eur(c.revenueCents)} · ${c.orders} orders${c.confidence ? ` · ${c.confidence} confidence` : ''}`} />
+              ))}
+              <div className="az-hm2-tot" title={`${DOW_LABEL[d]} total — ${eur(w?.revenueCents ?? 0)}`}><span className="b" style={{ width: `${Math.max(3, ((w?.revenueCents ?? 0) / wMax) * 100)}%` }} /></div>
             </div>
           )
         })}
+
+        {/* hour-of-day totals along the bottom */}
+        <div className="az-hm2-row foot">
+          <div className="az-hm2-dlbl">all</div>
+          {hourProfile.map((h) => (
+            <div key={h.key} className="az-hm2-hbar" title={`${hh(h.key)}:00 — ${eur(h.revenueCents)} · ${h.orders} orders`}><span style={{ height: `${Math.max(4, (h.revenueCents / hMax) * 100)}%` }} className={h.index != null && h.index >= 1.2 ? 'peak' : ''} /></div>
+          ))}
+          <div className="az-hm2-tot" />
+        </div>
       </div>
+      <div className="az-hm2-note">Darker cell = more sales that hour. Right column = each day&apos;s total; bottom bars = each hour&apos;s total across the week (green = busiest hours). Hover for exact figures.</div>
     </div>
   )
 }
