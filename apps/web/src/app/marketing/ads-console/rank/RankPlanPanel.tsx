@@ -13,7 +13,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Crosshair, Plus, Trash2, Save, UploadCloud, Undo2, Sparkles, Power, Wand2 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
-import { DemandHeatmap, type HeatCell } from '../automation/DemandHeatmap'
+import { DemandReadout, type DemandProfile } from './DemandReadout'
 
 interface RankTarget { id: string; key: string; name: string; placement: string; targetISPct: number | null; acosCapPct: number | null; pause: boolean; allOut: boolean; color: string | null }
 interface Win { days: number[]; startHour: number; endHour: number; targetKey?: string }
@@ -35,7 +35,7 @@ export function RankPlanPanel({ campaignId, campaignName }: { campaignId: string
   const [decision, setDecision] = useState<Decision | null>(null)
   // RD.10b — the product family's by-hour demand, so you set rank windows where the
   // product actually sells (same fusion as the By-product view, scoped to this campaign).
-  const [demand, setDemand] = useState<{ grid: HeatCell[][]; hasData: boolean; familyOrders: number } | null>(null)
+  const [demand, setDemand] = useState<{ hourProfile: DemandProfile[]; weekdayProfile: DemandProfile[]; hasData: boolean; familyOrders: number } | null>(null)
   const [famName, setFamName] = useState<string>('')
   const [demandDays, setDemandDays] = useState(180) // chosen timeframe for the heatmap data
   const [rec, setRec] = useState<{ windows: Win[]; baselineTargetKey: string; peakHours: number[] } | null>(null)
@@ -157,7 +157,7 @@ export function RankPlanPanel({ campaignId, campaignName }: { campaignId: string
               </select>
               {rec && rec.windows.length > 0 && <button type="button" className="az-link" onClick={applyRecommended} title="Set windows from the demand peaks"><Wand2 size={12} /> Recommend windows</button>}
             </div>
-            <DemandHeatmap grid={demand.grid} />
+            <DemandReadout hourProfile={demand.hourProfile} weekdayProfile={demand.weekdayProfile} />
           </div>
         )}
 
