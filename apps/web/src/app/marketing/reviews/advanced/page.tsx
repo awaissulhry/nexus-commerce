@@ -20,6 +20,7 @@ const FEATURES: { href: string; label: string; desc: string; icon: LucideIcon }[
   { href: '/marketing/reviews/import', label: 'Import reviews', desc: 'Upload CSV / JSON / XLSX exports (Seller Central, Judge.me, Loox).', icon: Upload },
   { href: '/orders/reviews/rules', label: 'Request rules', desc: 'Define when post-purchase review requests are sent.', icon: SlidersHorizontal },
   { href: '/orders/reviews/rules/timing', label: 'Timing defaults', desc: 'Edit the per-product-type “days after delivery” baseline.', icon: Clock },
+  { href: '/orders/reviews/rules/send-times', label: 'Send times', desc: 'Best local hour to ask, per weekday + market (send-time optimization).', icon: Clock },
   { href: '/marketing/reviews/inserts', label: 'Review inserts', desc: 'Printable in-box cards with a QR to the Amazon review page (compliant).', icon: QrCode },
 ]
 

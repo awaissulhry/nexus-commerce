@@ -12,6 +12,7 @@
 import type { FastifyInstance } from 'fastify'
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
+import { computeSendHourConversion } from '../services/reviews/review-sendhour-analytics.service.js'
 
 const GLOBAL_SEED = [
   { dayOfWeek: 0, hourLocal: 11, dayRank: 2 }, // Sun
@@ -83,6 +84,17 @@ export default async function reviewSendWindowsRoutes(app: FastifyInstance) {
       return reply.send({ ok: true, marketplace, windows: rows })
     } catch (err: any) {
       logger.error('review-send-windows PUT failed', { error: err?.message })
+      return reply.status(500).send({ error: err?.message ?? 'failed' })
+    }
+  })
+
+  // STO.5 — descriptive conversion by send weekday×hour (read-only; not auto-applied)
+  app.get('/review-send-windows/conversion', async (req, reply) => {
+    const windowDays = Number((req.query as any)?.windowDays) || 90
+    try {
+      return reply.send(await computeSendHourConversion({ windowDays }))
+    } catch (err: any) {
+      logger.error('review-send-windows conversion failed', { error: err?.message })
       return reply.status(500).send({ error: err?.message ?? 'failed' })
     }
   })

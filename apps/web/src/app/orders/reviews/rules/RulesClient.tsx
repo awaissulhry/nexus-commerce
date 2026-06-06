@@ -37,6 +37,7 @@ type Rule = {
   anchor?: string
   sendHourLocal?: number | null
   skipWeekends?: boolean
+  shiftToBestDay?: boolean
 }
 
 const SCOPES: Array<{ value: string; label: string; helpText: string }> = [
@@ -426,7 +427,8 @@ function RuleEditor({ rule, onClose, onSaved }: { rule: Rule | null; onClose: ()
   const [anchor, setAnchor] = useState<string>(rule?.anchor ?? 'DELIVERY')
   const [sendHourLocal, setSendHourLocal] = useState<number | null>(rule?.sendHourLocal ?? null)
   const [skipWeekends, setSkipWeekends] = useState<boolean>(rule?.skipWeekends ?? false)
-  const [preview, setPreview] = useState<{ scheduledFor: string | null; effectiveDelayDays: number | null; anchorUsed: string; source: string; tz: string } | null>(null)
+  const [shiftToBestDay, setShiftToBestDay] = useState<boolean>(rule?.shiftToBestDay ?? false)
+  const [preview, setPreview] = useState<{ scheduledFor: string | null; effectiveDelayDays: number | null; anchorUsed: string; source: string; tz: string; sendHour?: number | null; sendHourSource?: string } | null>(null)
   const isAmazonScope = scope === 'AMAZON_PER_MARKETPLACE' || scope === 'AMAZON_GLOBAL'
 
   // product-type suggestions from the timing table
@@ -446,12 +448,12 @@ function RuleEditor({ rule, onClose, onSaved }: { rule: Rule | null; onClose: ()
           productType: productTypes[0] || 'casco',
           sendDelayDays: delayMode === 'custom' ? sendDelayDays : null,
           anchor: isAmazonScope ? 'DELIVERY' : anchor,
-          sendHourLocal, skipWeekends, minDaysSinceDelivery: minDays, maxDaysSinceDelivery: maxDays,
+          sendHourLocal, skipWeekends, shiftToBestDay, minDaysSinceDelivery: minDays, maxDaysSinceDelivery: maxDays,
         }),
       }).then((r) => (r.ok ? r.json() : null)).then(setPreview).catch(() => {})
     }, 400)
     return () => clearTimeout(t)
-  }, [scope, marketplace, productTypes, delayMode, sendDelayDays, anchor, sendHourLocal, skipWeekends, minDays, maxDays, isAmazonScope])
+  }, [scope, marketplace, productTypes, delayMode, sendDelayDays, anchor, sendHourLocal, skipWeekends, shiftToBestDay, minDays, maxDays, isAmazonScope])
 
   const addPt = (p: string) => { const v = p.trim().toLowerCase(); if (v && !productTypes.includes(v)) setProductTypes([...productTypes, v]); setPtInput('') }
 
@@ -496,6 +498,7 @@ function RuleEditor({ rule, onClose, onSaved }: { rule: Rule | null; onClose: ()
         anchor: isAmazonScope ? 'DELIVERY' : anchor,
         sendHourLocal,
         skipWeekends,
+        shiftToBestDay,
       }
       const res = await fetch(`${getBackendUrl()}/api/review-rules${rule ? `/${rule.id}` : ''}`, {
         method: rule ? 'PATCH' : 'POST',
@@ -644,13 +647,22 @@ function RuleEditor({ rule, onClose, onSaved }: { rule: Rule | null; onClose: ()
               <label className="inline-flex items-center gap-1.5 text-sm text-slate-600 dark:text-slate-300">
                 <input type="checkbox" checked={skipWeekends} onChange={(e) => setSkipWeekends(e.target.checked)} /> Skip weekends
               </label>
+              <label className="inline-flex items-center gap-1.5 text-sm text-slate-600 dark:text-slate-300" title="Shift the send to the best-ranked nearby weekday from the send-times table (within the Amazon window).">
+                <input type="checkbox" checked={shiftToBestDay} onChange={(e) => setShiftToBestDay(e.target.checked)} /> Shift to best day
+              </label>
             </div>
+            {sendHourLocal == null && (
+              <p className="text-xs text-slate-400">
+                No preferred hour set → the send hour follows the per-weekday{' '}
+                <Link href="/orders/reviews/rules/send-times" className="underline hover:text-blue-600">send-times table</Link>.
+              </p>
+            )}
 
             {preview?.scheduledFor && (
               <div className="text-xs rounded-md bg-slate-50 dark:bg-slate-950/40 border border-slate-200 dark:border-slate-800 px-3 py-2 text-slate-600 dark:text-slate-300">
                 <span className="font-medium text-slate-800 dark:text-slate-200">Preview:</span> a {productTypes[0] || 'helmet'} {preview.anchorUsed.toLowerCase()} today → asked{' '}
                 <span className="font-semibold">{new Date(preview.scheduledFor).toLocaleString('en-GB', { weekday: 'short', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>{' '}
-                <span className="text-slate-400">({preview.anchorUsed.toLowerCase()} + {preview.effectiveDelayDays}d{preview.source === 'timing-table' ? ' · baseline' : preview.source === 'rule-override' ? ' · custom' : ''})</span>
+                <span className="text-slate-400">({preview.anchorUsed.toLowerCase()} + {preview.effectiveDelayDays}d{preview.source === 'timing-table' ? ' · baseline' : preview.source === 'rule-override' ? ' · custom' : ''}{preview.sendHourSource === 'window' ? ' · best time' : ''})</span>
               </div>
             )}
           </div>
