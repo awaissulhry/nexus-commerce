@@ -93,6 +93,19 @@ describe('computeStep', () => {
     expect(d.action).toBe('hold')
   })
 
+  it('RS.5.1b: no signal + bias ABOVE a low target (rest-of-search 0%) → snaps DOWN to it', () => {
+    const d = computeStep(T({ biasPct: 0, targetISPct: 10, acosCapPct: 30 }), obs({ currentPct: 130 }))
+    expect(d.action).toBe('lower'); expect(d.nextPct).toBe(0); expect(d.reason).toMatch(/entry bias/)
+  })
+  it('RS.5.1b: no signal + bias above own-top entry → snaps down to the entry bias', () => {
+    const d = computeStep(T(), obs({ currentPct: 130 })) // biasPct 100
+    expect(d.action).toBe('lower'); expect(d.nextPct).toBe(100)
+  })
+  it('RS.5.1b: all-out is exempt — maxed with no signal HOLDS, never eases down to biasPct', () => {
+    const d = computeStep(T({ allOut: true, biasPct: 150 }), obs({ currentPct: 900 }))
+    expect(d.action).toBe('hold'); expect(d.nextPct).toBe(900)
+  })
+
   it('clamps at maxPct — already maxed holds', () => {
     const d = computeStep(T(), obs({ currentPct: 900, achievedISFraction: 0.4, achievedAcosFraction: 0.3 }))
     expect(d.action).toBe('hold'); expect(d.nextPct).toBe(900)

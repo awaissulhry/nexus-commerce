@@ -84,6 +84,15 @@ export function computeStep(target: RankTargetSpec, obs: Observed, opts: { maxPc
     if (target.biasPct != null && obs.currentPct < target.biasPct && acosOk) {
       return { action: 'raise', nextPct: clamp(Math.min(target.biasPct, obs.currentPct + step * 2), 0, maxPct), reason: `ramping to ${target.biasPct}% entry bias` }
     }
+    // RS.5.1b — SNAP DOWN to the entry bias in one cycle. With no IS signal, a window
+    // whose target wants a LOWER bias (e.g. rest-of-search = 0%) must reach it now, not
+    // hold a leftover high one (the bug: a rest-of-search window kept an all-out-level
+    // bias). Going down only REDUCES spend (no overspend / auction-war risk), so it's
+    // safe to jump; the ramp-UP above stays gradual (climbing has overspend risk).
+    // All-out is exempt — it pushes to max, handled above.
+    if (target.biasPct != null && !target.allOut && obs.currentPct > target.biasPct) {
+      return { action: 'lower', nextPct: clamp(target.biasPct, 0, maxPct), reason: `set to ${target.biasPct}% entry bias (no signal)` }
+    }
     return { action: 'hold', nextPct: obs.currentPct, reason }
   }
 
