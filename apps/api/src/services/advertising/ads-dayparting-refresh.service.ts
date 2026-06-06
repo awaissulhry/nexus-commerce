@@ -58,7 +58,16 @@ export async function resolveProductFamily(opts: { campaignId?: string; parentPr
   if (family.length === 0) return { ...empty, marketplace }
   const familyIds = family.map((f) => f.id)
   const familyAsins = [...new Set(family.map((f) => f.amazonAsin).filter((x): x is string => !!x))]
-  const familySkus = [...new Set(family.map((f) => f.sku).filter((x): x is string => !!x))]
+  let familySkus = family.map((f) => f.sku).filter((x): x is string => !!x)
+  // RD.10h — the parentId tree only catches one product record per variant, but the
+  // SAME ASIN is often listed under separate FBA vs FBM SKUs (= separate product rows).
+  // Pull in EVERY product record sharing the family's ASINs so the whole family's
+  // sales (both fulfillment channels) are counted — not just the parentId-linked ones.
+  if (familyAsins.length) {
+    const dupes = await prisma.product.findMany({ where: { amazonAsin: { in: familyAsins }, id: { notIn: familyIds } }, select: { id: true, sku: true } })
+    for (const dp of dupes) { familyIds.push(dp.id); if (dp.sku) familySkus.push(dp.sku) }
+  }
+  familySkus = [...new Set(familySkus)]
   const parent = family.find((f) => f.id === parentProductId) ?? family[0]
   const famAds = familyAsins.length ? await prisma.adProductAd.findMany({
     where: { asin: { in: familyAsins }, ...(marketplace ? { adGroup: { campaign: { marketplace } } } : {}) },

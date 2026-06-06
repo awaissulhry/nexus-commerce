@@ -615,7 +615,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
         aggregateOrdersDayparting({ channel: 'AMAZON', marketplace: fam.marketplace, productIds: fam.productIds, windowDays }),
         fam.skus.length ? aggregateOrdersDayparting({ channel: 'AMAZON', marketplace: fam.marketplace, skus: fam.skus, windowDays }) : Promise.resolve({ totals: { orders: 0 } }),
       ])
-      _diag = { skuCount: fam.skus.length, sampleSkus: fam.skus.slice(0, 4), sampleAsins: fam.asins.slice(0, 4), byProductId: byPid.totals.orders, bySku: bySku.totals.orders, combined: d.raw.totals.orders }
+      _diag = { productCount: fam.productIds.length, skuCount: fam.skus.length, asinCount: fam.asins.length, sampleSkus: fam.skus.slice(0, 6), byProductId: byPid.totals.orders, bySku: bySku.totals.orders, combined: d.raw.totals.orders }
     }
     return {
       marketplace: fam.marketplace ?? marketplace, parentProductId: fam.parentProductId, parentName: fam.parentName, productIds: fam.productIds, asins: fam.asins,
