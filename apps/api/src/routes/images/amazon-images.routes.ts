@@ -32,6 +32,7 @@ import { validateAmazonPublish } from '../../services/images/amazon-publish-vali
 import { findStaleListingImages } from '../../services/images/amazon-stale.service.js'
 import { recordImagePublishAudit } from '../../utils/image-publish-audit.js'
 import { adoptAmazonImages, reconcileAmazonImages } from '../../services/images/amazon-adopt.service.js'
+import { buildMirrorDiff } from '../../services/images/amazon-mirror-diff.service.js'
 import prisma from '../../db.js'
 
 const VALID_MARKETPLACES = new Set(['IT', 'DE', 'FR', 'ES', 'UK'])
@@ -186,6 +187,28 @@ const amazonImagesRoutes: FastifyPluginAsync = async (fastify) => {
         refresh: request.query.refresh === '1' || request.query.refresh === 'true',
       })
       return result
+    } catch (err) {
+      return reply.code(500).send({ error: err instanceof Error ? err.message : String(err) })
+    }
+  })
+
+  // ── GET /api/products/:productId/amazon-images/mirror-diff ─────────
+  // M4 — what an exact-mirror publish WOULD change on Amazon (adds /
+  // replaces / DELETES) per ASIN vs the live state. The pre-publish safety
+  // surface — `deletes` lists only images that would actually be removed.
+  fastify.get<{
+    Params: { productId: string }
+    Querystring: { marketplace?: string; activeAxis?: string }
+  }>('/products/:productId/amazon-images/mirror-diff', async (request, reply) => {
+    const mkt = (request.query.marketplace ?? '').toUpperCase()
+    if (!mkt) return reply.code(400).send({ error: 'marketplace required' })
+    try {
+      const diff = await buildMirrorDiff({
+        productId: request.params.productId,
+        marketplace: mkt,
+        activeAxis: request.query.activeAxis,
+      })
+      return diff
     } catch (err) {
       return reply.code(500).send({ error: err instanceof Error ? err.message : String(err) })
     }
