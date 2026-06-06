@@ -23,6 +23,7 @@ export interface ProductFamily {
   parentName: string | null
   productIds: string[]
   asins: string[]
+  skus: string[] // RD.10g — the family's SKUs; the RELIABLE order-match key (sales are SKU-keyed, OrderItem.productId is often null)
   campaigns: Array<{ id: string; name: string; status: string; marketplace: string | null }>
 }
 
@@ -32,7 +33,7 @@ export interface ProductFamily {
 export async function resolveProductFamily(opts: { campaignId?: string; parentProductId?: string; marketplace?: string }): Promise<ProductFamily> {
   let parentProductId = opts.parentProductId ?? null
   let marketplace = opts.marketplace
-  const empty: ProductFamily = { marketplace, parentProductId: null, parentName: null, productIds: [], asins: [], campaigns: [] }
+  const empty: ProductFamily = { marketplace, parentProductId: null, parentName: null, productIds: [], asins: [], skus: [], campaigns: [] }
 
   if (!parentProductId) {
     if (!opts.campaignId) return empty
@@ -53,10 +54,11 @@ export async function resolveProductFamily(opts: { campaignId?: string; parentPr
     parentProductId = [...parentCount.entries()].sort((a, b) => b[1] - a[1])[0][0]
   }
 
-  const family = await prisma.product.findMany({ where: { OR: [{ id: parentProductId }, { parentId: parentProductId }] }, select: { id: true, name: true, amazonAsin: true } })
+  const family = await prisma.product.findMany({ where: { OR: [{ id: parentProductId }, { parentId: parentProductId }] }, select: { id: true, name: true, amazonAsin: true, sku: true } })
   if (family.length === 0) return { ...empty, marketplace }
   const familyIds = family.map((f) => f.id)
   const familyAsins = [...new Set(family.map((f) => f.amazonAsin).filter((x): x is string => !!x))]
+  const familySkus = [...new Set(family.map((f) => f.sku).filter((x): x is string => !!x))]
   const parent = family.find((f) => f.id === parentProductId) ?? family[0]
   const famAds = familyAsins.length ? await prisma.adProductAd.findMany({
     where: { asin: { in: familyAsins }, ...(marketplace ? { adGroup: { campaign: { marketplace } } } : {}) },
@@ -70,6 +72,7 @@ export async function resolveProductFamily(opts: { campaignId?: string; parentPr
     parentName: parent?.name ?? null,
     productIds: familyIds,
     asins: familyAsins,
+    skus: familySkus,
     campaigns: [...campMap.values()].sort((a, b) => (a.status === b.status ? 0 : a.status === 'ENABLED' ? -1 : 1)),
   }
 }
@@ -109,11 +112,12 @@ export function shrinkShare(fShare: number, mShare: number, familyOrders: number
   return blended ? (familyOrders * fShare + k * mShare) / (familyOrders + k) : fShare
 }
 
-export async function blendedFamilyDemand(productIds: string[], marketplace: string | undefined, windowDays = 180, range?: { from?: Date; to?: Date }): Promise<BlendedDemand> {
+export async function blendedFamilyDemand(productIds: string[], marketplace: string | undefined, windowDays = 180, range?: { from?: Date; to?: Date }, skus?: string[]): Promise<BlendedDemand> {
   // RD.3 — optional explicit date range (from/to win over windowDays in
   // aggregateOrdersDayparting); both the family and the market prior use the same
   // window so the shrinkage stays apples-to-apples.
-  const fam = await aggregateOrdersDayparting({ channel: 'AMAZON', marketplace, productIds, windowDays, metric: 'revenue', from: range?.from, to: range?.to })
+  // RD.10g — match the family by productId OR sku (the reliable, SKU-keyed sales path).
+  const fam = await aggregateOrdersDayparting({ channel: 'AMAZON', marketplace, productIds, skus, windowDays, metric: 'revenue', from: range?.from, to: range?.to })
   const mkt = await aggregateOrdersDayparting({ channel: 'AMAZON', marketplace, windowDays, metric: 'revenue', from: range?.from, to: range?.to })
   const fTotRev = fam.totals.revenueCents, fTotOrders = fam.totals.orders, fTotUnits = fam.totals.units
   const mTotRev = mkt.totals.revenueCents
@@ -217,7 +221,7 @@ export async function refreshFamilySchedules(opts: { campaignId?: string; parent
   const fam = await resolveProductFamily({ campaignId: opts.campaignId, parentProductId: opts.parentProductId, marketplace: opts.marketplace })
   const base: RefreshResult = { parentName: fam.parentName, marketplace: fam.marketplace ?? null, campaigns: fam.campaigns.length, updated: 0, created: 0, windows: 0, dryRun: !!opts.dryRun }
   if (!fam.parentProductId || fam.campaigns.length === 0) return base
-  const demand = await blendedFamilyDemand(fam.productIds, fam.marketplace, opts.windowDays ?? 180)
+  const demand = await blendedFamilyDemand(fam.productIds, fam.marketplace, opts.windowDays ?? 180, undefined, fam.skus)
   const windows = generateDaypartingWindows(demand.weekdayProfile, demand.hourProfile, { bidUpPct: opts.bidUpPct, bidDownPct: opts.bidDownPct, pauseOvernight: opts.pauseOvernight })
   if (opts.dryRun) return { ...base, windows: windows.length }
   const timezone = MARKET_TZ[fam.marketplace ?? ''] ?? 'Europe/Rome'

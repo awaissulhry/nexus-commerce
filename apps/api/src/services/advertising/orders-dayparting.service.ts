@@ -29,6 +29,7 @@ export interface OrdersDaypartingOpts {
   productId?: string                 // scope to one product (OrderItem.productId)
   productIds?: string[]              // scope to a product family (parent + variants); rolls up children
   sku?: string                       // scope to one SKU (OrderItem.sku)
+  skus?: string[]                    // RD.10g — scope to a family's SKUs; the RELIABLE key (matched OR'd with productIds, since OrderItem.productId is often null while sales are SKU-keyed)
   from?: Date                        // explicit range start (inclusive)
   to?: Date                          // explicit range end (exclusive)
   windowDays?: number                // alternative to from/to; default 90
@@ -75,7 +76,8 @@ export async function aggregateOrdersDayparting(
 
   const mkts = opts.marketplace == null ? [] : Array.isArray(opts.marketplace) ? opts.marketplace : [opts.marketplace]
   const hasProductIds = !!(opts.productIds && opts.productIds.length)
-  const needsItemFilter = !!opts.productId || !!opts.sku || hasProductIds
+  const hasSkus = !!(opts.skus && opts.skus.length)
+  const needsItemFilter = !!opts.productId || !!opts.sku || hasProductIds || hasSkus
 
   // Inner join when scoping to a product/sku (only count buckets where that item
   // actually sold); LEFT join otherwise so item-less orders still count toward `orders`.
@@ -83,10 +85,16 @@ export async function aggregateOrdersDayparting(
     ? Prisma.sql`JOIN "OrderItem" oi ON oi."orderId" = o.id`
     : Prisma.sql`LEFT JOIN "OrderItem" oi ON oi."orderId" = o.id`
   const mktFrag = mkts.length ? Prisma.sql`AND o."marketplace" IN (${Prisma.join(mkts)})` : Prisma.empty
-  const prodFrag = hasProductIds
-    ? Prisma.sql`AND oi."productId" IN (${Prisma.join(opts.productIds as string[])})`
-    : opts.productId ? Prisma.sql`AND oi."productId" = ${opts.productId}` : Prisma.empty
-  const skuFrag = opts.sku ? Prisma.sql`AND oi."sku" = ${opts.sku}` : Prisma.empty
+  // RD.10g — a family is matched by productId OR sku (OR'd together). OrderItem.productId
+  // is often null while the whole sales pipeline is SKU-keyed, so SKU is the reliable key;
+  // matching both captures every variant's orders without undercounting.
+  const orClauses: Prisma.Sql[] = []
+  if (hasProductIds) orClauses.push(Prisma.sql`oi."productId" IN (${Prisma.join(opts.productIds as string[])})`)
+  if (hasSkus) orClauses.push(Prisma.sql`oi."sku" IN (${Prisma.join(opts.skus as string[])})`)
+  if (opts.productId) orClauses.push(Prisma.sql`oi."productId" = ${opts.productId}`)
+  if (opts.sku) orClauses.push(Prisma.sql`oi."sku" = ${opts.sku}`)
+  const prodFrag = orClauses.length ? Prisma.sql`AND (${Prisma.join(orClauses, ' OR ')})` : Prisma.empty
+  const skuFrag = Prisma.empty // folded into prodFrag
 
   // Single pass: bucket by Rome-local (dow, hour). COALESCE(purchaseDate, createdAt)
   // because purchaseDate is nullable (universal Order-read convention). COUNT(DISTINCT
