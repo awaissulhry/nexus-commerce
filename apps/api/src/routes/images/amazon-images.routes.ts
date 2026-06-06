@@ -31,6 +31,7 @@ import { buildAmazonImagePreview } from '../../services/images/amazon-image-prev
 import { validateAmazonPublish } from '../../services/images/amazon-publish-validator.service.js'
 import { findStaleListingImages } from '../../services/images/amazon-stale.service.js'
 import { recordImagePublishAudit } from '../../utils/image-publish-audit.js'
+import { adoptAmazonImages, reconcileAmazonImages } from '../../services/images/amazon-adopt.service.js'
 import prisma from '../../db.js'
 
 const VALID_MARKETPLACES = new Set(['IT', 'DE', 'FR', 'ES', 'UK'])
@@ -132,6 +133,63 @@ const amazonImagesRoutes: FastifyPluginAsync = async (fastify) => {
       }
     },
   )
+
+  // ── POST /api/products/:productId/amazon-images/adopt ──────────────
+  // M2 — Lossless adopt-first: pull all live Amazon images (all configured
+  // EU markets, all slots incl. PS) into a per-market ListingImage baseline
+  // so the exact-mirror publish (M3) never wipes manual Seller Central
+  // uploads. dryRun reports counts without writing.
+  fastify.post<{
+    Params: { productId: string }
+    Body: { marketplaces?: string[]; dryRun?: boolean }
+  }>('/products/:productId/amazon-images/adopt', async (request, reply) => {
+    const { productId } = request.params
+    const product = await prisma.product.findUnique({ where: { id: productId }, select: { id: true } })
+    if (!product) return reply.code(404).send({ error: 'Product not found' })
+    try {
+      const result = await adoptAmazonImages({
+        productId,
+        marketplaces: request.body?.marketplaces,
+        dryRun: request.body?.dryRun ?? false,
+      })
+      void recordImagePublishAudit({
+        productId,
+        action: 'imagesAdopted',
+        channel: 'AMAZON',
+        metadata: {
+          dryRun: result.dryRun,
+          perMarket: result.perMarket.map((m) => ({ marketplace: m.marketplace, created: m.created, skipped: m.skippedExisting })),
+        },
+      })
+      return result
+    } catch (err) {
+      return reply.code(500).send({ error: err instanceof Error ? err.message : String(err) })
+    }
+  })
+
+  // ── GET /api/products/:productId/amazon-images/reconcile ───────────
+  // M2 — Read-only diff: Amazon live vs the Nexus baseline per market.
+  // After a clean adopt, onlyOnAmazon should be empty. ?refresh=1 re-pulls
+  // live from Amazon first; ?marketplaces=IT,DE scopes the markets.
+  fastify.get<{
+    Params: { productId: string }
+    Querystring: { marketplaces?: string; refresh?: string }
+  }>('/products/:productId/amazon-images/reconcile', async (request, reply) => {
+    const { productId } = request.params
+    const marketplaces = request.query.marketplaces
+      ? request.query.marketplaces.split(',').map((s) => s.trim().toUpperCase()).filter(Boolean)
+      : undefined
+    try {
+      const result = await reconcileAmazonImages({
+        productId,
+        marketplaces,
+        refresh: request.query.refresh === '1' || request.query.refresh === 'true',
+      })
+      return result
+    } catch (err) {
+      return reply.code(500).send({ error: err instanceof Error ? err.message : String(err) })
+    }
+  })
 
   // ── GET /api/products/:productId/amazon-images/validate ────────────
   // IA.4 — Standalone validation surface for the preview modal so the

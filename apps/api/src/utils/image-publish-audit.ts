@@ -26,6 +26,8 @@ export type ImagePublishAction =
   | 'imagePublishFailed'
   | 'imagePublishScheduled'
   | 'imagePublishBulk'
+  | 'imagesAdopted'
+  | 'imagesMirrored'
 
 export interface ImagePublishAuditInput {
   productId: string
