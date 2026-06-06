@@ -428,7 +428,10 @@ export function startReviewMailerCron(): void {
     logger.warn('review-request-mailer cron already started')
     return
   }
-  const schedule = process.env.NEXUS_REVIEW_MAILER_SCHEDULE ?? '0 */4 * * *'
+  // Hourly so a request's targeted send-hour (STO send windows / per-rule hour)
+  // is actually honored — at every-4h it snapped to a 4-hour slot. The cron only
+  // sends DUE requests (scheduledFor <= now), so running more often is safe.
+  const schedule = process.env.NEXUS_REVIEW_MAILER_SCHEDULE ?? '0 * * * *'
   if (!cron.validate(schedule)) {
     logger.error('review-request-mailer cron: invalid schedule', { schedule })
     return
