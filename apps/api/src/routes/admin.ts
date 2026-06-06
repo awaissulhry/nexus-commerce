@@ -21,6 +21,7 @@ import {
 } from '../services/pim/resolver-shadow.js'
 import { productSearchIndexerService } from '../services/product-search-indexer.service.js'
 import { backfillNormalizeProductImageUrls } from '../services/images/normalize-image-urls-backfill.service.js'
+import { resolveSlotTaxonomy } from '../services/images/amazon-slot-taxonomy.service.js'
 import {
   isSearchConfigured,
   searchHealthy,
@@ -205,6 +206,26 @@ export async function adminRoutes(app: FastifyInstance) {
       return reply.status(500).send({ success: false, error: message })
     }
   })
+
+  /**
+   * GET /admin/amazon-slot-taxonomy?marketplace=IT&productType=OUTERWEAR
+   * M1 — inspect the schema-discovered image-slot taxonomy for a market +
+   * product type (reveals real PT count, swatch, and any PS/GPSR locators).
+   */
+  app.get<{ Querystring: { marketplace?: string; productType?: string } }>(
+    '/admin/amazon-slot-taxonomy',
+    async (request, reply) => {
+      const marketplace = (request.query.marketplace ?? 'IT').toUpperCase()
+      const productType = request.query.productType ?? 'PRODUCT'
+      try {
+        const tax = await resolveSlotTaxonomy(marketplace, productType)
+        return reply.send({ success: true, data: tax })
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unknown error'
+        return reply.status(500).send({ success: false, error: message })
+      }
+    },
+  )
 
   /**
    * POST /admin/repair/product-status
