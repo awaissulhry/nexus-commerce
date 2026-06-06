@@ -10,7 +10,7 @@
 // sees removals before publishing.
 
 import { useState } from 'react'
-import { Loader2, Sparkles, Eye, UploadCloud, ShieldCheck } from 'lucide-react'
+import { Loader2, Sparkles, Eye, UploadCloud, ShieldCheck, Copy } from 'lucide-react'
 import { beFetch } from '../api'
 import { AMAZON_MARKETPLACES, type AmazonMarketplace } from './useAmazonImages'
 
@@ -26,10 +26,13 @@ export function AmazonMirrorControls({
   productId,
   marketplace,
   onReload,
+  onCopyToMarkets,
 }: {
   productId: string
   marketplace: AmazonMarketplace
   onReload: () => void
+  /** CM — open the "copy this market → other markets" picker (active market only). */
+  onCopyToMarkets?: () => void
 }) {
   const [busy, setBusy] = useState<'fill' | 'preview' | 'mirror' | null>(null)
   const [diff, setDiff] = useState<DiffTotals | null>(null)
@@ -158,6 +161,16 @@ export function AmazonMirrorControls({
           {busy === 'mirror' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <UploadCloud className="w-3.5 h-3.5" />}
           Mirror to Amazon
         </button>
+        {onCopyToMarkets && (
+          <button
+            type="button"
+            onClick={onCopyToMarkets}
+            disabled={busy !== null}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2.5 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50"
+          >
+            <Copy className="w-3.5 h-3.5" /> Copy {marketplace} → markets
+          </button>
+        )}
       </div>
     </div>
   )

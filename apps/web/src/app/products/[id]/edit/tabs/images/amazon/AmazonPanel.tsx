@@ -32,9 +32,13 @@ const MARKETPLACE_GUIDANCE: Record<string, string> = {
 import {
   useAmazonImages,
   AMAZON_MARKETPLACES,
+  ALL_SLOTS,
+  SLOT_LABELS,
   type AmazonMarketplace,
   type AmazonSlot,
 } from './useAmazonImages'
+import { CopyToMarketsModal } from './CopyToMarketsModal'
+import { buildCrossMarketUpserts } from './crossMarketCopy'
 import type { ChannelLiveImage, ListingImage, PendingUpsert, ProductImage, VariantSummary, WorkspaceProduct, AmazonJobSummary } from '../types'
 
 interface CopyResult { copied: number; skipped: number }
@@ -245,6 +249,25 @@ export default function AmazonPanel({
     } finally {
       setSlotUploading(false)
     }
+  }
+
+  // CM — cross-market copy (whole-market or per-slot) → staged upserts.
+  const [copyPicker, setCopyPicker] = useState<{ slots: string[]; label: string } | null>(null)
+
+  function runCopy(targets: string[]) {
+    if (!copyPicker) return
+    const groups: Array<string | null> = [...amazon.variantGroups.map((g) => g.groupValue), null]
+    const upserts = buildCrossMarketUpserts({
+      sourceMarketplace: amazon.activeMarketplace,
+      targets,
+      slots: copyPicker.slots,
+      groups,
+      activeAxis,
+      resolveCell: (g, s) => amazon.resolveCell(g, s as AmazonSlot),
+      listingImages,
+    })
+    upserts.forEach((u) => addPendingUpsert(u))
+    setCopyPicker(null)
   }
 
   function handleCopyRow(groupValue: string, toMarketplace: string) {
@@ -507,6 +530,17 @@ export default function AmazonPanel({
         </div>
       )}
 
+      {/* CM.4 — "All Markets" applies to every Amazon market */}
+      {amazon.activeMarketplace === 'ALL' && (
+        <div className="mx-4 mt-4 flex items-start gap-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 px-3 py-2 text-xs text-slate-600 dark:text-slate-300">
+          <Info className="w-3.5 h-3.5 mt-0.5 flex-shrink-0 text-slate-400" />
+          <span>
+            Images set on <b>All Markets</b> apply to <b>every Amazon market</b> unless a specific market overrides them.
+            Switch to a market tab (IT, DE…) to set market-specific images or to copy one market&apos;s images to others.
+          </span>
+        </div>
+      )}
+
       {/* Missing axis-data warning */}
       {noAxisData && (
         <div className="mx-4 mt-4 flex items-start gap-2 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 px-3 py-2.5 text-sm text-amber-800 dark:text-amber-300">
@@ -524,6 +558,11 @@ export default function AmazonPanel({
         productId={productId}
         marketplace={amazon.activeMarketplace}
         onReload={onReload}
+        onCopyToMarkets={
+          amazon.activeMarketplace !== 'ALL'
+            ? () => setCopyPicker({ slots: [...ALL_SLOTS], label: 'all images' })
+            : undefined
+        }
       />
 
       {/* IE.5 — Live channel strip above the matrix */}
@@ -615,6 +654,11 @@ export default function AmazonPanel({
               amazon.activeMarketplace === 'ALL' ? 'IT' : amazon.activeMarketplace,
             )}
             onCopyRow={handleCopyRow}
+            onCopySlotToMarkets={
+              amazon.activeMarketplace !== 'ALL'
+                ? (slot) => setCopyPicker({ slots: [slot], label: SLOT_LABELS[slot] ?? slot })
+                : undefined
+            }
             onClearRow={handleClearRow}
             onCellFileDrop={handleCellFileDrop}
             onCellRevert={handleRevertCell}
@@ -710,6 +754,16 @@ export default function AmazonPanel({
             amazon.setImagePicker(null)
           }}
           onClose={() => amazon.setImagePicker(null)}
+        />
+      )}
+
+      {/* CM — copy this market's images to other markets (staged) */}
+      {copyPicker && amazon.activeMarketplace !== 'ALL' && (
+        <CopyToMarketsModal
+          sourceMarketplace={amazon.activeMarketplace}
+          whatLabel={copyPicker.label}
+          onConfirm={runCopy}
+          onClose={() => setCopyPicker(null)}
         />
       )}
 

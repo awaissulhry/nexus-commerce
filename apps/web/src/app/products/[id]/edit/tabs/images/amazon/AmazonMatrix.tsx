@@ -6,7 +6,7 @@
 // Column headers are also drop targets for column-fill operations.
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { AlertTriangle, Link2, MoreHorizontal, Plus } from 'lucide-react'
+import { AlertTriangle, Link2, MoreHorizontal, Plus, Copy } from 'lucide-react'
 import { PLATFORM_RULES } from '@nexus/shared/image-validation'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/Button'
@@ -26,6 +26,8 @@ interface MatrixProps {
   onColumnHeaderDrop: (slot: AmazonSlot, url: string, sourceId?: string) => void
   onPublishRow: (groupValue: string) => void
   onCopyRow: (groupValue: string, toMarketplace: string) => void
+  /** CM.3 — copy this slot (column) to the same slot in other markets. */
+  onCopySlotToMarkets?: (slot: AmazonSlot) => void
   onClearRow: (groupValue: string) => void
   onCellFileDrop: (groupValue: string | null, slot: AmazonSlot, file: File) => void
   /** IE.11 — Active status filter from the MatrixFilterBar. Defaults
@@ -352,9 +354,11 @@ function SlotCell({
 function ColumnHeader({
   slot,
   onHeaderDrop,
+  onCopySlotToMarkets,
 }: {
   slot: AmazonSlot
   onHeaderDrop: (slot: AmazonSlot, url: string, sourceId?: string) => void
+  onCopySlotToMarkets?: (slot: AmazonSlot) => void
 }) {
   const [isOver, setIsOver] = useState(false)
 
@@ -385,6 +389,16 @@ function ColumnHeader({
     >
       <div className="text-[11px] font-mono leading-none">{slot}</div>
       {slot === 'SWCH' && <div className="text-[9px] text-slate-400 mt-0.5">Swatch</div>}
+      {onCopySlotToMarkets && (
+        <button
+          type="button"
+          onClick={() => onCopySlotToMarkets(slot)}
+          title={`Copy ${slot} to the same slot in other markets`}
+          className="mt-1 inline-flex items-center justify-center text-slate-300 hover:text-orange-600 dark:text-slate-500 dark:hover:text-orange-400"
+        >
+          <Copy className="w-3 h-3" />
+        </button>
+      )}
     </div>
   )
 }
@@ -460,6 +474,7 @@ export default function AmazonMatrix({
   onColumnHeaderDrop,
   onPublishRow,
   onCopyRow,
+  onCopySlotToMarkets,
   onClearRow,
   onCellFileDrop,
   onCellRevert,
@@ -586,6 +601,7 @@ export default function AmazonMatrix({
                 <ColumnHeader
                   slot={slot}
                   onHeaderDrop={handleColumnHeaderDrop}
+                  onCopySlotToMarkets={onCopySlotToMarkets}
                 />
               </div>
             ))}
