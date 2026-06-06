@@ -654,9 +654,16 @@ export default function AmazonPanel({
               amazon.activeMarketplace === 'ALL' ? 'IT' : amazon.activeMarketplace,
             )}
             onCopyRow={handleCopyRow}
-            onCopySlotToMarkets={
+            onCopySlotsToMarkets={
               amazon.activeMarketplace !== 'ALL'
-                ? (slot) => setCopyPicker({ slots: [slot], label: SLOT_LABELS[slot] ?? slot })
+                ? (slots) =>
+                    setCopyPicker({
+                      slots,
+                      label:
+                        slots.length === 1
+                          ? (SLOT_LABELS[slots[0]!] ?? String(slots[0]))
+                          : `${slots.length} selected slots`,
+                    })
                 : undefined
             }
             onClearRow={handleClearRow}

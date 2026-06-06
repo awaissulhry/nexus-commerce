@@ -6,7 +6,7 @@
 // Column headers are also drop targets for column-fill operations.
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { AlertTriangle, Link2, MoreHorizontal, Plus, Copy } from 'lucide-react'
+import { AlertTriangle, Link2, MoreHorizontal, Plus } from 'lucide-react'
 import { PLATFORM_RULES } from '@nexus/shared/image-validation'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/Button'
@@ -26,8 +26,8 @@ interface MatrixProps {
   onColumnHeaderDrop: (slot: AmazonSlot, url: string, sourceId?: string) => void
   onPublishRow: (groupValue: string) => void
   onCopyRow: (groupValue: string, toMarketplace: string) => void
-  /** CM.3 — copy this slot (column) to the same slot in other markets. */
-  onCopySlotToMarkets?: (slot: AmazonSlot) => void
+  /** CM.6 — copy the SELECTED slots (columns) to the same slots in other markets. */
+  onCopySlotsToMarkets?: (slots: AmazonSlot[]) => void
   onClearRow: (groupValue: string) => void
   onCellFileDrop: (groupValue: string | null, slot: AmazonSlot, file: File) => void
   /** IE.11 — Active status filter from the MatrixFilterBar. Defaults
@@ -354,11 +354,13 @@ function SlotCell({
 function ColumnHeader({
   slot,
   onHeaderDrop,
-  onCopySlotToMarkets,
+  selected,
+  onToggleSelect,
 }: {
   slot: AmazonSlot
   onHeaderDrop: (slot: AmazonSlot, url: string, sourceId?: string) => void
-  onCopySlotToMarkets?: (slot: AmazonSlot) => void
+  selected?: boolean
+  onToggleSelect?: (slot: AmazonSlot) => void
 }) {
   const [isOver, setIsOver] = useState(false)
 
@@ -389,15 +391,14 @@ function ColumnHeader({
     >
       <div className="text-[11px] font-mono leading-none">{slot}</div>
       {slot === 'SWCH' && <div className="text-[9px] text-slate-400 mt-0.5">Swatch</div>}
-      {onCopySlotToMarkets && (
-        <button
-          type="button"
-          onClick={() => onCopySlotToMarkets(slot)}
-          title={`Copy ${slot} to the same slot in other markets`}
-          className="mt-1 inline-flex items-center justify-center text-slate-300 hover:text-orange-600 dark:text-slate-500 dark:hover:text-orange-400"
-        >
-          <Copy className="w-3 h-3" />
-        </button>
+      {onToggleSelect && (
+        <input
+          type="checkbox"
+          checked={!!selected}
+          onChange={() => onToggleSelect(slot)}
+          title={`Select ${slot} to copy across markets`}
+          className="mt-1 cursor-pointer accent-orange-600"
+        />
       )}
     </div>
   )
@@ -474,7 +475,7 @@ export default function AmazonMatrix({
   onColumnHeaderDrop,
   onPublishRow,
   onCopyRow,
-  onCopySlotToMarkets,
+  onCopySlotsToMarkets,
   onClearRow,
   onCellFileDrop,
   onCellRevert,
@@ -513,6 +514,16 @@ export default function AmazonMatrix({
     onColumnHeaderDrop(pendingColumnFill.slot, pendingColumnFill.url, pendingColumnFill.sourceId)
     setPendingColumnFill(null)
   }
+
+  const [selectedSlots, setSelectedSlots] = useState<Set<string>>(new Set())
+  const toggleSlotSelect = useCallback((slot: AmazonSlot) => {
+    setSelectedSlots((prev) => {
+      const n = new Set(prev)
+      if (n.has(slot)) n.delete(slot)
+      else n.add(slot)
+      return n
+    })
+  }, [])
 
   const rows: Array<{ groupValue: string | null; label: string; sublabel: string; asin: string | null; sku: string }> = [
     ...variantGroups.map((g) => ({
@@ -572,6 +583,29 @@ export default function AmazonMatrix({
         </div>
       )}
 
+      {/* CM.6 — cross-market copy: selected-slots toolbar */}
+      {onCopySlotsToMarkets && selectedSlots.size > 0 && (
+        <div className="mb-3 flex items-center gap-2 rounded-xl border border-orange-200 dark:border-orange-900/50 bg-orange-50/70 dark:bg-orange-950/20 px-3 py-2 text-sm">
+          <span className="font-medium text-slate-700 dark:text-slate-200">
+            {selectedSlots.size} slot{selectedSlots.size === 1 ? '' : 's'} selected
+          </span>
+          <span className="text-xs font-mono text-slate-500 dark:text-slate-400">{[...selectedSlots].join(', ')}</span>
+          <div className="flex-1" />
+          <Button
+            size="sm"
+            onClick={() => {
+              onCopySlotsToMarkets([...selectedSlots] as AmazonSlot[])
+              setSelectedSlots(new Set())
+            }}
+          >
+            Copy selected → markets
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => setSelectedSlots(new Set())} className="text-slate-500">
+            Clear
+          </Button>
+        </div>
+      )}
+
       {/* Scrollable matrix */}
       <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700">
         <div
@@ -601,7 +635,8 @@ export default function AmazonMatrix({
                 <ColumnHeader
                   slot={slot}
                   onHeaderDrop={handleColumnHeaderDrop}
-                  onCopySlotToMarkets={onCopySlotToMarkets}
+                  selected={selectedSlots.has(slot)}
+                  onToggleSelect={onCopySlotsToMarkets ? toggleSlotSelect : undefined}
                 />
               </div>
             ))}
