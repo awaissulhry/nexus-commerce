@@ -102,38 +102,42 @@ function drawCard(doc: PDFKit.PDFDocument, brand: string, p: InsertProduct, qr: 
   const innerW = W - 2 * M
   const lang = langFor(marketplace)
   const copy = COPY[lang]
-  const name = p.name.length > 72 ? `${p.name.slice(0, 69)}…` : p.name
+  const name = p.name.length > 64 ? `${p.name.slice(0, 61)}…` : p.name
+
+  // Every text() below is absolutely positioned and single-line except the
+  // body, so we pass lineBreak:false to stop pdfkit from auto-appending a page
+  // if a glyph nudges past the bottom margin (which would print a blank back).
 
   // brand wordmark
   doc.fillColor(INK).font('Helvetica-Bold').fontSize(22)
-  doc.text(brand.toUpperCase(), M, 32, { width: innerW, align: 'center', characterSpacing: 2 })
+  doc.text(brand.toUpperCase(), M, 32, { width: innerW, align: 'center', characterSpacing: 2, lineBreak: false })
 
   // accent rule
   doc.moveTo(cx - 26, 64).lineTo(cx + 26, 64).lineWidth(2).strokeColor(ACCENT).stroke()
 
   // headline
   doc.fillColor(INK).font('Helvetica-Bold').fontSize(13)
-  doc.text(copy.headline, M, 78, { width: innerW, align: 'center' })
+  doc.text(copy.headline, M, 78, { width: innerW, align: 'center', lineBreak: false })
 
-  // body
+  // body (the only wrapping block — sits high so it can never reach the margin)
   doc.fillColor(MUTED).font('Helvetica').fontSize(9.5)
   doc.text(copy.body(brand), M, 100, { width: innerW, align: 'center', lineGap: 1.5 })
 
   // QR centred
   const qrSize = 132
-  const qrY = 156
+  const qrY = 154
   doc.image(qr, cx - qrSize / 2, qrY, { width: qrSize, height: qrSize })
 
   // CTA under the QR
   doc.fillColor(INK).font('Helvetica-Bold').fontSize(9)
-  doc.text(copy.cta, M, qrY + qrSize + 8, { width: innerW, align: 'center' })
+  doc.text(copy.cta, M, qrY + qrSize + 8, { width: innerW, align: 'center', lineBreak: false })
 
-  // footer: product name + the marketplace site
-  const footerY = doc.page.height - 46
+  // footer: product name + the marketplace site (kept above the bottom margin)
+  const footerY = doc.page.height - 56
   doc.fillColor(MUTED).font('Helvetica').fontSize(7.5)
-  doc.text(name, M, footerY, { width: innerW, align: 'center', height: 18, ellipsis: true })
+  doc.text(name, M, footerY, { width: innerW, align: 'center', lineBreak: false, ellipsis: true })
   doc.fillColor(FAINT).fontSize(7)
-  doc.text(`amazon.${tldFor(marketplace)}`, M, footerY + 16, { width: innerW, align: 'center' })
+  doc.text(`amazon.${tldFor(marketplace)}`, M, footerY + 14, { width: innerW, align: 'center', lineBreak: false })
 }
 
 export async function buildReviewInsertPdf(input: ReviewInsertInput): Promise<Buffer> {
