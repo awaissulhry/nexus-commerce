@@ -606,9 +606,10 @@ export default function ImagesTab({ product, discardSignal, onDirtyChange, onPre
       </div>
 
       {/* ── Panel + sidebar layout ───────────────────────────────────── */}
-      <div className="grid grid-cols-1 xl:grid-cols-[1fr_220px] gap-4 items-start">
-        {/* Active panel */}
-        <div>
+      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_220px] gap-4 items-start">
+        {/* Active panel — min-w-0 so a wide channel matrix scrolls INSIDE its
+            own overflow-x-auto container instead of widening the whole page. */}
+        <div className="min-w-0">
           {activeChannel === 'master' && (
             <MasterPanel
               product={wp}
