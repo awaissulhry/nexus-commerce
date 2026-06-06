@@ -18,6 +18,7 @@ import CrossChannelSyncBar from '../CrossChannelSyncBar'
 import ChannelPreview from '../ChannelPreview'
 import ImagePublishHistory from '../ImagePublishHistory'
 import LiveChannelStrip from '../LiveChannelStrip'
+import { AmazonMirrorControls } from './AmazonMirrorControls'
 import LiveImageDriftModal from '../LiveImageDriftModal'
 import { useTranslations } from '@/lib/i18n/use-translations'
 
@@ -517,6 +518,13 @@ export default function AmazonPanel({
           </span>
         </div>
       )}
+
+      {/* M6 — Amazon Mirror controls (fill from gallery · preview · mirror) */}
+      <AmazonMirrorControls
+        productId={productId}
+        marketplace={amazon.activeMarketplace}
+        onReload={onReload}
+      />
 
       {/* IE.5 — Live channel strip above the matrix */}
       <div className="px-4 pt-4">
