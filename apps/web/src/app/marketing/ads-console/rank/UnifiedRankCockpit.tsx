@@ -3,6 +3,10 @@
 /**
  * RC4 — Unified Rank Control cockpit.
  *
+ * 2026-06-06: the placement ladder now reflects the TRUE current bias — the
+ * /placements read previously joined report display-names against the bidding
+ * enum keys, so it always showed 0% even when a bias was set.
+ *
  * One surface that consolidates the old Placement / Keyword / Strategy / Conquest
  * / Top-of-Search-IS modes. RC4.0 (this file) is the SHELL: a single sticky
  * context bar (market · window · unified campaign search · autonomy posture ·
