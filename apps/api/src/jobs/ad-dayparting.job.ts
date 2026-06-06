@@ -12,6 +12,7 @@ import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
 import { recordCronRun } from '../utils/cron-observability.js'
 import { updateCampaignWithSync, bulkUpdateAdTargetBids, type AdsActor } from '../services/advertising/ads-mutation.service.js'
+import { suppressCampaignBids, restoreCampaignBids } from '../services/advertising/ads-bid-suppression.service.js'
 import { isGoalMode } from './ad-rank-defend.job.js'
 
 // AU.3 — bid multiplier per window. A window can optionally carry a
@@ -85,15 +86,14 @@ export async function runDaypartingOnce(): Promise<{ evaluated: number; changed:
     const inWindow = shouldDeliver((s.windows as Window[]) ?? [], s.timezone)
     const desired = inWindow ? 'ENABLED' : 'PAUSED'
     const multiplier = activeMultiplier((s.windows as Window[]) ?? [], s.timezone)
-    const campaign = await prisma.campaign.findUnique({ where: { id: s.campaignId }, select: { status: true } })
+    const campaign = await prisma.campaign.findUnique({ where: { id: s.campaignId }, select: { status: true, bidsSuppressedAt: true } })
     if (!campaign) continue
 
-    // ── Status change (pause/resume) ─────────────────────────────────
-    if (s.lastApplied !== desired && campaign.status !== 'ARCHIVED' && campaign.status !== desired) {
-      try {
-        await updateCampaignWithSync({ campaignId: s.campaignId, patch: { status: desired }, actor: `automation:dayparting-${s.id}` as AdsActor, reason: 'dayparting window', applyImmediately: true } as never)
-        changed++
-      } catch (e) { logger.warn('[dayparting] status apply failed', { scheduleId: s.id, error: (e as Error).message }) }
+    // ── NP — never pause (Amazon algo disruption). Window OPEN: lift any no-pause
+    // floor BEFORE the multiplier logic reads current bids, so 'enter' snapshots the
+    // true base, not the 2¢ floor. ──
+    if (inWindow && campaign.bidsSuppressedAt) {
+      try { await restoreCampaignBids(s.campaignId, { actor: `automation:dayparting-${s.id}` as AdsActor, reason: 'dayparting: window open → restore bids' }); changed++ } catch (e) { logger.warn('[dayparting] restore failed', { scheduleId: s.id, error: (e as Error).message }) }
     }
 
     // ── AU.3 / RC2.TR0 bid multiplier (enter / transition / exit) ───────
@@ -149,6 +149,16 @@ export async function runDaypartingOnce(): Promise<{ evaluated: number; changed:
         bidsAdjusted += entries.length
         logger.info('[dayparting] bid multiplier restored', { scheduleId: s.id, targets: entries.length })
       } catch (e) { logger.warn('[dayparting] bid restore failed', { scheduleId: s.id, error: (e as Error).message }) }
+    }
+
+    // ── NP — window CLOSED: floor bids instead of pausing. The 'exit' branch above
+    // has already restored base bids, so we snapshot + floor the true base. ──
+    if (!inWindow && !campaign.bidsSuppressedAt) {
+      try { await suppressCampaignBids(s.campaignId, { actor: `automation:dayparting-${s.id}` as AdsActor, reason: 'dayparting: window closed → bids floored (no-pause)' }); changed++ } catch (e) { logger.warn('[dayparting] suppress failed', { scheduleId: s.id, error: (e as Error).message }) }
+    }
+    // Resume only if something ELSE left it paused (we never pause). Never touch ARCHIVED.
+    if (campaign.status === 'PAUSED') {
+      try { await updateCampaignWithSync({ campaignId: s.campaignId, patch: { status: 'ENABLED' }, actor: `automation:dayparting-${s.id}` as AdsActor, reason: 'dayparting: no-pause policy — resume', applyImmediately: true } as never); changed++ } catch (e) { logger.warn('[dayparting] resume failed', { scheduleId: s.id, error: (e as Error).message }) }
     }
 
     await prisma.adSchedule.update({ where: { id: s.id }, data: { lastApplied: desired, lastEvaluatedAt: new Date() } })

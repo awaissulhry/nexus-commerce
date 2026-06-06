@@ -13,7 +13,7 @@
  */
 
 import prisma from '../../db.js'
-import { updateCampaignWithSync } from './ads-mutation.service.js'
+import { suppressCampaignBids } from './ads-bid-suppression.service.js'
 import { logger } from '../../utils/logger.js'
 
 export type Verdict = 'pause' | 'watch' | 'ok'
@@ -101,8 +101,11 @@ export async function analyzeRetailReadiness(opts: { marketplace?: string; campa
   }
 }
 
-/** Pause the campaigns the analysis flags as 'pause' (or an explicit list).
- *  Goes through the gated, audited write path — sandbox-safe until P8 live. */
+/** Guard the campaigns the analysis flags as 'pause' (or an explicit list) by
+ *  flooring their bids to ~2¢ — NO-PAUSE policy (pausing disrupts Amazon's algo).
+ *  Bids are remembered and restored when the products become sellable again.
+ *  Goes through the gated, audited write path. (`paused` = guarded count, kept for
+ *  the existing intel-routes display.) */
 export async function applyRetailGuard(args: { campaignIds?: string[]; actor?: string; marketplace?: string }): Promise<{ paused: string[]; skipped: number }> {
   let ids = args.campaignIds
   if (!ids) {
@@ -112,8 +115,8 @@ export async function applyRetailGuard(args: { campaignIds?: string[]; actor?: s
   const paused: string[] = []
   let skipped = 0
   for (const id of ids) {
-    const r = await updateCampaignWithSync({ campaignId: id, patch: { status: 'PAUSED' }, actor: `automation:${args.actor ?? 'retail-guard'}`, reason: 'Retail-readiness guard: products unsellable (AX3.1)' }).catch(() => null)
-    if (r?.ok && r.error !== 'no_changes') paused.push(id); else skipped++
+    // NP — never pause: floor the campaign's bids to ~2¢ (restorable) instead.
+    try { await suppressCampaignBids(id, { actor: `automation:${args.actor ?? 'retail-guard'}`, reason: 'Retail-readiness guard: products unsellable → bids floored (no-pause)' }); paused.push(id) } catch { skipped++ }
   }
   logger.info('[AX3.1] applyRetailGuard', { paused: paused.length, skipped })
   return { paused, skipped }
