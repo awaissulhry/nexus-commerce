@@ -42,7 +42,8 @@ const toSpec = (t: RankTargetRow): RankTargetSpec => ({ key: t.key, placement: t
 
 // RTC — merge per-scope target overrides onto a spec, keyed by the spec's own target
 // key. Maps apply in order, so later (more specific) wins: product then campaign.
-type TargetOverrideMap = Record<string, { biasPct?: number; targetISPct?: number; acosCapPct?: number; maxCpcCents?: number }> | null | undefined
+type TargetOverride = { biasPct?: number; targetISPct?: number; acosCapPct?: number; maxCpcCents?: number; jumpStartPct?: number; stepUpPct?: number; stepDownPct?: number; maxBiasPct?: number; keepClimbing?: boolean }
+type TargetOverrideMap = Record<string, TargetOverride> | null | undefined
 export function applyTargetOverrides(spec: RankTargetSpec, ...maps: TargetOverrideMap[]): RankTargetSpec {
   let out = spec
   for (const m of maps) {
@@ -54,6 +55,12 @@ export function applyTargetOverrides(spec: RankTargetSpec, ...maps: TargetOverri
       ...(o.targetISPct != null ? { targetISPct: o.targetISPct } : {}),
       ...(o.acosCapPct != null ? { acosCapPct: o.acosCapPct } : {}),
       ...(o.maxCpcCents != null ? { maxCpcCents: o.maxCpcCents } : {}),
+      // MP — motion knobs are overridable per product/campaign too (campaign wins).
+      ...(o.jumpStartPct != null ? { jumpStartPct: o.jumpStartPct } : {}),
+      ...(o.stepUpPct != null ? { stepUpPct: o.stepUpPct } : {}),
+      ...(o.stepDownPct != null ? { stepDownPct: o.stepDownPct } : {}),
+      ...(o.maxBiasPct != null ? { maxBiasPct: o.maxBiasPct } : {}),
+      ...(o.keepClimbing !== undefined ? { keepClimbing: o.keepClimbing } : {}),
     }
   }
   return out

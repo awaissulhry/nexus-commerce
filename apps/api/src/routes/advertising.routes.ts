@@ -4679,6 +4679,12 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       acosCapPct: (b.acosCapPct as number | null) ?? null,
       maxCpcCents: (b.maxCpcCents as number | null) ?? null,
       biasPct: (b.biasPct as number | null) ?? null,
+      // MP — motion profile (how the loop moves the bias); all default to today's behaviour.
+      jumpStartPct: (b.jumpStartPct as number | null) ?? null,
+      stepUpPct: (b.stepUpPct as number | null) ?? null,
+      stepDownPct: (b.stepDownPct as number | null) ?? null,
+      maxBiasPct: (b.maxBiasPct as number | null) ?? null,
+      keepClimbing: !!b.keepClimbing,
       pause: !!b.pause, allOut: !!b.allOut, color: (b.color as string | null) ?? null,
       builtIn: false, sortOrder: (b.sortOrder as number) ?? 50,
       scopeProductId: (b.scopeProductId as string | null) ?? null,
@@ -4690,7 +4696,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const { id } = request.params as { id: string }
     const b = request.body as Record<string, unknown>
     const data: Record<string, unknown> = {}
-    for (const k of ['name', 'placement', 'targetISPct', 'acosCapPct', 'maxCpcCents', 'biasPct', 'pause', 'allOut', 'color', 'sortOrder']) if (b[k] !== undefined) data[k] = b[k]
+    for (const k of ['name', 'placement', 'targetISPct', 'acosCapPct', 'maxCpcCents', 'biasPct', 'jumpStartPct', 'stepUpPct', 'stepDownPct', 'maxBiasPct', 'keepClimbing', 'pause', 'allOut', 'color', 'sortOrder']) if (b[k] !== undefined) data[k] = b[k]
     try { return await prisma.rankTarget.update({ where: { id }, data }) } catch { reply.status(404); return { error: 'not found' } }
   })
   fastify.delete('/advertising/rank-targets/:id', async (request, reply) => {
@@ -4707,7 +4713,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const t = await prisma.rankTarget.findUnique({ where: { id }, select: { key: true } })
     const d = (t ? BUILTIN_RANK_TARGETS.find((x) => x.key === t.key) : null) as Record<string, unknown> | null
     if (!d) { reply.status(404); return { error: 'not_a_builtin' } }
-    return await prisma.rankTarget.update({ where: { id }, data: { name: d.name, placement: d.placement, targetISPct: d.targetISPct ?? null, acosCapPct: d.acosCapPct ?? null, maxCpcCents: d.maxCpcCents ?? null, biasPct: d.biasPct ?? null, color: d.color ?? null, pause: !!d.pause, allOut: !!d.allOut } as never })
+    return await prisma.rankTarget.update({ where: { id }, data: { name: d.name, placement: d.placement, targetISPct: d.targetISPct ?? null, acosCapPct: d.acosCapPct ?? null, maxCpcCents: d.maxCpcCents ?? null, biasPct: d.biasPct ?? null, jumpStartPct: (d.jumpStartPct as number | null) ?? null, stepUpPct: (d.stepUpPct as number | null) ?? null, stepDownPct: (d.stepDownPct as number | null) ?? null, maxBiasPct: (d.maxBiasPct as number | null) ?? null, keepClimbing: !!d.keepClimbing, color: d.color ?? null, pause: !!d.pause, allOut: !!d.allOut } as never })
   })
 
   // ── RTPL — named rank-SCHEDULE templates (account-global; Save/Load a painted schedule) ──
