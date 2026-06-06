@@ -4708,6 +4708,15 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     try { return await syncCampaignSettingsFromAmazon({ profileId: q.profileId }) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
   })
 
+  // B (on-open) — refresh ONE campaign's settings live from Amazon. The cockpit fires
+  // this when a campaign is opened so its placement bids / budget / strategy are bang
+  // up to date, without waiting for the ~20-min cron.
+  fastify.post('/advertising/campaigns/:id/refresh-settings', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const { syncOneCampaignSettings } = await import('../services/advertising/ads-campaign-settings-sync.service.js')
+    try { return await syncOneCampaignSettings(id) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
+  })
+
   fastify.get('/advertising/rank-plans', async (request, reply) => {
     const q = request.query as { marketplace?: string; enabled?: string }
     const where: Record<string, unknown> = {}

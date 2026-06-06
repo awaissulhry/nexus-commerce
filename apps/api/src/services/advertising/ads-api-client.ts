@@ -313,13 +313,14 @@ export interface V3CampaignSettings {
   dynamicBidding?: { strategy?: string; placementBidding?: Array<{ placement: string; percentage: number }> }
   budget?: { budget?: number; budgetType?: string }
 }
-export async function listCampaignsV3(ctx: ClientContext): Promise<V3CampaignSettings[]> {
+export async function listCampaignsV3(ctx: ClientContext, opts?: { campaignIds?: string[] }): Promise<V3CampaignSettings[]> {
   if (adsMode() === 'sandbox') return loadFixture<V3CampaignSettings[]>('campaigns-v3', [])
   const out: V3CampaignSettings[] = []
   let nextToken: string | undefined
   let pages = 0
   do {
     const body: Record<string, unknown> = { maxResults: 100, ...(nextToken ? { nextToken } : {}) }
+    if (opts?.campaignIds?.length) body.campaignIdFilter = { include: opts.campaignIds }
     const res = await liveCall<{ campaigns?: V3CampaignSettings[]; nextToken?: string }>({
       profileId: ctx.profileId,
       region: ctx.region,

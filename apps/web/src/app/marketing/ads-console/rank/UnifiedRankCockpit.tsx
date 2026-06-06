@@ -94,6 +94,13 @@ export function UnifiedRankCockpit() {
   const [autoDefend, setAutoDefend] = useState<{ on: boolean; scheduleId: string | null }>({ on: false, scheduleId: null })
   const [planReload, setPlanReload] = useState(0)
   useEffect(() => { setAutoDefend({ on: false, scheduleId: null }) }, [campaignId])
+  // B (on-open) — pull this campaign's live settings from Amazon (placement bids /
+  // budget / strategy / state) so it's current the moment it's opened. Fire-and-forget;
+  // the ~20-min cron keeps everything else fresh.
+  useEffect(() => {
+    if (!campaignId) return
+    void fetch(`${getBackendUrl()}/api/advertising/campaigns/${campaignId}/refresh-settings`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }).catch(() => {})
+  }, [campaignId])
   const takeManualControl = useCallback(async () => {
     if (!autoDefend.scheduleId) return
     try { await fetch(`${getBackendUrl()}/api/advertising/schedules/${autoDefend.scheduleId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled: false }) }) } catch { /* best-effort */ }
