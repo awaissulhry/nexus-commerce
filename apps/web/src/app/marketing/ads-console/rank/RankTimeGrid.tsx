@@ -28,7 +28,7 @@ interface DemandCell { revenueCents: number; orders: number }
 const DOW_LABEL = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const DOW_ORDER = [1, 2, 3, 4, 5, 6, 0] // render Mon→Sun; grid indexed by real dow (0=Sun)
 
-export function RankTimeGrid({ windows, onWindowsChange, targets, baselineKey, demandGrid, onUseDemandPeaks, onEditTargets }: {
+export function RankTimeGrid({ windows, onWindowsChange, targets, baselineKey, demandGrid, onUseDemandPeaks, onEditTargets, onOpenTemplates }: {
   windows: RankWin[]
   onWindowsChange: (w: RankWin[]) => void
   targets: RankTarget[]
@@ -36,6 +36,7 @@ export function RankTimeGrid({ windows, onWindowsChange, targets, baselineKey, d
   demandGrid: DemandCell[][] | null
   onUseDemandPeaks?: () => void
   onEditTargets?: () => void
+  onOpenTemplates?: () => void
 }) {
   const grid = useMemo(() => gridFromWindows(windows), [windows])
 
@@ -84,10 +85,6 @@ export function RankTimeGrid({ windows, onWindowsChange, targets, baselineKey, d
   const copyMonWeekdays = () => mutate(g => g.map((r, d) => (d >= 2 && d <= 5 ? g[1].slice() : r)))
   const copyMonEveryday = () => mutate(g => g.map(() => g[1].slice()))
 
-  // Per-browser template — paint once, reuse on the next campaign/product quickly.
-  const TPL = 'ads:rankgrid:tpl:v1'
-  const saveTpl = () => { try { localStorage.setItem(TPL, JSON.stringify(windows)) } catch { /* ignore */ } }
-  const loadTpl = () => { try { const s = localStorage.getItem(TPL); if (s) onWindowsChange(JSON.parse(s) as RankWin[]) } catch { /* ignore */ } }
 
   const nameOf = (k: string) => targets.find(t => t.key === k)?.name ?? k
   const counts = useMemo(() => rankGridCounts(grid), [grid])
@@ -114,8 +111,7 @@ export function RankTimeGrid({ windows, onWindowsChange, targets, baselineKey, d
         <button type="button" className="az-tr-mini" onClick={copyMonWeekdays} title="Copy Monday's row to Tue–Fri">Mon→weekdays</button>
         <button type="button" className="az-tr-mini" onClick={copyMonEveryday} title="Copy Monday's row to every day">Mon→all</button>
         <span style={{ flex: 1 }} />
-        <button type="button" className="az-tr-mini" onClick={saveTpl} title="Save this schedule as a reusable template (this browser)">Save template</button>
-        <button type="button" className="az-tr-mini" onClick={loadTpl} title="Load your saved template">Load template</button>
+        {onOpenTemplates && <button type="button" className="az-tr-mini" onClick={onOpenTemplates} title="Save / load named schedule templates (reusable across products & campaigns)">Templates…</button>}
       </div>
 
       <div className="az-trgrid-table" role="group" aria-label="Weekly rank schedule grid, 7 days by 24 hours. Press 1 to clear, 2 onward to pick a rank target, then click or drag to paint." onMouseLeave={() => { painting.current = false }}>

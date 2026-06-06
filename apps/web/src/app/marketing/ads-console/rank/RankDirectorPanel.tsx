@@ -17,6 +17,7 @@ import { getBackendUrl } from '@/lib/backend-url'
 import { DemandReadout, type DemandProfile, type DemandCell } from './DemandReadout'
 import { RankTimeGrid } from './RankTimeGrid'
 import { RankTargetEditor } from './RankTargetEditor'
+import { RankTemplateModal } from './RankTemplateModal'
 
 interface RankTarget { id: string; key: string; name: string; targetISPct: number | null; acosCapPct: number | null; pause: boolean; allOut: boolean; color: string | null }
 interface Win { days: number[]; startHour: number; endHour: number; targetKey?: string }
@@ -90,6 +91,7 @@ export function RankDirectorPanel({ market, productId, onPickProduct }: { market
   }, [productId])
   useEffect(() => { loadTargets() }, [loadTargets])
   const [editorOpen, setEditorOpen] = useState(false)
+  const [tplOpen, setTplOpen] = useState(false) // RTPL — schedule-templates modal
 
   // RD.10c — family demand over the chosen timeframe (separate effect so changing
   // the timeframe doesn't reload the plan / reset unsaved edits).
@@ -214,7 +216,7 @@ export function RankDirectorPanel({ market, productId, onPickProduct }: { market
               {winView === 'list' && <button type="button" className="az-link" onClick={addWindow}><Plus size={12} /> Add window</button>}
             </div>
             {winView === 'grid' ? (
-              <RankTimeGrid windows={windows} onWindowsChange={setWindows} targets={targets} baselineKey={baseline} demandGrid={(smooth && fam?.smoothed ? fam.smoothed : fam?.demand)?.grid ?? null} onUseDemandPeaks={fam?.recommended?.windows?.length ? useRecommended : undefined} onEditTargets={() => setEditorOpen(true)} />
+              <RankTimeGrid windows={windows} onWindowsChange={setWindows} targets={targets} baselineKey={baseline} demandGrid={(smooth && fam?.smoothed ? fam.smoothed : fam?.demand)?.grid ?? null} onUseDemandPeaks={fam?.recommended?.windows?.length ? useRecommended : undefined} onEditTargets={() => setEditorOpen(true)} onOpenTemplates={() => setTplOpen(true)} />
             ) : (<>
               {windows.length === 0 && <div className="az-rp-empty">No windows — the baseline holds all week. Add one (or use the recommended) to push the top slot during peak hours.</div>}
               {windows.map((w, i) => (
@@ -340,6 +342,7 @@ export function RankDirectorPanel({ market, productId, onPickProduct }: { market
         onSaveScopeOverrides={plan ? async (map) => { const r = await fetch(api(`/rank-plans/${plan.id}`), { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ targetOverrides: map }) }).then(x => x.json()); setPlan(r) } : undefined}
         productId={productId}
       />
+      <RankTemplateModal open={tplOpen} onClose={() => setTplOpen(false)} currentWindows={windows} currentBaseline={baseline} onLoad={(w, bl) => { setWindows(w); if (bl != null) setBaseline(bl) }} />
     </div>
   )
 }
