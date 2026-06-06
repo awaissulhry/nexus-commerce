@@ -53,7 +53,7 @@ export async function runRankDefendOnce(opts: { dryRun?: boolean } = {}): Promis
   const targetByKey = new Map(targets.map((t) => [t.key, t as unknown as RankTargetRow]))
 
   const campaignIds = [...new Set(schedules.map((s) => s.campaignId))]
-  const campaigns = await prisma.campaign.findMany({ where: { id: { in: campaignIds } }, select: { id: true, name: true, marketplace: true, status: true, externalCampaignId: true } })
+  const campaigns = await prisma.campaign.findMany({ where: { id: { in: campaignIds } }, select: { id: true, name: true, marketplace: true, status: true, externalCampaignId: true, dynamicBidding: true } })
   const campById = new Map(campaigns.map((c) => [c.id, c]))
 
   // One analyzeTopOfSearch call per marketplace gives every campaign's currentPct + topIS + topAcos.
@@ -99,7 +99,13 @@ export async function runRankDefendOnce(opts: { dryRun?: boolean } = {}): Promis
     if (!key) continue
     const target = targetByKey.get(key); if (!target) continue
     const spec = toSpec(target)
-    const sig = sigByCampaign.get(s.campaignId) ?? { currentPct: 0, topIS: null, topAcos: null }
+    // currentPct is the bias WE control — always the source of truth (dynamicBidding),
+    // never the placement report (which is sparse/T+1 and absent for low-IS campaigns,
+    // making the loop blind to its own prior changes — it would re-apply +step forever).
+    // The report only supplies the achieved IS/ACOS *signals*.
+    const sigRaw = sigByCampaign.get(s.campaignId) ?? { currentPct: 0, topIS: null, topAcos: null }
+    const camp_db = (camp.dynamicBidding ?? {}) as { placementBidding?: Array<{ placement: string; percentage: number }> }
+    const sig = { currentPct: camp_db.placementBidding?.find((x) => x.placement === 'PLACEMENT_TOP')?.percentage ?? 0, topIS: sigRaw.topIS, topAcos: sigRaw.topAcos }
 
     // Pause target → ensure the campaign is paused.
     if (spec.pause) {

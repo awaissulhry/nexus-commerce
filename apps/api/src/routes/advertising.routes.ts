@@ -461,6 +461,11 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const db = (campaign.dynamicBidding ?? {}) as { placementBidding?: Array<{ placement: string; percentage: number }>; cpcCeiling?: { enabled?: boolean; multiple?: number } }
     const adj: Record<string, number> = {}
     for (const p of db.placementBidding ?? []) adj[p.placement] = p.percentage
+    // Report rows carry Amazon's display placement names, but placementBidding is
+    // keyed by the bidding-API enum — without this map the bias adjustment never
+    // joins and the ladder shows 0% even when a bias IS set (see ads-top-of-search.service.ts:11).
+    const REPORT_TO_BID_KEY: Record<string, string> = { 'Top of Search on-Amazon': 'PLACEMENT_TOP', 'Detail Page on-Amazon': 'PLACEMENT_PRODUCT_PAGE', 'Other on-Amazon': 'PLACEMENT_REST_OF_SEARCH' }
+    const adjFor = (reportPlacement: string): number => adj[REPORT_TO_BID_KEY[reportPlacement] ?? reportPlacement] ?? adj[reportPlacement] ?? 0
     // CD/CPC — surface the CPC-ceiling guardrail config (read-modify-written by
     // PATCH /campaigns/:id/cpc-ceiling; enforced on ad-target bid writes).
     const cpcCeiling = { enabled: db.cpcCeiling?.enabled ?? false, multiple: db.cpcCeiling?.multiple ?? 1.5 }
@@ -500,7 +505,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
         costMicros: (r._sum.costMicros ?? 0n).toString(),
         sales7dCents: r._sum.sales7dCents ?? 0,
         orders7d: r._sum.orders7d ?? 0,
-        adjustmentPct: adj[r.placement] ?? 0,
+        adjustmentPct: adjFor(r.placement),
       })),
       cpcCeiling,
       ...(trend ? { trend } : {}),
