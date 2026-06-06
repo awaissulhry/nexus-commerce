@@ -319,10 +319,16 @@ export default function ProductEditClient({
       const cur = new URLSearchParams(searchParams?.toString() ?? '')
       const changed =
         cur.get('tab') !== params.get('tab') || cur.get('market') !== params.get('market')
-      if (changed) router.push(target, { scroll: false })
-      else router.replace(target, { scroll: false })
+      // The tab content is React state (topTab/setTopTab above) — the URL is
+      // only a CURSOR (for reload/bookmark/back-forward), not a route change.
+      // router.push() to the same pathname with a different query was not
+      // reflecting in the address bar; history.pushState updates it instantly
+      // and Next 16 syncs useSearchParams off it. push on a real change so
+      // back/forward walks tabs+markets; replace on a no-op/canonicalisation.
+      if (changed) window.history.pushState(null, '', target)
+      else window.history.replaceState(null, '', target)
     },
-    [router, searchParams],
+    [searchParams],
   )
   // Non-channel tabs carry no market — thin wrapper so the cursor logic
   // lives in one place (also clears a stale ?market when leaving a channel).
