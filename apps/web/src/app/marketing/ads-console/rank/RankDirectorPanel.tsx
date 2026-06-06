@@ -20,7 +20,7 @@ interface RankTarget { id: string; key: string; name: string; targetISPct: numbe
 interface Win { days: number[]; startHour: number; endHour: number; targetKey?: string }
 interface Plan { id: string; productId: string; parentAsin: string | null; marketplace: string; windows: Win[]; defaultTargetKey: string | null; familyDailyBudgetCents: number | null; familyAcosCapPct: number | null; maxCampaigns: number | null; leadTimeMinutes: number; enabled: boolean; manualOnly: boolean }
 interface Product { productId: string; name: string; parentAsin?: string | null; campaignCount?: number }
-interface Fam { parentName: string | null; campaignCount: number; demand: { grid: DemandCell[][]; hourProfile: DemandProfile[]; weekdayProfile: DemandProfile[]; hasData: boolean; familyOrders: number }; recommended: { windows: Win[]; baselineTargetKey: string; peakHours: number[] } }
+interface Fam { parentName: string | null; campaignCount: number; demand: { grid: DemandCell[][]; hourProfile: DemandProfile[]; weekdayProfile: DemandProfile[]; hasData: boolean; familyOrders: number }; smoothed?: { grid: DemandCell[][]; hourProfile: DemandProfile[]; weekdayProfile: DemandProfile[] }; recommended: { windows: Win[]; baselineTargetKey: string; peakHours: number[] } }
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const hh = (h: number) => `${String(h).padStart(2, '0')}:00`
@@ -33,6 +33,7 @@ export function RankDirectorPanel({ market, productId, onPickProduct }: { market
   const [plan, setPlan] = useState<Plan | null>(null)
   const [loadingFam, setLoadingFam] = useState(false)
   const [demandDays, setDemandDays] = useState(180) // chosen timeframe for the heatmap data
+  const [smooth, setSmooth] = useState(false) // false = RAW actual sales (default); true = market-smoothed
   // working draft
   const [baseline, setBaseline] = useState('')
   const [windows, setWindows] = useState<Win[]>([])
@@ -150,12 +151,13 @@ export function RankDirectorPanel({ market, productId, onPickProduct }: { market
           {/* Family + demand heatmap */}
           <div className="az-rd-fam">
             <span className="t"><Crosshair size={14} /> {fam?.parentName?.slice(0, 48) ?? selName.slice(0, 48)}</span>
-            <span className="sub">{fam?.campaignCount ?? 0} campaigns · {fam?.demand.familyOrders ?? 0} family orders</span>
+            <span className="sub">{fam?.campaignCount ?? 0} campaigns · <b>{fam?.demand.familyOrders ?? 0} actual orders</b> · {demandDays}d</span>
             <span className="grow" />
+            {fam?.smoothed && <label className="az-rp-smooth" title="Sparse product? Smooth toward the market's overall pattern. Off = your real sales."><input type="checkbox" checked={smooth} onChange={e => setSmooth(e.target.checked)} /> smooth</label>}
             <select className="az-rp-tf" value={demandDays} onChange={e => setDemandDays(Number(e.target.value))} aria-label="Demand timeframe" title="Timeframe for the demand data">{[7, 14, 30, 60, 90, 180].map(d => <option key={d} value={d}>last {d}d</option>)}</select>
             <button type="button" className="az-btn" onClick={useRecommended} disabled={!fam?.recommended?.windows?.length}><Wand2 size={13} /> Use recommended windows</button>
           </div>
-          {fam?.demand?.hasData ? <DemandReadout grid={fam.demand.grid} hourProfile={fam.demand.hourProfile} weekdayProfile={fam.demand.weekdayProfile} /> : <div className="az-rd-empty">Not enough order history to show a demand shape yet.</div>}
+          {fam?.demand?.hasData ? (() => { const dv = smooth && fam.smoothed ? fam.smoothed : fam.demand; return <DemandReadout grid={dv.grid} hourProfile={dv.hourProfile} weekdayProfile={dv.weekdayProfile} /> })() : <div className="az-rd-empty">Not enough order history to show a demand shape yet.</div>}
 
           {/* Baseline */}
           <div className="az-rp-sec">

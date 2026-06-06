@@ -39,6 +39,8 @@ export function RankPlanPanel({ campaignId, campaignName }: { campaignId: string
   const [famName, setFamName] = useState<string>('')
   const [demandDays, setDemandDays] = useState(180) // chosen timeframe for the heatmap data
   const [rec, setRec] = useState<{ windows: Win[]; baselineTargetKey: string; peakHours: number[] } | null>(null)
+  const [smoothed, setSmoothed] = useState<{ grid: DemandCell[][]; hourProfile: DemandProfile[]; weekdayProfile: DemandProfile[] } | null>(null)
+  const [smooth, setSmooth] = useState(false) // false = RAW actual sales (default); true = market-smoothed
 
   // server snapshot for dirty + discard
   const [serverBaseline, setServerBaseline] = useState('')
@@ -71,9 +73,9 @@ export function RankPlanPanel({ campaignId, campaignName }: { campaignId: string
   // RD.10b/c — family demand for this campaign's product over the chosen timeframe
   // (the dayparting heatmap) + a recommended set of rank windows from that demand.
   useEffect(() => {
-    if (!campaignId) { setDemand(null); setFamName(''); setRec(null); return }
+    if (!campaignId) { setDemand(null); setFamName(''); setRec(null); setSmoothed(null); return }
     void fetch(api(`/campaigns/${campaignId}/product-dayparting?windowDays=${demandDays}`), { cache: 'no-store' })
-      .then(r => r.json()).then(d => { setDemand(d.demand ?? null); setFamName(d.parentName ?? ''); setRec(d.recommended ?? null) }).catch(() => { setDemand(null) })
+      .then(r => r.json()).then(d => { setDemand(d.demand ?? null); setSmoothed(d.smoothed ?? null); setFamName(d.parentName ?? ''); setRec(d.recommended ?? null) }).catch(() => { setDemand(null) })
   }, [campaignId, demandDays])
   const applyRecommended = () => { if (!rec) return; setWindows(rec.windows.map(w => ({ ...w }))); if (rec.baselineTargetKey) setBaseline(rec.baselineTargetKey) }
 
@@ -150,14 +152,15 @@ export function RankPlanPanel({ campaignId, campaignName }: { campaignId: string
         {demand?.hasData && (
           <div className="az-rp-sec">
             <div className="az-rp-lbl az-rp-dphd">
-              <span>When this product&apos;s family sells{famName ? ` · ${famName.slice(0, 32)}` : ''} — hold the top slot in the busy hours:</span>
+              <span>When this product&apos;s family sells{famName ? ` · ${famName.slice(0, 26)}` : ''}: <b className="az-rp-sample">{demand.familyOrders} actual orders · {demandDays}d</b></span>
               <span className="grow" />
+              {smoothed && <label className="az-rp-smooth" title="Sparse product? Smooth toward the market's overall pattern. Off = your real sales."><input type="checkbox" checked={smooth} onChange={e => setSmooth(e.target.checked)} /> smooth</label>}
               <select className="az-rp-tf" value={demandDays} onChange={e => setDemandDays(Number(e.target.value))} aria-label="Demand timeframe" title="Timeframe for the demand data">
                 {[7, 14, 30, 60, 90, 180].map(d => <option key={d} value={d}>last {d}d</option>)}
               </select>
               {rec && rec.windows.length > 0 && <button type="button" className="az-link" onClick={applyRecommended} title="Set windows from the demand peaks"><Wand2 size={12} /> Recommend windows</button>}
             </div>
-            <DemandReadout grid={demand.grid} hourProfile={demand.hourProfile} weekdayProfile={demand.weekdayProfile} />
+            <DemandReadout grid={(smooth && smoothed ? smoothed : demand).grid} hourProfile={(smooth && smoothed ? smoothed : demand).hourProfile} weekdayProfile={(smooth && smoothed ? smoothed : demand).weekdayProfile} />
           </div>
         )}
 
