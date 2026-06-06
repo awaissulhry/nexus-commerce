@@ -19,7 +19,7 @@ import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
 import { recordCronRun } from '../utils/cron-observability.js'
 import { computeStep, resolveActiveTargetKey, isRankLoss, type RankTargetSpec, type ScheduleWindow } from '../services/advertising/rank-controller.js'
-import { analyzeTopOfSearch, applyTopOfSearch } from '../services/advertising/ads-top-of-search.service.js'
+import { analyzeTopOfSearch, setSearchPlacement } from '../services/advertising/ads-top-of-search.service.js'
 import { updateCampaignWithSync, type AdsActor } from '../services/advertising/ads-mutation.service.js'
 import { suppressCampaignBids, restoreCampaignBids } from '../services/advertising/ads-bid-suppression.service.js'
 import { detectSelfCompetition, type CampaignTargeting, type SelfCompetitionConflict } from '../services/advertising/rank-self-competition.js'
@@ -87,7 +87,10 @@ async function decideAndMaybeApply(
 ): Promise<{ decision: RankDefendDecision; applied: number }> {
   const sigRaw = ctx.sigByCampaign.get(camp.id) ?? { currentPct: 0, topIS: null, topAcos: null }
   const cdb = (camp.dynamicBidding ?? {}) as { placementBidding?: Array<{ placement: string; percentage: number }> }
-  const currentPct = cdb.placementBidding?.find((x) => x.placement === 'PLACEMENT_TOP')?.percentage ?? 0
+  // PP — read the bias of the TARGET's placement (Top for own-top/defend/all-out, Rest
+  // for rest-of-search), not always Top. The engine drives whichever placement the
+  // active target names.
+  const currentPct = cdb.placementBidding?.find((x) => x.placement === spec.placement)?.percentage ?? 0
   const base = { campaignId: camp.id, campaignName: camp.name, targetKey: key, currentPct, achievedISPct: pctOf(sigRaw.topIS), achievedAcosPct: pctOf(sigRaw.topAcos), planId }
   let applied = 0
   // NP — no-pause: a Pause target (or OOS/lost-buybox via effectiveSpec) drops every
@@ -110,14 +113,26 @@ async function decideAndMaybeApply(
     try { await updateCampaignWithSync({ campaignId: camp.id, patch: { status: 'ENABLED' }, actor: ctx.actor as AdsActor, reason: 'rank defend — resume to hold the slot', applyImmediately: true } as never); applied++ } catch (e) { logger.warn('[rank-defend] resume failed', { campaignId: camp.id, error: (e as Error).message }) }
   }
   const loss = ctx.lossByCampaign.get(camp.id) ?? false
-  const d = computeStep(spec, { currentPct, achievedISFraction: sigRaw.topIS, achievedAcosFraction: sigRaw.topAcos, lossDetected: loss })
+  // PP — the IS / ACOS / loss signals are Top-of-Search-specific (Amazon exposes no
+  // impression share for Rest/Product). For a non-Top target, feed no signal so the
+  // controller converges on the target's entry bias instead.
+  const isTop = spec.placement === 'PLACEMENT_TOP'
+  const d = computeStep(spec, { currentPct, achievedISFraction: isTop ? sigRaw.topIS : null, achievedAcosFraction: isTop ? sigRaw.topAcos : null, lossDetected: isTop ? loss : false })
   // RD.5 — family daily-budget cap: suppress raises (still allow holds/lowers) so a
   // must-win window can't push the whole family over its shared budget.
   let action = d.action, nextPct = d.nextPct, reason = d.reason
   if (ctx.suppressRaise && action === 'raise') { action = 'hold'; nextPct = currentPct; reason = 'family daily budget reached — holding (no raise)' }
-  const willApply = ctx.write && (action === 'raise' || action === 'lower') && nextPct !== currentPct
+  // PP — for a search target, also ensure the OTHER search placement (Top↔Rest) is
+  // zeroed — EVEN on a hold — so a rest-of-search window drops a leftover Top bias (and
+  // vice-versa). Actuate when the target's own bias changes OR the other search
+  // placement is still non-zero; setSearchPlacement sets the target + zeros the other.
+  const otherSearch = spec.placement === 'PLACEMENT_TOP' ? 'PLACEMENT_REST_OF_SEARCH' : spec.placement === 'PLACEMENT_REST_OF_SEARCH' ? 'PLACEMENT_TOP' : null
+  const otherCur = otherSearch ? (cdb.placementBidding?.find((x) => x.placement === otherSearch)?.percentage ?? 0) : 0
+  const targetChanges = (action === 'raise' || action === 'lower') && nextPct !== currentPct
+  if (otherCur > 0) reason = `${reason} · dropping ${otherSearch === 'PLACEMENT_TOP' ? 'Top' : 'Rest'} ${otherCur}→0`
+  const willApply = ctx.write && (targetChanges || otherCur > 0)
   if (willApply) {
-    try { await applyTopOfSearch(camp.id, nextPct); applied++ } catch (e) { logger.warn('[rank-defend] apply failed', { campaignId: camp.id, error: (e as Error).message }) }
+    try { await setSearchPlacement(camp.id, spec.placement, targetChanges ? nextPct : currentPct); applied++ } catch (e) { logger.warn('[rank-defend] apply failed', { campaignId: camp.id, error: (e as Error).message }) }
   }
   return { decision: { ...base, action, reason, nextPct, lossDetected: loss, applied: willApply }, applied }
 }
@@ -170,8 +185,9 @@ async function loadFamilyTargeting(famCampIds: string[], campById: Map<string, {
   })
 }
 
-// RD.7 — plan actuation is LIVE, gated. Plans actuate via applyTopOfSearch through
-// the same write-gate as schedules (sandbox-safe; live only when the gate is open).
+// RD.7 — plan actuation is LIVE, gated. Plans actuate via setSearchPlacement (the
+// target's own placement) through the same write-gate as schedules (sandbox-safe;
+// live only when the gate is open).
 // Auto-actuation (cron) skips manualOnly plans; an explicit run-now (force) actuates
 // them too.
 const PLAN_ALLOW_APPLY = true

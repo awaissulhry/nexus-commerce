@@ -93,13 +93,46 @@ export async function analyzeTopOfSearch(opts: { windowDays?: number; marketplac
   return { windowDays, targetAcos, targetIS, rows }
 }
 
-export async function applyTopOfSearch(campaignId: string, percentage: number): Promise<unknown> {
+const REST_BID_KEY = 'PLACEMENT_REST_OF_SEARCH'
+const clampPct = (p: number) => Math.max(0, Math.min(MAX_PCT, Math.round(p)))
+
+// PP — generic: set ONE placement's bias, preserving the others.
+export async function applyPlacementBias(campaignId: string, placement: string, percentage: number): Promise<unknown> {
   const { updatePlacementBidding } = await import('./ads-create.service.js')
   const c = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { dynamicBidding: true } })
   const db = (c?.dynamicBidding ?? {}) as { placementBidding?: Array<{ placement: string; percentage: number }> }
-  const others = (db.placementBidding ?? []).filter((x) => x.placement !== TOP_BID_KEY)
-  const adjustments = [...others, { placement: TOP_BID_KEY, percentage: Math.max(0, Math.min(MAX_PCT, Math.round(percentage))) }]
+  const others = (db.placementBidding ?? []).filter((x) => x.placement !== placement)
+  const adjustments = [...others, { placement, percentage: clampPct(percentage) }]
   return updatePlacementBidding({ campaignId, adjustments })
+}
+
+// PP — set the ACTIVE search placement to `percentage` AND zero the OTHER search
+// placement (Top ↔ Rest are mutually exclusive search positions); Product-page bias is
+// left untouched. This is the rank engine's lever: a Rest-of-Search target drives Rest
+// and drops Top; an Own-Top target drives Top and drops Rest.
+// Pure (unit-tested): active search placement = pct, the OTHER search placement = 0
+// (Top ↔ Rest are mutually exclusive), non-search placements (Product) preserved. A
+// non-search placement just sets itself and preserves everything else.
+export function buildSearchPlacementAdjustments(existing: Array<{ placement: string; percentage: number }>, placement: string, percentage: number): Array<{ placement: string; percentage: number }> {
+  const pct = clampPct(percentage)
+  if (placement !== TOP_BID_KEY && placement !== REST_BID_KEY) {
+    return [...(existing ?? []).filter((x) => x.placement !== placement), { placement, percentage: pct }]
+  }
+  const other = placement === TOP_BID_KEY ? REST_BID_KEY : TOP_BID_KEY
+  const preserved = (existing ?? []).filter((x) => x.placement !== TOP_BID_KEY && x.placement !== REST_BID_KEY)
+  return [...preserved, { placement, percentage: pct }, { placement: other, percentage: 0 }]
+}
+
+export async function setSearchPlacement(campaignId: string, placement: string, percentage: number): Promise<unknown> {
+  const { updatePlacementBidding } = await import('./ads-create.service.js')
+  const c = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { dynamicBidding: true } })
+  const db = (c?.dynamicBidding ?? {}) as { placementBidding?: Array<{ placement: string; percentage: number }> }
+  return updatePlacementBidding({ campaignId, adjustments: buildSearchPlacementAdjustments(db.placementBidding ?? [], placement, percentage) })
+}
+
+// Back-compat wrapper for the Top-of-Search recommendation / manual paths.
+export async function applyTopOfSearch(campaignId: string, percentage: number): Promise<unknown> {
+  return applyPlacementBias(campaignId, TOP_BID_KEY, percentage)
 }
 
 /** Auto-apply every raise/lower recommendation (within the step/cap guardrails). */
