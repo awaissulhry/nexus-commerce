@@ -5,7 +5,7 @@
  * `deliveredAt + delay` exactly.
  */
 import { describe, it, expect } from 'vitest'
-import { resolveSendTiming, lookupTimingTable, type TimingDefaultRow, type TimingRuleInput } from './review-timing.service.js'
+import { resolveSendTiming, lookupTimingTable, windowHourFor, type TimingDefaultRow, type TimingRuleInput, type SendWindowRow } from './review-timing.service.js'
 
 const DAY = 86_400_000
 const DELIV = new Date('2026-06-10T08:00:00.000Z')
@@ -77,6 +77,63 @@ describe('send niceties', () => {
       const r = resolveSendTiming(ebay(), rule({ sendDelayDays: d, skipWeekends: true, minDaysSinceDelivery: 1, maxDaysSinceDelivery: 30 }), TABLE)
       expect(['Mon', 'Tue', 'Wed', 'Thu', 'Fri']).toContain(localDow(r.scheduledFor!))
     }
+  })
+})
+
+// STO.3 / STO.6 — send-time windows
+const allDays = (hour: number, ranks: Partial<Record<number, number>> = {}, marketplace = '*'): SendWindowRow[] =>
+  [0, 1, 2, 3, 4, 5, 6].map((d) => ({ marketplace, dayOfWeek: d, hourLocal: hour, dayRank: ranks[d] ?? 5, isActive: true }))
+
+describe('send windows (STO.3)', () => {
+  it('window pins the weekday hour when the rule has none', () => {
+    const r = resolveSendTiming(ebay(), rule({ sendDelayDays: 5, minDaysSinceDelivery: 1 }), TABLE, allDays(19))
+    expect(localHour(r.scheduledFor!)).toBe(19)
+    expect(r.sendHourSource).toBe('window')
+    expect(r.sendHour).toBe(19)
+  })
+  it('rule sendHourLocal overrides the window', () => {
+    const r = resolveSendTiming(ebay(), rule({ sendDelayDays: 5, sendHourLocal: 8, minDaysSinceDelivery: 1 }), TABLE, allDays(19))
+    expect(localHour(r.scheduledFor!)).toBe(8)
+    expect(r.sendHourSource).toBe('rule')
+  })
+  it('per-market window beats global', () => {
+    const windows = [...allDays(19, {}, '*'), ...allDays(8, {}, 'IT')]
+    expect(localHour(resolveSendTiming(ebay(), rule({ sendDelayDays: 5, minDaysSinceDelivery: 1 }), TABLE, windows).scheduledFor!)).toBe(8)
+    const de = { ...ebay(), marketplace: 'DE' }
+    expect(localHour(resolveSendTiming(de, rule({ sendDelayDays: 5, minDaysSinceDelivery: 1 }), TABLE, windows).scheduledFor!)).toBe(19)
+  })
+  it('no windows → keeps anchor time-of-day (parity)', () => {
+    const r = resolveSendTiming(ebay(), rule({ sendDelayDays: 5, minDaysSinceDelivery: 1 }), TABLE, [])
+    expect(r.sendHourSource).toBe('none')
+    expect(r.scheduledFor?.getTime()).toBe(DELIV.getTime() + 5 * DAY)
+  })
+  it('inactive window rows are ignored', () => {
+    const windows = allDays(19).map((w) => ({ ...w, isActive: false }))
+    expect(resolveSendTiming(ebay(), rule({ sendDelayDays: 5, minDaysSinceDelivery: 1 }), TABLE, windows).sendHourSource).toBe('none')
+  })
+})
+
+describe('shift to best day (STO.6)', () => {
+  it('moves forward to the best-ranked weekday', () => {
+    // DELIV is Wed 2026-06-10; +2 = Fri; Saturday ranked best → shift to Sat
+    const windows = allDays(12, { 6: 0 })
+    const r = resolveSendTiming(ebay(), rule({ sendDelayDays: 2, shiftToBestDay: true, minDaysSinceDelivery: 1, maxDaysSinceDelivery: 30 }), TABLE, windows)
+    expect(localDow(r.scheduledFor!)).toBe('Sat')
+    expect(localHour(r.scheduledFor!)).toBe(12)
+  })
+  it('does not shift when the toggle is off', () => {
+    const windows = allDays(12, { 6: 0 })
+    const r = resolveSendTiming(ebay(), rule({ sendDelayDays: 2, minDaysSinceDelivery: 1, maxDaysSinceDelivery: 30 }), TABLE, windows)
+    expect(localDow(r.scheduledFor!)).toBe('Fri')
+  })
+})
+
+describe('windowHourFor', () => {
+  it('per-market beats global, falls back, null when absent', () => {
+    const windows = [...allDays(19, {}, '*'), ...allDays(8, {}, 'IT')]
+    expect(windowHourFor('IT', 3, windows)).toBe(8)
+    expect(windowHourFor('DE', 3, windows)).toBe(19)
+    expect(windowHourFor('IT', 3, [])).toBeNull()
   })
 })
 

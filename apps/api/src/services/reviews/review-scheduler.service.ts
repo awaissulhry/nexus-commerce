@@ -19,7 +19,7 @@
 import { randomBytes } from 'node:crypto'
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
-import { resolveSendTiming, type TimingDefaultRow } from './review-timing.service.js'
+import { resolveSendTiming, type TimingDefaultRow, type SendWindowRow } from './review-timing.service.js'
 
 // Active-return statuses suppress review requests — mirrored from
 // orders-reviews.routes.ts. Refunds suppress too (financialTransactions).
@@ -161,6 +161,8 @@ export async function schedulePendingOrders(): Promise<ScheduleResult> {
   const activeRules = await prisma.reviewRule.findMany({ where: { isActive: true } })
   // RRT.2 — load the editable per-product-type timing table once for the batch.
   const timingDefaults: TimingDefaultRow[] = await prisma.reviewTimingDefault.findMany({ where: { isActive: true } })
+  // STO.3 — load the per-weekday send-time windows once for the batch.
+  const sendWindows: SendWindowRow[] = await prisma.reviewSendWindow.findMany({ where: { isActive: true } })
 
   // Find delivered orders in the last 30 days with no ReviewRequest yet.
   // RV.2.5 — key off deliveredAt alone, not status. The deliveredAt field
@@ -231,6 +233,7 @@ export async function schedulePendingOrders(): Promise<ScheduleResult> {
         { channel: order.channel, marketplace: order.marketplace, deliveredAt: order.deliveredAt, shippedAt: order.shippedAt, purchaseDate: order.purchaseDate, productType },
         matchedRule,
         timingDefaults,
+        sendWindows,
       )
       if (!resolved.scheduledFor) { result.skipped += 1; continue }
       const scheduledFor = resolved.scheduledFor

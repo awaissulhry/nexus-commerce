@@ -55,6 +55,30 @@ function zonedDateTime(y: number, m0: number, d: number, hour: number, tz: strin
 }
 
 export interface TimingDefaultRow { pattern: string; delayDays: number; isActive: boolean; sortOrder: number }
+export interface SendWindowRow { marketplace: string; dayOfWeek: number; hourLocal: number; dayRank: number; isActive: boolean }
+
+/** Effective local send hour for a weekday: a per-market row beats the global '*'. null = none. */
+export function windowHourFor(marketplace: string | null | undefined, weekday: number, windows: SendWindowRow[]): number | null {
+  if (!windows.length) return null
+  const code = (marketplace || '').toUpperCase()
+  const active = windows.filter((w) => w.isActive && w.dayOfWeek === weekday)
+  const perMarket = code ? active.find((w) => w.marketplace.toUpperCase() === code) : undefined
+  if (perMarket) return perMarket.hourLocal
+  const global = active.find((w) => w.marketplace === '*')
+  return global ? global.hourLocal : null
+}
+
+/** Best (lowest dayRank) weekday from the windows for a market, falling back to global. */
+export function rankedWeekdays(marketplace: string | null | undefined, windows: SendWindowRow[]): number[] {
+  if (!windows.length) return []
+  const code = (marketplace || '').toUpperCase()
+  const byDay = new Map<number, SendWindowRow>()
+  for (const w of windows.filter((x) => x.isActive)) {
+    if (w.marketplace === '*' && !byDay.has(w.dayOfWeek)) byDay.set(w.dayOfWeek, w)
+    if (code && w.marketplace.toUpperCase() === code) byDay.set(w.dayOfWeek, w) // per-market overrides
+  }
+  return [...byDay.values()].sort((a, b) => a.dayRank - b.dayRank).map((w) => w.dayOfWeek)
+}
 export interface TimingOrderInput {
   channel: string
   marketplace: string | null
@@ -68,6 +92,7 @@ export interface TimingRuleInput {
   anchor: string
   sendHourLocal: number | null
   skipWeekends: boolean
+  shiftToBestDay?: boolean
   minDaysSinceDelivery: number
   maxDaysSinceDelivery: number
 }
@@ -78,6 +103,8 @@ export interface ResolvedTiming {
   delayDays: number
   effectiveDelayDays: number | null
   source: 'rule-override' | 'timing-table' | 'default'
+  sendHour: number | null // local hour pinned (null = anchor's time-of-day kept)
+  sendHourSource: 'rule' | 'window' | 'none'
 }
 
 /** First active table row (by sortOrder) whose pattern is a substring of productType. */
@@ -93,6 +120,7 @@ export function resolveSendTiming(
   order: TimingOrderInput,
   rule: TimingRuleInput | null,
   timingDefaults: TimingDefaultRow[],
+  sendWindows: SendWindowRow[] = [],
 ): ResolvedTiming {
   // 1. delay
   let delayDays: number
@@ -112,28 +140,34 @@ export function resolveSendTiming(
     anchorUsed === 'SHIP' ? (order.shippedAt ?? order.deliveredAt ?? order.purchaseDate)
       : anchorUsed === 'PURCHASE' ? (order.purchaseDate ?? order.shippedAt ?? order.deliveredAt)
         : (order.deliveredAt ?? order.shippedAt ?? order.purchaseDate)
-  if (!anchorDate) return { scheduledFor: null, anchorUsed, anchorDate: null, delayDays, effectiveDelayDays: null, source }
+  if (!anchorDate) return { scheduledFor: null, anchorUsed, anchorDate: null, delayDays, effectiveDelayDays: null, source, sendHour: null, sendHourSource: 'none' }
 
-  // 3. base
+  // 3. base date (keeps the anchor's time-of-day until we pin a send hour)
   let scheduled = new Date(anchorDate.getTime() + delayDays * DAY)
   const tz = timezoneForMarketplace(order.marketplace)
 
-  // 4. pin to a preferred local hour
-  if (rule?.sendHourLocal != null) {
-    const z = zoneParts(scheduled, tz)
-    scheduled = zonedDateTime(z.y, z.m - 1, z.d, rule.sendHourLocal, tz)
+  const amazonClamp = (d: Date): Date => {
+    if (order.channel === 'AMAZON' && order.deliveredAt) {
+      const aLo = new Date(order.deliveredAt.getTime() + AMAZON_MIN_DAYS * DAY)
+      const aHi = new Date(order.deliveredAt.getTime() + AMAZON_MAX_DAYS * DAY)
+      if (d < aLo) return aLo
+      if (d > aHi) return aHi
+    }
+    return d
   }
-  // 5. skip weekends (roll Sat/Sun forward to Monday; re-pin the hour)
+
+  // 4. position the calendar DAY first (weekend roll → window clamp → Amazon day
+  //    cap), preserving time-of-day; the send HOUR is pinned afterwards by the
+  //    settled weekday so a day-shift can't strand the hour on the wrong weekday.
+
+  // 4a. skip weekends (roll Sat/Sun forward to Monday)
   if (rule?.skipWeekends) {
     let guard = 0
     while ((dowInZone(scheduled, tz) === 0 || dowInZone(scheduled, tz) === 6) && guard++ < 3) {
-      const z = zoneParts(new Date(scheduled.getTime() + DAY), tz)
-      scheduled = rule.sendHourLocal != null
-        ? zonedDateTime(z.y, z.m - 1, z.d, rule.sendHourLocal, tz)
-        : new Date(scheduled.getTime() + DAY)
+      scheduled = new Date(scheduled.getTime() + DAY)
     }
   }
-  // 6. clamp into the rule's eligibility window [min,max] days from the anchor.
+  // 4b. clamp into the rule's eligibility window [min,max] days from the anchor.
   // Parity-safe: existing rules have delay == minDaysSinceDelivery, so this is a
   // no-op for them; it bounds operator delays + any hour/weekend drift.
   if (rule) {
@@ -144,12 +178,40 @@ export function resolveSendTiming(
       if (scheduled > hi) scheduled = hi
     }
   }
-  // 7. Amazon hard cap ALWAYS wins (legality beats the hour nicety at the boundary)
-  if (order.channel === 'AMAZON' && order.deliveredAt) {
-    const aLo = new Date(order.deliveredAt.getTime() + AMAZON_MIN_DAYS * DAY)
-    const aHi = new Date(order.deliveredAt.getTime() + AMAZON_MAX_DAYS * DAY)
-    if (scheduled < aLo) scheduled = aLo
-    if (scheduled > aHi) scheduled = aHi
+  // 4c. Amazon day cap
+  scheduled = amazonClamp(scheduled)
+
+  // 4d. STO.6 — optionally shift forward within the same week to the best-ranked
+  //     weekday (only if it stays inside every clamp above).
+  if (rule?.shiftToBestDay) {
+    const order2 = rankedWeekdays(order.marketplace, sendWindows)
+    if (order2.length) {
+      const curDow = dowInZone(scheduled, tz)
+      const curRank = order2.indexOf(curDow)
+      for (let add = 1; add <= 6; add++) {
+        const cand = new Date(scheduled.getTime() + add * DAY)
+        if (amazonClamp(cand).getTime() !== cand.getTime()) break // would leave the legal window
+        if (rule.skipWeekends && (dowInZone(cand, tz) === 0 || dowInZone(cand, tz) === 6)) continue
+        const candRank = order2.indexOf(dowInZone(cand, tz))
+        if (candRank !== -1 && (curRank === -1 || candRank < curRank)) { scheduled = cand; break }
+      }
+    }
+  }
+
+  // 5. pin the send HOUR by the settled weekday: rule override → send-window table
+  //    (per-market beats global) → none (keep the anchor's time-of-day).
+  let sendHour: number | null = rule?.sendHourLocal ?? null
+  let sendHourSource: ResolvedTiming['sendHourSource'] = rule?.sendHourLocal != null ? 'rule' : 'none'
+  if (sendHour == null) {
+    const w = windowHourFor(order.marketplace, dowInZone(scheduled, tz), sendWindows)
+    if (w != null) { sendHour = w; sendHourSource = 'window' }
+  }
+  if (sendHour != null) {
+    const z = zoneParts(scheduled, tz)
+    scheduled = zonedDateTime(z.y, z.m - 1, z.d, sendHour, tz)
+    // legality re-assert: an earlier hour on the min day (or later on the max day)
+    // must not cross Amazon's window — legality beats the hour nicety here.
+    scheduled = amazonClamp(scheduled)
   }
 
   return {
@@ -159,5 +221,7 @@ export function resolveSendTiming(
     delayDays,
     effectiveDelayDays: Math.round((scheduled.getTime() - anchorDate.getTime()) / DAY),
     source,
+    sendHour,
+    sendHourSource,
   }
 }

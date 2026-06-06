@@ -66,6 +66,7 @@ function timingFieldsFromBody(body: any): Record<string, any> {
   if (body.anchor !== undefined) out.anchor = ['DELIVERY', 'SHIP', 'PURCHASE'].includes(body.anchor) ? body.anchor : 'DELIVERY'
   if (body.sendHourLocal !== undefined) out.sendHourLocal = body.sendHourLocal == null ? null : Math.max(0, Math.min(23, Math.floor(Number(body.sendHourLocal))))
   if (body.skipWeekends !== undefined) out.skipWeekends = body.skipWeekends === true
+  if (body.shiftToBestDay !== undefined) out.shiftToBestDay = body.shiftToBestDay === true
   return out
 }
 
@@ -95,6 +96,7 @@ const ordersReviewsRoutes: FastifyPluginAsync = async (fastify) => {
           anchor: r.anchor,
           sendHourLocal: r.sendHourLocal,
           skipWeekends: r.skipWeekends,
+          shiftToBestDay: r.shiftToBestDay,
           requestCount: r._count.requests,
           updatedAt: r.updatedAt,
         })),
@@ -225,6 +227,7 @@ const ordersReviewsRoutes: FastifyPluginAsync = async (fastify) => {
       anchor: r.anchor,
       sendHourLocal: r.sendHourLocal,
       skipWeekends: r.skipWeekends,
+      shiftToBestDay: r.shiftToBestDay,
       useSentimentDiversion: r.useSentimentDiversion,
       fallbackOnNoResponse: r.fallbackOnNoResponse,
     }))
@@ -456,6 +459,7 @@ const ordersReviewsRoutes: FastifyPluginAsync = async (fastify) => {
       // RRT.6 — compute the real scheduledFor per sample so the preview shows WHEN.
       const { resolveSendTiming } = await import('../services/reviews/review-timing.service.js')
       const timingDefaults = await prisma.reviewTimingDefault.findMany({ where: { isActive: true } })
+      const sendWindows = await prisma.reviewSendWindow.findMany({ where: { isActive: true } })
       return {
         rule: { id: rule.id, name: rule.name, scope: rule.scope, marketplace: rule.marketplace },
         matchCount: matches.length,
@@ -464,11 +468,13 @@ const ordersReviewsRoutes: FastifyPluginAsync = async (fastify) => {
             { channel: m.channel, marketplace: m.marketplace, deliveredAt: m.deliveredAt, shippedAt: m.shippedAt, purchaseDate: m.purchaseDate, productType: m.items?.[0]?.product?.productType ?? null },
             rule,
             timingDefaults,
+            sendWindows,
           )
           return {
             orderId: m.id, channelOrderId: m.channelOrderId, channel: m.channel, marketplace: m.marketplace,
             totalPrice: Number(m.totalPrice), customerEmail: m.customerEmail, deliveredAt: m.deliveredAt,
             scheduledFor: r.scheduledFor, anchorUsed: r.anchorUsed, effectiveDelayDays: r.effectiveDelayDays, source: r.source,
+            sendHour: r.sendHour, sendHourSource: r.sendHourSource,
           }
         }),
       }
@@ -485,12 +491,14 @@ const ordersReviewsRoutes: FastifyPluginAsync = async (fastify) => {
     const b = (request.body ?? {}) as any
     const { resolveSendTiming, timezoneForMarketplace } = await import('../services/reviews/review-timing.service.js')
     const timingDefaults = await prisma.reviewTimingDefault.findMany({ where: { isActive: true } })
+    const sendWindows = await prisma.reviewSendWindow.findMany({ where: { isActive: true } })
     const now = new Date()
     const previewRule = {
       sendDelayDays: b.sendDelayDays == null ? null : Math.max(1, Math.min(60, Math.floor(Number(b.sendDelayDays)))),
       anchor: ['DELIVERY', 'SHIP', 'PURCHASE'].includes(b.anchor) ? b.anchor : 'DELIVERY',
       sendHourLocal: b.sendHourLocal == null ? null : Math.max(0, Math.min(23, Math.floor(Number(b.sendHourLocal)))),
       skipWeekends: b.skipWeekends === true,
+      shiftToBestDay: b.shiftToBestDay === true,
       minDaysSinceDelivery: Math.max(4, Math.floor(b.minDaysSinceDelivery ?? 7)),
       maxDaysSinceDelivery: Math.min(30, Math.floor(b.maxDaysSinceDelivery ?? 25)),
     }
@@ -501,6 +509,7 @@ const ordersReviewsRoutes: FastifyPluginAsync = async (fastify) => {
       { channel, marketplace, deliveredAt: now, shippedAt: now, purchaseDate: now, productType },
       previewRule,
       timingDefaults,
+      sendWindows,
     )
     reply.header('Cache-Control', 'no-store')
     return { ...r, tz: timezoneForMarketplace(marketplace), productType, channel }

@@ -10211,6 +10211,9 @@ model ReviewRule {
   sendHourLocal Int?
   // Roll Sat/Sun sends forward to Monday (RRT.5).
   skipWeekends  Boolean  @default(false)
+  // STO.6 — shift the send forward (within the Amazon window) to the best-ranked
+  // weekday in ReviewSendWindow.dayRank, then pin that day's hour. Off by default.
+  shiftToBestDay Boolean @default(false)
 
   @@unique([name, scope, marketplace])
   @@index([scope, isActive])
