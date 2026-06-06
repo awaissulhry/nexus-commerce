@@ -602,12 +602,16 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       return { marketplace, parentProductId: fam.parentProductId, parentName: fam.parentName, productIds: fam.productIds, asins: fam.asins, campaigns: fam.campaigns, demand: null }
     }
     const windowDays = q.windowDays ? Math.max(7, Math.min(365, Number(q.windowDays))) : 180
-    const demand = await blendedFamilyDemand(fam.productIds, fam.marketplace, windowDays)
-    const recommended = recommendRankWindows(demand.weekdayProfile, demand.hourProfile)
+    const d = await blendedFamilyDemand(fam.productIds, fam.marketplace, windowDays)
+    // RD.10f — RAW (the product's ACTUAL orders/revenue per cell) is the default so the
+    // numbers are true + self-consistent. `smoothed` (market-blended) is an optional
+    // overlay for sparse families. Recommendation derives from RAW so it matches what's shown.
+    const recommended = recommendRankWindows(d.raw.weekdayProfile, d.raw.hourProfile)
     return {
       marketplace: fam.marketplace ?? marketplace, parentProductId: fam.parentProductId, parentName: fam.parentName, productIds: fam.productIds, asins: fam.asins,
       campaigns: fam.campaigns,
-      demand: { totals: demand.totals, hourProfile: demand.hourProfile, weekdayProfile: demand.weekdayProfile, grid: demand.grid, hasData: demand.hasData, blended: demand.blended, familyOrders: demand.familyOrders, windowDays },
+      demand: { totals: d.raw.totals, hourProfile: d.raw.hourProfile, weekdayProfile: d.raw.weekdayProfile, grid: d.raw.grid, hasData: d.hasData, familyOrders: d.familyOrders, windowDays },
+      smoothed: { totals: d.totals, hourProfile: d.hourProfile, weekdayProfile: d.weekdayProfile, grid: d.grid, blended: d.blended },
       recommended,
     }
   })
@@ -4790,14 +4794,16 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const { resolveRange } = await import('../services/advertising/ads-date-range.js')
     const range = resolveRange({ preset: q.preset, startDate: q.from, endDate: q.to, windowDays: q.windowDays })
     const to = new Date(range.until.getTime() + 86_400_000) // include the until day (SQL uses < to)
-    const demand = await blendedFamilyDemand(fam.productIds, marketplace, range.days, { from: range.since, to })
-    const recommended = recommendRankWindows(demand.weekdayProfile, demand.hourProfile)
+    const d = await blendedFamilyDemand(fam.productIds, marketplace, range.days, { from: range.since, to })
+    // RD.10f — RAW actual demand is the default; smoothed (market-blended) is a toggle.
+    const recommended = recommendRankWindows(d.raw.weekdayProfile, d.raw.hourProfile)
     reply.header('Cache-Control', 'private, max-age=120')
     return {
       marketplace, parentProductId: fam.parentProductId, parentName: fam.parentName,
       productIds: fam.productIds, asins: fam.asins, campaignCount: fam.campaigns.length,
       range: { from: range.sinceStr, to: range.untilStr, days: range.days, preset: range.preset },
-      demand: { totals: demand.totals, hourProfile: demand.hourProfile, weekdayProfile: demand.weekdayProfile, grid: demand.grid, hasData: demand.hasData, blended: demand.blended, familyOrders: demand.familyOrders },
+      demand: { totals: d.raw.totals, hourProfile: d.raw.hourProfile, weekdayProfile: d.raw.weekdayProfile, grid: d.raw.grid, hasData: d.hasData, familyOrders: d.familyOrders },
+      smoothed: { totals: d.totals, hourProfile: d.hourProfile, weekdayProfile: d.weekdayProfile, grid: d.grid, blended: d.blended },
       recommended,
     }
   })

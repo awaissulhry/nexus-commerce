@@ -101,6 +101,8 @@ export async function aggregateOrdersDayparting(
     FROM "Order" o
     ${joinFrag}
     WHERE o."deletedAt" IS NULL
+      AND o."status"::text <> 'CANCELLED'
+      AND o."cancelledAt" IS NULL
       AND o."channel"::text = ${channel}
       AND COALESCE(o."purchaseDate", o."createdAt") >= ${from}
       AND COALESCE(o."purchaseDate", o."createdAt") <  ${to}

@@ -86,6 +86,7 @@ export async function familyDemand(productIds: string[], marketplace?: string, w
 export type Confidence = 'high' | 'med' | 'low'
 export interface BlendedCell { orders: number; units: number; revenueCents: number; familyOrders: number; confidence: Confidence }
 export interface BlendProfile { key: number; orders: number; units: number; revenueCents: number; index: number | null }
+export interface RawDemand { grid: Array<Array<{ orders: number; units: number; revenueCents: number }>>; hourProfile: BlendProfile[]; weekdayProfile: BlendProfile[]; totals: { orders: number; units: number; revenueCents: number } }
 export interface BlendedDemand {
   totals: { orders: number; units: number; revenueCents: number }
   grid: BlendedCell[][]
@@ -94,6 +95,9 @@ export interface BlendedDemand {
   hasData: boolean
   familyOrders: number
   blended: boolean
+  // RD.10f — the RAW family demand (un-blended, actual orders/revenue per cell), so
+  // the UI can show the product's TRUE data by default and offer smoothing as a toggle.
+  raw: RawDemand
 }
 
 const SHRINK_K = 2 // a cell needs ~2+ family orders before it outweighs the market shape
@@ -150,7 +154,7 @@ export async function blendedFamilyDemand(productIds: string[], marketplace: str
   for (const x of hourProfile) x.index = hMean > 0 ? x.revenueCents / hMean : null
   const wMean = weekdayProfile.reduce((s, x) => s + x.revenueCents, 0) / 7
   for (const x of weekdayProfile) x.index = wMean > 0 ? x.revenueCents / wMean : null
-  return { totals: fam.totals, grid, hourProfile, weekdayProfile, hasData: fTotOrders > 0, familyOrders: fTotOrders, blended }
+  return { totals: fam.totals, grid, hourProfile, weekdayProfile, hasData: fTotOrders > 0, familyOrders: fTotOrders, blended, raw: { grid: fam.grid, hourProfile: fam.hourProfile, weekdayProfile: fam.weekdayProfile, totals: fam.totals } }
 }
 
 interface GenParams { bidUpPct?: number; bidDownPct?: number; pauseOvernight?: boolean }
