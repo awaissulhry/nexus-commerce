@@ -23,7 +23,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
-import { Crosshair, Search, ChevronRight, Undo2, Redo2, Layers, Zap, AlertTriangle, History as HistoryIcon, Info } from 'lucide-react'
+import { Crosshair, Search, ChevronRight, Undo2, Redo2, Layers, Zap, AlertTriangle, History as HistoryIcon, Info, Package } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { RankPlacementCockpit } from '../automation/RankPlacementCockpit'
 import { StagedChangesTray } from './StagedChangesTray'
@@ -40,6 +40,7 @@ import { RankTrend } from './RankTrend'
 import { ManagedCampaigns } from './ManagedCampaigns'
 import { RankOverview } from './RankOverview'
 import { RankPlanPanel } from './RankPlanPanel'
+import { RankDirectorPanel } from './RankDirectorPanel'
 
 const MARKETS = ['IT', 'DE', 'FR', 'ES', 'NL', 'BE', 'SE', 'PL', 'IE', 'UK']
 const LOOKBACKS = [7, 14, 30, 60, 90]
@@ -72,8 +73,9 @@ export function UnifiedRankCockpit() {
   const market = sp.get('market') ?? 'IT'
   const campaignId = sp.get('campaignId') ?? ''
   const mode = sp.get('mode') ?? 'cockpit'
-  const view: 'cockpit' | 'managed' | 'overview' = mode === 'managed' ? 'managed' : mode === 'overview' ? 'overview' : 'cockpit'
-  const viewLabel = view === 'managed' ? 'Managed campaigns' : view === 'overview' ? 'Overview' : 'Cockpit'
+  const productId = sp.get('productId') ?? ''
+  const view: 'cockpit' | 'managed' | 'overview' | 'plan' = mode === 'managed' ? 'managed' : mode === 'overview' ? 'overview' : mode === 'plan' ? 'plan' : 'cockpit'
+  const viewLabel = view === 'managed' ? 'Managed campaigns' : view === 'overview' ? 'Overview' : view === 'plan' ? 'Rank Director' : 'Cockpit'
   const setMarket = useCallback((m: string) => setParams({ market: m, campaignId: null }), [setParams])
   const setCampaignId = useCallback((id: string) => setParams({ campaignId: id || null }), [setParams])
 
@@ -149,6 +151,7 @@ export function UnifiedRankCockpit() {
         <span className="az-urc-crumb"><Crosshair size={15} /> Rank Control <ChevronRight size={11} /> <b>{viewLabel}</b>{view === 'cockpit' && campaign ? <> <ChevronRight size={11} /> {campaign.name}</> : ''}</span>
         <span className="sp" />
         <label className="az-urc-ctl"><span>Market</span><select value={market} onChange={e => setMarket(e.target.value)}>{MARKETS.map(m => <option key={m}>{m}</option>)}</select></label>
+        <button type="button" className={`az-urc-modebtn ${view === 'plan' ? 'on' : ''}`} onClick={() => setParams({ mode: view === 'plan' ? 'cockpit' : 'plan' })} title="Rank Director — manage rank by product across all its campaigns at once"><Package size={13} /> By product</button>
         {view === 'cockpit' && (<>
           <label className="az-urc-ctl"><span>Window</span><select value={lookback} onChange={e => setLookback(Number(e.target.value))}>{LOOKBACKS.map(d => <option key={d} value={d}>{d}d</option>)}</select></label>
           <label className="az-urc-ctl"><span>Show</span><select value={statusFilter} onChange={e => setStatusFilter(e.target.value as 'active' | 'inactive' | 'all')}><option value="active">Active</option><option value="inactive">Inactive</option><option value="all">All</option></select></label>
@@ -176,6 +179,12 @@ export function UnifiedRankCockpit() {
 
       {view === 'overview' && <RankOverview market={market} onMode={m => router.push(`/marketing/ads-console/rank?mode=${m}`)} />}
       {view === 'managed' && <ManagedCampaigns market={market} onJump={goCockpit} onChanged={loadPending} />}
+      {view === 'plan' && (
+        <section className="az-cr-sec">
+          <div className="az-cr-sechd"><span className="n">★</span><div className="x"><b>Rank Director — by product</b><span>Pick a product → hold the top slot when its whole family sells, across every campaign at once.</span></div></div>
+          <RankDirectorPanel market={market} productId={productId} onPickProduct={id => setParams({ mode: 'plan', productId: id || null })} />
+        </section>
+      )}
 
       {view === 'cockpit' && (<>
         {/* CR.1 — one guided journey: ① see where you rank → ② set the goal →

@@ -452,6 +452,25 @@
 .az-rp-preview > svg { color: var(--blue); flex: none; margin-top: 2px; }
 .az-rp-msg { color: var(--green); font-size: 12px; font-weight: 600; margin-top: 8px; }
 .az-rp-note { color: var(--ink2); font-size: 11px; line-height: 1.5; margin-top: 8px; }
+/* RD.9/RD.10 — Rank Director (product-family rank authoring) */
+.az-urc-modebtn { display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--border); border-radius: 7px; background: #fff; padding: 5px 10px; font: inherit; font-size: 12px; font-weight: 700; color: var(--ink2); cursor: pointer; }
+.az-urc-modebtn.on { background: var(--navy); color: #fff; border-color: var(--navy); }
+.az-rd { display: flex; flex-direction: column; gap: 12px; }
+.az-rd-pick { display: flex; align-items: center; gap: 9px; }
+.az-rd-pick .lbl { display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; font-weight: 700; color: var(--ink); }
+.az-rd-pick select { flex: 1; max-width: 520px; border: 1px solid var(--border); border-radius: 8px; padding: 7px 10px; font: inherit; cursor: pointer; background: #fff; }
+.az-rd-haveplan { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 700; color: var(--green); }
+.az-rd-empty { color: var(--ink2); font-size: 12.5px; line-height: 1.55; background: var(--bg2, #f7f8fa); border: 1px solid var(--border); border-radius: 9px; padding: 12px 14px; }
+.az-rd-fam { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.az-rd-fam .t { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 800; color: var(--ink); }
+.az-rd-fam .sub { color: var(--ink2); font-size: 12px; }
+.az-rd-fam .grow { flex: 1; }
+.az-rd-guards { display: flex; gap: 14px; flex-wrap: wrap; }
+.az-rd-guards label { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; color: var(--ink2); }
+.az-rd-guards input { width: 72px; border: 1px solid var(--border); border-radius: 6px; padding: 5px 7px; font: inherit; }
+.az-rd-guards span { color: var(--ink3); font-weight: 700; }
+.az-rd-foot { display: flex; align-items: center; gap: 8px; padding-top: 4px; border-top: 1px solid var(--border); }
+.az-rd-foot .grow { flex: 1; }
 /* CR.1 — lean cockpit section IA (one guided journey, numbered) */
 .az-cr-sec { margin-bottom: 18px; }
 .az-cr-sechd { display: flex; align-items: center; gap: 11px; margin: 6px 2px 10px; }
