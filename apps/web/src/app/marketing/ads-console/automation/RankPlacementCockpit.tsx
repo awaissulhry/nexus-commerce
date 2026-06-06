@@ -690,7 +690,7 @@ export function RankPlacementCockpit({ market: ctxMarket, campaignId: ctxCampaig
 
   const isPct = cur?.topIS != null ? cur.topIS * 100 : null
   const targetSlot = SLOTS.find(s => s.k === slot) ?? null
-  const topLocked = !!topManaged && targetSlot?.placement === 'PLACEMENT_TOP' // CR.3b — §2's rank goal owns the Top-of-Search dial
+  const topLocked = !!topManaged // CR.3b/RTPL.B — when §2 auto-defend is on it owns the whole placement dial; lock all manual placement edits until Take manual control
   const targetIsPct = targetSlot?.isTarget != null ? Math.round(targetSlot.isTarget * 100) : null
   const curRankSlot = cur?.topIS != null ? impliedSlot(cur.topIS, cur.currentPct) : null
   const topSlots = SLOTS.filter(s => s.group === 'top')
@@ -774,7 +774,8 @@ export function RankPlacementCockpit({ market: ctxMarket, campaignId: ctxCampaig
       <div className="az-cockpit-body">
         {/* ── Numbered rank ladder ───────────────────────────── */}
         <DndContext sensors={sensors} onDragStart={onDragStart} onDragEnd={onDragEnd}>
-          <div className="az-ladder">
+          <div className="az-ladder" style={topManaged ? { opacity: 0.55, pointerEvents: 'none' } : undefined} aria-disabled={topManaged || undefined}>
+            {topManaged && <div className="az-cockpit-note" style={{ pointerEvents: 'auto', opacity: 1 }}><Lock size={12} /> Top-of-Search is held by your <b>rank goal (§2)</b> — use <b>Take manual control</b> above to edit placement by hand.</div>}
             <div className="az-ladder-cap"><ArrowUp size={13} /> Higher rank · more visible · more competitive · costs more</div>
 
             <div className="az-rankgroup">
@@ -852,7 +853,7 @@ export function RankPlacementCockpit({ market: ctxMarket, campaignId: ctxCampaig
             <>
               <div className="az-plan-head">Set {targetSlot ? PLACEMENT_SHORT[targetSlot.placement] : ''} bias{targetSlot && targetSlot.group !== 'product' ? ` → ${slotLabel(slot)}` : ''}</div>
               {topLocked ? (
-                <div className="az-cockpit-note"><Lock size={12} /> Managed by your rank goal (§2) — it holds Top-of-Search automatically. Turn off Auto-defend there to set it by hand.</div>
+                <div className="az-cockpit-note"><Lock size={12} /> Managed by your rank goal (§2) — Take manual control (above) to set placement by hand.</div>
               ) : (
                 <div className="az-plan-target">
                   <span className="az-gauge-lbl">Bias · now +{targetCurrentPct}%</span>
@@ -863,7 +864,7 @@ export function RankPlacementCockpit({ market: ctxMarket, campaignId: ctxCampaig
                   </div>
                 </div>
               )}
-              <button type="button" className="az-btn dark" style={{ marginTop: 8, width: '100%', justifyContent: 'center' }} disabled={applying || dirtyPlacements.length === 0} onClick={() => void applyAll()}>
+              <button type="button" className="az-btn dark" style={{ marginTop: 8, width: '100%', justifyContent: 'center' }} disabled={applying || topManaged || dirtyPlacements.length === 0} onClick={() => void applyAll()}>
                 {applying ? <><Loader2 size={14} className="az-spin" /> Applying…</> : <><Zap size={14} /> Apply {dirtyPlacements.length || ''} placement{dirtyPlacements.length === 1 ? '' : 's'}</>}
               </button>
               {applyResult && (
@@ -936,9 +937,9 @@ export function RankPlacementCockpit({ market: ctxMarket, campaignId: ctxCampaig
                     <td>{acos != null ? `${acos}%` : '—'}</td>
                     <td>
                       <span className="az-bias-edit">
-                        <button type="button" onClick={() => setBias(sr.key, sr.newBias - 10)} disabled={applying} aria-label="Decrease bias">−</button>
-                        <input type="number" min={0} max={900} value={sr.newBias} onChange={e => setBias(sr.key, Number(e.target.value))} disabled={applying} />
-                        <button type="button" onClick={() => setBias(sr.key, sr.newBias + 10)} disabled={applying} aria-label="Increase bias">+</button>
+                        <button type="button" onClick={() => setBias(sr.key, sr.newBias - 10)} disabled={applying || topManaged} aria-label="Decrease bias">−</button>
+                        <input type="number" min={0} max={900} value={sr.newBias} onChange={e => setBias(sr.key, Number(e.target.value))} disabled={applying || topManaged} />
+                        <button type="button" onClick={() => setBias(sr.key, sr.newBias + 10)} disabled={applying || topManaged} aria-label="Increase bias">+</button>
                       </span>
                       {sr.changed && <span className="was">was +{sr.curBias}%</span>}
                     </td>
@@ -958,10 +959,10 @@ export function RankPlacementCockpit({ market: ctxMarket, campaignId: ctxCampaig
           </table>
         </div>
         <div className="az-spend-actions">
-          <button type="button" className="az-btn dark" disabled={applying || !campaign || dirtyPlacements.length === 0} onClick={() => void applyAll()}>
+          <button type="button" className="az-btn dark" disabled={applying || topManaged || !campaign || dirtyPlacements.length === 0} onClick={() => void applyAll()}>
             {applying ? <><Loader2 size={14} className="az-spin" /> Applying…</> : <><Zap size={14} /> Apply {dirtyPlacements.length || 'all'} placement{dirtyPlacements.length === 1 ? '' : 's'}</>}
           </button>
-          {dirtyPlacements.length > 0 && <button type="button" className="az-btn" disabled={applying} onClick={resetBias}>Reset</button>}
+          {dirtyPlacements.length > 0 && <button type="button" className="az-btn" disabled={applying || topManaged} onClick={resetBias}>Reset</button>}
           {applyResult && <span className="az-cockpit-sub" style={{ color: applyResult.mode === 'live' ? 'var(--green)' : applyResult.mode === 'error' ? '#cc1100' : 'var(--ink2)' }}>{applyResult.mode === 'error' ? 'Apply failed.' : applyResult.mode === 'live' ? 'Applied live on Amazon.' : `Staged (${applyResult.mode}) — not live; flip the write-gate.`}</span>}
         </div>
         <div className="az-cockpit-note"><Info size={12} /> €/day = window spend ÷ {WINDOW_DAYS}. Projection estimates the CPC effect at the chosen bias % — actual spend also depends on how many more impressions you win in the auction.{dailyBudgetCents != null && totalProjPerDay > dailyBudgetCents ? ' Projected daily spend exceeds the daily budget (Amazon will cap at the budget).' : ''}</div>
