@@ -21,8 +21,10 @@ type OvField = 'biasPct' | 'targetISPct' | 'acosCapPct' | 'maxCpcCents'
 type Ov = Partial<Record<OvField, number>>
 type OvMap = Record<string, Ov>
 const api = (p: string) => `${getBackendUrl()}/api/advertising${p}`
+const PLACE_LABEL: Record<string, string> = { PLACEMENT_TOP: 'Top of Search', PLACEMENT_REST_OF_SEARCH: 'Rest of Search', PLACEMENT_PRODUCT_PAGE: 'Product pages' }
+const placeLabel = (p: string) => PLACE_LABEL[p] ?? p
 const FIELDS: { f: OvField; label: string; unit: '%' | '€'; hint: string }[] = [
-  { f: 'biasPct', label: 'Top-of-Search', unit: '%', hint: 'placement bid multiplier 0–900%' },
+  { f: 'biasPct', label: 'Placement', unit: '%', hint: "bid multiplier 0–900% for THIS target's placement (Top or Rest of Search)" },
   { f: 'targetISPct', label: 'Target IS', unit: '%', hint: 'top-of-search impression share to hold' },
   { f: 'acosCapPct', label: 'ACOS cap', unit: '%', hint: 'ease off above this ACOS' },
   { f: 'maxCpcCents', label: 'Max CPC', unit: '€', hint: 'never bid above this' },
@@ -68,7 +70,7 @@ export function RankTargetEditor({ open, onClose, scopeKind, scopeLabel, scopeOv
   const describe = (t: RankTarget): string => {
     if (t.pause) return 'Floors bids to ~€0.02 (campaign stays live, restorable) — never pauses'
     const p: string[] = []
-    const b = effOf(t, 'biasPct'); if (b != null) p.push(`Top-of-Search +${b}%`)
+    const b = effOf(t, 'biasPct'); if (b != null) p.push(`${placeLabel(t.placement)} +${b}%`)
     const is = effOf(t, 'targetISPct'); if (is != null) p.push(`hold ${is}% IS`)
     const a = effOf(t, 'acosCapPct'); if (a != null) p.push(`ease above ${a}% ACOS`)
     const c = effOf(t, 'maxCpcCents'); if (c != null) p.push(`max CPC €${(c / 100).toFixed(2)}`)
@@ -141,6 +143,7 @@ export function RankTargetEditor({ open, onClose, scopeKind, scopeLabel, scopeOv
                   <i className="sw" style={{ background: t.color ?? '#999' }} />
                   {view === 'global' && !t.pause ? <input className="az-rte-name" value={(lib[t.id]?.name as string) ?? t.name} onChange={e => setLibField(t.id, 'name', e.target.value)} /> : <b>{t.name}</b>}
                   <span className="bdg">{t.builtIn ? 'default' : scoped ? 'scoped' : 'custom'}</span>
+                  {!t.pause && <span className="bdg" style={{ background: '#eef2ff', color: '#3730a3' }}>{placeLabel(t.placement)}</span>}
                   {view === 'scope' && hasOverride(t) && <span className="bdg ov">override</span>}
                   <span className="desc">{describe(t)}</span>
                 </span>
