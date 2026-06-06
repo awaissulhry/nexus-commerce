@@ -19,7 +19,7 @@
  */
 
 import { cloneElement, isValidElement, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import {
   ChevronLeft,
   AlertCircle,
@@ -215,6 +215,7 @@ export default function ProductEditClient({
   parentListings = {},
 }: Props) {
   const router = useRouter()
+  const pathname = usePathname()
   const searchParams = useSearchParams()
   const { t } = useTranslations()
   const confirm = useConfirm()
@@ -313,22 +314,20 @@ export default function ProductEditClient({
       if (attachMarket) params.set('market', market!)
       else params.delete('market')
       const qs = params.toString()
-      // Absolute path — the App Router doesn't reliably push a bare relative
-      // query string (`?tab=…`), so the URL bar wouldn't update on tab clicks.
-      const target = qs ? `${window.location.pathname}?${qs}` : window.location.pathname
+      // Absolute `${pathname}?${qs}` via the Next router — the proven cursor
+      // pattern used by OrdersWorkspace. Going through the router keeps Next's
+      // history in sync so sidebar/<Link> navigation keeps working (a manual
+      // window.history.pushState here corrupted the router state and broke
+      // in-app nav). push on a real coordinate change so back/forward walks
+      // tabs+markets; replace on a no-op/canonicalisation.
+      const target = qs ? `${pathname}?${qs}` : pathname
       const cur = new URLSearchParams(searchParams?.toString() ?? '')
       const changed =
         cur.get('tab') !== params.get('tab') || cur.get('market') !== params.get('market')
-      // The tab content is React state (topTab/setTopTab above) — the URL is
-      // only a CURSOR (for reload/bookmark/back-forward), not a route change.
-      // router.push() to the same pathname with a different query was not
-      // reflecting in the address bar; history.pushState updates it instantly
-      // and Next 16 syncs useSearchParams off it. push on a real change so
-      // back/forward walks tabs+markets; replace on a no-op/canonicalisation.
-      if (changed) window.history.pushState(null, '', target)
-      else window.history.replaceState(null, '', target)
+      if (changed) router.push(target, { scroll: false })
+      else router.replace(target, { scroll: false })
     },
-    [searchParams],
+    [router, pathname, searchParams],
   )
   // Non-channel tabs carry no market — thin wrapper so the cursor logic
   // lives in one place (also clears a stale ?market when leaving a channel).
