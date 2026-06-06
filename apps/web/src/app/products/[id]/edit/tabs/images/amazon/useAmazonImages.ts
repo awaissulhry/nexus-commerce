@@ -16,17 +16,31 @@ import { beFetch } from '../api'
 import { fireBrowserNotification } from '@/lib/notifications/browser-notifications'
 import type { ListingImage, PendingUpsert, ProductImage, VariantSummary, AmazonJobSummary } from '../types'
 
-export type AmazonSlot = 'MAIN' | 'PT01' | 'PT02' | 'PT03' | 'PT04' | 'PT05' | 'PT06' | 'PT07' | 'PT08' | 'SWCH'
-export const ALL_SLOTS: AmazonSlot[] = ['MAIN', 'PT01', 'PT02', 'PT03', 'PT04', 'PT05', 'PT06', 'PT07', 'PT08', 'SWCH']
+// M6 — PS01..PS06 are Amazon's Product-Safety (GPSR) image slots. Ordered
+// MAIN → PT → PS → SWCH to match the schema taxonomy. The matrix renders
+// columns straight off ALL_SLOTS, so adding them here surfaces the PS columns.
+export type AmazonSlot =
+  | 'MAIN'
+  | 'PT01' | 'PT02' | 'PT03' | 'PT04' | 'PT05' | 'PT06' | 'PT07' | 'PT08'
+  | 'PS01' | 'PS02' | 'PS03' | 'PS04' | 'PS05' | 'PS06'
+  | 'SWCH'
+export const ALL_SLOTS: AmazonSlot[] = [
+  'MAIN', 'PT01', 'PT02', 'PT03', 'PT04', 'PT05', 'PT06', 'PT07', 'PT08',
+  'PS01', 'PS02', 'PS03', 'PS04', 'PS05', 'PS06', 'SWCH',
+]
 export const SLOT_LABELS: Record<AmazonSlot, string> = {
   MAIN: 'Main', PT01: 'PT01', PT02: 'PT02', PT03: 'PT03', PT04: 'PT04',
-  PT05: 'PT05', PT06: 'PT06', PT07: 'PT07', PT08: 'PT08', SWCH: 'Swatch',
+  PT05: 'PT05', PT06: 'PT06', PT07: 'PT07', PT08: 'PT08',
+  PS01: 'PS01', PS02: 'PS02', PS03: 'PS03', PS04: 'PS04', PS05: 'PS05', PS06: 'PS06',
+  SWCH: 'Swatch',
 }
 
 const SLOT_ROLE: Record<AmazonSlot, string> = {
   MAIN: 'MAIN', SWCH: 'SWATCH',
   PT01: 'GALLERY', PT02: 'GALLERY', PT03: 'GALLERY', PT04: 'GALLERY',
   PT05: 'GALLERY', PT06: 'GALLERY', PT07: 'GALLERY', PT08: 'GALLERY',
+  PS01: 'INFOGRAPHIC', PS02: 'INFOGRAPHIC', PS03: 'INFOGRAPHIC',
+  PS04: 'INFOGRAPHIC', PS05: 'INFOGRAPHIC', PS06: 'INFOGRAPHIC',
 }
 
 export const AMAZON_MARKETPLACES = ['IT', 'DE', 'FR', 'ES', 'UK'] as const
