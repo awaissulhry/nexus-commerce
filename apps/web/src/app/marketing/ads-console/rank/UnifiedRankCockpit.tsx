@@ -135,11 +135,20 @@ export function UnifiedRankCockpit() {
   const campaign = useMemo(() => campaigns.find(c => c.id === campaignId) ?? null, [campaigns, campaignId])
   const searchResults = useMemo(() => {
     const q = search.trim().toLowerCase()
-    const rows = q ? inMarketStatus.filter(c => c.name.toLowerCase().includes(q)) : inMarketStatus
-    return [...rows].sort((a, b) => (a.status === b.status ? a.name.localeCompare(b.name) : a.status === 'ENABLED' ? -1 : 1)).slice(0, 12)
-  }, [inMarketStatus, search])
+    // RK.2 — a search query spans EVERY in-market campaign regardless of the Show
+    // (Active/Inactive/All) filter, so paused campaigns are findable by name. Was
+    // scoped to the active-only subset, which hid the ~89 paused IT campaigns from
+    // search entirely. With no query, the browse list still honours the Show filter.
+    const pool = q ? inMarket : inMarketStatus
+    const rows = q ? pool.filter(c => c.name.toLowerCase().includes(q)) : pool
+    return [...rows].sort((a, b) => (a.status === b.status ? a.name.localeCompare(b.name) : a.status === 'ENABLED' ? -1 : 1)).slice(0, q ? 25 : 12)
+  }, [inMarket, inMarketStatus, search])
 
-  const pickCampaign = useCallback((id: string) => { setCampaignId(id); setSearch(''); setSearchOpen(false) }, [])
+  const pickCampaign = useCallback((id: string) => {
+    const c = campaigns.find(x => x.id === id)
+    if (c && c.status !== 'ENABLED') setStatusFilter('all') // keep a picked paused campaign visible in the browse list
+    setCampaignId(id); setSearch(''); setSearchOpen(false)
+  }, [campaigns])
 
   // RC5.1 / RK.1 — jump to a specific campaign in the cockpit via the URL (reliable
   // deep-link). Widen the status filter if the target is paused/archived so it's
@@ -170,11 +179,19 @@ export function UnifiedRankCockpit() {
           <label className="az-urc-ctl"><span>Show</span><select value={statusFilter} onChange={e => setStatusFilter(e.target.value as 'active' | 'inactive' | 'all')}><option value="active">Active</option><option value="inactive">Inactive</option><option value="all">All</option></select></label>
           <div className="az-urc-search">
             <Search size={13} />
-            <input value={search} onChange={e => { setSearch(e.target.value); setSearchOpen(true) }} onFocus={() => setSearchOpen(true)} onBlur={() => setTimeout(() => setSearchOpen(false), 150)} placeholder={`Search ${inMarketStatus.length} campaigns…`} aria-label="Search campaigns" />
+            <input value={search} onChange={e => { setSearch(e.target.value); setSearchOpen(true) }} onFocus={() => setSearchOpen(true)} onBlur={() => setTimeout(() => setSearchOpen(false), 150)} placeholder={`Search ${inMarket.length} campaigns…`} aria-label="Search campaigns" />
             {!searchOpen && <kbd title="Command palette">⌘K</kbd>}
-            {searchOpen && searchResults.length > 0 && (
+            {searchOpen && inMarket.length > 0 && (
               <div className="az-urc-results" role="listbox">
                 {searchResults.map(c => <button key={c.id} type="button" role="option" aria-selected={c.id === campaignId} className={c.id === campaignId ? 'on' : ''} onMouseDown={() => pickCampaign(c.id)}>{c.status === 'ENABLED' ? '● ' : '○ '}{c.name}{c.marketplace ? <span className="mk">{c.marketplace}</span> : null}</button>)}
+                {(() => {
+                  const hint = { padding: '6px 11px', fontSize: 11, color: 'var(--ink3)' } as const
+                  if (searchResults.length === 0 && search.trim()) return <div className="az-urc-moreopt" style={hint}>No campaigns match “{search.trim()}”.</div>
+                  const hiddenPaused = !search.trim() && statusFilter === 'active' ? inMarket.length - inMarketStatus.length : 0
+                  if (hiddenPaused > 0) return <div className="az-urc-moreopt" style={hint}>{hiddenPaused} paused campaign{hiddenPaused === 1 ? '' : 's'} hidden — type a name to find any, or set Show → All.</div>
+                  if (searchResults.length >= (search.trim() ? 25 : 12)) return <div className="az-urc-moreopt" style={hint}>Showing first {searchResults.length} — keep typing to narrow.</div>
+                  return null
+                })()}
               </div>
             )}
           </div>

@@ -46,11 +46,15 @@ export function RankTimeGrid({ windows, onWindowsChange, targets, baselineKey, d
   const colorOf = useMemo(() => Object.fromEntries(palette.map(p => [p.key, p])) as Record<string, { color: string; text: string; name: string }>, [palette])
 
   const [brush, setBrush] = useState<string>('')
-  // Default the brush to the first real target once targets load (not Baseline).
+  // Default the brush to the first real target ONCE when targets load. Guarding on a
+  // ref (not on the brush value) so picking Baseline — whose key is '' (falsy) — sticks
+  // instead of being read as "uninitialised" and snapped back to a target.
+  const brushInit = useRef(false)
   useEffect(() => {
-    if (brush && (brush === BASELINE || targets.some(t => t.key === brush))) return
-    setBrush(targets[0]?.key ?? BASELINE)
-  }, [targets, brush])
+    if (brushInit.current || !targets.length) return
+    brushInit.current = true
+    setBrush(targets[0].key)
+  }, [targets])
 
   const painting = useRef(false)
   useEffect(() => {
