@@ -4718,6 +4718,57 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     try { await prisma.productRankPlan.delete({ where: { id } }); return { ok: true } } catch { reply.status(404); return { error: 'not found' } }
   })
 
+  // ── RD.2 — what this plan fans out to + is the mapping trustworthy? ─────
+  // resolveProductFamily is ASIN-centric (AdProductAd.productId is often null), so
+  // we surface per-campaign attribution health (ASIN-matched vs productId-linked)
+  // alongside the retail-readiness verdict (OOS / lost-buybox) so the operator can
+  // trust the campaign list this plan will actuate before arming it.
+  fastify.get('/advertising/rank-plans/:id/family', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const plan = await prisma.productRankPlan.findUnique({ where: { id } })
+    if (!plan) { reply.status(404); return { error: 'not found' } }
+    const { resolveProductFamily } = await import('../services/advertising/ads-dayparting-refresh.service.js')
+    const fam = await resolveProductFamily({ parentProductId: plan.productId, marketplace: plan.marketplace })
+    // Attribution health: how reliably the family's ad rows link back to a Product.
+    const famAds = fam.asins.length ? await prisma.adProductAd.findMany({
+      where: { asin: { in: fam.asins }, adGroup: { campaign: { marketplace: plan.marketplace } } },
+      select: { productId: true, adGroup: { select: { campaign: { select: { id: true } } } } },
+    }) : []
+    const byCamp = new Map<string, { ads: number; matched: number }>()
+    for (const a of famAds) {
+      const cid = a.adGroup?.campaign?.id; if (!cid) continue
+      const e = byCamp.get(cid) ?? { ads: 0, matched: 0 }
+      e.ads += 1; if (a.productId) e.matched += 1
+      byCamp.set(cid, e)
+    }
+    // Retail-readiness verdicts (OOS / lost-buybox), filtered to family campaigns.
+    const readiness: Record<string, { verdict: string; reason: string; outOfStock: number; lostBuyBox: number }> = {}
+    try {
+      const { analyzeRetailReadiness } = await import('../services/advertising/ads-retail-readiness.service.js')
+      const rr = await analyzeRetailReadiness({ marketplace: plan.marketplace })
+      for (const c of rr.campaigns) readiness[c.campaignId] = { verdict: c.verdict, reason: c.reason, outOfStock: c.outOfStock, lostBuyBox: c.lostBuyBox }
+    } catch { /* readiness best-effort */ }
+    const campaigns = fam.campaigns.map((c) => {
+      const att = byCamp.get(c.id) ?? { ads: 0, matched: 0 }
+      return {
+        id: c.id, name: c.name, status: c.status, marketplace: c.marketplace,
+        adProductAds: att.ads, productIdMatched: att.matched, asinOnly: att.ads - att.matched,
+        attributionPct: att.ads ? Math.round((att.matched / att.ads) * 100) : null,
+        readiness: readiness[c.id] ?? null,
+      }
+    })
+    const totalAds = [...byCamp.values()].reduce((s, e) => s + e.ads, 0)
+    const totalMatched = [...byCamp.values()].reduce((s, e) => s + e.matched, 0)
+    reply.header('Cache-Control', 'private, max-age=60')
+    return {
+      plan: { id: plan.id, productId: plan.productId, parentAsin: plan.parentAsin, marketplace: plan.marketplace },
+      family: { parentProductId: fam.parentProductId, parentName: fam.parentName, asins: fam.asins, productIds: fam.productIds, campaignCount: fam.campaigns.length },
+      campaigns,
+      attribution: { totalAdProductAds: totalAds, productIdMatched: totalMatched, overallPct: totalAds ? Math.round((totalMatched / totalAds) * 100) : null },
+      readinessSummary: { pause: campaigns.filter((c) => c.readiness?.verdict === 'pause').length, watch: campaigns.filter((c) => c.readiness?.verdict === 'watch').length },
+    }
+  })
+
   // RS.4 — preview the pure rank controller's next move for a given target +
   // observed signals (no writes). Lets the cockpit show "what would the defend
   // loop do right now", and is how RS.4 is verified end-to-end.
