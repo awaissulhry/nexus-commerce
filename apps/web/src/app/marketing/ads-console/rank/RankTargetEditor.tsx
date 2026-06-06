@@ -70,9 +70,11 @@ export function RankTargetEditor({ open, onClose, scopeKind, scopeLabel, scopeOv
   const describe = (t: RankTarget): string => {
     if (t.pause) return 'Floors bids to ~€0.02 (campaign stays live, restorable) — never pauses'
     const p: string[] = []
+    const isTop = t.placement === 'PLACEMENT_TOP'
     const b = effOf(t, 'biasPct'); if (b != null) p.push(`${placeLabel(t.placement)} +${b}%`)
-    const is = effOf(t, 'targetISPct'); if (is != null) p.push(`hold ${is}% IS`)
-    const a = effOf(t, 'acosCapPct'); if (a != null) p.push(`ease above ${a}% ACOS`)
+    // IS + ACOS only mean something for Top of Search — Amazon exposes neither for Rest/Product.
+    const is = effOf(t, 'targetISPct'); if (is != null && isTop) p.push(`hold ${is}% IS`)
+    const a = effOf(t, 'acosCapPct'); if (a != null && isTop) p.push(`ease above ${a}% ACOS`)
     const c = effOf(t, 'maxCpcCents'); if (c != null) p.push(`max CPC €${(c / 100).toFixed(2)}`)
     if (t.allOut) p.push('all-out (ignore ACOS)')
     return p.join(' · ') || 'baseline (no push)'
@@ -149,6 +151,10 @@ export function RankTargetEditor({ open, onClose, scopeKind, scopeLabel, scopeOv
                 </span>
                 {FIELDS.map(f => {
                   if (t.pause || (t.allOut && f.f === 'acosCapPct')) return <span key={f.f} className="fld">—</span>
+                  // Top-only signals: Amazon publishes impression-share + ACOS only for Top of Search,
+                  // so the engine can't use them on Rest/Product targets — show n/a, don't let them be set.
+                  if ((f.f === 'targetISPct' || f.f === 'acosCapPct') && t.placement !== 'PLACEMENT_TOP')
+                    return <span key={f.f} className="fld az-rte-na" title="Top of Search only — Amazon exposes no impression-share or ACOS for this placement, so the rank engine can't act on it here">n/a</span>
                   if (view === 'scope') {
                     const v = ov[t.key]?.[f.f]
                     const ph = defOf(t, f.f)
