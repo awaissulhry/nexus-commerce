@@ -61,6 +61,7 @@ import {
   ingestCompletedExport,
   summarizeCycle as summarizeV1Cycle,
 } from '../services/advertising/ads-v1-sync.service.js'
+import { syncCampaignSettingsFromAmazon } from '../services/advertising/ads-campaign-settings-sync.service.js'
 import prisma from '../db.js'
 
 let fbaStorageAgeTask: ReturnType<typeof cron.schedule> | null = null
@@ -82,6 +83,7 @@ let keywordBidResyncTask: ReturnType<typeof cron.schedule> | null = null
 let anomalyGuardTask: ReturnType<typeof cron.schedule> | null = null
 let autoBidTask: ReturnType<typeof cron.schedule> | null = null
 let autoHarvestTask: ReturnType<typeof cron.schedule> | null = null
+let campaignSettingsSyncTask: ReturnType<typeof cron.schedule> | null = null
 
 // ── fba-storage-age-ingest ────────────────────────────────────────────
 
@@ -226,6 +228,29 @@ export function startAdsMetricsIngestCron(): void {
     void runAdsMetricsIngestCron()
   })
   logger.info('ads-metrics-ingest cron: scheduled', { schedule })
+}
+
+// ── B — live campaign-settings sync (placement bids / budget / strategy / state) ──
+// Pulls each campaign's CURRENT settings from Amazon v3 every ~20 min so the cockpit
+// reflects Amazon far fresher than the 6h v1 export (which carries NO placement bids).
+// Read-only from Amazon + non-destructive DB writes.
+export async function runCampaignSettingsSyncCron(): Promise<void> {
+  try {
+    await recordCronRun('ads-campaign-settings-sync', async () => {
+      const r = await syncCampaignSettingsFromAmazon()
+      return `profiles=${r.profiles} campaigns=${r.campaigns} updated=${r.updated} placements=${r.placementsFilled} errors=${r.errors.length}`
+    })
+  } catch (err) {
+    logger.error('ads-campaign-settings-sync cron: failure', { error: err instanceof Error ? err.message : String(err) })
+  }
+}
+
+export function startCampaignSettingsSyncCron(): void {
+  if (campaignSettingsSyncTask) { logger.warn('ads-campaign-settings-sync cron already started'); return }
+  const schedule = process.env.NEXUS_ADS_SETTINGS_SYNC_SCHEDULE ?? '*/20 * * * *'
+  if (!cron.validate(schedule)) { logger.error('ads-campaign-settings-sync cron: invalid schedule', { schedule }); return }
+  campaignSettingsSyncTask = cron.schedule(schedule, () => { void runCampaignSettingsSyncCron() })
+  logger.info('ads-campaign-settings-sync cron: scheduled', { schedule })
 }
 
 // ── AD.4 Step 6: FBA fees ingest cron ────────────────────────────────
@@ -600,6 +625,8 @@ export function startAllAdvertisingCrons(): void {
   startV1ExportCreateCron()
   startV1ExportPollCron()
   startV1ExportIngestCron()
+  // B — live campaign-settings sync (placement bids / budget / strategy) every ~20 min.
+  startCampaignSettingsSyncCron()
   // AF.7 — keep real bids after each structural sync.
   startKeywordBidResyncCron()
   // TD.0 — automation anomaly circuit-breaker.
