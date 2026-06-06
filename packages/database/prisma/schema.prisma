@@ -10236,6 +10236,28 @@ model ReviewTimingDefault {
   @@index([isActive, sortOrder])
 }
 
+// STO.2 — per-weekday send-time optimization windows.
+//
+// Once a review request's send DATE is fixed (anchor + delay, weekend-roll,
+// clamps), the resolver pins the local send HOUR to that weekday's optimal value
+// here. `marketplace = '*'` is the global default pattern; a specific code
+// (e.g. 'IT') overrides the global for that market. `dayOfWeek` is 0=Sun..6=Sat
+// (matches JS getDay + Postgres EXTRACT(DOW)). `dayRank` (lower = better) ranks
+// the weekday for the STO.6 "shift to best nearby day" option.
+model ReviewSendWindow {
+  id          String   @id @default(cuid())
+  marketplace String   @default("*") // '*' = global default; or 'IT','DE',...
+  dayOfWeek   Int // 0=Sun .. 6=Sat
+  hourLocal   Int // 0-23, in the buyer's marketplace timezone
+  dayRank     Int      @default(0) // lower = better day (for shift-to-best-day)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([marketplace, dayOfWeek])
+  @@index([marketplace, isActive])
+}
+
 // RV.6.1 — Negative-feedback diversion state machine.
 //
 // One row per (order, rule) pair. Lifecycle:
