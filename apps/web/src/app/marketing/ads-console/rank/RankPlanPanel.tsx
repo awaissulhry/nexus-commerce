@@ -205,7 +205,7 @@ export function RankPlanPanel({ campaignId, campaignName, onAutoDefend, reloadSi
         {/* Live defend preview */}
         {decision && (
           <div className="az-rp-preview"><Sparkles size={13} />
-            <span>Right now the loop would <b>{decision.action}</b>{decision.action === 'raise' || decision.action === 'lower' ? ` → ${decision.nextPct}% top bias` : ''}{decision.lossDetected ? ' (slipping — re-taking)' : ''} — <i>{decision.reason}</i>{decision.achievedISPct != null ? ` · IS ${decision.achievedISPct}%` : ' · no IS data yet'}.</span>
+            <span>Right now the loop would <b>{decision.action === 'pause' ? 'drop to Min bid' : decision.action}</b>{decision.action === 'raise' || decision.action === 'lower' ? ` → ${decision.nextPct}% top bias` : ''}{decision.lossDetected ? ' (slipping — re-taking)' : ''} — <i>{decision.reason}</i>{decision.achievedISPct != null ? ` · IS ${decision.achievedISPct}%` : ' · no IS data yet'}.</span>
           </div>
         )}
 

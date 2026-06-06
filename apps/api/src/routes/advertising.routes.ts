@@ -4647,7 +4647,9 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     { key: 'own-top', name: 'Own Top of Search', placement: 'PLACEMENT_TOP', targetISPct: 70, acosCapPct: 45, biasPct: 100, pause: false, color: '#0a7d48', builtIn: true, sortOrder: 1 },
     { key: 'defend-top', name: 'Defend Top', placement: 'PLACEMENT_TOP', targetISPct: 35, acosCapPct: 35, biasPct: 50, pause: false, color: '#3aa873', builtIn: true, sortOrder: 2 },
     { key: 'rest-of-search', name: 'Rest of Search', placement: 'PLACEMENT_REST_OF_SEARCH', targetISPct: 10, acosCapPct: 30, biasPct: 0, pause: false, color: '#e6b067', builtIn: true, sortOrder: 3 },
-    { key: 'pause', name: 'Pause', placement: 'PLACEMENT_TOP', pause: true, color: '#d97757', builtIn: true, sortOrder: 4 },
+    // NP — the engine never pauses; this target floors bids to ~2¢ (campaign stays
+    // live, restorable). Key stays 'pause' for back-compat with saved windows/plans.
+    { key: 'pause', name: 'Min bid', placement: 'PLACEMENT_TOP', pause: true, color: '#d97757', builtIn: true, sortOrder: 4 },
     // RS.1.1 — all-out: ignore ACOS, hold the slot at any cost (up to maxCpc). For
     // must-win windows; maxCpcCents stays null here (operator sets a runaway guard).
     { key: 'own-top-allout', name: 'Own Top — All-Out', placement: 'PLACEMENT_TOP', targetISPct: 90, acosCapPct: null, maxCpcCents: null, biasPct: 150, pause: false, allOut: true, color: '#b91c1c', builtIn: true, sortOrder: 5 },
@@ -4656,7 +4658,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     reply.header('Cache-Control', 'private, max-age=15')
     // Lazy-seed the built-ins (idempotent; update never overwrites operator tuning).
     for (const t of BUILTIN_RANK_TARGETS) {
-      try { await prisma.rankTarget.upsert({ where: { key: t.key }, update: { builtIn: true }, create: t as never }) } catch { /* race-safe */ }
+      try { await prisma.rankTarget.upsert({ where: { key: t.key }, update: { builtIn: true, name: t.name }, create: t as never }) } catch { /* race-safe */ }
     }
     const items = await prisma.rankTarget.findMany({ orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }] })
     return { items, count: items.length }

@@ -32,9 +32,9 @@ export function RetailTab() {
 
   const applyAll = async () => {
     if (!flagged.length) return
-    if (typeof window !== 'undefined' && !window.confirm(`Pause ${flagged.length} campaign(s) advertising unsellable products?`)) return
+    if (typeof window !== 'undefined' && !window.confirm(`Drop ${flagged.length} campaign(s) advertising unsellable products to Min bid (~€0.02, restorable)?`)) return
     setBusy(true); setMsg('')
-    try { const r = await fetch(`${getBackendUrl()}/api/advertising/retail-readiness/apply`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ campaignIds: flagged.map((c) => c.campaignId) }) }).then((x) => x.json()).catch(() => null); setMsg(r ? `Paused ${r.paused ?? r.applied ?? flagged.length} campaign(s) (pending)` : 'Applied'); load() } finally { setBusy(false) }
+    try { const r = await fetch(`${getBackendUrl()}/api/advertising/retail-readiness/apply`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ campaignIds: flagged.map((c) => c.campaignId) }) }).then((x) => x.json()).catch(() => null); setMsg(r ? `Min-bid ${r.paused ?? r.applied ?? flagged.length} campaign(s) (pending)` : 'Applied'); load() } finally { setBusy(false) }
   }
 
   return (
@@ -49,7 +49,7 @@ export function RetailTab() {
         <span style={{ fontWeight: 700 }}><ShieldAlert size={15} style={{ verticalAlign: 'text-bottom', marginRight: 5 }} />Retail readiness</span>
         <select value={mkt} onChange={(e) => setMkt(e.target.value)} style={{ border: '1px solid var(--border)', borderRadius: 6, padding: '5px 8px', font: 'inherit', cursor: 'pointer' }} aria-label="Market"><option value="All">All markets</option>{markets.map((m) => <option key={m} value={m}>{m}</option>)}</select>
         <span style={{ flex: 1 }} />
-        {flagged.length > 0 && <button className="az-btn dark" disabled={busy} onClick={() => void applyAll()}><PauseCircle size={14} />Pause {flagged.length} flagged</button>}
+        {flagged.length > 0 && <button className="az-btn dark" disabled={busy} onClick={() => void applyAll()}><PauseCircle size={14} />Min bid · {flagged.length} flagged</button>}
         {msg && <span style={{ color: 'var(--ink2)', fontSize: 12 }}>{msg}</span>}
         <button className="az-iconbtn" onClick={load} title="Refresh"><RefreshCw size={15} /></button>
       </div>
@@ -67,7 +67,7 @@ export function RetailTab() {
                 <td className="num" style={{ color: c.outOfStock ? '#cc1100' : undefined }}>{c.outOfStock}</td>
                 <td className="num" style={{ color: c.lostBuyBox ? 'var(--amber)' : undefined }}>{c.lostBuyBox}</td>
                 <td className="num">{c.uncompetitive}</td>
-                <td className="l">{c.verdict === 'pause' ? <span className="az-badge warn">pause</span> : <span className="az-badge deliver">ok</span>}</td>
+                <td className="l">{c.verdict === 'pause' ? <span className="az-badge warn">min bid</span> : <span className="az-badge deliver">ok</span>}</td>
                 <td className="l"><span className="sub">{c.reason}</span></td>
               </tr>
             ))}

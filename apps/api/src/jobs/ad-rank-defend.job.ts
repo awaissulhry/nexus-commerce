@@ -80,7 +80,7 @@ async function decideAndMaybeApply(
       try { suppressed = await suppressCampaignBids(camp.id, { actor: ctx.actor as AdsActor, reason: 'rank — pause target → bids floored (no-pause)' }) } catch (e) { logger.warn('[rank-defend] bid-suppress failed', { campaignId: camp.id, error: (e as Error).message }) }
     }
     applied += suppressed
-    return { decision: { ...base, action: 'pause', reason: 'target = pause → bids floored (no-pause, restorable)', nextPct: currentPct, lossDetected: false, applied: suppressed > 0 || (ctx.write && !!camp.bidsSuppressedAt) }, applied }
+    return { decision: { ...base, action: 'pause', reason: 'target = Min bid → bids at floor ~2¢ (campaign live, restorable)', nextPct: currentPct, lossDetected: false, applied: suppressed > 0 || (ctx.write && !!camp.bidsSuppressedAt) }, applied }
   }
   // Serve target → first restore any no-pause bid suppression (exact prior bids).
   if (ctx.write && camp.bidsSuppressedAt) {

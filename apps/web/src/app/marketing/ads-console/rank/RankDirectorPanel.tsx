@@ -284,7 +284,7 @@ export function RankDirectorPanel({ market, productId, onPickProduct }: { market
                         <span className="rec">{recencyLabel(c.lastDeliveredAt, c.recentSpendCents)}</span>
                         <span className="grow" />
                         {c.readiness && c.readiness.verdict !== 'ok' && <span className={`vd ${c.readiness.verdict}`}>{c.readiness.verdict}</span>}
-                        {inc && dec && <span className="dec">{dec.action}{dec.action === 'raise' || dec.action === 'lower' ? ` → ${dec.nextPct}%` : ''}</span>}
+                        {inc && dec && <span className="dec">{dec.action === 'pause' ? 'Min bid' : dec.action}{dec.action === 'raise' || dec.action === 'lower' ? ` → ${dec.nextPct}%` : ''}</span>}
                       </label>
                     )
                   })}
