@@ -398,23 +398,29 @@ async function ingestCampaigns(profileId: string, records: V1Campaign[]): Promis
   let upserted = 0
   for (const r of records) {
     if (!r.campaignId) continue
-    const dailyBudget = r.budgetCaps?.budgetValue?.monetaryBudget?.amount ?? 0
     const stateLower = normalizeStateV1(r.state)
-    const data = {
+    // RD.13 — NON-DESTRUCTIVE sync. A campaigns-export record can omit budgetCaps /
+    // optimization / state (partial page, SP-vs-SB/SD shape, throttled pull). The old
+    // mapper fell back to 0 / LEGACY_FOR_SALES / ENABLED and wrote them on UPDATE —
+    // clobbering a previously-correct budget, strategy or status with a default. That
+    // is the "reload shows budget 0 / strategy reset" bug. Now a settings field is
+    // written only when the record actually carried it; defaults apply to CREATE only.
+    const budgetAmount = r.budgetCaps?.budgetValue?.monetaryBudget?.amount
+    const stratRaw = r.optimization?.bidStrategy
+    const stratMapped = stratRaw
+      ? ((V1_BID_STRATEGY_MAP[stratRaw] === 'autoForSales' ? 'AUTO_FOR_SALES'
+         : V1_BID_STRATEGY_MAP[stratRaw] === 'legacyForSales' ? 'LEGACY_FOR_SALES'
+         : 'MANUAL') as 'AUTO_FOR_SALES' | 'LEGACY_FOR_SALES' | 'MANUAL')
+      : null
+    const statusMapped = STATE_TO_PRISMA[stateLower] ?? null
+    const base = {
       name: r.name,
       type: ADPRODUCT_TO_TYPE[r.adProduct] ?? 'SP' as const,
       adProduct: r.adProduct,
-      status: STATE_TO_PRISMA[stateLower] ?? 'ENABLED',
-      dailyBudget,
       startDate: r.startDate ? new Date(r.startDate) : new Date(),
       endDate: r.endDate ? new Date(r.endDate) : null,
       marketplace,
       externalCampaignId: r.campaignId,
-      biddingStrategy: r.optimization?.bidStrategy
-        ? (V1_BID_STRATEGY_MAP[r.optimization.bidStrategy] === 'autoForSales' ? 'AUTO_FOR_SALES'
-           : V1_BID_STRATEGY_MAP[r.optimization.bidStrategy] === 'legacyForSales' ? 'LEGACY_FOR_SALES'
-           : 'MANUAL') as 'AUTO_FOR_SALES' | 'LEGACY_FOR_SALES' | 'MANUAL'
-        : 'LEGACY_FOR_SALES' as const,
       brandEntityId: r.brandEntityId ?? null,
       budgetJson: r.budgetCaps ? (r.budgetCaps as object) : undefined,
       bidStrategyJson: r.optimization ? (r.optimization as object) : undefined,
@@ -425,6 +431,12 @@ async function ingestCampaigns(profileId: string, records: V1Campaign[]): Promis
       lastSyncStatus: 'SUCCESS' as const,
       lastSyncError: null,
     }
+    // Settings carried by THIS record — skipped on update when absent so a partial
+    // pull can't zero a good value.
+    const settings: Record<string, unknown> = {}
+    if (budgetAmount != null) settings.dailyBudget = budgetAmount
+    if (stratMapped) settings.biddingStrategy = stratMapped
+    if (statusMapped) settings.status = statusMapped
     try {
       // AF.1d — find by externalCampaignId ALONE. It is globally unique per
       // Amazon account; matching on marketplace too created a 2nd row whenever
@@ -435,9 +447,9 @@ async function ingestCampaigns(profileId: string, records: V1Campaign[]): Promis
         select: { id: true },
       })
       if (existing) {
-        await prisma.campaign.update({ where: { id: existing.id }, data })
+        await prisma.campaign.update({ where: { id: existing.id }, data: { ...base, ...settings } })
       } else {
-        await prisma.campaign.create({ data })
+        await prisma.campaign.create({ data: { ...base, dailyBudget: budgetAmount ?? 0, biddingStrategy: stratMapped ?? 'LEGACY_FOR_SALES', status: statusMapped ?? 'ENABLED' } })
       }
       upserted += 1
     } catch (err) {
