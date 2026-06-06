@@ -4661,6 +4661,63 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     return { ok: true }
   })
 
+  // ── RD.1 — Rank Director: product-FAMILY rank+dayparting plans ──────────
+  // ONE plan per (parent product, marketplace). The defend loop (RD.4+) fans it
+  // out to EVERY campaign advertising the family's ASINs, resolved LIVE — so it
+  // is the single source of truth vs N drifting per-campaign AdSchedules. Windows
+  // carry a rank targetKey (fused dayparting + rank goal); defaultTargetKey is the
+  // baseline for unpainted hours ("for the rest, hold Y").
+  fastify.get('/advertising/rank-plans', async (request, reply) => {
+    const q = request.query as { marketplace?: string; enabled?: string }
+    const where: Record<string, unknown> = {}
+    if (q.marketplace) where.marketplace = q.marketplace
+    if (q.enabled === '1' || q.enabled === 'true') where.enabled = true
+    if (q.enabled === '0' || q.enabled === 'false') where.enabled = false
+    const items = await prisma.productRankPlan.findMany({ where, orderBy: { updatedAt: 'desc' } })
+    return { items, count: items.length }
+  })
+  fastify.get('/advertising/rank-plans/:id', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const plan = await prisma.productRankPlan.findUnique({ where: { id } })
+    if (!plan) { reply.status(404); return { error: 'not found' } }
+    return plan
+  })
+  fastify.post('/advertising/rank-plans', async (request, reply) => {
+    const b = request.body as Record<string, unknown>
+    if (!b?.productId || !b?.marketplace) { reply.status(400); return { error: 'productId, marketplace required' } }
+    const data = {
+      productId: b.productId as string,
+      parentAsin: (b.parentAsin as string | null) ?? null,
+      marketplace: b.marketplace as string,
+      windows: (b.windows as object) ?? [],
+      defaultTargetKey: (b.defaultTargetKey as string | null) ?? null,
+      timezone: (b.timezone as string) ?? 'Europe/Rome',
+      familyDailyBudgetCents: (b.familyDailyBudgetCents as number | null) ?? null,
+      familyAcosCapPct: (b.familyAcosCapPct as number | null) ?? null,
+      maxCampaigns: (b.maxCampaigns as number | null) ?? null,
+      leadTimeMinutes: (b.leadTimeMinutes as number) ?? 0,
+      enabled: (b.enabled as boolean) ?? false,
+      manualOnly: (b.manualOnly as boolean) ?? false,
+      createdBy: (b.createdBy as string | null) ?? null,
+    }
+    // @@unique([productId, marketplace]) → one plan per family per market.
+    try { return await prisma.productRankPlan.create({ data: data as never }) } catch { reply.status(409); return { error: 'plan_exists_for_product_market' } }
+  })
+  fastify.patch('/advertising/rank-plans/:id', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const b = request.body as Record<string, unknown>
+    const data: Record<string, unknown> = {}
+    for (const k of ['parentAsin', 'windows', 'defaultTargetKey', 'timezone', 'familyDailyBudgetCents', 'familyAcosCapPct', 'maxCampaigns', 'leadTimeMinutes', 'enabled', 'manualOnly']) if (b[k] !== undefined) data[k] = b[k]
+    // Disabling stamps pausedAt. The resume-paused-family-campaigns safety (mirror
+    // of the AdSchedule reactivation guard) lands in RD.7, once plans actuate.
+    if (data.enabled === false) data.pausedAt = new Date()
+    try { return await prisma.productRankPlan.update({ where: { id }, data }) } catch { reply.status(404); return { error: 'not found' } }
+  })
+  fastify.delete('/advertising/rank-plans/:id', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    try { await prisma.productRankPlan.delete({ where: { id } }); return { ok: true } } catch { reply.status(404); return { error: 'not found' } }
+  })
+
   // RS.4 — preview the pure rank controller's next move for a given target +
   // observed signals (no writes). Lets the cockpit show "what would the defend
   // loop do right now", and is how RS.4 is verified end-to-end.

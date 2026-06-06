@@ -12476,6 +12476,51 @@ model RankTarget {
   updatedAt   DateTime @updatedAt
 }
 
+// RD.1 — Rank Director: ONE family-level rank+dayparting plan that fans out to
+// every Amazon campaign advertising a product family's ASINs in a market. The
+// single source of truth (vs N drifting per-campaign AdSchedules). Family
+// membership is resolved LIVE at evaluation time (resolveProductFamily) — never
+// stored, since AdProductAd.productId is often null and campaigns join/leave.
+model ProductRankPlan {
+  id          String  @id @default(cuid())
+  // Family anchor. productId = the PARENT Product.id (isParent). parentAsin is a
+  // denormalised convenience for display / cross-check; resolution is by productId.
+  productId   String
+  parentAsin  String?
+  marketplace String // 'IT' first; one plan per (family, market).
+
+  // FUSED dayparting + rank goals. JSON window shape is a SUPERSET of AdSchedule's
+  // so it feeds resolveActiveTargetKey() unchanged:
+  // [{ days:[0-6], startHour:0-23, endHour:0-24, targetKey:RankTarget.key }]
+  // Outside every window the defaultTargetKey baseline governs ("for the rest, hold Y").
+  windows          Json    @default("[]")
+  defaultTargetKey String?
+
+  // Per-market shopper-local TZ the windows are enforced in (Europe/Rome for IT).
+  timezone String @default("Europe/Rome")
+
+  // ── Family-level guardrails (the reason a family row must exist) ──
+  familyDailyBudgetCents Int? // soft cap on summed daily ad spend across the family's campaigns
+  familyAcosCapPct       Int? // family-aggregate ACOS ceiling
+  maxCampaigns           Int? // blast-radius guard — refuse/auto-pause if the family resolves to more
+  leadTimeMinutes        Int  @default(0) // pre-ramp: start converging this many minutes BEFORE a window opens
+
+  // ── Lifecycle / safety ──
+  enabled         Boolean   @default(false) // armed = the cron auto-holds it
+  manualOnly      Boolean   @default(false) // true = never auto-run; only "apply now"
+  pausedAt        DateTime? // kill-switch timestamp (auto-pause on breaker)
+  lastEvaluatedAt DateTime?
+  lastSummary     Json? // last run's per-campaign decision summary (for the UI)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  createdBy String?
+
+  @@unique([productId, marketplace]) // one plan per family per market
+  @@index([enabled])
+  @@index([marketplace, enabled])
+}
+
 // AX3.4 — AMC-style no-SQL audience definitions. Operators compose audiences
 // from templates (cart abandoners / product viewers / past purchasers /
 // lookalike / suppression / competitor viewers) without writing SQL; the
