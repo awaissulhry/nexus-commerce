@@ -12530,6 +12530,12 @@ model ProductRankPlan {
   maxCampaigns           Int? // blast-radius guard — refuse/auto-pause if the family resolves to more
   leadTimeMinutes        Int  @default(0) // pre-ramp: start converging this many minutes BEFORE a window opens
 
+  // RD.12 — manual campaign scope. Campaign IDs the operator has EXCLUDED from this
+  // plan (e.g. permanently-paused campaigns they don't want held). Default [] = the
+  // plan controls the WHOLE resolved family; stored as exclusions (not an include
+  // list) so newly-created campaigns for the family are auto-covered, not orphaned.
+  excludeCampaignIds Json @default("[]")
+
   // ── Lifecycle / safety ──
   enabled         Boolean   @default(false) // armed = the cron auto-holds it
   manualOnly      Boolean   @default(false) // true = never auto-run; only "apply now"

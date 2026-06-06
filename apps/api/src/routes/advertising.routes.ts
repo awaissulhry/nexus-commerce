@@ -4728,6 +4728,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       familyAcosCapPct: (b.familyAcosCapPct as number | null) ?? null,
       maxCampaigns: (b.maxCampaigns as number | null) ?? null,
       leadTimeMinutes: (b.leadTimeMinutes as number) ?? 0,
+      excludeCampaignIds: (b.excludeCampaignIds as object) ?? [],
       enabled: (b.enabled as boolean) ?? false,
       manualOnly: (b.manualOnly as boolean) ?? false,
       createdBy: (b.createdBy as string | null) ?? null,
@@ -4739,7 +4740,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const { id } = request.params as { id: string }
     const b = request.body as Record<string, unknown>
     const data: Record<string, unknown> = {}
-    for (const k of ['parentAsin', 'windows', 'defaultTargetKey', 'timezone', 'familyDailyBudgetCents', 'familyAcosCapPct', 'maxCampaigns', 'leadTimeMinutes', 'enabled', 'manualOnly']) if (b[k] !== undefined) data[k] = b[k]
+    for (const k of ['parentAsin', 'windows', 'defaultTargetKey', 'timezone', 'familyDailyBudgetCents', 'familyAcosCapPct', 'maxCampaigns', 'leadTimeMinutes', 'excludeCampaignIds', 'enabled', 'manualOnly']) if (b[k] !== undefined) data[k] = b[k]
     // Disabling stamps pausedAt. The resume-paused-family-campaigns safety (mirror
     // of the AdSchedule reactivation guard) lands in RD.7, once plans actuate.
     if (data.enabled === false) data.pausedAt = new Date()
@@ -4761,6 +4762,16 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     if (!plan) { reply.status(404); return { error: 'not found' } }
     const { resolveProductFamily } = await import('../services/advertising/ads-dayparting-refresh.service.js')
     const fam = await resolveProductFamily({ parentProductId: plan.productId, marketplace: plan.marketplace })
+    // RD.12 — manual scope + delivery recency, so the UI shows which campaigns this
+    // plan excludes and can tell "running recently" from "permanently paused".
+    const excludeSet = new Set<string>(Array.isArray(plan.excludeCampaignIds) ? (plan.excludeCampaignIds as string[]) : [])
+    const since30 = new Date(Date.now() - 30 * 86400000)
+    const perf = fam.campaigns.length ? await prisma.amazonAdsDailyPerformance.groupBy({
+      by: ['localEntityId'],
+      where: { entityType: 'CAMPAIGN', localEntityId: { in: fam.campaigns.map((c) => c.id) }, date: { gte: since30 }, impressions: { gt: 0 } },
+      _max: { date: true }, _sum: { costMicros: true },
+    }) : []
+    const perfByCamp = new Map(perf.filter((p) => p.localEntityId).map((p) => [p.localEntityId as string, { lastDeliveredAt: p._max.date as Date | null, recentSpendCents: Math.round(Number(p._sum.costMicros ?? 0n) / 10000) }]))
     // Attribution health: how reliably the family's ad rows link back to a Product.
     const famAds = fam.asins.length ? await prisma.adProductAd.findMany({
       where: { asin: { in: fam.asins }, adGroup: { campaign: { marketplace: plan.marketplace } } },
@@ -4782,11 +4793,15 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     } catch { /* readiness best-effort */ }
     const campaigns = fam.campaigns.map((c) => {
       const att = byCamp.get(c.id) ?? { ads: 0, matched: 0 }
+      const pf = perfByCamp.get(c.id)
       return {
         id: c.id, name: c.name, status: c.status, marketplace: c.marketplace,
         adProductAds: att.ads, productIdMatched: att.matched, asinOnly: att.ads - att.matched,
         attributionPct: att.ads ? Math.round((att.matched / att.ads) * 100) : null,
         readiness: readiness[c.id] ?? null,
+        excluded: excludeSet.has(c.id),
+        lastDeliveredAt: pf?.lastDeliveredAt ?? null,
+        recentSpendCents: pf?.recentSpendCents ?? 0,
       }
     })
     const totalAds = [...byCamp.values()].reduce((s, e) => s + e.ads, 0)
@@ -4857,9 +4872,12 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const fam = await resolveProductFamily({ parentProductId: plan.productId, marketplace: plan.marketplace })
     const baseline = plan.defaultTargetKey ? await prisma.rankTarget.findUnique({ where: { key: plan.defaultTargetKey } }) : null
     const pct = baseline?.biasPct ?? 0
+    // Only revert the campaigns this plan actually controls (excluded ones were never touched).
+    const exRevert = new Set<string>(Array.isArray(plan.excludeCampaignIds) ? (plan.excludeCampaignIds as string[]) : [])
+    const scoped = fam.campaigns.filter((c) => !exRevert.has(c.id))
     let reverted = 0
-    for (const c of fam.campaigns) { try { await applyTopOfSearch(c.id, pct); reverted++ } catch { /* best-effort */ } }
-    return { ok: true, reverted, toPct: pct, campaigns: fam.campaigns.length }
+    for (const c of scoped) { try { await applyTopOfSearch(c.id, pct); reverted++ } catch { /* best-effort */ } }
+    return { ok: true, reverted, toPct: pct, campaigns: scoped.length }
   })
   fastify.post('/advertising/rank-plans/:id/apply-across', async (request, reply) => {
     const { id } = request.params as { id: string }
@@ -4873,9 +4891,11 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const { resolveProductFamily } = await import('../services/advertising/ads-dayparting-refresh.service.js')
     const { applyTopOfSearch } = await import('../services/advertising/ads-top-of-search.service.js')
     const fam = await resolveProductFamily({ parentProductId: plan.productId, marketplace: plan.marketplace })
+    const exApply = new Set<string>(Array.isArray(plan.excludeCampaignIds) ? (plan.excludeCampaignIds as string[]) : [])
+    const scoped = fam.campaigns.filter((c) => !exApply.has(c.id))
     let applied = 0
-    for (const c of fam.campaigns) { try { await applyTopOfSearch(c.id, clamped); applied++ } catch { /* best-effort */ } }
-    return { ok: true, applied, pct: clamped, campaigns: fam.campaigns.length }
+    for (const c of scoped) { try { await applyTopOfSearch(c.id, clamped); applied++ } catch { /* best-effort */ } }
+    return { ok: true, applied, pct: clamped, campaigns: scoped.length }
   })
 
   // ── RG.4 — copy one schedule (windows + baseline) onto many products' plans ──

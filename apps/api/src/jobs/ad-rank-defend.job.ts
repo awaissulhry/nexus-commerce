@@ -168,7 +168,11 @@ export async function runRankDefendOnce(opts: { dryRun?: boolean; onlyPlanId?: s
   for (const plan of plans) {
     try {
       const fam = await resolveProductFamily({ parentProductId: plan.productId, marketplace: plan.marketplace })
-      const camps = fam.campaigns ?? []
+      // RD.12 — honour the operator's manual campaign scope: drop excluded campaigns
+      // BEFORE governance + blast-radius, so they're neither held nor counted nor
+      // marked governed (they stay free for schedules / manual control).
+      const excluded = new Set<string>(Array.isArray(plan.excludeCampaignIds) ? (plan.excludeCampaignIds as string[]) : [])
+      const camps = (fam.campaigns ?? []).filter((c) => !excluded.has(c.id))
       // RD.8 — blast-radius guard: a plan resolving to MORE than maxCampaigns is likely
       // mis-targeted (wrong product / runaway ASIN match). Refuse to actuate it, and on
       // a real run auto-pause it so it can't fan out to an unexpected fleet.
