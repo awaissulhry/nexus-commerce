@@ -302,6 +302,40 @@ export async function listProfiles(): Promise<AdsProfileDTO[]> {
   })
 }
 
+// B — live v3 campaign-settings read. POST /sp/campaigns/list returns each campaign's
+// CURRENT dynamicBidding (strategy + placementBidding %), budget and state — the
+// settings the v1 export omits (placement bids) or only refreshes every 6h. Paginated
+// via nextToken; defensive parse (Amazon v3 shapes vary). Sandbox returns a fixture.
+export interface V3CampaignSettings {
+  campaignId: string
+  name?: string
+  state?: string // enabled | paused | archived
+  dynamicBidding?: { strategy?: string; placementBidding?: Array<{ placement: string; percentage: number }> }
+  budget?: { budget?: number; budgetType?: string }
+}
+export async function listCampaignsV3(ctx: ClientContext): Promise<V3CampaignSettings[]> {
+  if (adsMode() === 'sandbox') return loadFixture<V3CampaignSettings[]>('campaigns-v3', [])
+  const out: V3CampaignSettings[] = []
+  let nextToken: string | undefined
+  let pages = 0
+  do {
+    const body: Record<string, unknown> = { maxResults: 100, ...(nextToken ? { nextToken } : {}) }
+    const res = await liveCall<{ campaigns?: V3CampaignSettings[]; nextToken?: string }>({
+      profileId: ctx.profileId,
+      region: ctx.region,
+      method: 'POST',
+      path: '/sp/campaigns/list',
+      body,
+      contentType: 'application/vnd.spCampaign.v3+json',
+      acceptHeader: 'application/vnd.spCampaign.v3+json',
+    })
+    for (const c of res.campaigns ?? []) out.push(c)
+    nextToken = res.nextToken
+    pages++
+  } while (nextToken && pages < 50)
+  return out
+}
+
 // ── Apex C.1 — Amazon theme-based bid recommendations ──────────────────────
 // POST /sp/targets/bid/recommendations returns themed bid candidates per
 // targeting expression (theme = CONVERSION_OPPORTUNITIES | SPECIAL_DAYS …),

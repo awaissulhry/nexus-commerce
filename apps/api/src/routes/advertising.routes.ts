@@ -4699,6 +4699,15 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   // is the single source of truth vs N drifting per-campaign AdSchedules. Windows
   // carry a rank targetKey (fused dayparting + rank goal); defaultTargetKey is the
   // baseline for unpainted hours ("for the rest, hold Y").
+  // B — pull live campaign settings (placement bids / budget / strategy / state) from
+  // Amazon v3 into the DB. ?profileId= scopes to one account; default = all. Returns
+  // sampleShape (first raw v3 campaign) so the response shape can be verified/refined.
+  fastify.post('/advertising/campaigns/sync-settings', async (request, reply) => {
+    const q = request.query as { profileId?: string }
+    const { syncCampaignSettingsFromAmazon } = await import('../services/advertising/ads-campaign-settings-sync.service.js')
+    try { return await syncCampaignSettingsFromAmazon({ profileId: q.profileId }) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
+  })
+
   fastify.get('/advertising/rank-plans', async (request, reply) => {
     const q = request.query as { marketplace?: string; enabled?: string }
     const where: Record<string, unknown> = {}
