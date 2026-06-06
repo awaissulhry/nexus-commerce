@@ -4710,6 +4710,29 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     return await prisma.rankTarget.update({ where: { id }, data: { name: d.name, placement: d.placement, targetISPct: d.targetISPct ?? null, acosCapPct: d.acosCapPct ?? null, maxCpcCents: d.maxCpcCents ?? null, biasPct: d.biasPct ?? null, color: d.color ?? null, pause: !!d.pause, allOut: !!d.allOut } as never })
   })
 
+  // ── RTPL — named rank-SCHEDULE templates (account-global; Save/Load a painted schedule) ──
+  fastify.get('/advertising/rank-templates', async (_request, reply) => {
+    reply.header('Cache-Control', 'private, max-age=10')
+    const items = await prisma.rankScheduleTemplate.findMany({ orderBy: { updatedAt: 'desc' } })
+    return { items, count: items.length }
+  })
+  fastify.post('/advertising/rank-templates', async (request, reply) => {
+    const b = request.body as { name?: string; windows?: unknown; defaultTargetKey?: string | null }
+    if (!b?.name?.trim()) { reply.status(400); return { error: 'name required' } }
+    return await prisma.rankScheduleTemplate.create({ data: { name: b.name.trim(), windows: (b.windows as object) ?? [], defaultTargetKey: (b.defaultTargetKey as string | null) ?? null } })
+  })
+  fastify.patch('/advertising/rank-templates/:id', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const b = request.body as Record<string, unknown>
+    const data: Record<string, unknown> = {}
+    for (const k of ['name', 'windows', 'defaultTargetKey']) if (b[k] !== undefined) data[k] = b[k]
+    try { return await prisma.rankScheduleTemplate.update({ where: { id }, data }) } catch { reply.status(404); return { error: 'not found' } }
+  })
+  fastify.delete('/advertising/rank-templates/:id', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    try { await prisma.rankScheduleTemplate.delete({ where: { id } }); return { ok: true } } catch { reply.status(404); return { error: 'not found' } }
+  })
+
   // ── RD.1 — Rank Director: product-FAMILY rank+dayparting plans ──────────
   // ONE plan per (parent product, marketplace). The defend loop (RD.4+) fans it
   // out to EVERY campaign advertising the family's ASINs, resolved LIVE — so it

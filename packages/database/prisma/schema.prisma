@@ -12514,6 +12514,20 @@ model RankTarget {
   updatedAt   DateTime @updatedAt
 }
 
+// RTPL — a named, reusable rank SCHEDULE template (account-global). Saves the painted
+// windows + baseline so an operator can Save/Load schedules across products/campaigns.
+model RankScheduleTemplate {
+  id               String   @id @default(cuid())
+  name             String
+  windows          Json     @default("[]") // [{ days:[0-6], startHour, endHour, targetKey }] (RankWin shape)
+  defaultTargetKey String? // baseline that loads alongside the windows
+  createdBy        String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([name])
+}
+
 // RD.1 — Rank Director: ONE family-level rank+dayparting plan that fans out to
 // every Amazon campaign advertising a product family's ASINs in a market. The
 // single source of truth (vs N drifting per-campaign AdSchedules). Family
