@@ -18,7 +18,7 @@ const LEVELS = [
   { k: 'ease', label: 'Ease off', desc: 'Save budget, rank naturally', icon: ArrowDown, top: 0, rest: 0, prod: 0 },
 ]
 
-export function QuickRankSet({ campaignId, currentTopPct, onChanged }: { campaignId: string; currentTopPct?: number; onChanged: () => void }) {
+export function QuickRankSet({ campaignId, currentTopPct, onChanged, locked }: { campaignId: string; currentTopPct?: number; onChanged: () => void; locked?: boolean }) {
   const [busy, setBusy] = useState<string | null>(null)
   const [msg, setMsg] = useState('')
 
@@ -37,19 +37,19 @@ export function QuickRankSet({ campaignId, currentTopPct, onChanged }: { campaig
   const active = currentTopPct == null ? null : LEVELS.reduce((best, l) => Math.abs(l.top - currentTopPct) < Math.abs(best.top - currentTopPct) ? l : best, LEVELS[0]).k
 
   return (
-    <div className="az-qrs">
+    <div className={`az-qrs ${locked ? 'locked' : ''}`}>
       <div className="az-qrs-row">
         <span className="lbl">Quick set:</span>
         {LEVELS.map(l => {
           const Icon = l.icon
           return (
-            <button key={l.k} type="button" className={`az-qrs-btn ${active === l.k ? 'on' : ''}`} disabled={busy === l.k} onClick={() => void setRank(l)} title={l.desc}>
+            <button key={l.k} type="button" className={`az-qrs-btn ${active === l.k ? 'on' : ''}`} disabled={busy === l.k || !!locked} onClick={() => void setRank(l)} title={locked ? 'Managed by your rank goal (§2)' : l.desc}>
               {busy === l.k ? <Loader2 size={15} className="az-spin" /> : <Icon size={15} />}
               <span className="t">{l.label}</span>
             </button>
           )
         })}
-        <span className="hint">or fine-tune the placement ladder below</span>
+        <span className="hint">{locked ? 'Top-of-Search is held by your rank goal above' : 'or fine-tune the placement ladder below'}</span>
       </div>
       {msg && <div className="az-qrs-msg" role="status" aria-live="polite"><Check size={12} /> {msg}</div>}
     </div>

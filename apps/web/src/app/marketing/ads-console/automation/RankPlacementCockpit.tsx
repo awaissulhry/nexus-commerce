@@ -22,7 +22,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { DndContext, useDraggable, useDroppable, DragOverlay, type DragEndEvent, type DragStartEvent, PointerSensor, KeyboardSensor, useSensor, useSensors } from '@dnd-kit/core'
-import { GripVertical, Info, ArrowUp, Crosshair, TrendingUp, TrendingDown, Minus, Search, Plus, Loader2, Check, ListPlus, Sparkles, Zap, ShieldCheck, BarChart3, AlertTriangle, Clock, Wallet, RotateCcw } from 'lucide-react'
+import { GripVertical, Info, ArrowUp, Crosshair, TrendingUp, TrendingDown, Minus, Search, Plus, Loader2, Check, ListPlus, Sparkles, Zap, ShieldCheck, BarChart3, AlertTriangle, Clock, Wallet, RotateCcw, Lock } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { TimeRankGrid, compileGrid, describeGrid, type Level } from './TimeRankGrid'
 import { DemandHeatmap } from './DemandHeatmap'
@@ -191,8 +191,9 @@ export interface RankCockpitProps {
   hideScopeBar?: boolean
   hideKeywordManager?: boolean
   hideDayparting?: boolean
+  topManaged?: boolean // CR.3b — §2's rank goal owns the Top-of-Search dial; lock the TOP slot's manual controls
 }
-export function RankPlacementCockpit({ market: ctxMarket, campaignId: ctxCampaignId, lookbackDays, onMarketChange, onCampaignChange, hideScopeBar, hideKeywordManager, hideDayparting }: RankCockpitProps = {}) {
+export function RankPlacementCockpit({ market: ctxMarket, campaignId: ctxCampaignId, lookbackDays, onMarketChange, onCampaignChange, hideScopeBar, hideKeywordManager, hideDayparting, topManaged }: RankCockpitProps = {}) {
   const WINDOW_DAYS = lookbackDays ?? DEFAULT_WINDOW_DAYS
   const [campaigns, setCampaigns] = useState<Camp[]>([])
   const [marketState, setMarketState] = useState('IT')
@@ -689,6 +690,7 @@ export function RankPlacementCockpit({ market: ctxMarket, campaignId: ctxCampaig
 
   const isPct = cur?.topIS != null ? cur.topIS * 100 : null
   const targetSlot = SLOTS.find(s => s.k === slot) ?? null
+  const topLocked = !!topManaged && targetSlot?.placement === 'PLACEMENT_TOP' // CR.3b — §2's rank goal owns the Top-of-Search dial
   const targetIsPct = targetSlot?.isTarget != null ? Math.round(targetSlot.isTarget * 100) : null
   const curRankSlot = cur?.topIS != null ? impliedSlot(cur.topIS, cur.currentPct) : null
   const topSlots = SLOTS.filter(s => s.group === 'top')
@@ -849,14 +851,18 @@ export function RankPlacementCockpit({ market: ctxMarket, campaignId: ctxCampaig
           ) : !campaign ? null : (
             <>
               <div className="az-plan-head">Set {targetSlot ? PLACEMENT_SHORT[targetSlot.placement] : ''} bias{targetSlot && targetSlot.group !== 'product' ? ` → ${slotLabel(slot)}` : ''}</div>
-              <div className="az-plan-target">
-                <span className="az-gauge-lbl">Bias · now +{targetCurrentPct}%</span>
-                <div className="az-stepper">
-                  <button type="button" onClick={() => targetSlot && setBias(targetSlot.placement, biasDraft[targetSlot.placement] - 10)} disabled={applying} aria-label="Decrease bias">−</button>
-                  <span className="v">+{targetSlot ? biasDraft[targetSlot.placement] : 0}%</span>
-                  <button type="button" onClick={() => targetSlot && setBias(targetSlot.placement, biasDraft[targetSlot.placement] + 10)} disabled={applying} aria-label="Increase bias">+</button>
+              {topLocked ? (
+                <div className="az-cockpit-note"><Lock size={12} /> Managed by your rank goal (§2) — it holds Top-of-Search automatically. Turn off Auto-defend there to set it by hand.</div>
+              ) : (
+                <div className="az-plan-target">
+                  <span className="az-gauge-lbl">Bias · now +{targetCurrentPct}%</span>
+                  <div className="az-stepper">
+                    <button type="button" onClick={() => targetSlot && setBias(targetSlot.placement, biasDraft[targetSlot.placement] - 10)} disabled={applying} aria-label="Decrease bias">−</button>
+                    <span className="v">+{targetSlot ? biasDraft[targetSlot.placement] : 0}%</span>
+                    <button type="button" onClick={() => targetSlot && setBias(targetSlot.placement, biasDraft[targetSlot.placement] + 10)} disabled={applying} aria-label="Increase bias">+</button>
+                  </div>
                 </div>
-              </div>
+              )}
               <button type="button" className="az-btn dark" style={{ marginTop: 8, width: '100%', justifyContent: 'center' }} disabled={applying || dirtyPlacements.length === 0} onClick={() => void applyAll()}>
                 {applying ? <><Loader2 size={14} className="az-spin" /> Applying…</> : <><Zap size={14} /> Apply {dirtyPlacements.length || ''} placement{dirtyPlacements.length === 1 ? '' : 's'}</>}
               </button>
@@ -868,7 +874,9 @@ export function RankPlacementCockpit({ market: ctxMarket, campaignId: ctxCampaig
                 </div>
               )}
 
-              {targetSlot?.group === 'top' && (
+              {targetSlot?.group === 'top' && (topManaged ? (
+                <div className="az-cockpit-note" style={{ marginTop: 8 }}><ShieldCheck size={12} /> Rank-hold is already running via your rank goal (§2) — manage the target &amp; schedule there.</div>
+              ) : (
                 <div className="az-hold">
                   <div className="az-hold-head"><ShieldCheck size={13} /> Hold {slotLabel(slot)}</div>
                   <div className="az-hold-sub">Run an autonomous loop that keeps impression share at the target for the least cost — raise while below &amp; ACOS is in budget, ease off otherwise.</div>
@@ -882,7 +890,7 @@ export function RankPlacementCockpit({ market: ctxMarket, campaignId: ctxCampaig
                   {holdMsg === 'created' && <div className="az-cockpit-sub" style={{ marginTop: 6, color: 'var(--green)' }}><Check size={12} style={{ verticalAlign: 'text-bottom' }} /> Hold rule created (disabled + dry-run). Enable it in Active rules and allowlist this campaign to go live.</div>}
                   {holdMsg === 'error' && <div className="az-cockpit-sub" style={{ marginTop: 6, color: '#cc1100' }}>Could not create the hold rule.</div>}
                 </div>
-              )}
+              ))}
               <div className="az-cockpit-note" style={{ marginTop: 8 }}><Info size={12} /> Apply &amp; Hold are gated — sandbox stages locally until the ads write-gate is live (needs approval). The hold loop is market-scoped; allowlist this campaign to include it.</div>
             </>
           )}

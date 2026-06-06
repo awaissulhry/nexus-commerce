@@ -24,7 +24,7 @@ const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const hh = (h: number) => `${String(h).padStart(2, '0')}:00`
 const api = (p: string) => `${getBackendUrl()}/api/advertising${p}`
 
-export function RankPlanPanel({ campaignId, campaignName }: { campaignId: string; campaignName: string }) {
+export function RankPlanPanel({ campaignId, campaignName, onAutoDefend, reloadSignal }: { campaignId: string; campaignName: string; onAutoDefend?: (info: { enabled: boolean; scheduleId: string | null }) => void; reloadSignal?: number }) {
   const [targets, setTargets] = useState<RankTarget[]>([])
   const [sched, setSched] = useState<Sched | null>(null)        // the persisted schedule (or null)
   const [baseline, setBaseline] = useState<string>('')          // working draft: defaultTargetKey
@@ -59,9 +59,11 @@ export function RankPlanPanel({ campaignId, campaignName }: { campaignId: string
     const wins = (mine?.windows ?? []).filter((w: Win) => w?.targetKey)
     setBaseline(bk); setServerBaseline(bk)
     setWindows(wins.map(w => ({ ...w }))); setServerWindows(wins.map(w => ({ ...w })))
+    // CR.3b — tell the cockpit whether auto-defend owns the Top-of-Search dial right now.
+    onAutoDefend?.({ enabled: !!mine?.enabled && (!!bk || wins.length > 0), scheduleId: mine?.id ?? null })
     setLoaded(true)
-  }, [campaignId])
-  useEffect(() => { void load() }, [load])
+  }, [campaignId, onAutoDefend])
+  useEffect(() => { void load() }, [load, reloadSignal])
 
   // live "what would the loop do right now" — only meaningful once a goal exists
   useEffect(() => {
@@ -118,7 +120,7 @@ export function RankPlanPanel({ campaignId, campaignName }: { campaignId: string
     setMsg('')
     try {
       const r = await fetch(api(`/schedules/${sched.id}`), { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled: next }) }).then(x => x.json())
-      if (r?.id) setSched(r)
+      if (r?.id) { setSched(r); onAutoDefend?.({ enabled: r.enabled && (!!serverBaseline || serverWindows.length > 0), scheduleId: r.id }) }
       setMsg(next ? 'Auto-defend ON — the engine holds this plan on its cadence (live pushes still need the write-gate).' : 'Auto-defend OFF — plan saved but not auto-held.')
     } catch { setMsg('Could not toggle auto-defend.') }
   }

@@ -23,7 +23,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
-import { Crosshair, Search, ChevronRight, Undo2, Redo2, Layers, Zap, AlertTriangle, History as HistoryIcon, Info, Package } from 'lucide-react'
+import { Crosshair, Search, ChevronRight, Undo2, Redo2, Layers, Zap, AlertTriangle, History as HistoryIcon, Info, Package, Lock } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { RankPlacementCockpit } from '../automation/RankPlacementCockpit'
 import { StagedChangesTray } from './StagedChangesTray'
@@ -86,6 +86,19 @@ export function UnifiedRankCockpit() {
     void fetch(`${getBackendUrl()}/api/advertising/campaigns/${campaignId}/pending-writes`, { cache: 'no-store' }).then(r => r.json()).then(d => { setPending((d.pending ?? []).length); setGateOpen(d.gate?.allowed ?? d.campaign?.liveBidWritesEnabled ?? false) }).catch(() => {})
   }, [campaignId])
   useEffect(() => { loadPending() }, [loadPending, market])
+
+  // CR.3b — §2's rank goal and §3's placement controls both write the Top-of-Search
+  // bias. To avoid them fighting, RankPlanPanel reports whether auto-defend is ON; when
+  // it is, §3's placement controls lock ("managed by your rank goal") with a one-click
+  // hand-off that turns auto-defend off. Keyword bids / strategy / conquest stay free.
+  const [autoDefend, setAutoDefend] = useState<{ on: boolean; scheduleId: string | null }>({ on: false, scheduleId: null })
+  const [planReload, setPlanReload] = useState(0)
+  useEffect(() => { setAutoDefend({ on: false, scheduleId: null }) }, [campaignId])
+  const takeManualControl = useCallback(async () => {
+    if (!autoDefend.scheduleId) return
+    try { await fetch(`${getBackendUrl()}/api/advertising/schedules/${autoDefend.scheduleId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled: false }) }) } catch { /* best-effort */ }
+    setAutoDefend(a => ({ ...a, on: false })); setPlanReload(n => n + 1)
+  }, [autoDefend.scheduleId])
 
   // RC4.6 — history + undo/redo (Cmd+Z / Cmd+Shift+Z). Undo re-stages the prior
   // value through the gated bid path; it refreshes the staged count on change.
@@ -200,14 +213,17 @@ export function UnifiedRankCockpit() {
         {campaignId && (
           <section className="az-cr-sec">
             <div className="az-cr-sechd"><span className="n">2</span><div className="x"><b>Your rank goal &amp; schedule</b><span>Hold this rank, on this schedule — Save, Publish, or Discard.</span></div></div>
-            <RankPlanPanel campaignId={campaignId} campaignName={campaign?.name ?? 'this campaign'} />
+            <RankPlanPanel campaignId={campaignId} campaignName={campaign?.name ?? 'this campaign'} onAutoDefend={info => setAutoDefend({ on: info.enabled, scheduleId: info.scheduleId })} reloadSignal={planReload} />
           </section>
         )}
 
         <section className="az-cr-sec">
           <div className="az-cr-sechd"><span className="n">3</span><div className="x"><b>Adjust placement &amp; bids</b><span>Quick-set the push, or fine-tune the placement ladder &amp; bids below.</span></div></div>
-          {campaignId && <QuickRankSet campaignId={campaignId} onChanged={loadPending} />}
-          <RankPlacementCockpit market={market} campaignId={campaignId} lookbackDays={lookback} onMarketChange={setMarket} onCampaignChange={setCampaignId} hideScopeBar hideKeywordManager hideDayparting />
+          {campaignId && autoDefend.on && (
+            <div className="az-cr-managed"><Lock size={13} /> <span>Top-of-Search placement is <b>managed by your rank goal</b> (§2) — it auto-adjusts to hold your target, so manual changes here would be overridden. Keyword bids &amp; strategy below are unaffected.</span><button type="button" onClick={() => void takeManualControl()}>Take manual control</button></div>
+          )}
+          {campaignId && <QuickRankSet campaignId={campaignId} onChanged={loadPending} locked={autoDefend.on} />}
+          <RankPlacementCockpit market={market} campaignId={campaignId} lookbackDays={lookback} onMarketChange={setMarket} onCampaignChange={setCampaignId} hideScopeBar hideKeywordManager hideDayparting topManaged={autoDefend.on} />
           {campaignId && <StrategyStation campaignId={campaignId} currentStrategy={campaign?.biddingStrategy ?? null} onChanged={loadPending} />}
           {campaignId && <KeywordBidStation campaignId={campaignId} onChanged={loadPending} />}
           {campaignId && <ConquestStation campaignId={campaignId} onChanged={loadPending} />}

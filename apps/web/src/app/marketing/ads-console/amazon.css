@@ -529,6 +529,14 @@
 .az-cr-sechd .x span { color: var(--ink2); font-size: 12px; }
 .az-cr-note { display: flex; align-items: flex-start; gap: 6px; color: var(--ink2); font-size: 11.5px; line-height: 1.5; margin: 8px 2px 0; }
 .az-cr-note > svg { flex: none; margin-top: 2px; color: var(--ink3); }
+/* CR.3b — §3 placement controls locked while §2's rank goal auto-defends the top slot */
+.az-cr-managed { display: flex; align-items: center; gap: 9px; background: #fff8e6; border: 1px solid #f0d98a; border-radius: 9px; padding: 9px 12px; font-size: 12px; color: var(--ink); margin-bottom: 10px; }
+.az-cr-managed > svg { color: #9a6700; flex: none; }
+.az-cr-managed span { flex: 1; line-height: 1.45; }
+.az-cr-managed button { flex: none; border: 1px solid var(--navy); background: var(--navy); color: #fff; border-radius: 7px; padding: 5px 11px; font: inherit; font-size: 11.5px; font-weight: 700; cursor: pointer; white-space: nowrap; }
+.az-cr-managed button:hover { opacity: 0.92; }
+.az-qrs.locked { opacity: 0.5; }
+.az-qrs.locked .az-qrs-btn { cursor: not-allowed; }
 /* CR.2 — one quick placement-set (replaces the Simple-mode preset duplication) */
 .az-qrs { margin-bottom: 12px; }
 .az-qrs-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
