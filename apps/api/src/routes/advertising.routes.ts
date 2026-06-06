@@ -616,6 +616,21 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
         fam.skus.length ? aggregateOrdersDayparting({ channel: 'AMAZON', marketplace: fam.marketplace, skus: fam.skus, windowDays }) : Promise.resolve({ totals: { orders: 0 } }),
       ])
       _diag = { productCount: fam.productIds.length, skuCount: fam.skus.length, asinCount: fam.asins.length, sampleSkus: fam.skus.slice(0, 6), byProductId: byPid.totals.orders, bySku: bySku.totals.orders, combined: d.raw.totals.orders }
+      // Reconcile vs Amazon's official Sales & Traffic report (= Seller Central) over the last 30d.
+      try {
+        const since = new Date(Date.now() - 30 * 86_400_000)
+        const dsaWhere = (src: string) => ({ sku: { in: fam.skus }, channel: 'AMAZON', ...(fam.marketplace ? { marketplace: fam.marketplace } : {}), day: { gte: since }, source: src })
+        const [rep, ord, ourDemand30] = await Promise.all([
+          prisma.dailySalesAggregate.aggregate({ where: dsaWhere('AMAZON_REPORT'), _sum: { unitsSold: true, grossRevenue: true, ordersCount: true } }),
+          prisma.dailySalesAggregate.aggregate({ where: dsaWhere('ORDER_ITEM'), _sum: { unitsSold: true, grossRevenue: true, ordersCount: true } }),
+          aggregateOrdersDayparting({ channel: 'AMAZON', marketplace: fam.marketplace, productIds: fam.productIds, skus: fam.skus, windowDays: 30 }),
+        ])
+        _diag.reconcile30d = {
+          amazonOfficialReport: { units: rep._sum.unitsSold ?? 0, revenueEur: Math.round(Number(rep._sum.grossRevenue ?? 0)), orders: rep._sum.ordersCount ?? 0 },
+          orderItemAgg: { units: ord._sum.unitsSold ?? 0, revenueEur: Math.round(Number(ord._sum.grossRevenue ?? 0)), orders: ord._sum.ordersCount ?? 0 },
+          ourDemand: { orders: ourDemand30.totals.orders, units: ourDemand30.totals.units, revenueEur: Math.round(ourDemand30.totals.revenueCents / 100) },
+        }
+      } catch (e) { _diag.reconcileError = (e as Error).message }
     }
     return {
       marketplace: fam.marketplace ?? marketplace, parentProductId: fam.parentProductId, parentName: fam.parentName, productIds: fam.productIds, asins: fam.asins,
