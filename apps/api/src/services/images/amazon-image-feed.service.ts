@@ -33,6 +33,19 @@ import {
   pollAmazonFeedStatus,
   type AmazonSlot,
 } from '../channel-batch/amazon-batch-feed.service.js'
+import { resolveSlotTaxonomy } from './amazon-slot-taxonomy.service.js'
+import { computeExactMirror } from './amazon-exact-mirror.js'
+import { marketplaceCodeToId } from '../../utils/marketplace-code.js'
+
+/**
+ * M3 — publish mode. 'exact-mirror' (default) sends the full desired state
+ * per slot (replace filled + delete empty) so Amazon matches Nexus exactly.
+ * Kill-switch: NEXUS_AMAZON_IMAGE_MIRROR_ENABLED=0 falls back to 'additive'
+ * (legacy: only push filled slots, never delete).
+ */
+export function defaultMirrorMode(): 'exact-mirror' | 'additive' {
+  return process.env.NEXUS_AMAZON_IMAGE_MIRROR_ENABLED === '0' ? 'additive' : 'exact-mirror'
+}
 
 // ── Types ─────────────────────────────────────────────────────────────
 
@@ -57,6 +70,8 @@ export interface AmazonImageFeedInput {
   variantIds?: string[]      // undefined = all variants
   activeAxis?: string        // axis used for group-based image resolution
   dryRun?: boolean
+  /** M3 — defaults to defaultMirrorMode() (exact-mirror unless killed). */
+  mode?: 'exact-mirror' | 'additive'
 }
 
 export interface AmazonImageFeedOutput {
@@ -76,6 +91,7 @@ export async function resolveAmazonImages(
   marketplace: string,
   variantIds?: string[],
   activeAxis?: string,
+  slotCodes?: string[],
 ): Promise<ResolvedVariantImages[]> {
   const platform = 'AMAZON'
   const mkt = marketplace.toUpperCase()
@@ -141,7 +157,7 @@ export async function resolveAmazonImages(
     const axisValue = activeAxis && attrs ? (attrs[activeAxis] ?? null) : null
     const resolvedSlots: ResolvedSlot[] = []
 
-    for (const slot of AMAZON_SLOTS) {
+    for (const slot of (slotCodes ?? AMAZON_SLOTS)) {
       const resolved = resolveSlot(allImages, variant.id, slot, platform, mkt, activeAxis, axisValue)
       if (resolved) resolvedSlots.push(resolved)
     }
@@ -235,7 +251,7 @@ function resolveSlot(
 export async function submitAmazonImageFeed(
   input: AmazonImageFeedInput,
 ): Promise<AmazonImageFeedOutput> {
-  const { productId, marketplace, variantIds, activeAxis, dryRun = false } = input
+  const { productId, marketplace, variantIds, activeAxis, dryRun = false, mode = defaultMirrorMode() } = input
   const mkt = marketplace.toUpperCase()
 
   const product = await prisma.product.findUnique({
@@ -245,7 +261,13 @@ export async function submitAmazonImageFeed(
   if (!product) throw new Error(`Product ${productId} not found`)
 
   const axis = activeAxis ?? product.imageAxisPreference ?? undefined
-  const resolved = await resolveAmazonImages(productId, mkt, variantIds, axis)
+  const productType = product.productType ?? 'PRODUCT'
+  // M3 — resolve the schema-discovered slot taxonomy (MAIN/PT.../PS.../SWCH)
+  // so the cascade covers every writable slot and exact-mirror knows the
+  // delete set + the per-slot locator attribute.
+  const taxonomy = await resolveSlotTaxonomy(mkt, productType)
+  const taxLite = taxonomy.slots.map((s) => ({ slot: s.slot, kind: s.kind, writable: s.writable }))
+  const resolved = await resolveAmazonImages(productId, mkt, variantIds, axis, taxonomy.slots.map((s) => s.slot))
 
   const skippedNoAsin: string[] = []
   const skippedNoImages: string[] = []
@@ -257,16 +279,35 @@ export async function submitAmazonImageFeed(
       skippedNoAsin.push(v.sku)
       continue
     }
-    if (v.slots.length === 0) {
-      skippedNoImages.push(v.sku)
-      continue
+    const filled = v.slots.map((s) => ({ slot: s.slot, url: s.url }))
+    if (mode === 'exact-mirror') {
+      const plan = computeExactMirror(filled, taxLite)
+      if (plan.skip) {
+        // SAFETY: no MAIN resolved → leave this ASIN untouched (never wipe).
+        skippedNoImages.push(v.sku)
+        continue
+      }
+      operations.push({
+        type: 'image',
+        sku: v.sku,
+        productType,
+        slots: plan.slots,
+        deleteSlots: plan.deleteSlots,
+        slotToAttribute: taxonomy.slotToAttribute,
+      })
+    } else {
+      if (filled.length === 0) {
+        skippedNoImages.push(v.sku)
+        continue
+      }
+      operations.push({
+        type: 'image',
+        sku: v.sku,
+        productType,
+        slots: filled,
+        slotToAttribute: taxonomy.slotToAttribute,
+      })
     }
-    operations.push({
-      type: 'image',
-      sku: v.sku,
-      productType: product.productType ?? 'PRODUCT',
-      slots: v.slots.map((s) => ({ slot: s.slot, url: s.url })),
-    })
     includedSkus.push(v.sku)
   }
 
@@ -287,7 +328,7 @@ export async function submitAmazonImageFeed(
     }
   }
 
-  const marketplaceId = MARKETPLACE_IDS[mkt]
+  const marketplaceId = MARKETPLACE_IDS[mkt] ?? marketplaceCodeToId(mkt)
   if (!marketplaceId) throw new Error(`Unknown Amazon marketplace: ${mkt}`)
 
   const sellerId = process.env.AMAZON_SELLER_ID ?? ''

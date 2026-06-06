@@ -22,11 +22,11 @@
 
 import { logger } from '../../utils/logger.js'
 
-export type AmazonSlot =
-  | 'MAIN'
-  | 'PT01' | 'PT02' | 'PT03' | 'PT04'
-  | 'PT05' | 'PT06' | 'PT07' | 'PT08'
-  | 'SWCH'
+// M1/M3 — slot codes are dynamic (schema-discovered): MAIN, PT01..PTnn,
+// PS01..PSnn (product-safety / GPSR), SWCH. The constants below are the
+// legacy fallback set; the live taxonomy (amazon-slot-taxonomy.service)
+// supplies the real per-(market,productType) set + attribute mapping.
+export type AmazonSlot = string
 
 export const SLOT_TO_ATTRIBUTE: Record<AmazonSlot, string> = {
   MAIN: 'main_product_image_locator',
@@ -69,7 +69,12 @@ export type AmazonBatchOperation =
       type: 'image'
       sku: string
       productType: string  // e.g. 'JACKET' — from product's catalogAttributes or productType field
-      slots: { slot: AmazonSlot; url: string }[]
+      slots: { slot: string; url: string }[]
+      // M3 — exact-mirror: slot codes to DELETE on Amazon (locator cleared).
+      deleteSlots?: string[]
+      // M1/M3 — per-op slot→locator-attribute map from the schema taxonomy.
+      // Falls back to SLOT_TO_ATTRIBUTE when omitted.
+      slotToAttribute?: Record<string, string>
     }
 
 export interface AmazonBatchSubmission {
@@ -124,16 +129,35 @@ export function buildJsonListingsFeedBody(
       }
     }
     if (op.type === 'image') {
+      // M3 — exact mirror: replace filled slots AND delete empty ones, so
+      // Amazon's image set matches Nexus exactly (count + order). MAIN is
+      // required by Amazon, so it is NEVER deleted (hard guard).
+      const map = op.slotToAttribute ?? SLOT_TO_ATTRIBUTE
+      if ((op.deleteSlots ?? []).includes('MAIN')) {
+        throw new Error(`Refusing to delete MAIN image locator for SKU ${op.sku}`)
+      }
+      const replacePatches = op.slots
+        .filter(({ slot }) => map[slot])
+        .map(({ slot, url }) => ({
+          op: 'replace',
+          path: `/attributes/${map[slot]}`,
+          value: [{ media_location: url }] as unknown,
+        }))
+      const deletePatches = (op.deleteSlots ?? [])
+        .filter((slot) => slot !== 'MAIN' && map[slot])
+        .map((slot) => ({
+          op: 'delete',
+          path: `/attributes/${map[slot]}`,
+          value: undefined as unknown,
+        }))
       return {
         messageId,
         sku: op.sku,
         operationType: 'PATCH',
         productType: op.productType,
-        patches: op.slots.map(({ slot, url }) => ({
-          op: 'replace',
-          path: `/attributes/${SLOT_TO_ATTRIBUTE[slot]}`,
-          value: [{ media_location: url }],
-        })),
+        patches: [...replacePatches, ...deletePatches].map((p) =>
+          p.value === undefined ? { op: p.op, path: p.path } : { op: p.op, path: p.path, value: p.value },
+        ),
       }
     }
     // status
