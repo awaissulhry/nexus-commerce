@@ -23,8 +23,11 @@ import { analyzeTopOfSearch, applyTopOfSearch } from '../services/advertising/ad
 import { updateCampaignWithSync, type AdsActor } from '../services/advertising/ads-mutation.service.js'
 import { detectSelfCompetition, type CampaignTargeting, type SelfCompetitionConflict } from '../services/advertising/rank-self-competition.js'
 
-function nowInTz(tz: string): { day: number; hour: number } {
-  const parts = new Intl.DateTimeFormat('en-US', { timeZone: tz, weekday: 'short', hour: 'numeric', hour12: false }).formatToParts(new Date())
+// RD.8 — leadMinutes shifts the evaluation clock forward so a plan starts converging
+// BEFORE a window opens (Amazon bid changes propagate with lag → arrive at-rank, not late).
+function nowInTz(tz: string, leadMinutes = 0): { day: number; hour: number } {
+  const at = leadMinutes ? new Date(Date.now() + leadMinutes * 60_000) : new Date()
+  const parts = new Intl.DateTimeFormat('en-US', { timeZone: tz, weekday: 'short', hour: 'numeric', hour12: false }).formatToParts(at)
   const wk = parts.find((p) => p.type === 'weekday')?.value ?? 'Sun'
   const hourStr = parts.find((p) => p.type === 'hour')?.value ?? '0'
   const dayIdx = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(wk)
@@ -165,8 +168,17 @@ export async function runRankDefendOnce(opts: { dryRun?: boolean; onlyPlanId?: s
   for (const plan of plans) {
     try {
       const fam = await resolveProductFamily({ parentProductId: plan.productId, marketplace: plan.marketplace })
-      planFamilies.push({ plan, campaigns: fam.campaigns ?? [] })
-      for (const c of fam.campaigns ?? []) governed.add(c.id)
+      const camps = fam.campaigns ?? []
+      // RD.8 — blast-radius guard: a plan resolving to MORE than maxCampaigns is likely
+      // mis-targeted (wrong product / runaway ASIN match). Refuse to actuate it, and on
+      // a real run auto-pause it so it can't fan out to an unexpected fleet.
+      if (plan.maxCampaigns != null && camps.length > plan.maxCampaigns) {
+        logger.warn('[rank-defend] plan exceeds maxCampaigns — refusing', { planId: plan.id, resolved: camps.length, max: plan.maxCampaigns })
+        if (!dryRun) { try { await prisma.productRankPlan.update({ where: { id: plan.id }, data: { enabled: false, pausedAt: new Date(), lastSummary: { at: new Date().toISOString(), autoPaused: true, reason: `family resolved to ${camps.length} campaigns > maxCampaigns ${plan.maxCampaigns}` } as never } }) } catch { /* best-effort */ } }
+        continue
+      }
+      planFamilies.push({ plan, campaigns: camps })
+      for (const c of camps) governed.add(c.id)
     } catch (e) { logger.warn('[rank-defend] family resolve failed', { planId: plan.id, error: (e as Error).message }) }
   }
 
@@ -224,7 +236,7 @@ export async function runRankDefendOnce(opts: { dryRun?: boolean; onlyPlanId?: s
 
   // ── Plans first (governed). Dry-only actuation until RD.7. ──
   for (const { plan, campaigns: famCamps } of planFamilies) {
-    const { day, hour } = nowInTz(plan.timezone || 'Europe/Rome')
+    const { day, hour } = nowInTz(plan.timezone || 'Europe/Rome', plan.leadTimeMinutes || 0)
     const key = resolveActiveTargetKey(plan.windows as ScheduleWindow[], plan.defaultTargetKey, day, hour)
     const planDecisions: RankDefendDecision[] = []
     let planConflicts: SelfCompetitionConflict[] = []
