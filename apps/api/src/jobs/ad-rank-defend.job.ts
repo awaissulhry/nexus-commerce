@@ -43,25 +43,85 @@ export const isGoalMode = (windows: unknown, defaultTargetKey: string | null): b
 export interface RankDefendDecision {
   campaignId: string; campaignName: string; targetKey: string; action: string; reason: string
   currentPct: number; nextPct: number; achievedISPct: number | null; achievedAcosPct: number | null; lossDetected: boolean; applied: boolean
+  planId?: string | null
 }
-export interface RankDefendSummary { evaluated: number; applied: number; decisions: RankDefendDecision[] }
+export interface RankPlanRunSummary { planId: string; productId: string; marketplace: string; campaigns: number; decisions: RankDefendDecision[] }
+export interface RankDefendSummary { evaluated: number; applied: number; decisions: RankDefendDecision[]; plans?: RankPlanRunSummary[] }
+
+const pctOf = (f: number | null): number | null => (f != null ? Math.round(f * 100) : null)
+type SigMap = Map<string, { currentPct: number; topIS: number | null; topAcos: number | null }>
+interface CampRow { id: string; name: string; status: string; dynamicBidding: unknown }
+
+// RD.4 — one per-campaign decision body, shared by the schedule loop and the
+// product-plan fan-out. `write` gates ALL actuation (pause / resume / placement
+// bias); when false it is a pure decision (preview / plan dry-run). currentPct is
+// always read from dynamicBidding (the bias WE control), never the sparse T+1
+// placement report — else the loop is blind to its own prior changes.
+async function decideAndMaybeApply(
+  camp: CampRow, key: string, spec: RankTargetSpec, planId: string | null,
+  ctx: { write: boolean; actor: string; sigByCampaign: SigMap; lossByCampaign: Map<string, boolean> },
+): Promise<{ decision: RankDefendDecision; applied: number }> {
+  const sigRaw = ctx.sigByCampaign.get(camp.id) ?? { currentPct: 0, topIS: null, topAcos: null }
+  const cdb = (camp.dynamicBidding ?? {}) as { placementBidding?: Array<{ placement: string; percentage: number }> }
+  const currentPct = cdb.placementBidding?.find((x) => x.placement === 'PLACEMENT_TOP')?.percentage ?? 0
+  const base = { campaignId: camp.id, campaignName: camp.name, targetKey: key, currentPct, achievedISPct: pctOf(sigRaw.topIS), achievedAcosPct: pctOf(sigRaw.topAcos), planId }
+  let applied = 0
+  // Pause target → ensure the campaign is paused.
+  if (spec.pause) {
+    const pausing = camp.status !== 'PAUSED' && camp.status !== 'ARCHIVED'
+    if (ctx.write && pausing) {
+      try { await updateCampaignWithSync({ campaignId: camp.id, patch: { status: 'PAUSED' }, actor: ctx.actor as AdsActor, reason: 'rank — pause target', applyImmediately: true } as never); applied++ } catch (e) { logger.warn('[rank-defend] pause failed', { campaignId: camp.id, error: (e as Error).message }) }
+    }
+    return { decision: { ...base, action: 'pause', reason: 'target = pause', nextPct: currentPct, lossDetected: false, applied: ctx.write && pausing }, applied }
+  }
+  // Defend semantics: a serve target must actually SERVE — resume if something left it paused. Never touch ARCHIVED.
+  if (ctx.write && camp.status === 'PAUSED') {
+    try { await updateCampaignWithSync({ campaignId: camp.id, patch: { status: 'ENABLED' }, actor: ctx.actor as AdsActor, reason: 'rank defend — resume to hold the slot', applyImmediately: true } as never); applied++ } catch (e) { logger.warn('[rank-defend] resume failed', { campaignId: camp.id, error: (e as Error).message }) }
+  }
+  const loss = ctx.lossByCampaign.get(camp.id) ?? false
+  const d = computeStep(spec, { currentPct, achievedISFraction: sigRaw.topIS, achievedAcosFraction: sigRaw.topAcos, lossDetected: loss })
+  const willApply = ctx.write && (d.action === 'raise' || d.action === 'lower') && d.nextPct !== currentPct
+  if (willApply) {
+    try { await applyTopOfSearch(camp.id, d.nextPct); applied++ } catch (e) { logger.warn('[rank-defend] apply failed', { campaignId: camp.id, error: (e as Error).message }) }
+  }
+  return { decision: { ...base, action: d.action, reason: d.reason, nextPct: d.nextPct, lossDetected: loss, applied: willApply }, applied }
+}
+
+// RD.4 — plan actuation is OFF until RD.7. Plans compute + persist decisions
+// (so the UI can preview the fan-out) but do NOT touch campaigns yet.
+const PLAN_ALLOW_APPLY = false
 
 export async function runRankDefendOnce(opts: { dryRun?: boolean } = {}): Promise<RankDefendSummary> {
   const dryRun = !!opts.dryRun
   const schedules = (await prisma.adSchedule.findMany({ where: { enabled: true } }))
     .filter((s) => isGoalMode(s.windows, s.defaultTargetKey))
-  if (schedules.length === 0) return { evaluated: 0, applied: 0, decisions: [] }
+  const plans = await prisma.productRankPlan.findMany({ where: { enabled: true } })
+  if (schedules.length === 0 && plans.length === 0) return { evaluated: 0, applied: 0, decisions: [], plans: [] }
 
   const targets = await prisma.rankTarget.findMany()
   const targetByKey = new Map(targets.map((t) => [t.key, t as unknown as RankTargetRow]))
 
-  const campaignIds = [...new Set(schedules.map((s) => s.campaignId))]
-  const campaigns = await prisma.campaign.findMany({ where: { id: { in: campaignIds } }, select: { id: true, name: true, marketplace: true, status: true, externalCampaignId: true, dynamicBidding: true } })
+  // Resolve each plan's family campaigns LIVE (RD.4) → the governed set, so the
+  // schedule loop never fights a plan over the same campaign (precedence: plan wins).
+  const { resolveProductFamily } = await import('../services/advertising/ads-dayparting-refresh.service.js')
+  const planFamilies: Array<{ plan: (typeof plans)[number]; campaigns: Array<{ id: string }> }> = []
+  const governed = new Set<string>()
+  for (const plan of plans) {
+    try {
+      const fam = await resolveProductFamily({ parentProductId: plan.productId, marketplace: plan.marketplace })
+      planFamilies.push({ plan, campaigns: fam.campaigns ?? [] })
+      for (const c of fam.campaigns ?? []) governed.add(c.id)
+    } catch (e) { logger.warn('[rank-defend] family resolve failed', { planId: plan.id, error: (e as Error).message }) }
+  }
+
+  // Union of schedule + plan campaigns → one campaign load + one signal pass.
+  const unionIds = [...new Set([...schedules.map((s) => s.campaignId), ...governed])]
+  const campaigns = await prisma.campaign.findMany({ where: { id: { in: unionIds } }, select: { id: true, name: true, marketplace: true, status: true, externalCampaignId: true, dynamicBidding: true } })
   const campById = new Map(campaigns.map((c) => [c.id, c]))
 
-  // One analyzeTopOfSearch call per marketplace gives every campaign's currentPct + topIS + topAcos.
+  // One analyzeTopOfSearch call per marketplace gives every campaign's topIS + topAcos signals.
   const markets = [...new Set(campaigns.map((c) => c.marketplace).filter(Boolean) as string[])]
-  const sigByCampaign = new Map<string, { currentPct: number; topIS: number | null; topAcos: number | null }>()
+  const sigByCampaign: SigMap = new Map()
   for (const mk of markets) {
     try {
       const { rows } = await analyzeTopOfSearch({ marketplace: mk, windowDays: 14 })
@@ -70,9 +130,8 @@ export async function runRankDefendOnce(opts: { dryRun?: boolean } = {}): Promis
   }
 
   // RS.6 — loss proxy: the latest hour's impressions cratering vs the campaign's
-  // own ~2-day baseline is the fastest "we're slipping" signal (no live rank on
-  // Amazon). Conservative threshold → sparse/low-volume campaigns simply never
-  // trip it (baseline below the floor), so no false snap-backs.
+  // own ~2-day baseline is the fastest "we're slipping" signal. Conservative
+  // threshold → sparse/low-volume campaigns never trip it (no false snap-backs).
   const lossByCampaign = new Map<string, boolean>()
   const extIds = campaigns.map((c) => c.externalCampaignId).filter(Boolean) as string[]
   if (extIds.length > 0) {
@@ -94,49 +153,45 @@ export async function runRankDefendOnce(opts: { dryRun?: boolean } = {}): Promis
   }
 
   const decisions: RankDefendDecision[] = []
+  const planSummaries: RankPlanRunSummary[] = []
   let applied = 0
+
+  // ── Plans first (governed). Dry-only actuation until RD.7. ──
+  for (const { plan, campaigns: famCamps } of planFamilies) {
+    const { day, hour } = nowInTz(plan.timezone || 'Europe/Rome')
+    const key = resolveActiveTargetKey(plan.windows as ScheduleWindow[], plan.defaultTargetKey, day, hour)
+    const planDecisions: RankDefendDecision[] = []
+    if (key) {
+      const target = targetByKey.get(key)
+      if (target) {
+        const spec = toSpec(target)
+        const write = !dryRun && PLAN_ALLOW_APPLY && !plan.manualOnly
+        for (const fc of famCamps) {
+          const camp = campById.get(fc.id); if (!camp) continue
+          const { decision, applied: a } = await decideAndMaybeApply(camp, key, spec, plan.id, { write, actor: `automation:rank-plan-${plan.id}`, sigByCampaign, lossByCampaign })
+          planDecisions.push(decision); decisions.push(decision); applied += a
+        }
+      }
+    }
+    planSummaries.push({ planId: plan.id, productId: plan.productId, marketplace: plan.marketplace, campaigns: planDecisions.length, decisions: planDecisions })
+    if (!dryRun) {
+      try { await prisma.productRankPlan.update({ where: { id: plan.id }, data: { lastEvaluatedAt: new Date(), lastSummary: { at: new Date().toISOString(), activeTargetKey: key ?? null, campaigns: planDecisions.length, decisions: planDecisions } as never } }) } catch { /* best-effort */ }
+    }
+  }
+
+  // ── Schedules (skip plan-governed campaigns). Existing behaviour preserved. ──
   for (const s of schedules) {
+    if (governed.has(s.campaignId)) continue
     const camp = campById.get(s.campaignId); if (!camp) continue
     const { day, hour } = nowInTz(s.timezone || 'Europe/Rome')
     const key = resolveActiveTargetKey(s.windows as ScheduleWindow[], s.defaultTargetKey, day, hour)
     if (!key) continue
     const target = targetByKey.get(key); if (!target) continue
-    const spec = toSpec(target)
-    // currentPct is the bias WE control — always the source of truth (dynamicBidding),
-    // never the placement report (which is sparse/T+1 and absent for low-IS campaigns,
-    // making the loop blind to its own prior changes — it would re-apply +step forever).
-    // The report only supplies the achieved IS/ACOS *signals*.
-    const sigRaw = sigByCampaign.get(s.campaignId) ?? { currentPct: 0, topIS: null, topAcos: null }
-    const camp_db = (camp.dynamicBidding ?? {}) as { placementBidding?: Array<{ placement: string; percentage: number }> }
-    const sig = { currentPct: camp_db.placementBidding?.find((x) => x.placement === 'PLACEMENT_TOP')?.percentage ?? 0, topIS: sigRaw.topIS, topAcos: sigRaw.topAcos }
-
-    // Pause target → ensure the campaign is paused.
-    if (spec.pause) {
-      const pausing = camp.status !== 'PAUSED' && camp.status !== 'ARCHIVED'
-      decisions.push({ campaignId: s.campaignId, campaignName: camp.name, targetKey: key, action: 'pause', reason: 'target = pause', currentPct: sig.currentPct, nextPct: sig.currentPct, achievedISPct: sig.topIS != null ? Math.round(sig.topIS * 100) : null, achievedAcosPct: sig.topAcos != null ? Math.round(sig.topAcos * 100) : null, lossDetected: false, applied: !dryRun && pausing })
-      if (!dryRun && pausing) {
-        try { await updateCampaignWithSync({ campaignId: s.campaignId, patch: { status: 'PAUSED' }, actor: `automation:rank-defend-${s.id}` as AdsActor, reason: 'rank schedule — pause target', applyImmediately: true } as never); applied++ } catch (e) { logger.warn('[rank-defend] pause failed', { scheduleId: s.id, error: (e as Error).message }) }
-      }
-      continue
-    }
-
-    // Defend semantics: a serve target must actually SERVE. We're past the pause
-    // branch, so the active target wants delivery — if anything (dayparting, a manual
-    // pause) left the campaign paused, resume it so the rank hold is real. Never
-    // touch ARCHIVED.
-    if (!dryRun && camp.status === 'PAUSED') {
-      try { await updateCampaignWithSync({ campaignId: s.campaignId, patch: { status: 'ENABLED' }, actor: `automation:rank-defend-${s.id}` as AdsActor, reason: 'rank defend — resume to hold the slot', applyImmediately: true } as never); applied++ } catch (e) { logger.warn('[rank-defend] resume failed', { scheduleId: s.id, error: (e as Error).message }) }
-    }
-
-    const loss = lossByCampaign.get(s.campaignId) ?? false
-    const decision = computeStep(spec, { currentPct: sig.currentPct, achievedISFraction: sig.topIS, achievedAcosFraction: sig.topAcos, lossDetected: loss })
-    const willApply = !dryRun && (decision.action === 'raise' || decision.action === 'lower') && decision.nextPct !== sig.currentPct
-    decisions.push({ campaignId: s.campaignId, campaignName: camp.name, targetKey: key, action: decision.action, reason: decision.reason, currentPct: sig.currentPct, nextPct: decision.nextPct, achievedISPct: sig.topIS != null ? Math.round(sig.topIS * 100) : null, achievedAcosPct: sig.topAcos != null ? Math.round(sig.topAcos * 100) : null, lossDetected: loss, applied: willApply })
-    if (willApply) {
-      try { await applyTopOfSearch(s.campaignId, decision.nextPct); applied++ } catch (e) { logger.warn('[rank-defend] apply failed', { scheduleId: s.id, error: (e as Error).message }) }
-    }
+    const { decision, applied: a } = await decideAndMaybeApply(camp, key, toSpec(target), null, { write: !dryRun, actor: `automation:rank-defend-${s.id}`, sigByCampaign, lossByCampaign })
+    decisions.push(decision); applied += a
   }
-  return { evaluated: schedules.length, applied, decisions }
+
+  return { evaluated: decisions.length, applied, decisions, plans: planSummaries }
 }
 
 export async function runRankDefendCron(): Promise<void> {
