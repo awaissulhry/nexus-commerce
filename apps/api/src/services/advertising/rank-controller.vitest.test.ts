@@ -117,6 +117,69 @@ describe('computeStep', () => {
   })
 })
 
+describe('MP — motion profile (jump / climb / ease / ceiling / keep-climbing)', () => {
+  const obs = (over = {}) => ({ currentPct: 50, achievedISFraction: null, achievedAcosFraction: null, ...over })
+
+  it('opening jump: jumpStartPct snaps to the opening in ONE cycle (no signal)', () => {
+    const d = computeStep(T({ jumpStartPct: 75 }), obs({ currentPct: 0 }))
+    expect(d.action).toBe('raise'); expect(d.nextPct).toBe(75); expect(d.reason).toMatch(/jump|opening/)
+  })
+  it('after the jump (no keep-climbing) it HOLDS at the opening', () => {
+    const d = computeStep(T({ jumpStartPct: 75 }), obs({ currentPct: 75 }))
+    expect(d.action).toBe('hold'); expect(d.nextPct).toBe(75)
+  })
+
+  it('custom climb step: stepUpPct drives the raise increment', () => {
+    const d = computeStep(T({ stepUpPct: 30 }), obs({ currentPct: 50, achievedISFraction: 0.4, achievedAcosFraction: 0.3 }))
+    expect(d.action).toBe('raise'); expect(d.nextPct).toBe(80) // 50 + 30
+  })
+  it('custom ease step: stepDownPct drives the signal-driven lower increment', () => {
+    const d = computeStep(T({ stepDownPct: 5 }), obs({ currentPct: 80, achievedISFraction: 0.85, achievedAcosFraction: 0.3 }))
+    expect(d.action).toBe('lower'); expect(d.nextPct).toBe(75) // 80 - 5
+  })
+
+  it('gradual down: stepDownPct set ⇒ ease −N to the floor instead of snapping', () => {
+    const d = computeStep(T({ biasPct: 0, stepDownPct: 20 }), obs({ currentPct: 130 }))
+    expect(d.action).toBe('lower'); expect(d.nextPct).toBe(110); expect(d.reason).toMatch(/easing/) // 130 - 20, not snap-to-0
+  })
+  it('snap down is still the default (stepDownPct null) — one cycle to the floor', () => {
+    const d = computeStep(T({ biasPct: 0 }), obs({ currentPct: 130 }))
+    expect(d.action).toBe('lower'); expect(d.nextPct).toBe(0)
+  })
+
+  it('ceiling: maxBiasPct caps the climb', () => {
+    const d = computeStep(T({ maxBiasPct: 300 }), obs({ currentPct: 295, achievedISFraction: 0.4, achievedAcosFraction: 0.3 }))
+    expect(d.action).toBe('raise'); expect(d.nextPct).toBe(300) // 295 + 15 clamped to 300
+  })
+  it('ceiling: at maxBiasPct with IS short → holds (does not exceed the ceiling)', () => {
+    const d = computeStep(T({ maxBiasPct: 300 }), obs({ currentPct: 300, achievedISFraction: 0.4, achievedAcosFraction: 0.3 }))
+    expect(d.action).toBe('hold'); expect(d.nextPct).toBe(300)
+  })
+
+  it('keepClimbing: climbs to the ceiling with NO signal, then holds at the ceiling', () => {
+    const climb = computeStep(T({ keepClimbing: true, maxBiasPct: 300 }), obs({ currentPct: 100 }))
+    expect(climb.action).toBe('raise'); expect(climb.nextPct).toBe(115); expect(climb.reason).toMatch(/climb|ceiling/)
+    const top = computeStep(T({ keepClimbing: true, maxBiasPct: 300 }), obs({ currentPct: 300 }))
+    expect(top.action).toBe('hold'); expect(top.nextPct).toBe(300) // does NOT fall back to the floor
+  })
+  it('keepClimbing is still bounded by the ACOS cap — eases when over', () => {
+    const d = computeStep(T({ keepClimbing: true }), obs({ currentPct: 200, achievedAcosFraction: 0.6 }))
+    expect(d.action).toBe('lower'); expect(d.reason).toMatch(/over cap/)
+  })
+
+  it('REGRESSION LOCK: an all-null motion spec == historical behaviour exactly', () => {
+    const nul = { jumpStartPct: null, stepUpPct: null, stepDownPct: null, maxBiasPct: null, keepClimbing: false }
+    // fresh, no signal → ramp +30 to the entry bias
+    expect(computeStep(T(nul), obs({ currentPct: 0 }))).toMatchObject({ action: 'raise', nextPct: 30 })
+    // IS below target → +15
+    expect(computeStep(T(nul), obs({ currentPct: 50, achievedISFraction: 0.4, achievedAcosFraction: 0.3 })).nextPct).toBe(65)
+    // bias above entry, no signal → snap to 100
+    expect(computeStep(T(nul), obs({ currentPct: 130 }))).toMatchObject({ action: 'lower', nextPct: 100 })
+    // all-out, no signal → +25, ceiling 900
+    expect(computeStep(T({ ...nul, allOut: true }), obs({ currentPct: 0 })).nextPct).toBe(25)
+  })
+})
+
 describe('isRankLoss (RS.6 hourly proxy)', () => {
   it('sharp drop vs a meaningful baseline → loss', () => { expect(isRankLoss(1, 20)).toBe(true) })
   it('within band → no loss', () => { expect(isRankLoss(15, 20)).toBe(false) })

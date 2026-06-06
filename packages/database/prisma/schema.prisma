@@ -12497,6 +12497,12 @@ model RankTarget {
   acosCapPct  Int? // ACOS ceiling % the loop must respect; null = use campaign/global default
   maxCpcCents Int? // hard bid ceiling the loop may set; null = use CPC-ceiling guardrail
   biasPct     Int? // starting placement-bias % (0-900) applied on entry
+  // MP — motion profile: HOW the loop moves the bias (all null/false = today's behaviour).
+  jumpStartPct Int? // opening bid: on entry, SNAP straight to this % in one cycle; null = gradual ramp to biasPct
+  stepUpPct    Int? // gradual climb step %/cycle; null = 15 (25 all-out)
+  stepDownPct  Int? // ease step %/cycle; null = SNAP down to floor on a plan change (today); a number = gradual, never snap
+  maxBiasPct   Int? // ceiling the climb won't exceed; null = 900
+  keepClimbing Boolean @default(false) // after the jump, keep stepping to the ceiling even with NO signal (bounded by ceiling + ACOS cap)
   pause       Boolean  @default(false) // this target = pause delivery in the window
   // RS.1.1 — "all-out": the defend loop IGNORES acosCapPct and holds the slot at
   // any cost up to maxCpcCents (null maxCpc = truly unbounded). For windows where
