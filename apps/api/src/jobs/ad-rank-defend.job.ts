@@ -140,15 +140,18 @@ async function loadFamilyTargeting(famCampIds: string[], campById: Map<string, {
   })
 }
 
-// RD.4 — plan actuation is OFF until RD.7. Plans compute + persist decisions
-// (so the UI can preview the fan-out) but do NOT touch campaigns yet.
-const PLAN_ALLOW_APPLY = false
+// RD.7 — plan actuation is LIVE, gated. Plans actuate via applyTopOfSearch through
+// the same write-gate as schedules (sandbox-safe; live only when the gate is open).
+// Auto-actuation (cron) skips manualOnly plans; an explicit run-now (force) actuates
+// them too.
+const PLAN_ALLOW_APPLY = true
 
-export async function runRankDefendOnce(opts: { dryRun?: boolean } = {}): Promise<RankDefendSummary> {
+export async function runRankDefendOnce(opts: { dryRun?: boolean; onlyPlanId?: string; force?: boolean } = {}): Promise<RankDefendSummary> {
   const dryRun = !!opts.dryRun
-  const schedules = (await prisma.adSchedule.findMany({ where: { enabled: true } }))
-    .filter((s) => isGoalMode(s.windows, s.defaultTargetKey))
-  const plans = await prisma.productRankPlan.findMany({ where: { enabled: true } })
+  // onlyPlanId scopes a run to ONE plan (per-plan run-now / apply-now): skip schedules
+  // and the enabled filter, so even a disabled plan can be previewed or manually applied.
+  const schedules = opts.onlyPlanId ? [] : (await prisma.adSchedule.findMany({ where: { enabled: true } })).filter((s) => isGoalMode(s.windows, s.defaultTargetKey))
+  const plans = await prisma.productRankPlan.findMany({ where: opts.onlyPlanId ? { id: opts.onlyPlanId } : { enabled: true } })
   if (schedules.length === 0 && plans.length === 0) return { evaluated: 0, applied: 0, decisions: [], plans: [] }
 
   const targets = await prisma.rankTarget.findMany()
@@ -228,7 +231,7 @@ export async function runRankDefendOnce(opts: { dryRun?: boolean } = {}): Promis
     if (key) {
       const target = targetByKey.get(key)
       if (target) {
-        const write = !dryRun && PLAN_ALLOW_APPLY && !plan.manualOnly
+        const write = !dryRun && PLAN_ALLOW_APPLY && (!plan.manualOnly || !!opts.force)
         // RD.5 — family pre-flight guards (once per plan, shared by every campaign):
         // retail-readiness (OOS/lost-buybox), family daily spend vs budget cap,
         // family ACOS vs cap.

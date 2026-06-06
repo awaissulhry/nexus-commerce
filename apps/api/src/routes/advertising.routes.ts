@@ -4800,6 +4800,50 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // ── RD.7 — per-plan actuation: live preview / apply-now / revert / bulk push ──
+  // run-now evaluates ONE plan: dryRun previews per-campaign decisions; live applies
+  // them through the write-gate (force bypasses manualOnly — the operator clicked
+  // apply). revert resets the family's PLACEMENT_TOP to the baseline. apply-across is
+  // an immediate bulk Top-of-Search set across every family campaign.
+  fastify.post('/advertising/rank-plans/:id/run-now', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const body = (request.body ?? {}) as { dryRun?: boolean }
+    const dryRun = body.dryRun === true || (request.query as { dryRun?: string })?.dryRun === '1'
+    const plan = await prisma.productRankPlan.findUnique({ where: { id }, select: { id: true } })
+    if (!plan) { reply.status(404); return { error: 'not found' } }
+    const { runRankDefendOnce } = await import('../jobs/ad-rank-defend.job.js')
+    try { return await runRankDefendOnce({ dryRun, onlyPlanId: id, force: !dryRun }) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
+  })
+  fastify.post('/advertising/rank-plans/:id/revert', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const plan = await prisma.productRankPlan.findUnique({ where: { id } })
+    if (!plan) { reply.status(404); return { error: 'not found' } }
+    const { resolveProductFamily } = await import('../services/advertising/ads-dayparting-refresh.service.js')
+    const { applyTopOfSearch } = await import('../services/advertising/ads-top-of-search.service.js')
+    const fam = await resolveProductFamily({ parentProductId: plan.productId, marketplace: plan.marketplace })
+    const baseline = plan.defaultTargetKey ? await prisma.rankTarget.findUnique({ where: { key: plan.defaultTargetKey } }) : null
+    const pct = baseline?.biasPct ?? 0
+    let reverted = 0
+    for (const c of fam.campaigns) { try { await applyTopOfSearch(c.id, pct); reverted++ } catch { /* best-effort */ } }
+    return { ok: true, reverted, toPct: pct, campaigns: fam.campaigns.length }
+  })
+  fastify.post('/advertising/rank-plans/:id/apply-across', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const b = (request.body ?? {}) as { targetKey?: string; percentage?: number }
+    const plan = await prisma.productRankPlan.findUnique({ where: { id } })
+    if (!plan) { reply.status(404); return { error: 'not found' } }
+    let pct = typeof b.percentage === 'number' ? b.percentage : undefined
+    if (pct == null && b.targetKey) { const t = await prisma.rankTarget.findUnique({ where: { key: b.targetKey } }); pct = t?.biasPct ?? undefined }
+    if (pct == null) { reply.status(400); return { error: 'targetKey or percentage required' } }
+    const clamped = Math.max(0, Math.min(900, Math.round(pct)))
+    const { resolveProductFamily } = await import('../services/advertising/ads-dayparting-refresh.service.js')
+    const { applyTopOfSearch } = await import('../services/advertising/ads-top-of-search.service.js')
+    const fam = await resolveProductFamily({ parentProductId: plan.productId, marketplace: plan.marketplace })
+    let applied = 0
+    for (const c of fam.campaigns) { try { await applyTopOfSearch(c.id, clamped); applied++ } catch { /* best-effort */ } }
+    return { ok: true, applied, pct: clamped, campaigns: fam.campaigns.length }
+  })
+
   // RS.4 — preview the pure rank controller's next move for a given target +
   // observed signals (no writes). Lets the cockpit show "what would the defend
   // loop do right now", and is how RS.4 is verified end-to-end.
