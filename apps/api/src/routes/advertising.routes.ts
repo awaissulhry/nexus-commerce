@@ -4769,6 +4769,37 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // ── RD.3 — family demand by hour (product-anchored, per-market, date-range) ──
+  // The authoring feed for Rank Director: pick a PRODUCT → see when the whole
+  // VARIATION FAMILY actually sells (order demand, blended + sparse-shrunk toward
+  // the market prior), in the market's shopper-local time — even if a campaign has
+  // one ASIN. Returns a recommended rank-window plan (peak hours → push target,
+  // the rest → baseline) the operator one-clicks then tunes. Read-only.
+  fastify.get('/advertising/by-product/family-dayparting', async (request, reply) => {
+    const q = request.query as { productId?: string; marketplace?: string; from?: string; to?: string; preset?: string; windowDays?: string }
+    if (!q.productId) { reply.status(400); return { error: 'productId required' } }
+    const marketplace = q.marketplace || 'IT'
+    const { resolveProductFamily, blendedFamilyDemand, recommendRankWindows } = await import('../services/advertising/ads-dayparting-refresh.service.js')
+    const fam = await resolveProductFamily({ parentProductId: q.productId, marketplace })
+    if (!fam.parentProductId || fam.productIds.length === 0) { reply.status(404); return { error: 'product family not found' } }
+    // Date range: explicit from/to (or a preset), else windowDays fallback. TZ note:
+    // the demand SQL buckets in Europe/Rome — correct for IT v1; multi-market needs
+    // the bucket TZ parameterised (tracked for expansion).
+    const { resolveRange } = await import('../services/advertising/ads-date-range.js')
+    const range = resolveRange({ preset: q.preset, startDate: q.from, endDate: q.to, windowDays: q.windowDays })
+    const to = new Date(range.until.getTime() + 86_400_000) // include the until day (SQL uses < to)
+    const demand = await blendedFamilyDemand(fam.productIds, marketplace, range.days, { from: range.since, to })
+    const recommended = recommendRankWindows(demand.weekdayProfile, demand.hourProfile)
+    reply.header('Cache-Control', 'private, max-age=120')
+    return {
+      marketplace, parentProductId: fam.parentProductId, parentName: fam.parentName,
+      productIds: fam.productIds, asins: fam.asins, campaignCount: fam.campaigns.length,
+      range: { from: range.sinceStr, to: range.untilStr, days: range.days, preset: range.preset },
+      demand: { totals: demand.totals, hourProfile: demand.hourProfile, weekdayProfile: demand.weekdayProfile, grid: demand.grid, hasData: demand.hasData, blended: demand.blended, familyOrders: demand.familyOrders },
+      recommended,
+    }
+  })
+
   // RS.4 — preview the pure rank controller's next move for a given target +
   // observed signals (no writes). Lets the cockpit show "what would the defend
   // loop do right now", and is how RS.4 is verified end-to-end.

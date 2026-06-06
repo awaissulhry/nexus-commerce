@@ -105,9 +105,12 @@ export function shrinkShare(fShare: number, mShare: number, familyOrders: number
   return blended ? (familyOrders * fShare + k * mShare) / (familyOrders + k) : fShare
 }
 
-export async function blendedFamilyDemand(productIds: string[], marketplace: string | undefined, windowDays = 180): Promise<BlendedDemand> {
-  const fam = await aggregateOrdersDayparting({ channel: 'AMAZON', marketplace, productIds, windowDays, metric: 'revenue' })
-  const mkt = await aggregateOrdersDayparting({ channel: 'AMAZON', marketplace, windowDays, metric: 'revenue' })
+export async function blendedFamilyDemand(productIds: string[], marketplace: string | undefined, windowDays = 180, range?: { from?: Date; to?: Date }): Promise<BlendedDemand> {
+  // RD.3 — optional explicit date range (from/to win over windowDays in
+  // aggregateOrdersDayparting); both the family and the market prior use the same
+  // window so the shrinkage stays apples-to-apples.
+  const fam = await aggregateOrdersDayparting({ channel: 'AMAZON', marketplace, productIds, windowDays, metric: 'revenue', from: range?.from, to: range?.to })
+  const mkt = await aggregateOrdersDayparting({ channel: 'AMAZON', marketplace, windowDays, metric: 'revenue', from: range?.from, to: range?.to })
   const fTotRev = fam.totals.revenueCents, fTotOrders = fam.totals.orders, fTotUnits = fam.totals.units
   const mTotRev = mkt.totals.revenueCents
   const blended = mTotRev > 0 && fTotOrders > 0
@@ -175,6 +178,30 @@ export function generateDaypartingWindows(weekdayProfile: DaypartProfile[], hour
   if (weak.length) windows.push({ days: weak, startHour: activeStart, endHour: activeEnd, bidMultiplierPct: -bidDownPct })
   if (keep.length) windows.push({ days: keep, startHour: activeStart, endHour: activeEnd })
   return windows
+}
+
+// ── RD.3 — fused dayparting → RANK windows ─────────────────────────────────
+// Turn a family's by-hour demand into a recommended rank PLAN: the hours the
+// family actually sells get the "push" target (default own-top); everything else
+// falls to the baseline (rest-of-search). This is the dayparting↔rank fusion the
+// operator one-clicks before tuning. Weekday key 0=Sun..6=Sat (cron-aligned).
+export interface RankWindow { days: number[]; startHour: number; endHour: number; targetKey: string }
+export function recommendRankWindows(
+  weekdayProfile: BlendProfile[],
+  hourProfile: BlendProfile[],
+  opts: { peakTargetKey?: string; baselineTargetKey?: string } = {},
+): { windows: RankWindow[]; baselineTargetKey: string; peakHours: number[]; peakDays: number[] } {
+  const peakTargetKey = opts.peakTargetKey ?? 'own-top'
+  const baselineTargetKey = opts.baselineTargetKey ?? 'rest-of-search'
+  const peakDays = weekdayProfile.filter((w) => w.index != null && w.index >= 1.2).map((w) => w.key)
+  // No strong weekday signal (flat week) → push every day during peak hours.
+  const days = peakDays.length ? peakDays : [0, 1, 2, 3, 4, 5, 6]
+  const peakHours = hourProfile.filter((h) => h.index != null && h.index >= 1.2).map((h) => h.key)
+  const windows: RankWindow[] = []
+  if (peakHours.length) {
+    windows.push({ days, startHour: Math.min(...peakHours), endHour: Math.max(...peakHours) + 1, targetKey: peakTargetKey })
+  }
+  return { windows, baselineTargetKey, peakHours, peakDays }
 }
 
 export interface RefreshResult { parentName: string | null; marketplace: string | null; campaigns: number; updated: number; created: number; windows: number; dryRun: boolean }
