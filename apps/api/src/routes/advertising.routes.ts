@@ -4612,7 +4612,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const { id } = request.params as { id: string }
     const b = request.body as Record<string, unknown>
     const data: Record<string, unknown> = {}
-    for (const k of ['name', 'windows', 'timezone', 'enabled', 'defaultTargetKey']) if (b[k] !== undefined) data[k] = b[k]
+    for (const k of ['name', 'windows', 'timezone', 'enabled', 'defaultTargetKey', 'targetOverrides']) if (b[k] !== undefined) data[k] = b[k]
     const before = await prisma.adSchedule.findUnique({ where: { id }, select: { campaignId: true, lastApplied: true } })
     if (!before) { reply.status(404); return { error: 'not found' } }
     // RC2.T3 reactivation safety: disabling a schedule that currently has the
@@ -4654,13 +4654,18 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     // must-win windows; maxCpcCents stays null here (operator sets a runaway guard).
     { key: 'own-top-allout', name: 'Own Top — All-Out', placement: 'PLACEMENT_TOP', targetISPct: 90, acosCapPct: null, maxCpcCents: null, biasPct: 150, pause: false, allOut: true, color: '#b91c1c', builtIn: true, sortOrder: 5 },
   ]
-  fastify.get('/advertising/rank-targets', async (_request, reply) => {
+  fastify.get('/advertising/rank-targets', async (request, reply) => {
+    const q = request.query as { productId?: string; campaignId?: string }
     reply.header('Cache-Control', 'private, max-age=15')
-    // Lazy-seed the built-ins (idempotent; update never overwrites operator tuning).
+    // Lazy-seed the built-ins (idempotent; never overwrites operator tuning incl. renames).
     for (const t of BUILTIN_RANK_TARGETS) {
-      try { await prisma.rankTarget.upsert({ where: { key: t.key }, update: { builtIn: true, name: t.name }, create: t as never }) } catch { /* race-safe */ }
+      try { await prisma.rankTarget.upsert({ where: { key: t.key }, update: { builtIn: true }, create: t as never }) } catch { /* race-safe */ }
     }
-    const items = await prisma.rankTarget.findMany({ orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }] })
+    // RTC — global library (scope null) ∪ custom swatches scoped to this product/campaign.
+    const scopeOr: Record<string, unknown>[] = [{ scopeProductId: null, scopeCampaignId: null }]
+    if (q.productId) scopeOr.push({ scopeProductId: q.productId })
+    if (q.campaignId) scopeOr.push({ scopeCampaignId: q.campaignId })
+    const items = await prisma.rankTarget.findMany({ where: { OR: scopeOr }, orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }] })
     return { items, count: items.length }
   })
   fastify.post('/advertising/rank-targets', async (request, reply) => {
@@ -4676,6 +4681,8 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       biasPct: (b.biasPct as number | null) ?? null,
       pause: !!b.pause, allOut: !!b.allOut, color: (b.color as string | null) ?? null,
       builtIn: false, sortOrder: (b.sortOrder as number) ?? 50,
+      scopeProductId: (b.scopeProductId as string | null) ?? null,
+      scopeCampaignId: (b.scopeCampaignId as string | null) ?? null,
     }
     try { return await prisma.rankTarget.create({ data: data as never }) } catch { reply.status(409); return { error: 'key_taken' } }
   })
@@ -4693,6 +4700,14 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     if (t.builtIn) { reply.status(409); return { error: 'builtin_protected' } }
     await prisma.rankTarget.delete({ where: { id } })
     return { ok: true }
+  })
+  // RTC — reset a built-in target to its canonical default values (clears operator tuning).
+  fastify.post('/advertising/rank-targets/:id/reset', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const t = await prisma.rankTarget.findUnique({ where: { id }, select: { key: true } })
+    const d = (t ? BUILTIN_RANK_TARGETS.find((x) => x.key === t.key) : null) as Record<string, unknown> | null
+    if (!d) { reply.status(404); return { error: 'not_a_builtin' } }
+    return await prisma.rankTarget.update({ where: { id }, data: { name: d.name, placement: d.placement, targetISPct: d.targetISPct ?? null, acosCapPct: d.acosCapPct ?? null, maxCpcCents: d.maxCpcCents ?? null, biasPct: d.biasPct ?? null, color: d.color ?? null, pause: !!d.pause, allOut: !!d.allOut } as never })
   })
 
   // ── RD.1 — Rank Director: product-FAMILY rank+dayparting plans ──────────
@@ -4760,7 +4775,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const { id } = request.params as { id: string }
     const b = request.body as Record<string, unknown>
     const data: Record<string, unknown> = {}
-    for (const k of ['parentAsin', 'windows', 'defaultTargetKey', 'timezone', 'familyDailyBudgetCents', 'familyAcosCapPct', 'maxCampaigns', 'leadTimeMinutes', 'excludeCampaignIds', 'enabled', 'manualOnly']) if (b[k] !== undefined) data[k] = b[k]
+    for (const k of ['parentAsin', 'windows', 'defaultTargetKey', 'timezone', 'familyDailyBudgetCents', 'familyAcosCapPct', 'maxCampaigns', 'leadTimeMinutes', 'excludeCampaignIds', 'targetOverrides', 'enabled', 'manualOnly']) if (b[k] !== undefined) data[k] = b[k]
     // Disabling stamps pausedAt. The resume-paused-family-campaigns safety (mirror
     // of the AdSchedule reactivation guard) lands in RD.7, once plans actuate.
     if (data.enabled === false) data.pausedAt = new Date()

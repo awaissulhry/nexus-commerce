@@ -12472,6 +12472,8 @@ model AdSchedule {
   // AU.3 — bid snapshot taken when entering a bid-multiplier window.
   // JSON: { [adTargetId]: originalBidCents }. Cleared when exiting/restoring.
   originalBids    Json?
+  // RTC — per-campaign target overrides: { targetKey: { biasPct?, targetISPct?, acosCapPct?, maxCpcCents? } }
+  targetOverrides Json      @default("{}")
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
   createdBy       String?
@@ -12503,6 +12505,10 @@ model RankTarget {
   color       String? // UI swatch (hex)
   builtIn     Boolean  @default(false) // seeded preset — not user-deletable
   sortOrder   Int      @default(0)
+  // RTC — scope: both null = global library swatch (the default); set = a custom
+  // swatch visible only on that product family / campaign. Built-ins stay global.
+  scopeProductId  String?
+  scopeCampaignId String?
   createdBy   String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -12542,6 +12548,8 @@ model ProductRankPlan {
   // plan controls the WHOLE resolved family; stored as exclusions (not an include
   // list) so newly-created campaigns for the family are auto-covered, not orphaned.
   excludeCampaignIds Json @default("[]")
+  // RTC — per-product target overrides: { targetKey: { biasPct?, targetISPct?, acosCapPct?, maxCpcCents? } }
+  targetOverrides Json @default("{}")
 
   // ── Lifecycle / safety ──
   enabled         Boolean   @default(false) // armed = the cron auto-holds it
