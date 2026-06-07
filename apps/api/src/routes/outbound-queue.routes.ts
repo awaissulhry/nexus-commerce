@@ -8,7 +8,7 @@
 
 import type { FastifyInstance } from 'fastify'
 import prisma from '../db.js'
-import { outboundSyncQueue } from '../lib/queue.js'
+import { outboundSyncQueue, adsSyncQueue } from '../lib/queue.js'
 import { logger } from '../utils/logger.js'
 
 export default async function outboundQueueRoutes(fastify: FastifyInstance) {
@@ -171,10 +171,35 @@ export default async function outboundQueueRoutes(fastify: FastifyInstance) {
           },
           { jobId: `${row.channelListingId}:${row.syncType}:retry:${Date.now()}` },
         )
+      } else if (row.syncType?.startsWith('AD_')) {
+        // B2 — ads rows carry no channelListingId, so the generic re-enqueue above skips them and
+        // they'd wait for the ~1-min drain cron. Re-enqueue on the ads queue for an immediate retry.
+        await adsSyncQueue.add('ads-sync', { queueId: id, syncType: row.syncType }, { jobId: `ads-sync:${id}:retry:${Date.now()}` }).catch(() => {})
       }
 
       logger.info('Outbound queue job retried by operator', { id, channel: row.targetChannel })
       return reply.send({ ok: true, item: formatRow(updated) })
+    },
+  )
+
+  // ── POST /api/outbound-queue/purge-failed (B3) ───────────────────────────
+  // Delete terminal FAILED queue rows (historical cross-channel cruft that masks real failures
+  // in the dashboard count). SAFE: only ever touches syncStatus=FAILED — never PENDING/IN_PROGRESS/
+  // SUCCESS/SKIPPED. Pass {dryRun:true} to see the channel/syncType breakdown without deleting;
+  // optional {channel, olderThanDays} to scope.
+  fastify.post<{ Body: { dryRun?: boolean; channel?: string; olderThanDays?: number } }>(
+    '/api/outbound-queue/purge-failed',
+    async (request, reply) => {
+      const { dryRun, channel, olderThanDays } = request.body ?? {}
+      const where: any = { syncStatus: 'FAILED' }
+      if (channel) where.targetChannel = channel
+      if (olderThanDays != null) where.updatedAt = { lt: new Date(Date.now() - olderThanDays * 86_400_000) }
+      const breakdown = await (prisma.outboundSyncQueue as any).groupBy({ by: ['targetChannel', 'syncType'], where, _count: { id: true } })
+      const matched = breakdown.reduce((s: number, b: { _count: { id: number } }) => s + b._count.id, 0)
+      if (dryRun) return reply.send({ dryRun: true, matched, breakdown })
+      const res = await prisma.outboundSyncQueue.deleteMany({ where })
+      logger.info('[outbound-queue] purged terminal FAILED rows', { deleted: res.count, channel: channel ?? 'all', olderThanDays: olderThanDays ?? 'any' })
+      return reply.send({ ok: true, deleted: res.count, breakdown })
     },
   )
 
@@ -230,7 +255,9 @@ export default async function outboundQueueRoutes(fastify: FastifyInstance) {
               { queueId: r.id, productId: r.productId, channelListingId: r.channelListingId, targetChannel: r.targetChannel, syncType: r.syncType },
               { jobId: `${r.channelListingId}:${r.syncType}:retry:${Date.now()}` },
             ).catch(() => {})
-          : Promise.resolve(),
+          : r.syncType?.startsWith('AD_') // B2 — ads rows go on the ads queue
+            ? adsSyncQueue.add('ads-sync', { queueId: r.id, syncType: r.syncType }, { jobId: `ads-sync:${r.id}:retry:${Date.now()}` }).catch(() => {})
+            : Promise.resolve(),
       ),
     )
 
