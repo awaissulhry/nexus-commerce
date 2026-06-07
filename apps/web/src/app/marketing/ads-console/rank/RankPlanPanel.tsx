@@ -17,6 +17,7 @@ import { DemandReadout, type DemandProfile, type DemandCell } from './DemandRead
 import { RankTimeGrid } from './RankTimeGrid'
 import { RankTargetEditor } from './RankTargetEditor'
 import { RankTemplateModal } from './RankTemplateModal'
+import { DeliveryChip } from './DeliveryChip'
 
 interface RankTarget { id: string; key: string; name: string; placement: string; targetISPct: number | null; acosCapPct: number | null; pause: boolean; allOut: boolean; color: string | null }
 interface Win { days: number[]; startHour: number; endHour: number; targetKey?: string }
@@ -212,6 +213,9 @@ export function RankPlanPanel({ campaignId, campaignName, onAutoDefend, reloadSi
             <span>Right now the loop would <b>{decision.action === 'pause' ? 'drop to Min bid' : decision.action}</b>{decision.action === 'raise' || decision.action === 'lower' ? ` → ${decision.nextPct}% placement bias` : ''}{decision.lossDetected ? ' (slipping — re-taking)' : ''} — <i>{decision.reason}</i>{decision.achievedISPct != null ? ` · IS ${decision.achievedISPct}%` : ' · no IS data yet'}.</span>
           </div>
         )}
+
+        {/* B1 — is it actually reaching Amazon? (delivery truth: live/sandbox · gated · pending · last push) */}
+        {campaignId && <DeliveryChip campaignId={campaignId} reloadSignal={reloadSignal} />}
 
         {msg && <div className="az-rp-msg">{msg}</div>}
         <div className="az-rp-note">Save stores the plan in Nexus (survives reload). Publish runs the defend loop now; real Amazon pushes still honour the write-gate (sandbox stays local). The loop also runs on its own once armed.</div>
