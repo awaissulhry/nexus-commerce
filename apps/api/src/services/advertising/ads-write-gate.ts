@@ -126,21 +126,14 @@ export async function checkAdsWriteGate(ctx: GateContext): Promise<GateDecision>
         deniedAt: 'campaign_allowlist',
       }
     }
-    // maxWritesPerDay guardrail — caps how many live writes automation may apply
-    // to this campaign per UTC day. Stale-day counters read as 0.
-    const guards = (campaign.dynamicBidding ?? {}) as { maxWritesPerDay?: number }
-    const cap = Number(guards.maxWritesPerDay)
-    if (Number.isFinite(cap) && cap > 0) {
-      const today = utcDayKey()
-      const used = campaign.liveBidWritesDay === today ? campaign.liveBidWritesToday : 0
-      if (used >= cap) {
-        return {
-          allowed: false,
-          reason: `campaign ${ctx.campaignId} hit its daily live-write cap (${used}/${cap} for ${today})`,
-          deniedAt: 'daily_cap',
-        }
-      }
-    }
+    // WC — the maxWritesPerDay DAILY cap is intentionally DISABLED (operator decision:
+    // unlimited bid writes). It counted +1 per ENTITY, so a per-hour rank schedule
+    // (~12 entities × ~12–24 flips/day) blew through a small cap by mid-morning and then
+    // silently dropped the rest of the day's pushes to Amazon (local ≠ Amazon split-brain).
+    // Frequency is no longer capped. Per-WRITE safety still applies (the value + change
+    // clamps below, plus cpcCeiling) so no single write can set a wild bid, and the Ads
+    // client's 429 backoff (ads-api-client.ts) paces bursts against Amazon's rate limits.
+    // liveBidWritesToday is still recorded (see recordWrite) for observability only.
   }
 
   // Value cap: blast-radius limit per write. Composite actions are
