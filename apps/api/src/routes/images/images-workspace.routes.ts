@@ -225,16 +225,22 @@ const imagesWorkspaceRoutes: FastifyPluginAsync = async (fastify) => {
         .map((m) => m.publicId)
         .filter((v): v is string => !!v)
       const damLinks: Record<string, string> = {}
+      // MM.8 — productImageIds whose linked DAM asset URL no longer matches the
+      // product image (asset replaced/re-derived in the DAM → drift).
+      const damDrift: string[] = []
       if (publicIds.length > 0) {
         const assets = await prisma.digitalAsset.findMany({
           where: { storageProvider: 'cloudinary', storageId: { in: publicIds } },
-          select: { id: true, storageId: true },
+          select: { id: true, storageId: true, url: true },
         })
-        const byStorageId = new Map(assets.map((a) => [a.storageId, a.id]))
+        const byStorageId = new Map(assets.map((a) => [a.storageId, a]))
         for (const m of master) {
           if (m.publicId) {
-            const assetId = byStorageId.get(m.publicId)
-            if (assetId) damLinks[m.id] = assetId
+            const asset = byStorageId.get(m.publicId)
+            if (asset) {
+              damLinks[m.id] = asset.id
+              if (asset.url && m.url && asset.url !== m.url) damDrift.push(m.id)
+            }
           }
         }
       }
@@ -255,6 +261,7 @@ const imagesWorkspaceRoutes: FastifyPluginAsync = async (fastify) => {
         availableAxes,
         amazonJobs: recentJobs,
         damLinks,
+        damDrift,
         channelLiveImages: liveImages,
         amazonSlotTaxonomy,
       }

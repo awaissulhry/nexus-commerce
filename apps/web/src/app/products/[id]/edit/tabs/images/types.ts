@@ -140,6 +140,8 @@ export interface WorkspaceData {
   // IR.7.2 — Map productImage.id → DigitalAsset.id for rows mirrored in
   // the DAM library. Empty when no master image has been pushed yet.
   damLinks: Record<string, string>
+  // MM.8 — productImage.ids whose linked DAM asset URL drifted from the product.
+  damDrift?: string[]
   // IE.4 — read-replica of what each channel is currently serving.
   // Empty until the operator triggers a refresh; populated again by
   // IE.4b's cron once that lands.

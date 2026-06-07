@@ -125,6 +125,8 @@ export default function ImagesTab({ product, discardSignal, onDirtyChange, onPre
   // slots to IMAGE, so this split is belt-and-braces.)
   const masterImages = master.filter((m) => (m.mediaType ?? 'IMAGE') === 'IMAGE')
   const masterVideos = master.filter((m) => m.mediaType === 'VIDEO')
+  // MM.8 — DAM drift: images whose linked DAM asset URL changed.
+  const damDrift = workspace.data?.damDrift ?? []
   const variants = workspace.data?.variants ?? []
   const channelLiveImages = workspace.data?.channelLiveImages ?? []
 
@@ -613,6 +615,13 @@ export default function ImagesTab({ product, discardSignal, onDirtyChange, onPre
 
       {/* ── Panel + sidebar layout ───────────────────────────────────── */}
       <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_220px] gap-4 items-start">
+        {/* MM.8 — DAM drift notice */}
+        {damDrift.length > 0 && (
+          <div className="mx-4 mb-2 flex items-center gap-2 rounded-lg border border-amber-200 dark:border-amber-900/50 bg-amber-50 dark:bg-amber-950/30 px-3 py-2 text-xs text-amber-800 dark:text-amber-200">
+            <span>⚠ {damDrift.length} image{damDrift.length === 1 ? '' : 's'} changed in the DAM library since they were added here — re-upload or re-link to refresh.</span>
+          </div>
+        )}
+
         {/* Active panel — min-w-0 so a wide channel matrix scrolls INSIDE its
             own overflow-x-auto container instead of widening the whole page. */}
         <div className="min-w-0">
