@@ -88,16 +88,18 @@ export function RankTargetEditor({ open, onClose, scopeKind, scopeLabel, scopeOv
     const p: string[] = []
     const isTop = t.placement === 'PLACEMENT_TOP'
     const b = effOf(t, 'biasPct'); if (b != null) p.push(`${placeLabel(t.placement)} +${b}%`)
-    // IS + ACOS only mean something for Top of Search — Amazon exposes neither for Rest/Product.
-    const is = effOf(t, 'targetISPct'); if (is != null && isTop) p.push(`hold ${is}% IS`)
-    const a = effOf(t, 'acosCapPct'); if (a != null && isTop) p.push(`ease above ${a}% ACOS`)
+    const ceil = effOf(t, 'maxBiasPct')
+    // MP v2 — IS / ACOS only act when the bid is ALLOWED above Placement % (a Ceiling above it,
+    // or all-out). Without a Ceiling the loop just snaps to Placement %, so don't advertise them.
+    const canChase = t.allOut || (ceil != null && ceil > (b ?? 0))
+    const is = effOf(t, 'targetISPct'); if (is != null && isTop && canChase) p.push(`hold ${is}% IS`)
+    const a = effOf(t, 'acosCapPct'); if (a != null && isTop && canChase) p.push(`ease above ${a}% ACOS`)
     const c = effOf(t, 'maxCpcCents'); if (c != null) p.push(`max CPC €${(c / 100).toFixed(2)}`)
     if (t.allOut) p.push('all-out (ignore ACOS)')
     // MP v2 — motion summary (only the parts tuned away from snap-and-hold, to avoid clutter).
     const motion: string[] = []
     const up = effOf(t, 'stepUpPct'); if (up != null) motion.push(`ramp +${up}↑`)
     const down = effOf(t, 'stepDownPct'); if (down != null) motion.push(`ease −${down}↓`)
-    const ceil = effOf(t, 'maxBiasPct')
     if (ceil != null && ceil > (b ?? 0)) motion.push(effKeep(t) ? `push→${ceil}%` : `chase→${ceil}%`)
     else if (effKeep(t)) motion.push('keep-climbing')
     if (motion.length) p.push(motion.join(' '))
