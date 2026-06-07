@@ -12571,6 +12571,21 @@ model RankTarget {
   // any cost up to maxCpcCents (null maxCpc = truly unbounded). For windows where
   // winning the rank matters more than margin. maxCpcCents stays a runaway guard.
   allOut      Boolean  @default(false)
+  // BL — blended multi-placement strategy. When set (non-empty), the engine drives
+  // EACH lane's placement simultaneously in one combined write (Top + Rest of Search +
+  // Product pages), instead of the single `placement` above (which zeros the other
+  // search placement). null/[] => legacy single-placement behaviour (unchanged).
+  // Shape: [{ placement, biasPct, maxBiasPct?, targetISPct?, acosCapPct?, stepUpPct?,
+  //   stepDownPct?, keepClimbing?, allOut? }]. Per-lane signal: Top=Amazon Top-IS,
+  //   Rest=SQP brand share, Product=open-loop (set-and-hold, no chase).
+  lanes       Json? // BL — per-placement lane specs; null = single-placement (legacy)
+  // BL — base-bid directive (the campaign's base bid the placement multipliers stack on).
+  // mode: null/'hold' = don't touch (today); 'absolute' = set ad-group default to
+  // bidValueCents; 'suppress' = floor to ~2¢ (placements still set). 'deltaPct' is
+  // reserved (needs baseline memory — wired in a follow-up).
+  bidMode      String? // null|'hold'|'absolute'|'suppress'|'deltaPct'
+  bidValueCents Int?   // for 'absolute' — set ad-group default bid to this
+  bidDeltaPct  Int?    // reserved for 'deltaPct' (±% on base bid)
   color       String? // UI swatch (hex)
   builtIn     Boolean  @default(false) // seeded preset — not user-deletable
   sortOrder   Int      @default(0)
