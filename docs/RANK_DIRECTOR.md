@@ -41,10 +41,31 @@ join/leave; `AdProductAd.productId` is often null).
 3. **lead-time** — evaluate the active target at `now + leadTimeMinutes` (`resolveActiveTargetKey`).
 4. **family guards** (`effectiveSpec` / `suppressRaise`): OOS / lost-buybox (`analyzeRetailReadiness`) → pause; over family daily budget → suppress raises; over family ACOS → drop all-out.
 5. **self-competition** (`rank-self-competition.ts`): two of our campaigns on the same EXACT/PHRASE keyword (or two AUTO) → keep the best (lower ACOS), demote the rest to baseline.
-6. Per campaign: `computeStep` → `applyTopOfSearch` (gated, the same plumbing as schedules). Sandbox-safe; live only when the write-gate is open.
+6. Per campaign: `computeStep` → `setSearchPlacement` (gated, the same plumbing as schedules) — drives the **target's own placement** (Top for own-top/defend/all-out, Rest for rest-of-search) and zeroes the other search placement. Sandbox-safe; live only when the write-gate is open.
 
 Cron self-gated on `NEXUS_ENABLE_RANK_DEFEND=1`. Auto-actuation skips `manualOnly`
 plans; an explicit run-now (`force`) actuates them.
+
+## Motion profiles (MP) — how a bid MOVES
+
+`computeStep` (`rank-controller.ts`) is the one place a bid moves; its motion is
+operator-controllable per `RankTarget` (and per product/campaign via the override
+layer). Five nullable/false fields, all defaulting to the historical behaviour
+(regression-locked by `rank-controller.vitest.test.ts`):
+
+| Field | Meaning | Blank/default |
+| --- | --- | --- |
+| `jumpStartPct` | **opening jump** — snap straight to this % in one cycle on entry | gradual ramp `+step×2` to `biasPct` |
+| `stepUpPct` | **climb step** %/cycle | `15` (`25` all-out) |
+| `stepDownPct` | **ease step** %/cycle; a number ⇒ gradual, never snap | snap to the floor in one cycle |
+| `maxBiasPct` | **ceiling** the climb won't exceed | `900` |
+| `keepClimbing` | after the opening, keep stepping to the ceiling **with no signal** (still bounded by ceiling + ACOS cap; the ceiling becomes the rest point) | `false` (hold at the floor until a signal) |
+
+Effective floor = `jumpStartPct ?? biasPct`. Up has overspend risk so it stays
+incremental (jump excepted); down only reduces spend so it snaps by default.
+Edited in the **✎ Edit targets → ▸ Motion** drawer, with one-click recipes
+(**Blitz / Kickstart / Steady / Glide**). Motion is placement-agnostic, so it
+applies to Rest-of-Search targets too even though their IS/ACOS knobs don't.
 
 ## API (`apps/api/src/routes/advertising.routes.ts`)
 
