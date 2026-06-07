@@ -181,6 +181,31 @@ const FEED_TERMINAL = new Set(['DONE', 'FATAL', 'CANCELLED'])
 const isFeedTerminal = (s: string | null | undefined): boolean => !!s && FEED_TERMINAL.has(s)
 const feedErrorCount = (results: FeedResult[]): number => results.filter((r) => r.status === 'error').length
 
+// FFA.2 — merge copied columns into a target market's existing rows BY SKU
+// (update matching SKUs, add genuinely-new ones). Replaces the old behaviour
+// that overwrote the target market's whole row set with copies-only (wiping
+// existing target rows) and created duplicate rows for SKUs already present.
+function mergeReplicatedRows(
+  targetRows: Row[],
+  sourceRows: Row[],
+  colsToCopy: Set<string>,
+  structural: Set<string>,
+): Row[] {
+  const bySku = new Map<string, Row>(targetRows.map((r) => [String(r.item_sku ?? ''), r]))
+  for (const src of sourceRows) {
+    const sku = String(src.item_sku ?? '')
+    if (!sku) continue
+    const existing = bySku.get(sku)
+    const base: Row = existing
+      ? { ...existing, _dirty: true }
+      : { _rowId: `copy-${sku}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, _isNew: true, _dirty: true, _status: 'idle' }
+    for (const k of structural) if (src[k] != null) base[k] = src[k]
+    for (const colId of colsToCopy) if (src[colId] != null) base[colId] = src[colId]
+    bySku.set(sku, base)
+  }
+  return Array.from(bySku.values())
+}
+
 interface SubmissionRecord {
   id: string            // feedId
   market: string
@@ -2069,6 +2094,16 @@ export default function AmazonFlatFileClient({
         r._dirty || r._isNew ? { ...r, _dirty: false, _isNew: false, _status: 'pending' } : r
       ))
     }
+    // FFA.2 — clear _dirty/_isNew in OTHER submitted markets' localStorage too, so
+    // returning to them doesn't show stale "unsaved" flags (which caused re-submits).
+    for (const mp of submitted) {
+      if (mp === marketplace) continue
+      const saved = loadSavedRows(mp, productType)
+      if (!saved) continue
+      saveRows(mp, productType, saved.map((r) =>
+        r._dirty || r._isNew ? { ...r, _dirty: false, _isNew: false, _status: 'pending' } : r
+      ))
+    }
     setSubmitting(false)
   }, [rows, marketplace, productType, manifest, saveSubmissionRecord, createVersion, toast])
 
@@ -2250,17 +2285,21 @@ export default function AmazonFlatFileClient({
         const targetManifest: Manifest = await res.json()
         const targetColIds = new Set(targetManifest.groups.flatMap((g) => g.columns.map((c) => c.id)))
         const STRUCTURAL = new Set(['item_sku', 'product_type', 'record_action', 'parentage_level', 'parent_sku', 'variation_theme'])
-        const copiedRows = sourceRows.map((row) => {
-          const newRow: Row = { _rowId: `copy-${row._rowId}-${target}-${Date.now()}`, _isNew: true, _dirty: true, _status: 'idle' }
-          for (const key of STRUCTURAL) { if (row[key] != null) newRow[key] = row[key] }
-          for (const colId of colSet) { if (targetColIds.has(colId) && row[colId] != null) newRow[colId] = row[colId] }
-          return newRow
-        })
-        // Persist to localStorage under the target market key
-        const base = `ff-rows-${target.toUpperCase()}-${productType.toUpperCase()}`
-        const key = familyId ? `${base}-family-${familyId}` : base
-        try { localStorage.setItem(key, JSON.stringify(copiedRows)) } catch {}
-        copied += copiedRows.length
+        const cols = new Set([...colSet].filter((c) => targetColIds.has(c)))
+        // FFA.2 — merge into the target's EXISTING rows (local draft, else DB) by
+        // SKU, instead of overwriting the target's whole row set with copies-only.
+        let existingTarget = loadSavedRows(target, productType)
+        if (!existingTarget) {
+          try {
+            const rq = new URLSearchParams({ marketplace: target, productType })
+            if (familyId) rq.set('productId', familyId)
+            const rr = await fetch(`${getBackendUrl()}/api/amazon/flat-file/rows?${rq}`)
+            existingTarget = rr.ok ? ((await rr.json()).rows ?? []) : []
+          } catch { existingTarget = [] }
+        }
+        const merged = mergeReplicatedRows(existingTarget ?? [], sourceRows, cols, STRUCTURAL)
+        saveRows(target, productType, merged)
+        copied += sourceRows.length
       } catch { skipped += sourceRows.length }
     }
     return { copied, skipped }
@@ -2283,28 +2322,29 @@ export default function AmazonFlatFileClient({
         'item_sku', 'product_type', 'record_action',
         'parentage_level', 'parent_sku', 'variation_theme',
       ])
-      const copiedRows = rows.map((row) => {
-        const newRow: Row = {
-          _rowId: `copy-${row._rowId}-${Date.now()}`,
-          _isNew: true, _dirty: true, _status: 'idle',
-        }
-        for (const key of STRUCTURAL) {
-          if (row[key] != null) newRow[key] = row[key]
-        }
-        for (const colId of colIds) {
-          if (row[colId] != null) newRow[colId] = row[colId]
-        }
-        return newRow
-      })
+      const targetColIds = new Set(targetManifest.groups.flatMap((g) => g.columns.map((c) => c.id)))
+      const cols = new Set([...colIds].filter((c) => targetColIds.has(c)))
+      // FFA.2 — merge into the target's existing rows by SKU (don't replace the
+      // grid with copies-only, which shadowed the target's real rows).
+      let existingTarget = loadSavedRows(targetMarket, productType)
+      if (!existingTarget) {
+        try {
+          const rq = new URLSearchParams({ marketplace: targetMarket, productType })
+          if (familyId) rq.set('productId', familyId)
+          const rr = await fetch(`${getBackendUrl()}/api/amazon/flat-file/rows?${rq}`)
+          existingTarget = rr.ok ? ((await rr.json()).rows ?? []) : []
+        } catch { existingTarget = [] }
+      }
+      const merged = mergeReplicatedRows(existingTarget ?? [], rows, cols, STRUCTURAL)
 
       setMarketplace(targetMarket)
       setManifest(targetManifest)
-      setRows(copiedRows)
+      setRows(merged)
       setFeedEntries([])
     } catch (e: any) {
       setLoadError({ message: e?.message ?? 'Copy failed', at: Date.now() })
     }
-  }, [manifest, rows, productType])
+  }, [manifest, rows, productType, familyId])
 
   // ── Pull from Amazon (full attributes, in-editor, undoable) ─────────
   // Calls /api/amazon/flat-file/pull-preview which fetches live SP-API data
