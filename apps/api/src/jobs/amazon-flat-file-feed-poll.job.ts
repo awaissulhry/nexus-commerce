@@ -15,6 +15,7 @@
 import cron from 'node-cron'
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
+import { recordCronRun } from '../utils/cron-observability.js'
 import { reconcileFeedJob } from '../services/amazon-flat-file-feed.service.js'
 import { amazonCredsConfigured } from '../lib/amazon-sp-client.js'
 
@@ -58,7 +59,10 @@ export function startFlatFileFeedPollCron(): void {
     return
   }
   scheduledTask = cron.schedule(schedule, () => {
-    void runFlatFileFeedPoll()
+    void recordCronRun('flat-file-feed-poll', async () => {
+      const r = await runFlatFileFeedPoll()
+      return `polled=${r.polled} advanced=${r.advanced}`
+    })
   })
   logger.info('flat-file-feed-poll cron: scheduled', { schedule })
 }
