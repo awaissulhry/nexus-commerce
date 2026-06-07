@@ -178,6 +178,7 @@ import { startCatalogRefreshCron } from "./jobs/catalog-refresh.job.js";
 import { startEbayTokenRefreshCron } from "./jobs/ebay-token-refresh.job.js";
 import { startEbayReturnsPollCron } from "./jobs/ebay-returns-poll.job.js";
 import { startAmazonReturnsPollCron } from "./jobs/amazon-returns-poll.job.js";
+import { startFlatFileFeedPollCron } from "./jobs/amazon-flat-file-feed-poll.job.js";
 import { startRefundRetryCron } from "./jobs/refund-retry.job.js";
 import { startRefundDeadlineTrackerCron } from "./jobs/refund-deadline-tracker.job.js";
 import { startAmazonOrdersCron } from "./jobs/amazon-orders-sync.job.js";
@@ -812,6 +813,12 @@ async function start() {
     // dev clone burning the operator's report quota. Flip
     // NEXUS_ENABLE_AMAZON_RETURNS_POLL=1 to enable on production.
     startAmazonReturnsPollCron();
+
+    // FFS.3 — reconcile in-flight flat-file feeds so status advances + the
+    // per-SKU report is captured even with no tab open. Runs by default
+    // (self-guards on Amazon creds + only polls due in-flight jobs); schedule
+    // overridable via NEXUS_FLAT_FILE_FEED_POLL_SCHEDULE.
+    startFlatFileFeedPollCron();
 
     // R5.3 — failed-refund retry queue. Hourly sweep that re-runs
     // the channel publisher against Returns stuck in CHANNEL_FAILED.
