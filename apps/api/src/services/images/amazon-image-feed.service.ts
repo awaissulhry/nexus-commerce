@@ -111,13 +111,25 @@ export async function resolveAmazonImages(
     : { parentId: productId }
   const children = await prisma.product.findMany({
     where: childWhere,
-    select: { id: true, sku: true, amazonAsin: true },
+    select: { id: true, sku: true, amazonAsin: true, variantAttributes: true, categoryAttributes: true },
     orderBy: { sku: 'asc' },
   })
 
   let variants: ResolvableVariant[]
   if (children.length > 0) {
-    variants = children.map((c) => ({ id: c.id, sku: c.sku, amazonAsin: c.amazonAsin, variationAttributes: null }))
+    // Derive each child's axis attributes the SAME way the workspace GET / matrix
+    // does: variantAttributes is canonical, but products from the old bulk-create
+    // route carry their axis values in categoryAttributes.variations. Without this
+    // fallback axisValue is null → per-group (per-colour) images never resolve →
+    // spurious MAIN_MISSING. Must stay in sync with images-workspace.routes.ts.
+    variants = children.map((c) => {
+      const catVars = (c.categoryAttributes as Record<string, unknown> | null)?.variations
+      const attrs = (c.variantAttributes as Record<string, string> | null)
+        ?? (catVars && typeof catVars === 'object' && !Array.isArray(catVars)
+          ? (catVars as Record<string, string>)
+          : null)
+      return { id: c.id, sku: c.sku, amazonAsin: c.amazonAsin, variationAttributes: attrs }
+    })
   } else {
     variants = await prisma.productVariation.findMany({
       where: variantWhere,
