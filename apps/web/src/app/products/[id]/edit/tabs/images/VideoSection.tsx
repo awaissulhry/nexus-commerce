@@ -65,12 +65,18 @@ export default function VideoSection({
   }
 
   async function handleDelete(id: string) {
+    // Optimistic: drop the tile immediately, then confirm with the server and
+    // revert if it fails. (Awaiting the round-trip first made delete feel laggy.)
+    const prev = videos
     setDeletingId(id)
+    if (playingId === id) setPlayingId(null)
+    onVideosChange(videos.filter((v) => v.id !== id))
     try {
       const res = await beFetch(`/api/products/${productId}/images/${id}`, { method: 'DELETE' })
       if (!res.ok) throw new Error()
-      onVideosChange(videos.filter((v) => v.id !== id))
-      if (playingId === id) setPlayingId(null)
+    } catch {
+      onVideosChange(prev)
+      setError('Delete failed — restored the video')
     } finally {
       setDeletingId(null)
     }

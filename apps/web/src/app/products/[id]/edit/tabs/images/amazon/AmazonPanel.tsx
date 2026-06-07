@@ -63,6 +63,7 @@ interface Props {
   // whether to drop a pending upsert (unsaved override) or queue a
   // delete (committed override) here in the panel.
   addPendingDelete?: (listingImageId: string) => void
+  patchListingImages?: (ids: string[], patch: Partial<ListingImage>) => void
   // IA.10 — Server rows queued for deletion. Threaded into the
   // resolver so cell-move source-delete + revert reflect in the UI
   // immediately, not after Save+reload.
@@ -112,6 +113,7 @@ export default function AmazonPanel({
   onCopyToShopifyAssignments,
   removePendingUpsert,
   addPendingDelete,
+  patchListingImages,
   pendingDeletes,
   restorePending,
   amazonJobs,
@@ -279,15 +281,17 @@ export default function AmazonPanel({
 
   async function handleBulkLock(ids: string[], locked: boolean) {
     if (ids.length === 0) return
+    // Optimistic: the padlock badge toggles instantly; re-sync only on failure.
+    patchListingImages?.(ids, { locked })
     try {
-      await beFetch(`/api/products/${productId}/images-workspace/lock`, {
+      const res = await beFetch(`/api/products/${productId}/images-workspace/lock`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ids, locked }),
       })
-      onReload()
+      if (!res.ok) throw new Error()
     } catch {
-      /* lock failures are non-fatal; a reload reflects server truth */
+      onReload()
     }
   }
 

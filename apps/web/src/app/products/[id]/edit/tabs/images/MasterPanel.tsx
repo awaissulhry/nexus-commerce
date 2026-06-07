@@ -497,11 +497,17 @@ export default function MasterPanel({
 
   // ── Delete ────────────────────────────────────────────────────────────
   async function handleDelete(imageId: string) {
+    // Optimistic: remove the card immediately, then confirm with the server and
+    // revert on failure. (Awaiting the DELETE round-trip first felt laggy.)
+    const prev = images
     setDeletingId(imageId)
+    onImagesChange(images.filter((i) => i.id !== imageId))
     try {
       const res = await beFetch(`/api/products/${product.id}/images/${imageId}`, { method: 'DELETE' })
       if (!res.ok) throw new Error()
-      onImagesChange(images.filter((i) => i.id !== imageId))
+    } catch {
+      onImagesChange(prev)
+      onToast?.('Delete failed — restored the image')
     } finally {
       setDeletingId(null)
     }
@@ -560,17 +566,22 @@ export default function MasterPanel({
 
   async function commitEdit() {
     if (!editingId) return
+    const id = editingId
+    const prev = images
     setSavingEdit(true)
+    // Optimistic: apply the alt/type edit immediately, revert on failure.
+    onImagesChange(images.map((i) => (i.id === id ? { ...i, alt: editAlt || null, type: editType } : i)))
+    setEditingId(null)
     try {
-      const res = await beFetch(`/api/products/${product.id}/images/${editingId}`, {
+      const res = await beFetch(`/api/products/${product.id}/images/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ alt: editAlt || null, type: editType }),
       })
       if (!res.ok) throw new Error()
-      const updated: ProductImage = await res.json()
-      onImagesChange(images.map((i) => (i.id === updated.id ? updated : i)))
-      setEditingId(null)
+    } catch {
+      onImagesChange(prev)
+      onToast?.('Edit failed — reverted')
     } finally {
       setSavingEdit(false)
     }

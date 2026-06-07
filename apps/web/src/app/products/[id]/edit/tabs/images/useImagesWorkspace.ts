@@ -17,7 +17,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { beFetch } from './api'
-import type { WorkspaceData, PendingUpsert, ProductImage } from './types'
+import type { WorkspaceData, PendingUpsert, ProductImage, ListingImage } from './types'
 import { setDraftField } from '../../_shared/draft-bus/useProductDraftBus'
 
 let _tempIdCounter = 0
@@ -337,6 +337,14 @@ export function useImagesWorkspace(
       return { ...prev, master: next }
     })
   }, [productId])
+  // Real-time — optimistic patch of listing rows (e.g. bulk lock/unlock) so the
+  // matrix reflects the change instantly instead of waiting for a full reload.
+  const patchListingImages = useCallback((ids: string[], patch: Partial<ListingImage>) => {
+    const idSet = new Set(ids)
+    setData((prev) =>
+      prev ? { ...prev, listing: prev.listing.map((li) => (idSet.has(li.id) ? { ...li, ...patch } : li)) } : prev,
+    )
+  }, [])
 
   // IA.19 — Restore pending state to a captured snapshot. Used by
   // the undo-last-drag affordance: operator drags → we snapshot
@@ -371,6 +379,7 @@ export function useImagesWorkspace(
     // IA.12 — optimistic local patches
     setMasterImages,
     patchMasterImage,
+    patchListingImages,
     // IA.19 — undo-last-drag snapshot restore
     restorePending,
   }

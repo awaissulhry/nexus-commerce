@@ -674,6 +674,7 @@ export default function ImagesTab({ product, discardSignal, onDirtyChange, onPre
               addPendingDelete={workspace.addPendingDelete}
               pendingDeletes={workspace.pendingDeletes}
               restorePending={workspace.restorePending}
+              patchListingImages={workspace.patchListingImages}
               onPublishSuccess={(marketplace) => {
                 captureSnapshot({ productId: product.id, channel: 'AMAZON', marketplace, listingImages: listing })
               }}
