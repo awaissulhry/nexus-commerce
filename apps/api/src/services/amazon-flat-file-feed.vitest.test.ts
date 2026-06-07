@@ -3,8 +3,18 @@
  * legacy {processingReport.rows} shape and produced an EMPTY per-SKU breakdown
  * for JSON_LISTINGS_FEED (the format actually used) — these lock the real shape.
  */
-import { describe, it, expect } from 'vitest'
-import { parseProcessingReport, backoffMs } from './amazon-flat-file-feed.service.js'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+
+// Mock the DB + SP client so we can exercise reconcileFeedJob's control flow.
+// The pure parser tests below touch neither; hoisted spies let us assert that
+// the terminal fast path (FFS.9) returns persisted results WITHOUT calling SP-API.
+const { findUnique, updateJob, getSpClient } = vi.hoisted(() => ({
+  findUnique: vi.fn(), updateJob: vi.fn(), getSpClient: vi.fn(),
+}))
+vi.mock('../db.js', () => ({ default: { amazonFlatFileFeedJob: { findUnique, update: updateJob } } }))
+vi.mock('../lib/amazon-sp-client.js', () => ({ getAmazonSpClient: getSpClient }))
+
+import { parseProcessingReport, backoffMs, reconcileFeedJob } from './amazon-flat-file-feed.service.js'
 
 describe('parseProcessingReport — JSON_LISTINGS_FEED (issues[]/summary)', () => {
   const report = JSON.stringify({
@@ -93,5 +103,49 @@ describe('backoffMs', () => {
     expect(backoffMs(0)).toBe(25_000)
     expect(backoffMs(1)).toBeGreaterThan(backoffMs(0))
     expect(backoffMs(100)).toBe(300_000) // capped
+  })
+})
+
+describe('reconcileFeedJob — terminal fast-path (FFS.9)', () => {
+  beforeEach(() => {
+    findUnique.mockReset()
+    getSpClient.mockReset()
+    updateJob.mockReset().mockResolvedValue({})
+  })
+
+  it('returns persisted results for a finished feed WITHOUT calling SP-API', async () => {
+    findUnique.mockResolvedValue({
+      id: 'j1', feedId: 'F-DONE', status: 'DONE',
+      completedAt: new Date('2026-06-07T20:00:00Z'),
+      perSkuResults: [{ sku: 'A', status: 'success' }, { sku: 'B', status: 'error', code: '90220' }],
+      resultSummary: { messagesProcessed: 2, messagesSuccessful: 1, messagesWithWarning: 0, messagesWithError: 1 },
+      errorMessage: null, skus: ['A', 'B'], pollCount: 4,
+    })
+    // If the fast path ever regressed and hit SP-API, this would surface it.
+    getSpClient.mockImplementation(() => { throw new Error('SP-API must NOT be called for a finished feed') })
+
+    const r = await reconcileFeedJob('F-DONE')
+    expect(getSpClient).not.toHaveBeenCalled()
+    expect(updateJob).not.toHaveBeenCalled()
+    expect(r.processingStatus).toBe('DONE')
+    expect(r.terminal).toBe(true)
+    expect(r.changed).toBe(false)
+    expect(r.results).toHaveLength(2)
+    expect(r.summary?.messagesWithError).toBe(1)
+  })
+
+  it('still polls SP-API when the job has not yet reached a terminal state', async () => {
+    findUnique.mockResolvedValue({
+      id: 'j2', feedId: 'F-LIVE', status: 'IN_PROGRESS', completedAt: null,
+      perSkuResults: null, resultSummary: null, errorMessage: null, skus: ['A'], pollCount: 0,
+    })
+    const callAPI = vi.fn().mockResolvedValue({ processingStatus: 'IN_PROGRESS', resultFeedDocumentId: null })
+    getSpClient.mockResolvedValue({ callAPI })
+
+    const r = await reconcileFeedJob('F-LIVE')
+    expect(getSpClient).toHaveBeenCalledTimes(1)
+    expect(callAPI).toHaveBeenCalledTimes(1) // getFeed only; no report download
+    expect(r.processingStatus).toBe('IN_PROGRESS')
+    expect(r.terminal).toBe(false)
   })
 })

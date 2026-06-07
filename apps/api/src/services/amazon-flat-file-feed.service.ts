@@ -151,6 +151,23 @@ export function backoffMs(pollCount: number): number {
   return Math.min(300_000, 25_000 + pollCount * 15_000) // 25s → … → cap 5min
 }
 
+/**
+ * Download the processing report with a hard timeout. Amazon's report-document
+ * URLs expire/stall, and an unbounded fetch here could hang the whole reconcile
+ * (manual poll or cron) until the gateway 502'd. AbortController guarantees a
+ * bounded wall-clock cost regardless of Amazon's CDN.
+ */
+async function fetchReportText(url: string, timeoutMs: number): Promise<string> {
+  const ctrl = new AbortController()
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs)
+  try {
+    const res = await fetch(url, { signal: ctrl.signal })
+    return await res.text()
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
 export interface ReconcileResult {
   feedId: string
   processingStatus: string
@@ -168,9 +185,29 @@ export interface ReconcileResult {
  * still returns live status, just doesn't persist.
  */
 export async function reconcileFeedJob(feedId: string): Promise<ReconcileResult> {
-  const sp = await getAmazonSpClient()
   const job = await prisma.amazonFlatFileFeedJob.findUnique({ where: { feedId } }).catch(() => null)
 
+  // FFS.9 — fast path: a feed that already reached a terminal state never changes
+  // again (a re-submit gets a brand-new feedId). Return the persisted result
+  // without touching SP-API. This makes GET /feeds/:id instant for finished feeds
+  // and — critically — stops re-downloading the processing report on every call:
+  // Amazon's report-document URLs expire/stall, and the report fetch could hang
+  // until the gateway 502'd (observed on a DONE feed). The cron already skips
+  // terminal jobs (nextPollAt=null), so this only changes the manual-poll path.
+  if (job && job.completedAt && TERMINAL.has(job.status)) {
+    return {
+      feedId,
+      processingStatus: job.status,
+      resultFeedDocumentId: null,
+      results: (Array.isArray(job.perSkuResults) ? job.perSkuResults : []) as unknown as PerSkuResult[],
+      summary: (job.resultSummary as unknown as FeedReportSummary) ?? null,
+      errorMessage: job.errorMessage ?? null,
+      terminal: true,
+      changed: false,
+    }
+  }
+
+  const sp = await getAmazonSpClient()
   const feedRes: any = await sp.callAPI({ operation: 'getFeed', endpoint: 'feeds', path: { feedId } })
   const status: string = feedRes.processingStatus
   const resultDocId: string | null = feedRes.resultFeedDocumentId ?? null
@@ -183,7 +220,7 @@ export async function reconcileFeedJob(feedId: string): Promise<ReconcileResult>
   if (terminal && resultDocId) {
     try {
       const docRes: any = await sp.callAPI({ operation: 'getFeedDocument', endpoint: 'feeds', path: { feedDocumentId: resultDocId } })
-      const reportText = await fetch(docRes.url).then((r) => r.text())
+      const reportText = await fetchReportText(docRes.url, 20_000)
       const parsed = parseProcessingReport(reportText, (job?.skus as string[] | undefined) ?? undefined)
       perSku = parsed.perSku
       summary = parsed.summary
