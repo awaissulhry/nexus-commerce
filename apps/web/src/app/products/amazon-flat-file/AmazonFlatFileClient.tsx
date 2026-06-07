@@ -27,6 +27,7 @@ import {
 import { cn } from '@/lib/utils'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useOrderEventsRefresh } from '@/hooks/use-order-events-refresh'
+import FeedSubmissionsPanel from './FeedSubmissionsPanel'
 import { emitInvalidation, useInvalidationChannel } from '@/lib/sync/invalidation-channel'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
@@ -3813,12 +3814,9 @@ export default function AmazonFlatFileClient({
       )}
 
       {submissionPanelOpen && (
-        <SubmissionHistoryPanel
-          history={submissionHistory}
-          onClear={() => {
-            setSubmissionHistory([])
-            try { localStorage.removeItem(submissionHistoryKey(marketplace, productType)) } catch {}
-          }}
+        // FFS.6 — durable, server-backed Submissions panel (survives reload /
+        // tab close / other device) with the full per-SKU drill-down.
+        <FeedSubmissionsPanel
           onClose={() => setSubmissionPanelOpen(false)}
         />
       )}
@@ -6316,134 +6314,6 @@ function AddRowsPanel({ initialType, initialPosition, rows, hasSelection, produc
               <Plus className="w-3.5 h-3.5 mr-1" />Add {count > 1 ? `${count} ` : ''}row{count !== 1 ? 's' : ''}
             </Button>
           </div>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// ── SubmissionHistoryPanel ─────────────────────────────────────────────────
-
-interface SubmissionHistoryPanelProps {
-  history: SubmissionRecord[]
-  onClear: () => void
-  onClose: () => void
-}
-
-function SubmissionHistoryPanel({ history, onClear, onClose }: SubmissionHistoryPanelProps) {
-  const [expanded, setExpanded] = useState<Set<string>>(new Set())
-
-  function toggle(id: string) {
-    setExpanded((prev) => {
-      const next = new Set(prev)
-      next.has(id) ? next.delete(id) : next.add(id)
-      return next
-    })
-  }
-
-  function statusColor(s: string) {
-    if (s === 'DONE') return 'text-emerald-600 dark:text-emerald-400'
-    if (s === 'FATAL') return 'text-red-500 dark:text-red-400'
-    return 'text-amber-500 dark:text-amber-400'
-  }
-
-  function formatTime(iso: string) {
-    try {
-      const d = new Date(iso)
-      return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
-        + ' ' + d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
-    } catch { return iso }
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-start justify-end pt-16 pr-4" onClick={(e) => { if (e.target === e.currentTarget) onClose() }}>
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl w-full max-w-lg max-h-[80vh] flex flex-col">
-        {/* Header */}
-        <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between flex-shrink-0">
-          <div className="flex items-center gap-2">
-            <History className="w-4 h-4 text-blue-500" />
-            <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Submission History</h2>
-            <span className="text-xs text-slate-400">({history.length})</span>
-          </div>
-          <div className="flex items-center gap-2">
-            {history.length > 0 && (
-              <button type="button" onClick={onClear}
-                className="text-xs text-red-400 hover:text-red-600 dark:hover:text-red-300">
-                Clear all
-              </button>
-            )}
-            <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-600">
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-
-        {/* List */}
-        <div className="overflow-y-auto flex-1">
-          {history.length === 0 ? (
-            <div className="px-4 py-8 text-center text-sm text-slate-400 italic">No submissions yet</div>
-          ) : (
-            history.map((rec) => {
-              const isExpanded = expanded.has(rec.id)
-              const hasErrors = (rec.errorCount ?? 0) > 0
-              return (
-                <div key={rec.id} className="border-b border-slate-100 dark:border-slate-800 last:border-0">
-                  {/* Summary row */}
-                  <div className="px-4 py-2.5 flex items-start gap-3 hover:bg-slate-50 dark:hover:bg-slate-800/40">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-1.5 py-0.5 rounded">{rec.market}</span>
-                        {rec.dryRun && <span className="text-[10px] text-slate-400 italic">dry run</span>}
-                        <span className={cn('text-[10px] font-semibold', statusColor(rec.status))}>{rec.status}</span>
-                        {rec.status === 'DONE' && (
-                          <span className="text-[10px] text-slate-500 dark:text-slate-400">
-                            {rec.successCount ?? 0} ok
-                            {hasErrors && <span className="ml-1 text-red-500 dark:text-red-400">· {rec.errorCount} error{rec.errorCount !== 1 ? 's' : ''}</span>}
-                          </span>
-                        )}
-                      </div>
-                      <div className="text-[10px] text-slate-400 mt-0.5 flex items-center gap-2">
-                        <span>{formatTime(rec.submittedAt)}</span>
-                        <span>·</span>
-                        <span>{rec.rowCount} row{rec.rowCount !== 1 ? 's' : ''}</span>
-                        <span>·</span>
-                        <span className="font-mono truncate max-w-[120px]" title={rec.id}>{rec.id.slice(0, 16)}…</span>
-                      </div>
-                    </div>
-                    {(rec.results?.length ?? 0) > 0 && (
-                      <button type="button" onClick={() => toggle(rec.id)}
-                        className="text-[10px] text-slate-400 hover:text-slate-600 flex items-center gap-0.5 flex-shrink-0 mt-0.5">
-                        <ChevronDown className={cn('w-3 h-3 transition-transform', isExpanded && 'rotate-180')} />
-                        {isExpanded ? 'Hide' : 'Details'}
-                      </button>
-                    )}
-                  </div>
-
-                  {/* Expanded results */}
-                  {isExpanded && rec.results && rec.results.length > 0 && (
-                    <div className="px-4 pb-2.5 space-y-0.5 max-h-48 overflow-y-auto">
-                      {rec.results.filter((r) => r.status === 'error').map((r) => (
-                        <div key={r.sku} className="flex items-start gap-2 text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/20 rounded px-2 py-1">
-                          <X className="w-3 h-3 mt-0.5 flex-shrink-0" />
-                          <span className="font-mono font-medium flex-shrink-0">{r.sku}</span>
-                          <span className="text-[11px] text-red-500/80">{r.message}</span>
-                        </div>
-                      ))}
-                      {rec.results.filter((r) => r.status !== 'error').slice(0, 3).map((r) => (
-                        <div key={r.sku} className="flex items-center gap-2 text-[11px] text-emerald-600 dark:text-emerald-400 px-2 py-0.5">
-                          <CheckCircle2 className="w-3 h-3 flex-shrink-0" />
-                          <span className="font-mono">{r.sku}</span>
-                        </div>
-                      ))}
-                      {rec.results.filter((r) => r.status !== 'error').length > 3 && (
-                        <p className="text-[10px] text-slate-400 px-2">+{rec.results.filter((r) => r.status !== 'error').length - 3} more ok</p>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )
-            })
-          )}
         </div>
       </div>
     </div>
