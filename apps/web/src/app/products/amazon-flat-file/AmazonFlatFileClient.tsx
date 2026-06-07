@@ -620,6 +620,11 @@ export default function AmazonFlatFileClient({
   // ── Undo / Redo ────────────────────────────────────────────────────
   const rowsRef = useRef<Row[]>(rows)
   useEffect(() => { rowsRef.current = rows }, [rows])
+  // FFX.2 — true when the local grid has diverged from the DB (e.g. a pull that
+  // isn't yet round-tripped). Survives Publish clearing _dirty, so a background
+  // external reload can't silently overwrite freshly-pulled work. Cleared after
+  // a sync-to-DB / fromDB load / discard, when grid == DB again.
+  const localDivergedRef = useRef(false)
 
   // On mount: if localStorage has a draft with dirty rows from a previous
   // session, offer to restore it rather than silently discarding it.
@@ -1509,9 +1514,21 @@ export default function AmazonFlatFileClient({
   // Live sync: reload rows from DB when the Matrix or another tab updates
   // channel prices. Skip if the user has unsaved edits — their work takes
   // priority and will overwrite the external change on next Save.
-  useInvalidationChannel('channel-pricing.updated', () => {
+  useInvalidationChannel('channel-pricing.updated', (event) => {
     if (!productType) return
-    if (rowsRef.current.some((r) => r._dirty)) return
+    // FFX.1 — ignore our OWN sync emit. syncToPlatform (Save / feed-DONE) fires
+    // channel-pricing.updated; reacting to it here ran loadData(fromDB=true),
+    // which overwrote a just-pulled grid + localStorage with the DB
+    // representation (the "previous version") — worst after Publish, which
+    // clears _dirty so the guard below no longer protects.
+    if ((event?.meta as { source?: string } | undefined)?.source === 'amazon-flat-file') return
+    // FFX.2 — never force-overwrite local work. _dirty covers unsaved edits;
+    // localDivergedRef covers a pulled-but-not-round-tripped grid even after
+    // Publish clears _dirty. Surface the external change instead of clobbering.
+    if (rowsRef.current.some((r) => r._dirty) || localDivergedRef.current) {
+      toast.info('This listing changed elsewhere — use Refresh to load the latest.')
+      return
+    }
     void loadData(marketplace, productType, false, true)
   })
 
@@ -1660,7 +1677,7 @@ export default function AmazonFlatFileClient({
         } else {
           setRows([])
         }
-        if (fromDB) setDraftBanner(null)
+        if (fromDB) { setDraftBanner(null); localDivergedRef.current = false } // FFX.2 — grid == DB
         // FF-MS.4 — Write through to the SWR cache so next visit is instant.
         cacheRef.current.set(cacheKey(mp, pt), { manifest, rows: freshRows, fetchedAt: Date.now() })
         // FF-MS.9 — Only record fetch-source telemetry if cache didn't already
@@ -2076,8 +2093,9 @@ export default function AmazonFlatFileClient({
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'Sync failed')
       setSyncStatus('synced')
+      localDivergedRef.current = false // FFX.2 — grid is now persisted to the DB
       setTimeout(() => setSyncStatus('idle'), 4000)
-      emitInvalidation({ type: 'channel-pricing.updated', meta: { marketplace, productType } })
+      emitInvalidation({ type: 'channel-pricing.updated', meta: { marketplace, productType, source: 'amazon-flat-file' } })
       emitInvalidation({ type: 'stock.adjusted', meta: { source: 'amazon-flat-file', marketplace } })
       emitInvalidation({ type: 'product.updated', meta: { source: 'amazon-flat-file', marketplace } })
     } catch {
@@ -2419,6 +2437,7 @@ export default function AmazonFlatFileClient({
       return changed ? merged : row
     }))
     if (Object.keys(asinCacheEntries).length) writeAsinCache(marketplace, asinCacheEntries)
+    localDivergedRef.current = true // FFX.2 — grid now diverges from DB until synced
 
     setPullResult({
       pulled: result.selectedRowIds.length,
@@ -2476,6 +2495,7 @@ export default function AmazonFlatFileClient({
     if (!confirm('Discard all local changes? Your edits will be lost and rows will reload from the server.')) return
     createVersion('Before discard')
     try { localStorage.removeItem(rowStorageKey(marketplace, productType)) } catch {}
+    localDivergedRef.current = false // FFX.2 — discarding local work; grid reloads from DB
     void loadData(marketplace, productType, false)
   }, [marketplace, productType, loadData, createVersion])
 
