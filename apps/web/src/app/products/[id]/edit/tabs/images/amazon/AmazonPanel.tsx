@@ -247,10 +247,11 @@ export default function AmazonPanel({
     try {
       const fd = new FormData()
       fd.append('file', file)
-      const res = await beFetch(`/api/products/${productId}/images?type=ALT`, { method: 'POST', body: fd })
-      if (!res.ok) return
+      const res = await beFetch(`/api/products/${productId}/images?type=ALT&force=true`, { method: 'POST', body: fd })
+      if (!res.ok) { onToast('Upload failed'); return }
       const created = await res.json()
       amazon.assignCell(groupValue, slot, created.url, created.id)
+      onToast('Image uploaded — Save, then Publish')
     } finally {
       setSlotUploading(false)
     }
@@ -283,16 +284,28 @@ export default function AmazonPanel({
 
   async function handleBulkUpload(files: File[], cells: Array<{ group: string | null; slot: AmazonSlot }>) {
     // Pair each picked file with a selected cell (in order) — upload to the
-    // master gallery, then assign it to that cell. Fills empties or replaces.
+    // master gallery, then assign it to that cell. Shows the "Uploading…"
+    // indicator + a result toast; force=true so near-duplicates aren't silently
+    // dropped. Cells fill as each upload completes (staged); Save → Publish.
     const n = Math.min(files.length, cells.length)
-    for (let i = 0; i < n; i++) {
-      const fd = new FormData()
-      fd.append('file', files[i]!)
-      const res = await beFetch(`/api/products/${productId}/images?type=ALT`, { method: 'POST', body: fd })
-      if (!res.ok) continue
-      const created = await res.json()
-      amazon.assignCell(cells[i]!.group, cells[i]!.slot, created.url, created.id)
+    if (n === 0) return
+    setSlotUploading(true)
+    let ok = 0
+    let fail = 0
+    try {
+      for (let i = 0; i < n; i++) {
+        const fd = new FormData()
+        fd.append('file', files[i]!)
+        const res = await beFetch(`/api/products/${productId}/images?type=ALT&force=true`, { method: 'POST', body: fd })
+        if (!res.ok) { fail += 1; continue }
+        const created = await res.json()
+        amazon.assignCell(cells[i]!.group, cells[i]!.slot, created.url, created.id)
+        ok += 1
+      }
+    } finally {
+      setSlotUploading(false)
     }
+    onToast(`${ok} image${ok === 1 ? '' : 's'} uploaded${fail ? `, ${fail} failed` : ''} — Save, then Publish`)
     onReload()
   }
 
