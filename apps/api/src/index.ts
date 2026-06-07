@@ -223,6 +223,7 @@ import { seedPromptTemplateDefaults } from "./services/ai/prompt-template.servic
 // opt in via NEXUS_ENABLE_SCHEDULED_WIZARD_PUBLISH=1.
 import { startScheduledWizardPublishCron } from "./jobs/scheduled-wizard-publish.job.js";
 import { startScheduledImagePublishCron } from "./jobs/scheduled-image-publish.job.js";
+import { startImagePublishReconcileCron } from "./jobs/image-publish-reconcile.job.js";
 import { startScheduledPoCron } from "./jobs/scheduled-po.job.js";
 import { startObservabilityRetentionCron } from "./jobs/observability-retention.job.js";
 import { startAlertEvaluatorCron } from "./jobs/alert-evaluator.job.js";
@@ -1273,6 +1274,11 @@ async function start() {
     // PB.10 — scheduled image publish cron. Default-OFF unless
     // NEXUS_ENABLE_SCHEDULED_IMAGE_PUBLISH=1. Tick 60s; cap 25 rows.
     startScheduledImagePublishCron();
+
+    // Safety net: reconcile feeds that finished on Amazon but left rows stuck on
+    // DRAFT (empty-report finalize / missed poll). On by default; status-only,
+    // never calls Amazon. Tick 3min + a boot sweep ~30s after start.
+    startImagePublishReconcileCron();
 
     // PO-Plus.6 — recurring PO cron. Default-OFF unless
     // NEXUS_ENABLE_SCHEDULED_PO=1. Tick 5min; cap 25 schedules per
