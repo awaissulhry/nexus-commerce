@@ -312,57 +312,47 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
     }
 
     try {
-      const sp = await getSpClient()
-
-      const feedRes: any = await sp.callAPI({
-        operation: 'getFeed',
-        endpoint: 'feeds',
-        path: { feedId },
-      })
-
-      const status: string = feedRes.processingStatus
-      const resultDocId: string | null = feedRes.resultFeedDocumentId ?? null
-
-      if (status !== 'DONE' || !resultDocId) {
-        return reply.send({
-          feedId,
-          processingStatus: status,
-          resultFeedDocumentId: resultDocId,
-          results: [],
-        })
-      }
-
-      // Download and parse the processing report
-      const docRes: any = await sp.callAPI({
-        operation: 'getFeedDocument',
-        endpoint: 'feeds',
-        path: { feedDocumentId: resultDocId },
-      })
-
-      let results: Array<{ sku: string; status: string; message: string }> = []
-      try {
-        const reportText = await fetch(docRes.url).then((r) => r.text())
-        // Processing report is JSON: { processingReport: { processingStatus, messagesProcessed, messagesSuccessful, messagesWithError, rows: [...] } }
-        const report = JSON.parse(reportText)
-        const reportRows: any[] = report?.processingReport?.rows ?? report?.rows ?? []
-        results = reportRows.map((r: any) => ({
-          sku: r.sku ?? r.messageId ?? '',
-          status: r.processingStatus === 'DONE' ? 'success' : 'error',
-          message: r.issues?.map((i: any) => i.message).join('; ') ?? '',
-        }))
-      } catch {
-        // Non-fatal — return status without per-row breakdown
-      }
-
+      // FFS.2 — delegate to the shared reconcile service: getFeed → on terminal,
+      // parse the report robustly (JSON_LISTINGS_FEED issues[]/summary, tri-state
+      // per-SKU) and update the durable AmazonFlatFileFeedJob row.
+      const { reconcileFeedJob } = await import('../services/amazon-flat-file-feed.service.js')
+      const r = await reconcileFeedJob(feedId)
       return reply.send({
-        feedId,
-        processingStatus: status,
-        resultFeedDocumentId: resultDocId,
-        results,
+        feedId: r.feedId,
+        processingStatus: r.processingStatus,
+        resultFeedDocumentId: r.resultFeedDocumentId,
+        results: r.results,
+        summary: r.summary,
+        errorMessage: r.errorMessage,
       })
     } catch (err: any) {
       request.log.error(err, 'flat-file/feeds/:feedId failed')
       return reply.code(500).send({ error: err?.message ?? 'Status poll failed' })
+    }
+  })
+
+  // ── GET /api/amazon/flat-file/feeds — durable submission list (FFS.2) ────
+  // Survives tab close / other device: reads the persisted AmazonFlatFileFeedJob
+  // rows instead of client localStorage.
+  fastify.get<{
+    Querystring: { marketplace?: string; productType?: string; status?: string; limit?: string }
+  }>('/amazon/flat-file/feeds', async (request, reply) => {
+    const q = request.query
+    const where: any = {}
+    if (q.marketplace) where.marketplace = q.marketplace.toUpperCase()
+    if (q.productType) where.productType = q.productType
+    if (q.status) where.status = q.status.toUpperCase()
+    const limit = Math.min(200, Math.max(1, parseInt(q.limit ?? '50', 10) || 50))
+    try {
+      const jobs = await prisma.amazonFlatFileFeedJob.findMany({
+        where,
+        orderBy: { submittedAt: 'desc' },
+        take: limit,
+      })
+      return reply.send({ jobs })
+    } catch (err: any) {
+      request.log.error(err, 'flat-file/feeds list failed')
+      return reply.code(500).send({ error: err?.message ?? 'List failed' })
     }
   })
 
