@@ -615,9 +615,9 @@ export default function AmazonMatrix({
       {bulkMode && (
         <div className="mb-3 flex flex-wrap items-center gap-x-2 gap-y-1.5 rounded-xl border border-orange-200 dark:border-orange-900/50 bg-orange-50/70 dark:bg-orange-950/20 px-3 py-2 text-sm">
           <span className="font-medium text-slate-700 dark:text-slate-200">
-            {bulk.filled.length > 0 ? `${bulk.filled.length} image${bulk.filled.length === 1 ? '' : 's'} selected` : 'Select images'}
+            {bulk.imageCount > 0 ? `${bulk.imageCount} image${bulk.imageCount === 1 ? '' : 's'} selected` : 'Select images'}
           </span>
-          {bulk.locked.length > 0 && <span className="text-xs text-amber-600 dark:text-amber-400">· {bulk.locked.length} locked</span>}
+          {bulk.lockedIds.length > 0 && <span className="text-xs text-amber-600 dark:text-amber-400">· {bulk.lockedIds.length} locked</span>}
           {bulk.empty.length > 0 && <span className="text-xs text-slate-400">· {bulk.empty.length} empty</span>}
           {/* quick selects */}
           <span className="text-slate-300 dark:text-slate-600">|</span>
@@ -639,48 +639,45 @@ export default function AmazonMatrix({
               Fill from gallery
             </Button>
           )}
-          {onBulkLock && bulk.lockable.length > 0 && (
-            <Button size="sm" variant="ghost" onClick={() => { onBulkLock(bulk.lockable.map((c) => c.listingImageId!).filter(Boolean), true); setSelectedCells(new Map()) }}>
+          {onBulkLock && bulk.lockableIds.length > 0 && (
+            <Button size="sm" variant="ghost" onClick={() => { onBulkLock(bulk.lockableIds, true); setSelectedCells(new Map()) }}>
               Lock
             </Button>
           )}
-          {onBulkLock && bulk.locked.length > 0 && (
-            <Button size="sm" variant="ghost" onClick={() => { onBulkLock(bulk.locked.map((c) => c.listingImageId!).filter(Boolean), false); setSelectedCells(new Map()) }}>
+          {onBulkLock && bulk.lockedIds.length > 0 && (
+            <Button size="sm" variant="ghost" onClick={() => { onBulkLock(bulk.lockedIds, false); setSelectedCells(new Map()) }}>
               Unlock
             </Button>
           )}
-          {onBulkClearOverride && bulk.overrides.length > 0 && (
+          {onBulkClearOverride && bulk.overrideIds.length > 0 && (
             <Button
               size="sm"
               variant="ghost"
               onClick={() => {
-                const ids = bulk.overrides.map((c) => c.listingImageId!).filter(Boolean)
-                if (!window.confirm(`Reset ${ids.length} image${ids.length === 1 ? '' : 's'} to the All-Markets image?\nStaged — Save, then Publish.`)) return
-                onBulkClearOverride(ids)
+                if (!window.confirm(`Reset ${bulk.overrideIds.length} image${bulk.overrideIds.length === 1 ? '' : 's'} to the All-Markets image?\nStaged — Save, then Publish.`)) return
+                onBulkClearOverride(bulk.overrideIds)
                 setSelectedCells(new Map())
               }}
             >
               Reset to shared
             </Button>
           )}
-          {onBulkDelete && bulk.deletable.length > 0 && (
+          {onBulkDelete && bulk.deletableIds.length > 0 && (
             <Button
               size="sm"
               variant="danger"
               onClick={() => {
-                const ids = bulk.deletable.map((c) => c.listingImageId!).filter(Boolean)
-                if (!ids.length) return
                 const warn =
-                  `Delete ${ids.length} image${ids.length === 1 ? '' : 's'}?` +
-                  (activeMarketplace === 'ALL' ? ' This removes the shared image from every market.' : ' This market falls back to the All-Markets image (or empties if none).') +
-                  (bulk.deleteSkipped.length ? `\n${bulk.deleteSkipped.length} locked/inherited image(s) will be skipped.` : '') +
+                  `Delete ${bulk.deletableIds.length} image${bulk.deletableIds.length === 1 ? '' : 's'}?` +
+                  ` Shared / All-Markets images are removed from every market.` +
+                  (bulk.skippedCount ? `\n${bulk.skippedCount} locked or no-row cell(s) will be skipped.` : '') +
                   `\nStaged — Save, then Publish to remove from Amazon.`
                 if (!window.confirm(warn)) return
-                onBulkDelete(ids)
+                onBulkDelete(bulk.deletableIds)
                 setSelectedCells(new Map())
               }}
             >
-              Delete ({bulk.deletable.length})
+              Delete ({bulk.deletableIds.length})
             </Button>
           )}
           <Button size="sm" variant="ghost" onClick={() => setSelectedCells(new Map())} className="text-slate-500">Clear</Button>

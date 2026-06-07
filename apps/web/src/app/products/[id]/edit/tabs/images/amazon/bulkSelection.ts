@@ -1,6 +1,10 @@
 // BE — bulk selection classification (pure). Given the resolved cells in the
 // current selection, work out which bulk actions apply and the counts shown in
 // the action bar. Keeps the matrix UI dumb and the rules unit-testable.
+//
+// Many cells can resolve to the SAME backing ListingImage (e.g. colour rows
+// inherit the shared/All-Colors image), so actions de-duplicate by
+// listingImageId — the counts and the work are per unique image, not per cell.
 
 export interface ResolvedSelCell {
   group: string | null
@@ -15,33 +19,45 @@ export interface BulkBreakdown {
   total: number
   filled: ResolvedSelCell[]
   empty: ResolvedSelCell[]
-  locked: ResolvedSelCell[]
-  /** Filled, unlocked, backed by a row the current scope OWNS → safe to delete. */
-  deletable: ResolvedSelCell[]
-  /** Filled but skipped by delete: locked, no row, or inherited/shared on a market. */
-  deleteSkipped: ResolvedSelCell[]
-  /** Filled + backed by a row → can be locked / unlocked. */
-  lockable: ResolvedSelCell[]
-  /** Own MARKETPLACE overrides (specific market only) → can clear back to shared. */
-  overrides: ResolvedSelCell[]
+  /** Unique images selected (deduped by backing row, or group:slot for fallbacks). */
+  imageCount: number
+  /** Unique unlocked backing rows → can be deleted / locked. */
+  deletableIds: string[]
+  lockableIds: string[]
+  /** Unique locked backing rows → can be unlocked. */
+  lockedIds: string[]
+  /** Unique own MARKETPLACE rows (specific market only) → reset to shared. */
+  overrideIds: string[]
+  /** Filled cells skipped by delete/lock: locked, or no backing row (master fallback). */
+  skippedCount: number
 }
+
+const uniq = (a: Array<string | undefined>): string[] => [...new Set(a.filter((x): x is string => !!x))]
 
 export function classifyBulk(resolved: ResolvedSelCell[], isAllMarkets: boolean): BulkBreakdown {
   const filled = resolved.filter((r) => !!r.url)
   const empty = resolved.filter((r) => !r.url)
-  const locked = filled.filter((r) => !!r.locked)
-  // Delete only removes images the current scope OWNS: on a single market that
-  // means an own MARKETPLACE row (origin 'own'); on All Markets every row is
-  // the shared PLATFORM row. Inherited/master cells and locked cells are skipped.
-  const deletable = filled.filter(
-    (r) => !r.locked && !!r.listingImageId && (isAllMarkets || r.origin === 'own'),
-  )
-  const deleteSkipped = filled.filter(
-    (r) => r.locked || !r.listingImageId || (!isAllMarkets && r.origin !== 'own'),
-  )
-  const lockable = filled.filter((r) => !!r.listingImageId)
-  const overrides = isAllMarkets
+
+  // Any backing row the operator owns or inherits can be acted on; deleting an
+  // inherited (shared) row removes it everywhere — the UI confirm spells that out.
+  const deletableIds = uniq(filled.filter((r) => !r.locked && r.listingImageId).map((r) => r.listingImageId))
+  const lockableIds = deletableIds // same set: unlocked rows can be locked
+  const lockedIds = uniq(filled.filter((r) => r.locked && r.listingImageId).map((r) => r.listingImageId))
+  const overrideIds = isAllMarkets
     ? []
-    : filled.filter((r) => r.origin === 'own' && !!r.listingImageId)
-  return { total: resolved.length, filled, empty, locked, deletable, deleteSkipped, lockable, overrides }
+    : uniq(filled.filter((r) => r.origin === 'own' && r.listingImageId).map((r) => r.listingImageId))
+  const imageCount = new Set(filled.map((r) => r.listingImageId ?? `${r.group}::${r.slot}`)).size
+  const skippedCount = filled.filter((r) => r.locked || !r.listingImageId).length
+
+  return {
+    total: resolved.length,
+    filled,
+    empty,
+    imageCount,
+    deletableIds,
+    lockableIds,
+    lockedIds,
+    overrideIds,
+    skippedCount,
+  }
 }
