@@ -70,6 +70,7 @@ export function buildCrossMarketUpserts(input: CrossMarketCopyInput): CrossMarke
             ? !li.variantGroupKey
             : li.variantGroupKey === activeAxis && li.variantGroupValue === group),
       )
+      if (existing?.locked) continue // BE — never overwrite a locked target cell
 
       out.push({
         ...(existing ? { id: existing.id } : {}),

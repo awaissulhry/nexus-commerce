@@ -6,7 +6,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/Button'
-import { AlertTriangle, ChevronDown, Clock, Eye, Info, Loader2 } from 'lucide-react'
+import { AlertTriangle, CheckSquare, ChevronDown, Clock, Eye, Info, Loader2 } from 'lucide-react'
 import { beFetch } from '../api'
 import AmazonMatrix from './AmazonMatrix'
 import AmazonPublishBar from './AmazonPublishBar'
@@ -252,6 +252,28 @@ export default function AmazonPanel({
 
   // CM — cross-market copy (whole-market or per-slot) → staged upserts.
   const [copyPicker, setCopyPicker] = useState<{ cells: Array<{ group: string | null; slot: string }>; label: string } | null>(null)
+
+  // BE — bulk-edit mode + actions.
+  const [bulkMode, setBulkMode] = useState(false)
+
+  function handleBulkDelete(ids: string[]) {
+    if (!addPendingDelete) return
+    ids.forEach((id) => addPendingDelete(id))
+  }
+
+  async function handleBulkLock(ids: string[], locked: boolean) {
+    if (ids.length === 0) return
+    try {
+      await beFetch(`/api/products/${productId}/images-workspace/lock`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids, locked }),
+      })
+      onReload()
+    } catch {
+      /* lock failures are non-fatal; a reload reflects server truth */
+    }
+  }
 
   function runCopy(targets: string[]) {
     if (!copyPicker) return
@@ -634,6 +656,26 @@ export default function AmazonPanel({
         </div>
       )}
 
+      {/* BE — bulk-edit toggle */}
+      <div className="px-4 pb-1 flex items-center">
+        <button
+          type="button"
+          onClick={() => setBulkMode((v) => !v)}
+          className={cn(
+            'inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors',
+            bulkMode
+              ? 'border-orange-300 bg-orange-50 text-orange-700 dark:border-orange-800 dark:bg-orange-950/30 dark:text-orange-300'
+              : 'border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700',
+          )}
+        >
+          <CheckSquare className="w-3.5 h-3.5" />
+          {bulkMode ? 'Done selecting' : 'Select'}
+        </button>
+        {bulkMode && (
+          <span className="ml-2 text-[11px] text-slate-400">Tick images, or use the row / column / all boxes, then pick a bulk action.</span>
+        )}
+      </div>
+
       {/* Matrix */}
       <div className="p-4">
         {amazon.variantGroups.length === 0 && variants.length === 0 ? (
@@ -657,6 +699,9 @@ export default function AmazonPanel({
               amazon.activeMarketplace === 'ALL' ? 'IT' : amazon.activeMarketplace,
             )}
             onCopyRow={handleCopyRow}
+            bulkMode={bulkMode}
+            onBulkDelete={handleBulkDelete}
+            onBulkLock={handleBulkLock}
             onCopyCellsToMarkets={
               amazon.activeMarketplace !== 'ALL'
                 ? (cells) =>

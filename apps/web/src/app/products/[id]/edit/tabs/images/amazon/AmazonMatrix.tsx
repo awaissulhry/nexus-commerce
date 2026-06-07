@@ -6,7 +6,8 @@
 // Column headers are also drop targets for column-fill operations.
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { AlertTriangle, Link2, MoreHorizontal, Plus } from 'lucide-react'
+import { AlertTriangle, Link2, MoreHorizontal, Plus, Lock } from 'lucide-react'
+import { classifyBulk } from './bulkSelection'
 import { PLATFORM_RULES } from '@nexus/shared/image-validation'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/Button'
@@ -28,6 +29,12 @@ interface MatrixProps {
   onCopyRow: (groupValue: string, toMarketplace: string) => void
   /** CM.6 — copy the SELECTED cells (individual images) to the same cell in other markets. */
   onCopyCellsToMarkets?: (cells: Array<{ group: string | null; slot: AmazonSlot }>) => void
+  /** BE — bulk-edit mode: show checkboxes + the bulk action bar. */
+  bulkMode?: boolean
+  /** BE — stage deletion of these listing-image rows. */
+  onBulkDelete?: (listingImageIds: string[]) => void
+  /** BE — lock / unlock these listing-image rows on the server. */
+  onBulkLock?: (listingImageIds: string[], locked: boolean) => void
   onClearRow: (groupValue: string) => void
   onCellFileDrop: (groupValue: string | null, slot: AmazonSlot, file: File) => void
   /** IE.11 — Active status filter from the MatrixFilterBar. Defaults
@@ -463,6 +470,9 @@ export default function AmazonMatrix({
   onPublishRow,
   onCopyRow,
   onCopyCellsToMarkets,
+  bulkMode,
+  onBulkDelete,
+  onBulkLock,
   onClearRow,
   onCellFileDrop,
   onCellRevert,
@@ -513,6 +523,17 @@ export default function AmazonMatrix({
       return n
     })
   }, [])
+  const toggleCells = useCallback((cells: Array<{ group: string | null; slot: string }>, select: boolean) => {
+    setSelectedCells((prev) => {
+      const n = new Map(prev)
+      for (const c of cells) {
+        const k = `${c.group ?? '__ALL__'}::${c.slot}`
+        if (select) n.set(k, { group: c.group, slot: c.slot as AmazonSlot })
+        else n.delete(k)
+      }
+      return n
+    })
+  }, [])
 
   const rows: Array<{ groupValue: string | null; label: string; sublabel: string; asin: string | null; sku: string }> = [
     ...variantGroups.map((g) => ({
@@ -527,6 +548,15 @@ export default function AmazonMatrix({
 
   const rowCount = rows.length
   const colCount = ALL_SLOTS.length
+
+  // BE — resolve the current selection into a bulk-action breakdown.
+  const resolvedSel = [...selectedCells.values()].map((c) => {
+    const cd = resolveCell(c.group, c.slot)
+    return { group: c.group, slot: c.slot, url: cd?.url, listingImageId: cd?.listingImageId, locked: cd?.locked, origin: cd?.origin }
+  })
+  const bulk = classifyBulk(resolvedSel, activeMarketplace === 'ALL')
+  const allGridCells = rows.flatMap((r) => ALL_SLOTS.map((slot) => ({ group: r.groupValue, slot })))
+  const allGridChecked = allGridCells.length > 0 && allGridCells.every((c) => selectedCells.has(cellKey(c.group, c.slot)))
 
   // Clamp the focused cell when the row/col count changes (variant axis swap).
   useEffect(() => {
@@ -572,25 +602,56 @@ export default function AmazonMatrix({
         </div>
       )}
 
-      {/* CM.6 — cross-market copy: selected-slots toolbar */}
-      {onCopyCellsToMarkets && selectedCells.size > 0 && (
-        <div className="mb-3 flex items-center gap-2 rounded-xl border border-orange-200 dark:border-orange-900/50 bg-orange-50/70 dark:bg-orange-950/20 px-3 py-2 text-sm">
+      {/* BE — bulk action bar */}
+      {bulkMode && selectedCells.size > 0 && (
+        <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-orange-200 dark:border-orange-900/50 bg-orange-50/70 dark:bg-orange-950/20 px-3 py-2 text-sm">
           <span className="font-medium text-slate-700 dark:text-slate-200">
-            {selectedCells.size} image{selectedCells.size === 1 ? '' : 's'} selected
+            {bulk.filled.length} image{bulk.filled.length === 1 ? '' : 's'} selected
           </span>
+          {bulk.locked.length > 0 && (
+            <span className="text-xs text-amber-600 dark:text-amber-400">· {bulk.locked.length} locked</span>
+          )}
+          {bulk.empty.length > 0 && (
+            <span className="text-xs text-slate-400">· {bulk.empty.length} empty</span>
+          )}
           <div className="flex-1" />
-          <Button
-            size="sm"
-            onClick={() => {
-              onCopyCellsToMarkets([...selectedCells.values()])
-              setSelectedCells(new Map())
-            }}
-          >
-            Copy selected → markets
-          </Button>
-          <Button size="sm" variant="ghost" onClick={() => setSelectedCells(new Map())} className="text-slate-500">
-            Clear
-          </Button>
+          {onCopyCellsToMarkets && bulk.filled.length > 0 && (
+            <Button size="sm" variant="secondary" onClick={() => { onCopyCellsToMarkets(bulk.filled.map((c) => ({ group: c.group, slot: c.slot as AmazonSlot }))); setSelectedCells(new Map()) }}>
+              Copy → markets
+            </Button>
+          )}
+          {onBulkLock && bulk.lockable.length > 0 && (
+            <Button size="sm" variant="ghost" onClick={() => { onBulkLock(bulk.lockable.map((c) => c.listingImageId!).filter(Boolean), true); setSelectedCells(new Map()) }}>
+              Lock
+            </Button>
+          )}
+          {onBulkLock && bulk.locked.length > 0 && (
+            <Button size="sm" variant="ghost" onClick={() => { onBulkLock(bulk.locked.map((c) => c.listingImageId!).filter(Boolean), false); setSelectedCells(new Map()) }}>
+              Unlock
+            </Button>
+          )}
+          {onBulkDelete && (
+            <Button
+              size="sm"
+              variant="danger"
+              disabled={bulk.deletable.length === 0}
+              onClick={() => {
+                const ids = bulk.deletable.map((c) => c.listingImageId!).filter(Boolean)
+                if (!ids.length) return
+                const warn =
+                  `Delete ${ids.length} image${ids.length === 1 ? '' : 's'}?` +
+                  (activeMarketplace === 'ALL' ? ' This removes the shared image from every market.' : '') +
+                  (bulk.deleteSkipped.length ? `\n${bulk.deleteSkipped.length} locked/inherited image(s) will be skipped.` : '') +
+                  `\nStaged — Save, then Publish to remove from Amazon.`
+                if (!window.confirm(warn)) return
+                onBulkDelete(ids)
+                setSelectedCells(new Map())
+              }}
+            >
+              Delete{bulk.deletable.length ? ` (${bulk.deletable.length})` : ''}
+            </Button>
+          )}
+          <Button size="sm" variant="ghost" onClick={() => setSelectedCells(new Map())} className="text-slate-500">Clear</Button>
         </div>
       )}
 
@@ -615,11 +676,29 @@ export default function AmazonMatrix({
               aria-colindex={1}
               className="w-44 flex-shrink-0 text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide sticky left-0 z-20 bg-slate-50 dark:bg-slate-800 shadow-[2px_0_4px_rgba(0,0,0,0.04)] dark:shadow-[2px_0_4px_rgba(0,0,0,0.3)]"
             >
+              {bulkMode && (
+                <input
+                  type="checkbox"
+                  checked={allGridChecked}
+                  onChange={(e) => toggleCells(allGridCells, e.target.checked)}
+                  title="Select all"
+                  className="mr-1.5 cursor-pointer accent-orange-600 align-middle"
+                />
+              )}
               {activeAxis}{activeMarketplace !== 'ALL' ? ` / ${activeMarketplace}` : ''}
             </div>
             {/* Slot column headers — each is a drag target */}
             {ALL_SLOTS.map((slot, i) => (
-              <div key={slot} role="columnheader" aria-colindex={i + 2}>
+              <div key={slot} role="columnheader" aria-colindex={i + 2} className="flex flex-col items-center">
+                {bulkMode && (
+                  <input
+                    type="checkbox"
+                    checked={rows.every((r) => selectedCells.has(cellKey(r.groupValue, slot)))}
+                    onChange={(e) => toggleCells(rows.map((r) => ({ group: r.groupValue, slot })), e.target.checked)}
+                    title="Select whole column"
+                    className="mb-0.5 cursor-pointer accent-orange-600"
+                  />
+                )}
                 <ColumnHeader
                   slot={slot}
                   onHeaderDrop={handleColumnHeaderDrop}
@@ -656,6 +735,15 @@ export default function AmazonMatrix({
                   )}
                 >
                   <div className="flex items-center gap-1.5">
+                    {bulkMode && (
+                      <input
+                        type="checkbox"
+                        checked={ALL_SLOTS.every((s) => selectedCells.has(cellKey(groupValue, s)))}
+                        onChange={(e) => toggleCells(ALL_SLOTS.map((s) => ({ group: groupValue, slot: s })), e.target.checked)}
+                        title="Select whole row"
+                        className="cursor-pointer accent-orange-600 flex-shrink-0"
+                      />
+                    )}
                     {isAllColors ? (
                       <span className="text-xs font-medium text-slate-500 dark:text-slate-400 italic">All Colors</span>
                     ) : (
@@ -684,15 +772,23 @@ export default function AmazonMatrix({
                       className={cn('relative', dim ? 'opacity-25 transition-opacity' : 'transition-opacity')}
                       aria-hidden={dim}
                     >
-                      {onCopyCellsToMarkets && cell?.url && (
+                      {bulkMode && (
                         <input
                           type="checkbox"
                           checked={selectedCells.has(cellKey(groupValue, slot))}
                           onChange={() => toggleCellSelect(groupValue, slot)}
                           onClick={(e) => e.stopPropagation()}
-                          title="Select this image to copy across markets"
+                          title="Select image"
                           className="absolute top-1 left-1 z-20 cursor-pointer accent-orange-600"
                         />
+                      )}
+                      {cell?.locked && (
+                        <span
+                          title="Locked — protected from bulk delete"
+                          className="absolute top-1 right-1 z-20 rounded bg-amber-500/90 p-0.5 text-white shadow"
+                        >
+                          <Lock className="w-3 h-3" />
+                        </span>
                       )}
                       <SlotCell
                         cell={cell}
