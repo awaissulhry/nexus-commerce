@@ -36,6 +36,14 @@ const MOTION_FIELDS: { f: OvField; label: string; hint: string }[] = [
   { f: 'stepDownPct', label: 'Ease step', hint: 'How much to step DOWN per cycle. Blank = snap straight back to the floor (today).' },
   { f: 'maxBiasPct', label: 'Ceiling', hint: "The climb won't exceed this %. Blank = 900%." },
 ]
+// MP — one-click recipes that fill the four knobs + keep-climbing. null = leave that knob blank (default).
+type Motion = { jumpStartPct: number | null; stepUpPct: number | null; stepDownPct: number | null; maxBiasPct: number | null; keepClimbing: boolean }
+const RECIPES: { id: string; label: string; hint: string; m: Motion }[] = [
+  { id: 'blitz', label: 'Blitz', hint: 'Open straight at the ceiling and hold — win the slot instantly, defend.', m: { jumpStartPct: 300, stepUpPct: null, stepDownPct: null, maxBiasPct: 300, keepClimbing: false } },
+  { id: 'kickstart', label: 'Kickstart', hint: 'Jump to 75%, then climb +15%/cycle to a 300% ceiling even with no signal.', m: { jumpStartPct: 75, stepUpPct: 15, stepDownPct: null, maxBiasPct: 300, keepClimbing: true } },
+  { id: 'steady', label: 'Steady', hint: 'Ramp up gradually, snap back when a lower target takes over, cap at 300% (≈ today).', m: { jumpStartPct: null, stepUpPct: 15, stepDownPct: null, maxBiasPct: 300, keepClimbing: false } },
+  { id: 'glide', label: 'Glide', hint: 'Gentle both ways — climb +10, ease −10 (never snap), cap 250%.', m: { jumpStartPct: null, stepUpPct: 10, stepDownPct: 10, maxBiasPct: 250, keepClimbing: false } },
+]
 
 export function RankTargetEditor({ open, onClose, scopeKind, scopeLabel, scopeOverrides, onSaveScopeOverrides, productId, campaignId }: {
   open: boolean
@@ -103,6 +111,21 @@ export function RankTargetEditor({ open, onClose, scopeKind, scopeLabel, scopeOv
     return !!t.keepClimbing
   }
   const setLibKeep = (id: string, checked: boolean) => { setChanged(true); setLib(m => ({ ...m, [id]: { ...(m[id] || {}), keepClimbing: checked } })) }
+  // MP — apply a recipe to the four knobs + keep-climbing, in whichever view is active.
+  const applyRecipe = (t: RankTarget, m: Motion) => {
+    setChanged(true)
+    const num: OvField[] = ['jumpStartPct', 'stepUpPct', 'stepDownPct', 'maxBiasPct']
+    if (view === 'scope') {
+      setOv(prev => {
+        const next = { ...prev }; const cur = { ...(next[t.key] || {}) }
+        for (const f of num) { if (m[f as keyof Motion] == null) delete cur[f]; else cur[f] = m[f as keyof Motion] as number }
+        cur.keepClimbing = m.keepClimbing // a recipe makes an explicit choice at this scope
+        next[t.key] = cur; return next
+      })
+    } else {
+      setLib(prev => ({ ...prev, [t.id]: { ...(prev[t.id] || {}), jumpStartPct: m.jumpStartPct, stepUpPct: m.stepUpPct, stepDownPct: m.stepDownPct, maxBiasPct: m.maxBiasPct, keepClimbing: m.keepClimbing } }))
+    }
+  }
   const setScopeKeep = (key: string, val: '' | 'on' | 'off') => {
     setChanged(true)
     setOv(m => {
@@ -229,6 +252,10 @@ export function RankTargetEditor({ open, onClose, scopeKind, scopeLabel, scopeOv
                         ? <select disabled={!scopeAvailable} value={ov[t.key]?.keepClimbing === undefined ? '' : ov[t.key]!.keepClimbing ? 'on' : 'off'} onChange={e => setScopeKeep(t.key, e.target.value as '' | 'on' | 'off')}><option value="">inherit</option><option value="on">on</option><option value="off">off</option></select>
                         : <input type="checkbox" checked={effKeep(t)} onChange={e => setLibKeep(t.id, e.target.checked)} />}
                     </label>
+                  </div>
+                  <div className="az-mrecipes">
+                    <span style={{ fontSize: 10, fontWeight: 700, color: '#3730a3' }}>Recipes:</span>
+                    {RECIPES.map(r => <button key={r.id} type="button" className="az-rcp" disabled={view === 'scope' && !scopeAvailable} title={r.hint} onClick={() => applyRecipe(t, r.m)}>{r.label}</button>)}
                   </div>
                   <div className="az-mnote">Blank = today: ramp up gradually (+{t.allOut ? 25 : 15}/cyc), snap back, ceiling 900%.{effKeep(t) ? ' Keep-climbing ON → pushes to the ceiling without waiting for a signal.' : ''}</div>
                 </div>
