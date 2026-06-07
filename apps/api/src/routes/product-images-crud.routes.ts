@@ -238,6 +238,110 @@ const productImagesCrudRoutes: FastifyPluginAsync = async (fastify) => {
     },
   )
 
+  // ── POST /products/:id/videos ────────────────────────────────────
+  // MM.2 — upload a product VIDEO into the master media hub. Reuses the
+  // Cloudinary video path (resource_type=video, returns duration) + the DAM
+  // tee. Creates a ProductImage row with mediaType=VIDEO so the hub + the
+  // existing gallery plumbing carry it; image flows are untouched (mediaType
+  // defaults to IMAGE everywhere else).
+  fastify.post<{ Params: { id: string }; Querystring: { alt?: string } }>(
+    '/products/:id/videos',
+    { config: { rateLimit: { max: 30, timeWindow: '1 minute' } } },
+    async (req, reply) => {
+      const { id } = req.params
+      const product = await prisma.product.findUnique({ where: { id }, select: { id: true } })
+      if (!product) return reply.status(404).send({ error: 'PRODUCT_NOT_FOUND' })
+
+      const data = await req.file()
+      if (!data) return reply.status(400).send({ error: 'NO_FILE' })
+
+      const filename: string = data.filename ?? 'video'
+      if (!/\.(mp4|mov|webm|mkv|m4v)$/i.test(filename)) {
+        return reply.status(400).send({ error: 'UNSUPPORTED_VIDEO', filename })
+      }
+      if (!isCloudinaryConfigured()) {
+        return reply.status(503).send({ error: 'CLOUDINARY_NOT_CONFIGURED' })
+      }
+
+      const buf = await data.toBuffer()
+
+      // Exact-content dedup (same contract as images).
+      const contentHash = sha256Buffer(buf)
+      const exact = await prisma.productImage.findFirst({ where: { productId: id, contentHash } })
+      if (exact) return reply.status(200).send({ ...exact, reused: 'exact' })
+
+      const existing = await prisma.productImage.count({ where: { productId: id } })
+
+      let cloudResult
+      try {
+        cloudResult = await uploadBufferToCloudinary(buf, {
+          folder: `product-videos/${id}`,
+          resourceType: 'video',
+        })
+      } catch (err) {
+        return reply.status(502).send({
+          error: err instanceof Error ? err.message : 'Cloudinary upload failed',
+          filename,
+        })
+      }
+
+      // Poster = Cloudinary first-frame (so_0) of the video as a JPG.
+      const posterUrl = cloudResult.url
+        .replace('/upload/', '/upload/so_0/')
+        .replace(/\.(mp4|mov|webm|mkv|m4v)$/i, '.jpg')
+      const mimeType = `video/${cloudResult.format || 'mp4'}`
+
+      const video = await prisma.productImage.create({
+        data: {
+          productId: id,
+          url: cloudResult.url,
+          publicId: cloudResult.publicId,
+          type: 'VIDEO',
+          mediaType: 'VIDEO',
+          alt: req.query.alt ?? filename,
+          sortOrder: existing,
+          posterUrl,
+          durationSec: cloudResult.durationSeconds ?? null,
+          fileSize: cloudResult.bytes,
+          mimeType,
+          contentHash,
+        },
+      })
+
+      // DAM tee (best-effort) — video asset + usage + bidirectional link.
+      try {
+        const asset = await prisma.digitalAsset.create({
+          data: {
+            label: filename,
+            type: 'video',
+            mimeType,
+            sizeBytes: cloudResult.bytes,
+            storageProvider: 'cloudinary',
+            storageId: cloudResult.publicId,
+            url: cloudResult.url,
+            originalFilename: filename,
+            metadata: {
+              durationSec: cloudResult.durationSeconds,
+              posterUrl,
+              productImageId: video.id,
+            },
+          },
+          select: { id: true },
+        })
+        await prisma.assetUsage.create({
+          data: { assetId: asset.id, scope: 'product', productId: id, role: 'video', sortOrder: existing },
+        })
+        await prisma.productImage.update({ where: { id: video.id }, data: { sourceAssetId: asset.id } })
+        ;(video as { sourceAssetId?: string | null }).sourceAssetId = asset.id
+      } catch (err) {
+        req.log.warn({ err, productId: id, source: 'MM.2-dam-tee' }, 'DAM video tee failed; ProductImage wrote OK')
+      }
+
+      emitImagesUpdated(id, 'upload-video', { imageId: video.id })
+      return reply.status(201).send(video)
+    },
+  )
+
   // ── POST /api/products/:id/images/reorder ────────────────────────────
   fastify.post<{
     Params: { id: string }
