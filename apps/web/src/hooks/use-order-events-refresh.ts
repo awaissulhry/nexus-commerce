@@ -23,7 +23,7 @@ export interface UseOrderEventsRefreshOptions {
   /** Whether to subscribe at all. Default true — toggle off for kill-switch. */
   enabled?: boolean
   /** Which event types to react to. Default: all order lifecycle + returns. */
-  eventTypes?: Array<'order.created' | 'order.updated' | 'order.cancelled' | 'return.created'>
+  eventTypes?: Array<'order.created' | 'order.updated' | 'order.cancelled' | 'return.created' | 'flat_file_feed.status_changed'>
 }
 
 export function useOrderEventsRefresh(

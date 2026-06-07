@@ -26,6 +26,7 @@ import {
 } from '../_shared/FlatFileIconToolbar'
 import { cn } from '@/lib/utils'
 import { getBackendUrl } from '@/lib/backend-url'
+import { useOrderEventsRefresh } from '@/hooks/use-order-events-refresh'
 import { emitInvalidation, useInvalidationChannel } from '@/lib/sync/invalidation-channel'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
@@ -171,13 +172,20 @@ interface FeedEntry {
   error?: string
 }
 
+// FFS.5 — Amazon's real feed statuses are IN_QUEUE | IN_PROGRESS | DONE | FATAL |
+// CANCELLED. Treat all three end-states as terminal so polling stops + the
+// "Check" loop can't spin forever (previously CANCELLED was treated as in-flight).
+const FEED_TERMINAL = new Set(['DONE', 'FATAL', 'CANCELLED'])
+const isFeedTerminal = (s: string | null | undefined): boolean => !!s && FEED_TERMINAL.has(s)
+const feedErrorCount = (results: FeedResult[]): number => results.filter((r) => r.status === 'error').length
+
 interface SubmissionRecord {
   id: string            // feedId
   market: string
   productType: string
   submittedAt: string   // ISO
   rowCount: number
-  status: 'IN_QUEUE' | 'PROCESSING' | 'DONE' | 'FATAL'
+  status: 'IN_QUEUE' | 'IN_PROGRESS' | 'PROCESSING' | 'DONE' | 'FATAL' | 'CANCELLED'
   successCount?: number
   errorCount?: number
   results?: Array<{ sku: string; status: string; message: string }>
@@ -1976,7 +1984,7 @@ export default function AmazonFlatFileClient({
         const res = await fetch(`${getBackendUrl()}/api/amazon/flat-file/submit`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ rows: toSend, marketplace: mp, expandedFields: manifest?.expandedFields ?? {} }),
+          body: JSON.stringify({ rows: toSend, marketplace: mp, expandedFields: manifest?.expandedFields ?? {}, productType }),
         })
         const data = await res.json()
         if (!res.ok) throw new Error(`[${mp}] ${data.error ?? 'Submit failed'}`)
@@ -2059,9 +2067,18 @@ export default function AmazonFlatFileClient({
     try {
       const updated = await Promise.all(
         feedEntries.map(async (entry) => {
-          if (entry.status === 'DONE' || entry.status === 'FATAL') return entry
+          if (isFeedTerminal(entry.status)) return entry
           const res = await fetch(`${getBackendUrl()}/api/amazon/flat-file/feeds/${entry.feedId}`)
-          const data = await res.json()
+          // FFS.5 — guard against non-OK / malformed responses. Previously a 500/429
+          // was parsed as data and overwrote the status with `undefined` (looked
+          // "stuck"/blank). Keep the entry intact + surface a transient error.
+          if (!res.ok) {
+            return { ...entry, error: `Status check failed (HTTP ${res.status})` }
+          }
+          const data = await res.json().catch(() => null)
+          if (!data || !data.processingStatus) {
+            return { ...entry, error: 'Status check returned no status' }
+          }
           if (data.processingStatus === 'DONE' && entry.market === marketplace) {
             const bySkU = new Map<string, FeedResult>((data.results as FeedResult[]).map((r: FeedResult) => [r.sku, r]))
             setRows((prev) => prev.map((r) => {
@@ -2069,17 +2086,17 @@ export default function AmazonFlatFileClient({
               return fr ? { ...r, _status: fr.status as any, _feedMessage: fr.message } : r
             }))
           }
-          return { ...entry, status: data.processingStatus, results: data.results ?? [] }
+          return { ...entry, status: data.processingStatus, results: data.results ?? [], error: undefined }
         })
       )
       setFeedEntries(updated)
       // Persist completed submissions to history + sync to platform when DONE
       for (const entry of updated) {
-        if (entry.status === 'DONE' || entry.status === 'FATAL') {
+        if (isFeedTerminal(entry.status)) {
           const ok = entry.results.filter((r: FeedResult) => r.status === 'success').length
-          const err = entry.results.filter((r: FeedResult) => r.status === 'error').length
+          const err = feedErrorCount(entry.results)
           updateSubmissionRecord(entry.feedId, {
-            status: entry.status as 'DONE' | 'FATAL',
+            status: entry.status as SubmissionRecord['status'],
             successCount: ok,
             errorCount: err,
             results: entry.results,
@@ -2097,12 +2114,41 @@ export default function AmazonFlatFileClient({
             void syncToPlatform(mpRows, true)
           }
         } else {
-          updateSubmissionRecord(entry.feedId, { status: entry.status as 'IN_QUEUE' | 'PROCESSING' })
+          updateSubmissionRecord(entry.feedId, { status: entry.status as SubmissionRecord['status'] })
         }
       }
     } catch (e: any) { setLoadError({ message: e?.message ?? 'Polling failed', at: Date.now() }) }
     finally { setPolling(false) }
   }, [feedEntries, marketplace, productType, rows, updateSubmissionRecord, syncToPlatform])
+
+  // FFS.5 — restore in-flight feeds from the server on mount so a reload/reopen
+  // never "loses" a submission that's still processing (feedEntries is in-memory
+  // only). Doesn't clobber a live session that already has entries.
+  useEffect(() => {
+    let alive = true
+    fetch(`${getBackendUrl()}/api/amazon/flat-file/feeds?limit=30`, { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!alive || !Array.isArray(d?.jobs)) return
+        const inflight = (d.jobs as Array<{ marketplace: string; feedId: string; status: string }>)
+          .filter((j) => j.status === 'IN_QUEUE' || j.status === 'IN_PROGRESS')
+        if (!inflight.length) return
+        setFeedEntries((prev) => prev.length ? prev : inflight.map((j) => ({
+          market: j.marketplace, feedId: j.feedId, status: j.status, results: [] as FeedResult[],
+        })))
+      })
+      .catch(() => {})
+    return () => { alive = false }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // FFS.5 — live status: re-poll when the server pushes a feed status change (the
+  // reconcile cron + manual poll both emit). Replaces manual-only "Check".
+  useOrderEventsRefresh(() => { void pollAllFeeds() }, {
+    eventTypes: ['flat_file_feed.status_changed'],
+    debounceMs: 1500,
+    enabled: feedEntries.some((e) => !isFeedTerminal(e.status)),
+  })
 
   // ── Import / Export ────────────────────────────────────────────────
 
@@ -2545,26 +2591,32 @@ export default function AmazonFlatFileClient({
           <input ref={fileInputRef} type="file" accept=".txt,.tsv,.csv,.xlsm,.xlsx" className="hidden"
             onChange={(e) => { const f = e.target.files?.[0]; if (f) void importFile(f); e.target.value = '' }} />
 
-          {/* Feed status badges */}
+          {/* Feed status badges (FFS.5 — error-aware + terminal-correct) */}
           {feedEntries.length > 0 && (
             <div className="flex items-center gap-1">
-              {feedEntries.map((e) => (
-                <span key={e.market} className={cn(
-                  'text-xs font-medium px-2 py-0.5 rounded-full border',
-                  e.status === 'DONE'
-                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-800'
-                    : e.status === 'FATAL'
-                    ? 'bg-red-50 text-red-700 border-red-200'
-                    : 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800',
-                )}>
-                  {e.market}: {e.status ?? '…'}
-                </span>
-              ))}
-              {feedEntries.some((e) => e.status !== 'DONE' && e.status !== 'FATAL') && (
-                <Button size="sm" variant="ghost" onClick={pollAllFeeds} loading={polling}>
-                  <RefreshCw className="w-3 h-3 mr-1" />Check
-                </Button>
-              )}
+              {feedEntries.map((e) => {
+                const errs = feedErrorCount(e.results)
+                const done = e.status === 'DONE'
+                const failed = e.status === 'FATAL' || e.status === 'CANCELLED'
+                const cls = failed || (done && errs > 0)
+                  ? 'bg-red-50 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-300 dark:border-red-800'
+                  : done
+                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-800'
+                  : 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800'
+                const label = done && errs > 0
+                  ? `${e.status} · ${errs} error${errs === 1 ? '' : 's'}`
+                  : (e.status ?? '…')
+                return (
+                  <span key={e.market} title={e.error ?? label}
+                    className={cn('text-xs font-medium px-2 py-0.5 rounded-full border', cls)}>
+                    {e.market}: {label}
+                  </span>
+                )
+              })}
+              {/* Always available — re-check even after DONE to re-verify the report */}
+              <Button size="sm" variant="ghost" onClick={pollAllFeeds} loading={polling}>
+                <RefreshCw className="w-3 h-3 mr-1" />Check
+              </Button>
             </div>
           )}
 
