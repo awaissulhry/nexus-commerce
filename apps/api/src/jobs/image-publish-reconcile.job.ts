@@ -15,6 +15,7 @@
 
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
+import { pollAndUpdateFeedJob } from '../services/images/amazon-image-feed.service.js'
 
 const TICK_INTERVAL_MS = 3 * 60 * 1000
 const INFLIGHT = new Set(['IN_QUEUE', 'IN_PROGRESS', 'SUBMITTING', 'PENDING'])
@@ -22,6 +23,30 @@ const INFLIGHT = new Set(['IN_QUEUE', 'IN_PROGRESS', 'SUBMITTING', 'PENDING'])
 let cronTimer: NodeJS.Timeout | null = null
 
 export async function runImagePublishReconcileOnce(): Promise<string> {
+  // 0. Advance STALE in-flight feeds first. A feed Amazon already finished can
+  //    sit IN_QUEUE/IN_PROGRESS in our records when the FE poll / SQS finalize
+  //    never ran (e.g. tab closed). Poll Amazon for them — a DONE result
+  //    finalizes the job and flips its rows. Without this, step 2 below would
+  //    skip the product forever (it has an "in-flight" feed that never clears).
+  const stale = await prisma.amazonImageFeedJob.findMany({
+    where: {
+      status: { in: ['IN_QUEUE', 'IN_PROGRESS'] },
+      feedId: { not: null },
+      submittedAt: { lt: new Date(Date.now() - 2 * 60 * 1000) },
+    },
+    select: { id: true },
+    take: 50,
+  })
+  let advanced = 0
+  for (const j of stale) {
+    try {
+      const r = await pollAndUpdateFeedJob(j.id)
+      if (r.status === 'DONE' || r.status === 'FATAL' || r.status === 'CANCELLED') advanced += 1
+    } catch {
+      /* keep going — one bad feed shouldn't stall the sweep */
+    }
+  }
+
   // Products that currently have any DRAFT Amazon image rows.
   const draftProducts = await prisma.listingImage.findMany({
     where: { publishStatus: 'DRAFT', platform: 'AMAZON' },
@@ -64,7 +89,7 @@ export async function runImagePublishReconcileOnce(): Promise<string> {
   // Surface (don't auto-touch) rows stuck in ERROR — operator visibility.
   stuckErrors = await prisma.listingImage.count({ where: { publishStatus: 'ERROR', platform: 'AMAZON' } })
 
-  return `healed ${healedRows} row(s) across ${healedProducts} product(s); ${skippedInflight} skipped (in-flight); ${stuckErrors} row(s) in ERROR`
+  return `advanced ${advanced} stale feed(s); healed ${healedRows} row(s) across ${healedProducts} product(s); ${skippedInflight} skipped (in-flight); ${stuckErrors} row(s) in ERROR`
 }
 
 export function startImagePublishReconcileCron(): void {
