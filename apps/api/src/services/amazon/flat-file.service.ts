@@ -16,6 +16,7 @@
 
 import type { PrismaClient } from '@nexus/database'
 import { CategorySchemaService } from '../categories/schema-sync.service.js'
+import { parseLocaleNumber, parseLocaleInt } from '../../lib/parse-locale-number.js'
 
 // ── Constants ──────────────────────────────────────────────────────────
 
@@ -1026,12 +1027,12 @@ export class AmazonFlatFileService {
           const poSaleTo     = String(row['purchasable_offer__sale_end_date'] ?? '')
           const offer: Record<string, any> = {
             currency: poCurrency,
-            our_price: [{ schedule: [{ value_with_tax: parseFloat(String(poPrice)) }] }],
+            our_price: [{ schedule: [{ value_with_tax: Math.max(0, parseLocaleNumber(poPrice) ?? 0) }] }],
             marketplace_id: marketplaceId,
           }
           if (poCondition) offer.condition_type = poCondition
           if (poSalePrice !== undefined && poSalePrice !== '') {
-            const sp: Record<string, any> = { schedule: [{ value_with_tax: parseFloat(String(poSalePrice)) }] }
+            const sp: Record<string, any> = { schedule: [{ value_with_tax: Math.max(0, parseLocaleNumber(poSalePrice) ?? 0) }] }
             if (poSaleFrom) sp.start_at = [{ value: poSaleFrom, marketplace_id: marketplaceId }]
             if (poSaleTo)   sp.end_at   = [{ value: poSaleTo,   marketplace_id: marketplaceId }]
             offer.sale_price = [sp]
@@ -1045,7 +1046,7 @@ export class AmazonFlatFileService {
           const faLeadTime = row['fulfillment_availability__lead_time_to_ship_max_days']
           const fa: Record<string, any> = {
             fulfillment_channel_code: faCode,
-            quantity: parseInt(String(faQty), 10),
+            quantity: Math.max(0, parseLocaleInt(faQty) ?? 0),
             marketplace_id: marketplaceId,
           }
           if (faLeadTime !== undefined && faLeadTime !== '') fa.lead_time_to_ship_max_days = parseInt(String(faLeadTime), 10)
@@ -1230,13 +1231,17 @@ export class AmazonFlatFileService {
         const bareBullet = String(row.bullet_point ?? '').trim()
         if (bareBullet && !bullets.includes(bareBullet)) bullets.unshift(bareBullet)
 
-        // Price / qty — prefer expanded sub-columns, fall back to bare/legacy keys
+        // Price / qty — prefer expanded sub-columns, fall back to bare/legacy keys.
+        // FFA.1 — locale-tolerant parse ("19,99"→19.99) + drop negatives.
         const priceRaw    = row['purchasable_offer__our_price'] ?? row.purchasable_offer ?? row.standard_price
-        const price       = priceRaw !== undefined && priceRaw !== '' ? parseFloat(String(priceRaw)) : null
+        const priceParsed = priceRaw !== undefined && priceRaw !== '' ? parseLocaleNumber(priceRaw) : null
+        const price       = priceParsed !== null && priceParsed >= 0 ? priceParsed : null
         const salePriceRaw = row['purchasable_offer__sale_price'] ?? row.sale_price
-        const salePrice   = salePriceRaw !== undefined && salePriceRaw !== '' ? parseFloat(String(salePriceRaw)) : null
+        const salePriceParsed = salePriceRaw !== undefined && salePriceRaw !== '' ? parseLocaleNumber(salePriceRaw) : null
+        const salePrice   = salePriceParsed !== null && salePriceParsed >= 0 ? salePriceParsed : null
         const qtyRaw      = row['fulfillment_availability__quantity'] ?? row.fulfillment_availability ?? row.quantity
-        const qty         = qtyRaw !== undefined && qtyRaw !== '' ? parseInt(String(qtyRaw), 10) : null
+        const qtyParsed   = qtyRaw !== undefined && qtyRaw !== '' ? parseLocaleInt(qtyRaw) : null
+        const qty         = qtyParsed !== null && qtyParsed >= 0 ? qtyParsed : null
 
         // Collapsed attributes (same format getExistingRows reads back)
         const collapsedAttrs = this.buildCollapsedAttrs(row, expandedFields, mp, marketplaceId, languageTag)
@@ -1435,12 +1440,12 @@ export class AmazonFlatFileService {
       const poSaleTo    = String(row['purchasable_offer__sale_end_date'] ?? '')
       const offer: Record<string, any> = {
         currency: poCurrency,
-        our_price: [{ schedule: [{ value_with_tax: parseFloat(String(poPrice)) }] }],
+        our_price: [{ schedule: [{ value_with_tax: Math.max(0, parseLocaleNumber(poPrice) ?? 0) }] }],
         marketplace_id: marketplaceId,
       }
       if (poCondition) offer.condition_type = poCondition
       if (poSalePrice !== undefined && poSalePrice !== '') {
-        const sp: Record<string, any> = { schedule: [{ value_with_tax: parseFloat(String(poSalePrice)) }] }
+        const sp: Record<string, any> = { schedule: [{ value_with_tax: Math.max(0, parseLocaleNumber(poSalePrice) ?? 0) }] }
         if (poSaleFrom) sp.start_at = [{ value: poSaleFrom, marketplace_id: marketplaceId }]
         if (poSaleTo)   sp.end_at   = [{ value: poSaleTo,   marketplace_id: marketplaceId }]
         offer.sale_price = [sp]
