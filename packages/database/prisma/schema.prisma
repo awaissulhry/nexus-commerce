@@ -6684,6 +6684,42 @@ model AmazonImageFeedJob {
   @@index([status, submittedAt])
 }
 
+// FFS.1 — durable record of a flat-file (JSON_LISTINGS_FEED) submission, so feed
+// status + the per-SKU processing report survive a tab close and are visible
+// across sessions/devices. Mirrors AmazonImageFeedJob but is NOT tied to one
+// product (a flat-file feed spans many SKUs). The poll-and-reconcile cron
+// (FFS.3) advances status + captures the report even with no tab open.
+model AmazonFlatFileFeedJob {
+  id             String  @id @default(cuid())
+  feedId         String  @unique // Amazon feedId (createFeed response)
+  feedDocumentId String? // Amazon feedDocumentId (createFeedDocument)
+
+  marketplace String // IT | DE | FR | ES | UK …
+  productType String? // manifest product type, e.g. "JACKET"
+
+  // IN_QUEUE | IN_PROGRESS | DONE | FATAL | CANCELLED
+  status   String @default("IN_QUEUE")
+  skuCount Int    @default(0)
+  skus     Json? // string[] — item_sku values in this submission
+
+  // parsed processing report
+  resultSummary Json? // { processingStatus, messagesProcessed, messagesSuccessful, messagesWithWarning, messagesWithError }
+  perSkuResults Json? // [{ sku, status: success|warning|error, code?, message }]
+  errorMessage  String? // top-level feed error (FATAL)
+
+  // poll bookkeeping (FFS.3 cron)
+  lastPolledAt DateTime?
+  pollCount    Int       @default(0)
+  nextPollAt   DateTime?
+
+  submittedAt DateTime  @default(now())
+  completedAt DateTime?
+
+  @@index([marketplace, productType])
+  @@index([status, submittedAt])
+  @@index([nextPollAt])
+}
+
 /// IR.9.1 — eBay + Shopify image publish job log.
 ///
 /// Parallel to AmazonImageFeedJob but for the non-Amazon channels.

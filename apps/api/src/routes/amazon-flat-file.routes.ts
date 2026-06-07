@@ -197,9 +197,9 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
   // ── POST /api/amazon/flat-file/submit ───────────────────────────────
   // Accepts an array of rows, submits them as a JSON_LISTINGS_FEED to SP-API.
   fastify.post<{
-    Body: { rows: any[]; marketplace?: string; expandedFields?: Record<string, string> }
+    Body: { rows: any[]; marketplace?: string; expandedFields?: Record<string, string>; productType?: string }
   }>('/amazon/flat-file/submit', async (request, reply) => {
-    const { rows, marketplace = 'IT', expandedFields = {} } = request.body
+    const { rows, marketplace = 'IT', expandedFields = {}, productType } = request.body
     const mp = marketplace.toUpperCase()
     const marketplaceId = MARKETPLACE_ID_MAP[mp] ?? MARKETPLACE_ID_MAP.IT
     const sellerId = getSellerId()
@@ -256,6 +256,30 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
           inputFeedDocumentId: docRes.feedDocumentId,
         },
       })
+
+      // FFS.1 — durable server-side record so status + the per-SKU report survive
+      // a tab close and are visible across sessions/devices. Best-effort: never
+      // block the submit, the feed is already accepted by Amazon. nextPollAt=now
+      // so the reconcile cron (FFS.3) picks it up on its next tick.
+      try {
+        const skus = rows
+          .map((r: any) => r?.item_sku)
+          .filter((s: any): s is string => typeof s === 'string' && s.length > 0)
+        await prisma.amazonFlatFileFeedJob.create({
+          data: {
+            feedId: feedRes.feedId,
+            feedDocumentId: docRes.feedDocumentId,
+            marketplace: mp,
+            productType: productType ?? null,
+            status: 'IN_QUEUE',
+            skuCount: rows.length,
+            skus,
+            nextPollAt: new Date(),
+          },
+        })
+      } catch (e: any) {
+        request.log.warn({ err: e?.message, feedId: feedRes.feedId }, 'flat-file feed-job persist failed (non-fatal)')
+      }
 
       return reply.send({
         feedId: feedRes.feedId,
