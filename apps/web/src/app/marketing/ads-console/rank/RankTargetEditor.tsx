@@ -25,24 +25,24 @@ const PLACE_LABEL: Record<string, string> = { PLACEMENT_TOP: 'Top of Search', PL
 const placeLabel = (p: string) => PLACE_LABEL[p] ?? p
 const FIELDS: { f: OvField; label: string; unit: '%' | '€'; hint: string }[] = [
   { f: 'biasPct', label: 'Placement', unit: '%', hint: "bid multiplier 0–900% for THIS target's placement (Top or Rest of Search)" },
-  { f: 'targetISPct', label: 'Target IS', unit: '%', hint: 'top-of-search impression share to hold' },
-  { f: 'acosCapPct', label: 'ACOS cap', unit: '%', hint: 'ease off above this ACOS' },
+  { f: 'targetISPct', label: 'Target IS', unit: '%', hint: 'Top-of-search impression share to chase — only used when a Ceiling above Placement % is set.' },
+  { f: 'acosCapPct', label: 'ACOS cap', unit: '%', hint: 'Ease off above this ACOS while climbing — only used when a Ceiling above Placement % is set.' },
   { f: 'maxCpcCents', label: 'Max CPC', unit: '€', hint: 'never bid above this' },
 ]
-// MP — motion profile: HOW the loop moves the bias (all blank = today's behaviour).
+// MP v2 — motion profile: HOW the loop moves the bid. Blank everywhere = snap to Placement %
+// both ways and hold (the bid you set is the bid you get).
 const MOTION_FIELDS: { f: OvField; label: string; hint: string }[] = [
-  { f: 'jumpStartPct', label: 'Opening jump', hint: 'On entry, SNAP straight to this % in one cycle. Blank = ramp up gradually (today).' },
-  { f: 'stepUpPct', label: 'Climb step', hint: 'How much to step UP per 15-min cycle. Blank = 15% (25 all-out).' },
-  { f: 'stepDownPct', label: 'Ease step', hint: 'How much to step DOWN per cycle. Blank = snap straight back to the floor (today).' },
-  { f: 'maxBiasPct', label: 'Ceiling', hint: "The climb won't exceed this %. Blank = 900%." },
+  { f: 'stepUpPct', label: 'Climb step', hint: 'Blank = SNAP up to Placement %. A number = ramp up +N%/cycle instead.' },
+  { f: 'stepDownPct', label: 'Ease step', hint: 'Blank = SNAP down to Placement %. A number = ease down −N%/cycle instead. (The opposite of Climb step.)' },
+  { f: 'maxBiasPct', label: 'Ceiling', hint: 'Blank = hold at Placement %, never above. Set ABOVE Placement % to let the bid climb up to here.' },
 ]
-// MP — one-click recipes that fill the four knobs + keep-climbing. null = leave that knob blank (default).
-type Motion = { jumpStartPct: number | null; stepUpPct: number | null; stepDownPct: number | null; maxBiasPct: number | null; keepClimbing: boolean }
+// MP v2 — one-click recipes that fill the knobs + keep-climbing. null = leave that knob blank.
+type Motion = { stepUpPct: number | null; stepDownPct: number | null; maxBiasPct: number | null; keepClimbing: boolean }
 const RECIPES: { id: string; label: string; hint: string; m: Motion }[] = [
-  { id: 'blitz', label: 'Blitz', hint: 'Open straight at the ceiling and hold — win the slot instantly, defend.', m: { jumpStartPct: 300, stepUpPct: null, stepDownPct: null, maxBiasPct: 300, keepClimbing: false } },
-  { id: 'kickstart', label: 'Kickstart', hint: 'Jump to 75%, then climb +15%/cycle to a 300% ceiling even with no signal.', m: { jumpStartPct: 75, stepUpPct: 15, stepDownPct: null, maxBiasPct: 300, keepClimbing: true } },
-  { id: 'steady', label: 'Steady', hint: 'Ramp up gradually, snap back when a lower target takes over, cap at 300% (≈ today).', m: { jumpStartPct: null, stepUpPct: 15, stepDownPct: null, maxBiasPct: 300, keepClimbing: false } },
-  { id: 'glide', label: 'Glide', hint: 'Gentle both ways — climb +10, ease −10 (never snap), cap 250%.', m: { jumpStartPct: null, stepUpPct: 10, stepDownPct: 10, maxBiasPct: 250, keepClimbing: false } },
+  { id: 'hold', label: 'Hold', hint: 'Snap to Placement % and hold — the bid you set is the bid you get. (The default.)', m: { stepUpPct: null, stepDownPct: null, maxBiasPct: null, keepClimbing: false } },
+  { id: 'gradual', label: 'Gradual', hint: 'Ramp ±15%/cycle to Placement % instead of snapping; still never above it.', m: { stepUpPct: 15, stepDownPct: 15, maxBiasPct: null, keepClimbing: false } },
+  { id: 'chase', label: 'Chase', hint: 'Hold Placement %, but climb up to 300% when Amazon says you are winning (signal-driven), then ease back.', m: { stepUpPct: 15, stepDownPct: 15, maxBiasPct: 300, keepClimbing: false } },
+  { id: 'push', label: 'Push', hint: 'Always climb to a 300% ceiling on its own (no signal needed), within the ACOS cap.', m: { stepUpPct: 25, stepDownPct: null, maxBiasPct: 300, keepClimbing: true } },
 ]
 
 export function RankTargetEditor({ open, onClose, scopeKind, scopeLabel, scopeOverrides, onSaveScopeOverrides, productId, campaignId }: {
@@ -93,13 +93,13 @@ export function RankTargetEditor({ open, onClose, scopeKind, scopeLabel, scopeOv
     const a = effOf(t, 'acosCapPct'); if (a != null && isTop) p.push(`ease above ${a}% ACOS`)
     const c = effOf(t, 'maxCpcCents'); if (c != null) p.push(`max CPC €${(c / 100).toFixed(2)}`)
     if (t.allOut) p.push('all-out (ignore ACOS)')
-    // MP — motion summary (only when tuned away from the defaults, to avoid clutter).
+    // MP v2 — motion summary (only the parts tuned away from snap-and-hold, to avoid clutter).
     const motion: string[] = []
-    const jump = effOf(t, 'jumpStartPct'); if (jump != null) motion.push(`jump ${jump}`)
-    const up = effOf(t, 'stepUpPct'); if (up != null) motion.push(`+${up}/cyc`)
-    const ceil = effOf(t, 'maxBiasPct'); if (ceil != null) motion.push(`cap ${ceil}`)
-    const down = effOf(t, 'stepDownPct'); if (down != null) motion.push(`ease −${down}/cyc`)
-    if (effKeep(t)) motion.push('keep-climbing')
+    const up = effOf(t, 'stepUpPct'); if (up != null) motion.push(`ramp +${up}↑`)
+    const down = effOf(t, 'stepDownPct'); if (down != null) motion.push(`ease −${down}↓`)
+    const ceil = effOf(t, 'maxBiasPct')
+    if (ceil != null && ceil > (b ?? 0)) motion.push(effKeep(t) ? `push→${ceil}%` : `chase→${ceil}%`)
+    else if (effKeep(t)) motion.push('keep-climbing')
     if (motion.length) p.push(motion.join(' '))
     return p.join(' · ') || 'baseline (no push)'
   }
@@ -111,10 +111,10 @@ export function RankTargetEditor({ open, onClose, scopeKind, scopeLabel, scopeOv
     return !!t.keepClimbing
   }
   const setLibKeep = (id: string, checked: boolean) => { setChanged(true); setLib(m => ({ ...m, [id]: { ...(m[id] || {}), keepClimbing: checked } })) }
-  // MP — apply a recipe to the four knobs + keep-climbing, in whichever view is active.
+  // MP v2 — apply a recipe to the knobs + keep-climbing, in whichever view is active.
   const applyRecipe = (t: RankTarget, m: Motion) => {
     setChanged(true)
-    const num: OvField[] = ['jumpStartPct', 'stepUpPct', 'stepDownPct', 'maxBiasPct']
+    const num: OvField[] = ['stepUpPct', 'stepDownPct', 'maxBiasPct']
     if (view === 'scope') {
       setOv(prev => {
         const next = { ...prev }; const cur = { ...(next[t.key] || {}) }
@@ -123,7 +123,7 @@ export function RankTargetEditor({ open, onClose, scopeKind, scopeLabel, scopeOv
         next[t.key] = cur; return next
       })
     } else {
-      setLib(prev => ({ ...prev, [t.id]: { ...(prev[t.id] || {}), jumpStartPct: m.jumpStartPct, stepUpPct: m.stepUpPct, stepDownPct: m.stepDownPct, maxBiasPct: m.maxBiasPct, keepClimbing: m.keepClimbing } }))
+      setLib(prev => ({ ...prev, [t.id]: { ...(prev[t.id] || {}), stepUpPct: m.stepUpPct, stepDownPct: m.stepDownPct, maxBiasPct: m.maxBiasPct, keepClimbing: m.keepClimbing } }))
     }
   }
   const setScopeKeep = (key: string, val: '' | 'on' | 'off') => {
@@ -231,6 +231,7 @@ export function RankTargetEditor({ open, onClose, scopeKind, scopeLabel, scopeOv
               {mOpen && !t.pause && (
                 <div className="az-rte-motion">
                   <div className="az-mtitle"><SlidersHorizontal size={12} /> Motion — how the bid moves{view === 'scope' ? ` · override for ${scopeLabel}` : ''}</div>
+                  <div className="az-msub">Default: <b>snap to {effOf(t, 'biasPct') ?? 0}% Placement</b>, up or down, then hold. Tune below to ramp instead, or set a Ceiling to climb above it.</div>
                   <div className="az-mfields">
                     {MOTION_FIELDS.map(f => {
                       const ph = defOf(t, f.f)
@@ -246,7 +247,7 @@ export function RankTargetEditor({ open, onClose, scopeKind, scopeLabel, scopeOv
                         </label>
                       )
                     })}
-                    <label className="az-mfield az-mkeep" title="After the opening, keep climbing to the ceiling even with NO signal (bounded by the ceiling + ACOS cap).">
+                    <label className="az-mfield az-mkeep" title="Climb to the Ceiling on its own every cycle, even with no signal (bounded by the Ceiling + ACOS cap). Off = only climb when Amazon's data says you're winning.">
                       <span>Keep climbing</span>
                       {view === 'scope'
                         ? <select disabled={!scopeAvailable} value={ov[t.key]?.keepClimbing === undefined ? '' : ov[t.key]!.keepClimbing ? 'on' : 'off'} onChange={e => setScopeKeep(t.key, e.target.value as '' | 'on' | 'off')}><option value="">inherit</option><option value="on">on</option><option value="off">off</option></select>
@@ -257,7 +258,7 @@ export function RankTargetEditor({ open, onClose, scopeKind, scopeLabel, scopeOv
                     <span style={{ fontSize: 10, fontWeight: 700, color: '#3730a3' }}>Recipes:</span>
                     {RECIPES.map(r => <button key={r.id} type="button" className="az-rcp" disabled={view === 'scope' && !scopeAvailable} title={r.hint} onClick={() => applyRecipe(t, r.m)}>{r.label}</button>)}
                   </div>
-                  <div className="az-mnote">Blank = today: ramp up gradually (+{t.allOut ? 25 : 15}/cyc), snap back, ceiling 900%.{effKeep(t) ? ' Keep-climbing ON → pushes to the ceiling without waiting for a signal.' : ''}</div>
+                  <div className="az-mnote">Blank = snap to {effOf(t, 'biasPct') ?? 0}% Placement (up or down) and hold — never above it. Set a Ceiling above Placement % to let it climb.{effKeep(t) ? ' Keep-climbing ON → pushes to the Ceiling on its own.' : ''}</div>
                 </div>
               )}
               </Fragment>
