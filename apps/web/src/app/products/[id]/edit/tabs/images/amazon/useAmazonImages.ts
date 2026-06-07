@@ -138,7 +138,10 @@ export function useAmazonImages({
   const [publishingAll, setPublishingAll] = useState(false)
   const [publishError, setPublishError] = useState<string | null>(null)
   const [feedJobs, setFeedJobs] = useState<FeedJobStatus[]>([])
-  const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  // One poll timer PER job id — publishAll queues several markets at once and a
+  // single shared timer meant only the last market ever polled (the rest stuck
+  // on IN_QUEUE forever).
+  const pollTimersRef = useRef<Map<string, ReturnType<typeof setInterval>>>(new Map())
   // PB.15 — Ref-mirror of feedJobs so the poll callback can read the
   // latest array without rebuilding the interval on every change.
   const feedJobsRef = useRef<FeedJobStatus[]>([])
@@ -374,14 +377,14 @@ export function useAmazonImages({
   }, [variantGroups, resolveCell, assignCell])
 
   // ── Publish ────────────────────────────────────────────────────────
-  const publish = useCallback(async (marketplace: AmazonMarketplace) => {
-    if (marketplace === 'ALL') return
+  const publish = useCallback(async (marketplace: AmazonMarketplace): Promise<{ ok: boolean; error?: string }> => {
+    if (marketplace === 'ALL') return { ok: false }
     setPublishing(true)
     setPublishError(null)
     try {
       // Save pending first
       const saved = await onSavePending()
-      if (!saved) { setPublishError('Save failed — fix errors before publishing'); return }
+      if (!saved) { const e = 'Save failed — fix errors before publishing'; setPublishError(e); return { ok: false, error: e } }
 
       const res = await beFetch(`/api/products/${productId}/amazon-images/publish`, {
         method: 'POST',
@@ -390,9 +393,13 @@ export function useAmazonImages({
       })
       if (!res.ok) {
         const body = await res.json().catch(() => ({}))
-        throw new Error(body?.error ?? `Publish failed: ${res.status}`)
+        // Prefer the human message (e.g. "Every variant is blocked: …") over the
+        // bare code so the bar shows something actionable, not "VALIDATION_FAILED".
+        const e = (body?.message as string) ?? (body?.error as string) ?? `Publish failed: ${res.status}`
+        setPublishError(e)
+        return { ok: false, error: e }
       }
-      const data: { jobId: string; feedId: string | null; skus: string[] } = await res.json()
+      const data: { jobId: string; feedId: string | null; skus: string[]; skippedAsins?: number } = await res.json()
       setFeedJobs((prev) => [{
         jobId: data.jobId, marketplace,
         status: 'IN_QUEUE', submittedAt: new Date().toISOString(),
@@ -401,16 +408,26 @@ export function useAmazonImages({
       startPolling(data.jobId)
       // PB.9 — Notify owner so it can capture a rollback snapshot.
       onPublishSuccess?.(marketplace)
+      // Partial publish — some variants were skipped (e.g. no MAIN). Surface it.
+      if (data.skippedAsins && data.skippedAsins > 0) {
+        setPublishError(`${marketplace}: published, but ${data.skippedAsins} variant${data.skippedAsins === 1 ? '' : 's'} skipped (no MAIN). Add a MAIN, then re-publish.`)
+      }
+      return { ok: true }
     } catch (err) {
-      setPublishError(err instanceof Error ? err.message : 'Publish failed')
+      const e = err instanceof Error ? err.message : 'Publish failed'
+      setPublishError(e)
+      return { ok: false, error: e }
     } finally {
       setPublishing(false)
     }
   }, [productId, activeAxis, onSavePending, onPublishSuccess])
 
   function startPolling(jobId: string) {
-    if (pollTimerRef.current) clearInterval(pollTimerRef.current)
-    pollTimerRef.current = setInterval(async () => {
+    const timers = pollTimersRef.current
+    const prior = timers.get(jobId)
+    if (prior) clearInterval(prior)
+    const stop = () => { const t = pollTimersRef.current.get(jobId); if (t) { clearInterval(t); pollTimersRef.current.delete(jobId) } }
+    const timer = setInterval(async () => {
       const res = await beFetch(`/api/products/${productId}/amazon-images/feed-status/${jobId}`)
       if (!res.ok) return
       const { status } = await res.json()
@@ -421,7 +438,7 @@ export function useAmazonImages({
         return prev.map((j) => j.jobId === jobId ? { ...j, status } : j)
       })
       if (['DONE', 'FATAL', 'CANCELLED'].includes(status)) {
-        if (pollTimerRef.current) clearInterval(pollTimerRef.current)
+        stop()
         onReload()
         // PB.15 — Browser notification on terminal transition.
         // Only fires when the status genuinely changed (avoids
@@ -443,6 +460,7 @@ export function useAmazonImages({
         }
       }
     }, 30_000)
+    timers.set(jobId, timer)
   }
 
   // PB.15 — Keep ref in sync so the poll callback reads latest.
@@ -459,21 +477,33 @@ export function useAmazonImages({
       errorMessage: j.errorMessage,
       skuCount: Array.isArray(j.skus) ? (j.skus as string[]).length : 0,
     })))
+    // Resume polling for any job still in flight (tab closed mid-publish, or
+    // publishAll left several markets queued) so the badge resolves instead of
+    // spinning on IN_QUEUE forever.
+    for (const j of amazonJobs) {
+      if (!['DONE', 'FATAL', 'CANCELLED'].includes(j.status)) startPolling(j.id)
+    }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const publishAll = useCallback(async () => {
     setPublishingAll(true)
+    setPublishError(null)
+    const failures: string[] = []
     try {
       for (const mkt of AMAZON_MARKETPLACES) {
-        await publish(mkt)
+        const r = await publish(mkt)
+        if (!r.ok) failures.push(`${mkt}: ${r.error ?? 'failed'}`)
       }
     } finally {
       setPublishingAll(false)
     }
+    // Each publish() clears publishError on entry, so without this a market that
+    // failed mid-run would leave no visible error. Surface a combined summary.
+    if (failures.length > 0) setPublishError(`Some markets failed — ${failures.join(' · ')}`)
   }, [publish])
 
-  // Cleanup on unmount
-  useEffect(() => () => { if (pollTimerRef.current) clearInterval(pollTimerRef.current) }, [])
+  // Cleanup on unmount — clear every per-job timer.
+  useEffect(() => () => { for (const t of pollTimersRef.current.values()) clearInterval(t); pollTimersRef.current.clear() }, [])
 
   return {
     activeMarketplace, setActiveMarketplace,

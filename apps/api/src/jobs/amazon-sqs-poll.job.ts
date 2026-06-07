@@ -121,19 +121,25 @@ async function runSqsPoll(): Promise<void> {
                   select: { id: true, productId: true, status: true },
                 })
               : null
-            if (job && job.status !== note.processingStatus) {
-              await prisma.amazonImageFeedJob.update({
-                where: { id: job.id },
-                data: {
-                  status: note.processingStatus,
-                  completedAt:
-                    note.processingStatus === 'DONE' ||
-                    note.processingStatus === 'CANCELLED' ||
-                    note.processingStatus === 'FATAL'
-                      ? new Date()
-                      : null,
-                },
-              })
+            if (job) {
+              const terminal =
+                note.processingStatus === 'DONE' ||
+                note.processingStatus === 'CANCELLED' ||
+                note.processingStatus === 'FATAL'
+              if (terminal) {
+                // Finalize from the push: poll Amazon, fetch the processing report,
+                // and flip DRAFT → PUBLISHED/ERROR — so the job resolves without
+                // anyone keeping the images tab open to drive the FE poll.
+                const { pollAndUpdateFeedJob } = await import(
+                  '../services/images/amazon-image-feed.service.js'
+                )
+                await pollAndUpdateFeedJob(job.id).catch(() => {})
+              } else if (job.status !== note.processingStatus) {
+                await prisma.amazonImageFeedJob.update({
+                  where: { id: job.id },
+                  data: { status: note.processingStatus, completedAt: null },
+                })
+              }
             }
             const { publishOrderEvent } = await import(
               '../services/order-events.service.js'

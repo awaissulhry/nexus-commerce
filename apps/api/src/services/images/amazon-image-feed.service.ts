@@ -449,13 +449,18 @@ export async function pollAndUpdateFeedJob(jobId: string): Promise<{
 }> {
   const job = await prisma.amazonImageFeedJob.findUnique({
     where: { id: jobId },
-    select: { id: true, feedId: true, productId: true, skus: true, status: true },
+    select: { id: true, feedId: true, productId: true, skus: true, status: true, resultSummary: true },
   })
   if (!job) throw new Error(`AmazonImageFeedJob ${jobId} not found`)
 
-  // Terminal states — no need to poll Amazon
-  if (['DONE', 'FATAL', 'CANCELLED', 'PENDING'].includes(job.status) && job.status !== 'IN_QUEUE' && job.status !== 'IN_PROGRESS') {
-    return { jobId, status: job.status, resultSummary: null }
+  // Already-finalized terminal states — nothing more to do. But a job marked DONE
+  // by the SQS push and NOT yet finalized (no resultSummary → DRAFT rows not
+  // flipped) deliberately falls through so this call completes the writeback.
+  if (job.status === 'FATAL' || job.status === 'CANCELLED') {
+    return { jobId, status: job.status, resultSummary: job.resultSummary ?? null }
+  }
+  if (job.status === 'DONE' && job.resultSummary) {
+    return { jobId, status: job.status, resultSummary: job.resultSummary }
   }
 
   if (!job.feedId) {
@@ -501,21 +506,13 @@ export async function pollAndUpdateFeedJob(jobId: string): Promise<{
         completedAt: new Date(),
       },
     })
-    // Mark all affected images as ERROR
-    const skus = Array.isArray(job.skus) ? (job.skus as string[]) : []
-    if (skus.length > 0) {
-      const variations = await prisma.productVariation.findMany({
-        where: { productId: job.productId, sku: { in: skus } },
-        select: { id: true },
-      })
-      const varIds = variations.map((v) => v.id)
-      if (varIds.length > 0) {
-        await prisma.listingImage.updateMany({
-          where: { productId: job.productId, variationId: { in: varIds }, publishStatus: 'DRAFT' },
-          data: { publishStatus: 'ERROR', publishError: `Feed ${poll.processingStatus}` },
-        })
-      }
-    }
+    // Feed failed wholesale → every in-flight (DRAFT) row for this product is
+    // ERROR. (The old per-SKU→ProductVariation lookup matched nothing on the live
+    // child-Product model, so failures were never reflected.)
+    await prisma.listingImage.updateMany({
+      where: { productId: job.productId, publishStatus: 'DRAFT' },
+      data: { publishStatus: 'ERROR', publishError: `Feed ${poll.processingStatus}` },
+    })
     return { jobId, status: poll.processingStatus, resultSummary: null }
   }
 
@@ -641,22 +638,59 @@ async function applyPublishResults(
     }
   }
 
+  // Which SKUs were rejected (+ the first error to surface).
+  let firstError: string | undefined
+  const erroringSkus: string[] = []
   for (let i = 0; i < skus.length; i++) {
-    const messageId = i + 1
-    const sku = skus[i]
-    const error = errorByMessageId.get(messageId)
+    const e = errorByMessageId.get(i + 1)
+    if (e) { firstError ??= e; erroringSkus.push(skus[i]!) }
+  }
 
-    const variation = await prisma.productVariation.findUnique({
-      where: { sku },
-      select: { id: true },
+  // Map rejected SKUs → their axis values + child ids so we can flag the right
+  // per-group / per-variation rows. Child Products carry axis values in
+  // variantAttributes ?? categoryAttributes.variations (matches resolveAmazonImages);
+  // the old per-SKU→ProductVariation lookup never matched the live child-Product
+  // model, so DRAFT rows were never flipped (status stuck forever).
+  const errorAxisValues = new Set<string>()
+  const errorChildIds = new Set<string>()
+  if (erroringSkus.length > 0) {
+    const kids = await prisma.product.findMany({
+      where: { sku: { in: erroringSkus }, parentId: productId },
+      select: { id: true, variantAttributes: true, categoryAttributes: true },
     })
-    if (!variation) continue
+    for (const c of kids) {
+      errorChildIds.add(c.id)
+      const catVars = (c.categoryAttributes as Record<string, unknown> | null)?.variations
+      const attrs = (c.variantAttributes as Record<string, string> | null)
+        ?? (catVars && typeof catVars === 'object' && !Array.isArray(catVars) ? (catVars as Record<string, string>) : null)
+      if (attrs) for (const v of Object.values(attrs)) errorAxisValues.add(String(v))
+    }
+  }
 
+  // Flip this product's DRAFT rows: PUBLISHED by default, ERROR for rows that
+  // map to a rejected SKU (by variant group value or exact variation id).
+  const draft = await prisma.listingImage.findMany({
+    where: { productId, publishStatus: 'DRAFT' },
+    select: { id: true, variantGroupValue: true, variationId: true },
+  })
+  const okIds: string[] = []
+  const errIds: string[] = []
+  for (const r of draft) {
+    const isErr =
+      (!!r.variantGroupValue && errorAxisValues.has(r.variantGroupValue)) ||
+      (!!r.variationId && errorChildIds.has(r.variationId))
+    ;(isErr ? errIds : okIds).push(r.id)
+  }
+  if (okIds.length > 0) {
     await prisma.listingImage.updateMany({
-      where: { productId, variationId: variation.id, publishStatus: 'DRAFT' },
-      data: error
-        ? { publishStatus: 'ERROR', publishError: error }
-        : { publishStatus: 'PUBLISHED', publishedAt: new Date(), publishError: null },
+      where: { id: { in: okIds } },
+      data: { publishStatus: 'PUBLISHED', publishedAt: new Date(), publishError: null },
+    })
+  }
+  if (errIds.length > 0) {
+    await prisma.listingImage.updateMany({
+      where: { id: { in: errIds } },
+      data: { publishStatus: 'ERROR', publishError: firstError ?? 'Amazon rejected this image' },
     })
   }
 }
