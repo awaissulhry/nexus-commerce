@@ -459,10 +459,11 @@ export async function pollAndUpdateFeedJob(jobId: string): Promise<{
   if (job.status === 'FATAL' || job.status === 'CANCELLED') {
     return { jobId, status: job.status, resultSummary: job.resultSummary ?? null }
   }
-  if (job.status === 'DONE' && job.resultSummary) {
-    // Self-heal: a finalize done before the empty-report fix may have left rows
-    // DRAFT even though the feed is DONE (images are live on Amazon). Flip any
-    // stragglers for this product — idempotent (0 rows once already flipped).
+  // Only treat DONE as final when we actually have Amazon's processing report.
+  // Feeds finalized before the gzip-parse fix have a report-less resultSummary
+  // (just perSku) — fall through to re-fetch the now-decompressable report so the
+  // TRUE accept/reject is recorded. Real-report DONE → self-heal + return.
+  if (job.status === 'DONE' && (job.resultSummary as any)?.processingReport) {
     await prisma.listingImage.updateMany({
       where: { productId: job.productId, publishStatus: 'DRAFT' },
       data: { publishStatus: 'PUBLISHED', publishedAt: new Date(), publishError: null },
@@ -553,7 +554,14 @@ async function fetchProcessingReport(resultFeedDocumentId: string): Promise<unkn
       path: { feedDocumentId: resultFeedDocumentId },
     })
     const raw = await fetch(docRes.url)
-    const text = await raw.text()
+    const buf = Buffer.from(await raw.arrayBuffer())
+    // Amazon returns the result document GZIP-compressed. Decompress before
+    // parsing — otherwise JSON.parse throws, we return null, and the per-image
+    // accept/reject results are silently lost (we'd wrongly assume "accepted").
+    const zlib = await import('node:zlib')
+    const text = docRes.compressionAlgorithm === 'GZIP'
+      ? zlib.gunzipSync(buf).toString('utf-8')
+      : buf.toString('utf-8')
     return JSON.parse(text)
   } catch (err) {
     logger.warn('[amazon-image-feed] could not fetch processing report', { err })

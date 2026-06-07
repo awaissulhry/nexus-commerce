@@ -47,6 +47,22 @@ export async function runImagePublishReconcileOnce(): Promise<string> {
     }
   }
 
+  // 0b. Re-finalize BLIND DONE feeds — those finalized before the gzip-parse fix
+  //     have a report-less resultSummary, so we never recorded Amazon's true
+  //     accept/reject. Re-poll (the report decompresses now) to record it.
+  //     Self-limiting: once a feed has a real report it's skipped.
+  const recentDone = await prisma.amazonImageFeedJob.findMany({
+    where: { status: 'DONE', feedId: { not: null } },
+    select: { id: true, resultSummary: true },
+    orderBy: { submittedAt: 'desc' },
+    take: 30,
+  })
+  let refetched = 0
+  for (const j of recentDone) {
+    if ((j.resultSummary as any)?.processingReport) continue
+    try { await pollAndUpdateFeedJob(j.id); refetched += 1 } catch { /* keep going */ }
+  }
+
   // Products that currently have any DRAFT Amazon image rows.
   const draftProducts = await prisma.listingImage.findMany({
     where: { publishStatus: 'DRAFT', platform: 'AMAZON' },
@@ -89,7 +105,7 @@ export async function runImagePublishReconcileOnce(): Promise<string> {
   // Surface (don't auto-touch) rows stuck in ERROR — operator visibility.
   stuckErrors = await prisma.listingImage.count({ where: { publishStatus: 'ERROR', platform: 'AMAZON' } })
 
-  return `advanced ${advanced} stale feed(s); healed ${healedRows} row(s) across ${healedProducts} product(s); ${skippedInflight} skipped (in-flight); ${stuckErrors} row(s) in ERROR`
+  return `advanced ${advanced} stale feed(s); re-fetched ${refetched} blind report(s); healed ${healedRows} row(s) across ${healedProducts} product(s); ${skippedInflight} skipped (in-flight); ${stuckErrors} row(s) in ERROR`
 }
 
 export function startImagePublishReconcileCron(): void {
