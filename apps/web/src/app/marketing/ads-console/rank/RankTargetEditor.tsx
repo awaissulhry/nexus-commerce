@@ -13,16 +13,18 @@
  */
 
 import { Fragment, useCallback, useEffect, useState } from 'react'
-import { Save, Plus, Trash2, RotateCcw, Info, SlidersHorizontal } from 'lucide-react'
+import { Save, Plus, Trash2, RotateCcw, Info, SlidersHorizontal, Layers } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
+import { RankBlendEditor, type BlendLane } from './RankBlendEditor'
 
-interface RankTarget { id: string; key: string; name: string; placement: string; targetISPct: number | null; acosCapPct: number | null; maxCpcCents: number | null; biasPct: number | null; pause: boolean; allOut: boolean; color: string | null; builtIn: boolean; scopeProductId: string | null; scopeCampaignId: string | null; jumpStartPct: number | null; stepUpPct: number | null; stepDownPct: number | null; maxBiasPct: number | null; keepClimbing: boolean }
+interface RankTarget { id: string; key: string; name: string; placement: string; targetISPct: number | null; acosCapPct: number | null; maxCpcCents: number | null; biasPct: number | null; pause: boolean; allOut: boolean; color: string | null; builtIn: boolean; scopeProductId: string | null; scopeCampaignId: string | null; jumpStartPct: number | null; stepUpPct: number | null; stepDownPct: number | null; maxBiasPct: number | null; keepClimbing: boolean; lanes?: BlendLane[] | null; bidMode?: string | null; bidValueCents?: number | null; bidDeltaPct?: number | null }
 type OvField = 'biasPct' | 'targetISPct' | 'acosCapPct' | 'maxCpcCents' | 'jumpStartPct' | 'stepUpPct' | 'stepDownPct' | 'maxBiasPct'
 type Ov = Partial<Record<OvField, number>> & { keepClimbing?: boolean }
 type OvMap = Record<string, Ov>
 const api = (p: string) => `${getBackendUrl()}/api/advertising${p}`
 const PLACE_LABEL: Record<string, string> = { PLACEMENT_TOP: 'Top of Search', PLACEMENT_REST_OF_SEARCH: 'Rest of Search', PLACEMENT_PRODUCT_PAGE: 'Product pages' }
 const placeLabel = (p: string) => PLACE_LABEL[p] ?? p
+const SHORT_PLACE: Record<string, string> = { PLACEMENT_TOP: 'Top', PLACEMENT_REST_OF_SEARCH: 'Rest', PLACEMENT_PRODUCT_PAGE: 'Product' }
 const FIELDS: { f: OvField; label: string; unit: '%' | '€'; hint: string }[] = [
   { f: 'biasPct', label: 'Placement', unit: '%', hint: "bid multiplier 0–900% for THIS target's placement (Top or Rest of Search)" },
   { f: 'targetISPct', label: 'Target IS', unit: '%', hint: 'Impression share to chase when a Ceiling above Placement % is set. Top of Search uses Amazon Top-IS; Rest of Search uses SQP brand impression share.' },
@@ -64,6 +66,7 @@ export function RankTargetEditor({ open, onClose, scopeKind, scopeLabel, scopeOv
   const [changed, setChanged] = useState(false)
   const [adding, setAdding] = useState(false)
   const [motionOpen, setMotionOpen] = useState<Record<string, boolean>>({}) // per-target Motion drawer
+  const [blendOpen, setBlendOpen] = useState<Record<string, boolean>>({}) // BL — per-target Blend drawer
   const [form, setForm] = useState<{ name: string; color: string; scope: 'global' | 'scope' } & Ov>({ name: '', color: '#3aa873', scope: scopeKind === 'campaign' ? 'scope' : 'scope' })
 
   const load = useCallback(() => {
@@ -85,6 +88,14 @@ export function RankTargetEditor({ open, onClose, scopeKind, scopeLabel, scopeOv
   const effOf = (t: RankTarget, f: OvField): number | null => (view === 'scope' && ov[t.key]?.[f] != null ? ov[t.key]![f]! : defOf(t, f))
   const describe = (t: RankTarget): string => {
     if (t.pause) return 'Floors bids to ~€0.02 (campaign stays live, restorable) — never pauses'
+    // BL — a blended target drives multiple placements at once; summarise the blend.
+    if (t.lanes && t.lanes.length) {
+      const parts = t.lanes.map((l) => `${SHORT_PLACE[l.placement] ?? l.placement} +${l.biasPct ?? 0}%${l.maxBiasPct != null && l.maxBiasPct > (l.biasPct ?? 0) ? `→${l.maxBiasPct}` : ''}`)
+      let bb = ''
+      if (t.bidMode === 'absolute' && t.bidValueCents != null) bb = ` · base €${(t.bidValueCents / 100).toFixed(2)}`
+      else if (t.bidMode === 'suppress') bb = ' · base floored'
+      return `blend: ${parts.join(' · ')}${bb}`
+    }
     const p: string[] = []
     const isTop = t.placement === 'PLACEMENT_TOP'
     const b = effOf(t, 'biasPct'); if (b != null) p.push(`${placeLabel(t.placement)} +${b}%`)
@@ -168,6 +179,12 @@ export function RankTargetEditor({ open, onClose, scopeKind, scopeLabel, scopeOv
     } catch { setMsg('Save failed — try again.') } finally { setBusy(false) }
   }
   const resetTarget = async (id: string) => { setBusy(true); try { await fetch(api(`/rank-targets/${id}/reset`), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }); setChanged(true); setLib(m => { const n = { ...m }; delete n[id]; return n }); load() } finally { setBusy(false) } }
+  // BL — save a blended strategy (lanes + base-bid) onto a library target, then reload.
+  const saveBlend = async (id: string, patch: { lanes: BlendLane[]; bidMode: string | null; bidValueCents: number | null }) => {
+    setBusy(true); setMsg('')
+    try { await fetch(api(`/rank-targets/${id}`), { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch) }); setChanged(true); setBlendOpen(m => ({ ...m, [id]: false })); setMsg(patch.lanes.length ? 'Saved blend.' : 'Cleared blend (back to single-placement).'); load() }
+    catch { setMsg('Could not save blend.') } finally { setBusy(false) }
+  }
   const deleteTarget = async (id: string, name: string) => { if (typeof window !== 'undefined' && !window.confirm(`Delete custom target "${name}"? Windows using it fall back to baseline.`)) return; setBusy(true); try { await fetch(api(`/rank-targets/${id}`), { method: 'DELETE' }); setChanged(true); load() } finally { setBusy(false) } }
   const addCustom = async () => {
     if (!form.name.trim()) { setMsg('Name required.'); return }
@@ -204,7 +221,8 @@ export function RankTargetEditor({ open, onClose, scopeKind, scopeLabel, scopeOv
                   <i className="sw" style={{ background: t.color ?? '#999' }} />
                   {view === 'global' && !t.pause ? <input className="az-rte-name" value={(lib[t.id]?.name as string) ?? t.name} onChange={e => setLibField(t.id, 'name', e.target.value)} /> : <b>{t.name}</b>}
                   <span className="bdg">{t.builtIn ? 'default' : scoped ? 'scoped' : 'custom'}</span>
-                  {!t.pause && <span className="bdg" style={{ background: '#eef2ff', color: '#3730a3' }}>{placeLabel(t.placement)}</span>}
+                  {!t.pause && !(t.lanes && t.lanes.length) && <span className="bdg" style={{ background: '#eef2ff', color: '#3730a3' }}>{placeLabel(t.placement)}</span>}
+                  {!t.pause && t.lanes && t.lanes.length > 0 && <span className="bdg" style={{ background: '#f3e8ff', color: '#7c3aed' }}>blend ×{t.lanes.length}</span>}
                   {view === 'scope' && hasOverride(t) && <span className="bdg ov">override</span>}
                   <span className="desc">{describe(t)}</span>
                 </span>
@@ -225,6 +243,7 @@ export function RankTargetEditor({ open, onClose, scopeKind, scopeLabel, scopeOv
                 })}
                 <span className="act">
                   {!t.pause && <button type="button" className="az-kebab" title="Motion — how the bid moves (jump / climb / ease / ceiling)" aria-expanded={mOpen} style={mOpen ? { color: '#3730a3' } : undefined} onClick={() => setMotionOpen(m => ({ ...m, [t.id]: !m[t.id] }))}><SlidersHorizontal size={13} /></button>}
+                  {view === 'global' && !t.pause && <button type="button" className="az-kebab" title="Blend — drive Top + Rest of Search + Product pages at once (+ base bid)" aria-expanded={!!blendOpen[t.id]} style={blendOpen[t.id] ? { color: '#7c3aed' } : undefined} onClick={() => setBlendOpen(m => ({ ...m, [t.id]: !m[t.id] }))}><Layers size={13} /></button>}
                   {view === 'scope' && hasOverride(t) && <button type="button" className="az-kebab" title="Clear override (use default)" onClick={() => clearOverride(t.key)}><RotateCcw size={13} /></button>}
                   {view === 'global' && t.builtIn && <button type="button" className="az-kebab" title="Reset to default" onClick={() => void resetTarget(t.id)}><RotateCcw size={13} /></button>}
                   {view === 'global' && !t.builtIn && <button type="button" className="az-kebab" title="Delete custom" style={{ color: '#cc1100' }} onClick={() => void deleteTarget(t.id, t.name)}><Trash2 size={13} /></button>}
@@ -262,6 +281,9 @@ export function RankTargetEditor({ open, onClose, scopeKind, scopeLabel, scopeOv
                   </div>
                   <div className="az-mnote">Blank = snap to {effOf(t, 'biasPct') ?? 0}% Placement (up or down) and hold — never above it. Set a Ceiling above Placement % to let it climb.{effKeep(t) ? ' Keep-climbing ON → pushes to the Ceiling on its own.' : ''}</div>
                 </div>
+              )}
+              {!!blendOpen[t.id] && view === 'global' && !t.pause && (
+                <RankBlendEditor target={t} busy={busy} onSave={(patch) => void saveBlend(t.id, patch)} onClose={() => setBlendOpen(m => ({ ...m, [t.id]: false }))} />
               )}
               </Fragment>
             )

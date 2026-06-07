@@ -4689,6 +4689,12 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       builtIn: false, sortOrder: (b.sortOrder as number) ?? 50,
       scopeProductId: (b.scopeProductId as string | null) ?? null,
       scopeCampaignId: (b.scopeCampaignId as string | null) ?? null,
+      // BL — blended lanes (Top/Rest/Product driven at once) + base-bid lever. Empty
+      // lanes = legacy single-placement (the engine ignores []).
+      lanes: Array.isArray(b.lanes) ? (b.lanes as never) : [],
+      bidMode: (b.bidMode as string | null) ?? null,
+      bidValueCents: (b.bidValueCents as number | null) ?? null,
+      bidDeltaPct: (b.bidDeltaPct as number | null) ?? null,
     }
     try { return await prisma.rankTarget.create({ data: data as never }) } catch { reply.status(409); return { error: 'key_taken' } }
   })
@@ -4696,7 +4702,8 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const { id } = request.params as { id: string }
     const b = request.body as Record<string, unknown>
     const data: Record<string, unknown> = {}
-    for (const k of ['name', 'placement', 'targetISPct', 'acosCapPct', 'maxCpcCents', 'biasPct', 'jumpStartPct', 'stepUpPct', 'stepDownPct', 'maxBiasPct', 'keepClimbing', 'pause', 'allOut', 'color', 'sortOrder']) if (b[k] !== undefined) data[k] = b[k]
+    for (const k of ['name', 'placement', 'targetISPct', 'acosCapPct', 'maxCpcCents', 'biasPct', 'jumpStartPct', 'stepUpPct', 'stepDownPct', 'maxBiasPct', 'keepClimbing', 'pause', 'allOut', 'color', 'sortOrder', 'bidMode', 'bidValueCents', 'bidDeltaPct']) if (b[k] !== undefined) data[k] = b[k]
+    if (b.lanes !== undefined) data.lanes = Array.isArray(b.lanes) ? b.lanes : [] // BL — [] = clear blend
     try { return await prisma.rankTarget.update({ where: { id }, data }) } catch { reply.status(404); return { error: 'not found' } }
   })
   fastify.delete('/advertising/rank-targets/:id', async (request, reply) => {
@@ -4713,7 +4720,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const t = await prisma.rankTarget.findUnique({ where: { id }, select: { key: true } })
     const d = (t ? BUILTIN_RANK_TARGETS.find((x) => x.key === t.key) : null) as Record<string, unknown> | null
     if (!d) { reply.status(404); return { error: 'not_a_builtin' } }
-    return await prisma.rankTarget.update({ where: { id }, data: { name: d.name, placement: d.placement, targetISPct: d.targetISPct ?? null, acosCapPct: d.acosCapPct ?? null, maxCpcCents: d.maxCpcCents ?? null, biasPct: d.biasPct ?? null, jumpStartPct: (d.jumpStartPct as number | null) ?? null, stepUpPct: (d.stepUpPct as number | null) ?? null, stepDownPct: (d.stepDownPct as number | null) ?? null, maxBiasPct: (d.maxBiasPct as number | null) ?? null, keepClimbing: !!d.keepClimbing, color: d.color ?? null, pause: !!d.pause, allOut: !!d.allOut } as never })
+    return await prisma.rankTarget.update({ where: { id }, data: { name: d.name, placement: d.placement, targetISPct: d.targetISPct ?? null, acosCapPct: d.acosCapPct ?? null, maxCpcCents: d.maxCpcCents ?? null, biasPct: d.biasPct ?? null, jumpStartPct: (d.jumpStartPct as number | null) ?? null, stepUpPct: (d.stepUpPct as number | null) ?? null, stepDownPct: (d.stepDownPct as number | null) ?? null, maxBiasPct: (d.maxBiasPct as number | null) ?? null, keepClimbing: !!d.keepClimbing, color: d.color ?? null, pause: !!d.pause, allOut: !!d.allOut, lanes: [], bidMode: null, bidValueCents: null, bidDeltaPct: null } as never })
   })
 
   // ── RTPL — named rank-SCHEDULE templates (account-global; Save/Load a painted schedule) ──
