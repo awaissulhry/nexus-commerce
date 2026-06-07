@@ -312,6 +312,31 @@ export default function AmazonPanel({
     onReload()
   }
 
+  // Pre-publish safety: writable slots empty in Nexus (no image at any scope) are
+  // REMOVED from Amazon by the exact-mirror. Surface them so a deletion (e.g.
+  // PT07/PT08) is an explicit choice, never silent.
+  function deletionSetFor(marketplace: AmazonMarketplace): AmazonSlot[] {
+    const groups: Array<string | null> = [...amazon.variantGroups.map((g) => g.groupValue), null]
+    return ALL_SLOTS.filter(
+      (slot) => slot !== 'MAIN' && groups.every((g) => !amazon.resolveCell(g, slot, marketplace)?.url),
+    )
+  }
+  function confirmDeletions(label: string, del: AmazonSlot[]): boolean {
+    if (del.length === 0) return true
+    return window.confirm(
+      `Publishing ${label} will REMOVE ${del.length} slot${del.length === 1 ? '' : 's'} from Amazon (empty in Nexus): ${del.join(', ')}.\n\n` +
+        `To keep Amazon's current images there, Adopt them first (Live strip). Continue?`,
+    )
+  }
+  async function publishWithGuard(marketplace: AmazonMarketplace) {
+    if (!confirmDeletions(marketplace, deletionSetFor(marketplace))) return
+    await amazon.publish(marketplace)
+  }
+  async function publishAllWithGuard() {
+    if (!confirmDeletions('all markets', deletionSetFor('ALL'))) return
+    await amazon.publishAll()
+  }
+
   async function handleBulkLock(ids: string[], locked: boolean) {
     if (ids.length === 0) return
     // Optimistic: the padlock badge toggles instantly; re-sync only on failure.
@@ -889,8 +914,8 @@ export default function AmazonPanel({
         publishError={amazon.publishError}
         feedJobs={amazon.feedJobs}
         dirtyCount={dirtyCount}
-        onPublish={amazon.publish}
-        onPublishAll={amazon.publishAll}
+        onPublish={publishWithGuard}
+        onPublishAll={publishAllWithGuard}
         onExportZip={handleExportZip}
         isExporting={isExporting}
         onPreview={(mkt) => setPreviewMarketplace(mkt)}
