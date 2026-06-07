@@ -171,6 +171,28 @@ export function useAmazonImages({
     }))
   }, [variants, activeAxis])
 
+  // Images are keyed by the IMAGE axis (e.g. Color), independent of the group-by
+  // axis. When grouping by a virtual axis (ASIN/SKU) each row is one variant, so
+  // map the row → its colour and resolve the colour's images — otherwise every
+  // ASIN row matches nothing (no ASIN-keyed images) and falls back to the same
+  // shared image (Nero + Giallo rows looked identical).
+  const imageAxis = useMemo(
+    () => listingImages.find((i) => i.variantGroupKey)?.variantGroupKey
+      ?? (activeAxis === 'ASIN' || activeAxis === 'SKU' ? 'Color' : activeAxis),
+    [listingImages, activeAxis],
+  )
+  const rowImageValue = useMemo(() => {
+    const m = new Map<string, string>()
+    if (activeAxis === 'ASIN' || activeAxis === 'SKU') {
+      for (const v of variants) {
+        const key = activeAxis === 'ASIN' ? (v.amazonAsin ?? '—') : v.sku
+        const color = (v.variantAttributes as Record<string, string> | null)?.[imageAxis]
+        if (color) m.set(key, color)
+      }
+    }
+    return m
+  }, [variants, activeAxis, imageAxis])
+
   // Which marketplaces have any listing images (show tab as "active")
   const populatedMarketplaces = useMemo(() => {
     const set = new Set<string>()
@@ -228,7 +250,12 @@ export function useAmazonImages({
 
     function matchesGroup(img: { variantGroupKey: string | null; variantGroupValue: string | null }): boolean {
       if (groupValue === null) return !img.variantGroupKey && !img.variantGroupValue
-      return img.variantGroupKey === activeAxis && img.variantGroupValue === groupValue
+      // Resolve by the image axis (Color). When grouping by ASIN/SKU, map this
+      // row to its colour so per-colour images still show in the right row.
+      const isVirtual = activeAxis === 'ASIN' || activeAxis === 'SKU'
+      const axis = isVirtual ? imageAxis : activeAxis
+      const value = isVirtual ? (rowImageValue.get(groupValue) ?? groupValue) : groupValue
+      return img.variantGroupKey === axis && img.variantGroupValue === value
     }
 
     function matchesMkt(u: PendingUpsert): boolean {
@@ -322,7 +349,7 @@ export function useAmazonImages({
     }
 
     return null
-  }, [activeMarketplace, activeAxis, listingImages, pendingUpserts, pendingDeletes, resolveMasterForSlot])
+  }, [activeMarketplace, activeAxis, imageAxis, rowImageValue, listingImages, pendingUpserts, pendingDeletes, resolveMasterForSlot])
 
   // ── Cell assignment ────────────────────────────────────────────────
   const assignCell = useCallback((
@@ -332,6 +359,11 @@ export function useAmazonImages({
     sourceId?: string,
   ) => {
     const isAll = activeMarketplace === 'ALL'
+    // Edit on the image axis (Color) too: grouping by ASIN/SKU maps this row to
+    // its colour, so editing a cell edits that colour (consistent with display).
+    const isVirtual = activeAxis === 'ASIN' || activeAxis === 'SKU'
+    const effAxis = isVirtual ? imageAxis : activeAxis
+    const effValue = groupValue === null ? null : (isVirtual ? (rowImageValue.get(groupValue) ?? groupValue) : groupValue)
 
     // Find existing server row to update (or create new)
     const existing = listingImages.find((img) =>
@@ -339,9 +371,9 @@ export function useAmazonImages({
       img.amazonSlot === slot &&
       img.scope === (isAll ? 'PLATFORM' : 'MARKETPLACE') &&
       img.marketplace === (isAll ? null : activeMarketplace) &&
-      (groupValue === null
+      (effValue === null
         ? !img.variantGroupKey
-        : img.variantGroupKey === activeAxis && img.variantGroupValue === groupValue),
+        : img.variantGroupKey === effAxis && img.variantGroupValue === effValue),
     )
 
     addPendingUpsert({
@@ -350,14 +382,14 @@ export function useAmazonImages({
       platform: 'AMAZON',
       marketplace: isAll ? null : activeMarketplace,
       amazonSlot: slot,
-      variantGroupKey: groupValue !== null ? activeAxis : null,
-      variantGroupValue: groupValue,
+      variantGroupKey: effValue !== null ? effAxis : null,
+      variantGroupValue: effValue,
       url,
       sourceProductImageId: sourceId,
       role: SLOT_ROLE[slot],
       position: ALL_SLOTS.indexOf(slot),
     })
-  }, [activeMarketplace, activeAxis, listingImages, addPendingUpsert])
+  }, [activeMarketplace, activeAxis, imageAxis, rowImageValue, listingImages, addPendingUpsert])
 
   // ── Column fill ────────────────────────────────────────────────────
   const assignColumn = useCallback((
