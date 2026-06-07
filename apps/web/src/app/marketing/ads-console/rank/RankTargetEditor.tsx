@@ -25,7 +25,7 @@ const PLACE_LABEL: Record<string, string> = { PLACEMENT_TOP: 'Top of Search', PL
 const placeLabel = (p: string) => PLACE_LABEL[p] ?? p
 const FIELDS: { f: OvField; label: string; unit: '%' | '€'; hint: string }[] = [
   { f: 'biasPct', label: 'Placement', unit: '%', hint: "bid multiplier 0–900% for THIS target's placement (Top or Rest of Search)" },
-  { f: 'targetISPct', label: 'Target IS', unit: '%', hint: 'Top-of-search impression share to chase — only used when a Ceiling above Placement % is set.' },
+  { f: 'targetISPct', label: 'Target IS', unit: '%', hint: 'Impression share to chase when a Ceiling above Placement % is set. Top of Search uses Amazon Top-IS; Rest of Search uses SQP brand impression share.' },
   { f: 'acosCapPct', label: 'ACOS cap', unit: '%', hint: 'Ease off above this ACOS while climbing — only used when a Ceiling above Placement % is set.' },
   { f: 'maxCpcCents', label: 'Max CPC', unit: '€', hint: 'never bid above this' },
 ]
@@ -92,7 +92,7 @@ export function RankTargetEditor({ open, onClose, scopeKind, scopeLabel, scopeOv
     // MP v2 — IS / ACOS only act when the bid is ALLOWED above Placement % (a Ceiling above it,
     // or all-out). Without a Ceiling the loop just snaps to Placement %, so don't advertise them.
     const canChase = t.allOut || (ceil != null && ceil > (b ?? 0))
-    const is = effOf(t, 'targetISPct'); if (is != null && isTop && canChase) p.push(`hold ${is}% IS`)
+    const is = effOf(t, 'targetISPct'); if (is != null && canChase) p.push(`hold ${is}% ${isTop ? 'IS' : 'SQP'}`)
     const a = effOf(t, 'acosCapPct'); if (a != null && isTop && canChase) p.push(`ease above ${a}% ACOS`)
     const c = effOf(t, 'maxCpcCents'); if (c != null) p.push(`max CPC €${(c / 100).toFixed(2)}`)
     if (t.allOut) p.push('all-out (ignore ACOS)')
@@ -210,10 +210,10 @@ export function RankTargetEditor({ open, onClose, scopeKind, scopeLabel, scopeOv
                 </span>
                 {FIELDS.map(f => {
                   if (t.pause || (t.allOut && f.f === 'acosCapPct')) return <span key={f.f} className="fld">—</span>
-                  // Top-only signals: Amazon publishes impression-share + ACOS only for Top of Search,
-                  // so the engine can't use them on Rest/Product targets — show n/a, don't let them be set.
-                  if ((f.f === 'targetISPct' || f.f === 'acosCapPct') && t.placement !== 'PLACEMENT_TOP')
-                    return <span key={f.f} className="fld az-rte-na" title="Top of Search only — Amazon exposes no impression-share or ACOS for this placement, so the rank engine can't act on it here">n/a</span>
+                  // RM2 — Target IS is now fed by SQP brand impression share for Rest of Search, so
+                  // it's editable for non-Top too; only ACOS stays n/a (Amazon exposes no Rest ACOS).
+                  if (f.f === 'acosCapPct' && t.placement !== 'PLACEMENT_TOP')
+                    return <span key={f.f} className="fld az-rte-na" title="Top of Search only — Amazon exposes no ACOS for Rest/Product placements">n/a</span>
                   if (view === 'scope') {
                     const v = ov[t.key]?.[f.f]
                     const ph = defOf(t, f.f)

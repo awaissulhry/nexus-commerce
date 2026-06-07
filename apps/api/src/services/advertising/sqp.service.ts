@@ -146,6 +146,27 @@ export async function ourAsinsForMarketplace(marketplace: string, limit = 25): P
   return asins
 }
 
+/**
+ * RM2 — the family's brand IMPRESSION SHARE (0..1) from the latest weekly SQP report. Used as a
+ * coarse feedback signal for Rest-of-Search rank targets, which have NO Amazon placement-IS metric.
+ * Impression-weighted across the family's ASIN-level rows for the most recent period only (older
+ * weeks would dilute it). Returns null when there's no SQP data yet (caller stays open-loop).
+ */
+export async function sqpImpressionShareForAsins(marketplace: string, asins: string[]): Promise<number | null> {
+  if (!asins.length) return null
+  const rows = await prisma.searchQueryPerformance.findMany({
+    where: { marketplace, asin: { in: asins } },
+    orderBy: { startDate: 'desc' },
+    take: 3000,
+    select: { startDate: true, impressionsBrand: true, impressionsTotal: true },
+  })
+  if (!rows.length) return null
+  const latest = +rows[0].startDate
+  let brand = 0, total = 0
+  for (const r of rows) { if (+r.startDate !== latest) continue; brand += r.impressionsBrand; total += r.impressionsTotal }
+  return total > 0 ? Math.max(0, Math.min(1, brand / total)) : null
+}
+
 export interface SqpProbeResult { available: boolean; reportType: string; marketplace: string; detail: string }
 
 /**

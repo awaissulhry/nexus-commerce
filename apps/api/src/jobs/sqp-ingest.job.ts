@@ -49,8 +49,10 @@ export function startSqpIngestCron(): void {
     logger.warn('sqp-ingest cron already started')
     return
   }
-  if (!envEnabled('NEXUS_ENABLE_SQP_INGEST_CRON')) {
-    logger.info('sqp-ingest cron NOT scheduled (NEXUS_ENABLE_SQP_INGEST_CRON off) — manual trigger available once Brand Analytics access is confirmed')
+  // RM2 — Brand Analytics SQP access is confirmed (probe = available), so this is default-ON now;
+  // it powers the Rest-of-Search feedback signal + the SQP insights. Opt out with NEXUS_DISABLE_SQP_INGEST_CRON=1.
+  if (envEnabled('NEXUS_DISABLE_SQP_INGEST_CRON')) {
+    logger.info('sqp-ingest cron disabled (NEXUS_DISABLE_SQP_INGEST_CRON=1)')
     return
   }
   // Daily 03:45 UTC (after sales-report at 02:00); fetches the current WEEK each

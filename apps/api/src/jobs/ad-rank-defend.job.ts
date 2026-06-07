@@ -20,6 +20,7 @@ import { logger } from '../utils/logger.js'
 import { recordCronRun } from '../utils/cron-observability.js'
 import { computeStep, resolveActiveTargetKey, isRankLoss, type RankTargetSpec, type ScheduleWindow } from '../services/advertising/rank-controller.js'
 import { analyzeTopOfSearch, setSearchPlacement } from '../services/advertising/ads-top-of-search.service.js'
+import { sqpImpressionShareForAsins } from '../services/advertising/sqp.service.js'
 import { updateCampaignWithSync, type AdsActor } from '../services/advertising/ads-mutation.service.js'
 import { suppressCampaignBids, restoreCampaignBids } from '../services/advertising/ads-bid-suppression.service.js'
 import { detectSelfCompetition, type CampaignTargeting, type SelfCompetitionConflict } from '../services/advertising/rank-self-competition.js'
@@ -90,7 +91,7 @@ interface CampRow { id: string; name: string; status: string; dynamicBidding: un
 // placement report — else the loop is blind to its own prior changes.
 async function decideAndMaybeApply(
   camp: CampRow, key: string, spec: RankTargetSpec, planId: string | null,
-  ctx: { write: boolean; actor: string; sigByCampaign: SigMap; lossByCampaign: Map<string, boolean>; suppressRaise?: boolean },
+  ctx: { write: boolean; actor: string; sigByCampaign: SigMap; lossByCampaign: Map<string, boolean>; suppressRaise?: boolean; sqpByCampaign?: Map<string, number | null> },
 ): Promise<{ decision: RankDefendDecision; applied: number }> {
   const sigRaw = ctx.sigByCampaign.get(camp.id) ?? { currentPct: 0, topIS: null, topAcos: null }
   const cdb = (camp.dynamicBidding ?? {}) as { placementBidding?: Array<{ placement: string; percentage: number }> }
@@ -124,7 +125,12 @@ async function decideAndMaybeApply(
   // impression share for Rest/Product). For a non-Top target, feed no signal so the
   // controller converges on the target's entry bias instead.
   const isTop = spec.placement === 'PLACEMENT_TOP'
-  const d = computeStep(spec, { currentPct, achievedISFraction: isTop ? sigRaw.topIS : null, achievedAcosFraction: isTop ? sigRaw.topAcos : null, lossDetected: isTop ? loss : false })
+  // RM2 — Top targets use Amazon's Top-of-Search impression share; non-Top (Rest of Search) targets
+  // have NO Amazon placement-IS, so feed the family's SQP brand impression share as a coarse
+  // feedback signal (null when no SQP data → stays open-loop / holds the entry bias). ACOS/loss stay
+  // Top-only (Amazon exposes neither for Rest).
+  const achievedIS = isTop ? sigRaw.topIS : (ctx.sqpByCampaign?.get(camp.id) ?? null)
+  const d = computeStep(spec, { currentPct, achievedISFraction: achievedIS, achievedAcosFraction: isTop ? sigRaw.topAcos : null, lossDetected: isTop ? loss : false })
   // RD.5 — family daily-budget cap: suppress raises (still allow holds/lowers) so a
   // must-win window can't push the whole family over its shared budget.
   let action = d.action, nextPct = d.nextPct, reason = d.reason
@@ -295,6 +301,21 @@ export async function runRankDefendOnce(opts: { dryRun?: boolean; onlyPlanId?: s
     } catch (e) { logger.warn('[rank-defend] loss-proxy read failed', { error: (e as Error).message }) }
   }
 
+  // RM2 — per-campaign SQP brand impression share, the feedback signal for Rest-of-Search targets
+  // (Amazon exposes no Rest placement-IS). Resolve each campaign's advertised ASINs → latest weekly
+  // SQP share for its market. Best-effort: any failure leaves a campaign open-loop (null).
+  const sqpByCampaign = new Map<string, number | null>()
+  try {
+    const ads = await prisma.adProductAd.findMany({ where: { adGroup: { campaignId: { in: unionIds } }, status: 'ENABLED' }, select: { asin: true, adGroup: { select: { campaignId: true } } } })
+    const asinsByCampaign = new Map<string, Set<string>>()
+    for (const a of ads) { const cid = a.adGroup?.campaignId; if (!cid || !a.asin) continue; const s = asinsByCampaign.get(cid) ?? new Set<string>(); s.add(a.asin); asinsByCampaign.set(cid, s) }
+    for (const c of campaigns) {
+      const asins = [...(asinsByCampaign.get(c.id) ?? [])]
+      if (!asins.length || !c.marketplace) { sqpByCampaign.set(c.id, null); continue }
+      try { sqpByCampaign.set(c.id, await sqpImpressionShareForAsins(c.marketplace, asins)) } catch { sqpByCampaign.set(c.id, null) }
+    }
+  } catch (e) { logger.warn('[rank-defend] SQP signal read failed', { error: (e as Error).message }) }
+
   const decisions: RankDefendDecision[] = []
   const planSummaries: RankPlanRunSummary[] = []
   let applied = 0
@@ -338,7 +359,7 @@ export async function runRankDefendOnce(opts: { dryRun?: boolean; onlyPlanId?: s
           const demote = sc.demoted.has(fc.id) && !!baselineTarget && plan.defaultTargetKey !== key
           const useKey = demote ? plan.defaultTargetKey! : key
           const eff = effectiveSpec(applyTargetOverrides(toSpec(demote ? baselineTarget! : target), plan.targetOverrides as TargetOverrideMap, schedOverrides.get(fc.id)), { oos, overAcos, familyAcosCapPct: plan.familyAcosCapPct })
-          const { decision, applied: a } = await decideAndMaybeApply(camp, useKey, eff, plan.id, { write, actor: `automation:rank-plan-${plan.id}`, sigByCampaign, lossByCampaign, suppressRaise: overBudget })
+          const { decision, applied: a } = await decideAndMaybeApply(camp, useKey, eff, plan.id, { write, actor: `automation:rank-plan-${plan.id}`, sigByCampaign, lossByCampaign, sqpByCampaign, suppressRaise: overBudget })
           planDecisions.push(decision); decisions.push(decision); applied += a
         }
       }
@@ -357,7 +378,7 @@ export async function runRankDefendOnce(opts: { dryRun?: boolean; onlyPlanId?: s
     const key = resolveActiveTargetKey(s.windows as ScheduleWindow[], s.defaultTargetKey, day, hour)
     if (!key) continue
     const target = targetByKey.get(key); if (!target) continue
-    const { decision, applied: a } = await decideAndMaybeApply(camp, key, applyTargetOverrides(toSpec(target), s.targetOverrides as TargetOverrideMap), null, { write: !dryRun, actor: `automation:rank-defend-${s.id}`, sigByCampaign, lossByCampaign })
+    const { decision, applied: a } = await decideAndMaybeApply(camp, key, applyTargetOverrides(toSpec(target), s.targetOverrides as TargetOverrideMap), null, { write: !dryRun, actor: `automation:rank-defend-${s.id}`, sigByCampaign, lossByCampaign, sqpByCampaign })
     decisions.push(decision); applied += a
   }
 
