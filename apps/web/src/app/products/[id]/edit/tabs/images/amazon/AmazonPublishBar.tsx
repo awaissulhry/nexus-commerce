@@ -30,6 +30,7 @@ interface Props {
   onPublishAll: () => void
   onExportZip: (marketplace: AmazonMarketplace) => void
   isExporting: boolean
+  exportProgress?: { market: string; index: number; total: number } | null
   // IA.2 — Open the pre-publish preview modal for a given marketplace.
   onPreview?: (marketplace: AmazonMarketplace) => void
   // PB.9 — Open the rollback modal for the active marketplace.
@@ -65,6 +66,7 @@ export default function AmazonPublishBar({
   onPublishAll,
   onExportZip,
   isExporting,
+  exportProgress,
   onPreview,
   onOpenRollback,
 }: Props) {
@@ -150,7 +152,13 @@ export default function AmazonPublishBar({
             className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 px-2 py-1.5 rounded hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isExporting ? <Loader2 className="w-3 h-3 animate-spin" /> : '···'}
-            {isExporting ? 'Exporting…' : 'Export ZIP'}
+            {isExporting
+              ? (exportProgress
+                  ? (exportProgress.market === 'Packaging'
+                      ? 'Packaging…'
+                      : `Exporting ${exportProgress.market} (${exportProgress.index}/${exportProgress.total})…`)
+                  : 'Exporting…')
+              : 'Export ZIP'}
             {!isExporting && <ChevronDown className="w-3 h-3" />}
           </button>
           {zipMenuOpen && (
@@ -172,7 +180,7 @@ export default function AmazonPublishBar({
                   className="w-full text-left px-3 py-1.5 text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-950/30 font-medium"
                   onClick={() => { setZipMenuOpen(false); onExportZip('ALL' as AmazonMarketplace) }}
                 >
-                  All markets (one ZIP)
+                  All markets (one ZIP per market)
                 </button>
                 {/* IA.7 — filename convention reference. The toggle
                     itself lives in the dev-doc until the operator

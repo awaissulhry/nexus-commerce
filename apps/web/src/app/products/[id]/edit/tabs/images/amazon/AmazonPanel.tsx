@@ -131,6 +131,7 @@ export default function AmazonPanel({
   const noAxisData = variants.length > 0 && availableAxes.length === 0
   const [slotUploading, setSlotUploading] = useState(false)
   const [isExporting, setIsExporting] = useState(false)
+  const [exportProgress, setExportProgress] = useState<{ market: string; index: number; total: number } | null>(null)
   const [previewOpen, setPreviewOpen] = useState(false)
   const [historyOpen, setHistoryOpen] = useState(false)
   // IE.5 — drift modal state
@@ -196,52 +197,89 @@ export default function AmazonPanel({
   }, [amazon.variantGroups, filterValues])
 
   async function handleExportZip(marketplace: AmazonMarketplace) {
-    // IA.1 — marketplace='ALL' is now valid; the backend walks every
-    // EU market and emits per-market folders inside one ZIP.
     setIsExporting(true)
     try {
-      const res = await beFetch(`/api/products/${productId}/amazon-images/export-zip`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        // IA.1 — activeAxis is the critical fix. Without it, the
-        // resolver skips the entire group cascade (Color=Black,
-        // Size=M, …) and only emits product-level images.
-        body: JSON.stringify({ marketplace, activeAxis }),
-      })
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}))
-        const skipped = Array.isArray(body?.skippedNoAsin) ? body.skippedNoAsin.length : 0
-        onToast(
-          body?.error
-            ? `Export failed: ${body.error}${skipped > 0 ? ` (${skipped} SKUs with no ASIN on this market)` : ''}`
-            : `Export failed: ${res.status}`,
-        )
-        return
-      }
-      const blob = await res.blob()
-      const disposition = res.headers.get('Content-Disposition') ?? ''
-      const filename = disposition.match(/filename="([^"]+)"/)?.[1] ?? `amazon-${marketplace.toLowerCase()}.zip`
-      const a = document.createElement('a')
-      a.href = URL.createObjectURL(blob)
-      a.download = filename
-      a.click()
-      URL.revokeObjectURL(a.href)
-      // IA.1 — surface counts to the operator so a smaller-than-expected
-      // ZIP doesn't go unnoticed. Headers always present.
-      const fileCount = res.headers.get('X-File-Count') ?? '?'
-      const errors = res.headers.get('X-Errors') ?? '0'
-      const skippedRaw = res.headers.get('X-Skipped-No-Asin') ?? ''
-      const skippedCount = skippedRaw.split(',').filter(Boolean).length
-      onToast(
-        `Downloaded ${fileCount} image${fileCount === '1' ? '' : 's'}` +
-        (Number(errors) > 0 ? ` · ${errors} fetch error${errors === '1' ? '' : 's'}` : '') +
-        (skippedCount > 0 ? ` · ${skippedCount} SKU${skippedCount === 1 ? '' : 's'} skipped (no ASIN)` : ''),
-      )
+      if (marketplace === 'ALL') await exportAllMarkets()
+      else await exportSingleMarket(marketplace)
     } catch (err) {
       onToast(err instanceof Error ? err.message : 'Export failed')
     } finally {
       setIsExporting(false)
+      setExportProgress(null)
     }
+  }
+
+  function triggerDownload(blob: Blob, filename: string) {
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = filename
+    a.click()
+    URL.revokeObjectURL(a.href)
+  }
+
+  // One flat ZIP for a single market — drops straight into that market's
+  // Seller Central bulk upload. activeAxis is required so the resolver honours
+  // the per-group (per-colour) overrides.
+  async function exportSingleMarket(marketplace: AmazonMarketplace) {
+    const res = await beFetch(`/api/products/${productId}/amazon-images/export-zip`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ marketplace, activeAxis }),
+    })
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}))
+      const skipped = Array.isArray(body?.skippedNoAsin) ? body.skippedNoAsin.length : 0
+      onToast(body?.error ? `Export failed: ${body.error}${skipped > 0 ? ` (${skipped} SKUs with no ASIN)` : ''}` : `Export failed: ${res.status}`)
+      return
+    }
+    const blob = await res.blob()
+    const disposition = res.headers.get('Content-Disposition') ?? ''
+    const filename = disposition.match(/filename="([^"]+)"/)?.[1] ?? `amazon-${marketplace.toLowerCase()}.zip`
+    triggerDownload(blob, filename)
+    const fileCount = res.headers.get('X-File-Count') ?? '?'
+    const errors = Number(res.headers.get('X-Errors') ?? '0')
+    const skippedCount = (res.headers.get('X-Skipped-No-Asin') ?? '').split(',').filter(Boolean).length
+    onToast(`Downloaded ${fileCount} image${fileCount === '1' ? '' : 's'}` + (errors > 0 ? ` · ${errors} fetch error${errors === 1 ? '' : 's'}` : '') + (skippedCount > 0 ? ` · ${skippedCount} SKU${skippedCount === 1 ? '' : 's'} skipped (no ASIN)` : ''))
+  }
+
+  // All markets → ONE download containing a ready-to-upload ZIP per market
+  // (IT.zip, DE.zip, …) so each can be uploaded individually to its market.
+  // Driven market-by-market with live progress instead of a silent spinner.
+  async function exportAllMarkets() {
+    const markets = ['IT', 'DE', 'FR', 'ES', 'UK'] as const
+    const JSZip = (await import('jszip')).default
+    const parent = new JSZip()
+    const results: Array<{ market: string; fileCount: number; errors: number; skipped: number; ok: boolean }> = []
+    for (let i = 0; i < markets.length; i++) {
+      const m = markets[i]!
+      setExportProgress({ market: m, index: i + 1, total: markets.length })
+      const res = await beFetch(`/api/products/${productId}/amazon-images/export-zip`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ marketplace: m, activeAxis }),
+      })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        results.push({ market: m, fileCount: 0, errors: Array.isArray(body?.errors) ? body.errors.length : 0, skipped: Array.isArray(body?.skippedNoAsin) ? body.skippedNoAsin.length : 0, ok: false })
+        continue
+      }
+      parent.file(`${m}.zip`, await res.blob())
+      results.push({
+        market: m,
+        fileCount: Number(res.headers.get('X-File-Count') ?? '0'),
+        errors: Number(res.headers.get('X-Errors') ?? '0'),
+        skipped: (res.headers.get('X-Skipped-No-Asin') ?? '').split(',').filter(Boolean).length,
+        ok: true,
+      })
+    }
+    setExportProgress({ market: 'Packaging', index: markets.length, total: markets.length })
+    const parentBlob = await parent.generateAsync({ type: 'blob', compression: 'DEFLATE' })
+    triggerDownload(parentBlob, `amazon-all-markets-${new Date().toISOString().slice(0, 10)}.zip`)
+    const totalFiles = results.reduce((s, r) => s + r.fileCount, 0)
+    const totalErrs = results.reduce((s, r) => s + r.errors, 0)
+    const totalSkipped = results.reduce((s, r) => s + r.skipped, 0)
+    const okMarkets = results.filter((r) => r.ok).length
+    onToast(`Exported ${totalFiles} images · ${okMarkets}/${markets.length} markets — one ZIP per market inside${totalErrs ? ` · ${totalErrs} errors` : ''}${totalSkipped ? ` · ${totalSkipped} skipped` : ''}`)
   }
 
   async function handleCellFileDrop(groupValue: string | null, slot: AmazonSlot, file: File) {
@@ -918,6 +956,7 @@ export default function AmazonPanel({
         onPublishAll={publishAllWithGuard}
         onExportZip={handleExportZip}
         isExporting={isExporting}
+        exportProgress={exportProgress}
         onPreview={(mkt) => setPreviewMarketplace(mkt)}
         onOpenRollback={onOpenRollback ? (mkt) => onOpenRollback(mkt) : undefined}
       />
