@@ -79,7 +79,10 @@ const amazonImagesRoutes: FastifyPluginAsync = async (fastify) => {
       })
       if (!product) return reply.code(404).send({ error: 'Product not found' })
 
-      // IA.4 — Validation gate. Refuse on hard fails unless force=true.
+      // IA.4 — Validation gate. Refuse only when EVERY variant is blocked;
+      // otherwise publish the valid variants and skip the blocked ones (the
+      // exact-mirror skips MAIN-less ASINs without wiping them on Amazon).
+      let publishWarnings: Awaited<ReturnType<typeof validateAmazonPublish>> | null = null
       if (!force) {
         const validation = await validateAmazonPublish({
           productId,
@@ -88,13 +91,20 @@ const amazonImagesRoutes: FastifyPluginAsync = async (fastify) => {
           variantIds,
         })
         if (validation.hardFails.length > 0) {
-          return reply.code(422).send({
-            error: 'VALIDATION_FAILED',
-            message: `${validation.hardFails.length} blocking issue${validation.hardFails.length === 1 ? '' : 's'} across ${validation.summary.asinsBlocked} ASIN${validation.summary.asinsBlocked === 1 ? '' : 's'}. Resubmit with force=true to publish anyway.`,
-            hardFails: validation.hardFails,
-            softWarnings: validation.softWarnings,
-            summary: validation.summary,
-          })
+          const allBlocked =
+            validation.summary.totalAsins > 0 &&
+            validation.summary.asinsBlocked >= validation.summary.totalAsins
+          if (allBlocked) {
+            return reply.code(422).send({
+              error: 'VALIDATION_FAILED',
+              message: `Every variant is blocked: ${validation.hardFails.length} issue${validation.hardFails.length === 1 ? '' : 's'} (e.g. "${validation.hardFails[0]?.message}"). Fix the images — a MAIN is required — or resubmit with force=true.`,
+              hardFails: validation.hardFails,
+              softWarnings: validation.softWarnings,
+              summary: validation.summary,
+            })
+          }
+          // Some variants are valid → publish those; the blocked ones are skipped.
+          publishWarnings = validation
         }
       }
 
@@ -123,7 +133,9 @@ const amazonImagesRoutes: FastifyPluginAsync = async (fastify) => {
             variantIds: variantIds && variantIds.length > 0 ? variantIds : undefined,
           },
         })
-        return result
+        return publishWarnings
+          ? { ...result, skippedAsins: publishWarnings.summary.asinsBlocked, skippedIssues: publishWarnings.hardFails }
+          : result
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
         void recordImagePublishAudit({
