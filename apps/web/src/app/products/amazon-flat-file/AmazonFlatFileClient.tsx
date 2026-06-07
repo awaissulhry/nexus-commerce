@@ -4145,8 +4145,8 @@ function SpreadsheetRow({ row, rowIdx, columns, colToGroup, selected, activeCell
             <span className="text-[9px] text-slate-400 tabular-nums leading-none">{rowIdx + 1}</span>
           )}
 
-          {/* ASIN link — always when images off; also for M/L/XL when images on */}
-          {(!showRowImages || imageSize >= 48) && row._asin ? (() => {
+          {/* ASIN link — only when row images are ON and at view M/L/XL (size ≥ 48 = M) */}
+          {showRowImages && imageSize >= 48 && row._asin ? (() => {
             const asin = String(row._asin)
             const domain = AMAZON_DOMAIN[marketplace] ?? 'amazon.com'
             return (
@@ -4162,8 +4162,8 @@ function SpreadsheetRow({ row, rowIdx, columns, colToGroup, selected, activeCell
             )
           })() : null}
 
-          {/* Listing status — same visibility rule as ASIN */}
-          {(!showRowImages || imageSize >= 48) && row._listingStatus != null && (() => {
+          {/* Listing status — same visibility rule as ASIN (images ON + view M/L/XL) */}
+          {showRowImages && imageSize >= 48 && row._listingStatus != null && (() => {
             const s = String(row._listingStatus)
             const cls = (s === 'ACTIVE' || s === 'BUYABLE')
               ? 'text-emerald-600 dark:text-emerald-400'
