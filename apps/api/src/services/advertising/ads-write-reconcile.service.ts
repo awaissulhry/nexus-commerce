@@ -79,7 +79,6 @@ export async function reconcileFailedAmazonWrites(
     where: {
       lastSyncStatus: 'FAILED',
       externalAdGroupId: { not: null },
-      defaultBidCents: { not: null },
       lastSyncedAt: { gte: since },
     },
     select: { id: true, defaultBidCents: true, lastSyncError: true },
@@ -115,7 +114,7 @@ export async function reconcileFailedAmazonWrites(
       lastSyncStatus: 'FAILED',
       externalTargetId: { not: null },
       isNegative: false,
-      bidCents: { not: null, gte: 0 },
+      bidCents: { gte: 0 },
       lastSyncedAt: { gte: since },
     },
     select: { id: true, bidCents: true, lastSyncError: true },
