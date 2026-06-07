@@ -6,7 +6,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/Button'
-import { AlertTriangle, CheckSquare, ChevronDown, Clock, Eye, Info, Loader2 } from 'lucide-react'
+import { AlertTriangle, CheckSquare, ChevronDown, Clock, Eye, Info, Loader2, SlidersHorizontal } from 'lucide-react'
 import { beFetch } from '../api'
 import AmazonMatrix from './AmazonMatrix'
 import AmazonPublishBar from './AmazonPublishBar'
@@ -37,6 +37,8 @@ import {
   type AmazonSlot,
 } from './useAmazonImages'
 import { CopyToMarketsModal } from './CopyToMarketsModal'
+import { useMatrixColumnPrefs } from './useMatrixColumnPrefs'
+import { MatrixColumnsModal } from './MatrixColumnsModal'
 import { buildCrossMarketUpserts } from './crossMarketCopy'
 import type { ChannelLiveImage, ListingImage, PendingUpsert, ProductImage, VariantSummary, WorkspaceProduct, AmazonJobSummary } from '../types'
 
@@ -255,6 +257,8 @@ export default function AmazonPanel({
 
   // BE — bulk-edit mode + actions.
   const [bulkMode, setBulkMode] = useState(false)
+  const matrixCols = useMatrixColumnPrefs()
+  const [colsModalOpen, setColsModalOpen] = useState(false)
 
   function handleBulkDelete(ids: string[]) {
     if (!addPendingDelete) return
@@ -707,6 +711,13 @@ export default function AmazonPanel({
           <CheckSquare className="w-3.5 h-3.5" />
           {bulkMode ? 'Done selecting' : 'Select'}
         </button>
+        <button
+          type="button"
+          onClick={() => setColsModalOpen(true)}
+          className="ml-2 inline-flex items-center gap-1.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2.5 py-1 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700"
+        >
+          <SlidersHorizontal className="w-3.5 h-3.5" /> Columns{matrixCols.hiddenCount > 0 ? ` · ${matrixCols.hiddenCount} hidden` : ''}
+        </button>
         {bulkMode && (
           <span className="ml-2 text-[11px] text-slate-400">Tick images, or use the row / column / all boxes, then pick a bulk action.</span>
         )}
@@ -741,6 +752,7 @@ export default function AmazonPanel({
             onBulkSetMain={handleBulkSetMain}
             onBulkClearOverride={amazon.activeMarketplace !== 'ALL' ? handleBulkClearOverride : undefined}
             onBulkFill={handleBulkFill}
+            visibleSlots={matrixCols.visibleSlots}
             onCopyCellsToMarkets={
               amazon.activeMarketplace !== 'ALL'
                 ? (cells) =>
@@ -845,6 +857,16 @@ export default function AmazonPanel({
             amazon.setImagePicker(null)
           }}
           onClose={() => amazon.setImagePicker(null)}
+        />
+      )}
+
+      {/* MM.5 — customize matrix slot-columns */}
+      {colsModalOpen && (
+        <MatrixColumnsModal
+          prefs={matrixCols.prefs}
+          onSave={matrixCols.save}
+          onReset={matrixCols.reset}
+          onClose={() => setColsModalOpen(false)}
         />
       )}
 

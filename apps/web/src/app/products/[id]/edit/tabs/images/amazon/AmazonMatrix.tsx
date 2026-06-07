@@ -41,6 +41,8 @@ interface MatrixProps {
   onBulkClearOverride?: (listingImageIds: string[]) => void
   /** BE.6 — fill empty slots from the master gallery. */
   onBulkFill?: () => void
+  /** MM.5 — visible slot-columns in display order; defaults to all. */
+  visibleSlots?: AmazonSlot[]
   onClearRow: (groupValue: string) => void
   onCellFileDrop: (groupValue: string | null, slot: AmazonSlot, file: File) => void
   /** IE.11 — Active status filter from the MatrixFilterBar. Defaults
@@ -482,6 +484,7 @@ export default function AmazonMatrix({
   onBulkSetMain,
   onBulkClearOverride,
   onBulkFill,
+  visibleSlots,
   onClearRow,
   onCellFileDrop,
   onCellRevert,
@@ -556,7 +559,9 @@ export default function AmazonMatrix({
   ]
 
   const rowCount = rows.length
-  const colCount = ALL_SLOTS.length
+  // MM.5 — render only the operator's chosen slot-columns, in their order.
+  const slots: AmazonSlot[] = visibleSlots && visibleSlots.length > 0 ? visibleSlots : [...ALL_SLOTS]
+  const colCount = slots.length
 
   // BE — resolve the current selection into a bulk-action breakdown.
   const resolvedSel = [...selectedCells.values()].map((c) => {
@@ -564,7 +569,7 @@ export default function AmazonMatrix({
     return { group: c.group, slot: c.slot, url: cd?.url, listingImageId: cd?.listingImageId, locked: cd?.locked, origin: cd?.origin }
   })
   const bulk = classifyBulk(resolvedSel, activeMarketplace === 'ALL')
-  const allGridCells = rows.flatMap((r) => ALL_SLOTS.map((slot) => ({ group: r.groupValue, slot })))
+  const allGridCells = rows.flatMap((r) => slots.map((slot) => ({ group: r.groupValue, slot })))
   const allGridChecked = allGridCells.length > 0 && allGridCells.every((c) => selectedCells.has(cellKey(c.group, c.slot)))
 
   // Clamp the focused cell when the row/col count changes (variant axis swap).
@@ -717,7 +722,7 @@ export default function AmazonMatrix({
               {activeAxis}{activeMarketplace !== 'ALL' ? ` / ${activeMarketplace}` : ''}
             </div>
             {/* Slot column headers — each is a drag target */}
-            {ALL_SLOTS.map((slot, i) => (
+            {slots.map((slot, i) => (
               <div key={slot} role="columnheader" aria-colindex={i + 2} className="flex flex-col items-center">
                 {bulkMode && (
                   <input
@@ -767,8 +772,8 @@ export default function AmazonMatrix({
                     {bulkMode && (
                       <input
                         type="checkbox"
-                        checked={ALL_SLOTS.every((s) => selectedCells.has(cellKey(groupValue, s)))}
-                        onChange={(e) => toggleCells(ALL_SLOTS.map((s) => ({ group: groupValue, slot: s })), e.target.checked)}
+                        checked={slots.every((s) => selectedCells.has(cellKey(groupValue, s)))}
+                        onChange={(e) => toggleCells(slots.map((s) => ({ group: groupValue, slot: s })), e.target.checked)}
                         title="Select whole row"
                         className="cursor-pointer accent-orange-600 flex-shrink-0"
                       />
@@ -792,7 +797,7 @@ export default function AmazonMatrix({
                 </div>
 
                 {/* Slot cells */}
-                {ALL_SLOTS.map((slot, colIdx) => {
+                {slots.map((slot, colIdx) => {
                   const cell = resolveCell(groupValue, slot)
                   const dim = !cellMatchesStatus(cell)
                   return (
