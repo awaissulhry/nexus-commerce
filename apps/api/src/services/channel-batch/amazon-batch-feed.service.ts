@@ -143,12 +143,17 @@ export function buildJsonListingsFeedBody(
           path: `/attributes/${map[slot]}`,
           value: [{ media_location: url }] as unknown,
         }))
+      // Amazon's PATCH `delete` REQUIRES a value selector identifying which
+      // marketplace's value to remove. Omitting it is rejected as "Invalid empty
+      // value provided in patch" — which failed the WHOLE message (every image,
+      // every SKU). Scope the delete to this feed's marketplace.
+      const deleteSelector = [{ marketplace_id: input.marketplaceIds[0] }]
       const deletePatches = (op.deleteSlots ?? [])
         .filter((slot) => slot !== 'MAIN' && map[slot])
         .map((slot) => ({
           op: 'delete',
           path: `/attributes/${map[slot]}`,
-          value: undefined as unknown,
+          value: deleteSelector as unknown,
         }))
       return {
         messageId,
