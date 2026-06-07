@@ -1304,6 +1304,9 @@ export class AmazonFlatFileService {
           ...(price !== null && !isNaN(price)         ? { price, followMasterPrice: false }      : {}),
           ...(salePrice !== null && !isNaN(salePrice) ? { salePrice }                            : {}),
           ...(qty !== null && !isNaN(qty)             ? { quantity: qty, followMasterQuantity: false } : {}),
+          // RR.1 — verbatim flat row (sans internal _ keys) for lossless grid
+          // round-trip; structured fields above stay authoritative on read.
+          flatFileSnapshot: Object.fromEntries(Object.entries(row).filter(([k]) => !k.startsWith('_'))),
           platformAttributes: { attributes: collapsedAttrs },
           syncStatus: opts.isPublished ? 'SYNCED' : 'PENDING',
           lastSyncedAt: new Date(),

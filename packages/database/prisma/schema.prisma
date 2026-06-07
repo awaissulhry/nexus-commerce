@@ -1429,6 +1429,13 @@ model ChannelListing {
   // Shopify: { tags, vendor, collections }
   platformAttributes Json?
 
+  // RR.1 — verbatim flat-file row for the Amazon flat-file editor (the exact
+  // key→value map the operator pulled/edited). The grid reads this back
+  // losslessly instead of expanding the nested platformAttributes (which dropped
+  // gated fields). Structured fields (price/qty/title) still live in their own
+  // columns above + are overlaid on read so they stay authoritative.
+  flatFileSnapshot Json?
+
   // ── PIM A.1 — Channel-level master attribute overrides ─────────
   // JSONB bag of overrides for master Product attributes (categoryAttributes,
   // localizedContent keys). Distinct from platformAttributes:
