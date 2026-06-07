@@ -96,6 +96,19 @@ export type OrderEvent =
       productId: string | null
       ts: number
     }
+  // FFS.4 — a flat-file (JSON_LISTINGS_FEED) submission changed status. Any open
+  // /products/amazon-flat-file tab refreshes its badges + per-SKU summary live
+  // instead of waiting for a manual "Check".
+  | {
+      type: 'flat_file_feed.status_changed'
+      feedId: string
+      processingStatus: string
+      marketplace: string | null
+      productType: string | null
+      messagesWithError: number | null
+      terminal: boolean
+      ts: number
+    }
   // RT.16 — CRITICAL alert. ACCOUNT_STATUS_CHANGED from Amazon —
   // suspension / warning / policy violation. Surfaces as a
   // persistent red banner + browser notification + console.error

@@ -15,6 +15,7 @@
 import prisma from '../db.js'
 import { getAmazonSpClient } from '../lib/amazon-sp-client.js'
 import { logger } from '../utils/logger.js'
+import { publishOrderEvent } from './order-events.service.js'
 
 export type SkuStatus = 'success' | 'warning' | 'error'
 export interface PerSkuResult { sku: string; status: SkuStatus; code?: string; message?: string }
@@ -214,6 +215,25 @@ export async function reconcileFeedJob(feedId: string): Promise<ReconcileResult>
         nextPollAt: terminal ? null : new Date(Date.now() + backoffMs(pollCount)),
       },
     }).catch((e) => logger.warn('[flat-file-feed] job update failed', { feedId, error: e?.message }))
+  }
+
+  // FFS.4 — push a live status change to any open flat-file tab (cron + manual
+  // poll both flow through here, so both drive the live UI).
+  if (changed) {
+    try {
+      publishOrderEvent({
+        type: 'flat_file_feed.status_changed',
+        feedId,
+        processingStatus: status,
+        marketplace: job?.marketplace ?? null,
+        productType: job?.productType ?? null,
+        messagesWithError: summary?.messagesWithError ?? null,
+        terminal,
+        ts: Date.now(),
+      })
+    } catch (e: any) {
+      logger.warn('[flat-file-feed] SSE emit failed', { feedId, error: e?.message })
+    }
   }
 
   return { feedId, processingStatus: status, resultFeedDocumentId: resultDocId, results: perSku, summary, errorMessage, terminal, changed }
