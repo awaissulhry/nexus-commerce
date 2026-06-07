@@ -84,17 +84,43 @@ describe('parseProcessingReport — fallbacks', () => {
     expect(perSku.find((p) => p.sku === 'B')!.status).toBe('error')
   })
 
-  it('unparseable report → submitted SKUs default to success (feed was accepted)', () => {
-    const { perSku, summary } = parseProcessingReport('<<not json or tsv>>', ['A', 'B'])
-    expect(perSku).toHaveLength(2)
-    expect(perSku.every((p) => p.status === 'success')).toBe(true)
-    expect(summary.messagesSuccessful).toBe(2)
+  it('unparseable report → PENDING, not a false success (must re-poll)', () => {
+    const { perSku, pending } = parseProcessingReport('<<not json or tsv>>', ['A', 'B'])
+    expect(pending).toBe(true)
+    expect(perSku).toHaveLength(0)
   })
 
-  it('empty report + no submitted SKUs → empty, zeroed summary', () => {
-    const { perSku, summary } = parseProcessingReport('', [])
+  it('empty report → PENDING (Amazon returned DONE before writing the report)', () => {
+    const { pending, perSku } = parseProcessingReport('', ['A', 'B'])
+    expect(pending).toBe(true)
     expect(perSku).toHaveLength(0)
-    expect(summary.messagesProcessed).toBe(0)
+  })
+})
+
+// The DE-feed false-positive: Amazon returned DONE before the report was written,
+// the old parser read that as "all accepted." An empty/early report must be
+// PENDING; only a report that actually confirms acceptance counts as success.
+describe('parseProcessingReport — pending vs confirmed (false-positive guard)', () => {
+  it('issues:[] with NO summary → PENDING (report not finalized yet)', () => {
+    const { pending } = parseProcessingReport(JSON.stringify({ issues: [] }), ['A', 'B'])
+    expect(pending).toBe(true)
+  })
+  it('issues:[] WITH a confirming summary → genuine all-accepted (not pending)', () => {
+    const r = JSON.stringify({ issues: [], summary: { messagesProcessed: 2, messagesAccepted: 2, messagesInvalid: 0 } })
+    const { pending, summary, perSku } = parseProcessingReport(r, ['A', 'B'])
+    expect(pending).toBeFalsy()
+    expect(summary.messagesSuccessful).toBe(2)
+    expect(perSku.every((p) => p.status === 'success')).toBe(true)
+  })
+  it('a real rejection report parses as errors (not pending)', () => {
+    const r = JSON.stringify({
+      issues: [{ sku: 'A', code: '90220', severity: 'ERROR', message: 'outer required' }],
+      summary: { errors: 1, warnings: 0, messagesProcessed: 1, messagesAccepted: 0, messagesInvalid: 1 },
+    })
+    const { pending, summary } = parseProcessingReport(r, ['A'])
+    expect(pending).toBeFalsy()
+    expect(summary.messagesWithError).toBe(1)
+    expect(summary.messagesSuccessful).toBe(0)
   })
 })
 

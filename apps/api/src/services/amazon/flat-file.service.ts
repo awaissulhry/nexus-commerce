@@ -1059,8 +1059,20 @@ export class AmazonFlatFileService {
     const messages = rows
       .filter((r) => r.item_sku)
       .map((row, i) => {
-        const opRaw = String(row.record_action ?? 'full_update')
-        const operationType = opRaw === 'delete' ? 'DELETE' : 'UPDATE'
+        // operationType — the flat-file editor overwhelmingly EDITS existing
+        // listings, so default to PARTIAL_UPDATE: it patches only the attributes we
+        // actually send and does NOT enforce the product type's full required-
+        // attribute set. A full UPDATE (with requirements:'LISTING') rejects a
+        // partial edit for any required attr we didn't resend — e.g. outer/inner/
+        // closure on a jacket — which is exactly what sank the DE feed. Only a
+        // genuinely NEW listing needs a full UPDATE to satisfy creation
+        // requirements. record_action defaults to 'full_update' on EVERY pulled row
+        // (getExistingRows), so it can't signal intent — it drives DELETE only.
+        const opRaw = String(row.record_action ?? '').toLowerCase()
+        const operationType =
+          opRaw === 'delete' ? 'DELETE'
+          : row._isNew === true ? 'UPDATE'
+          : 'PARTIAL_UPDATE'
         const productType = String(row.product_type ?? '').toUpperCase()
 
         if (operationType === 'DELETE') {
@@ -1183,14 +1195,21 @@ export class AmazonFlatFileService {
           if (!isBlankFeedValue(v)) cleanAttrs[k] = v
         }
 
-        return {
+        const message: Record<string, any> = {
           messageId: i + 1,
           sku: String(row.item_sku),
           operationType,
           productType,
-          requirements: String(row.parentage_level).toLowerCase() === 'parent' ? 'LISTING_PRODUCT_ONLY' : 'LISTING',
           attributes: cleanAttrs,
         }
+        // `requirements` enforces the full required-attribute set, so it's only
+        // valid for a full UPDATE (create / full replace). For PARTIAL_UPDATE it
+        // must be omitted — otherwise Amazon re-validates every required attribute
+        // and rejects the patch for fields we intentionally didn't resend.
+        if (operationType === 'UPDATE') {
+          message.requirements = String(row.parentage_level).toLowerCase() === 'parent' ? 'LISTING_PRODUCT_ONLY' : 'LISTING'
+        }
+        return message
       })
 
     return JSON.stringify({

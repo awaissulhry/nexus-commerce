@@ -297,8 +297,12 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
   // Polls feed status. When DONE, downloads and parses the processing report.
   fastify.get<{
     Params: { feedId: string }
+    Querystring: { refresh?: string }
   }>('/amazon/flat-file/feeds/:feedId', async (request, reply) => {
     const { feedId } = request.params
+    // ?refresh=1 forces a live re-fetch past the terminal fast-path — used to
+    // re-validate / repair a feed that finalized against a premature empty report.
+    const force = request.query?.refresh === '1' || request.query?.refresh === 'true'
     const dryRun = process.env.NEXUS_AMAZON_BATCH_DRYRUN === '1'
 
     if (dryRun || feedId.startsWith('dryrun-')) {
@@ -316,7 +320,7 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
       // parse the report robustly (JSON_LISTINGS_FEED issues[]/summary, tri-state
       // per-SKU) and update the durable AmazonFlatFileFeedJob row.
       const { reconcileFeedJob } = await import('../services/amazon-flat-file-feed.service.js')
-      const r = await reconcileFeedJob(feedId)
+      const r = await reconcileFeedJob(feedId, { force })
       return reply.send({
         feedId: r.feedId,
         processingStatus: r.processingStatus,

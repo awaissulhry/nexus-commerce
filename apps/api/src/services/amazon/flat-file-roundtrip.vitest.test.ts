@@ -151,3 +151,36 @@ describe('RR — applySnapshotOverlay (lossless grid round-trip)', () => {
     expect(row._fieldStates).toEqual({ price: 'OVERRIDE' })
   })
 })
+
+// The DE feed was rejected because every push went out as a full UPDATE
+// (requirements:'LISTING'), so Amazon enforced the product type's full required-
+// attribute set on a partial edit. Existing edits must be PARTIAL_UPDATE.
+describe('buildJsonFeedBody — operationType (partial vs full)', () => {
+  const svc2 = new AmazonFlatFileService({} as any, {} as any)
+  const build = (row: any) => JSON.parse(svc2.buildJsonFeedBody([row], 'IT', 'SELLER', {})).messages[0]
+
+  it('existing-listing edit → PARTIAL_UPDATE, no requirements (no full required-attr enforcement)', () => {
+    const m = build({ item_sku: 'E1', item_name: 'edited title', record_action: 'full_update', _isNew: false })
+    expect(m.operationType).toBe('PARTIAL_UPDATE')
+    expect(m.requirements).toBeUndefined()
+  })
+  it('row with no _isNew flag (pulled listing) → PARTIAL_UPDATE', () => {
+    const m = build({ item_sku: 'E2', item_name: 'edited', record_action: 'full_update' })
+    expect(m.operationType).toBe('PARTIAL_UPDATE')
+  })
+  it('new listing → full UPDATE with requirements:LISTING', () => {
+    const m = build({ item_sku: 'N1', item_name: 'brand new', _isNew: true })
+    expect(m.operationType).toBe('UPDATE')
+    expect(m.requirements).toBe('LISTING')
+  })
+  it('new parent → full UPDATE with requirements:LISTING_PRODUCT_ONLY', () => {
+    const m = build({ item_sku: 'P1', parentage_level: 'parent', variation_theme: 'SIZE', _isNew: true })
+    expect(m.operationType).toBe('UPDATE')
+    expect(m.requirements).toBe('LISTING_PRODUCT_ONLY')
+  })
+  it('delete row → DELETE (regardless of _isNew)', () => {
+    const m = build({ item_sku: 'D1', record_action: 'delete', _isNew: false })
+    expect(m.operationType).toBe('DELETE')
+    expect(m.requirements).toBeUndefined()
+  })
+})

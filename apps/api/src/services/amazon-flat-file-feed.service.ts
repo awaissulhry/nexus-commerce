@@ -25,9 +25,19 @@ export interface FeedReportSummary {
   messagesWithWarning: number
   messagesWithError: number
 }
-export interface ParsedReport { summary: FeedReportSummary; perSku: PerSkuResult[]; feedError?: string }
+export interface ParsedReport { summary: FeedReportSummary; perSku: PerSkuResult[]; feedError?: string; pending?: boolean }
 
 const TERMINAL = new Set(['DONE', 'FATAL', 'CANCELLED'])
+
+// Amazon can return a terminal status (DONE) before the processing report is
+// written. We re-poll (as IN_PROGRESS) until the report lands, up to this many
+// total polls, then finalize with a "report unavailable" note — rather than EVER
+// caching a false all-success (the bug that hid a fully-rejected DE feed).
+const MAX_REPORT_RETRIES = 20
+
+function zeroSummary(): FeedReportSummary {
+  return { messagesProcessed: 0, messagesSuccessful: 0, messagesWithWarning: 0, messagesWithError: 0 }
+}
 
 function sevToStatus(sev: unknown): SkuStatus {
   const s = String(sev ?? '').toUpperCase()
@@ -46,11 +56,22 @@ const worse = (a: SkuStatus, b: SkuStatus): SkuStatus => {
  */
 export function parseProcessingReport(reportText: string, submittedSkus?: string[]): ParsedReport {
   const skus = (submittedSkus ?? []).filter(Boolean)
+  const trimmed = (reportText ?? '').trim()
+  // An empty report body = Amazon returned a terminal status before the report was
+  // written. This is NOT success — signal pending so the caller re-polls instead
+  // of caching a false all-accepted result.
+  if (!trimmed) return { summary: zeroSummary(), perSku: [], pending: true }
+
   let obj: any = null
-  try { obj = JSON.parse(reportText) } catch { /* not JSON → TSV fallback below */ }
+  try { obj = JSON.parse(trimmed) } catch { /* not JSON → TSV fallback below */ }
 
   // ── Format 1: JSON_LISTINGS_FEED — { issues:[{sku,code,severity,message}], summary:{...} }
   if (obj && Array.isArray(obj.issues)) {
+    // A real report — even an all-accepted one — always carries a summary with a
+    // processed count. issues:[] AND no summary = the report isn't finalized yet.
+    if (obj.issues.length === 0 && !Number.isFinite(Number(obj.summary?.messagesProcessed))) {
+      return { summary: zeroSummary(), perSku: [], pending: true }
+    }
     const bySku = new Map<string, PerSkuResult>()
     let feedError: string | undefined
     for (const iss of obj.issues) {
@@ -130,8 +151,10 @@ export function parseProcessingReport(reportText: string, submittedSkus?: string
     }
   }
 
-  // Nothing parseable → mark submitted SKUs as success (feed was accepted, no report rows)
-  return summarize(skus.map((s) => ({ sku: s, status: 'success' as SkuStatus })))
+  // Nothing parseable from a non-empty body — ambiguous. Do NOT assume success;
+  // that false-positive is exactly what masked a fully-rejected feed. Signal
+  // pending so the caller re-polls for a real report.
+  return { summary: zeroSummary(), perSku: [], pending: true }
 }
 
 function summarize(perSku: PerSkuResult[]): ParsedReport {
@@ -184,7 +207,7 @@ export interface ReconcileResult {
  * durable job row. Safe to call for a feedId with no DB job (older feeds) — it
  * still returns live status, just doesn't persist.
  */
-export async function reconcileFeedJob(feedId: string): Promise<ReconcileResult> {
+export async function reconcileFeedJob(feedId: string, opts?: { force?: boolean }): Promise<ReconcileResult> {
   const job = await prisma.amazonFlatFileFeedJob.findUnique({ where: { feedId } }).catch(() => null)
 
   // FFS.9 — fast path: a feed that already reached a terminal state never changes
@@ -194,7 +217,9 @@ export async function reconcileFeedJob(feedId: string): Promise<ReconcileResult>
   // Amazon's report-document URLs expire/stall, and the report fetch could hang
   // until the gateway 502'd (observed on a DONE feed). The cron already skips
   // terminal jobs (nextPollAt=null), so this only changes the manual-poll path.
-  if (job && job.completedAt && TERMINAL.has(job.status)) {
+  // `force` bypasses it to re-fetch the now-final report (re-validate / repair a
+  // job that finalized against a premature empty report).
+  if (!opts?.force && job && job.completedAt && TERMINAL.has(job.status)) {
     return {
       feedId,
       processingStatus: job.status,
@@ -216,40 +241,65 @@ export async function reconcileFeedJob(feedId: string): Promise<ReconcileResult>
   let perSku: PerSkuResult[] = []
   let summary: FeedReportSummary | null = null
   let errorMessage: string | null = null
+  // A terminal status whose report we can't yet read (empty / not-finalized /
+  // fetch failed). Must NOT be treated as success — re-poll until it lands.
+  let reportPending = false
 
   if (terminal && resultDocId) {
     try {
       const docRes: any = await sp.callAPI({ operation: 'getFeedDocument', endpoint: 'feeds', path: { feedDocumentId: resultDocId } })
       const reportText = await fetchReportText(docRes.url, 20_000)
       const parsed = parseProcessingReport(reportText, (job?.skus as string[] | undefined) ?? undefined)
-      perSku = parsed.perSku
-      summary = parsed.summary
-      if (parsed.feedError) errorMessage = parsed.feedError
-      if (status === 'FATAL' && !errorMessage) errorMessage = 'Feed processing failed (FATAL)'
+      if (parsed.pending) {
+        reportPending = true
+      } else {
+        perSku = parsed.perSku
+        summary = parsed.summary
+        if (parsed.feedError) errorMessage = parsed.feedError
+      }
     } catch (e: any) {
-      logger.warn('[flat-file-feed] report parse failed', { feedId, error: e?.message })
-      if (status === 'FATAL') errorMessage = 'Feed processing failed (FATAL)'
+      logger.warn('[flat-file-feed] report fetch/parse failed — will retry', { feedId, error: e?.message })
+      reportPending = true
     }
+    if (status === 'FATAL' && !errorMessage) errorMessage = 'Feed processing failed (FATAL)'
   } else if (status === 'FATAL') {
     errorMessage = 'Feed processing failed (FATAL)'
+  } else if (terminal && status === 'DONE' && !resultDocId) {
+    // DONE but no report document yet — premature; re-poll.
+    reportPending = true
+  }
+
+  const pollCount = (job?.pollCount ?? 0) + 1
+  // If the Amazon status is DONE but the report isn't ready, keep the job "live"
+  // (status IN_PROGRESS, no completedAt, nextPollAt set) so the cron + UI keep
+  // polling — UNLESS retries are exhausted, in which case finalize with a clear
+  // note rather than a fake success. FATAL/CANCELLED have no report and are final.
+  const retriesExhausted = reportPending && pollCount > MAX_REPORT_RETRIES
+  const reportBlocks = reportPending && status === 'DONE' && !retriesExhausted
+  const effectiveStatus = reportBlocks ? 'IN_PROGRESS' : status
+  const effectiveTerminal = TERMINAL.has(effectiveStatus)
+  if (retriesExhausted && status === 'DONE' && !errorMessage) {
+    errorMessage = 'Amazon marked the feed complete but its processing report was unavailable after repeated attempts — verify the result in Seller Central.'
   }
 
   const prevStatus = job?.status
-  const changed = !job || prevStatus !== status
+  // Fire on a status change OR a corrected result summary (so a force re-validate
+  // that flips a false 19-ok → 19-error still pushes the fix to open tabs).
+  const changed = !job || prevStatus !== effectiveStatus ||
+    (!!summary && JSON.stringify(job?.resultSummary ?? null) !== JSON.stringify(summary))
 
   if (job) {
-    const pollCount = job.pollCount + 1
     await prisma.amazonFlatFileFeedJob.update({
       where: { id: job.id },
       data: {
-        status,
+        status: effectiveStatus,
         resultSummary: summary ? (summary as any) : (job.resultSummary ?? undefined),
         perSkuResults: perSku.length ? (perSku as any) : (job.perSkuResults ?? undefined),
         errorMessage: errorMessage ?? job.errorMessage,
         lastPolledAt: new Date(),
         pollCount,
-        completedAt: terminal ? (job.completedAt ?? new Date()) : null,
-        nextPollAt: terminal ? null : new Date(Date.now() + backoffMs(pollCount)),
+        completedAt: effectiveTerminal ? (job.completedAt ?? new Date()) : null,
+        nextPollAt: effectiveTerminal ? null : new Date(Date.now() + backoffMs(pollCount)),
       },
     }).catch((e) => logger.warn('[flat-file-feed] job update failed', { feedId, error: e?.message }))
   }
@@ -261,11 +311,11 @@ export async function reconcileFeedJob(feedId: string): Promise<ReconcileResult>
       publishOrderEvent({
         type: 'flat_file_feed.status_changed',
         feedId,
-        processingStatus: status,
+        processingStatus: effectiveStatus,
         marketplace: job?.marketplace ?? null,
         productType: job?.productType ?? null,
         messagesWithError: summary?.messagesWithError ?? null,
-        terminal,
+        terminal: effectiveTerminal,
         ts: Date.now(),
       })
     } catch (e: any) {
@@ -273,5 +323,5 @@ export async function reconcileFeedJob(feedId: string): Promise<ReconcileResult>
     }
   }
 
-  return { feedId, processingStatus: status, resultFeedDocumentId: resultDocId, results: perSku, summary, errorMessage, terminal, changed }
+  return { feedId, processingStatus: effectiveStatus, resultFeedDocumentId: resultDocId, results: perSku, summary, errorMessage, terminal: effectiveTerminal, changed }
 }
