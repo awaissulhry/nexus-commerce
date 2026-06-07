@@ -11,7 +11,7 @@
 // sees removals before publishing.
 
 import { useState } from 'react'
-import { Loader2, Sparkles, Eye, UploadCloud, ShieldCheck, Copy } from 'lucide-react'
+import { Loader2, Sparkles, Eye, ShieldCheck, Copy } from 'lucide-react'
 import { beFetch } from '../api'
 import { AMAZON_MARKETPLACES, type AmazonMarketplace } from './useAmazonImages'
 
@@ -28,24 +28,19 @@ export function AmazonMirrorControls({
   marketplace,
   onReload,
   onCopyToMarkets,
-  onPublish,
 }: {
   productId: string
   marketplace: AmazonMarketplace
   onReload: () => void
   /** CM — open the "copy this market → other markets" picker (active market only). */
   onCopyToMarkets?: () => void
-  /** Robust publish (saves pending first + polls status + rollback) — the SAME
-   *  flow as the publish bar, so this panel's button isn't a lesser duplicate. */
-  onPublish: (marketplace: string) => Promise<void>
 }) {
-  const [busy, setBusy] = useState<'fill' | 'preview' | 'mirror' | null>(null)
+  const [busy, setBusy] = useState<'fill' | 'preview' | null>(null)
   const [diff, setDiff] = useState<DiffTotals | null>(null)
   const [msg, setMsg] = useState<string | null>(null)
   const [err, setErr] = useState<string | null>(null)
 
   const target = marketplace === 'ALL' ? 'IT' : marketplace
-  const markets: string[] = marketplace === 'ALL' ? [...AMAZON_MARKETPLACES] : [marketplace]
   const scopeLabel = marketplace === 'ALL' ? `all EU markets (${AMAZON_MARKETPLACES.join(', ')})` : marketplace
 
   async function fill() {
@@ -82,41 +77,18 @@ export function AmazonMirrorControls({
     }
   }
 
-  async function publishNow() {
-    const warn =
-      `Publish Nexus images to Amazon ${scopeLabel}?\n\n` +
-      `Amazon will match Nexus EXACTLY — additions, reorders, and removals` +
-      `${diff && diff.deletes > 0 ? ` (including ${diff.deletes} removal${diff.deletes === 1 ? '' : 's'})` : ''}.\n` +
-      `Your pending edits are saved first.`
-    if (!window.confirm(warn)) return
-    setBusy('mirror'); setErr(null); setMsg(null)
-    // Reuse the robust per-market publish (save-first + poll + rollback) — the
-    // SAME flow as the publish bar. Errors surface in the publish status bar.
-    let ok = 0
-    for (const m of markets) {
-      try {
-        await onPublish(m)
-        ok += 1
-      } catch {
-        /* per-market error is reflected in the publish status bar */
-      }
-    }
-    setMsg(`Publish submitted for ${ok} market${ok === 1 ? '' : 's'} — see the publish status below.`)
-    setBusy(null)
-    onReload()
-  }
-
   return (
     <div className="mx-4 mt-4 rounded-xl border border-orange-200 dark:border-orange-900/50 bg-orange-50/60 dark:bg-orange-950/20 p-3">
       <div className="flex items-center gap-2 mb-1">
         <ShieldCheck className="w-4 h-4 text-orange-600 dark:text-orange-400 flex-shrink-0" />
         <span className="text-sm font-semibold text-slate-800 dark:text-slate-100">
-          Publish to Amazon — Nexus is the source of truth
+          Amazon images — Nexus is the source of truth
         </span>
       </div>
       <p className="text-xs text-slate-600 dark:text-slate-400 mb-2.5">
-        Publishing makes Amazon match Nexus exactly — same images, order and count, including
-        Product-Safety (PS) slots — across {scopeLabel}. Deletions in Nexus are removed on Amazon.
+        Set up Amazon images here — fill from the gallery, preview the changes, copy across markets —
+        then <b>Publish</b> from the bar below. Publishing makes Amazon match Nexus exactly (adds,
+        reorders, removals) for {scopeLabel}.
       </p>
 
       {diff && (
@@ -153,15 +125,6 @@ export function AmazonMirrorControls({
         >
           {busy === 'preview' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Eye className="w-3.5 h-3.5" />}
           Preview
-        </button>
-        <button
-          type="button"
-          onClick={publishNow}
-          disabled={busy !== null}
-          className="inline-flex items-center gap-1.5 rounded-lg bg-orange-600 hover:bg-orange-700 px-2.5 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
-        >
-          {busy === 'mirror' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <UploadCloud className="w-3.5 h-3.5" />}
-          Publish to Amazon
         </button>
         {onCopyToMarkets && (
           <button

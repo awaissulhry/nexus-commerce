@@ -553,7 +553,7 @@ export default function AmazonPanel({
         </div>
       )}
 
-      {/* M6 — Amazon Mirror controls (fill from gallery · preview · mirror) */}
+      {/* Amazon image prep — fill from gallery · preview diff · copy across markets (publish is the bar below) */}
       <AmazonMirrorControls
         productId={productId}
         marketplace={amazon.activeMarketplace}
@@ -563,7 +563,6 @@ export default function AmazonPanel({
             ? () => setCopyPicker({ slots: [...ALL_SLOTS], label: 'all images' })
             : undefined
         }
-        onPublish={(m) => amazon.publish(m as AmazonMarketplace)}
       />
 
       {/* IE.5 — Live channel strip above the matrix */}
