@@ -25,9 +25,10 @@ const LANES: { placement: string; label: string; signal: string; chase: boolean;
   { placement: 'PLACEMENT_PRODUCT_PAGE', label: 'Product pages', signal: 'open-loop (set & hold)', chase: false, acos: false, def: 30 },
 ]
 
-export function RankBlendEditor({ target, busy, onSave, onClose }: {
+export function RankBlendEditor({ target, busy, scopeNote, onSave, onClose }: {
   target: { id: string; name: string; lanes?: BlendLane[] | null; bidMode?: string | null; bidValueCents?: number | null; bidDeltaPct?: number | null }
   busy: boolean
+  scopeNote?: string // BL.9 — when set, this blend is specific to that product/campaign scope
   onSave: (patch: { lanes: BlendLane[]; bidMode: string | null; bidValueCents: number | null; bidDeltaPct: number | null }) => void
   onClose: () => void
 }) {
@@ -72,8 +73,8 @@ export function RankBlendEditor({ target, busy, onSave, onClose }: {
 
   return (
     <div className="az-rte-motion az-rte-blend">
-      <div className="az-mtitle"><Layers size={12} /> Blend — run Top + Rest of Search + Product pages in the SAME window</div>
-      <div className="az-msub">Toggle a placement to drive it. Each gets its own bias + ceiling + signal; the base bid (below) is what these % stack on. No lanes enabled = the target stays single-placement.</div>
+      <div className="az-mtitle"><Layers size={12} /> Blend — run Top + Rest of Search + Product pages in the SAME window{scopeNote ? <span style={{ color: '#7c3aed', fontWeight: 700 }}> · for {scopeNote}</span> : ''}</div>
+      <div className="az-msub">Toggle a placement to drive it. Each gets its own bias + ceiling + signal; the base bid (below) is what these % stack on. No lanes enabled = {scopeNote ? `${scopeNote} uses single-placement` : 'the target stays single-placement'}.</div>
       {LANES.map((l) => {
         const on = !!enabled[l.placement]
         const v = vals[l.placement] || { placement: l.placement, biasPct: null }

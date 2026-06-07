@@ -19,7 +19,9 @@ import { RankBlendEditor, type BlendLane } from './RankBlendEditor'
 
 interface RankTarget { id: string; key: string; name: string; placement: string; targetISPct: number | null; acosCapPct: number | null; maxCpcCents: number | null; biasPct: number | null; pause: boolean; allOut: boolean; color: string | null; builtIn: boolean; scopeProductId: string | null; scopeCampaignId: string | null; jumpStartPct: number | null; stepUpPct: number | null; stepDownPct: number | null; maxBiasPct: number | null; keepClimbing: boolean; lanes?: BlendLane[] | null; bidMode?: string | null; bidValueCents?: number | null; bidDeltaPct?: number | null }
 type OvField = 'biasPct' | 'targetISPct' | 'acosCapPct' | 'maxCpcCents' | 'jumpStartPct' | 'stepUpPct' | 'stepDownPct' | 'maxBiasPct'
-type Ov = Partial<Record<OvField, number>> & { keepClimbing?: boolean }
+// BL.9 — a scope override can also carry a per-product/campaign BLEND (its own lanes +
+// base-bid), so a blend can be campaign-specific, not just the global library default.
+type Ov = Partial<Record<OvField, number>> & { keepClimbing?: boolean; lanes?: BlendLane[]; bidMode?: string | null; bidValueCents?: number | null; bidDeltaPct?: number | null }
 type OvMap = Record<string, Ov>
 const api = (p: string) => `${getBackendUrl()}/api/advertising${p}`
 const PLACE_LABEL: Record<string, string> = { PLACEMENT_TOP: 'Top of Search', PLACEMENT_REST_OF_SEARCH: 'Rest of Search', PLACEMENT_PRODUCT_PAGE: 'Product pages' }
@@ -89,12 +91,14 @@ export function RankTargetEditor({ open, onClose, scopeKind, scopeLabel, scopeOv
   const describe = (t: RankTarget): string => {
     if (t.pause) return 'Floors bids to ~€0.02 (campaign stays live, restorable) — never pauses'
     // BL — a blended target drives multiple placements at once; summarise the blend.
-    if (t.lanes && t.lanes.length) {
-      const parts = t.lanes.map((l) => `${SHORT_PLACE[l.placement] ?? l.placement} +${l.biasPct ?? 0}%${l.maxBiasPct != null && l.maxBiasPct > (l.biasPct ?? 0) ? `→${l.maxBiasPct}` : ''}`)
+    // BL.9 — in scope view a per-campaign/product override blend wins over the global one.
+    const blend = effBlend(t)
+    if (blend.lanes && blend.lanes.length) {
+      const parts = blend.lanes.map((l) => `${SHORT_PLACE[l.placement] ?? l.placement} +${l.biasPct ?? 0}%${l.maxBiasPct != null && l.maxBiasPct > (l.biasPct ?? 0) ? `→${l.maxBiasPct}` : ''}`)
       let bb = ''
-      if (t.bidMode === 'absolute' && t.bidValueCents != null) bb = ` · base €${(t.bidValueCents / 100).toFixed(2)}`
-      else if (t.bidMode === 'deltaPct' && t.bidDeltaPct != null) bb = ` · base ${t.bidDeltaPct >= 0 ? '+' : ''}${t.bidDeltaPct}%`
-      else if (t.bidMode === 'suppress') bb = ' · base floored'
+      if (blend.bidMode === 'absolute' && blend.bidValueCents != null) bb = ` · base €${(blend.bidValueCents / 100).toFixed(2)}`
+      else if (blend.bidMode === 'deltaPct' && blend.bidDeltaPct != null) bb = ` · base ${blend.bidDeltaPct >= 0 ? '+' : ''}${blend.bidDeltaPct}%`
+      else if (blend.bidMode === 'suppress') bb = ' · base floored'
       return `blend: ${parts.join(' · ')}${bb}`
     }
     const p: string[] = []
@@ -123,6 +127,27 @@ export function RankTargetEditor({ open, onClose, scopeKind, scopeLabel, scopeOv
     if (view === 'scope' && ov[t.key]?.keepClimbing !== undefined) return !!ov[t.key]!.keepClimbing
     if (lib[t.id]?.keepClimbing !== undefined) return !!lib[t.id]!.keepClimbing
     return !!t.keepClimbing
+  }
+  // BL.9 — effective blend: in scope view a saved override blend wins over the global one.
+  const effBlend = (t: RankTarget): { lanes: BlendLane[] | null | undefined; bidMode: string | null | undefined; bidValueCents: number | null | undefined; bidDeltaPct: number | null | undefined } => {
+    if (view === 'scope' && ov[t.key]?.lanes !== undefined) {
+      const o = ov[t.key]!
+      return { lanes: o.lanes, bidMode: o.bidMode, bidValueCents: o.bidValueCents, bidDeltaPct: o.bidDeltaPct }
+    }
+    return { lanes: t.lanes, bidMode: t.bidMode, bidValueCents: t.bidValueCents, bidDeltaPct: t.bidDeltaPct }
+  }
+  // BL.9 — save a blend at the active scope: Global view PATCHes the library target;
+  // scope view stages it into the override map (persisted by the main Save button).
+  const onBlendSave = (t: RankTarget, patch: { lanes: BlendLane[]; bidMode: string | null; bidValueCents: number | null; bidDeltaPct: number | null }) => {
+    if (view === 'global') { void saveBlend(t.id, patch); return }
+    setChanged(true)
+    setOv((m) => {
+      const next = { ...m }
+      next[t.key] = { ...(next[t.key] || {}), lanes: patch.lanes, bidMode: patch.bidMode, bidValueCents: patch.bidValueCents, bidDeltaPct: patch.bidDeltaPct }
+      return next
+    })
+    setBlendOpen((m) => ({ ...m, [t.id]: false }))
+    setMsg(`Staged a ${scopeLabel}-specific blend — click Save overrides to apply.`)
   }
   const setLibKeep = (id: string, checked: boolean) => { setChanged(true); setLib(m => ({ ...m, [id]: { ...(m[id] || {}), keepClimbing: checked } })) }
   // MP v2 — apply a recipe to the knobs + keep-climbing, in whichever view is active.
@@ -215,6 +240,9 @@ export function RankTargetEditor({ open, onClose, scopeKind, scopeLabel, scopeOv
           {targets.map(t => {
             const scoped = !!t.scopeProductId || !!t.scopeCampaignId
             const mOpen = !!motionOpen[t.id]
+            const eb = effBlend(t) // BL.9 — scope override wins over global
+            const blendLanes = eb.lanes
+            const blendOverridden = view === 'scope' && ov[t.key]?.lanes !== undefined
             return (
               <Fragment key={t.id}>
               <div className={`az-rte-row ${view === 'scope' && hasOverride(t) ? 'ovr' : ''}`}>
@@ -222,8 +250,8 @@ export function RankTargetEditor({ open, onClose, scopeKind, scopeLabel, scopeOv
                   <i className="sw" style={{ background: t.color ?? '#999' }} />
                   {view === 'global' && !t.pause ? <input className="az-rte-name" value={(lib[t.id]?.name as string) ?? t.name} onChange={e => setLibField(t.id, 'name', e.target.value)} /> : <b>{t.name}</b>}
                   <span className="bdg">{t.builtIn ? 'default' : scoped ? 'scoped' : 'custom'}</span>
-                  {!t.pause && !(t.lanes && t.lanes.length) && <span className="bdg" style={{ background: '#eef2ff', color: '#3730a3' }}>{placeLabel(t.placement)}</span>}
-                  {!t.pause && t.lanes && t.lanes.length > 0 && <span className="bdg" style={{ background: '#f3e8ff', color: '#7c3aed' }}>blend ×{t.lanes.length}</span>}
+                  {!t.pause && !(blendLanes && blendLanes.length) && <span className="bdg" style={{ background: '#eef2ff', color: '#3730a3' }}>{placeLabel(t.placement)}</span>}
+                  {!t.pause && blendLanes && blendLanes.length > 0 && <span className="bdg" style={{ background: '#f3e8ff', color: '#7c3aed' }} title={blendOverridden ? `${scopeLabel}-specific blend` : 'global blend'}>blend ×{blendLanes.length}{blendOverridden ? '*' : ''}</span>}
                   {view === 'scope' && hasOverride(t) && <span className="bdg ov">override</span>}
                   <span className="desc">{describe(t)}</span>
                 </span>
@@ -244,7 +272,7 @@ export function RankTargetEditor({ open, onClose, scopeKind, scopeLabel, scopeOv
                 })}
                 <span className="act">
                   {!t.pause && <button type="button" className="az-kebab" title="Motion — how the bid moves (jump / climb / ease / ceiling)" aria-expanded={mOpen} style={mOpen ? { color: '#3730a3' } : undefined} onClick={() => setMotionOpen(m => ({ ...m, [t.id]: !m[t.id] }))}><SlidersHorizontal size={13} /></button>}
-                  {view === 'global' && !t.pause && <button type="button" className="az-kebab" title="Blend — drive Top + Rest of Search + Product pages at once (+ base bid)" aria-expanded={!!blendOpen[t.id]} style={blendOpen[t.id] ? { color: '#7c3aed' } : undefined} onClick={() => setBlendOpen(m => ({ ...m, [t.id]: !m[t.id] }))}><Layers size={13} /></button>}
+                  {!t.pause && <button type="button" className="az-kebab" disabled={view === 'scope' && !scopeAvailable} title={view === 'scope' ? `Blend for ${scopeLabel} — drive Top + Rest of Search + Product pages at once (+ base bid), just here` : 'Blend — drive Top + Rest of Search + Product pages at once (+ base bid)'} aria-expanded={!!blendOpen[t.id]} style={blendOpen[t.id] ? { color: '#7c3aed' } : undefined} onClick={() => setBlendOpen(m => ({ ...m, [t.id]: !m[t.id] }))}><Layers size={13} /></button>}
                   {view === 'scope' && hasOverride(t) && <button type="button" className="az-kebab" title="Clear override (use default)" onClick={() => clearOverride(t.key)}><RotateCcw size={13} /></button>}
                   {view === 'global' && t.builtIn && <button type="button" className="az-kebab" title="Reset to default" onClick={() => void resetTarget(t.id)}><RotateCcw size={13} /></button>}
                   {view === 'global' && !t.builtIn && <button type="button" className="az-kebab" title="Delete custom" style={{ color: '#cc1100' }} onClick={() => void deleteTarget(t.id, t.name)}><Trash2 size={13} /></button>}
@@ -283,8 +311,14 @@ export function RankTargetEditor({ open, onClose, scopeKind, scopeLabel, scopeOv
                   <div className="az-mnote">Blank = snap to {effOf(t, 'biasPct') ?? 0}% Placement (up or down) and hold — never above it. Set a Ceiling above Placement % to let it climb.{effKeep(t) ? ' Keep-climbing ON → pushes to the Ceiling on its own.' : ''}</div>
                 </div>
               )}
-              {!!blendOpen[t.id] && view === 'global' && !t.pause && (
-                <RankBlendEditor target={t} busy={busy} onSave={(patch) => void saveBlend(t.id, patch)} onClose={() => setBlendOpen(m => ({ ...m, [t.id]: false }))} />
+              {!!blendOpen[t.id] && !t.pause && (
+                <RankBlendEditor
+                  target={{ id: t.id, name: t.name, lanes: blendLanes, bidMode: eb.bidMode, bidValueCents: eb.bidValueCents, bidDeltaPct: eb.bidDeltaPct }}
+                  busy={busy}
+                  scopeNote={view === 'scope' ? scopeLabel : undefined}
+                  onSave={(patch) => onBlendSave(t, patch)}
+                  onClose={() => setBlendOpen(m => ({ ...m, [t.id]: false }))}
+                />
               )}
               </Fragment>
             )

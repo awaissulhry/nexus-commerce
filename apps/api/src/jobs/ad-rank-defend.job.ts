@@ -43,7 +43,7 @@ const toSpec = (t: RankTargetRow): RankTargetSpec => ({ key: t.key, placement: t
 
 // RTC — merge per-scope target overrides onto a spec, keyed by the spec's own target
 // key. Maps apply in order, so later (more specific) wins: product then campaign.
-type TargetOverride = { biasPct?: number; targetISPct?: number; acosCapPct?: number; maxCpcCents?: number; jumpStartPct?: number; stepUpPct?: number; stepDownPct?: number; maxBiasPct?: number; keepClimbing?: boolean }
+type TargetOverride = { biasPct?: number; targetISPct?: number; acosCapPct?: number; maxCpcCents?: number; jumpStartPct?: number; stepUpPct?: number; stepDownPct?: number; maxBiasPct?: number; keepClimbing?: boolean; lanes?: LaneSpec[]; bidMode?: string | null; bidValueCents?: number | null; bidDeltaPct?: number | null }
 type TargetOverrideMap = Record<string, TargetOverride> | null | undefined
 export function applyTargetOverrides(spec: RankTargetSpec, ...maps: TargetOverrideMap[]): RankTargetSpec {
   let out = spec
@@ -62,6 +62,13 @@ export function applyTargetOverrides(spec: RankTargetSpec, ...maps: TargetOverri
       ...(o.stepDownPct != null ? { stepDownPct: o.stepDownPct } : {}),
       ...(o.maxBiasPct != null ? { maxBiasPct: o.maxBiasPct } : {}),
       ...(o.keepClimbing !== undefined ? { keepClimbing: o.keepClimbing } : {}),
+      // BL.9 — per-scope BLEND override: a product/campaign can set its OWN lanes +
+      // base-bid (not just scalar tweaks), so a blend can be campaign-specific. An empty
+      // lanes array explicitly clears the blend at this scope (back to single-placement).
+      ...(Array.isArray(o.lanes) ? { lanes: o.lanes } : {}),
+      ...(o.bidMode !== undefined ? { bidMode: o.bidMode } : {}),
+      ...(o.bidValueCents !== undefined ? { bidValueCents: o.bidValueCents } : {}),
+      ...(o.bidDeltaPct !== undefined ? { bidDeltaPct: o.bidDeltaPct } : {}),
     }
   }
   return out
