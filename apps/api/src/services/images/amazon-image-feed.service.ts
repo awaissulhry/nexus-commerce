@@ -460,6 +460,13 @@ export async function pollAndUpdateFeedJob(jobId: string): Promise<{
     return { jobId, status: job.status, resultSummary: job.resultSummary ?? null }
   }
   if (job.status === 'DONE' && job.resultSummary) {
+    // Self-heal: a finalize done before the empty-report fix may have left rows
+    // DRAFT even though the feed is DONE (images are live on Amazon). Flip any
+    // stragglers for this product — idempotent (0 rows once already flipped).
+    await prisma.listingImage.updateMany({
+      where: { productId: job.productId, publishStatus: 'DRAFT' },
+      data: { publishStatus: 'PUBLISHED', publishedAt: new Date(), publishError: null },
+    })
     return { jobId, status: job.status, resultSummary: job.resultSummary }
   }
 
@@ -623,7 +630,11 @@ async function applyPublishResults(
   skus: string[],
   report: unknown,
 ): Promise<void> {
-  if (!report || !skus.length) return
+  // A DONE feed often returns an empty/absent processing report when every
+  // message was accepted. Do NOT bail on a null report — treat it as "0 issues"
+  // so the DRAFT rows still flip to PUBLISHED. (Bailing here was why status stayed
+  // stuck on DRAFT after a successful publish.)
+  if (!skus.length) return
 
   // Amazon processingReport shape:
   // { processingReport: { processingStatus, processingSummary, issues: [{ messageId, code, ... }] } }
