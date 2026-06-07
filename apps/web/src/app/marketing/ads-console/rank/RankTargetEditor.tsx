@@ -12,13 +12,13 @@
  * Effective at runtime = global ⊕ product ⊕ campaign (the engine merges; RTC.2).
  */
 
-import { useCallback, useEffect, useState } from 'react'
-import { Save, Plus, Trash2, RotateCcw, Info } from 'lucide-react'
+import { Fragment, useCallback, useEffect, useState } from 'react'
+import { Save, Plus, Trash2, RotateCcw, Info, SlidersHorizontal } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 
-interface RankTarget { id: string; key: string; name: string; placement: string; targetISPct: number | null; acosCapPct: number | null; maxCpcCents: number | null; biasPct: number | null; pause: boolean; allOut: boolean; color: string | null; builtIn: boolean; scopeProductId: string | null; scopeCampaignId: string | null }
-type OvField = 'biasPct' | 'targetISPct' | 'acosCapPct' | 'maxCpcCents'
-type Ov = Partial<Record<OvField, number>>
+interface RankTarget { id: string; key: string; name: string; placement: string; targetISPct: number | null; acosCapPct: number | null; maxCpcCents: number | null; biasPct: number | null; pause: boolean; allOut: boolean; color: string | null; builtIn: boolean; scopeProductId: string | null; scopeCampaignId: string | null; jumpStartPct: number | null; stepUpPct: number | null; stepDownPct: number | null; maxBiasPct: number | null; keepClimbing: boolean }
+type OvField = 'biasPct' | 'targetISPct' | 'acosCapPct' | 'maxCpcCents' | 'jumpStartPct' | 'stepUpPct' | 'stepDownPct' | 'maxBiasPct'
+type Ov = Partial<Record<OvField, number>> & { keepClimbing?: boolean }
 type OvMap = Record<string, Ov>
 const api = (p: string) => `${getBackendUrl()}/api/advertising${p}`
 const PLACE_LABEL: Record<string, string> = { PLACEMENT_TOP: 'Top of Search', PLACEMENT_REST_OF_SEARCH: 'Rest of Search', PLACEMENT_PRODUCT_PAGE: 'Product pages' }
@@ -28,6 +28,13 @@ const FIELDS: { f: OvField; label: string; unit: '%' | '€'; hint: string }[] =
   { f: 'targetISPct', label: 'Target IS', unit: '%', hint: 'top-of-search impression share to hold' },
   { f: 'acosCapPct', label: 'ACOS cap', unit: '%', hint: 'ease off above this ACOS' },
   { f: 'maxCpcCents', label: 'Max CPC', unit: '€', hint: 'never bid above this' },
+]
+// MP — motion profile: HOW the loop moves the bias (all blank = today's behaviour).
+const MOTION_FIELDS: { f: OvField; label: string; hint: string }[] = [
+  { f: 'jumpStartPct', label: 'Opening jump', hint: 'On entry, SNAP straight to this % in one cycle. Blank = ramp up gradually (today).' },
+  { f: 'stepUpPct', label: 'Climb step', hint: 'How much to step UP per 15-min cycle. Blank = 15% (25 all-out).' },
+  { f: 'stepDownPct', label: 'Ease step', hint: 'How much to step DOWN per cycle. Blank = snap straight back to the floor (today).' },
+  { f: 'maxBiasPct', label: 'Ceiling', hint: "The climb won't exceed this %. Blank = 900%." },
 ]
 
 export function RankTargetEditor({ open, onClose, scopeKind, scopeLabel, scopeOverrides, onSaveScopeOverrides, productId, campaignId }: {
@@ -48,6 +55,7 @@ export function RankTargetEditor({ open, onClose, scopeKind, scopeLabel, scopeOv
   const [msg, setMsg] = useState('')
   const [changed, setChanged] = useState(false)
   const [adding, setAdding] = useState(false)
+  const [motionOpen, setMotionOpen] = useState<Record<string, boolean>>({}) // per-target Motion drawer
   const [form, setForm] = useState<{ name: string; color: string; scope: 'global' | 'scope' } & Ov>({ name: '', color: '#3aa873', scope: scopeKind === 'campaign' ? 'scope' : 'scope' })
 
   const load = useCallback(() => {
@@ -77,9 +85,33 @@ export function RankTargetEditor({ open, onClose, scopeKind, scopeLabel, scopeOv
     const a = effOf(t, 'acosCapPct'); if (a != null && isTop) p.push(`ease above ${a}% ACOS`)
     const c = effOf(t, 'maxCpcCents'); if (c != null) p.push(`max CPC €${(c / 100).toFixed(2)}`)
     if (t.allOut) p.push('all-out (ignore ACOS)')
+    // MP — motion summary (only when tuned away from the defaults, to avoid clutter).
+    const motion: string[] = []
+    const jump = effOf(t, 'jumpStartPct'); if (jump != null) motion.push(`jump ${jump}`)
+    const up = effOf(t, 'stepUpPct'); if (up != null) motion.push(`+${up}/cyc`)
+    const ceil = effOf(t, 'maxBiasPct'); if (ceil != null) motion.push(`cap ${ceil}`)
+    const down = effOf(t, 'stepDownPct'); if (down != null) motion.push(`ease −${down}/cyc`)
+    if (effKeep(t)) motion.push('keep-climbing')
+    if (motion.length) p.push(motion.join(' '))
     return p.join(' · ') || 'baseline (no push)'
   }
   const hasOverride = (t: RankTarget) => !!ov[t.key] && Object.keys(ov[t.key]).length > 0
+  // MP — effective keepClimbing (scope override wins → global draft → saved value).
+  const effKeep = (t: RankTarget): boolean => {
+    if (view === 'scope' && ov[t.key]?.keepClimbing !== undefined) return !!ov[t.key]!.keepClimbing
+    if (lib[t.id]?.keepClimbing !== undefined) return !!lib[t.id]!.keepClimbing
+    return !!t.keepClimbing
+  }
+  const setLibKeep = (id: string, checked: boolean) => { setChanged(true); setLib(m => ({ ...m, [id]: { ...(m[id] || {}), keepClimbing: checked } })) }
+  const setScopeKeep = (key: string, val: '' | 'on' | 'off') => {
+    setChanged(true)
+    setOv(m => {
+      const next = { ...m }; const cur = { ...(next[key] || {}) }
+      if (val === '') delete cur.keepClimbing; else cur.keepClimbing = val === 'on'
+      if (Object.keys(cur).length) next[key] = cur; else delete next[key]
+      return next
+    })
+  }
 
   // scope-view: edit the override map (empty = inherit)
   const setScope = (key: string, f: OvField, raw: string) => {
@@ -139,8 +171,10 @@ export function RankTargetEditor({ open, onClose, scopeKind, scopeLabel, scopeOv
           <div className="az-rte-row az-rte-head"><span className="nm">Target</span>{FIELDS.map(f => <span key={f.f} className="fld" title={f.hint}>{f.label} {f.unit === '€' ? '€' : '%'}</span>)}<span className="act" /></div>
           {targets.map(t => {
             const scoped = !!t.scopeProductId || !!t.scopeCampaignId
+            const mOpen = !!motionOpen[t.id]
             return (
-              <div key={t.id} className={`az-rte-row ${view === 'scope' && hasOverride(t) ? 'ovr' : ''}`}>
+              <Fragment key={t.id}>
+              <div className={`az-rte-row ${view === 'scope' && hasOverride(t) ? 'ovr' : ''}`}>
                 <span className="nm">
                   <i className="sw" style={{ background: t.color ?? '#999' }} />
                   {view === 'global' && !t.pause ? <input className="az-rte-name" value={(lib[t.id]?.name as string) ?? t.name} onChange={e => setLibField(t.id, 'name', e.target.value)} /> : <b>{t.name}</b>}
@@ -165,11 +199,41 @@ export function RankTargetEditor({ open, onClose, scopeKind, scopeLabel, scopeOv
                   return <span key={f.f} className="fld"><input type="number" value={val == null ? '' : f.f === 'maxCpcCents' ? eur(val) : val} onChange={e => setLibField(t.id, f.f, e.target.value)} step={f.f === 'maxCpcCents' ? '0.01' : '1'} /></span>
                 })}
                 <span className="act">
+                  {!t.pause && <button type="button" className="az-kebab" title="Motion — how the bid moves (jump / climb / ease / ceiling)" aria-expanded={mOpen} style={mOpen ? { color: '#3730a3' } : undefined} onClick={() => setMotionOpen(m => ({ ...m, [t.id]: !m[t.id] }))}><SlidersHorizontal size={13} /></button>}
                   {view === 'scope' && hasOverride(t) && <button type="button" className="az-kebab" title="Clear override (use default)" onClick={() => clearOverride(t.key)}><RotateCcw size={13} /></button>}
                   {view === 'global' && t.builtIn && <button type="button" className="az-kebab" title="Reset to default" onClick={() => void resetTarget(t.id)}><RotateCcw size={13} /></button>}
                   {view === 'global' && !t.builtIn && <button type="button" className="az-kebab" title="Delete custom" style={{ color: '#cc1100' }} onClick={() => void deleteTarget(t.id, t.name)}><Trash2 size={13} /></button>}
                 </span>
               </div>
+              {mOpen && !t.pause && (
+                <div className="az-rte-motion">
+                  <div className="az-mtitle"><SlidersHorizontal size={12} /> Motion — how the bid moves{view === 'scope' ? ` · override for ${scopeLabel}` : ''}</div>
+                  <div className="az-mfields">
+                    {MOTION_FIELDS.map(f => {
+                      const ph = defOf(t, f.f)
+                      const lv = lib[t.id]?.[f.f] as number | null | undefined
+                      const v = view === 'scope' ? ov[t.key]?.[f.f] : (lv !== undefined ? lv : (t[f.f] as number | null))
+                      return (
+                        <label key={f.f} className="az-mfield" title={f.hint}>
+                          <span>{f.label}</span>
+                          <input type="number" min={0} max={900} disabled={view === 'scope' && !scopeAvailable}
+                            value={v == null ? '' : v}
+                            placeholder={view === 'scope' ? (ph == null ? '—' : String(ph)) : '—'}
+                            onChange={e => view === 'scope' ? setScope(t.key, f.f, e.target.value) : setLibField(t.id, f.f, e.target.value)} />
+                        </label>
+                      )
+                    })}
+                    <label className="az-mfield az-mkeep" title="After the opening, keep climbing to the ceiling even with NO signal (bounded by the ceiling + ACOS cap).">
+                      <span>Keep climbing</span>
+                      {view === 'scope'
+                        ? <select disabled={!scopeAvailable} value={ov[t.key]?.keepClimbing === undefined ? '' : ov[t.key]!.keepClimbing ? 'on' : 'off'} onChange={e => setScopeKeep(t.key, e.target.value as '' | 'on' | 'off')}><option value="">inherit</option><option value="on">on</option><option value="off">off</option></select>
+                        : <input type="checkbox" checked={effKeep(t)} onChange={e => setLibKeep(t.id, e.target.checked)} />}
+                    </label>
+                  </div>
+                  <div className="az-mnote">Blank = today: ramp up gradually (+{t.allOut ? 25 : 15}/cyc), snap back, ceiling 900%.{effKeep(t) ? ' Keep-climbing ON → pushes to the ceiling without waiting for a signal.' : ''}</div>
+                </div>
+              )}
+              </Fragment>
             )
           })}
           {adding && (
