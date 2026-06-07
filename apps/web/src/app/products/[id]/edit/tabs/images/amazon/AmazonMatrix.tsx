@@ -35,6 +35,12 @@ interface MatrixProps {
   onBulkDelete?: (listingImageIds: string[]) => void
   /** BE — lock / unlock these listing-image rows on the server. */
   onBulkLock?: (listingImageIds: string[], locked: boolean) => void
+  /** BE.5 — promote a single selected image to the MAIN slot. */
+  onBulkSetMain?: (cell: { group: string | null; slot: string }) => void
+  /** BE.5 — clear market overrides (delete rows → fall back to the shared image). */
+  onBulkClearOverride?: (listingImageIds: string[]) => void
+  /** BE.6 — fill empty slots from the master gallery. */
+  onBulkFill?: () => void
   onClearRow: (groupValue: string) => void
   onCellFileDrop: (groupValue: string | null, slot: AmazonSlot, file: File) => void
   /** IE.11 — Active status filter from the MatrixFilterBar. Defaults
@@ -473,6 +479,9 @@ export default function AmazonMatrix({
   bulkMode,
   onBulkDelete,
   onBulkLock,
+  onBulkSetMain,
+  onBulkClearOverride,
+  onBulkFill,
   onClearRow,
   onCellFileDrop,
   onCellRevert,
@@ -602,22 +611,32 @@ export default function AmazonMatrix({
         </div>
       )}
 
-      {/* BE — bulk action bar */}
-      {bulkMode && selectedCells.size > 0 && (
-        <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-orange-200 dark:border-orange-900/50 bg-orange-50/70 dark:bg-orange-950/20 px-3 py-2 text-sm">
+      {/* BE — bulk action bar (persistent while in select mode) */}
+      {bulkMode && (
+        <div className="mb-3 flex flex-wrap items-center gap-x-2 gap-y-1.5 rounded-xl border border-orange-200 dark:border-orange-900/50 bg-orange-50/70 dark:bg-orange-950/20 px-3 py-2 text-sm">
           <span className="font-medium text-slate-700 dark:text-slate-200">
-            {bulk.filled.length} image{bulk.filled.length === 1 ? '' : 's'} selected
+            {bulk.filled.length > 0 ? `${bulk.filled.length} image${bulk.filled.length === 1 ? '' : 's'} selected` : 'Select images'}
           </span>
-          {bulk.locked.length > 0 && (
-            <span className="text-xs text-amber-600 dark:text-amber-400">· {bulk.locked.length} locked</span>
-          )}
-          {bulk.empty.length > 0 && (
-            <span className="text-xs text-slate-400">· {bulk.empty.length} empty</span>
-          )}
+          {bulk.locked.length > 0 && <span className="text-xs text-amber-600 dark:text-amber-400">· {bulk.locked.length} locked</span>}
+          {bulk.empty.length > 0 && <span className="text-xs text-slate-400">· {bulk.empty.length} empty</span>}
+          {/* quick selects */}
+          <span className="text-slate-300 dark:text-slate-600">|</span>
+          <button type="button" onClick={() => toggleCells(allGridCells.filter((c) => !resolveCell(c.group, c.slot as AmazonSlot)?.url), true)} className="text-xs text-slate-500 dark:text-slate-400 underline-offset-2 hover:underline">empties</button>
+          <button type="button" onClick={() => toggleCells(allGridCells, true)} className="text-xs text-slate-500 dark:text-slate-400 underline-offset-2 hover:underline">all</button>
           <div className="flex-1" />
           {onCopyCellsToMarkets && bulk.filled.length > 0 && (
             <Button size="sm" variant="secondary" onClick={() => { onCopyCellsToMarkets(bulk.filled.map((c) => ({ group: c.group, slot: c.slot as AmazonSlot }))); setSelectedCells(new Map()) }}>
               Copy → markets
+            </Button>
+          )}
+          {onBulkSetMain && bulk.filled.length === 1 && bulk.filled[0]!.slot !== 'MAIN' && (
+            <Button size="sm" variant="ghost" onClick={() => { onBulkSetMain({ group: bulk.filled[0]!.group, slot: bulk.filled[0]!.slot }); setSelectedCells(new Map()) }}>
+              Set as MAIN
+            </Button>
+          )}
+          {onBulkFill && bulk.empty.length > 0 && (
+            <Button size="sm" variant="ghost" onClick={() => { onBulkFill(); setSelectedCells(new Map()) }}>
+              Fill from gallery
             </Button>
           )}
           {onBulkLock && bulk.lockable.length > 0 && (
@@ -630,17 +649,30 @@ export default function AmazonMatrix({
               Unlock
             </Button>
           )}
-          {onBulkDelete && (
+          {onBulkClearOverride && bulk.overrides.length > 0 && (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                const ids = bulk.overrides.map((c) => c.listingImageId!).filter(Boolean)
+                if (!window.confirm(`Reset ${ids.length} image${ids.length === 1 ? '' : 's'} to the All-Markets image?\nStaged — Save, then Publish.`)) return
+                onBulkClearOverride(ids)
+                setSelectedCells(new Map())
+              }}
+            >
+              Reset to shared
+            </Button>
+          )}
+          {onBulkDelete && bulk.deletable.length > 0 && (
             <Button
               size="sm"
               variant="danger"
-              disabled={bulk.deletable.length === 0}
               onClick={() => {
                 const ids = bulk.deletable.map((c) => c.listingImageId!).filter(Boolean)
                 if (!ids.length) return
                 const warn =
                   `Delete ${ids.length} image${ids.length === 1 ? '' : 's'}?` +
-                  (activeMarketplace === 'ALL' ? ' This removes the shared image from every market.' : '') +
+                  (activeMarketplace === 'ALL' ? ' This removes the shared image from every market.' : ' This market falls back to the All-Markets image (or empties if none).') +
                   (bulk.deleteSkipped.length ? `\n${bulk.deleteSkipped.length} locked/inherited image(s) will be skipped.` : '') +
                   `\nStaged — Save, then Publish to remove from Amazon.`
                 if (!window.confirm(warn)) return
@@ -648,7 +680,7 @@ export default function AmazonMatrix({
                 setSelectedCells(new Map())
               }}
             >
-              Delete{bulk.deletable.length ? ` (${bulk.deletable.length})` : ''}
+              Delete ({bulk.deletable.length})
             </Button>
           )}
           <Button size="sm" variant="ghost" onClick={() => setSelectedCells(new Map())} className="text-slate-500">Clear</Button>

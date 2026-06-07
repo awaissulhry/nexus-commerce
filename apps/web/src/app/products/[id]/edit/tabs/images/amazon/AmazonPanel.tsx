@@ -275,6 +275,42 @@ export default function AmazonPanel({
     }
   }
 
+  function handleBulkSetMain(cell: { group: string | null; slot: string }) {
+    const cd = amazon.resolveCell(cell.group, cell.slot as AmazonSlot)
+    if (!cd?.url) return
+    const isAll = amazon.activeMarketplace === 'ALL'
+    addPendingUpsert({
+      scope: isAll ? 'PLATFORM' : 'MARKETPLACE',
+      platform: 'AMAZON',
+      marketplace: isAll ? null : amazon.activeMarketplace,
+      amazonSlot: 'MAIN',
+      variantGroupKey: cell.group === null ? null : activeAxis,
+      variantGroupValue: cell.group === null ? null : cell.group,
+      url: cd.url,
+      sourceProductImageId: cd.masterImageId ?? null,
+      role: 'MAIN',
+      position: 0,
+    })
+  }
+
+  function handleBulkClearOverride(ids: string[]) {
+    if (!addPendingDelete) return
+    ids.forEach((id) => addPendingDelete(id))
+  }
+
+  async function handleBulkFill() {
+    try {
+      await beFetch(`/api/products/${productId}/amazon-images/fill-from-gallery`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      })
+      onReload()
+    } catch {
+      /* non-fatal */
+    }
+  }
+
   function runCopy(targets: string[]) {
     if (!copyPicker) return
     const upserts = buildCrossMarketUpserts({
@@ -702,6 +738,9 @@ export default function AmazonPanel({
             bulkMode={bulkMode}
             onBulkDelete={handleBulkDelete}
             onBulkLock={handleBulkLock}
+            onBulkSetMain={handleBulkSetMain}
+            onBulkClearOverride={amazon.activeMarketplace !== 'ALL' ? handleBulkClearOverride : undefined}
+            onBulkFill={handleBulkFill}
             onCopyCellsToMarkets={
               amazon.activeMarketplace !== 'ALL'
                 ? (cells) =>
