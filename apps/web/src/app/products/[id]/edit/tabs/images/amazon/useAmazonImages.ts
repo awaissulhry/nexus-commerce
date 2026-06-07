@@ -186,24 +186,28 @@ export function useAmazonImages({
   //   SWCH     → master image with type='SWATCH'
   //   PT01–08  → nth master image with type='LIFESTYLE' (then 'ALT' as overflow)
   const resolveMasterForSlot = useCallback((slot: AmazonSlot): ProductImage | null => {
+    // MM.1 — image slots only ever resolve IMAGE masters; gallery videos
+    // (mediaType=VIDEO) must never be picked into an image slot. Legacy rows
+    // with no mediaType are treated as IMAGE.
+    const imgs = masterImages.filter((m) => (m.mediaType ?? 'IMAGE') === 'IMAGE')
     if (slot === 'MAIN') {
       // PG.4 hero override beats type=MAIN: an operator who marked a
       // LIFESTYLE shot as "primary" wants that one as the Amazon MAIN.
       return (
-        masterImages.find((m) => m.isPrimary)
-        ?? masterImages.find((m) => m.type === 'MAIN')
+        imgs.find((m) => m.isPrimary)
+        ?? imgs.find((m) => m.type === 'MAIN')
         ?? null
       )
     }
     if (slot === 'SWCH') {
-      return masterImages.find((m) => m.type === 'SWATCH') ?? null
+      return imgs.find((m) => m.type === 'SWATCH') ?? null
     }
     // PT01..PT08 → 0..7 into the [LIFESTYLE, then ALT] sequence.
     // Sorted by sortOrder upstream in useImagesWorkspace.
     const idx = parseInt(slot.slice(2), 10) - 1
-    const lifestyles = masterImages.filter((m) => m.type === 'LIFESTYLE')
+    const lifestyles = imgs.filter((m) => m.type === 'LIFESTYLE')
     if (idx < lifestyles.length) return lifestyles[idx]
-    const alts = masterImages.filter((m) => m.type === 'ALT')
+    const alts = imgs.filter((m) => m.type === 'ALT')
     const overflow = idx - lifestyles.length
     if (overflow >= 0 && overflow < alts.length) return alts[overflow]
     return null

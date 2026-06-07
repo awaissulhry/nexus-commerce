@@ -2066,6 +2066,18 @@ model ProductImage {
   /// invariant — concurrent operator sessions can't both win.
   isPrimary Boolean @default(false)
 
+  /// MM.1 — Media type discriminator. The product media hub holds images
+  /// AND videos (+ future 3D/docs). Existing rows default to IMAGE so the
+  /// whole image pipeline (matrix, mirror, bulk, cascade) is unaffected.
+  /// 'IMAGE' | 'VIDEO' | 'MODEL3D' | 'DOC'
+  mediaType     String  @default("IMAGE")
+  /// MM.1 — Video poster / 3D thumbnail (Cloudinary so_0 frame for video).
+  posterUrl     String?
+  /// MM.1 — Video length in seconds (Cloudinary durationSeconds).
+  durationSec   Float?
+  /// MM.1 — Bidirectional link to the DAM DigitalAsset this media came from.
+  sourceAssetId String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -2083,6 +2095,7 @@ model ProductImage {
   /// the FE's "find current primary" lookup. The DB-level partial
   /// unique is what actually enforces at-most-one per product.
   @@index([productId, isPrimary])
+  @@index([productId, mediaType, sortOrder])
 }
 
 // (Phase 31 Image model removed 2026-05-02 — see RESTORATION_NOTES.
@@ -6610,6 +6623,14 @@ model ListingImage {
   // does NOT affect Publish (the mirror still publishes everything).
   locked Boolean @default(false)
 
+  // MM.1 — Media type discriminator (mirrors ProductImage). Channel media can
+  // be an image or a video; existing rows default to IMAGE so the matrix /
+  // mirror / bulk image flows are unaffected. 'IMAGE' | 'VIDEO' | 'MODEL3D' | 'DOC'
+  mediaType     String  @default("IMAGE")
+  posterUrl     String?
+  durationSec   Float?
+  sourceAssetId String?
+
   product   Product           @relation(fields: [productId], references: [id], onDelete: Cascade)
   variation ProductVariation? @relation(fields: [variationId], references: [id], onDelete: Cascade)
 
@@ -6618,6 +6639,7 @@ model ListingImage {
   @@index([productId, position])
   @@index([productId, platform, amazonSlot])
   @@index([productId, variantGroupKey, variantGroupValue])
+  @@index([productId, scope, platform, mediaType])
 }
 
 enum ImageScope {

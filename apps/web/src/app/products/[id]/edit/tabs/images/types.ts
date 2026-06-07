@@ -31,6 +31,11 @@ export interface ProductImage {
   // /products catalog thumbnail picker over type=MAIN + sortOrder.
   // At most one row per product is allowed (DB partial unique index).
   isPrimary: boolean
+  // MM.1 — media type + video fields (IMAGE on all legacy rows).
+  mediaType: string
+  posterUrl: string | null
+  durationSec: number | null
+  sourceAssetId: string | null
   createdAt: string
   // PB.3d — surfaced for the eBay/Shopify stale-detection banner.
   // The workspace endpoint already returns it; previously not typed.
@@ -65,6 +70,11 @@ export interface ListingImage {
   altOverride: string | null
   // BE.1 — bulk-edit lock; locked images are skipped by bulk Delete/Clear.
   locked: boolean
+  // MM.1 — media type + video fields (IMAGE on all legacy rows).
+  mediaType: string
+  posterUrl: string | null
+  durationSec: number | null
+  sourceAssetId: string | null
 }
 
 export interface VariantSummary {
