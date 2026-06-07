@@ -487,7 +487,7 @@ export async function updateCampaign(
   ctx: ClientContext,
   externalCampaignId: string,
   patch: CampaignPatch,
-): Promise<{ ok: boolean; mode: AdsMode; rawResponse: unknown }> {
+): Promise<{ ok: boolean; mode: AdsMode; rawResponse: unknown; error?: string | null }> {
   if (adsMode() === 'sandbox') {
     logger.info('[ADS-SANDBOX] updateCampaign', {
       profileId: ctx.profileId,
@@ -522,7 +522,24 @@ export async function updateCampaign(
     contentType: 'application/vnd.spCampaign.v3+json',
     acceptHeader: 'application/vnd.spCampaign.v3+json',
   })
-  return { ok: true, mode: 'live', rawResponse: response }
+  const parsed = v3BatchResult(response, 'campaigns')
+  return { ok: parsed.ok, mode: 'live', rawResponse: response, error: parsed.error }
+}
+
+// A3 — parse a v3 batch-mutation response. Amazon returns HTTP 200 even when an entity is
+// REJECTED; the failures live in `<resource>.error[]`. liveCall already throws on non-2xx, so
+// this is purely for the 2xx-with-error-body case that was previously logged as success.
+// CONSERVATIVE: report failure ONLY when a recognized non-empty error array is present — any
+// unknown response shape returns ok, so a shape surprise can never flip a real success to a
+// false failure (no regression risk).
+export function v3BatchResult(response: unknown, resourceKey: string): { ok: boolean; error: string | null } {
+  const block = (response as Record<string, unknown> | null)?.[resourceKey] as { error?: unknown[] } | undefined
+  if (block && typeof block === 'object' && Array.isArray(block.error) && block.error.length > 0) {
+    const first = block.error[0] as Record<string, unknown>
+    const detail = JSON.stringify((first?.errors as unknown) ?? first).slice(0, 240)
+    return { ok: false, error: `amazon_rejected: ${detail}` }
+  }
+  return { ok: true, error: null }
 }
 
 export interface AdGroupPatch {
@@ -534,7 +551,7 @@ export async function updateAdGroup(
   ctx: ClientContext,
   externalAdGroupId: string,
   patch: AdGroupPatch,
-): Promise<{ ok: boolean; mode: AdsMode; rawResponse: unknown }> {
+): Promise<{ ok: boolean; mode: AdsMode; rawResponse: unknown; error?: string | null }> {
   if (adsMode() === 'sandbox') {
     logger.info('[ADS-SANDBOX] updateAdGroup', {
       profileId: ctx.profileId,
@@ -555,7 +572,8 @@ export async function updateAdGroup(
     contentType: 'application/vnd.spAdGroup.v3+json',
     acceptHeader: 'application/vnd.spAdGroup.v3+json',
   })
-  return { ok: true, mode: 'live', rawResponse: response }
+  const parsed = v3BatchResult(response, 'adGroups')
+  return { ok: parsed.ok, mode: 'live', rawResponse: response, error: parsed.error }
 }
 
 export interface ProductAdPatch {
@@ -567,7 +585,7 @@ export async function updateProductAd(
   ctx: ClientContext,
   externalAdId: string,
   patch: ProductAdPatch,
-): Promise<{ ok: boolean; mode: AdsMode; rawResponse: unknown }> {
+): Promise<{ ok: boolean; mode: AdsMode; rawResponse: unknown; error?: string | null }> {
   if (adsMode() === 'sandbox') {
     logger.info('[ADS-SANDBOX] updateProductAd', { profileId: ctx.profileId, externalAdId, patch })
     return { ok: true, mode: 'sandbox', rawResponse: { sandbox: true, patch } }
@@ -582,7 +600,8 @@ export async function updateProductAd(
     contentType: 'application/vnd.spProductAd.v3+json',
     acceptHeader: 'application/vnd.spProductAd.v3+json',
   })
-  return { ok: true, mode: 'live', rawResponse: response }
+  const parsed = v3BatchResult(response, 'productAds')
+  return { ok: parsed.ok, mode: 'live', rawResponse: response, error: parsed.error }
 }
 
 export interface TargetPatch {
@@ -594,7 +613,7 @@ export async function updateTarget(
   ctx: ClientContext,
   externalTargetId: string,
   patch: TargetPatch,
-): Promise<{ ok: boolean; mode: AdsMode; rawResponse: unknown }> {
+): Promise<{ ok: boolean; mode: AdsMode; rawResponse: unknown; error?: string | null }> {
   if (adsMode() === 'sandbox') {
     logger.info('[ADS-SANDBOX] updateTarget', {
       profileId: ctx.profileId,
@@ -615,7 +634,8 @@ export async function updateTarget(
     contentType: 'application/vnd.spKeyword.v3+json',
     acceptHeader: 'application/vnd.spKeyword.v3+json',
   })
-  return { ok: true, mode: 'live', rawResponse: response }
+  const parsed = v3BatchResult(response, 'keywords')
+  return { ok: parsed.ok, mode: 'live', rawResponse: response, error: parsed.error }
 }
 
 // ── CREATE (AX.4) — v3 SP POST. Same LWA-Bearer v3 path as the updates;

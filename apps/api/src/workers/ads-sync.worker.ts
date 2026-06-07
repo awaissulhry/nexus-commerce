@@ -178,19 +178,19 @@ async function dispatchToAmazon(
   try {
     if (payload.entityType === 'CAMPAIGN') {
       const res = await updateCampaign(ctx, payload.externalId, patch)
-      return { ok: res.ok, rawResponse: res.rawResponse, error: null }
+      return { ok: res.ok, rawResponse: res.rawResponse, error: res.error ?? null }
     }
     if (payload.entityType === 'AD_GROUP') {
       const res = await updateAdGroup(ctx, payload.externalId, patch)
-      return { ok: res.ok, rawResponse: res.rawResponse, error: null }
+      return { ok: res.ok, rawResponse: res.rawResponse, error: res.error ?? null }
     }
     if (payload.entityType === 'AD_TARGET') {
       const res = await updateTarget(ctx, payload.externalId, patch)
-      return { ok: res.ok, rawResponse: res.rawResponse, error: null }
+      return { ok: res.ok, rawResponse: res.rawResponse, error: res.error ?? null }
     }
     if (payload.entityType === 'PRODUCT_AD') {
       const res = await updateProductAd(ctx, payload.externalId, { state: patch.state })
-      return { ok: res.ok, rawResponse: res.rawResponse, error: null }
+      return { ok: res.ok, rawResponse: res.rawResponse, error: res.error ?? null }
     }
     return { ok: false, rawResponse: null, error: `unknown_entity_type:${payload.entityType}` }
   } catch (err) {
@@ -200,6 +200,27 @@ async function dispatchToAmazon(
       error: err instanceof Error ? err.message : String(err),
     }
   }
+}
+
+// A2 — stamp the LOCAL entity with the outcome of its live push, so an operator can see per
+// keyword / ad-group / campaign whether the last write actually reached Amazon. Previously the
+// worker only updated the OutboundSyncQueue row + counter, never the entity, so lastSyncedAt
+// reflected only inbound READS — delivery was invisible (the bug that made "did it restore?"
+// unanswerable). Best-effort: a stamp failure must never break the worker.
+async function stampEntitySync(
+  payload: AdMutationPayload,
+  status: 'SUCCESS' | 'FAILED' | 'SKIPPED',
+  error: string | null,
+): Promise<void> {
+  const data = { lastSyncedAt: new Date(), lastSyncStatus: status, lastSyncError: error }
+  try {
+    switch (payload.entityType) {
+      case 'CAMPAIGN': await prisma.campaign.update({ where: { id: payload.entityId }, data }); break
+      case 'AD_GROUP': await prisma.adGroup.update({ where: { id: payload.entityId }, data }); break
+      case 'AD_TARGET': await prisma.adTarget.update({ where: { id: payload.entityId }, data }); break
+      case 'PRODUCT_AD': await prisma.adProductAd.update({ where: { id: payload.entityId }, data: { lastSyncedAt: data.lastSyncedAt } }); break
+    }
+  } catch (e) { logger.warn('[ads-sync.worker] entity sync-stamp failed', { entityType: payload.entityType, entityId: payload.entityId, error: (e as Error).message }) }
 }
 
 async function processAdsSyncJob(job: Job<AdsJobData>): Promise<{ status: string; queueId: string }> {
@@ -247,6 +268,7 @@ async function processAdsSyncJob(job: Job<AdsJobData>): Promise<{ status: string
         syncedAt: new Date(),
       },
     })
+    await stampEntitySync(payload, 'SKIPPED', `${gate.deniedAt}: ${gate.reason}`)
     return { status: 'SKIPPED', queueId }
   }
 
@@ -270,6 +292,7 @@ async function processAdsSyncJob(job: Job<AdsJobData>): Promise<{ status: string
   const ctx: ClientContext = { profileId, region: regionFor(marketplace) }
   const result = await dispatchToAmazon(payload, ctx)
   if (result.ok) {
+    const localOnly = (result.rawResponse as { skipped?: string } | null)?.skipped // e.g. 'no_external_id' — NOTHING reached Amazon
     await prisma.outboundSyncQueue.update({
       where: { id: queueId },
       data: {
@@ -293,14 +316,16 @@ async function processAdsSyncJob(job: Job<AdsJobData>): Promise<{ status: string
       .catch(() => {
         /* audit-update failure must not break the worker */
       })
-    if (gate.mode === 'live') {
+    // A2/A3 — stamp the entity with the real outcome. A no_external_id result pushed NOTHING to
+    // Amazon, so mark it SKIPPED and do NOT count it as a live write (the counter must mean
+    // "reached Amazon", not merely "processed").
+    await stampEntitySync(payload, localOnly ? 'SKIPPED' : 'SUCCESS', localOnly ? `local-only: ${localOnly}` : null)
+    if (gate.mode === 'live' && !localOnly) {
       await recordSuccessfulWrite(marketplace)
       // Apex A.2a — count this against the campaign's daily live-write cap.
-      if (isBidChange(payload)) {
-        await recordCampaignLiveWrite(campaignId)
-      }
+      if (isBidChange(payload)) await recordCampaignLiveWrite(campaignId)
     }
-    return { status: 'SUCCESS', queueId }
+    return { status: localOnly ? 'SKIPPED' : 'SUCCESS', queueId }
   }
   // Failure path: bump retryCount; if at max, mark dead.
   const nextRetry = row.retryCount + 1
@@ -330,6 +355,7 @@ async function processAdsSyncJob(job: Job<AdsJobData>): Promise<{ status: string
       .catch(() => {
         /* swallow */
       })
+    await stampEntitySync(payload, 'FAILED', result.error) // A2 — surface the failure on the entity itself
   }
   return { status: 'FAILED', queueId }
 }
