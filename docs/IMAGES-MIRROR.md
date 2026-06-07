@@ -91,9 +91,18 @@ A **Select** toggle (off by default) turns the matrix into a bulk editor:
 - **Lock** (`ListingImage.locked`, server-persisted) protects an image: it shows a padlock badge, is skipped by Delete / Reset, and won't be overwritten by Copy. `POST /images-workspace/lock {ids,locked}`. Lock does **not** affect Publish.
 - Classification (which actions apply + the counts) is the pure `classifyBulk` (`amazon/bulkSelection.ts`).
 
+## Product media manager (MM-series)
+Turns the Master tab into the hub for **all media — images and videos** — and makes the matrix view fully customizable.
+- **Unified model:** `ProductImage` + `ListingImage` carry `mediaType` ('IMAGE'|'VIDEO'|'MODEL3D'|'DOC') + `posterUrl` + `durationSec` + `sourceAssetId` (additive migration). The `resolveCell`/`resolveMasterForSlot` cascade guards image slots to IMAGE so gallery videos never bleed into image slots.
+- **Videos in the hub:** `POST /products/:id/videos` uploads via the Cloudinary video path (poster `so_0` + duration) → a `mediaType=VIDEO` `ProductImage` + DAM tee. The Master tab's **Videos** section (`VideoSection.tsx`) shows poster tiles → inline `<video>`, duration badge, delete, with **validation** warnings (`videoValidation.ts`: format / ≥1280×720 / 16:9 / ≤5min / ≤150MB).
+- **Dynamic columns:** a **Columns** modal shows/hides + reorders the Amazon slot-columns, persisted (`useMatrixColumnPrefs` — versioned localStorage, reconcile-against-canonical, MAIN always shown). **Completion chips** ("Safety 6/6 ✓") with a per-group eye toggle hide a finished group in one click (`groupCoverage.ts`). No auto-hide — the operator stays in control.
+- **Saved views:** a **Views** menu saves the column layout as a named, cross-device view via the generic `/api/saved-views` (`surface='product-media'`).
+- **Deferred:** channel video PUBLISH (Shopify Media API → eBay Vault → Amazon A+); the DAM↔ProductImage backfill + drift UI; per-role→per-channel publish, size charts, 3D, docs.
+
 ## Tests
 Pure verifiers (vitest): slot taxonomy (incl. PS naming + fallback), reconcile
 categorization, exact-mirror plan + the wire JSON (replace/delete/MAIN-guard),
 mirror-diff categorization, gallery-fill mapping, cross-market copy
 (whole/per-cell, shared→PLATFORM, replace-by-id, skip-self), bulk classification
-(deletable/lockable/overrides, lock-exclusion, all-markets). ~44 cases.
+(deletable/lockable/overrides, lock-exclusion, all-markets), video validation,
+matrix-column reconcile, slot-group coverage. ~63 cases.
