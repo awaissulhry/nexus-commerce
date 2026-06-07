@@ -17,6 +17,7 @@ import { Button } from '@/components/ui/Button'
 import { cn } from '@/lib/utils'
 import { useImagesWorkspace } from './images/useImagesWorkspace'
 import MasterPanel from './images/MasterPanel'
+import VideoSection from './images/VideoSection'
 import QualityChecklist from './images/QualityChecklist'
 import ImageActionBar from './images/ImageActionBar'
 import type { PublishTarget } from './images/ImageActionBar'
@@ -119,6 +120,11 @@ export default function ImagesTab({ product, discardSignal, onDirtyChange, onPre
   // These useMemo calls must stay above the early returns to satisfy Rules of Hooks.
   const listing  = workspace.data?.listing  ?? []
   const master   = workspace.data?.master   ?? []
+  // MM.3 — split the master hub: MasterPanel keeps its image-only contract;
+  // videos render in VideoSection. (resolveMasterForSlot also guards image
+  // slots to IMAGE, so this split is belt-and-braces.)
+  const masterImages = master.filter((m) => (m.mediaType ?? 'IMAGE') === 'IMAGE')
+  const masterVideos = master.filter((m) => m.mediaType === 'VIDEO')
   const variants = workspace.data?.variants ?? []
   const channelLiveImages = workspace.data?.channelLiveImages ?? []
 
@@ -611,9 +617,10 @@ export default function ImagesTab({ product, discardSignal, onDirtyChange, onPre
             own overflow-x-auto container instead of widening the whole page. */}
         <div className="min-w-0">
           {activeChannel === 'master' && (
+            <>
             <MasterPanel
               product={wp}
-              images={master}
+              images={masterImages}
               listingImages={listing}
               variants={variants}
               activeAxis={activeAxis}
@@ -624,13 +631,20 @@ export default function ImagesTab({ product, discardSignal, onDirtyChange, onPre
               // state directly. The master-image API endpoints have
               // already persisted by the time the callback fires;
               // skipping reload() removes the page-blink.
-              onImagesChange={(next) => workspace.setMasterImages(() => next)}
+              onImagesChange={(next) => workspace.setMasterImages((prev) => [...next, ...prev.filter((m) => m.mediaType === 'VIDEO')])}
               onAddToChannel={workspace.addToChannel}
               onToast={showToast}
-              onOpenLightbox={(img) => lightbox.open(fromMaster(img), master.map(fromMaster))}
+              onOpenLightbox={(img) => lightbox.open(fromMaster(img), masterImages.map(fromMaster))}
               onOpenDamPicker={() => setDamPickerOpen(true)}
               onOpenLifestyle={() => setLifestyleOpen(true)}
             />
+            <VideoSection
+              productId={product.id}
+              videos={masterVideos}
+              onVideosChange={(next) => workspace.setMasterImages((prev) => [...prev.filter((m) => (m.mediaType ?? 'IMAGE') === 'IMAGE'), ...next])}
+              onToast={showToast}
+            />
+            </>
           )}
           {activeChannel === 'amazon' && (
             <AmazonPanel
