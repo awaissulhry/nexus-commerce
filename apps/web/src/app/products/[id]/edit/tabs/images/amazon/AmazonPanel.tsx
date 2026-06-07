@@ -6,7 +6,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/Button'
-import { AlertTriangle, CheckSquare, ChevronDown, Clock, Eye, Info, Loader2, SlidersHorizontal } from 'lucide-react'
+import { AlertTriangle, Check, CheckSquare, ChevronDown, Clock, Eye, EyeOff, Info, Loader2, SlidersHorizontal } from 'lucide-react'
 import { beFetch } from '../api'
 import AmazonMatrix from './AmazonMatrix'
 import AmazonPublishBar from './AmazonPublishBar'
@@ -39,6 +39,7 @@ import {
 import { CopyToMarketsModal } from './CopyToMarketsModal'
 import { useMatrixColumnPrefs } from './useMatrixColumnPrefs'
 import { MatrixColumnsModal } from './MatrixColumnsModal'
+import { computeSlotGroups } from './groupCoverage'
 import { buildCrossMarketUpserts } from './crossMarketCopy'
 import type { ChannelLiveImage, ListingImage, PendingUpsert, ProductImage, VariantSummary, WorkspaceProduct, AmazonJobSummary } from '../types'
 
@@ -259,6 +260,16 @@ export default function AmazonPanel({
   const [bulkMode, setBulkMode] = useState(false)
   const matrixCols = useMatrixColumnPrefs()
   const [colsModalOpen, setColsModalOpen] = useState(false)
+  // MM.6 — slot-group completion (badges) + per-group quick-hide.
+  const slotGroups = computeSlotGroups([...ALL_SLOTS], (slot) => {
+    const groups: Array<string | null> = [...amazon.variantGroups.map((g) => g.groupValue), null]
+    return groups.some((g) => !!amazon.resolveCell(g, slot))
+  })
+  function toggleGroupHidden(gslots: AmazonSlot[]) {
+    const set = new Set<string>(gslots)
+    const hidden = gslots.every((s) => !matrixCols.visibleSlots.includes(s))
+    matrixCols.save(matrixCols.prefs.map((p) => (set.has(p.slot) && p.slot !== 'MAIN' ? { ...p, visible: hidden } : p)))
+  }
 
   function handleBulkDelete(ids: string[]) {
     if (!addPendingDelete) return
@@ -722,6 +733,40 @@ export default function AmazonPanel({
           <span className="ml-2 text-[11px] text-slate-400">Tick images, or use the row / column / all boxes, then pick a bulk action.</span>
         )}
       </div>
+
+      {/* MM.6 — slot-group completion badges + per-group quick-hide */}
+      {(amazon.variantGroups.length > 0 || variants.length > 0) && (
+        <div className="px-4 pb-2 flex flex-wrap items-center gap-1.5">
+          {slotGroups.map((g) => {
+            const hidden = g.slots.every((s) => !matrixCols.visibleSlots.includes(s))
+            return (
+              <span
+                key={g.key}
+                className={cn(
+                  'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px]',
+                  g.complete
+                    ? 'border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-300'
+                    : 'border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400',
+                  hidden && 'opacity-50',
+                )}
+              >
+                {g.complete && <Check className="w-3 h-3" />}
+                {g.label} {g.filledSlots}/{g.totalSlots}
+                {g.key !== 'MAIN' && (
+                  <button
+                    type="button"
+                    onClick={() => toggleGroupHidden(g.slots)}
+                    title={hidden ? `Show ${g.label} columns` : `Hide ${g.label} columns`}
+                    className="ml-0.5 opacity-60 hover:opacity-100"
+                  >
+                    {hidden ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
+                  </button>
+                )}
+              </span>
+            )
+          })}
+        </div>
+      )}
 
       {/* Matrix */}
       <div className="p-4">
