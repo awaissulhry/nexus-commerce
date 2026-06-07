@@ -302,6 +302,8 @@ const productImagesCrudRoutes: FastifyPluginAsync = async (fastify) => {
           sortOrder: existing,
           posterUrl,
           durationSec: cloudResult.durationSeconds ?? null,
+          width: cloudResult.width,
+          height: cloudResult.height,
           fileSize: cloudResult.bytes,
           mimeType,
           contentHash,

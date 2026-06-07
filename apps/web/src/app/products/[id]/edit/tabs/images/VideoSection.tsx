@@ -7,9 +7,10 @@
 // endpoints), so local state is patched via onVideosChange (no page reload).
 
 import { useRef, useState } from 'react'
-import { Plus, Trash2, Play, Loader2, Film } from 'lucide-react'
+import { Plus, Trash2, Play, Loader2, Film, AlertTriangle } from 'lucide-react'
 import { beFetch } from './api'
 import type { ProductImage } from './types'
+import { validateVideo } from './videoValidation'
 
 function fmtDuration(sec: number | null): string {
   if (!sec || sec <= 0) return ''
@@ -108,7 +109,9 @@ export default function VideoSection({
         </div>
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-          {videos.map((v) => (
+          {videos.map((v) => {
+            const warnings = validateVideo(v)
+            return (
             <div key={v.id} className="group relative rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden bg-slate-50 dark:bg-slate-800/40">
               <div className="relative aspect-square">
                 {playingId === v.id ? (
@@ -134,6 +137,14 @@ export default function VideoSection({
                     {fmtDuration(v.durationSec)}
                   </span>
                 )}
+                {warnings.length > 0 && (
+                  <span
+                    title={warnings.map((w) => w.message).join('\n')}
+                    className={`absolute top-1 left-1 rounded p-0.5 text-white ${warnings.some((w) => w.level === 'error') ? 'bg-rose-600' : 'bg-amber-500'}`}
+                  >
+                    <AlertTriangle className="w-3 h-3" />
+                  </span>
+                )}
               </div>
               <div className="flex items-center justify-between gap-1 px-2 py-1.5">
                 <span className="truncate text-[11px] text-slate-500 dark:text-slate-400" title={v.alt ?? ''}>
@@ -150,7 +161,8 @@ export default function VideoSection({
                 </button>
               </div>
             </div>
-          ))}
+            )
+          })}
         </div>
       )}
     </div>
