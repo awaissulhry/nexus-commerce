@@ -16,12 +16,12 @@ export interface RankTargetSpec {
   biasPct: number | null // starting placement-bias % on entry
   pause: boolean
   allOut: boolean // ignore acosCapPct — hold the slot at any cost up to maxCpc
-  // MP — motion profile: how the loop MOVES the bias. All null/false => today's behaviour.
-  jumpStartPct?: number | null // opening bid: SNAP to this in one cycle on entry; null = gradual ramp to biasPct
-  stepUpPct?: number | null // climb step %/cycle; null => 15 (25 all-out)
-  stepDownPct?: number | null // ease step %/cycle; null => SNAP down to floor on plan change; a number => gradual (never snap)
-  maxBiasPct?: number | null // climb ceiling; null => 900
-  keepClimbing?: boolean // after the opening, keep stepping to the ceiling even with NO signal (bounded by ceiling + ACOS)
+  // MP v2 — motion profile: HOW the loop moves the bid. floor = biasPct (Placement %); blank knobs => snap to it both ways.
+  jumpStartPct?: number | null // DORMANT in v2 — computeStep ignores it (snap-to-Placement made the opening jump redundant)
+  stepUpPct?: number | null // climb step %/cycle; null => SNAP up to Placement % (default 15/25 when chasing above it)
+  stepDownPct?: number | null // ease step %/cycle; null => SNAP down to Placement %; a number => gradual (never snap)
+  maxBiasPct?: number | null // ceiling; null => Placement % (never above). Set above to allow climbing. all-out forces 900.
+  keepClimbing?: boolean // climb to the ceiling even with NO signal (only matters when ceiling > Placement %; bounded by ceiling + ACOS)
 }
 
 export interface ScheduleWindow { days?: number[]; startHour?: number; endHour?: number; bidMultiplierPct?: number; targetKey?: string }
