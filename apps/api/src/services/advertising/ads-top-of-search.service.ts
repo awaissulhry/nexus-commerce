@@ -61,7 +61,11 @@ export async function analyzeTopOfSearch(opts: { windowDays?: number; marketplac
     if (!c) continue
     const topSpendCents = microsToCents(p._sum.costMicros)
     const topSalesCents = p._sum.sales7dCents ?? 0
-    const topAcos = topSalesCents > 0 ? topSpendCents / topSalesCents : null
+    // C4 — spend with ZERO attributed sales is effectively INFINITE ACOS (burning money for
+    // nothing), NOT "no signal". Returning null here let the controller treat it as ACOS-ok and
+    // RAISE the bid. Use an over-any-cap sentinel so the loop eases off instead. Truly no spend
+    // (0/0) stays null = genuinely no signal.
+    const topAcos = topSalesCents > 0 ? topSpendCents / topSalesCents : (topSpendCents > 0 ? 9.99 : null)
     const topIS = p._avg.topOfSearchIS != null ? Number(p._avg.topOfSearchIS) : null
     const db = (c.dynamicBidding ?? {}) as { placementBidding?: Array<{ placement: string; percentage: number }> }
     const currentPct = db.placementBidding?.find((x) => x.placement === TOP_BID_KEY)?.percentage ?? 0

@@ -78,8 +78,26 @@ export async function runDaypartingOnce(): Promise<{ evaluated: number; changed:
   // Dayparting must skip them or the two crons fight (one pauses, one pushes).
   // The legacy windows stay intact but inert; drop defaultTargetKey to hand
   // control back to dayparting.
+  // C3b — also skip campaigns governed by an enabled rank PLAN. A plan resolves its family
+  // dynamically, so a plain (non-goal-mode) schedule sitting on a plan-governed campaign would
+  // let dayparting floor/restore bids the rank plan is simultaneously holding — they'd fight.
+  const planGoverned = new Set<string>()
+  try {
+    const plans = await prisma.productRankPlan.findMany({ where: { enabled: true }, select: { productId: true, marketplace: true, excludeCampaignIds: true } })
+    if (plans.length) {
+      const { resolveProductFamily } = await import('../services/advertising/ads-dayparting-refresh.service.js')
+      for (const p of plans) {
+        try {
+          const fam = await resolveProductFamily({ parentProductId: p.productId, marketplace: p.marketplace })
+          const excluded = new Set<string>(Array.isArray(p.excludeCampaignIds) ? (p.excludeCampaignIds as string[]) : [])
+          for (const c of fam.campaigns ?? []) if (!excluded.has(c.id)) planGoverned.add(c.id)
+        } catch { /* best-effort per plan */ }
+      }
+    }
+  } catch { /* best-effort */ }
+
   const schedules = (await prisma.adSchedule.findMany({ where: { enabled: true } }))
-    .filter((s) => !isGoalMode(s.windows, s.defaultTargetKey))
+    .filter((s) => !isGoalMode(s.windows, s.defaultTargetKey) && !planGoverned.has(s.campaignId))
   let changed = 0
   let bidsAdjusted = 0
   for (const s of schedules) {
@@ -173,8 +191,13 @@ export async function runDaypartingCron(): Promise<void> {
 }
 
 let task: ReturnType<typeof cron.schedule> | null = null
+let running = false // C3 — overlap guard: a slow tick must not run concurrently with the next
 export function startDaypartingCron(): void {
   if (task) return
-  task = cron.schedule('*/15 * * * *', () => void runDaypartingCron())
+  task = cron.schedule('*/15 * * * *', () => {
+    if (running) { logger.warn('[ad-dayparting] previous tick still in flight — skipping this run'); return }
+    running = true
+    void runDaypartingCron().finally(() => { running = false })
+  })
   logger.info('ad-dayparting cron scheduled (*/15 * * * *)')
 }

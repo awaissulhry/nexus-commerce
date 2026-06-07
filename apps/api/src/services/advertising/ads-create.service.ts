@@ -224,8 +224,15 @@ export async function updatePlacementBidding(input: PlacementBiddingInput): Prom
   if (c.externalCampaignId && c.marketplace) {
     const ctx = await resolveCtx(c.marketplace)
     if (ctx) {
-      const gate = await checkAdsWriteGate({ marketplace: c.marketplace, payloadValueCents: 0 })
-      if (gate.allowed) { const r = await updateCampaign(ctx, c.externalCampaignId, { placementBidding: adjustments, biddingStrategy: input.biddingStrategy }); mode = r.mode }
+      // C1 — pass campaignId so placement writes honour the SAME per-campaign live-write allowlist
+      // as every bid write (previously omitted → placement bias bypassed the allowlist entirely).
+      const gate = await checkAdsWriteGate({ marketplace: c.marketplace, campaignId: input.campaignId, payloadValueCents: 0 })
+      if (!gate.allowed) {
+        logger.warn('[AX2.2] placement write gated', { campaignId: input.campaignId, reason: (gate as { reason?: string }).reason })
+      } else {
+        const r = await updateCampaign(ctx, c.externalCampaignId, { placementBidding: adjustments, biddingStrategy: input.biddingStrategy })
+        mode = r.mode
+      }
     }
   }
   await prisma.campaign.update({ where: { id: input.campaignId }, data: { dynamicBidding: db as never, ...(input.biddingStrategy ? { biddingStrategy: input.biddingStrategy === 'autoForSales' ? 'AUTO_FOR_SALES' : input.biddingStrategy === 'manual' ? 'MANUAL' : 'LEGACY_FOR_SALES' } : {}) } })

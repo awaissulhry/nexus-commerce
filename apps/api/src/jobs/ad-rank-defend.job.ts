@@ -81,7 +81,7 @@ export interface RankDefendSummary { evaluated: number; applied: number; decisio
 
 const pctOf = (f: number | null): number | null => (f != null ? Math.round(f * 100) : null)
 type SigMap = Map<string, { currentPct: number; topIS: number | null; topAcos: number | null }>
-interface CampRow { id: string; name: string; status: string; dynamicBidding: unknown; bidsSuppressedAt?: Date | null }
+interface CampRow { id: string; name: string; status: string; dynamicBidding: unknown; bidsSuppressedAt?: Date | null; deliveryReasons?: string[] }
 
 // RD.4 — one per-campaign decision body, shared by the schedule loop and the
 // product-plan fan-out. `write` gates ALL actuation (pause / resume / placement
@@ -128,7 +128,14 @@ async function decideAndMaybeApply(
   // RD.5 — family daily-budget cap: suppress raises (still allow holds/lowers) so a
   // must-win window can't push the whole family over its shared budget.
   let action = d.action, nextPct = d.nextPct, reason = d.reason
-  if (ctx.suppressRaise && action === 'raise') { action = 'hold'; nextPct = currentPct; reason = 'family daily budget reached — holding (no raise)' }
+  // C2 — never bid UP into a capped campaign: raising the bias just burns the fixed daily budget
+  // earlier and SURRENDERS the slot for the rest of the day (the opposite of holding rank). Hold
+  // instead and let the operator raise the budget. Same idea as the family-budget suppressRaise.
+  const campOutOfBudget = (camp.deliveryReasons ?? []).includes('OUT_OF_BUDGET')
+  if ((ctx.suppressRaise || campOutOfBudget) && action === 'raise') {
+    action = 'hold'; nextPct = currentPct
+    reason = campOutOfBudget ? 'campaign OUT_OF_BUDGET — holding (raise the daily budget to hold this slot)' : 'family daily budget reached — holding (no raise)'
+  }
   // PP — for a search target, also ensure the OTHER search placement (Top↔Rest) is
   // zeroed — EVEN on a hold — so a rest-of-search window drops a leftover Top bias (and
   // vice-versa). Actuate when the target's own bias changes OR the other search
@@ -238,7 +245,7 @@ export async function runRankDefendOnce(opts: { dryRun?: boolean; onlyPlanId?: s
 
   // Union of schedule + plan campaigns → one campaign load + one signal pass.
   const unionIds = [...new Set([...schedules.map((s) => s.campaignId), ...governed])]
-  const campaigns = await prisma.campaign.findMany({ where: { id: { in: unionIds } }, select: { id: true, name: true, marketplace: true, status: true, externalCampaignId: true, dynamicBidding: true, acos: true, spend: true, bidsSuppressedAt: true } })
+  const campaigns = await prisma.campaign.findMany({ where: { id: { in: unionIds } }, select: { id: true, name: true, marketplace: true, status: true, externalCampaignId: true, dynamicBidding: true, acos: true, spend: true, bidsSuppressedAt: true, deliveryReasons: true } })
   const campById = new Map(campaigns.map((c) => [c.id, c]))
   // RTC — per-campaign (campaign-scope) target overrides for every campaign in play.
   const schedOverrides = new Map<string, TargetOverrideMap>()
@@ -355,11 +362,16 @@ export async function runRankDefendCron(): Promise<void> {
 }
 
 let task: ReturnType<typeof cron.schedule> | null = null
+let running = false // C3 — overlap guard: a slow tick must not run concurrently with the next
 export function startRankDefendCron(): void {
   if (task) return
   // OFF by default — operator opts in (and the write-gate still governs live pushes).
   if (process.env.NEXUS_ENABLE_RANK_DEFEND !== '1') { logger.info('ad-rank-defend cron disabled (set NEXUS_ENABLE_RANK_DEFEND=1)'); return }
   const schedule = process.env.NEXUS_RANK_DEFEND_SCHEDULE ?? '*/15 * * * *'
-  task = cron.schedule(schedule, () => void runRankDefendCron())
+  task = cron.schedule(schedule, () => {
+    if (running) { logger.warn('[ad-rank-defend] previous tick still in flight — skipping this run'); return }
+    running = true
+    void runRankDefendCron().finally(() => { running = false })
+  })
   logger.info(`ad-rank-defend cron scheduled (${schedule})`)
 }
