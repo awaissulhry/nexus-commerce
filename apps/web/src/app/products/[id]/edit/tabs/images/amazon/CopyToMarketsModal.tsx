@@ -47,7 +47,7 @@ export function CopyToMarketsModal({
         </div>
         <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">
           From <b>Amazon {sourceMarketplace}</b>. Replaces the same slot(s) at each target, in the same placement.
-          Staged as draft — <b>Save</b>, then <b>Mirror to Amazon</b> to publish.
+          Staged as draft — <b>Save</b>, then <b>Publish to Amazon</b>.
         </p>
 
         <div className="space-y-1 mb-3 max-h-56 overflow-y-auto">

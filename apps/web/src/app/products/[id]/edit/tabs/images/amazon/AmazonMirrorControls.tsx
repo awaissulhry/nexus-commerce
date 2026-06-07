@@ -5,7 +5,8 @@
 // M6 — "Amazon Mirror" control. Additive panel (does not touch the matrix):
 //   • Fill from gallery  → map the master gallery onto Amazon slots
 //   • Preview            → mirror-diff (adds / replaces / REMOVES) vs live
-//   • Mirror to Amazon   → exact-mirror publish so Amazon == Nexus
+//   • Publish to Amazon  → exact-mirror publish so Amazon == Nexus (same flow
+//                          as the publish bar: save-first + poll + rollback)
 // Backed by the M2–M6 engine. Surfaces the deletion count so the operator
 // sees removals before publishing.
 
@@ -27,12 +28,16 @@ export function AmazonMirrorControls({
   marketplace,
   onReload,
   onCopyToMarkets,
+  onPublish,
 }: {
   productId: string
   marketplace: AmazonMarketplace
   onReload: () => void
   /** CM — open the "copy this market → other markets" picker (active market only). */
   onCopyToMarkets?: () => void
+  /** Robust publish (saves pending first + polls status + rollback) — the SAME
+   *  flow as the publish bar, so this panel's button isn't a lesser duplicate. */
+  onPublish: (marketplace: string) => Promise<void>
 }) {
   const [busy, setBusy] = useState<'fill' | 'preview' | 'mirror' | null>(null)
   const [diff, setDiff] = useState<DiffTotals | null>(null)
@@ -77,29 +82,26 @@ export function AmazonMirrorControls({
     }
   }
 
-  async function mirror() {
+  async function publishNow() {
     const warn =
-      `Mirror Nexus images to Amazon ${scopeLabel}?\n\n` +
+      `Publish Nexus images to Amazon ${scopeLabel}?\n\n` +
       `Amazon will match Nexus EXACTLY — additions, reorders, and removals` +
-      `${diff && diff.deletes > 0 ? ` (including ${diff.deletes} removal${diff.deletes === 1 ? '' : 's'})` : ''}.`
+      `${diff && diff.deletes > 0 ? ` (including ${diff.deletes} removal${diff.deletes === 1 ? '' : 's'})` : ''}.\n` +
+      `Your pending edits are saved first.`
     if (!window.confirm(warn)) return
     setBusy('mirror'); setErr(null); setMsg(null)
+    // Reuse the robust per-market publish (save-first + poll + rollback) — the
+    // SAME flow as the publish bar. Errors surface in the publish status bar.
     let ok = 0
-    let fail = 0
     for (const m of markets) {
       try {
-        const res = await beFetch(`/api/products/${productId}/amazon-images/publish`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ marketplace: m }),
-        })
-        if (res.ok) ok += 1
-        else fail += 1
+        await onPublish(m)
+        ok += 1
       } catch {
-        fail += 1
+        /* per-market error is reflected in the publish status bar */
       }
     }
-    setMsg(`Mirror submitted to Amazon: ${ok} market${ok === 1 ? '' : 's'}${fail ? `, ${fail} failed` : ''}.`)
+    setMsg(`Publish submitted for ${ok} market${ok === 1 ? '' : 's'} — see the publish status below.`)
     setBusy(null)
     onReload()
   }
@@ -109,7 +111,7 @@ export function AmazonMirrorControls({
       <div className="flex items-center gap-2 mb-1">
         <ShieldCheck className="w-4 h-4 text-orange-600 dark:text-orange-400 flex-shrink-0" />
         <span className="text-sm font-semibold text-slate-800 dark:text-slate-100">
-          Amazon Mirror — Nexus is the source of truth
+          Publish to Amazon — Nexus is the source of truth
         </span>
       </div>
       <p className="text-xs text-slate-600 dark:text-slate-400 mb-2.5">
@@ -154,12 +156,12 @@ export function AmazonMirrorControls({
         </button>
         <button
           type="button"
-          onClick={mirror}
+          onClick={publishNow}
           disabled={busy !== null}
           className="inline-flex items-center gap-1.5 rounded-lg bg-orange-600 hover:bg-orange-700 px-2.5 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
         >
           {busy === 'mirror' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <UploadCloud className="w-3.5 h-3.5" />}
-          Mirror to Amazon
+          Publish to Amazon
         </button>
         {onCopyToMarkets && (
           <button

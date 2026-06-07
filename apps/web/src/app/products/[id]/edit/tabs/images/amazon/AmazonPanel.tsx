@@ -563,6 +563,7 @@ export default function AmazonPanel({
             ? () => setCopyPicker({ slots: [...ALL_SLOTS], label: 'all images' })
             : undefined
         }
+        onPublish={(m) => amazon.publish(m as AmazonMarketplace)}
       />
 
       {/* IE.5 — Live channel strip above the matrix */}
