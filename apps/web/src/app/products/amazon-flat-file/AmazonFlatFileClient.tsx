@@ -27,6 +27,7 @@ import {
 import { cn } from '@/lib/utils'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useOrderEventsRefresh } from '@/hooks/use-order-events-refresh'
+import { useToast } from '@/components/ui/Toast'
 import FeedSubmissionsPanel from './FeedSubmissionsPanel'
 import { emitInvalidation, useInvalidationChannel } from '@/lib/sync/invalidation-channel'
 import { Button } from '@/components/ui/Button'
@@ -534,6 +535,7 @@ export default function AmazonFlatFileClient({
   const [feedEntries, setFeedEntries] = useState<FeedEntry[]>([])
   const [submitting, setSubmitting] = useState(false)
   const [polling, setPolling] = useState(false)
+  const { toast } = useToast() // FFS.7 — submit summary + feed-completion notices
   const [submitPanelOpen, setSubmitPanelOpen] = useState(false)
   const [submissionHistory, setSubmissionHistory] = useState<SubmissionRecord[]>([])
   const [submissionPanelOpen, setSubmissionPanelOpen] = useState(false)
@@ -1995,15 +1997,32 @@ export default function AmazonFlatFileClient({
 
     const entries: FeedEntry[] = []
     const errors: string[] = []
+    const skipped: string[] = []
+    const submitted: string[] = []
     for (const result of settled) {
-      if (result.status === 'fulfilled' && !result.value.skipped) {
-        entries.push({ market: result.value.mp, feedId: result.value.feedId, status: 'IN_QUEUE', results: [] })
+      if (result.status === 'fulfilled') {
+        if (result.value.skipped) { skipped.push(result.value.mp) }
+        else {
+          entries.push({ market: result.value.mp, feedId: result.value.feedId, status: 'IN_QUEUE', results: [] })
+          submitted.push(result.value.mp)
+        }
       } else if (result.status === 'rejected') {
         errors.push(result.reason?.message ?? 'Submit failed')
       }
     }
     setFeedEntries(entries)
-    if (errors.length) setLoadError({ message: errors.join(' · '), at: Date.now() })
+    // FFS.7 — explicit summary: skipped markets were silently dropped before
+    // (leading to duplicate re-submits), and partial failures were invisible.
+    if (errors.length) {
+      setLoadError({ message: errors.join(' · '), at: Date.now() })
+      toast.error(`Submit failed: ${errors.join(' · ')}`)
+    }
+    if (submitted.length) {
+      const skip = skipped.length ? ` · skipped ${skipped.join(', ')} (no edited rows)` : ''
+      toast.success(`Submitted to ${submitted.join(', ')}${skip}`)
+    } else if (skipped.length && !errors.length) {
+      toast.warning(`Nothing submitted — ${skipped.join(', ')} had no edited rows to send`)
+    }
 
     // Save submission records to history
     const now = new Date().toISOString()
@@ -2029,7 +2048,7 @@ export default function AmazonFlatFileClient({
       ))
     }
     setSubmitting(false)
-  }, [rows, marketplace, productType, manifest, saveSubmissionRecord, createVersion])
+  }, [rows, marketplace, productType, manifest, saveSubmissionRecord, createVersion, toast])
 
   // ── Platform sync ──────────────────────────────────────────────────
   const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'synced' | 'error'>('idle')
@@ -2096,6 +2115,14 @@ export default function AmazonFlatFileClient({
         if (isFeedTerminal(entry.status)) {
           const ok = entry.results.filter((r: FeedResult) => r.status === 'success').length
           const err = feedErrorCount(entry.results)
+          // FFS.7 — notify on completion (the cron/SSE can flip this while the
+          // operator is on another screen). Only on the transition into terminal.
+          const prev = feedEntries.find((e) => e.feedId === entry.feedId)
+          if (prev && !isFeedTerminal(prev.status)) {
+            if (entry.status === 'DONE' && err === 0) toast.success(`${entry.market}: feed done — ${ok} SKU${ok === 1 ? '' : 's'} ok`)
+            else if (entry.status === 'DONE') toast.warning(`${entry.market}: feed done — ${ok} ok, ${err} error${err === 1 ? '' : 's'}`)
+            else toast.error(`${entry.market}: feed ${entry.status}`)
+          }
           updateSubmissionRecord(entry.feedId, {
             status: entry.status as SubmissionRecord['status'],
             successCount: ok,
@@ -2120,7 +2147,7 @@ export default function AmazonFlatFileClient({
       }
     } catch (e: any) { setLoadError({ message: e?.message ?? 'Polling failed', at: Date.now() }) }
     finally { setPolling(false) }
-  }, [feedEntries, marketplace, productType, rows, updateSubmissionRecord, syncToPlatform])
+  }, [feedEntries, marketplace, productType, rows, updateSubmissionRecord, syncToPlatform, toast])
 
   // FFS.5 — restore in-flight feeds from the server on mount so a reload/reopen
   // never "loses" a submission that's still processing (feedEntries is in-memory
