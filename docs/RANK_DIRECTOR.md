@@ -46,26 +46,34 @@ join/leave; `AdProductAd.productId` is often null).
 Cron self-gated on `NEXUS_ENABLE_RANK_DEFEND=1`. Auto-actuation skips `manualOnly`
 plans; an explicit run-now (`force`) actuates them.
 
-## Motion profiles (MP) — how a bid MOVES
+## Motion profiles (MP v2) — "Placement % is the bid"
 
-`computeStep` (`rank-controller.ts`) is the one place a bid moves; its motion is
-operator-controllable per `RankTarget` (and per product/campaign via the override
-layer). Five nullable/false fields, all defaulting to the historical behaviour
-(regression-locked by `rank-controller.vitest.test.ts`):
+`computeStep` (`rank-controller.ts`) is the one place a bid moves. The model the operator
+chose: **Placement % (`biasPct`) is the bid the loop holds — it snaps to it, up or down, in
+one cycle and holds. It only goes ABOVE Placement % when a Ceiling is raised above it.**
+Per-`RankTarget`, overridable per product/campaign; the v2 defaults are regression-locked by
+`rank-controller.vitest.test.ts`.
 
 | Field | Meaning | Blank/default |
 | --- | --- | --- |
-| `jumpStartPct` | **opening jump** — snap straight to this % in one cycle on entry | gradual ramp `+step×2` to `biasPct` |
-| `stepUpPct` | **climb step** %/cycle | `15` (`25` all-out) |
-| `stepDownPct` | **ease step** %/cycle; a number ⇒ gradual, never snap | snap to the floor in one cycle |
-| `maxBiasPct` | **ceiling** the climb won't exceed | `900` |
-| `keepClimbing` | after the opening, keep stepping to the ceiling **with no signal** (still bounded by ceiling + ACOS cap; the ceiling becomes the rest point) | `false` (hold at the floor until a signal) |
+| `biasPct` | **Placement %** — the bid the loop holds (the floor/anchor) | snap to it both ways |
+| `stepUpPct` | **Climb step** — set ⇒ ramp UP `+N`/cyc to the floor (and the chase rate above it) | blank ⇒ **snap up** |
+| `stepDownPct` | **Ease step** — set ⇒ ease DOWN `−N`/cyc to the floor (opposite of Climb) | blank ⇒ **snap down** |
+| `maxBiasPct` | **Ceiling** — set ABOVE Placement % to allow climbing up to it | blank ⇒ **= Placement %** (never above) |
+| `keepClimbing` | climb to the Ceiling on its own (no signal), bounded by Ceiling + ACOS | `false` (only climb when winning) |
+| `jumpStartPct` | dormant — snap-to-Placement makes the old "opening jump" redundant | ignored |
 
-Effective floor = `jumpStartPct ?? biasPct`. Up has overspend risk so it stays
-incremental (jump excepted); down only reduces spend so it snaps by default.
-Edited in the **✎ Edit targets → ▸ Motion** drawer, with one-click recipes
-(**Blitz / Kickstart / Steady / Glide**). Motion is placement-agnostic, so it
-applies to Rest-of-Search targets too even though their IS/ACOS knobs don't.
+Band = `[floor, ceiling]` where `floor = biasPct`, `ceiling = allOut ? (maxBiasPct ?? 900) :
+(maxBiasPct ?? floor)`. **Reaching the floor** snaps by default (or Climb/Ease step). **Above
+the floor** (only when `ceiling > floor`, or all-out): climb toward the ceiling — auto when
+Amazon signals (IS short / ACOS headroom / loss) **or** always with `keepClimbing` — and ease
+back toward the floor, never below it. **all-out** forces a 900 ceiling and pushes to it,
+ignoring ACOS. So `Target IS` / `ACOS cap` only act when a Ceiling above Placement % is set.
+
+Edited in the **✎ Edit targets → ▸ Motion** drawer, with one-click recipes — **Hold** (snap &
+hold), **Gradual** (ramp ±15), **Chase** (climb to 300 when winning), **Push** (always climb
+to 300). Built-ins ship with no Ceiling, so own-top/defend **snap to their Placement % and
+hold** (100% / 50%); raise a Ceiling to opt a target back into rank-chasing.
 
 ## API (`apps/api/src/routes/advertising.routes.ts`)
 
