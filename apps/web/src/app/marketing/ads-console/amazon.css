@@ -604,6 +604,11 @@
 .az-blend-delta { display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; color: var(--ink2); }
 .az-blend-delta input[type=number] { width: 64px; text-align: center; border: 1px solid var(--border); border-radius: 5px; padding: 3px 6px; font: inherit; font-size: 11.5px; background: #fff; }
 .az-blend-base .az-mnote { margin-top: 0; flex: 1 1 100%; }
+/* BL.8 — live blend decision chips in the cockpit */
+.az-blend-dec { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
+.az-blend-chip { font-size: 10px; font-weight: 700; padding: 1px 7px; border-radius: 999px; background: #f3e8ff; color: #7c3aed; border: 1px solid #e9d5ff; }
+.az-blend-chip.base { background: #eef2ff; color: #3730a3; border-color: #e0e3f5; }
+.az-rd-camp .dec.blend { color: #7c3aed; font-weight: 600; }
 .az-rte-name { border: 1px solid var(--border); border-radius: 5px; padding: 2px 5px; font: inherit; font-size: 12px; max-width: 150px; }
 .az-rte-addscope { grid-column: 1 / -1; display: flex; align-items: center; gap: 12px; font-size: 11.5px; color: var(--ink2); padding-top: 6px; flex-wrap: wrap; }
 .az-rte-addscope label { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }

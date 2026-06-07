@@ -26,6 +26,7 @@ interface Product { productId: string; name: string; parentAsin?: string | null;
 interface Fam { parentName: string | null; campaignCount: number; demand: { grid: DemandCell[][]; hourProfile: DemandProfile[]; weekdayProfile: DemandProfile[]; hasData: boolean; familyOrders: number; timezone?: string; metric?: 'revenue' | 'orders' }; smoothed?: { grid: DemandCell[][]; hourProfile: DemandProfile[]; weekdayProfile: DemandProfile[] }; recommended: { windows: Win[]; baselineTargetKey: string; peakHours: number[] } }
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+const SHORT_PL: Record<string, string> = { PLACEMENT_TOP: 'Top', PLACEMENT_REST_OF_SEARCH: 'Rest', PLACEMENT_PRODUCT_PAGE: 'Prod' } // BL.8
 const hh = (h: number) => `${String(h).padStart(2, '0')}:00`
 const api = (p: string) => `${getBackendUrl()}/api/advertising${p}`
 // RD.12 — delivery recency helpers (distinguish "running recently" from "paused long ago").
@@ -59,7 +60,7 @@ export function RankDirectorPanel({ market, productId, onPickProduct }: { market
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState('')
   // RD.10 — live preview + family detail + arm/apply controls (once a plan exists)
-  const [preview, setPreview] = useState<{ decisions: Array<{ campaignId: string; action: string; nextPct: number }>; selfCompetition?: Array<{ on: string; demoted: string[] }> } | null>(null)
+  const [preview, setPreview] = useState<{ decisions: Array<{ campaignId: string; action: string; nextPct: number; lanes?: Array<{ placement: string; fromPct: number; toPct: number; action: string }>; baseBid?: { mode: string; valueCents?: number | null } | null }>; selfCompetition?: Array<{ on: string; demoted: string[] }> } | null>(null)
   const [famDetail, setFamDetail] = useState<{ campaigns: Array<{ id: string; name: string; status: string; attributionPct: number | null; readiness: { verdict: string } | null; excluded?: boolean; lastDeliveredAt?: string | null; recentSpendCents?: number }>; attribution: { overallPct: number | null } } | null>(null)
   const [arming, setArming] = useState(false)
   const [armMsg, setArmMsg] = useState('')
@@ -292,7 +293,9 @@ export function RankDirectorPanel({ market, productId, onPickProduct }: { market
                         <span className="rec">{recencyLabel(c.lastDeliveredAt, c.recentSpendCents)}</span>
                         <span className="grow" />
                         {c.readiness && c.readiness.verdict !== 'ok' && <span className={`vd ${c.readiness.verdict}`}>{c.readiness.verdict}</span>}
-                        {inc && dec && <span className="dec">{dec.action === 'pause' ? 'Min bid' : dec.action}{dec.action === 'raise' || dec.action === 'lower' ? ` → ${dec.nextPct}%` : ''}</span>}
+                        {inc && dec && (dec.lanes && dec.lanes.length
+                          ? <span className="dec blend" title="blended placements (the loop's live decision per placement)">{dec.lanes.map(l => `${SHORT_PL[l.placement] ?? l.placement} ${l.toPct}%`).join(' · ')}{dec.baseBid && dec.baseBid.mode !== 'hold' ? ` · base ${dec.baseBid.mode === 'absolute' && dec.baseBid.valueCents != null ? '€' + (dec.baseBid.valueCents / 100).toFixed(2) : dec.baseBid.mode}` : ''}</span>
+                          : <span className="dec">{dec.action === 'pause' ? 'Min bid' : dec.action}{dec.action === 'raise' || dec.action === 'lower' ? ` → ${dec.nextPct}%` : ''}</span>)}
                       </label>
                     )
                   })}

@@ -22,7 +22,8 @@ import { DeliveryChip } from './DeliveryChip'
 interface RankTarget { id: string; key: string; name: string; placement: string; targetISPct: number | null; acosCapPct: number | null; pause: boolean; allOut: boolean; color: string | null }
 interface Win { days: number[]; startHour: number; endHour: number; targetKey?: string }
 interface Sched { id: string; campaignId: string; name: string; windows: Win[]; timezone: string; enabled: boolean; defaultTargetKey?: string | null; targetOverrides?: Record<string, { biasPct?: number; targetISPct?: number; acosCapPct?: number; maxCpcCents?: number }> }
-interface Decision { action: string; reason: string; currentPct: number; nextPct: number; achievedISPct: number | null; lossDetected: boolean }
+interface Decision { action: string; reason: string; currentPct: number; nextPct: number; achievedISPct: number | null; lossDetected: boolean; lanes?: Array<{ placement: string; fromPct: number; toPct: number; action: string }>; baseBid?: { mode: string; valueCents?: number | null } | null }
+const SHORT_PL: Record<string, string> = { PLACEMENT_TOP: 'Top', PLACEMENT_REST_OF_SEARCH: 'Rest', PLACEMENT_PRODUCT_PAGE: 'Product' } // BL.8
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const hh = (h: number) => `${String(h).padStart(2, '0')}:00`
@@ -211,6 +212,13 @@ export function RankPlanPanel({ campaignId, campaignName, onAutoDefend, reloadSi
         {decision && (
           <div className="az-rp-preview"><Sparkles size={13} />
             <span>Right now the loop would <b>{decision.action === 'pause' ? 'drop to Min bid' : decision.action}</b>{decision.action === 'raise' || decision.action === 'lower' ? ` → ${decision.nextPct}% placement bias` : ''}{decision.lossDetected ? ' (slipping — re-taking)' : ''} — <i>{decision.reason}</i>{decision.achievedISPct != null ? ` · IS ${decision.achievedISPct}%` : ' · no IS data yet'}.</span>
+            {/* BL.8 — per-placement breakdown when the active target is a blend */}
+            {decision.lanes && decision.lanes.length > 0 && (
+              <div className="az-blend-dec">
+                {decision.lanes.map(l => <span key={l.placement} className="az-blend-chip" title={`${l.action} ${SHORT_PL[l.placement] ?? l.placement}`}>{SHORT_PL[l.placement] ?? l.placement} {l.fromPct === l.toPct ? `${l.toPct}%` : `${l.fromPct}→${l.toPct}%`}</span>)}
+                {decision.baseBid && decision.baseBid.mode !== 'hold' && <span className="az-blend-chip base">base {decision.baseBid.mode === 'absolute' && decision.baseBid.valueCents != null ? `€${(decision.baseBid.valueCents / 100).toFixed(2)}` : decision.baseBid.mode}</span>}
+              </div>
+            )}
           </div>
         )}
 
