@@ -22,7 +22,7 @@ import { computeStep, resolveActiveTargetKey, isRankLoss, type RankTargetSpec, t
 import { analyzeTopOfSearch, setSearchPlacement, buildBlendedAdjustments } from '../services/advertising/ads-top-of-search.service.js'
 import { sqpImpressionShareForAsins } from '../services/advertising/sqp.service.js'
 import { updateCampaignWithSync, updateAdGroupWithSync, type AdsActor } from '../services/advertising/ads-mutation.service.js'
-import { suppressCampaignBids, restoreCampaignBids } from '../services/advertising/ads-bid-suppression.service.js'
+import { suppressCampaignBids, restoreCampaignBids, applyBaseBidDelta, revertBaseBidDelta } from '../services/advertising/ads-bid-suppression.service.js'
 import { detectSelfCompetition, type CampaignTargeting, type SelfCompetitionConflict } from '../services/advertising/rank-self-competition.js'
 
 // RD.8 — leadMinutes shifts the evaluation clock forward so a plan starts converging
@@ -106,6 +106,7 @@ const shortPlace = (p: string) => SHORT_PLACE[p] ?? p
 function baseBidNote(spec: RankTargetSpec): string {
   if (!spec.bidMode || spec.bidMode === 'hold') return ''
   if (spec.bidMode === 'absolute' && spec.bidValueCents != null) return ` · base bid €${(spec.bidValueCents / 100).toFixed(2)}`
+  if (spec.bidMode === 'deltaPct' && spec.bidDeltaPct != null) return ` · base bid ${spec.bidDeltaPct >= 0 ? '+' : ''}${spec.bidDeltaPct}%`
   if (spec.bidMode === 'suppress') return ' · base bid floored'
   return ` · base ${spec.bidMode}`
 }
@@ -122,19 +123,25 @@ function samePlacements(a: Array<{ placement: string; percentage: number }>, b: 
   return true
 }
 // BL — apply the target's base-bid directive (the base bid placement multipliers stack
-// on). hold/null = no change; absolute = set ad-group default bids to bidValueCents
-// (idempotent via change-detection); suppress = floor to ~2¢ (placements stay set).
-// deltaPct is reserved (needs baseline memory — a safe follow-up). Returns writes made.
+// on). hold/null = no change (but still revert any prior delta); absolute = set ad-group
+// default to bidValueCents (idempotent); suppress = floor to ~2¢ (placements stay set);
+// deltaPct (BL.7) = scale every bid ±% from a stable baseline (no compounding). Returns writes.
 async function applyBaseBidDirective(camp: CampRow, spec: RankTargetSpec, ctx: { write: boolean; actor: string }): Promise<number> {
-  if (!ctx.write || !spec.bidMode || spec.bidMode === 'hold') return 0
+  if (!ctx.write) return 0
   let n = 0
-  if (spec.bidMode === 'suppress') {
+  const mode = spec.bidMode
+  // Leaving deltaPct (or never in it) → restore each entity's stable baseline + clear it.
+  if (mode !== 'deltaPct') {
+    try { n += await revertBaseBidDelta(camp.id, { actor: ctx.actor as AdsActor }) } catch (e) { logger.warn('[rank-defend] base-bid delta revert failed', { campaignId: camp.id, error: (e as Error).message }) }
+  }
+  if (!mode || mode === 'hold') return n
+  if (mode === 'suppress') {
     if (!camp.bidsSuppressedAt) {
       try { n += await suppressCampaignBids(camp.id, { actor: ctx.actor as AdsActor, reason: 'rank base-bid = suppress (placements stay set)' }) } catch (e) { logger.warn('[rank-defend] base-bid suppress failed', { campaignId: camp.id, error: (e as Error).message }) }
     }
     return n
   }
-  if (spec.bidMode === 'absolute' && spec.bidValueCents != null && spec.bidValueCents > 0) {
+  if (mode === 'absolute' && spec.bidValueCents != null && spec.bidValueCents > 0) {
     const ags = await prisma.adGroup.findMany({ where: { campaignId: camp.id }, select: { id: true, defaultBidCents: true } })
     for (const g of ags) {
       if (g.defaultBidCents === spec.bidValueCents) continue
@@ -142,7 +149,11 @@ async function applyBaseBidDirective(camp: CampRow, spec: RankTargetSpec, ctx: {
     }
     return n
   }
-  return n // deltaPct reserved
+  if (mode === 'deltaPct' && spec.bidDeltaPct != null) {
+    try { n += await applyBaseBidDelta(camp.id, spec.bidDeltaPct, { actor: ctx.actor as AdsActor, reason: `rank base-bid ${spec.bidDeltaPct >= 0 ? '+' : ''}${spec.bidDeltaPct}%` }) } catch (e) { logger.warn('[rank-defend] base-bid delta failed', { campaignId: camp.id, error: (e as Error).message }) }
+    return n
+  }
+  return n
 }
 
 async function decideAndMaybeApply(

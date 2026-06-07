@@ -601,6 +601,8 @@
 .az-blend-baselbl { font-size: 11.5px; font-weight: 700; color: var(--ink2); }
 .az-blend-base select, .az-blend-base input[type=number] { border: 1px solid var(--border); border-radius: 5px; padding: 3px 6px; font: inherit; font-size: 11.5px; background: #fff; }
 .az-blend-base input[type=number] { width: 70px; text-align: center; }
+.az-blend-delta { display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; color: var(--ink2); }
+.az-blend-delta input[type=number] { width: 64px; text-align: center; border: 1px solid var(--border); border-radius: 5px; padding: 3px 6px; font: inherit; font-size: 11.5px; background: #fff; }
 .az-blend-base .az-mnote { margin-top: 0; flex: 1 1 100%; }
 .az-rte-name { border: 1px solid var(--border); border-radius: 5px; padding: 2px 5px; font: inherit; font-size: 12px; max-width: 150px; }
 .az-rte-addscope { grid-column: 1 / -1; display: flex; align-items: center; gap: 12px; font-size: 11.5px; color: var(--ink2); padding-top: 6px; flex-wrap: wrap; }

@@ -26,9 +26,9 @@ const LANES: { placement: string; label: string; signal: string; chase: boolean;
 ]
 
 export function RankBlendEditor({ target, busy, onSave, onClose }: {
-  target: { id: string; name: string; lanes?: BlendLane[] | null; bidMode?: string | null; bidValueCents?: number | null }
+  target: { id: string; name: string; lanes?: BlendLane[] | null; bidMode?: string | null; bidValueCents?: number | null; bidDeltaPct?: number | null }
   busy: boolean
-  onSave: (patch: { lanes: BlendLane[]; bidMode: string | null; bidValueCents: number | null }) => void
+  onSave: (patch: { lanes: BlendLane[]; bidMode: string | null; bidValueCents: number | null; bidDeltaPct: number | null }) => void
   onClose: () => void
 }) {
   const seed = new Map((target.lanes ?? []).map((l) => [l.placement, l]))
@@ -38,6 +38,7 @@ export function RankBlendEditor({ target, busy, onSave, onClose }: {
   )
   const [bidMode, setBidMode] = useState<string>(target.bidMode ?? 'hold')
   const [bidValueCents, setBidValueCents] = useState<number | null>(target.bidValueCents ?? null)
+  const [bidDeltaPct, setBidDeltaPct] = useState<number | null>(target.bidDeltaPct ?? null)
 
   const num = (raw: string) => (raw === '' ? null : Math.max(0, Math.min(900, Math.round(Number(raw)))))
   const setLaneField = (p: string, f: keyof BlendLane, raw: string) => setVals((v) => ({ ...v, [p]: { ...v[p], [f]: num(raw) } }))
@@ -66,7 +67,7 @@ export function RankBlendEditor({ target, busy, onSave, onClose }: {
         keepClimbing: !!v.keepClimbing,
       }
     })
-    onSave({ lanes, bidMode, bidValueCents: bidMode === 'absolute' ? bidValueCents : null })
+    onSave({ lanes, bidMode, bidValueCents: bidMode === 'absolute' ? bidValueCents : null, bidDeltaPct: bidMode === 'deltaPct' ? bidDeltaPct : null })
   }
 
   return (
@@ -99,12 +100,20 @@ export function RankBlendEditor({ target, busy, onSave, onClose }: {
         <select value={bidMode} onChange={(e) => setBidMode(e.target.value)}>
           <option value="hold">Hold — don&apos;t touch</option>
           <option value="absolute">Set to €…</option>
+          <option value="deltaPct">Adjust ±%…</option>
           <option value="suppress">Suppress to ~€0.02</option>
         </select>
         {bidMode === 'absolute' && (
           <input type="number" step="0.01" min={0.02} placeholder="0.50" value={bidValueCents != null ? (bidValueCents / 100).toFixed(2) : ''} onChange={(e) => setBidValueCents(e.target.value === '' ? null : Math.round(Number(e.target.value) * 100))} />
         )}
-        <span className="az-mnote">Absolute sets the ad-group default bid; the placement % above stack on it (preview updates live). Per-keyword ±% scaling is a follow-up.</span>
+        {bidMode === 'deltaPct' && (
+          <label className="az-blend-delta" title="Scale every keyword + ad-group bid by this % from its stable baseline (−95…+300). Reverts to baseline when the window ends — never compounds.">
+            <input type="number" step="5" min={-95} max={300} placeholder="+15" value={bidDeltaPct ?? ''} onChange={(e) => setBidDeltaPct(e.target.value === '' ? null : Math.max(-95, Math.min(300, Math.round(Number(e.target.value)))))} /> %
+          </label>
+        )}
+        <span className="az-mnote">{bidMode === 'deltaPct'
+          ? 'Adjust scales every keyword + ad-group bid ±% from its stable baseline (preserves your per-keyword tuning) and reverts when the window ends — never compounds.'
+          : 'Absolute sets the ad-group default bid; the placement % above stack on it (preview updates live).'}</span>
       </div>
       <div className="az-mrecipes" style={{ justifyContent: 'flex-end', gap: 6 }}>
         <span className="grow" style={{ fontSize: 10, color: 'var(--muted)' }}>{enabledCount === 0 ? 'No lanes → single-placement (legacy)' : `${enabledCount} placement${enabledCount > 1 ? 's' : ''} driven at once`}</span>

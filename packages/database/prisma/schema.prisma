@@ -2595,6 +2595,7 @@ model AdGroup {
   name              String
   defaultBidCents   Int            @default(50)
   suppressedFromBidCents Int? // NP — default bid before no-pause suppression; restored on resume
+  baseBidFromCents  Int? // BL — default bid before a base-bid deltaPct mod; the STABLE baseline (no compounding); reverted when the directive clears
   status            CampaignStatus @default(ENABLED)
   targetingType     String         @default("MANUAL") // AUTO | MANUAL
   impressions       Int            @default(0)
@@ -2637,6 +2638,7 @@ model AdTarget {
   // NP — the bid this target held BEFORE no-pause suppression dropped it to the
   // floor (~2¢). null = not suppressed. Restored verbatim when the campaign resumes.
   suppressedFromBidCents Int?
+  baseBidFromCents Int? // BL — the bid before a base-bid deltaPct mod; STABLE baseline so re-applying the delta never compounds; reverted when the directive clears
   status           CampaignStatus @default(ENABLED)
   impressions      Int            @default(0)
   clicks           Int            @default(0)

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildBlendedAdjustments } from './ads-placement-math.js'
+import { buildBlendedAdjustments, deltaBidCents } from './ads-placement-math.js'
 
 // BL — the blended writer must let Top + Rest of Search + Product pages coexist in ONE
 // placement profile, drop a lane the target no longer declares, preserve foreign
@@ -68,5 +68,27 @@ describe('buildBlendedAdjustments (BL — multi-placement coexistence)', () => {
     )
     expect(pmap(out).PLACEMENT_TOP).toBe(0)
     expect(pmap(out).PLACEMENT_REST_OF_SEARCH).toBe(0)
+  })
+})
+
+// BL.7 — deltaBidCents must compute from the STABLE baseline (the caller always passes the
+// remembered baseline, never the current bid) so repeated application can't compound; it
+// clamps the delta to a sane range and floors at 2¢.
+describe('deltaBidCents (BL.7 — base-bid delta, no compounding)', () => {
+  it('scales the baseline by ±%', () => {
+    expect(deltaBidCents(50, 20)).toBe(60)   // +20%
+    expect(deltaBidCents(50, -40)).toBe(30)  // −40%
+    expect(deltaBidCents(50, 0)).toBe(50)    // no-op
+  })
+  it('is idempotent from the baseline (no compounding) — same input → same output', () => {
+    const once = deltaBidCents(50, 15)
+    expect(deltaBidCents(50, 15)).toBe(once) // re-applying from baseline never drifts
+    expect(once).toBe(57) // 50 * 1.15 = 57.4999… (float) → round → 57
+  })
+  it('floors at 2¢ and clamps the delta to [-95, +300]', () => {
+    expect(deltaBidCents(50, -100)).toBe(3)   // clamped to -95% → round(2.5) = 3
+    expect(deltaBidCents(4, -90)).toBe(2)     // round(0.4) = 0 → floored to 2
+    expect(deltaBidCents(50, 9999)).toBe(deltaBidCents(50, 300)) // clamped to +300%
+    expect(deltaBidCents(50, 300)).toBe(200)  // round(50 * 4)
   })
 })

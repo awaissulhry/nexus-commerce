@@ -93,6 +93,7 @@ export function RankTargetEditor({ open, onClose, scopeKind, scopeLabel, scopeOv
       const parts = t.lanes.map((l) => `${SHORT_PLACE[l.placement] ?? l.placement} +${l.biasPct ?? 0}%${l.maxBiasPct != null && l.maxBiasPct > (l.biasPct ?? 0) ? `→${l.maxBiasPct}` : ''}`)
       let bb = ''
       if (t.bidMode === 'absolute' && t.bidValueCents != null) bb = ` · base €${(t.bidValueCents / 100).toFixed(2)}`
+      else if (t.bidMode === 'deltaPct' && t.bidDeltaPct != null) bb = ` · base ${t.bidDeltaPct >= 0 ? '+' : ''}${t.bidDeltaPct}%`
       else if (t.bidMode === 'suppress') bb = ' · base floored'
       return `blend: ${parts.join(' · ')}${bb}`
     }
@@ -180,7 +181,7 @@ export function RankTargetEditor({ open, onClose, scopeKind, scopeLabel, scopeOv
   }
   const resetTarget = async (id: string) => { setBusy(true); try { await fetch(api(`/rank-targets/${id}/reset`), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }); setChanged(true); setLib(m => { const n = { ...m }; delete n[id]; return n }); load() } finally { setBusy(false) } }
   // BL — save a blended strategy (lanes + base-bid) onto a library target, then reload.
-  const saveBlend = async (id: string, patch: { lanes: BlendLane[]; bidMode: string | null; bidValueCents: number | null }) => {
+  const saveBlend = async (id: string, patch: { lanes: BlendLane[]; bidMode: string | null; bidValueCents: number | null; bidDeltaPct: number | null }) => {
     setBusy(true); setMsg('')
     try { await fetch(api(`/rank-targets/${id}`), { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch) }); setChanged(true); setBlendOpen(m => ({ ...m, [id]: false })); setMsg(patch.lanes.length ? 'Saved blend.' : 'Cleared blend (back to single-placement).'); load() }
     catch { setMsg('Could not save blend.') } finally { setBusy(false) }

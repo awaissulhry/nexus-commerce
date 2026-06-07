@@ -5,6 +5,15 @@
 export const MAX_PCT = 900
 export const clampPct = (p: number): number => Math.max(0, Math.min(MAX_PCT, Math.round(p)))
 
+// BL.7 — base-bid deltaPct: scale a STABLE baseline by ±% (clamped to a sane range),
+// floored at 2¢. Pure so the no-compounding contract (always computed from the remembered
+// baseline, NEVER from the current/already-modified bid) is unit-testable.
+export const BASE_BID_FLOOR_CENTS = 2
+export const clampDeltaPct = (d: number): number => Math.max(-95, Math.min(300, Math.round(d)))
+export function deltaBidCents(baselineCents: number, deltaPct: number): number {
+  return Math.max(BASE_BID_FLOOR_CENTS, Math.round(baselineCents * (1 + clampDeltaPct(deltaPct) / 100)))
+}
+
 export const PLACEMENT_TOP = 'PLACEMENT_TOP'
 export const PLACEMENT_REST = 'PLACEMENT_REST_OF_SEARCH'
 export const PLACEMENT_PRODUCT = 'PLACEMENT_PRODUCT_PAGE'

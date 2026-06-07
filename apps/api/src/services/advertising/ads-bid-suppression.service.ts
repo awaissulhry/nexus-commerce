@@ -18,6 +18,7 @@
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import { updateAdTargetWithSync, updateAdGroupWithSync, type AdsActor } from './ads-mutation.service.js'
+import { deltaBidCents } from './ads-placement-math.js'
 
 export const SUPPRESSION_FLOOR_CENTS = 2
 
@@ -103,5 +104,70 @@ export async function restoreCampaignBids(
   if (failed === 0) await prisma.campaign.update({ where: { id: campaignId }, data: { bidsSuppressedAt: null } })
   else logger.warn('[no-pause] restore incomplete — bidsSuppressedAt kept set; next serving tick retries', { campaignId, failed, touched })
   logger.info('[no-pause] restored campaign bids', { campaignId, groups: groups.length, targets: targets.length, touched, failed })
+  return touched
+}
+
+// BL.7 — base-bid deltaPct: scale every ad-group default + keyword bid by ±% from a STABLE
+// remembered baseline (baseBidFromCents), so repeated ticks NEVER compound and a changed
+// delta re-applies cleanly from the baseline. Independent of suppress/restore (different
+// memory field), so the two compose. force:true lands the exact computed bid (deltaBidCents
+// already floors at 2¢). Idempotent. Returns entities moved.
+export async function applyBaseBidDelta(
+  campaignId: string, deltaPct: number,
+  opts: { actor: AdsActor; reason?: string; applyImmediately?: boolean },
+): Promise<number> {
+  const reason = opts.reason ?? `rank base-bid ${deltaPct >= 0 ? '+' : ''}${deltaPct}%`
+  const applyImmediately = opts.applyImmediately ?? true
+  let touched = 0
+  const groups = await prisma.adGroup.findMany({ where: { campaignId }, select: { id: true, defaultBidCents: true, baseBidFromCents: true } })
+  for (const g of groups) {
+    const baseline = g.baseBidFromCents ?? g.defaultBidCents // stable baseline → no compounding
+    const want = deltaBidCents(baseline, deltaPct)
+    if (g.baseBidFromCents != null && g.defaultBidCents === want) continue // already at target
+    try {
+      if (g.baseBidFromCents == null) await prisma.adGroup.update({ where: { id: g.id }, data: { baseBidFromCents: baseline } })
+      const r = await updateAdGroupWithSync({ adGroupId: g.id, patch: { defaultBidCents: want }, actor: opts.actor, reason, applyImmediately, force: true })
+      if (r.ok) touched++
+    } catch (e) { logger.warn('[base-bid] delta group failed', { adGroupId: g.id, error: (e as Error).message }) }
+  }
+  const targets = await prisma.adTarget.findMany({ where: { adGroup: { campaignId }, isNegative: false }, select: { id: true, bidCents: true, baseBidFromCents: true } })
+  for (const t of targets) {
+    const baseline = t.baseBidFromCents ?? t.bidCents
+    const want = deltaBidCents(baseline, deltaPct)
+    if (t.baseBidFromCents != null && t.bidCents === want) continue
+    try {
+      if (t.baseBidFromCents == null) await prisma.adTarget.update({ where: { id: t.id }, data: { baseBidFromCents: baseline } })
+      const r = await updateAdTargetWithSync({ adTargetId: t.id, patch: { bidCents: want }, actor: opts.actor, reason, applyImmediately, force: true })
+      if (r.ok) touched++
+    } catch (e) { logger.warn('[base-bid] delta target failed', { adTargetId: t.id, error: (e as Error).message }) }
+  }
+  if (touched) logger.info('[base-bid] applied delta', { campaignId, deltaPct, touched })
+  return touched
+}
+
+// BL.7 — revert a base-bid delta: restore each entity to its remembered baseline + clear it.
+// Retry-safe like restoreCampaignBids (clears memory only on accepted push / not_found).
+export async function revertBaseBidDelta(
+  campaignId: string,
+  opts: { actor: AdsActor; reason?: string; applyImmediately?: boolean },
+): Promise<number> {
+  const reason = opts.reason ?? 'rank base-bid delta cleared → restore baseline'
+  const applyImmediately = opts.applyImmediately ?? true
+  let touched = 0
+  const groups = await prisma.adGroup.findMany({ where: { campaignId, baseBidFromCents: { not: null } }, select: { id: true, baseBidFromCents: true } })
+  for (const g of groups) {
+    try {
+      const r = await updateAdGroupWithSync({ adGroupId: g.id, patch: { defaultBidCents: g.baseBidFromCents as number }, actor: opts.actor, reason, applyImmediately, force: true })
+      if (r.ok || r.error === 'not_found') { await prisma.adGroup.update({ where: { id: g.id }, data: { baseBidFromCents: null } }); if (r.ok) touched++ }
+    } catch (e) { logger.warn('[base-bid] revert group failed', { adGroupId: g.id, error: (e as Error).message }) }
+  }
+  const targets = await prisma.adTarget.findMany({ where: { adGroup: { campaignId }, baseBidFromCents: { not: null } }, select: { id: true, baseBidFromCents: true } })
+  for (const t of targets) {
+    try {
+      const r = await updateAdTargetWithSync({ adTargetId: t.id, patch: { bidCents: t.baseBidFromCents as number }, actor: opts.actor, reason, applyImmediately, force: true })
+      if (r.ok || r.error === 'not_found') { await prisma.adTarget.update({ where: { id: t.id }, data: { baseBidFromCents: null } }); if (r.ok) touched++ }
+    } catch (e) { logger.warn('[base-bid] revert target failed', { adTargetId: t.id, error: (e as Error).message }) }
+  }
+  if (touched) logger.info('[base-bid] reverted delta', { campaignId, touched })
   return touched
 }
