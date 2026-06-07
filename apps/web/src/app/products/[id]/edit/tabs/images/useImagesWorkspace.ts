@@ -107,12 +107,23 @@ export function useImagesWorkspace(
     const full: PendingUpsert = { ...upsert, _tempId: id }
     setPendingUpserts((prev) => {
       const next = new Map(prev)
-      // If updating existing row (id set), replace any prior pending for same id
-      if (upsert.id) {
-        for (const [k, v] of next) {
-          if (v.id === upsert.id) { next.delete(k); break }
-        }
-      }
+      // A cell holds only ONE pending edit — replace any prior pending with the
+      // same row id OR the same cell bucket (scope/platform/marketplace/slot/
+      // variant-group). This makes re-assigning a cell idempotent and, crucially,
+      // lets an upload replace a delete-blocker (both have no id) so the new
+      // image shows instead of the empty blocker winning.
+      const sameBucket = (v: PendingUpsert) =>
+        (!!upsert.id && v.id === upsert.id) ||
+        ((v.variationId ?? null) === (upsert.variationId ?? null) &&
+          v.scope === upsert.scope &&
+          (v.platform ?? null) === (upsert.platform ?? null) &&
+          (v.marketplace ?? null) === (upsert.marketplace ?? null) &&
+          (v.amazonSlot ?? null) === (upsert.amazonSlot ?? null) &&
+          (v.variantGroupKey ?? null) === (upsert.variantGroupKey ?? null) &&
+          (v.variantGroupValue ?? null) === (upsert.variantGroupValue ?? null))
+      const stale: string[] = []
+      for (const [k, v] of next) if (sameBucket(v)) stale.push(k)
+      for (const k of stale) next.delete(k)
       next.set(id, full)
       return next
     })
