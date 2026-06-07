@@ -60,4 +60,21 @@ describe('FFX.3 — flat-file pull round-trip contract', () => {
     const attrs = collapse({ item_sku: 'X4', main_product_image_locator: 'https://img/x.jpg' })
     expect(attrs.main_product_image_locator?.[0]?.media_location).toBe('https://img/x.jpg')
   })
+
+  // FFA.3 — the reported bug: FBA channel code dropped because the whole
+  // fulfillment block was gated on quantity (FBA listings have none).
+  it('FBA fulfillment channel code persists WITHOUT a quantity', () => {
+    const attrs = collapse({ item_sku: 'X5', fulfillment_availability__fulfillment_channel_code: 'AMAZON_EU' })
+    expect(attrs.fulfillment_availability?.[0]?.fulfillment_channel_code).toBe('AMAZON_EU')
+    expect(attrs.fulfillment_availability?.[0]?.quantity).toBeUndefined()
+  })
+  it('FBM fulfillment keeps channel code + quantity together', () => {
+    const attrs = collapse({ item_sku: 'X6', fulfillment_availability__fulfillment_channel_code: 'DEFAULT', fulfillment_availability__quantity: '20' })
+    expect(attrs.fulfillment_availability?.[0]?.fulfillment_channel_code).toBe('DEFAULT')
+    expect(attrs.fulfillment_availability?.[0]?.quantity).toBe(20)
+  })
+  it('no fulfillment data → no fulfillment_availability written', () => {
+    const attrs = collapse({ item_sku: 'X7', item_name: 'x' })
+    expect(attrs.fulfillment_availability).toBeUndefined()
+  })
 })

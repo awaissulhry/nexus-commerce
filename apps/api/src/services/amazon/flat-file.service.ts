@@ -851,7 +851,11 @@ export class AmazonFlatFileService {
 
       // fulfillment_availability sub-columns
       const faAttrs = attrs.fulfillment_availability?.[0] as Record<string, any> | undefined
-      const faCode = String(faAttrs?.fulfillment_channel_code ?? 'DEFAULT')
+      // FFA.3 — fall back to the product's fulfillment method when no channel code
+      // was persisted (legacy listings), so FBA shows AMAZON_EU instead of DEFAULT.
+      const faCode = faAttrs?.fulfillment_channel_code != null
+        ? String(faAttrs.fulfillment_channel_code)
+        : ((p as any).fulfillmentMethod === 'FBA' ? 'AMAZON_EU' : 'DEFAULT')
       const faLeadTime = faAttrs?.lead_time_to_ship_max_days != null ? String(faAttrs.lead_time_to_ship_max_days) : ''
 
       // Start with fixed structural fields
@@ -1039,17 +1043,21 @@ export class AmazonFlatFileService {
           }
           attrs.purchasable_offer = [offer]
         }
-        // fulfillment_availability — read from expanded sub-columns, fall back to bare value
-        const faQty  = row['fulfillment_availability__quantity'] ?? row.fulfillment_availability ?? row.quantity
-        if (faQty !== undefined && faQty !== '') {
-          const faCode     = String(row['fulfillment_availability__fulfillment_channel_code'] ?? 'DEFAULT')
-          const faLeadTime = row['fulfillment_availability__lead_time_to_ship_max_days']
+        // fulfillment_availability — FFA.3: include the channel code even with no
+        // quantity (FBA listings), so re-publishing an FBA listing keeps it FBA
+        // instead of dropping the channel. Quantity sent only when present.
+        const faCode     = String(row['fulfillment_availability__fulfillment_channel_code'] ?? row['fulfillment_channel_code'] ?? '').toUpperCase()
+        const faQtyRaw   = row['fulfillment_availability__quantity'] ?? row.fulfillment_availability ?? row.quantity
+        const faQtyNum   = faQtyRaw !== undefined && faQtyRaw !== '' ? parseLocaleInt(faQtyRaw) : null
+        const faLeadRaw  = row['fulfillment_availability__lead_time_to_ship_max_days']
+        const faLeadNum  = faLeadRaw !== undefined && faLeadRaw !== '' ? parseLocaleInt(faLeadRaw) : null
+        if (faCode || faQtyNum !== null || faLeadNum !== null) {
           const fa: Record<string, any> = {
-            fulfillment_channel_code: faCode,
-            quantity: Math.max(0, parseLocaleInt(faQty) ?? 0),
+            fulfillment_channel_code: faCode || 'DEFAULT',
             marketplace_id: marketplaceId,
           }
-          if (faLeadTime !== undefined && faLeadTime !== '') fa.lead_time_to_ship_max_days = parseInt(String(faLeadTime), 10)
+          if (faQtyNum !== null && faQtyNum >= 0) fa.quantity = faQtyNum
+          if (faLeadNum !== null && faLeadNum >= 0) fa.lead_time_to_ship_max_days = faLeadNum
           attrs.fulfillment_availability = [fa]
         }
 
@@ -1295,7 +1303,9 @@ export class AmazonFlatFileService {
 
         // ── Product hierarchy + type + fulfillment method ──────────
         const faCode = String(row['fulfillment_availability__fulfillment_channel_code'] ?? row['fulfillment_channel_code'] ?? 'DEFAULT').toUpperCase()
-        const derivedMethod = (faCode === 'AMAZON_NA' || faCode === 'AFN' || faCode === 'FBA') ? 'FBA' : 'FBM'
+        // FFA.3 — any AMAZON_* regional FBA channel (AMAZON_EU/AMAZON_NA/AMAZON_FE)
+        // + AFN/FBA = Fulfilled by Amazon; only DEFAULT/MFN is merchant (FBM).
+        const derivedMethod = (faCode.startsWith('AMAZON') || faCode === 'AFN' || faCode === 'FBA') ? 'FBA' : 'FBM'
         const productUpdates: Record<string, any> = {}
         if (productType && product.productType !== productType) productUpdates.productType = productType
         if (isParentRow && !product.isParent)              productUpdates.isParent = true
@@ -1453,17 +1463,22 @@ export class AmazonFlatFileService {
       attrs.purchasable_offer = [offer]
     }
 
-    // fulfillment_availability — prefer expanded sub-columns, fall back to bare value
-    const faQty = row['fulfillment_availability__quantity'] ?? row.fulfillment_availability ?? row.quantity
-    if (faQty !== undefined && faQty !== '') {
-      const faCode     = String(row['fulfillment_availability__fulfillment_channel_code'] ?? 'DEFAULT')
-      const faLeadTime = row['fulfillment_availability__lead_time_to_ship_max_days']
+    // fulfillment_availability — FFA.3: persist whenever ANY sub-field is present,
+    // not just quantity. FBA listings (channel_code AMAZON_EU/AMAZON_NA) carry no
+    // quantity, so the old qty-gate dropped the channel code → it reverted to
+    // DEFAULT on every reload. Channel code read from both the expanded + bare key.
+    const faCode = String(row['fulfillment_availability__fulfillment_channel_code'] ?? row['fulfillment_channel_code'] ?? '').toUpperCase()
+    const faQtyRaw  = row['fulfillment_availability__quantity'] ?? row.fulfillment_availability ?? row.quantity
+    const faQtyNum  = faQtyRaw !== undefined && faQtyRaw !== '' ? parseLocaleInt(faQtyRaw) : null
+    const faLeadRaw = row['fulfillment_availability__lead_time_to_ship_max_days']
+    const faLeadNum = faLeadRaw !== undefined && faLeadRaw !== '' ? parseLocaleInt(faLeadRaw) : null
+    if (faCode || faQtyNum !== null || faLeadNum !== null) {
       const fa: Record<string, any> = {
-        fulfillment_channel_code: faCode,
-        quantity: parseInt(String(faQty), 10),
+        fulfillment_channel_code: faCode || 'DEFAULT',
         marketplace_id: marketplaceId,
       }
-      if (faLeadTime !== undefined && faLeadTime !== '') fa.lead_time_to_ship_max_days = parseInt(String(faLeadTime), 10)
+      if (faQtyNum !== null && faQtyNum >= 0) fa.quantity = faQtyNum
+      if (faLeadNum !== null && faLeadNum >= 0) fa.lead_time_to_ship_max_days = faLeadNum
       attrs.fulfillment_availability = [fa]
     }
 
