@@ -1,6 +1,6 @@
 'use client'
 
-// IM.3 — Images workspace tab.
+// IM.3 — Images workspace tab.  [redeploy 2026-06-07: media upload/copy/publish fixes]
 //
 // Shell layout: channel tabs (Master | Amazon | eBay | Shopify),
 // axis selector, master panel (full), channel panels (stubs until IM.4-6),

@@ -1,5 +1,5 @@
 /**
- * IM.2 — Amazon image routes.
+ * IM.2 — Amazon image routes.  [redeploy 2026-06-07: partial-publish]
  *
  *   POST /api/products/:productId/amazon-images/publish
  *     Resolves + submits a JSON_LISTINGS_FEED for the product's images.
