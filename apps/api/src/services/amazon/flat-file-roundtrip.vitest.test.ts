@@ -11,7 +11,7 @@
  * the readback the way getExistingRows does.
  */
 import { describe, it, expect } from 'vitest'
-import { AmazonFlatFileService } from './flat-file.service.js'
+import { AmazonFlatFileService, isBlankFeedValue } from './flat-file.service.js'
 
 const svc = new AmazonFlatFileService({} as any, {} as any)
 // private but pure — call through an any-cast (same args syncRowsToPlatform uses)
@@ -76,5 +76,34 @@ describe('FFX.3 — flat-file pull round-trip contract', () => {
   it('no fulfillment data → no fulfillment_availability written', () => {
     const attrs = collapse({ item_sku: 'X7', item_name: 'x' })
     expect(attrs.fulfillment_availability).toBeUndefined()
+  })
+})
+
+// FFA — "Invalid empty value provided in patch" failed entire feeds when a
+// pulled cell was blank/whitespace. The feed body must omit blank attributes.
+describe('isBlankFeedValue (feed empty-attribute guard)', () => {
+  it('flags blank / whitespace / empty', () => {
+    expect(isBlankFeedValue([])).toBe(true)
+    expect(isBlankFeedValue([{ value: '', marketplace_id: 'X' }])).toBe(true)
+    expect(isBlankFeedValue([{ value: '   ', marketplace_id: 'X' }])).toBe(true)
+    expect(isBlankFeedValue([{ marketplace_id: 'X', language_tag: 'it_IT' }])).toBe(true) // only meta
+    expect(isBlankFeedValue([{ length: { value: '', unit: '' } }])).toBe(true)
+  })
+  it('keeps real values (incl. 0 / false)', () => {
+    expect(isBlankFeedValue([{ value: 'Nero', marketplace_id: 'X' }])).toBe(false)
+    expect(isBlankFeedValue([{ value_with_tax: 0 }])).toBe(false)
+    expect(isBlankFeedValue([{ fulfillment_channel_code: 'AMAZON_EU', marketplace_id: 'X' }])).toBe(false)
+  })
+
+  it('buildJsonFeedBody drops a blank cell instead of sending it', () => {
+    const svc2 = new AmazonFlatFileService({} as any, {} as any)
+    const feed = JSON.parse(svc2.buildJsonFeedBody(
+      [{ item_sku: 'B1', item_name: 'Title', color: '   ', some_attr: '' } as any],
+      'IT', 'SELLER', {},
+    ))
+    const attrs = feed.messages[0].attributes
+    expect(attrs.item_name).toBeDefined()
+    expect(attrs.color).toBeUndefined()      // whitespace-only → omitted
+    expect(attrs.some_attr).toBeUndefined()  // empty → omitted
   })
 })

@@ -551,6 +551,23 @@ function expandSchemaField(
   return [schemaFieldToColumn(fieldId, prop, isRequired, schemaLabels, schemaEnums, lang)]
 }
 
+// FFA — Amazon rejects any attribute submitted with an empty value ("Invalid
+// empty value provided in patch at index of N") and FAILS THE WHOLE FEED. A
+// pulled/edited row can carry a blank or whitespace cell, so we strip blank
+// attributes from the feed body before submitting (Amazon wants them omitted).
+const FEED_META_KEYS = new Set(['marketplace_id', 'language_tag', 'audience'])
+export function isBlankFeedValue(val: unknown): boolean {
+  if (val === null || val === undefined) return true
+  if (typeof val === 'string') return val.trim() === ''
+  if (typeof val === 'number' || typeof val === 'boolean') return false // 0 / false are real values
+  if (Array.isArray(val)) return val.length === 0 || val.every(isBlankFeedValue)
+  if (typeof val === 'object') {
+    const meaningful = Object.entries(val as Record<string, unknown>).filter(([k]) => !FEED_META_KEYS.has(k))
+    return meaningful.length === 0 || meaningful.every(([, v]) => isBlankFeedValue(v))
+  }
+  return false
+}
+
 // ── Main service ───────────────────────────────────────────────────────
 
 export class AmazonFlatFileService {
@@ -1118,13 +1135,20 @@ export class AmazonFlatFileService {
           attrs[base] = [{ ...val, marketplace_id: marketplaceId }]
         }
 
+        // FFA — drop any blank/whitespace attribute so a single empty pulled cell
+        // can't fail the whole feed ("Invalid empty value provided in patch").
+        const cleanAttrs: Record<string, any> = {}
+        for (const [k, v] of Object.entries(attrs)) {
+          if (!isBlankFeedValue(v)) cleanAttrs[k] = v
+        }
+
         return {
           messageId: i + 1,
           sku: String(row.item_sku),
           operationType,
           productType,
           requirements: String(row.parentage_level).toLowerCase() === 'parent' ? 'LISTING_PRODUCT_ONLY' : 'LISTING',
-          attributes: attrs,
+          attributes: cleanAttrs,
         }
       })
 
