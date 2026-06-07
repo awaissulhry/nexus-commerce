@@ -26,8 +26,8 @@ interface MatrixProps {
   onColumnHeaderDrop: (slot: AmazonSlot, url: string, sourceId?: string) => void
   onPublishRow: (groupValue: string) => void
   onCopyRow: (groupValue: string, toMarketplace: string) => void
-  /** CM.6 — copy the SELECTED slots (columns) to the same slots in other markets. */
-  onCopySlotsToMarkets?: (slots: AmazonSlot[]) => void
+  /** CM.6 — copy the SELECTED cells (individual images) to the same cell in other markets. */
+  onCopyCellsToMarkets?: (cells: Array<{ group: string | null; slot: AmazonSlot }>) => void
   onClearRow: (groupValue: string) => void
   onCellFileDrop: (groupValue: string | null, slot: AmazonSlot, file: File) => void
   /** IE.11 — Active status filter from the MatrixFilterBar. Defaults
@@ -354,13 +354,9 @@ function SlotCell({
 function ColumnHeader({
   slot,
   onHeaderDrop,
-  selected,
-  onToggleSelect,
 }: {
   slot: AmazonSlot
   onHeaderDrop: (slot: AmazonSlot, url: string, sourceId?: string) => void
-  selected?: boolean
-  onToggleSelect?: (slot: AmazonSlot) => void
 }) {
   const [isOver, setIsOver] = useState(false)
 
@@ -391,15 +387,6 @@ function ColumnHeader({
     >
       <div className="text-[11px] font-mono leading-none">{slot}</div>
       {slot === 'SWCH' && <div className="text-[9px] text-slate-400 mt-0.5">Swatch</div>}
-      {onToggleSelect && (
-        <input
-          type="checkbox"
-          checked={!!selected}
-          onChange={() => onToggleSelect(slot)}
-          title={`Select ${slot} to copy across markets`}
-          className="mt-1 cursor-pointer accent-orange-600"
-        />
-      )}
     </div>
   )
 }
@@ -475,7 +462,7 @@ export default function AmazonMatrix({
   onColumnHeaderDrop,
   onPublishRow,
   onCopyRow,
-  onCopySlotsToMarkets,
+  onCopyCellsToMarkets,
   onClearRow,
   onCellFileDrop,
   onCellRevert,
@@ -515,12 +502,14 @@ export default function AmazonMatrix({
     setPendingColumnFill(null)
   }
 
-  const [selectedSlots, setSelectedSlots] = useState<Set<string>>(new Set())
-  const toggleSlotSelect = useCallback((slot: AmazonSlot) => {
-    setSelectedSlots((prev) => {
-      const n = new Set(prev)
-      if (n.has(slot)) n.delete(slot)
-      else n.add(slot)
+  const [selectedCells, setSelectedCells] = useState<Map<string, { group: string | null; slot: AmazonSlot }>>(new Map())
+  const cellKey = (group: string | null, slot: string) => `${group ?? '__ALL__'}::${slot}`
+  const toggleCellSelect = useCallback((group: string | null, slot: AmazonSlot) => {
+    setSelectedCells((prev) => {
+      const n = new Map(prev)
+      const k = `${group ?? '__ALL__'}::${slot}`
+      if (n.has(k)) n.delete(k)
+      else n.set(k, { group, slot })
       return n
     })
   }, [])
@@ -584,23 +573,22 @@ export default function AmazonMatrix({
       )}
 
       {/* CM.6 — cross-market copy: selected-slots toolbar */}
-      {onCopySlotsToMarkets && selectedSlots.size > 0 && (
+      {onCopyCellsToMarkets && selectedCells.size > 0 && (
         <div className="mb-3 flex items-center gap-2 rounded-xl border border-orange-200 dark:border-orange-900/50 bg-orange-50/70 dark:bg-orange-950/20 px-3 py-2 text-sm">
           <span className="font-medium text-slate-700 dark:text-slate-200">
-            {selectedSlots.size} slot{selectedSlots.size === 1 ? '' : 's'} selected
+            {selectedCells.size} image{selectedCells.size === 1 ? '' : 's'} selected
           </span>
-          <span className="text-xs font-mono text-slate-500 dark:text-slate-400">{[...selectedSlots].join(', ')}</span>
           <div className="flex-1" />
           <Button
             size="sm"
             onClick={() => {
-              onCopySlotsToMarkets([...selectedSlots] as AmazonSlot[])
-              setSelectedSlots(new Set())
+              onCopyCellsToMarkets([...selectedCells.values()])
+              setSelectedCells(new Map())
             }}
           >
             Copy selected → markets
           </Button>
-          <Button size="sm" variant="ghost" onClick={() => setSelectedSlots(new Set())} className="text-slate-500">
+          <Button size="sm" variant="ghost" onClick={() => setSelectedCells(new Map())} className="text-slate-500">
             Clear
           </Button>
         </div>
@@ -635,8 +623,6 @@ export default function AmazonMatrix({
                 <ColumnHeader
                   slot={slot}
                   onHeaderDrop={handleColumnHeaderDrop}
-                  selected={selectedSlots.has(slot)}
-                  onToggleSelect={onCopySlotsToMarkets ? toggleSlotSelect : undefined}
                 />
               </div>
             ))}
@@ -695,9 +681,19 @@ export default function AmazonMatrix({
                   return (
                     <div
                       key={slot}
-                      className={dim ? 'opacity-25 transition-opacity' : 'transition-opacity'}
+                      className={cn('relative', dim ? 'opacity-25 transition-opacity' : 'transition-opacity')}
                       aria-hidden={dim}
                     >
+                      {onCopyCellsToMarkets && cell?.url && (
+                        <input
+                          type="checkbox"
+                          checked={selectedCells.has(cellKey(groupValue, slot))}
+                          onChange={() => toggleCellSelect(groupValue, slot)}
+                          onClick={(e) => e.stopPropagation()}
+                          title="Select this image to copy across markets"
+                          className="absolute top-1 left-1 z-20 cursor-pointer accent-orange-600"
+                        />
+                      )}
                       <SlotCell
                         cell={cell}
                         slot={slot}

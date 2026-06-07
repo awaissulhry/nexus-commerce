@@ -33,7 +33,6 @@ import {
   useAmazonImages,
   AMAZON_MARKETPLACES,
   ALL_SLOTS,
-  SLOT_LABELS,
   type AmazonMarketplace,
   type AmazonSlot,
 } from './useAmazonImages'
@@ -252,16 +251,14 @@ export default function AmazonPanel({
   }
 
   // CM — cross-market copy (whole-market or per-slot) → staged upserts.
-  const [copyPicker, setCopyPicker] = useState<{ slots: string[]; label: string } | null>(null)
+  const [copyPicker, setCopyPicker] = useState<{ cells: Array<{ group: string | null; slot: string }>; label: string } | null>(null)
 
   function runCopy(targets: string[]) {
     if (!copyPicker) return
-    const groups: Array<string | null> = [...amazon.variantGroups.map((g) => g.groupValue), null]
     const upserts = buildCrossMarketUpserts({
       sourceMarketplace: amazon.activeMarketplace,
       targets,
-      slots: copyPicker.slots,
-      groups,
+      cells: copyPicker.cells,
       activeAxis,
       resolveCell: (g, s) => amazon.resolveCell(g, s as AmazonSlot),
       listingImages,
@@ -560,7 +557,13 @@ export default function AmazonPanel({
         onReload={onReload}
         onCopyToMarkets={
           amazon.activeMarketplace !== 'ALL'
-            ? () => setCopyPicker({ slots: [...ALL_SLOTS], label: 'all images' })
+            ? () =>
+                setCopyPicker({
+                  cells: [...amazon.variantGroups.map((g) => g.groupValue), null].flatMap((group) =>
+                    ALL_SLOTS.map((slot) => ({ group, slot })),
+                  ),
+                  label: 'all images',
+                })
             : undefined
         }
       />
@@ -654,15 +657,12 @@ export default function AmazonPanel({
               amazon.activeMarketplace === 'ALL' ? 'IT' : amazon.activeMarketplace,
             )}
             onCopyRow={handleCopyRow}
-            onCopySlotsToMarkets={
+            onCopyCellsToMarkets={
               amazon.activeMarketplace !== 'ALL'
-                ? (slots) =>
+                ? (cells) =>
                     setCopyPicker({
-                      slots,
-                      label:
-                        slots.length === 1
-                          ? (SLOT_LABELS[slots[0]!] ?? String(slots[0]))
-                          : `${slots.length} selected slots`,
+                      cells,
+                      label: cells.length === 1 ? '1 image' : `${cells.length} images`,
                     })
                 : undefined
             }

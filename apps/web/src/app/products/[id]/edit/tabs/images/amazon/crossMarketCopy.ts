@@ -24,10 +24,8 @@ export interface CrossMarketCopyInput {
   sourceMarketplace: string
   /** Target market codes (e.g. ['DE','FR']) and/or SHARED_TARGET. */
   targets: string[]
-  /** Slot codes to copy — all slots (whole-market) or a single slot (per-slot). */
-  slots: string[]
-  /** Group values to copy across; null = the "All Colors" / product-level row. */
-  groups: Array<string | null>
+  /** Exact source cells to copy — (group, slot) pairs. group null = All Colors row. */
+  cells: Array<{ group: string | null; slot: string }>
   /** Axis key used for non-null groups (variantGroupKey). */
   activeAxis: string
   /** Resolves the SOURCE market's effective cell for (group, slot). */
@@ -43,7 +41,7 @@ function slotIndex(slot: string): number {
 }
 
 export function buildCrossMarketUpserts(input: CrossMarketCopyInput): CrossMarketUpsert[] {
-  const { sourceMarketplace, targets, slots, groups, activeAxis, resolveCell, listingImages } = input
+  const { sourceMarketplace, targets, cells, activeAxis, resolveCell, listingImages } = input
   const out: CrossMarketUpsert[] = []
 
   for (const target of targets) {
@@ -52,44 +50,42 @@ export function buildCrossMarketUpserts(input: CrossMarketCopyInput): CrossMarke
     const tScope: PendingUpsert['scope'] = isShared ? 'PLATFORM' : 'MARKETPLACE'
     const tMarket: string | null = isShared ? null : target
 
-    for (const group of groups) {
-      for (const slot of slots) {
-        const src = resolveCell(group, slot)
-        if (!src || !src.url) continue // skip empty source slots
+    for (const { group, slot } of cells) {
+      const src = resolveCell(group, slot)
+      if (!src || !src.url) continue // skip empty source cells
 
-        const srcRow = src.listingImageId
-          ? listingImages.find((li) => li.id === src.listingImageId)
-          : undefined
-        const sourceProductImageId = src.masterImageId ?? srcRow?.sourceProductImageId ?? null
+      const srcRow = src.listingImageId
+        ? listingImages.find((li) => li.id === src.listingImageId)
+        : undefined
+      const sourceProductImageId = src.masterImageId ?? srcRow?.sourceProductImageId ?? null
 
-        // Replace the target's same slot if it already exists (id → update).
-        const existing = listingImages.find(
-          (li) =>
-            li.platform === 'AMAZON' &&
-            li.amazonSlot === slot &&
-            li.scope === tScope &&
-            li.marketplace === tMarket &&
-            (group === null
-              ? !li.variantGroupKey
-              : li.variantGroupKey === activeAxis && li.variantGroupValue === group),
-        )
+      // Replace the target's same cell if it already exists (id → update).
+      const existing = listingImages.find(
+        (li) =>
+          li.platform === 'AMAZON' &&
+          li.amazonSlot === slot &&
+          li.scope === tScope &&
+          li.marketplace === tMarket &&
+          (group === null
+            ? !li.variantGroupKey
+            : li.variantGroupKey === activeAxis && li.variantGroupValue === group),
+      )
 
-        out.push({
-          ...(existing ? { id: existing.id } : {}),
-          scope: tScope,
-          platform: 'AMAZON',
-          marketplace: tMarket,
-          amazonSlot: slot,
-          variantGroupKey: group === null ? null : activeAxis,
-          variantGroupValue: group === null ? null : group,
-          url: src.url,
-          sourceProductImageId,
-          role: srcRow?.role ?? 'GALLERY',
-          position: srcRow?.position ?? slotIndex(slot),
-          width: src.width ?? null,
-          height: src.height ?? null,
-        })
-      }
+      out.push({
+        ...(existing ? { id: existing.id } : {}),
+        scope: tScope,
+        platform: 'AMAZON',
+        marketplace: tMarket,
+        amazonSlot: slot,
+        variantGroupKey: group === null ? null : activeAxis,
+        variantGroupValue: group === null ? null : group,
+        url: src.url,
+        sourceProductImageId,
+        role: srcRow?.role ?? 'GALLERY',
+        position: srcRow?.position ?? slotIndex(slot),
+        width: src.width ?? null,
+        height: src.height ?? null,
+      })
     }
   }
 
