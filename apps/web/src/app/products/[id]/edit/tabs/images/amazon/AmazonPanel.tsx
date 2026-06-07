@@ -38,6 +38,7 @@ import {
 } from './useAmazonImages'
 import { CopyToMarketsModal } from './CopyToMarketsModal'
 import { CopyToVariantsModal } from './CopyToVariantsModal'
+import { ExportPreviewModal } from './ExportPreviewModal'
 import { useMatrixColumnPrefs } from './useMatrixColumnPrefs'
 import { MatrixColumnsModal } from './MatrixColumnsModal'
 import { computeSlotGroups } from './groupCoverage'
@@ -132,6 +133,7 @@ export default function AmazonPanel({
   const [slotUploading, setSlotUploading] = useState(false)
   const [isExporting, setIsExporting] = useState(false)
   const [exportProgress, setExportProgress] = useState<{ market: string; index: number; total: number } | null>(null)
+  const [exportPreview, setExportPreview] = useState<{ marketplace: string } | null>(null)
   const [previewOpen, setPreviewOpen] = useState(false)
   const [historyOpen, setHistoryOpen] = useState(false)
   // IE.5 — drift modal state
@@ -954,7 +956,7 @@ export default function AmazonPanel({
         dirtyCount={dirtyCount}
         onPublish={publishWithGuard}
         onPublishAll={publishAllWithGuard}
-        onExportZip={handleExportZip}
+        onExportZip={(mkt) => setExportPreview({ marketplace: mkt })}
         isExporting={isExporting}
         exportProgress={exportProgress}
         onPreview={(mkt) => setPreviewMarketplace(mkt)}
@@ -1062,6 +1064,16 @@ export default function AmazonPanel({
             .filter((g) => !variantPicker.cells.some((c) => c.group === g))}
           onConfirm={runVariantCopy}
           onClose={() => setVariantPicker(null)}
+        />
+      )}
+
+      {exportPreview && (
+        <ExportPreviewModal
+          productId={productId}
+          marketplace={exportPreview.marketplace}
+          activeAxis={activeAxis ?? null}
+          onExport={(mkt) => handleExportZip(mkt as AmazonMarketplace)}
+          onClose={() => setExportPreview(null)}
         />
       )}
 

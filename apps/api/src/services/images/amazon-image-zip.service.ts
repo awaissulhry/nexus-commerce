@@ -232,6 +232,70 @@ export async function generateAmazonZip(
   }
 }
 
+// ── Manifest (preview + completeness report) ────────────────────────────
+// Per-market coverage WITHOUT downloading images: what would be exported,
+// what's skipped (no ASIN), what's blocked (validation) + why. Powers the
+// pre-export preview and the post-export report so nothing is silently missing.
+export interface ZipManifestMarket {
+  market: string
+  asinCount: number          // variants that have an ASIN on this market
+  estimatedFiles: number     // images that would be exported (non-blocked)
+  skippedNoAsin: string[]    // SKUs with no ASIN on this market
+  blocked: Array<{ asin: string; sku: string; reasons: string[] }>
+}
+export interface ZipManifest {
+  perMarket: ZipManifestMarket[]
+  totalEstimatedFiles: number
+  totalBlocked: number
+  totalSkippedNoAsin: number
+}
+
+export async function buildAmazonZipManifest(input: {
+  productId: string
+  marketplace: string
+  activeAxis?: string | null
+  variantIds?: string[]
+}): Promise<ZipManifest> {
+  const mkt = input.marketplace.toUpperCase()
+  const product = await prisma.product.findUnique({
+    where: { id: input.productId },
+    select: { imageAxisPreference: true },
+  })
+  if (!product) throw new Error(`Product ${input.productId} not found`)
+  const activeAxis = input.activeAxis ?? product.imageAxisPreference ?? null
+  const markets: Marketplace[] = mkt === 'ALL'
+    ? [...ALL_AMAZON_MARKETPLACES]
+    : [mkt as Marketplace]
+
+  const perMarket: ZipManifestMarket[] = []
+  for (const m of markets) {
+    const [resolved, validation] = await Promise.all([
+      resolveAmazonImages(input.productId, m, input.variantIds, activeAxis ?? undefined),
+      validateAmazonPublish({ productId: input.productId, marketplace: m, activeAxis, variantIds: input.variantIds }),
+    ])
+    const withAsin = resolved.filter((v) => v.amazonAsin)
+    const skippedNoAsin = resolved.filter((v) => !v.amazonAsin).map((v) => v.sku)
+    const blocked: ZipManifestMarket['blocked'] = []
+    let estimatedFiles = 0
+    for (const v of withAsin) {
+      if (validation.blockedAsins.has(v.amazonAsin!)) {
+        const reasons = [...new Set(validation.hardFails.filter((i) => i.asin === v.amazonAsin).map((i) => i.code))]
+        blocked.push({ asin: v.amazonAsin!, sku: v.sku, reasons })
+      } else {
+        estimatedFiles += v.slots.length
+      }
+    }
+    perMarket.push({ market: m, asinCount: withAsin.length, estimatedFiles, skippedNoAsin, blocked })
+  }
+
+  return {
+    perMarket,
+    totalEstimatedFiles: perMarket.reduce((s, p) => s + p.estimatedFiles, 0),
+    totalBlocked: perMarket.reduce((s, p) => s + p.blocked.length, 0),
+    totalSkippedNoAsin: perMarket.reduce((s, p) => s + p.skippedNoAsin.length, 0),
+  }
+}
+
 function mimeToExt(mime: string): string {
   if (mime.includes('png')) return 'png'
   if (mime.includes('webp')) return 'webp'

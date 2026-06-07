@@ -26,7 +26,7 @@ import {
   submitAmazonImageFeed,
   pollAndUpdateFeedJob,
 } from '../../services/images/amazon-image-feed.service.js'
-import { generateAmazonZip } from '../../services/images/amazon-image-zip.service.js'
+import { generateAmazonZip, buildAmazonZipManifest } from '../../services/images/amazon-image-zip.service.js'
 import { buildAmazonImagePreview } from '../../services/images/amazon-image-preview.service.js'
 import { validateAmazonPublish } from '../../services/images/amazon-publish-validator.service.js'
 import { findStaleListingImages } from '../../services/images/amazon-stale.service.js'
@@ -421,6 +421,30 @@ const amazonImagesRoutes: FastifyPluginAsync = async (fastify) => {
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
         return reply.code(500).send({ error: msg })
+      }
+    },
+  )
+
+  // ── GET /api/products/:productId/amazon-images/export-zip/manifest ─
+  // Pre-export coverage: per-market ASIN/file counts + skipped (no ASIN) +
+  // blocked (validation) ASINs, WITHOUT downloading images. Powers the export
+  // preview + completeness report so nothing is silently missing.
+  fastify.get<{
+    Params: { productId: string }
+    Querystring: { marketplace?: string; activeAxis?: string }
+  }>(
+    '/products/:productId/amazon-images/export-zip/manifest',
+    async (request, reply) => {
+      const mkt = (request.query.marketplace ?? 'ALL').toUpperCase()
+      try {
+        const manifest = await buildAmazonZipManifest({
+          productId: request.params.productId,
+          marketplace: mkt,
+          activeAxis: request.query.activeAxis ?? null,
+        })
+        return manifest
+      } catch (err) {
+        return reply.code(500).send({ error: err instanceof Error ? err.message : String(err) })
       }
     },
   )
