@@ -12,10 +12,14 @@
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import { ACTION_HANDLERS, type ActionResult } from '../automation-rule.service.js'
-import { aggregateOrdersDayparting, type DaypartProfile } from './orders-dayparting.service.js'
+import { aggregateOrdersDayparting, type DaypartProfile, type DaypartMetric, type DaypartBucket } from './orders-dayparting.service.js'
 
 // Shopper-local timezone per market (dayparting windows are enforced in this TZ).
 const MARKET_TZ: Record<string, string> = { IT: 'Europe/Rome', DE: 'Europe/Berlin', FR: 'Europe/Paris', ES: 'Europe/Madrid', NL: 'Europe/Amsterdam', BE: 'Europe/Brussels', SE: 'Europe/Stockholm', PL: 'Europe/Warsaw', IE: 'Europe/Dublin', UK: 'Europe/London' }
+// RM1 — EUR markets weight the demand shape by revenue; non-EUR have no EUR revenue, so weight by
+// order count. Unknown/undefined (the "all markets" case) defaults to revenue (IT-dominant today).
+const EUR_MARKETS = new Set(['IT', 'DE', 'FR', 'ES', 'NL', 'BE', 'IE', 'AT', 'FI', 'PT', 'GR', 'LU', 'SK', 'SI', 'EE', 'LV', 'LT', 'CY', 'MT'])
+const isEurMarket = (m?: string): boolean => !m || EUR_MARKETS.has(m)
 
 export interface ProductFamily {
   marketplace?: string
@@ -107,6 +111,8 @@ export interface BlendedDemand {
   hasData: boolean
   familyOrders: number
   blended: boolean
+  timezone: string // RM1 — the tz the day×hour grid is bucketed in (market-local)
+  metric: DaypartMetric // RM1 — what the shape is weighted by: revenue (EUR markets) or orders (non-EUR)
   // RD.10f — the RAW family demand (un-blended, actual orders/revenue per cell), so
   // the UI can show the product's TRUE data by default and offer smoothing as a toggle.
   raw: RawDemand
@@ -126,19 +132,26 @@ export async function blendedFamilyDemand(productIds: string[], marketplace: str
   // aggregateOrdersDayparting); both the family and the market prior use the same
   // window so the shrinkage stays apples-to-apples.
   // RD.10g — match the family by productId OR sku (the reliable, SKU-keyed sales path).
-  const fam = await aggregateOrdersDayparting({ channel: 'AMAZON', marketplace, productIds, skus, windowDays, metric: 'revenue', from: range?.from, to: range?.to })
-  const mkt = await aggregateOrdersDayparting({ channel: 'AMAZON', marketplace, windowDays, metric: 'revenue', from: range?.from, to: range?.to })
+  // RM1 — bucket in the market's local time + weight by the right metric (revenue for EUR markets,
+  // order count for non-EUR, which have no EUR revenue). EUR/IT is unchanged (revenue + Rome).
+  const tz = MARKET_TZ[marketplace ?? ''] ?? 'Europe/Rome'
+  const useRevenue = isEurMarket(marketplace)
+  const metric: DaypartMetric = useRevenue ? 'revenue' : 'orders'
+  const fam = await aggregateOrdersDayparting({ channel: 'AMAZON', marketplace, productIds, skus, windowDays, metric, timezone: tz, from: range?.from, to: range?.to })
+  const mkt = await aggregateOrdersDayparting({ channel: 'AMAZON', marketplace, windowDays, metric, timezone: tz, from: range?.from, to: range?.to })
+  const wCell = (c?: DaypartBucket): number => (useRevenue ? (c?.revenueCents ?? 0) : (c?.orders ?? 0))
   const fTotRev = fam.totals.revenueCents, fTotOrders = fam.totals.orders, fTotUnits = fam.totals.units
-  const mTotRev = mkt.totals.revenueCents
-  const blended = mTotRev > 0 && fTotOrders > 0
+  const fTotW = useRevenue ? fTotRev : fTotOrders
+  const mTotW = useRevenue ? mkt.totals.revenueCents : mkt.totals.orders
+  const blended = mTotW > 0 && fTotOrders > 0
 
   const rawShare: number[][] = []
   let shareSum = 0
   for (let d = 0; d < 7; d++) {
     rawShare[d] = []
     for (let h = 0; h < 24; h++) {
-      const fShare = fTotRev > 0 ? (fam.grid[d]?.[h]?.revenueCents ?? 0) / fTotRev : 0
-      const mShare = mTotRev > 0 ? (mkt.grid[d]?.[h]?.revenueCents ?? 0) / mTotRev : 0
+      const fShare = fTotW > 0 ? wCell(fam.grid[d]?.[h]) / fTotW : 0
+      const mShare = mTotW > 0 ? wCell(mkt.grid[d]?.[h]) / mTotW : 0
       const w = fam.grid[d]?.[h]?.orders ?? 0
       const bShare = shrinkShare(fShare, mShare, w, blended)
       rawShare[d][h] = bShare; shareSum += bShare
@@ -163,11 +176,13 @@ export async function blendedFamilyDemand(productIds: string[], marketplace: str
     for (let h = 0; h < 24; h++) { o += grid[d][h].orders; u += grid[d][h].units; r += grid[d][h].revenueCents }
     return { key: d, orders: o, units: u, revenueCents: r, index: null }
   })
-  const hMean = hourProfile.reduce((s, x) => s + x.revenueCents, 0) / 24
-  for (const x of hourProfile) x.index = hMean > 0 ? x.revenueCents / hMean : null
-  const wMean = weekdayProfile.reduce((s, x) => s + x.revenueCents, 0) / 7
-  for (const x of weekdayProfile) x.index = wMean > 0 ? x.revenueCents / wMean : null
-  return { totals: fam.totals, grid, hourProfile, weekdayProfile, hasData: fTotOrders > 0, familyOrders: fTotOrders, blended, raw: { grid: fam.grid, hourProfile: fam.hourProfile, weekdayProfile: fam.weekdayProfile, totals: fam.totals } }
+  // RM1 — index (peak/trough detection) weighted by the same metric the shape uses.
+  const wProf = (x: BlendProfile): number => (useRevenue ? x.revenueCents : x.orders)
+  const hMean = hourProfile.reduce((s, x) => s + wProf(x), 0) / 24
+  for (const x of hourProfile) x.index = hMean > 0 ? wProf(x) / hMean : null
+  const wMean = weekdayProfile.reduce((s, x) => s + wProf(x), 0) / 7
+  for (const x of weekdayProfile) x.index = wMean > 0 ? wProf(x) / wMean : null
+  return { totals: fam.totals, grid, hourProfile, weekdayProfile, hasData: fTotOrders > 0, familyOrders: fTotOrders, blended, timezone: tz, metric, raw: { grid: fam.grid, hourProfile: fam.hourProfile, weekdayProfile: fam.weekdayProfile, totals: fam.totals } }
 }
 
 interface GenParams { bidUpPct?: number; bidDownPct?: number; pauseOvernight?: boolean }

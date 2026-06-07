@@ -39,7 +39,7 @@ export function RankPlanPanel({ campaignId, campaignName, onAutoDefend, reloadSi
   const [decision, setDecision] = useState<Decision | null>(null)
   // RD.10b — the product family's by-hour demand, so you set rank windows where the
   // product actually sells (same fusion as the By-product view, scoped to this campaign).
-  const [demand, setDemand] = useState<{ grid: DemandCell[][]; hourProfile: DemandProfile[]; weekdayProfile: DemandProfile[]; hasData: boolean; familyOrders: number } | null>(null)
+  const [demand, setDemand] = useState<{ grid: DemandCell[][]; hourProfile: DemandProfile[]; weekdayProfile: DemandProfile[]; hasData: boolean; familyOrders: number; timezone?: string; metric?: 'revenue' | 'orders' } | null>(null)
   const [famName, setFamName] = useState<string>('')
   const [demandDays, setDemandDays] = useState(180) // chosen timeframe for the heatmap data
   const [rec, setRec] = useState<{ windows: Win[]; baselineTargetKey: string; peakHours: number[] } | null>(null)
@@ -175,7 +175,7 @@ export function RankPlanPanel({ campaignId, campaignName, onAutoDefend, reloadSi
               </select>
               {rec && rec.windows.length > 0 && <button type="button" className="az-link" onClick={applyRecommended} title="Set windows from the demand peaks"><Wand2 size={12} /> Recommend windows</button>}
             </div>
-            <DemandReadout grid={(smooth && smoothed ? smoothed : demand).grid} hourProfile={(smooth && smoothed ? smoothed : demand).hourProfile} weekdayProfile={(smooth && smoothed ? smoothed : demand).weekdayProfile} />
+            <DemandReadout grid={(smooth && smoothed ? smoothed : demand).grid} hourProfile={(smooth && smoothed ? smoothed : demand).hourProfile} weekdayProfile={(smooth && smoothed ? smoothed : demand).weekdayProfile} timezone={demand.timezone} metric={demand.metric} />
           </div>
         )}
 

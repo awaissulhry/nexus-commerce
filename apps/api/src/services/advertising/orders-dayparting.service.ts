@@ -34,6 +34,7 @@ export interface OrdersDaypartingOpts {
   to?: Date                          // explicit range end (exclusive)
   windowDays?: number                // alternative to from/to; default 90
   metric?: DaypartMetric             // drives index + peak/trough detection; default 'revenue'
+  timezone?: string                  // RM1 — IANA tz to bucket day×hour in; default Europe/Rome (IT). Pass the market's tz for non-IT.
 }
 
 export interface DaypartBucket { orders: number; units: number; revenueCents: number }
@@ -41,7 +42,7 @@ export interface DaypartProfile extends DaypartBucket { key: number; index: numb
 export interface RecommendedWindow { days: number[]; startHour: number; endHour: number }
 
 export interface OrdersDaypartingResult {
-  timezone: 'Europe/Rome'
+  timezone: string
   channel: string
   metric: DaypartMetric
   from: string
@@ -73,6 +74,7 @@ export async function aggregateOrdersDayparting(
   const metric: DaypartMetric = opts.metric ?? 'revenue'
   const to = opts.to ?? new Date()
   const from = opts.from ?? new Date(to.getTime() - (opts.windowDays ?? 90) * 86_400_000)
+  const tz = opts.timezone ?? 'Europe/Rome' // RM1 — bucket in the market's local time, not always Rome
 
   const mkts = opts.marketplace == null ? [] : Array.isArray(opts.marketplace) ? opts.marketplace : [opts.marketplace]
   const hasProductIds = !!(opts.productIds && opts.productIds.length)
@@ -101,11 +103,11 @@ export async function aggregateOrdersDayparting(
   // o.id) so a multi-line order counts once. Revenue summed as integer cents, EUR-only.
   const rows = await prisma.$queryRaw<Row[]>`
     SELECT
-      EXTRACT(DOW  FROM (COALESCE(o."purchaseDate", o."createdAt") AT TIME ZONE 'UTC' AT TIME ZONE 'Europe/Rome'))::int AS dow,
-      EXTRACT(HOUR FROM (COALESCE(o."purchaseDate", o."createdAt") AT TIME ZONE 'UTC' AT TIME ZONE 'Europe/Rome'))::int AS hour,
+      EXTRACT(DOW  FROM (COALESCE(o."purchaseDate", o."createdAt") AT TIME ZONE 'UTC' AT TIME ZONE ${tz}))::int AS dow,
+      EXTRACT(HOUR FROM (COALESCE(o."purchaseDate", o."createdAt") AT TIME ZONE 'UTC' AT TIME ZONE ${tz}))::int AS hour,
       COUNT(DISTINCT o.id)::bigint                                       AS orders,
       COALESCE(SUM(oi."quantity"), 0)::bigint                            AS units,
-      COALESCE(SUM(ROUND(oi."price" * oi."quantity" * 100)), 0)::bigint  AS cents
+      COALESCE(SUM(CASE WHEN COALESCE(o."currencyCode", 'EUR') = 'EUR' THEN ROUND(oi."price" * oi."quantity" * 100) ELSE 0 END), 0)::bigint AS cents
     FROM "Order" o
     ${joinFrag}
     WHERE o."deletedAt" IS NULL
@@ -114,7 +116,6 @@ export async function aggregateOrdersDayparting(
       AND o."channel"::text = ${channel}
       AND COALESCE(o."purchaseDate", o."createdAt") >= ${from}
       AND COALESCE(o."purchaseDate", o."createdAt") <  ${to}
-      AND COALESCE(o."currencyCode", 'EUR') = 'EUR'
       ${mktFrag}
       ${prodFrag}
       ${skuFrag}
@@ -177,7 +178,7 @@ export async function aggregateOrdersDayparting(
   }
 
   return {
-    timezone: 'Europe/Rome',
+    timezone: tz,
     channel,
     metric,
     from: from.toISOString(),
@@ -190,6 +191,6 @@ export async function aggregateOrdersDayparting(
     troughHours,
     recommendedWindow,
     hasData: totals.orders > 0,
-    currencyNote: 'Revenue is EUR; non-EUR markets are excluded from the revenue total.',
+    currencyNote: 'Orders/units count every currency; revenue is EUR-only (non-EUR markets contribute 0 to revenue — use the orders/units metric for them).',
   }
 }
