@@ -995,8 +995,16 @@ export default function AmazonFlatFileClient({
           }
         }
       }
+      // FFA.5 — only TRUE orphans (parent absent from the view, e.g. filtered out)
+      // get appended. A child of a COLLAPSED parent stays hidden until expanded —
+      // previously it leaked to the bottom of the grid + into fill/copy/validation.
+      const presentParentSkus = new Set(
+        result.filter((r) => r.parentage_level === 'parent').map((r) => String(r.item_sku ?? '')),
+      )
       for (const row of result) {
-        if (row.parentage_level === 'child' && !processedChildIds.has(row._rowId as string)) {
+        if (row.parentage_level === 'child'
+          && !processedChildIds.has(row._rowId as string)
+          && !presentParentSkus.has(String(row.parent_sku ?? ''))) {
           grouped.push(row)
         }
       }
@@ -4744,7 +4752,7 @@ function SpreadsheetCell({ col, value, isActive, cellBg, width, cellHeight, ri, 
             options={col.options}
             current={displayValue}
             selectionOnly={col.selectionOnly}
-            onSelect={(v) => { onChange(v); setDropdownOpen(false); onNavigate('right') }}
+            onSelect={(v) => { onChange(v); setDropdownOpen(false) }}
             onClose={() => { setDropdownOpen(false); onDeactivate() }}
           />
         )}
