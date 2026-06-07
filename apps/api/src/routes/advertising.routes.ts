@@ -635,8 +635,8 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     return {
       marketplace: fam.marketplace ?? marketplace, parentProductId: fam.parentProductId, parentName: fam.parentName, productIds: fam.productIds, asins: fam.asins,
       campaigns: fam.campaigns,
-      demand: { totals: d.raw.totals, hourProfile: d.raw.hourProfile, weekdayProfile: d.raw.weekdayProfile, grid: d.raw.grid, hasData: d.hasData, familyOrders: d.familyOrders, windowDays },
-      smoothed: { totals: d.totals, hourProfile: d.hourProfile, weekdayProfile: d.weekdayProfile, grid: d.grid, blended: d.blended },
+      demand: { totals: d.raw.totals, hourProfile: d.raw.hourProfile, weekdayProfile: d.raw.weekdayProfile, grid: d.raw.grid, hasData: d.hasData, familyOrders: d.familyOrders, windowDays, timezone: d.timezone, metric: d.metric },
+      smoothed: { totals: d.totals, hourProfile: d.hourProfile, weekdayProfile: d.weekdayProfile, grid: d.grid, blended: d.blended, timezone: d.timezone, metric: d.metric },
       recommended,
       ...(_diag ? { _diag } : {}),
     }
@@ -4907,8 +4907,8 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       marketplace, parentProductId: fam.parentProductId, parentName: fam.parentName,
       productIds: fam.productIds, asins: fam.asins, campaignCount: fam.campaigns.length,
       range: { from: range.sinceStr, to: range.untilStr, days: range.days, preset: range.preset },
-      demand: { totals: d.raw.totals, hourProfile: d.raw.hourProfile, weekdayProfile: d.raw.weekdayProfile, grid: d.raw.grid, hasData: d.hasData, familyOrders: d.familyOrders },
-      smoothed: { totals: d.totals, hourProfile: d.hourProfile, weekdayProfile: d.weekdayProfile, grid: d.grid, blended: d.blended },
+      demand: { totals: d.raw.totals, hourProfile: d.raw.hourProfile, weekdayProfile: d.raw.weekdayProfile, grid: d.raw.grid, hasData: d.hasData, familyOrders: d.familyOrders, timezone: d.timezone, metric: d.metric },
+      smoothed: { totals: d.totals, hourProfile: d.hourProfile, weekdayProfile: d.weekdayProfile, grid: d.grid, blended: d.blended, timezone: d.timezone, metric: d.metric },
       recommended,
     }
   })
