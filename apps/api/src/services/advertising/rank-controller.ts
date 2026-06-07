@@ -75,72 +75,72 @@ export function isRankLoss(latestImpr: number, baselineImpr: number): boolean {
  */
 export function computeStep(target: RankTargetSpec, obs: Observed, opts: { maxPct?: number } = {}): StepDecision {
   if (target.pause) return { action: 'pause', nextPct: obs.currentPct, reason: 'target = pause' }
-  // MP — motion profile. Defaults reproduce the historical behaviour EXACTLY (regression-locked):
-  // step 15/25, snap down to the entry bias, ceiling 900, ramp (not jump) to entry, hold (not climb).
-  const maxPct = Math.min(opts.maxPct ?? 900, target.maxBiasPct ?? 900)
-  const step = target.stepUpPct ?? stepFor(target) // climb increment %/cycle
-  const downStep = target.stepDownPct ?? step // ease increment %/cycle
-  const snapDown = target.stepDownPct == null // null => snap to floor on a plan change (today); a number => gradual
-  const floor = target.jumpStartPct ?? target.biasPct // the level we establish + hold on entry (opening jump or ramp target)
-  const targetIS = target.targetISPct != null ? target.targetISPct / 100 : null
+  // MP v2 — "Placement % is the bid". Snap to the floor (biasPct) both ways by default; a
+  // Climb/Ease step makes that move gradual instead; the bid only goes ABOVE the floor when a
+  // Ceiling is raised above it — then it chases the [floor, ceiling] band (signal-driven, or
+  // always with keepClimbing / all-out) and eases back toward the floor, never below it.
+  const floor = clamp(target.biasPct ?? 0, 0, 900) // the bid we hold = Placement %
+  const ceiling = target.allOut ? (target.maxBiasPct ?? 900) : (target.maxBiasPct ?? floor)
+  const maxPct = Math.min(opts.maxPct ?? 900, Math.max(floor, ceiling))
+  const climbStep = target.stepUpPct ?? stepFor(target) // up increment %/cyc (also the chase rate)
+  const easeStep = target.stepDownPct ?? climbStep // down increment %/cyc
+  const rampUp = target.stepUpPct != null // climb step SET → ramp up to the floor; blank → snap up
+  const easeDown = target.stepDownPct != null // ease step SET → ease down to the floor; blank → snap down
+  const cur = obs.currentPct
   const acosCap = target.allOut ? null : (target.acosCapPct != null ? target.acosCapPct / 100 : null)
   const acosOk = acosCap == null || obs.achievedAcosFraction == null || obs.achievedAcosFraction <= acosCap * 1.1
+  const targetIS = target.targetISPct != null ? target.targetISPct / 100 : null
+  const canChase = target.allOut || ceiling > floor
 
-  // RS.5.1 / MP — with no live signal, converge on the motion floor (jumpStartPct ?? biasPct)
-  // so the campaign actually COMPETES (Top-of-Search IS data is sparse). How it gets there
-  // and back is the motion profile:
-  //  • UP to the floor: SNAP in one cycle (jumpStartPct set — the "opening jump") or ramp
-  //    gradually +step×2 (today). Climbing has overspend risk, so the ramp stays gradual.
-  //  • keepClimbing: optionally push PAST the floor to the ceiling even with no signal
-  //    (bounded by the ACOS cap + ceiling); the ceiling then becomes the resting point.
-  //  • DOWN to the floor: SNAP in one cycle (today — safe, only reduces spend) or ease
-  //    gradually −downStep when stepDownPct is set. All-out / keepClimbing don't fall back.
-  const holdOrFloor = (reason: string): StepDecision => {
-    if (floor != null && obs.currentPct < floor && acosOk) {
-      if (target.jumpStartPct != null) return { action: 'raise', nextPct: clamp(floor, 0, maxPct), reason: `jump to ${clamp(floor, 0, maxPct)}% opening` }
-      return { action: 'raise', nextPct: clamp(Math.min(floor, obs.currentPct + step * 2), 0, maxPct), reason: `ramping to ${floor}% entry bias` }
-    }
-    if (target.keepClimbing && acosOk && obs.currentPct < maxPct) {
-      return { action: 'raise', nextPct: clamp(obs.currentPct + step, 0, maxPct), reason: `climbing to ${maxPct}% ceiling (+${step}/cyc, no signal)` }
-    }
-    if (floor != null && !target.allOut && !target.keepClimbing && obs.currentPct > floor) {
-      if (snapDown) return { action: 'lower', nextPct: clamp(floor, 0, maxPct), reason: `set to ${floor}% entry bias (no signal)` }
-      return { action: 'lower', nextPct: clamp(Math.max(floor, obs.currentPct - downStep), 0, maxPct), reason: `easing to ${floor}% entry bias (−${downStep}/cyc)` }
-    }
-    return { action: 'hold', nextPct: obs.currentPct, reason }
+  const toFloorUp = (): StepDecision => rampUp
+    ? { action: 'raise', nextPct: clamp(Math.min(floor, cur + climbStep), 0, maxPct), reason: `ramping to ${floor}% Placement (+${climbStep}/cyc)` }
+    : { action: 'raise', nextPct: clamp(floor, 0, maxPct), reason: `snap to ${floor}% Placement` }
+  // Easing DOWN moves toward the floor, so clamp to [0, 900] — NOT maxPct (which caps raises and
+  // equals the floor when there's no chase, which would wrongly snap a gradual ease straight down).
+  const toFloorDown = (why: string): StepDecision => easeDown
+    ? { action: 'lower', nextPct: clamp(Math.max(floor, cur - easeStep), 0, 900), reason: `${why} — ease to ${floor}% Placement (−${easeStep}/cyc)` }
+    : { action: 'lower', nextPct: clamp(floor, 0, 900), reason: `${why} — snap to ${floor}% Placement` }
+
+  // 1) Below the floor → establish the Placement % (snap, or ramp if a Climb step is set).
+  if (cur < floor) return toFloorUp()
+
+  // 2) No chase allowed (Ceiling = Placement %) → sit exactly at the floor; come back if drifted up.
+  if (!canChase) {
+    if (cur > floor) return toFloorDown('above Placement')
+    return { action: 'hold', nextPct: cur, reason: `holding ${floor}% Placement` }
   }
 
-  // 1) Loss reaction — re-take the slot FAST when the proxy says we're slipping.
-  if (obs.lossDetected && acosOk && obs.currentPct < maxPct) {
-    return { action: 'raise', nextPct: clamp(obs.currentPct + step * 2, 0, maxPct), reason: 'rank slipping — re-take aggressively' }
+  // 3) Chase band [floor, ceiling] — only when a Ceiling above Placement % is set (or all-out).
+  if (target.allOut) {
+    return cur < maxPct
+      ? { action: 'raise', nextPct: clamp(cur + climbStep, 0, maxPct), reason: 'all-out — push for the slot' }
+      : { action: 'hold', nextPct: cur, reason: `all-out — holding ${maxPct}% ceiling` }
   }
-
-  // 2) IS-driven hold (the truth signal).
+  // loss proxy — re-take the slot fast
+  if (obs.lossDetected && acosOk && cur < maxPct) {
+    return { action: 'raise', nextPct: clamp(cur + climbStep * 2, 0, maxPct), reason: 'rank slipping — re-take aggressively' }
+  }
+  // IS truth signal — seek the least-cost hold of the target share within [floor, ceiling].
   if (targetIS != null && obs.achievedISFraction != null) {
-    if (obs.achievedISFraction < targetIS && acosOk && obs.currentPct < maxPct) {
-      return { action: 'raise', nextPct: clamp(obs.currentPct + step, 0, maxPct), reason: `IS ${pctStr(obs.achievedISFraction)} below target ${pctStr(targetIS)} — push` }
+    if (obs.achievedISFraction < targetIS && acosOk && cur < maxPct) {
+      return { action: 'raise', nextPct: clamp(cur + climbStep, 0, maxPct), reason: `IS ${pctStr(obs.achievedISFraction)} below target ${pctStr(targetIS)} — push` }
     }
-    if (obs.currentPct > 0 && obs.achievedISFraction >= targetIS * 1.1) {
-      return { action: 'lower', nextPct: clamp(obs.currentPct - downStep, 0, maxPct), reason: `IS ${pctStr(obs.achievedISFraction)} above target — ease for least cost` }
-    }
-    if (acosCap != null && obs.achievedAcosFraction != null && obs.achievedAcosFraction > acosCap * 1.2 && obs.currentPct > 0) {
-      return { action: 'lower', nextPct: clamp(obs.currentPct - downStep, 0, maxPct), reason: `ACOS ${pctStr(obs.achievedAcosFraction)} over cap — ease off` }
-    }
-    return { action: 'hold', nextPct: obs.currentPct, reason: 'holding target IS' }
+    if (cur > floor && obs.achievedISFraction >= targetIS * 1.1) return toFloorDown(`IS ${pctStr(obs.achievedISFraction)} above target`)
+    if (cur > floor && acosCap != null && obs.achievedAcosFraction != null && obs.achievedAcosFraction > acosCap * 1.2) return toFloorDown(`ACOS ${pctStr(obs.achievedAcosFraction)} over cap`)
+    return { action: 'hold', nextPct: cur, reason: 'holding target IS' }
   }
-
-  // 3) No IS signal — ACOS-guided, or an all-out push.
+  // No IS — ACOS-guided within the band.
   if (acosCap != null && obs.achievedAcosFraction != null) {
-    if (obs.achievedAcosFraction <= acosCap * 0.8 && obs.currentPct < maxPct) {
-      return { action: 'raise', nextPct: clamp(obs.currentPct + step, 0, maxPct), reason: `ACOS ${pctStr(obs.achievedAcosFraction)} well under cap — capture more` }
+    if (obs.achievedAcosFraction <= acosCap * 0.8 && cur < maxPct) {
+      return { action: 'raise', nextPct: clamp(cur + climbStep, 0, maxPct), reason: `ACOS ${pctStr(obs.achievedAcosFraction)} well under cap — capture more` }
     }
-    if (obs.achievedAcosFraction >= acosCap * 1.2 && obs.currentPct > 0) {
-      return { action: 'lower', nextPct: clamp(obs.currentPct - downStep, 0, maxPct), reason: `ACOS ${pctStr(obs.achievedAcosFraction)} over cap — ease off` }
-    }
-    return holdOrFloor('ACOS in band')
+    if (cur > floor && obs.achievedAcosFraction >= acosCap * 1.2) return toFloorDown(`ACOS ${pctStr(obs.achievedAcosFraction)} over cap`)
   }
-  if (acosCap == null && obs.currentPct < maxPct) {
-    return { action: 'raise', nextPct: clamp(obs.currentPct + step, 0, maxPct), reason: 'all-out — push for the slot' }
+  // keep-climbing — push to the ceiling with no signal (bounded by ceiling + ACOS).
+  if (target.keepClimbing && acosOk && cur < maxPct) {
+    return { action: 'raise', nextPct: clamp(cur + climbStep, 0, maxPct), reason: `climbing to ${maxPct}% ceiling (+${climbStep}/cyc, no signal)` }
   }
-  return holdOrFloor('no signal — hold')
+  // No reason to be elevated → settle back to the floor (keep-climbing holds at the ceiling instead).
+  if (cur > floor && !target.keepClimbing) return toFloorDown('no signal')
+  return { action: 'hold', nextPct: cur, reason: cur > floor ? `holding ${cur}% (ceiling)` : `holding ${floor}% Placement` }
 }

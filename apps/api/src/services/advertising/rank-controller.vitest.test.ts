@@ -29,154 +29,111 @@ describe('resolveActiveTargetKey', () => {
   })
 })
 
-describe('computeStep', () => {
+describe('computeStep v2 — Placement % is the bid; snap to it both ways by default', () => {
   const obs = (over = {}) => ({ currentPct: 50, achievedISFraction: null, achievedAcosFraction: null, ...over })
 
   it('pause target → pause, no bid change', () => {
     expect(computeStep(T({ pause: true }), obs({ currentPct: 80 }))).toMatchObject({ action: 'pause', nextPct: 80 })
   })
 
-  it('IS below target + ACOS ok → raise by the step', () => {
-    const d = computeStep(T(), obs({ achievedISFraction: 0.4, achievedAcosFraction: 0.3 }))
-    expect(d.action).toBe('raise'); expect(d.nextPct).toBe(65)
+  // ── Default (no Ceiling): snap to Placement %, both ways, hold ──
+  it('below Placement % → SNAP up to it in one cycle', () => {
+    const d = computeStep(T(), obs({ currentPct: 50 })) // floor 100
+    expect(d.action).toBe('raise'); expect(d.nextPct).toBe(100); expect(d.reason).toMatch(/snap.*Placement/)
+  })
+  it('above Placement % → SNAP down to it in one cycle', () => {
+    const d = computeStep(T(), obs({ currentPct: 130 }))
+    expect(d.action).toBe('lower'); expect(d.nextPct).toBe(100); expect(d.reason).toMatch(/snap.*Placement/)
+  })
+  it('at Placement % → hold', () => {
+    expect(computeStep(T(), obs({ currentPct: 100 }))).toMatchObject({ action: 'hold', nextPct: 100 })
+  })
+  it('a signal does NOT push above Placement % when no Ceiling is set', () => {
+    // IS far below target, ACOS fine — but Ceiling = Placement %, so it just snaps to 100 and holds.
+    const d = computeStep(T(), obs({ currentPct: 100, achievedISFraction: 0.2, achievedAcosFraction: 0.2 }))
+    expect(d.action).toBe('hold'); expect(d.nextPct).toBe(100)
+  })
+  it('loss is ignored without a Ceiling (no chase) — holds at Placement %', () => {
+    expect(computeStep(T(), obs({ currentPct: 100, lossDetected: true }))).toMatchObject({ action: 'hold', nextPct: 100 })
   })
 
-  it('IS comfortably above target → lower (least cost)', () => {
-    const d = computeStep(T(), obs({ currentPct: 80, achievedISFraction: 0.85, achievedAcosFraction: 0.3 }))
-    expect(d.action).toBe('lower'); expect(d.nextPct).toBe(65)
+  // ── Climb step / Ease step = gradual instead of snap ──
+  it('Climb step set → ramp UP gradually to Placement %', () => {
+    const d = computeStep(T({ stepUpPct: 20 }), obs({ currentPct: 50 }))
+    expect(d.action).toBe('raise'); expect(d.nextPct).toBe(70); expect(d.reason).toMatch(/ramping/) // 50 + 20
+  })
+  it('Ease step set → ease DOWN gradually to Placement %', () => {
+    const d = computeStep(T({ stepDownPct: 10 }), obs({ currentPct: 130 }))
+    expect(d.action).toBe('lower'); expect(d.nextPct).toBe(120); expect(d.reason).toMatch(/ease/) // 130 - 10
+  })
+  it('rest-of-search style (floor 0) snaps a leftover bias down to 0', () => {
+    const d = computeStep(T({ biasPct: 0, targetISPct: null, acosCapPct: null }), obs({ currentPct: 130 }))
+    expect(d.action).toBe('lower'); expect(d.nextPct).toBe(0)
   })
 
-  it('non-all-out: ACOS just over cap → wont chase rank, holds', () => {
-    // IS below target BUT ACOS 50% vs cap 45% (>1.1x, <1.2x) → cannot raise, not bad
-    // enough to cut → holds. Profit ceiling stops us chasing rank into a loss.
-    const d = computeStep(T(), obs({ achievedISFraction: 0.4, achievedAcosFraction: 0.5 }))
-    expect(d.action).toBe('hold')
+  // ── Ceiling above Placement % → chase band [floor, ceiling] ──
+  it('Ceiling set: first reaches the floor, then chases above on an IS signal', () => {
+    expect(computeStep(T({ maxBiasPct: 300 }), obs({ currentPct: 50 })).nextPct).toBe(100) // reach floor first (snap)
+    const d = computeStep(T({ maxBiasPct: 300 }), obs({ currentPct: 100, achievedISFraction: 0.4, achievedAcosFraction: 0.3 }))
+    expect(d.action).toBe('raise'); expect(d.nextPct).toBe(115); expect(d.reason).toMatch(/below target/) // 100 + 15
+  })
+  it('Ceiling caps the climb — never exceeds it', () => {
+    const d = computeStep(T({ maxBiasPct: 300 }), obs({ currentPct: 295, achievedISFraction: 0.4, achievedAcosFraction: 0.3 }))
+    expect(d.nextPct).toBe(300)
+    expect(computeStep(T({ maxBiasPct: 300 }), obs({ currentPct: 300, achievedISFraction: 0.4, achievedAcosFraction: 0.3 }))).toMatchObject({ action: 'hold', nextPct: 300 })
+  })
+  it('in the band, IS above target → eases back toward the floor (not below it)', () => {
+    const d = computeStep(T({ maxBiasPct: 300 }), obs({ currentPct: 200, achievedISFraction: 0.85, achievedAcosFraction: 0.3 }))
+    expect(d.action).toBe('lower'); expect(d.nextPct).toBe(100) // snap toward floor (no ease step)
+  })
+  it('in the band, ACOS over cap → eases toward the floor even if IS is short', () => {
+    const d = computeStep(T({ maxBiasPct: 300 }), obs({ currentPct: 200, achievedISFraction: 0.4, achievedAcosFraction: 0.6 }))
+    expect(d.action).toBe('lower'); expect(d.reason).toMatch(/over cap/)
+  })
+  it('in the band, no signal + keep-climbing OFF → settles back to the floor', () => {
+    const d = computeStep(T({ maxBiasPct: 300 }), obs({ currentPct: 200 }))
+    expect(d.action).toBe('lower'); expect(d.nextPct).toBe(100); expect(d.reason).toMatch(/no signal/)
+  })
+  it('no IS, ACOS well under cap → captures more (within the band)', () => {
+    const d = computeStep(T({ targetISPct: null, maxBiasPct: 300 }), obs({ currentPct: 100, achievedAcosFraction: 0.3 }))
+    expect(d.action).toBe('raise'); expect(d.nextPct).toBe(115)
   })
 
-  it('non-all-out: ACOS well over cap (>1.2x) → ease off even if IS is short', () => {
-    const d = computeStep(T(), obs({ currentPct: 50, achievedISFraction: 0.4, achievedAcosFraction: 0.6 }))
-    expect(d.action).toBe('lower'); expect(d.nextPct).toBe(35)
+  // ── Keep climbing ──
+  it('keep-climbing climbs to the Ceiling with NO signal, then holds there', () => {
+    const climb = computeStep(T({ maxBiasPct: 300, keepClimbing: true }), obs({ currentPct: 100 }))
+    expect(climb.action).toBe('raise'); expect(climb.nextPct).toBe(115); expect(climb.reason).toMatch(/climbing.*ceiling/)
+    expect(computeStep(T({ maxBiasPct: 300, keepClimbing: true }), obs({ currentPct: 300 }))).toMatchObject({ action: 'hold', nextPct: 300 })
+  })
+  it('keep-climbing is still bounded by the ACOS cap — eases when over', () => {
+    const d = computeStep(T({ maxBiasPct: 300, keepClimbing: true }), obs({ currentPct: 200, achievedAcosFraction: 0.6 }))
+    expect(d.action).toBe('lower'); expect(d.reason).toMatch(/over cap/)
   })
 
-  it('ALL-OUT ignores ACOS: raises for the slot even when ACOS is way over', () => {
-    const d = computeStep(T({ allOut: true, acosCapPct: 45 }), obs({ achievedISFraction: 0.4, achievedAcosFraction: 0.9 }))
-    expect(d.action).toBe('raise'); expect(d.nextPct).toBe(75) // step 25 for all-out
+  // ── All-out (Ceiling forced to 900) ──
+  it('all-out reaches its floor then pushes toward 900, ignoring ACOS', () => {
+    expect(computeStep(T({ allOut: true, biasPct: 150 }), obs({ currentPct: 0 })).nextPct).toBe(150) // reach floor
+    const d = computeStep(T({ allOut: true, biasPct: 150, acosCapPct: 45 }), obs({ currentPct: 150, achievedISFraction: 0.4, achievedAcosFraction: 0.9 }))
+    expect(d.action).toBe('raise'); expect(d.nextPct).toBe(175); expect(d.reason).toMatch(/all-out/) // 150 + 25
   })
-
-  it('loss proxy → re-take aggressively (2x step)', () => {
-    const d = computeStep(T(), obs({ achievedISFraction: 0.7, achievedAcosFraction: 0.3, lossDetected: true }))
-    expect(d.action).toBe('raise'); expect(d.nextPct).toBe(80) // 50 + 2*15
-  })
-
-  it('no IS, ACOS well under cap → raise to capture more', () => {
-    const d = computeStep(T(), obs({ achievedAcosFraction: 0.3 })) // cap 45, 0.3 <= 0.8*0.45=0.36
-    expect(d.action).toBe('raise')
-  })
-
-  it('no IS, ACOS over cap → ease off', () => {
-    const d = computeStep(T(), obs({ currentPct: 60, achievedAcosFraction: 0.6 }))
-    expect(d.action).toBe('lower')
-  })
-
-  it('all-out with no signal → push for the slot', () => {
-    const d = computeStep(T({ allOut: true }), obs({ currentPct: 0 }))
-    expect(d.action).toBe('raise'); expect(d.nextPct).toBe(25)
-  })
-
-  it('RS.5.1: fresh own-top campaign with no signal ramps to the entry bias', () => {
-    const d = computeStep(T(), obs({ currentPct: 0 })) // biasPct 100, no IS/ACOS
-    expect(d.action).toBe('raise'); expect(d.nextPct).toBe(30); expect(d.reason).toMatch(/entry bias/)
-  })
-
-  it('RS.5.1: at the entry bias with no signal → hold (does not overshoot)', () => {
-    const d = computeStep(T(), obs({ currentPct: 100 }))
-    expect(d.action).toBe('hold')
-  })
-
-  it('RS.5.1b: no signal + bias ABOVE a low target (rest-of-search 0%) → snaps DOWN to it', () => {
-    const d = computeStep(T({ biasPct: 0, targetISPct: 10, acosCapPct: 30 }), obs({ currentPct: 130 }))
-    expect(d.action).toBe('lower'); expect(d.nextPct).toBe(0); expect(d.reason).toMatch(/entry bias/)
-  })
-  it('RS.5.1b: no signal + bias above own-top entry → snaps down to the entry bias', () => {
-    const d = computeStep(T(), obs({ currentPct: 130 })) // biasPct 100
-    expect(d.action).toBe('lower'); expect(d.nextPct).toBe(100)
-  })
-  it('RS.5.1b: all-out is exempt — maxed with no signal HOLDS, never eases down to biasPct', () => {
-    const d = computeStep(T({ allOut: true, biasPct: 150 }), obs({ currentPct: 900 }))
-    expect(d.action).toBe('hold'); expect(d.nextPct).toBe(900)
-  })
-
-  it('clamps at maxPct — already maxed holds', () => {
-    const d = computeStep(T(), obs({ currentPct: 900, achievedISFraction: 0.4, achievedAcosFraction: 0.3 }))
-    expect(d.action).toBe('hold'); expect(d.nextPct).toBe(900)
+  it('all-out at the ceiling holds 900', () => {
+    expect(computeStep(T({ allOut: true, biasPct: 150 }), obs({ currentPct: 900 }))).toMatchObject({ action: 'hold', nextPct: 900 })
   })
 
   it('stepFor: all-out is more aggressive', () => {
     expect(stepFor(T())).toBe(15)
     expect(stepFor(T({ allOut: true }))).toBe(25)
   })
-})
 
-describe('MP — motion profile (jump / climb / ease / ceiling / keep-climbing)', () => {
-  const obs = (over = {}) => ({ currentPct: 50, achievedISFraction: null, achievedAcosFraction: null, ...over })
-
-  it('opening jump: jumpStartPct snaps to the opening in ONE cycle (no signal)', () => {
-    const d = computeStep(T({ jumpStartPct: 75 }), obs({ currentPct: 0 }))
-    expect(d.action).toBe('raise'); expect(d.nextPct).toBe(75); expect(d.reason).toMatch(/jump|opening/)
-  })
-  it('after the jump (no keep-climbing) it HOLDS at the opening', () => {
-    const d = computeStep(T({ jumpStartPct: 75 }), obs({ currentPct: 75 }))
-    expect(d.action).toBe('hold'); expect(d.nextPct).toBe(75)
-  })
-
-  it('custom climb step: stepUpPct drives the raise increment', () => {
-    const d = computeStep(T({ stepUpPct: 30 }), obs({ currentPct: 50, achievedISFraction: 0.4, achievedAcosFraction: 0.3 }))
-    expect(d.action).toBe('raise'); expect(d.nextPct).toBe(80) // 50 + 30
-  })
-  it('custom ease step: stepDownPct drives the signal-driven lower increment', () => {
-    const d = computeStep(T({ stepDownPct: 5 }), obs({ currentPct: 80, achievedISFraction: 0.85, achievedAcosFraction: 0.3 }))
-    expect(d.action).toBe('lower'); expect(d.nextPct).toBe(75) // 80 - 5
-  })
-
-  it('gradual down: stepDownPct set ⇒ ease −N to the floor instead of snapping', () => {
-    const d = computeStep(T({ biasPct: 0, stepDownPct: 20 }), obs({ currentPct: 130 }))
-    expect(d.action).toBe('lower'); expect(d.nextPct).toBe(110); expect(d.reason).toMatch(/easing/) // 130 - 20, not snap-to-0
-  })
-  it('snap down is still the default (stepDownPct null) — one cycle to the floor', () => {
-    const d = computeStep(T({ biasPct: 0 }), obs({ currentPct: 130 }))
-    expect(d.action).toBe('lower'); expect(d.nextPct).toBe(0)
-  })
-
-  it('ceiling: maxBiasPct caps the climb', () => {
-    const d = computeStep(T({ maxBiasPct: 300 }), obs({ currentPct: 295, achievedISFraction: 0.4, achievedAcosFraction: 0.3 }))
-    expect(d.action).toBe('raise'); expect(d.nextPct).toBe(300) // 295 + 15 clamped to 300
-  })
-  it('ceiling: at maxBiasPct with IS short → holds (does not exceed the ceiling)', () => {
-    const d = computeStep(T({ maxBiasPct: 300 }), obs({ currentPct: 300, achievedISFraction: 0.4, achievedAcosFraction: 0.3 }))
-    expect(d.action).toBe('hold'); expect(d.nextPct).toBe(300)
-  })
-
-  it('keepClimbing: climbs to the ceiling with NO signal, then holds at the ceiling', () => {
-    const climb = computeStep(T({ keepClimbing: true, maxBiasPct: 300 }), obs({ currentPct: 100 }))
-    expect(climb.action).toBe('raise'); expect(climb.nextPct).toBe(115); expect(climb.reason).toMatch(/climb|ceiling/)
-    const top = computeStep(T({ keepClimbing: true, maxBiasPct: 300 }), obs({ currentPct: 300 }))
-    expect(top.action).toBe('hold'); expect(top.nextPct).toBe(300) // does NOT fall back to the floor
-  })
-  it('keepClimbing is still bounded by the ACOS cap — eases when over', () => {
-    const d = computeStep(T({ keepClimbing: true }), obs({ currentPct: 200, achievedAcosFraction: 0.6 }))
-    expect(d.action).toBe('lower'); expect(d.reason).toMatch(/over cap/)
-  })
-
-  it('REGRESSION LOCK: an all-null motion spec == historical behaviour exactly', () => {
-    const nul = { jumpStartPct: null, stepUpPct: null, stepDownPct: null, maxBiasPct: null, keepClimbing: false }
-    // fresh, no signal → ramp +30 to the entry bias
-    expect(computeStep(T(nul), obs({ currentPct: 0 }))).toMatchObject({ action: 'raise', nextPct: 30 })
-    // IS below target → +15
-    expect(computeStep(T(nul), obs({ currentPct: 50, achievedISFraction: 0.4, achievedAcosFraction: 0.3 })).nextPct).toBe(65)
-    // bias above entry, no signal → snap to 100
-    expect(computeStep(T(nul), obs({ currentPct: 130 }))).toMatchObject({ action: 'lower', nextPct: 100 })
-    // all-out, no signal → +25, ceiling 900
-    expect(computeStep(T({ ...nul, allOut: true }), obs({ currentPct: 0 })).nextPct).toBe(25)
+  it('REGRESSION LOCK (v2): an all-blank target snaps to Placement % both ways and NEVER exceeds it', () => {
+    const blank = { jumpStartPct: null, stepUpPct: null, stepDownPct: null, maxBiasPct: null, keepClimbing: false }
+    expect(computeStep(T(blank), obs({ currentPct: 0 }))).toMatchObject({ action: 'raise', nextPct: 100 }) // snap up
+    expect(computeStep(T(blank), obs({ currentPct: 500 }))).toMatchObject({ action: 'lower', nextPct: 100 }) // snap down
+    // even with a strong signal, no Ceiling ⇒ never above Placement %
+    for (const cur of [0, 50, 100, 200, 800]) {
+      const d = computeStep(T(blank), obs({ currentPct: cur, achievedISFraction: 0.1, achievedAcosFraction: 0.1 }))
+      expect(d.nextPct).toBeLessThanOrEqual(100)
+    }
   })
 })
 
