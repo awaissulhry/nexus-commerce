@@ -161,7 +161,7 @@ export default function ImagesTab({ product, discardSignal, onDirtyChange, onPre
     function pct(checks: boolean[]) { return Math.round(checks.filter(Boolean).length / checks.length * 100) }
 
     const amazonChecks = [
-      amazonEffective.some((i) => i.amazonSlot === 'MAIN') || master.length > 0,
+      amazonEffective.some((i) => i.amazonSlot === 'MAIN') || masterImages.length > 0,
       amazonEffective.some((i) => i.amazonSlot === 'MAIN' && i.hasWhiteBackground === true) || !amazonEffective.some((i) => i.amazonSlot === 'MAIN'),
       amazonEffective.some((i) => i.amazonSlot === 'SWCH') || variants.length === 0,
       variants.length === 0 || variants.every((v) => v.amazonAsin),
@@ -169,16 +169,16 @@ export default function ImagesTab({ product, discardSignal, onDirtyChange, onPre
 
     const ebayGallery = ebayEffective.filter((i) => !i.variantGroupKey)
     const ebayChecks = [
-      ebayGallery.length > 0 || master.length > 0,
-      ebayGallery.length >= 3 || master.length >= 3,
+      ebayGallery.length > 0 || masterImages.length > 0,
+      ebayGallery.length >= 3 || masterImages.length >= 3,
       ebayEffective.some((i) => i.variantGroupKey) || variants.length === 0,
     ]
 
     const shopifyPool = shopifyEffective.filter((i) => !i.variantGroupKey)
     const shopifyChecks = [
-      shopifyPool.length > 0 || master.length > 0,
+      shopifyPool.length > 0 || masterImages.length > 0,
       shopifyEffective.some((i) => i.variantGroupKey) || variants.length === 0,
-      master.some((i) => i.type === 'MAIN'),
+      masterImages.some((i) => i.type === 'MAIN'),
     ]
 
     return {
@@ -224,7 +224,7 @@ export default function ImagesTab({ product, discardSignal, onDirtyChange, onPre
       ).length
       return upserts + deletes
     }
-    const masterExists = master.length > 0
+    const masterExists = masterImages.length > 0
     return {
       amazon: {
         hasContent: masterExists || listing.some((i) => i.platform === 'AMAZON'),
@@ -659,7 +659,7 @@ export default function ImagesTab({ product, discardSignal, onDirtyChange, onPre
             <AmazonPanel
               productId={product.id}
               product={wp}
-              masterImages={master}
+              masterImages={masterImages}
               listingImages={listing}
               variants={variants}
               activeAxis={activeAxis}
@@ -694,7 +694,7 @@ export default function ImagesTab({ product, discardSignal, onDirtyChange, onPre
             <EbayPanel
               productId={product.id}
               product={wp}
-              masterImages={master}
+              masterImages={masterImages}
               listingImages={listing}
               variants={variants}
               activeAxis={activeAxis}
@@ -738,7 +738,7 @@ export default function ImagesTab({ product, discardSignal, onDirtyChange, onPre
             <ShopifyPanel
               productId={product.id}
               product={wp}
-              masterImages={master}
+              masterImages={masterImages}
               listingImages={listing}
               variants={variants}
               activeAxis={activeAxis}
@@ -783,7 +783,7 @@ export default function ImagesTab({ product, discardSignal, onDirtyChange, onPre
         <div className="xl:sticky xl:top-24">
           <QualityChecklist
             product={wp}
-            masterImages={master}
+            masterImages={masterImages}
             listingImages={listing}
             variants={variants}
           />
@@ -897,7 +897,7 @@ export default function ImagesTab({ product, discardSignal, onDirtyChange, onPre
       <CrossChannelPublishModal
         open={crossChannelOpen}
         productId={product.id}
-        masterImages={master}
+        masterImages={masterImages}
         listingImages={listing}
         pendingUpserts={workspace.pendingUpserts}
         pendingDeletes={workspace.pendingDeletes}
@@ -913,13 +913,13 @@ export default function ImagesTab({ product, discardSignal, onDirtyChange, onPre
       {lightbox.state && (
         <LightboxModal
           state={lightbox.state}
-          masterImages={master}
+          masterImages={masterImages}
           listingImages={listing}
           damLinks={data.damLinks ?? {}}
           productId={product.id}
           onMasterImageUpdated={() => { void workspace.reload() }}
           onEditMaster={(img) => setEditorImage(img)}
-          onSwitchToMaster={(img) => lightbox.open(fromMaster(img), master.map(fromMaster))}
+          onSwitchToMaster={(img) => lightbox.open(fromMaster(img), masterImages.map(fromMaster))}
           onPushToDam={() => { void workspace.reload(); showToast(t('products.edit.images.toasts.pushedToDam')) }}
           onClose={lightbox.close}
           onNavigate={lightbox.navigate}

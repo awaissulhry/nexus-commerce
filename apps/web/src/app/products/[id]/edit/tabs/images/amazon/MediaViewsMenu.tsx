@@ -37,7 +37,7 @@ export function MediaViewsMenu({
         (d.items ?? []).map((v: { id: string; name: string; filters: ColPref[]; isDefault: boolean }) => ({
           id: v.id,
           name: v.name,
-          filters: v.filters,
+          filters: Array.isArray(v.filters) ? v.filters : [],
           isDefault: v.isDefault,
         })),
       )

@@ -65,7 +65,7 @@ export async function applyImagesToProducts(input: BulkApplyInput): Promise<Bulk
   }
 
   const sourceImages = await prisma.productImage.findMany({
-    where: { productId: sourceProductId },
+    where: { productId: sourceProductId, mediaType: 'IMAGE' },
     orderBy: { sortOrder: 'asc' },
   })
 

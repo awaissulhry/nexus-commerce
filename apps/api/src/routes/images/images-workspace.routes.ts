@@ -228,6 +228,9 @@ const imagesWorkspaceRoutes: FastifyPluginAsync = async (fastify) => {
       // MM.8 — productImageIds whose linked DAM asset URL no longer matches the
       // product image (asset replaced/re-derived in the DAM → drift).
       const damDrift: string[] = []
+      // Normalize away harmless URL differences (protocol, Cloudinary version
+      // segment) so drift only flags a genuinely different asset.
+      const normDamUrl = (u: string) => u.replace(/^https?:/i, '').replace(/\/v\d+\//, '/')
       if (publicIds.length > 0) {
         const assets = await prisma.digitalAsset.findMany({
           where: { storageProvider: 'cloudinary', storageId: { in: publicIds } },
@@ -239,7 +242,7 @@ const imagesWorkspaceRoutes: FastifyPluginAsync = async (fastify) => {
             const asset = byStorageId.get(m.publicId)
             if (asset) {
               damLinks[m.id] = asset.id
-              if (asset.url && m.url && asset.url !== m.url) damDrift.push(m.id)
+              if (asset.url && m.url && normDamUrl(asset.url) !== normDamUrl(m.url)) damDrift.push(m.id)
             }
           }
         }

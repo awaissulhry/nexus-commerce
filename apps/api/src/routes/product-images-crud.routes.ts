@@ -252,7 +252,8 @@ const productImagesCrudRoutes: FastifyPluginAsync = async (fastify) => {
       const product = await prisma.product.findUnique({ where: { id }, select: { id: true } })
       if (!product) return reply.status(404).send({ error: 'PRODUCT_NOT_FOUND' })
 
-      const data = await req.file()
+      // MM.2 — raise the per-call cap to 200MB (global multipart limit is 50MB).
+      const data = await req.file({ limits: { fileSize: 200 * 1024 * 1024 } })
       if (!data) return reply.status(400).send({ error: 'NO_FILE' })
 
       const filename: string = data.filename ?? 'video'
@@ -263,7 +264,12 @@ const productImagesCrudRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.status(503).send({ error: 'CLOUDINARY_NOT_CONFIGURED' })
       }
 
-      const buf = await data.toBuffer()
+      let buf: Buffer
+      try {
+        buf = await data.toBuffer()
+      } catch {
+        return reply.status(413).send({ error: 'VIDEO_TOO_LARGE', max: '200MB' })
+      }
 
       // Exact-content dedup (same contract as images).
       const contentHash = sha256Buffer(buf)

@@ -57,7 +57,7 @@ export async function publishEbayImages(
 
   // Load all eBay listing images in one query
   const allEbayImages = await prisma.listingImage.findMany({
-    where: { productId, platform: 'EBAY' },
+    where: { productId, platform: 'EBAY', mediaType: 'IMAGE' },
     orderBy: { position: 'asc' },
     select: {
       id: true, url: true, position: true,

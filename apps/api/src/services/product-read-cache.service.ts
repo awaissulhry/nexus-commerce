@@ -108,6 +108,7 @@ export class ProductReadCacheService {
           // one exists. The picker prefers isPrimary, then MAIN, then
           // lowest sortOrder, then createdAt. 12 covers Amazon's max
           // main+alt set; we don't need more.
+          where: { mediaType: 'IMAGE' }, // MM — videos never become the catalog/search thumbnail
           take: 12,
           orderBy: FACE_IMAGE_ORDER_BY,
           select: FACE_IMAGE_SELECT,
@@ -191,11 +192,12 @@ export class ProductReadCacheService {
         where: {
           parentId: product.id,
           deletedAt: null,
-          images: { some: {} },
+          images: { some: { mediaType: 'IMAGE' } },
         },
         orderBy: { sku: 'asc' },
         select: {
           images: {
+            where: { mediaType: 'IMAGE' },
             take: 12,
             orderBy: FACE_IMAGE_ORDER_BY,
             select: FACE_IMAGE_SELECT,

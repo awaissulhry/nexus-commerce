@@ -59,14 +59,14 @@ export async function publishShopifyImages(
 
   // Load pool images (platform=SHOPIFY, no variantGroup), ordered by position
   const poolImages = await prisma.listingImage.findMany({
-    where: { productId, platform: 'SHOPIFY', variantGroupKey: null, variationId: null },
+    where: { productId, platform: 'SHOPIFY', variantGroupKey: null, variationId: null, mediaType: 'IMAGE' },
     orderBy: { position: 'asc' },
     select: { id: true, url: true, position: true },
   })
 
   // Load variant assignments (platform=SHOPIFY, variantGroupKey=axis)
   const assignments = await prisma.listingImage.findMany({
-    where: { productId, platform: 'SHOPIFY', variantGroupKey: axis },
+    where: { productId, platform: 'SHOPIFY', variantGroupKey: axis, mediaType: 'IMAGE' },
     select: { id: true, url: true, variantGroupValue: true },
   })
 

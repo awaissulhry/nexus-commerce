@@ -81,7 +81,8 @@ export async function fillSlotsFromGallery(opts: {
   const ptCap = taxonomy.slots.filter((s) => s.kind === 'OTHER' && s.writable).length || 8
 
   const gallery = await prisma.productImage.findMany({
-    where: { productId: opts.productId },
+    // MM — only IMAGE media fills image slots; videos never map into MAIN/PT.
+    where: { productId: opts.productId, mediaType: 'IMAGE' },
     select: { id: true, url: true, type: true, isPrimary: true, sortOrder: true },
     orderBy: [{ isPrimary: 'desc' }, { sortOrder: 'asc' }],
   })

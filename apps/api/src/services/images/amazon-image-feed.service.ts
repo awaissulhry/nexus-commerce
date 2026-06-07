@@ -145,6 +145,7 @@ export async function resolveAmazonImages(
     where: {
       productId,
       amazonSlot: { not: null },
+      mediaType: 'IMAGE', // MM — never publish a VIDEO row as an image locator
       // Prisma rejects null inside `in`; match the platform OR global (null).
       OR: [{ platform }, { platform: null }],
     },
@@ -167,7 +168,7 @@ export async function resolveAmazonImages(
   // can swap stale ListingImage.url values for the master's current
   // URL. Single batched query keyed by productId.
   const masters = await prisma.productImage.findMany({
-    where: { productId },
+    where: { productId, mediaType: 'IMAGE' },
     select: { id: true, url: true, alt: true },
   })
   const masterById = new Map(masters.map((m) => [m.id, m]))

@@ -233,7 +233,10 @@ export function useImagesWorkspace(
     let sourceItems: SrcItem[]
 
     if (fromPlatform === 'MASTER') {
-      sourceItems = data.master.map((img, idx) => ({
+      // MM — copy only IMAGE media to channels; videos aren't gallery images.
+      sourceItems = data.master
+        .filter((img) => (img.mediaType ?? 'IMAGE') === 'IMAGE')
+        .map((img, idx) => ({
         url: img.url,
         variantGroupKey: null,
         variantGroupValue: null,

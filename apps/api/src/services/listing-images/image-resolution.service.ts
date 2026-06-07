@@ -163,7 +163,7 @@ export class ImageResolutionService {
     // a smaller set of columns; we map type→role and use createdAt
     // ordering as the implicit position.
     const masterRows = await this.prisma.productImage.findMany({
-      where: { productId: opts.productId },
+      where: { productId: opts.productId, mediaType: 'IMAGE' },
       orderBy: [{ type: 'asc' }, { createdAt: 'asc' }],
     })
     if (masterRows.length === 0) return []
