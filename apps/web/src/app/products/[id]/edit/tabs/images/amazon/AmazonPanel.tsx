@@ -386,12 +386,17 @@ export default function AmazonPanel({
   }
 
   function handleClearRow(groupValue: string) {
-    // Mark all server images for this group as pending deletes
-    // For now, remove pending upserts only (server rows cleared on next save via the delete flow)
+    // Clear the row = drop its pending edits, then blocker every filled slot so
+    // the row empties immediately (suppressing the master fallback) and the
+    // mirror op:deletes those slots on Publish. (Previously a no-op for saved
+    // rows — it only removed pending upserts.)
     for (const [key, u] of pendingUpserts.entries()) {
       if (u.platform === 'AMAZON' && u.variantGroupKey === activeAxis && u.variantGroupValue === groupValue) {
         removePendingUpsert(key)
       }
+    }
+    for (const slot of ALL_SLOTS) {
+      if (amazon.resolveCell(groupValue, slot)) amazon.assignCell(groupValue, slot, '')
     }
   }
 
