@@ -1440,21 +1440,22 @@ export class AmazonFlatFileService {
         .map(([, v]) => ({ value: v, language_tag: languageTag, marketplace_id: marketplaceId }))
     }
 
-    // purchasable_offer — prefer expanded sub-columns, fall back to bare value
-    const poPrice = row['purchasable_offer__our_price'] ?? row.purchasable_offer ?? row.standard_price
-    if (poPrice !== undefined && poPrice !== '') {
+    // purchasable_offer — FFA.3: persist when our_price OR sale OR condition is
+    // present (was our_price-gated, which dropped condition/currency/sale on a
+    // price-less row). our_price/sale only included when actually set.
+    const poPrice     = row['purchasable_offer__our_price'] ?? row.purchasable_offer ?? row.standard_price
+    const poCondition = String(row['purchasable_offer__condition_type'] ?? '')
+    const poSalePrice = row['purchasable_offer__sale_price']
+    const poHasPrice  = poPrice !== undefined && poPrice !== ''
+    const poHasSale   = poSalePrice !== undefined && poSalePrice !== ''
+    if (poHasPrice || poHasSale || poCondition) {
       const poCurrency  = String(row['purchasable_offer__currency'] ?? CURRENCY_MAP[mp] ?? 'EUR')
-      const poCondition = String(row['purchasable_offer__condition_type'] ?? '')
-      const poSalePrice = row['purchasable_offer__sale_price']
       const poSaleFrom  = String(row['purchasable_offer__sale_from_date'] ?? '')
       const poSaleTo    = String(row['purchasable_offer__sale_end_date'] ?? '')
-      const offer: Record<string, any> = {
-        currency: poCurrency,
-        our_price: [{ schedule: [{ value_with_tax: Math.max(0, parseLocaleNumber(poPrice) ?? 0) }] }],
-        marketplace_id: marketplaceId,
-      }
+      const offer: Record<string, any> = { currency: poCurrency, marketplace_id: marketplaceId }
+      if (poHasPrice) offer.our_price = [{ schedule: [{ value_with_tax: Math.max(0, parseLocaleNumber(poPrice) ?? 0) }] }]
       if (poCondition) offer.condition_type = poCondition
-      if (poSalePrice !== undefined && poSalePrice !== '') {
+      if (poHasSale) {
         const sp: Record<string, any> = { schedule: [{ value_with_tax: Math.max(0, parseLocaleNumber(poSalePrice) ?? 0) }] }
         if (poSaleFrom) sp.start_at = [{ value: poSaleFrom, marketplace_id: marketplaceId }]
         if (poSaleTo)   sp.end_at   = [{ value: poSaleTo,   marketplace_id: marketplaceId }]
