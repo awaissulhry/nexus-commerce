@@ -100,6 +100,9 @@ export async function reconcileFailedAmazonWrites(
         actor: ACTOR,
         reason: 'auto-reconcile: re-push last failed bid so Amazon matches local',
         applyImmediately: true,
+        // force — re-push the EXACT current local value: bypass the 5¢ floor + change-clamp
+        // so a suppressed ~2¢ bid (no-pause policy) isn't reconciled UP to the floor.
+        force: true,
         forceResync: true,
       })
       if (r.ok) adGroups++
@@ -136,6 +139,8 @@ export async function reconcileFailedAmazonWrites(
         actor: ACTOR,
         reason: 'auto-reconcile: re-push last failed bid so Amazon matches local',
         applyImmediately: true,
+        // force — see ad-group note: re-push the exact suppressed/current bid, no floor/clamp.
+        force: true,
         forceResync: true,
       })
       if (r.ok) adTargets++
