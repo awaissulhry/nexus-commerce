@@ -104,8 +104,9 @@ Safety: the write-gate (env `NEXUS_AMAZON_ADS_MODE=live` + connection `productio
 `writesEnabledAt` + per-campaign value/day caps) governs every live push; sandbox
 markets stay local. `maxCampaigns` bounds the blast radius. Start with one product.
 
-## Known limitations (v1)
+## Signals & reliability (2026-06-07)
 
-- **Multi-market TZ / currency**: the demand SQL buckets `Europe/Rome` and counts EUR only — correct for **IT v1**; DE/FR/UK need the bucket TZ + multi-currency parameterised before they're trustworthy.
+- **Multi-market dayparting (RM1)** — `aggregateOrdersDayparting` now buckets day×hour in the market's **own timezone** (`MARKET_TZ[marketplace]`) and counts orders/units for **every** currency (revenue stays EUR-only via a conditional sum). `blendedFamilyDemand` + the heatmap weight the shape by **revenue for EUR markets, order count for non-EUR** (so non-EUR isn't blank), and the cockpit shows the real tz. IT/EUR unchanged.
+- **Rest-of-Search feedback (RM2)** — Rest targets have no Amazon placement-IS, so the engine now feeds the family's **SQP brand impression share** (`sqpImpressionShareForAsins`, latest weekly, impression-weighted over the campaign's ASINs) as the non-Top `achievedISFraction`. A Rest target with a Ceiling chases it; null SQP → open-loop. The SQP ingest cron is **default-ON** (Brand Analytics access confirmed; opt out via `NEXUS_DISABLE_SQP_INGEST_CRON`).
+- **Hourly ads (AMS) (RM4)** — subscriptions are **ACTIVE** for all 6 datasets (sp/sd/sb · traffic+conversion) and the poller/SQS/creds are configured, but `hourlyRows` is still 0 → Amazon isn't delivering to the queue. Manage via `POST/GET /advertising/ams/subscribe|subscriptions|status`. **Blocker (AWS-side, not code):** the SQS queue access policy must grant the AMS service principal `sqs:SendMessage`. Once messages flow, the RS.6 loss-proxy + intraday spend circuit-breaker activate automatically (the consuming code is already wired).
 - **AUTO self-competition** depends on `AdGroup.targetingType='AUTO'` being synced; the keyword path (the dominant case) is unaffected.
-- **Hourly ads (AMS)** is dormant on prod, so order demand is the primary timing signal and the RS.6 loss proxy simply never trips (conservative) — hourly-ads is a future overlay, not a dependency.
