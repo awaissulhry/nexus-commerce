@@ -72,7 +72,7 @@ Nexus precisely.
 ## Cross-market copy (CM-series)
 Replicate one Amazon market's images onto others quickly, **staged** (then publish via Mirror):
 - **Copy this market → markets** — in the Amazon Mirror panel (active market only). Copies all slots.
-- **Copy slot → markets** — the small copy icon on each matrix column header. Copies just that slot to the **same slot** in the targets (the "certain image at a certain place" case).
+- **Copy selected images → markets** — in **Select** mode, tick individual images (or use the row / column / all checkboxes) and copy them to the **same cell** (group + slot) in the targets — the "certain image at a certain place" case.
 - Targets = other Amazon markets and/or **"All Markets (shared)"** (writes PLATFORM scope → applies everywhere).
 - **Edit once for all** — the "All Markets" tab edits PLATFORM scope, applying to every market unless a market overrides.
 
@@ -83,8 +83,17 @@ Mechanics (frontend, no backend change): `buildCrossMarketUpserts`
 **replaces the target's same slot in place** (no duplicate). Copy stages as
 DRAFT → operator Saves → Mirror to Amazon.
 
+## Bulk editing (BE-series)
+A **Select** toggle (off by default) turns the matrix into a bulk editor:
+- **Select** at four levels — per image (cell), whole **row**, whole **column**, **all** — on every market incl. "All Markets".
+- One **action bar**: **Copy → markets**, **Set as MAIN** (single), **Fill from gallery** (empty slots), **Lock / Unlock**, **Reset to shared** (revert a market override), **Delete**. Quick-selects: *empties*, *all*.
+- **Delete** only removes images the current scope OWNS (a market's own override, or the shared row on All Markets); inherited + locked cells are skipped; the confirm spells out the effect. Staged → Save → Publish removes from Amazon.
+- **Lock** (`ListingImage.locked`, server-persisted) protects an image: it shows a padlock badge, is skipped by Delete / Reset, and won't be overwritten by Copy. `POST /images-workspace/lock {ids,locked}`. Lock does **not** affect Publish.
+- Classification (which actions apply + the counts) is the pure `classifyBulk` (`amazon/bulkSelection.ts`).
+
 ## Tests
 Pure verifiers (vitest): slot taxonomy (incl. PS naming + fallback), reconcile
 categorization, exact-mirror plan + the wire JSON (replace/delete/MAIN-guard),
 mirror-diff categorization, gallery-fill mapping, cross-market copy
-(whole/per-slot, shared→PLATFORM, replace-by-id, skip-self). ~38 cases.
+(whole/per-cell, shared→PLATFORM, replace-by-id, skip-self), bulk classification
+(deletable/lockable/overrides, lock-exclusion, all-markets). ~44 cases.
