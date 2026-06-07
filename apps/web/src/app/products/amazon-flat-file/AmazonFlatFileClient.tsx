@@ -2142,6 +2142,12 @@ export default function AmazonFlatFileClient({
       setSyncStatus('synced')
       localDivergedRef.current = false // FFX.2 — grid is now persisted to the DB
       setTimeout(() => setSyncStatus('idle'), 4000)
+      // FFA.6 — surface per-SKU sync failures instead of silently reporting "synced".
+      const syncErrors: Array<{ sku: string; error: string }> = Array.isArray(data?.errors) ? data.errors : []
+      if (syncErrors.length) {
+        const sample = syncErrors.slice(0, 3).map((e) => e.sku).filter(Boolean).join(', ')
+        toast.warning(`${syncErrors.length} row${syncErrors.length === 1 ? '' : 's'} didn't save${sample ? `: ${sample}${syncErrors.length > 3 ? '…' : ''}` : ''} — ${syncErrors[0]?.error ?? 'see details'}`)
+      }
       emitInvalidation({ type: 'channel-pricing.updated', meta: { marketplace, productType, source: 'amazon-flat-file' } })
       emitInvalidation({ type: 'stock.adjusted', meta: { source: 'amazon-flat-file', marketplace } })
       emitInvalidation({ type: 'product.updated', meta: { source: 'amazon-flat-file', marketplace } })
@@ -2149,7 +2155,7 @@ export default function AmazonFlatFileClient({
       setSyncStatus('error')
       setTimeout(() => setSyncStatus('idle'), 6000)
     }
-  }, [manifest, marketplace, productType])
+  }, [manifest, marketplace, productType, toast])
 
   const pollAllFeeds = useCallback(async () => {
     if (!feedEntries.length) return
@@ -2548,6 +2554,7 @@ export default function AmazonFlatFileClient({
     createVersion('Before discard')
     try { localStorage.removeItem(rowStorageKey(marketplace, productType)) } catch {}
     localDivergedRef.current = false // FFX.2 — discarding local work; grid reloads from DB
+    setDraftBanner(null) // FFA.6 — the restore-draft banner referred to the now-deleted draft
     void loadData(marketplace, productType, false)
   }, [marketplace, productType, loadData, createVersion])
 

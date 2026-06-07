@@ -579,10 +579,9 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
           })
 
           for (const listing of listings) {
-            const row = rows.find((r: any) => {
-              // match by SKU via listing.productId — simpler: match any changed field
-              return true
-            })
+            // FFA.6 — enqueue from the listing's own (already-synced) qty/price; the
+            // dead `rows.find(()=>true)` placeholder was removed (it matched the
+            // first row regardless of SKU and was never used).
             if (!listing.productId) continue
             await prisma.outboundSyncQueue.createMany({
               data: [
