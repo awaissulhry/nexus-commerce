@@ -568,6 +568,37 @@ export function isBlankFeedValue(val: unknown): boolean {
   return false
 }
 
+// RR.2 — build a grid row from the verbatim flat-file snapshot: the snapshot
+// (lossless content) with the live structured columns overlaid from the DB
+// (price/qty/title/desc/bullets, so repricer/stock changes show) + the internal
+// row metadata. Everything else comes from the snapshot exactly as saved.
+const SNAPSHOT_LIVE_OVERLAY = [
+  'item_name', 'product_description',
+  'bullet_point', 'bullet_point_2', 'bullet_point_3', 'bullet_point_4', 'bullet_point_5',
+  'purchasable_offer__our_price', 'purchasable_offer__sale_price',
+  'fulfillment_availability__quantity',
+]
+export function applySnapshotOverlay(snapshot: Record<string, any>, liveRow: FlatFileRow): FlatFileRow {
+  const overlay: Record<string, any> = {}
+  for (const k of SNAPSHOT_LIVE_OVERLAY) {
+    if (liveRow[k] !== undefined && liveRow[k] !== '') overlay[k] = liveRow[k]
+  }
+  return {
+    ...snapshot,
+    ...overlay,
+    item_sku: liveRow.item_sku ?? snapshot.item_sku,
+    _rowId: liveRow._rowId,
+    _productId: liveRow._productId,
+    _isNew: false,
+    _status: 'idle',
+    _listingId: liveRow._listingId,
+    _asin: liveRow._asin,
+    _listingStatus: liveRow._listingStatus,
+    _fieldStates: liveRow._fieldStates,
+    _masterValues: liveRow._masterValues,
+  } as FlatFileRow
+}
+
 // ── Main service ───────────────────────────────────────────────────────
 
 export class AmazonFlatFileService {
@@ -980,6 +1011,16 @@ export class AmazonFlatFileService {
             }
           }
         }
+      }
+
+      // RR.2 — if a verbatim flat-row snapshot exists, return it LOSSLESSLY rather
+      // than the expand-from-platformAttributes above (which dropped gated fields).
+      // Overlay only the live structured columns (price/qty/title/desc/bullets) so
+      // repricer/stock changes show; everything else comes from the snapshot. The
+      // expanded `row` above is the legacy fallback for listings with no snapshot.
+      const snapshot = (listing as any)?.flatFileSnapshot as Record<string, any> | null | undefined
+      if (snapshot && typeof snapshot === 'object' && Object.keys(snapshot).length > 0) {
+        return applySnapshotOverlay(snapshot, row)
       }
 
       return row

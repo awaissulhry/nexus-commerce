@@ -11,7 +11,7 @@
  * the readback the way getExistingRows does.
  */
 import { describe, it, expect } from 'vitest'
-import { AmazonFlatFileService, isBlankFeedValue } from './flat-file.service.js'
+import { AmazonFlatFileService, isBlankFeedValue, applySnapshotOverlay } from './flat-file.service.js'
 
 const svc = new AmazonFlatFileService({} as any, {} as any)
 // private but pure — call through an any-cast (same args syncRowsToPlatform uses)
@@ -105,5 +105,49 @@ describe('isBlankFeedValue (feed empty-attribute guard)', () => {
     expect(attrs.item_name).toBeDefined()
     expect(attrs.color).toBeUndefined()      // whitespace-only → omitted
     expect(attrs.some_attr).toBeUndefined()  // empty → omitted
+  })
+})
+
+// RR — the lossless snapshot path. The grid reads the verbatim flat row back +
+// overlays only the live structured columns, so no field can silently revert.
+describe('RR — applySnapshotOverlay (lossless grid round-trip)', () => {
+  const snapshot = {
+    item_sku: 'GALE-JACKET-BLACK-MEN-S',
+    item_name: 'XAVIA GALE Giacca (pulled)',
+    size: 'S', material: 'Cordura', fabric_type: '100% Nylon',
+    fulfillment_availability__fulfillment_channel_code: 'AMAZON_EU', // FBA, no qty
+    fulfillment_availability__quantity: '10',
+    purchasable_offer__our_price: '189.99',
+  }
+  const liveRow: any = {
+    item_sku: 'GALE-JACKET-BLACK-MEN-S',
+    item_name: 'XAVIA GALE Giacca (live title)', // changed via content tool
+    purchasable_offer__our_price: '199.99',       // repriced elsewhere
+    fulfillment_availability__quantity: '',        // FBA → live column empty
+    _rowId: 'p1', _productId: 'p1', _isNew: false, _status: 'idle',
+    _listingId: 'l1', _fieldStates: { price: 'OVERRIDE' },
+  }
+
+  it('preserves the FBA channel code + long-tail verbatim (the revert bug is gone)', () => {
+    const row = applySnapshotOverlay(snapshot, liveRow)
+    expect(row.fulfillment_availability__fulfillment_channel_code).toBe('AMAZON_EU') // not DEFAULT
+    expect(row.size).toBe('S')
+    expect(row.material).toBe('Cordura')
+    expect(row.fabric_type).toBe('100% Nylon')
+  })
+  it('overlays live structured columns (price/title repriced/edited elsewhere)', () => {
+    const row = applySnapshotOverlay(snapshot, liveRow)
+    expect(row.purchasable_offer__our_price).toBe('199.99')
+    expect(row.item_name).toBe('XAVIA GALE Giacca (live title)')
+  })
+  it('keeps the snapshot value when the live column is empty', () => {
+    const row = applySnapshotOverlay(snapshot, liveRow)
+    expect(row.fulfillment_availability__quantity).toBe('10') // snapshot wins over empty live
+  })
+  it('carries internal row metadata from the live (DB) row', () => {
+    const row = applySnapshotOverlay(snapshot, liveRow)
+    expect(row._rowId).toBe('p1')
+    expect(row._isNew).toBe(false)
+    expect(row._fieldStates).toEqual({ price: 'OVERRIDE' })
   })
 })
