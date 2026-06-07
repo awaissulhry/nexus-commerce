@@ -386,7 +386,24 @@ export async function runRankDefendOnce(opts: { dryRun?: boolean; onlyPlanId?: s
 }
 
 export async function runRankDefendCron(): Promise<void> {
-  try { await recordCronRun('ad-rank-defend', async () => { const r = await runRankDefendOnce(); return `evaluated=${r.evaluated} applied=${r.applied}` }) }
+  try {
+    await recordCronRun('ad-rank-defend', async () => {
+      const r = await runRankDefendOnce()
+      // AR — after holding the slot, re-push any bid/placement whose LAST live write
+      // to Amazon failed (dead-lettered queue rows + failed inline placement), so
+      // Amazon converges to our local truth without waiting for the next change or a
+      // manual resync. Bounded + gated; a sweep error must not fail the rank tick.
+      let rec = ''
+      try {
+        const { reconcileFailedAmazonWrites } = await import('../services/advertising/ads-write-reconcile.service.js')
+        const rr = await reconcileFailedAmazonWrites({ limit: 50 })
+        if (rr.attempted || rr.skippedPermanent) {
+          rec = ` reconciled=${rr.attempted}(ag=${rr.adGroups},tg=${rr.adTargets},cm=${rr.campaigns})${rr.skippedPermanent ? ` skip-perm=${rr.skippedPermanent}` : ''}`
+        }
+      } catch (e) { logger.warn('[ad-rank-defend] reconcile sweep failed', { error: (e as Error).message }) }
+      return `evaluated=${r.evaluated} applied=${r.applied}${rec}`
+    })
+  }
   catch (err) { logger.error('ad-rank-defend cron failure', { error: err instanceof Error ? err.message : String(err) }) }
 }
 

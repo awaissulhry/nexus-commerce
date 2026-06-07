@@ -5049,6 +5049,20 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     return { campaigns: campaignIds.length, groups, targets, skipped }
   })
 
+  // AR — manual trigger / preview for the auto-reconcile sweep (the same sweep the
+  // rank cron rides every tick). Re-pushes the CURRENT local bid/placement for any
+  // entity whose LAST live write to Amazon failed transiently. dryRun=1 lists what
+  // WOULD be re-pushed without writing.
+  fastify.post('/advertising/rank-defend/reconcile', async (request, reply) => {
+    const { reconcileFailedAmazonWrites } = await import('../services/advertising/ads-write-reconcile.service.js')
+    const q = request.query as Record<string, string | undefined>
+    const body = (request.body ?? {}) as { dryRun?: boolean; limit?: number }
+    const dryRun = q.dryRun === '1' || q.dryRun === 'true' || body.dryRun === true
+    const limit = body.limit ?? (q.limit ? Number(q.limit) : undefined)
+    try { return await reconcileFailedAmazonWrites({ dryRun, limit }) }
+    catch (e) { reply.status(500); return { error: (e as Error)?.message } }
+  })
+
   fastify.post('/advertising/dayparting/run-now', async (_request, reply) => {
     const { runDaypartingOnce } = await import('../jobs/ad-dayparting.job.js')
     try { return await runDaypartingOnce() } catch (e) { reply.status(500); return { error: (e as Error)?.message } }

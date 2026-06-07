@@ -223,6 +223,11 @@ export async function updatePlacementBidding(input: PlacementBiddingInput): Prom
   const priorAdjustments = ((c.dynamicBidding as { placementBidding?: Array<{ placement: string; percentage: number }> })?.placementBidding) ?? []
   const db = { ...((c.dynamicBidding as Record<string, unknown>) ?? {}), placementBidding: adjustments }
   let mode = 'local'
+  // AR — placement writes go inline (not via the queued+stamped worker path), so a
+  // failed push to Amazon was previously invisible AND unrecoverable. Stamp the
+  // campaign with the push outcome so a failure is observable on lastSyncStatus and
+  // the auto-reconcile sweep can re-push it. Only stamp on a real live attempt.
+  let syncStamp: { lastSyncedAt: Date; lastSyncStatus: 'SUCCESS' | 'FAILED'; lastSyncError: string | null } | null = null
   if (c.externalCampaignId && c.marketplace) {
     const ctx = await resolveCtx(c.marketplace)
     if (ctx) {
@@ -234,10 +239,13 @@ export async function updatePlacementBidding(input: PlacementBiddingInput): Prom
       } else {
         const r = await updateCampaign(ctx, c.externalCampaignId, { placementBidding: adjustments, biddingStrategy: input.biddingStrategy })
         mode = r.mode
+        if (r.mode !== 'sandbox') {
+          syncStamp = { lastSyncedAt: new Date(), lastSyncStatus: r.ok ? 'SUCCESS' : 'FAILED', lastSyncError: r.ok ? null : (r.error ?? 'placement push failed') }
+        }
       }
     }
   }
-  await prisma.campaign.update({ where: { id: input.campaignId }, data: { dynamicBidding: db as never, ...(input.biddingStrategy ? { biddingStrategy: input.biddingStrategy === 'autoForSales' ? 'AUTO_FOR_SALES' : input.biddingStrategy === 'manual' ? 'MANUAL' : 'LEGACY_FOR_SALES' } : {}) } })
+  await prisma.campaign.update({ where: { id: input.campaignId }, data: { dynamicBidding: db as never, ...(syncStamp ?? {}), ...(input.biddingStrategy ? { biddingStrategy: input.biddingStrategy === 'autoForSales' ? 'AUTO_FOR_SALES' : input.biddingStrategy === 'manual' ? 'MANUAL' : 'LEGACY_FOR_SALES' } : {}) } })
   await audit('update_placement_bidding', 'CAMPAIGN', input.campaignId, { adjustments, mode }, input.userId, { adjustments: priorAdjustments })
   logger.info('[AX2.2] updatePlacementBidding', { campaignId: input.campaignId, adjustments, mode })
   return { ok: true, adjustments, mode }
