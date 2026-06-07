@@ -63,6 +63,8 @@ export interface ListingImage {
   uploadedAt: string
   // IE.6 — per-row alt-text override; NULL inherits from master.
   altOverride: string | null
+  // BE.1 — bulk-edit lock; locked images are skipped by bulk Delete/Clear.
+  locked: boolean
 }
 
 export interface VariantSummary {

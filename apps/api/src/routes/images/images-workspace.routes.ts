@@ -441,6 +441,29 @@ const imagesWorkspaceRoutes: FastifyPluginAsync = async (fastify) => {
       return { copied, skipped }
     },
   )
+
+  // ── POST /api/products/:productId/images-workspace/lock ──────────
+  // BE.4 — bulk lock / unlock images. A locked image is skipped by bulk
+  // Delete / Clear-override and won't be overwritten by cross-market Copy.
+  // UI safety only — does NOT affect Publish (the mirror still publishes all).
+  fastify.post<{
+    Params: { productId: string }
+    Body: { ids: string[]; locked: boolean }
+  }>(
+    '/products/:productId/images-workspace/lock',
+    async (request, reply) => {
+      const { productId } = request.params
+      const { ids, locked } = request.body
+      if (!Array.isArray(ids) || ids.length === 0) {
+        return reply.code(400).send({ error: 'ids required' })
+      }
+      const result = await prisma.listingImage.updateMany({
+        where: { id: { in: ids }, productId },
+        data: { locked: Boolean(locked) },
+      })
+      return { updated: result.count, locked: Boolean(locked) }
+    },
+  )
 }
 
 export default imagesWorkspaceRoutes

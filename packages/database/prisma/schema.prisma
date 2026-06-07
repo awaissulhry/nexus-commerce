@@ -6605,6 +6605,11 @@ model ListingImage {
   publishedAt   DateTime?
   publishError  String?
 
+  // BE.1 — Bulk-edit lock. When true, bulk Delete / Clear-override skip
+  // this image and cross-market Copy won't overwrite it. A UI safety only;
+  // does NOT affect Publish (the mirror still publishes everything).
+  locked Boolean @default(false)
+
   product   Product           @relation(fields: [productId], references: [id], onDelete: Cascade)
   variation ProductVariation? @relation(fields: [variationId], references: [id], onDelete: Cascade)
 

@@ -58,6 +58,8 @@ export interface CellDisplay {
   origin: 'own' | 'inherited'   // own = exact scope match, inherited = fallback
   isPending: boolean
   listingImageId?: string
+  /** BE — server lock flag; bulk Delete / Clear-override skip locked cells. */
+  locked?: boolean
   hasWhiteBackground?: boolean | null
   width?: number | null
   height?: number | null
@@ -253,6 +255,7 @@ export function useAmazonImages({
         listingImageId: serverOwn.id, hasWhiteBackground: serverOwn.hasWhiteBackground,
         width: serverOwn.width, height: serverOwn.height,
         publishStatus: serverOwn.publishStatus, publishError: serverOwn.publishError,
+        locked: serverOwn.locked,
       }
     }
 
@@ -278,6 +281,7 @@ export function useAmazonImages({
           listingImageId: serverPlatform.id, hasWhiteBackground: serverPlatform.hasWhiteBackground,
           width: serverPlatform.width, height: serverPlatform.height,
           publishStatus: serverPlatform.publishStatus,
+          locked: serverPlatform.locked,
         }
       }
     }
