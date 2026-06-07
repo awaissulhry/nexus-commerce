@@ -342,6 +342,7 @@ export async function updateAdGroupWithSync(args: {
   reason?: string | null
   applyImmediately?: boolean
   force?: boolean // NP — bypass the 5¢ floor for deliberate bid suppression/restore
+  forceResync?: boolean // WC — push to Amazon even if the local value is unchanged (one-time re-sync of stale Amazon state)
 }): Promise<MutationOutcome> {
   const existing = await prisma.adGroup.findUnique({
     where: { id: args.adGroupId },
@@ -358,7 +359,7 @@ export async function updateAdGroupWithSync(args: {
   }
   const changes: FieldChange[] = []
   let syncType: AdSyncType = 'AD_BID_UPDATE'
-  if (args.patch.defaultBidCents != null && args.patch.defaultBidCents !== existing.defaultBidCents) {
+  if (args.patch.defaultBidCents != null && (args.forceResync || args.patch.defaultBidCents !== existing.defaultBidCents)) {
     changes.push({
       field: 'defaultBid',
       oldValue: String(existing.defaultBidCents),
@@ -494,6 +495,7 @@ export async function updateAdTargetWithSync(args: {
   reason?: string | null
   applyImmediately?: boolean
   force?: boolean // NP — bypass the change-clamp + 5¢ floor for deliberate bid suppression/restore
+  forceResync?: boolean // WC — push to Amazon even if the local value is unchanged (one-time re-sync of stale Amazon state)
 }): Promise<MutationOutcome> {
   const existing = await prisma.adTarget.findUnique({
     where: { id: args.adTargetId },
@@ -527,7 +529,7 @@ export async function updateAdTargetWithSync(args: {
 
   const changes: FieldChange[] = []
   let syncType: AdSyncType = 'AD_BID_UPDATE'
-  if (args.patch.bidCents != null && args.patch.bidCents !== existing.bidCents) {
+  if (args.patch.bidCents != null && (args.forceResync || args.patch.bidCents !== existing.bidCents)) {
     changes.push({
       field: 'bid',
       oldValue: String(existing.bidCents),

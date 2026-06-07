@@ -5015,6 +5015,40 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     try { return await runRankDefendOnce({ dryRun }) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
   })
 
+  // WC — one-time re-sync: force-push the CURRENT local bids to Amazon for rank-governed
+  // campaigns, healing stale Amazon state left by the old daily-write cap. forceResync makes
+  // the push fire even when the patch equals the local value (Amazon was the stale side).
+  // Defaults to every campaign under an enabled goal-mode schedule; pass {campaignIds:[...]} to scope.
+  fastify.post('/advertising/rank-defend/resync-bids', async (request, reply) => {
+    const { updateAdGroupWithSync, updateAdTargetWithSync } = await import('../services/advertising/ads-mutation.service.js')
+    const { isGoalMode } = await import('../jobs/ad-rank-defend.job.js')
+    const body = (request.body ?? {}) as { campaignIds?: string[] }
+    let campaignIds = body.campaignIds
+    if (!campaignIds?.length) {
+      const scheds = await prisma.adSchedule.findMany({ where: { enabled: true }, select: { campaignId: true, windows: true, defaultTargetKey: true } })
+      campaignIds = [...new Set(scheds.filter((s) => isGoalMode(s.windows, s.defaultTargetKey)).map((s) => s.campaignId))]
+    }
+    const actor = 'automation:resync-bids' as const
+    let groups = 0, targets = 0, skipped = 0
+    try {
+      for (const cid of campaignIds) {
+        const ags = await prisma.adGroup.findMany({ where: { campaignId: cid }, select: { id: true, defaultBidCents: true } })
+        for (const g of ags) {
+          if (g.defaultBidCents == null) { skipped++; continue }
+          const r = await updateAdGroupWithSync({ adGroupId: g.id, patch: { defaultBidCents: g.defaultBidCents }, actor, reason: 'resync stale Amazon bid (WC)', applyImmediately: true, force: true, forceResync: true })
+          if (r.ok && r.error !== 'no_changes') groups++; else skipped++
+        }
+        const tgs = await prisma.adTarget.findMany({ where: { adGroup: { campaignId: cid }, isNegative: false }, select: { id: true, bidCents: true } })
+        for (const t of tgs) {
+          if (t.bidCents == null) { skipped++; continue }
+          const r = await updateAdTargetWithSync({ adTargetId: t.id, patch: { bidCents: t.bidCents }, actor, reason: 'resync stale Amazon bid (WC)', applyImmediately: true, force: true, forceResync: true })
+          if (r.ok && r.error !== 'no_changes') targets++; else skipped++
+        }
+      }
+    } catch (e) { reply.status(500); return { error: (e as Error)?.message, groups, targets, skipped } }
+    return { campaigns: campaignIds.length, groups, targets, skipped }
+  })
+
   fastify.post('/advertising/dayparting/run-now', async (_request, reply) => {
     const { runDaypartingOnce } = await import('../jobs/ad-dayparting.job.js')
     try { return await runDaypartingOnce() } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
