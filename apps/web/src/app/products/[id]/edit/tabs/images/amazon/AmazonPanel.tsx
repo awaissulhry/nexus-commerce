@@ -40,6 +40,7 @@ import { CopyToMarketsModal } from './CopyToMarketsModal'
 import { useMatrixColumnPrefs } from './useMatrixColumnPrefs'
 import { MatrixColumnsModal } from './MatrixColumnsModal'
 import { computeSlotGroups } from './groupCoverage'
+import { MediaViewsMenu } from './MediaViewsMenu'
 import { buildCrossMarketUpserts } from './crossMarketCopy'
 import type { ChannelLiveImage, ListingImage, PendingUpsert, ProductImage, VariantSummary, WorkspaceProduct, AmazonJobSummary } from '../types'
 
@@ -729,6 +730,9 @@ export default function AmazonPanel({
         >
           <SlidersHorizontal className="w-3.5 h-3.5" /> Columns{matrixCols.hiddenCount > 0 ? ` · ${matrixCols.hiddenCount} hidden` : ''}
         </button>
+        <span className="ml-2">
+          <MediaViewsMenu currentPrefs={matrixCols.prefs} onApply={matrixCols.save} />
+        </span>
         {bulkMode && (
           <span className="ml-2 text-[11px] text-slate-400">Tick images, or use the row / column / all boxes, then pick a bulk action.</span>
         )}
