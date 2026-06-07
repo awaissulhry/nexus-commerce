@@ -538,6 +538,10 @@ export default function AmazonFlatFileClient({
   const { toast } = useToast() // FFS.7 — submit summary + feed-completion notices
   const [submitPanelOpen, setSubmitPanelOpen] = useState(false)
   const [submissionHistory, setSubmissionHistory] = useState<SubmissionRecord[]>([])
+  // FFS.6/#1 — authoritative submission count from the server (the Submissions
+  // panel's source). Falls back to the local count until it loads, so the badge
+  // never diverges from the panel (incl. feeds submitted on another device).
+  const [serverFeedCount, setServerFeedCount] = useState<number | null>(null)
   const [submissionPanelOpen, setSubmissionPanelOpen] = useState(false)
   const [versionPanelOpen, setVersionPanelOpen] = useState(false)
 
@@ -2020,6 +2024,7 @@ export default function AmazonFlatFileClient({
     if (submitted.length) {
       const skip = skipped.length ? ` · skipped ${skipped.join(', ')} (no edited rows)` : ''
       toast.success(`Submitted to ${submitted.join(', ')}${skip}`)
+      setServerFeedCount((c) => (c ?? 0) + submitted.length) // #1 — keep the count live within the session
     } else if (skipped.length && !errors.length) {
       toast.warning(`Nothing submitted — ${skipped.join(', ')} had no edited rows to send`)
     }
@@ -2158,6 +2163,7 @@ export default function AmazonFlatFileClient({
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
         if (!alive || !Array.isArray(d?.jobs)) return
+        if (typeof d.total === 'number') setServerFeedCount(d.total) // #1 — authoritative count
         const inflight = (d.jobs as Array<{ marketplace: string; feedId: string; status: string }>)
           .filter((j) => j.status === 'IN_QUEUE' || j.status === 'IN_PROGRESS')
         if (!inflight.length) return
@@ -2707,7 +2713,7 @@ export default function AmazonFlatFileClient({
                 onSubmit={handleSubmitToMarkets} onClose={() => setSubmitPanelOpen(false)} />
             )}
           </div>
-          {submissionHistory.length > 0 && (
+          {((serverFeedCount ?? 0) > 0 || submissionHistory.length > 0) && (
             <button
               type="button"
               onClick={() => setSubmissionPanelOpen((o) => !o)}
@@ -2717,10 +2723,10 @@ export default function AmazonFlatFileClient({
                   ? 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
                   : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300',
               )}
-              title="Submission history"
+              title="Submissions"
             >
               <History className="w-3 h-3" />
-              <span>{submissionHistory.length}</span>
+              <span>{serverFeedCount ?? submissionHistory.length}</span>
             </button>
           )}
           {/* PE: keyboard shortcuts modal trigger */}

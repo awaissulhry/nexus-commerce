@@ -344,12 +344,11 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
     if (q.status) where.status = q.status.toUpperCase()
     const limit = Math.min(200, Math.max(1, parseInt(q.limit ?? '50', 10) || 50))
     try {
-      const jobs = await prisma.amazonFlatFileFeedJob.findMany({
-        where,
-        orderBy: { submittedAt: 'desc' },
-        take: limit,
-      })
-      return reply.send({ jobs })
+      const [jobs, total] = await Promise.all([
+        prisma.amazonFlatFileFeedJob.findMany({ where, orderBy: { submittedAt: 'desc' }, take: limit }),
+        prisma.amazonFlatFileFeedJob.count({ where }),
+      ])
+      return reply.send({ jobs, total })
     } catch (err: any) {
       request.log.error(err, 'flat-file/feeds list failed')
       return reply.code(500).send({ error: err?.message ?? 'List failed' })
