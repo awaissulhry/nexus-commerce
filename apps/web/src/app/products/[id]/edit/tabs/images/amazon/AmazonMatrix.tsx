@@ -32,7 +32,7 @@ interface MatrixProps {
   /** BE — bulk-edit mode: show checkboxes + the bulk action bar. */
   bulkMode?: boolean
   /** BE — stage deletion of these listing-image rows. */
-  onBulkDelete?: (listingImageIds: string[]) => void
+  onBulkDelete?: (cells: Array<{ group: string | null; slot: AmazonSlot }>) => void
   /** BE — lock / unlock these listing-image rows on the server. */
   onBulkLock?: (listingImageIds: string[], locked: boolean) => void
   /** BE.5 — promote a single selected image to the MAIN slot. */
@@ -41,6 +41,8 @@ interface MatrixProps {
   onBulkClearOverride?: (listingImageIds: string[]) => void
   /** BE.6 — fill empty slots from the master gallery. */
   onBulkFill?: () => void
+  /** BE — bulk upload: pair picked files with the selected cells (fill / replace). */
+  onBulkUpload?: (files: File[], cells: Array<{ group: string | null; slot: AmazonSlot }>) => void
   /** MM.5 — visible slot-columns in display order; defaults to all. */
   visibleSlots?: AmazonSlot[]
   onClearRow: (groupValue: string) => void
@@ -484,6 +486,7 @@ export default function AmazonMatrix({
   onBulkSetMain,
   onBulkClearOverride,
   onBulkFill,
+  onBulkUpload,
   visibleSlots,
   onClearRow,
   onCellFileDrop,
@@ -525,6 +528,7 @@ export default function AmazonMatrix({
   }
 
   const [selectedCells, setSelectedCells] = useState<Map<string, { group: string | null; slot: AmazonSlot }>>(new Map())
+  const bulkUploadRef = useRef<HTMLInputElement>(null)
   const cellKey = (group: string | null, slot: string) => `${group ?? '__ALL__'}::${slot}`
   const toggleCellSelect = useCallback((group: string | null, slot: AmazonSlot) => {
     setSelectedCells((prev) => {
@@ -644,6 +648,11 @@ export default function AmazonMatrix({
               Fill from gallery
             </Button>
           )}
+          {onBulkUpload && selectedCells.size > 0 && (
+            <Button size="sm" variant="ghost" onClick={() => bulkUploadRef.current?.click()}>
+              Upload to selected
+            </Button>
+          )}
           {onBulkLock && bulk.lockableIds.length > 0 && (
             <Button size="sm" variant="ghost" onClick={() => { onBulkLock(bulk.lockableIds, true); setSelectedCells(new Map()) }}>
               Lock
@@ -667,25 +676,40 @@ export default function AmazonMatrix({
               Reset to shared
             </Button>
           )}
-          {onBulkDelete && bulk.deletableIds.length > 0 && (
+          {onBulkDelete && bulk.filled.some((c) => !c.locked) && (
             <Button
               size="sm"
               variant="danger"
               onClick={() => {
+                const cells = bulk.filled.filter((c) => !c.locked).map((c) => ({ group: c.group, slot: c.slot as AmazonSlot }))
                 const warn =
-                  `Delete ${bulk.deletableIds.length} image${bulk.deletableIds.length === 1 ? '' : 's'}?` +
-                  ` Shared / All-Markets images are removed from every market.` +
-                  (bulk.skippedCount ? `\n${bulk.skippedCount} locked or no-row cell(s) will be skipped.` : '') +
-                  `\nStaged — Save, then Publish to remove from Amazon.`
+                  `Delete ${cells.length} image${cells.length === 1 ? '' : 's'}? ` +
+                  `The slot${cells.length === 1 ? '' : 's'} will be emptied here and removed from Amazon on Publish.` +
+                  (bulk.lockedIds.length ? `\n${bulk.lockedIds.length} locked image(s) skipped.` : '') +
+                  `\nStaged — Save, then Publish.`
                 if (!window.confirm(warn)) return
-                onBulkDelete(bulk.deletableIds)
+                onBulkDelete(cells)
                 setSelectedCells(new Map())
               }}
             >
-              Delete ({bulk.deletableIds.length})
+              Delete ({bulk.filled.filter((c) => !c.locked).length})
             </Button>
           )}
           <Button size="sm" variant="ghost" onClick={() => setSelectedCells(new Map())} className="text-slate-500">Clear</Button>
+          <input
+            ref={bulkUploadRef}
+            type="file"
+            accept="image/*"
+            multiple
+            className="sr-only"
+            onChange={(e) => {
+              const files = e.target.files ? [...e.target.files] : []
+              const cells = [...selectedCells.values()].map((c) => ({ group: c.group, slot: c.slot }))
+              if (files.length && cells.length) onBulkUpload?.(files, cells)
+              setSelectedCells(new Map())
+              if (bulkUploadRef.current) bulkUploadRef.current.value = ''
+            }}
+          />
         </div>
       )}
 

@@ -274,9 +274,26 @@ export default function AmazonPanel({
     matrixCols.save(matrixCols.prefs.map((p) => (set.has(p.slot) && p.slot !== 'MAIN' ? { ...p, visible: hidden } : p)))
   }
 
-  function handleBulkDelete(ids: string[]) {
-    if (!addPendingDelete) return
-    ids.forEach((id) => addPendingDelete(id))
+  function handleBulkDelete(cells: Array<{ group: string | null; slot: AmazonSlot }>) {
+    // Delete = blocker (empty-url override): the cell vanishes immediately
+    // (resolveCell treats an empty url as intentionally-empty, suppressing the
+    // master-gallery fallback) and the exact-mirror op:deletes the slot on Publish.
+    cells.forEach((c) => amazon.assignCell(c.group, c.slot, ''))
+  }
+
+  async function handleBulkUpload(files: File[], cells: Array<{ group: string | null; slot: AmazonSlot }>) {
+    // Pair each picked file with a selected cell (in order) — upload to the
+    // master gallery, then assign it to that cell. Fills empties or replaces.
+    const n = Math.min(files.length, cells.length)
+    for (let i = 0; i < n; i++) {
+      const fd = new FormData()
+      fd.append('file', files[i]!)
+      const res = await beFetch(`/api/products/${productId}/images?type=ALT`, { method: 'POST', body: fd })
+      if (!res.ok) continue
+      const created = await res.json()
+      amazon.assignCell(cells[i]!.group, cells[i]!.slot, created.url, created.id)
+    }
+    onReload()
   }
 
   async function handleBulkLock(ids: string[], locked: boolean) {
@@ -805,6 +822,7 @@ export default function AmazonPanel({
             onBulkSetMain={handleBulkSetMain}
             onBulkClearOverride={amazon.activeMarketplace !== 'ALL' ? handleBulkClearOverride : undefined}
             onBulkFill={handleBulkFill}
+            onBulkUpload={handleBulkUpload}
             visibleSlots={matrixCols.visibleSlots}
             onCopyCellsToMarkets={
               amazon.activeMarketplace !== 'ALL'
