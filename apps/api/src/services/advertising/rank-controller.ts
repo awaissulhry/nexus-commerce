@@ -22,6 +22,27 @@ export interface RankTargetSpec {
   stepDownPct?: number | null // ease step %/cycle; null => SNAP down to Placement %; a number => gradual (never snap)
   maxBiasPct?: number | null // ceiling; null => Placement % (never above). Set above to allow climbing. all-out forces 900.
   keepClimbing?: boolean // climb to the ceiling even with NO signal (only matters when ceiling > Placement %; bounded by ceiling + ACOS)
+  // BL — blended multi-placement + base-bid (all optional; absent => single-placement legacy).
+  lanes?: LaneSpec[] | null // when set, the engine drives EACH lane's placement at once
+  bidMode?: string | null // base-bid lever: null|'hold'|'absolute'|'suppress'|'deltaPct'
+  bidValueCents?: number | null // 'absolute' → set ad-group default bid to this
+  bidDeltaPct?: number | null // reserved for 'deltaPct'
+}
+
+// BL — one placement lane in a blended target: the per-placement bid strategy. A lane is
+// a single-placement RankTargetSpec minus the shared key/pause/base-bid; the engine
+// expands each into computeStep with that placement's own signal (Top=Top-IS, Rest=SQP,
+// Product=open-loop).
+export interface LaneSpec {
+  placement: string // PLACEMENT_TOP | PLACEMENT_REST_OF_SEARCH | PLACEMENT_PRODUCT_PAGE
+  biasPct: number | null
+  maxBiasPct?: number | null
+  targetISPct?: number | null
+  acosCapPct?: number | null
+  stepUpPct?: number | null
+  stepDownPct?: number | null
+  keepClimbing?: boolean
+  allOut?: boolean
 }
 
 export interface ScheduleWindow { days?: number[]; startHour?: number; endHour?: number; bidMultiplierPct?: number; targetKey?: string }

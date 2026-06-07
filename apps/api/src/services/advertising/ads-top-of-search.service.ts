@@ -127,6 +127,10 @@ export function buildSearchPlacementAdjustments(existing: Array<{ placement: str
   return [...preserved, { placement, percentage: pct }, { placement: other, percentage: 0 }]
 }
 
+// BL — blended multi-placement writer lives in the pure ads-placement-math module
+// (no DB → unit-testable). Re-exported here so existing import sites resolve unchanged.
+export { buildBlendedAdjustments, MANAGED_PLACEMENTS } from './ads-placement-math.js'
+
 export async function setSearchPlacement(campaignId: string, placement: string, percentage: number): Promise<unknown> {
   const { updatePlacementBidding } = await import('./ads-create.service.js')
   const c = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { dynamicBidding: true } })

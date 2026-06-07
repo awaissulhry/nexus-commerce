@@ -18,10 +18,10 @@ import cron from 'node-cron'
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
 import { recordCronRun } from '../utils/cron-observability.js'
-import { computeStep, resolveActiveTargetKey, isRankLoss, type RankTargetSpec, type ScheduleWindow } from '../services/advertising/rank-controller.js'
-import { analyzeTopOfSearch, setSearchPlacement } from '../services/advertising/ads-top-of-search.service.js'
+import { computeStep, resolveActiveTargetKey, isRankLoss, type RankTargetSpec, type LaneSpec, type ScheduleWindow } from '../services/advertising/rank-controller.js'
+import { analyzeTopOfSearch, setSearchPlacement, buildBlendedAdjustments } from '../services/advertising/ads-top-of-search.service.js'
 import { sqpImpressionShareForAsins } from '../services/advertising/sqp.service.js'
-import { updateCampaignWithSync, type AdsActor } from '../services/advertising/ads-mutation.service.js'
+import { updateCampaignWithSync, updateAdGroupWithSync, type AdsActor } from '../services/advertising/ads-mutation.service.js'
 import { suppressCampaignBids, restoreCampaignBids } from '../services/advertising/ads-bid-suppression.service.js'
 import { detectSelfCompetition, type CampaignTargeting, type SelfCompetitionConflict } from '../services/advertising/rank-self-competition.js'
 
@@ -38,8 +38,8 @@ function nowInTz(tz: string, leadMinutes = 0): { day: number; hour: number } {
   return { day: dayIdx < 0 ? 0 : dayIdx, hour }
 }
 
-interface RankTargetRow { key: string; placement: string; targetISPct: number | null; acosCapPct: number | null; maxCpcCents: number | null; biasPct: number | null; pause: boolean; allOut: boolean; jumpStartPct?: number | null; stepUpPct?: number | null; stepDownPct?: number | null; maxBiasPct?: number | null; keepClimbing?: boolean }
-const toSpec = (t: RankTargetRow): RankTargetSpec => ({ key: t.key, placement: t.placement, targetISPct: t.targetISPct, acosCapPct: t.acosCapPct, maxCpcCents: t.maxCpcCents, biasPct: t.biasPct, pause: t.pause, allOut: t.allOut, jumpStartPct: t.jumpStartPct ?? null, stepUpPct: t.stepUpPct ?? null, stepDownPct: t.stepDownPct ?? null, maxBiasPct: t.maxBiasPct ?? null, keepClimbing: !!t.keepClimbing })
+interface RankTargetRow { key: string; placement: string; targetISPct: number | null; acosCapPct: number | null; maxCpcCents: number | null; biasPct: number | null; pause: boolean; allOut: boolean; jumpStartPct?: number | null; stepUpPct?: number | null; stepDownPct?: number | null; maxBiasPct?: number | null; keepClimbing?: boolean; lanes?: unknown; bidMode?: string | null; bidValueCents?: number | null; bidDeltaPct?: number | null }
+const toSpec = (t: RankTargetRow): RankTargetSpec => ({ key: t.key, placement: t.placement, targetISPct: t.targetISPct, acosCapPct: t.acosCapPct, maxCpcCents: t.maxCpcCents, biasPct: t.biasPct, pause: t.pause, allOut: t.allOut, jumpStartPct: t.jumpStartPct ?? null, stepUpPct: t.stepUpPct ?? null, stepDownPct: t.stepDownPct ?? null, maxBiasPct: t.maxBiasPct ?? null, keepClimbing: !!t.keepClimbing, lanes: Array.isArray(t.lanes) ? (t.lanes as LaneSpec[]) : null, bidMode: t.bidMode ?? null, bidValueCents: t.bidValueCents ?? null, bidDeltaPct: t.bidDeltaPct ?? null })
 
 // RTC — merge per-scope target overrides onto a spec, keyed by the spec's own target
 // key. Maps apply in order, so later (more specific) wins: product then campaign.
@@ -76,6 +76,9 @@ export interface RankDefendDecision {
   campaignId: string; campaignName: string; targetKey: string; action: string; reason: string
   currentPct: number; nextPct: number; achievedISPct: number | null; achievedAcosPct: number | null; lossDetected: boolean; applied: boolean
   planId?: string | null
+  // BL — per-placement decisions when the target is a blend (Top/Rest/Product driven at once).
+  lanes?: Array<{ placement: string; fromPct: number; toPct: number; action: string }>
+  baseBid?: { mode: string; valueCents?: number | null } | null // BL — base-bid directive applied
 }
 export interface RankPlanRunSummary { planId: string; productId: string; marketplace: string; campaigns: number; decisions: RankDefendDecision[]; selfCompetition?: SelfCompetitionConflict[] }
 export interface RankDefendSummary { evaluated: number; applied: number; decisions: RankDefendDecision[]; plans?: RankPlanRunSummary[] }
@@ -89,6 +92,59 @@ interface CampRow { id: string; name: string; status: string; dynamicBidding: un
 // bias); when false it is a pure decision (preview / plan dry-run). currentPct is
 // always read from dynamicBidding (the bias WE control), never the sparse T+1
 // placement report — else the loop is blind to its own prior changes.
+// BL — expand one lane into a single-placement RankTargetSpec the controller understands.
+function laneToSpec(parent: RankTargetSpec, lane: LaneSpec): RankTargetSpec {
+  return {
+    key: parent.key, placement: lane.placement, biasPct: lane.biasPct,
+    maxBiasPct: lane.maxBiasPct ?? null, targetISPct: lane.targetISPct ?? null, acosCapPct: lane.acosCapPct ?? null,
+    maxCpcCents: parent.maxCpcCents, stepUpPct: lane.stepUpPct ?? null, stepDownPct: lane.stepDownPct ?? null,
+    keepClimbing: !!lane.keepClimbing, allOut: !!lane.allOut, pause: false, jumpStartPct: null,
+  }
+}
+const SHORT_PLACE: Record<string, string> = { PLACEMENT_TOP: 'Top', PLACEMENT_REST_OF_SEARCH: 'Rest', PLACEMENT_PRODUCT_PAGE: 'Product' }
+const shortPlace = (p: string) => SHORT_PLACE[p] ?? p
+function baseBidNote(spec: RankTargetSpec): string {
+  if (!spec.bidMode || spec.bidMode === 'hold') return ''
+  if (spec.bidMode === 'absolute' && spec.bidValueCents != null) return ` · base bid €${(spec.bidValueCents / 100).toFixed(2)}`
+  if (spec.bidMode === 'suppress') return ' · base bid floored'
+  return ` · base ${spec.bidMode}`
+}
+// BL — compare placementBidding arrays as {placement→pct} maps, ignoring order and
+// treating 0/absent as equal, so the engine never churns a no-op write each tick.
+function samePlacements(a: Array<{ placement: string; percentage: number }>, b: Array<{ placement: string; percentage: number }>): boolean {
+  const m = (arr: Array<{ placement: string; percentage: number }>) => {
+    const o: Record<string, number> = {}
+    for (const x of arr ?? []) if (x.percentage) o[x.placement] = x.percentage
+    return o
+  }
+  const ma = m(a), mb = m(b)
+  for (const k of new Set([...Object.keys(ma), ...Object.keys(mb)])) if ((ma[k] ?? 0) !== (mb[k] ?? 0)) return false
+  return true
+}
+// BL — apply the target's base-bid directive (the base bid placement multipliers stack
+// on). hold/null = no change; absolute = set ad-group default bids to bidValueCents
+// (idempotent via change-detection); suppress = floor to ~2¢ (placements stay set).
+// deltaPct is reserved (needs baseline memory — a safe follow-up). Returns writes made.
+async function applyBaseBidDirective(camp: CampRow, spec: RankTargetSpec, ctx: { write: boolean; actor: string }): Promise<number> {
+  if (!ctx.write || !spec.bidMode || spec.bidMode === 'hold') return 0
+  let n = 0
+  if (spec.bidMode === 'suppress') {
+    if (!camp.bidsSuppressedAt) {
+      try { n += await suppressCampaignBids(camp.id, { actor: ctx.actor as AdsActor, reason: 'rank base-bid = suppress (placements stay set)' }) } catch (e) { logger.warn('[rank-defend] base-bid suppress failed', { campaignId: camp.id, error: (e as Error).message }) }
+    }
+    return n
+  }
+  if (spec.bidMode === 'absolute' && spec.bidValueCents != null && spec.bidValueCents > 0) {
+    const ags = await prisma.adGroup.findMany({ where: { campaignId: camp.id }, select: { id: true, defaultBidCents: true } })
+    for (const g of ags) {
+      if (g.defaultBidCents === spec.bidValueCents) continue
+      try { const r = await updateAdGroupWithSync({ adGroupId: g.id, patch: { defaultBidCents: spec.bidValueCents }, actor: ctx.actor as AdsActor, reason: 'rank base-bid (absolute)', applyImmediately: true }); if (r.ok) n++ } catch (e) { logger.warn('[rank-defend] base-bid absolute failed', { campaignId: camp.id, adGroupId: g.id, error: (e as Error).message }) }
+    }
+    return n
+  }
+  return n // deltaPct reserved
+}
+
 async function decideAndMaybeApply(
   camp: CampRow, key: string, spec: RankTargetSpec, planId: string | null,
   ctx: { write: boolean; actor: string; sigByCampaign: SigMap; lossByCampaign: Map<string, boolean>; suppressRaise?: boolean; sqpByCampaign?: Map<string, number | null> },
@@ -112,8 +168,9 @@ async function decideAndMaybeApply(
     applied += suppressed
     return { decision: { ...base, action: 'pause', reason: 'target = Min bid → bids at floor ~2¢ (campaign live, restorable)', nextPct: currentPct, lossDetected: false, applied: suppressed > 0 || (ctx.write && !!camp.bidsSuppressedAt) }, applied }
   }
-  // Serve target → first restore any no-pause bid suppression (exact prior bids).
-  if (ctx.write && camp.bidsSuppressedAt) {
+  // Serve target → restore any no-pause bid suppression (exact prior bids), UNLESS the
+  // target's own base-bid directive is 'suppress' (then we keep bids floored on purpose).
+  if (ctx.write && camp.bidsSuppressedAt && spec.bidMode !== 'suppress') {
     try { applied += await restoreCampaignBids(camp.id, { actor: ctx.actor as AdsActor, reason: 'rank — serve target → restore prior bids' }) } catch (e) { logger.warn('[rank-defend] bid-restore failed', { campaignId: camp.id, error: (e as Error).message }) }
   }
   // Defend semantics: resume only if something ELSE left it paused (we never pause). Never touch ARCHIVED.
@@ -121,31 +178,51 @@ async function decideAndMaybeApply(
     try { await updateCampaignWithSync({ campaignId: camp.id, patch: { status: 'ENABLED' }, actor: ctx.actor as AdsActor, reason: 'rank defend — resume to hold the slot', applyImmediately: true } as never); applied++ } catch (e) { logger.warn('[rank-defend] resume failed', { campaignId: camp.id, error: (e as Error).message }) }
   }
   const loss = ctx.lossByCampaign.get(camp.id) ?? false
-  // PP — the IS / ACOS / loss signals are Top-of-Search-specific (Amazon exposes no
-  // impression share for Rest/Product). For a non-Top target, feed no signal so the
-  // controller converges on the target's entry bias instead.
+  // C2 — never bid UP into a capped campaign (burns the fixed daily budget early + surrenders
+  // the slot). Shared by both paths.
+  const campOutOfBudget = (camp.deliveryReasons ?? []).includes('OUT_OF_BUDGET')
+
+  // ── BL — blended path: drive Top + Rest of Search + Product pages SIMULTANEOUSLY ──
+  // in one combined placement write. Each lane gets its own feedback signal: Top = Amazon
+  // Top-of-Search IS, Rest = SQP brand impression share, Product = open-loop (set-and-hold).
+  if (spec.lanes && spec.lanes.length) {
+    const laneDecisions: NonNullable<RankDefendDecision['lanes']> = []
+    const driven: Array<{ placement: string; percentage: number }> = []
+    for (const lane of spec.lanes) {
+      const laneCur = cdb.placementBidding?.find((x) => x.placement === lane.placement)?.percentage ?? 0
+      const lTop = lane.placement === 'PLACEMENT_TOP'
+      const lRest = lane.placement === 'PLACEMENT_REST_OF_SEARCH'
+      const laneIS = lTop ? sigRaw.topIS : lRest ? (ctx.sqpByCampaign?.get(camp.id) ?? null) : null
+      const dd = computeStep(laneToSpec(spec, lane), { currentPct: laneCur, achievedISFraction: laneIS, achievedAcosFraction: lTop ? sigRaw.topAcos : null, lossDetected: lTop ? loss : false })
+      let toPct = dd.nextPct, act = dd.action
+      if ((ctx.suppressRaise || campOutOfBudget) && act === 'raise') { toPct = laneCur; act = 'hold' }
+      driven.push({ placement: lane.placement, percentage: toPct })
+      laneDecisions.push({ placement: lane.placement, fromPct: laneCur, toPct, action: act })
+    }
+    const adjustments = buildBlendedAdjustments(cdb.placementBidding ?? [], driven)
+    const changed = !samePlacements(cdb.placementBidding ?? [], adjustments)
+    if (ctx.write && changed) {
+      try { const { updatePlacementBidding } = await import('../services/advertising/ads-create.service.js'); await updatePlacementBidding({ campaignId: camp.id, adjustments }); applied++ } catch (e) { logger.warn('[rank-defend] blended apply failed', { campaignId: camp.id, error: (e as Error).message }) }
+    }
+    const baseApplied = await applyBaseBidDirective(camp, spec, ctx)
+    applied += baseApplied
+    const head = laneDecisions.find((l) => l.placement === 'PLACEMENT_TOP') ?? laneDecisions[0]
+    const reason = `blend: ${laneDecisions.map((l) => `${shortPlace(l.placement)} ${l.fromPct}→${l.toPct}`).join(', ')}${baseBidNote(spec)}`
+    return { decision: { ...base, action: head?.action ?? 'hold', reason, nextPct: head?.toPct ?? currentPct, lossDetected: loss, applied: (ctx.write && changed) || baseApplied > 0, lanes: laneDecisions, baseBid: spec.bidMode && spec.bidMode !== 'hold' ? { mode: spec.bidMode, valueCents: spec.bidValueCents } : null }, applied }
+  }
+
+  // ── Legacy single-placement path (behaviour unchanged) ──────────────────────────
+  // PP — the IS / ACOS / loss signals are Top-of-Search-specific. RM2 — non-Top targets
+  // use the family's SQP brand impression share as a coarse feedback signal.
   const isTop = spec.placement === 'PLACEMENT_TOP'
-  // RM2 — Top targets use Amazon's Top-of-Search impression share; non-Top (Rest of Search) targets
-  // have NO Amazon placement-IS, so feed the family's SQP brand impression share as a coarse
-  // feedback signal (null when no SQP data → stays open-loop / holds the entry bias). ACOS/loss stay
-  // Top-only (Amazon exposes neither for Rest).
   const achievedIS = isTop ? sigRaw.topIS : (ctx.sqpByCampaign?.get(camp.id) ?? null)
   const d = computeStep(spec, { currentPct, achievedISFraction: achievedIS, achievedAcosFraction: isTop ? sigRaw.topAcos : null, lossDetected: isTop ? loss : false })
-  // RD.5 — family daily-budget cap: suppress raises (still allow holds/lowers) so a
-  // must-win window can't push the whole family over its shared budget.
   let action = d.action, nextPct = d.nextPct, reason = d.reason
-  // C2 — never bid UP into a capped campaign: raising the bias just burns the fixed daily budget
-  // earlier and SURRENDERS the slot for the rest of the day (the opposite of holding rank). Hold
-  // instead and let the operator raise the budget. Same idea as the family-budget suppressRaise.
-  const campOutOfBudget = (camp.deliveryReasons ?? []).includes('OUT_OF_BUDGET')
   if ((ctx.suppressRaise || campOutOfBudget) && action === 'raise') {
     action = 'hold'; nextPct = currentPct
     reason = campOutOfBudget ? 'campaign OUT_OF_BUDGET — holding (raise the daily budget to hold this slot)' : 'family daily budget reached — holding (no raise)'
   }
-  // PP — for a search target, also ensure the OTHER search placement (Top↔Rest) is
-  // zeroed — EVEN on a hold — so a rest-of-search window drops a leftover Top bias (and
-  // vice-versa). Actuate when the target's own bias changes OR the other search
-  // placement is still non-zero; setSearchPlacement sets the target + zeros the other.
+  // PP — also zero the OTHER search placement (Top↔Rest mutually exclusive) even on a hold.
   const otherSearch = spec.placement === 'PLACEMENT_TOP' ? 'PLACEMENT_REST_OF_SEARCH' : spec.placement === 'PLACEMENT_REST_OF_SEARCH' ? 'PLACEMENT_TOP' : null
   const otherCur = otherSearch ? (cdb.placementBidding?.find((x) => x.placement === otherSearch)?.percentage ?? 0) : 0
   const targetChanges = (action === 'raise' || action === 'lower') && nextPct !== currentPct
@@ -154,7 +231,9 @@ async function decideAndMaybeApply(
   if (willApply) {
     try { await setSearchPlacement(camp.id, spec.placement, targetChanges ? nextPct : currentPct); applied++ } catch (e) { logger.warn('[rank-defend] apply failed', { campaignId: camp.id, error: (e as Error).message }) }
   }
-  return { decision: { ...base, action, reason, nextPct, lossDetected: loss, applied: willApply }, applied }
+  const baseApplied = await applyBaseBidDirective(camp, spec, ctx)
+  applied += baseApplied
+  return { decision: { ...base, action, reason: reason + baseBidNote(spec), nextPct, lossDetected: loss, applied: willApply || baseApplied > 0, baseBid: spec.bidMode && spec.bidMode !== 'hold' ? { mode: spec.bidMode, valueCents: spec.bidValueCents } : null }, applied }
 }
 
 // RD.5 — family guardrails. effectiveSpec transforms the window target before the
