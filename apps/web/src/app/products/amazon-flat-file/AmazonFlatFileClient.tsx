@@ -1009,6 +1009,10 @@ export default function AmazonFlatFileClient({
 
   // BF.1 — flat list of every visible cell for FindReplaceBar
   const findCells = useMemo<FindCell[]>(() => {
+    // FFA.4 — only build the full-grid cell index when Find/Replace is actually
+    // open (it's the sole consumer). Previously this allocated rows×cols objects
+    // on every keystroke even with the panel closed.
+    if (!findReplaceOpen) return []
     const out: FindCell[] = []
     displayRows.forEach((row, ri) => {
       allColumnsRef.current.forEach((col, ci) => {
@@ -1016,7 +1020,7 @@ export default function AmazonFlatFileClient({
       })
     })
     return out
-  }, [displayRows])
+  }, [displayRows, findReplaceOpen])
 
   // BF.2 — per-cell tone map from conditional formatting rules
   const toneMap = useMemo(() => {
