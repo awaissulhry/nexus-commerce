@@ -29,6 +29,8 @@ interface MatrixProps {
   onCopyRow: (groupValue: string, toMarketplace: string) => void
   /** CM.6 — copy the SELECTED cells (individual images) to the same cell in other markets. */
   onCopyCellsToMarkets?: (cells: Array<{ group: string | null; slot: AmazonSlot }>) => void
+  /** VC — copy the selected cells to other variants (colours / siblings). */
+  onCopyCellsToVariants?: (cells: Array<{ group: string | null; slot: AmazonSlot }>) => void
   /** BE — bulk-edit mode: show checkboxes + the bulk action bar. */
   bulkMode?: boolean
   /** BE — stage deletion of these listing-image rows. */
@@ -480,6 +482,7 @@ export default function AmazonMatrix({
   onPublishRow,
   onCopyRow,
   onCopyCellsToMarkets,
+  onCopyCellsToVariants,
   bulkMode,
   onBulkDelete,
   onBulkLock,
@@ -636,6 +639,11 @@ export default function AmazonMatrix({
           {onCopyCellsToMarkets && bulk.filled.length > 0 && (
             <Button size="sm" variant="secondary" onClick={() => { onCopyCellsToMarkets(bulk.filled.map((c) => ({ group: c.group, slot: c.slot as AmazonSlot }))); setSelectedCells(new Map()) }}>
               Copy → markets
+            </Button>
+          )}
+          {onCopyCellsToVariants && bulk.filled.length > 0 && (
+            <Button size="sm" variant="secondary" onClick={() => { onCopyCellsToVariants(bulk.filled.map((c) => ({ group: c.group, slot: c.slot as AmazonSlot }))); setSelectedCells(new Map()) }}>
+              Copy → variants
             </Button>
           )}
           {onBulkSetMain && bulk.filled.length === 1 && bulk.filled[0]!.slot !== 'MAIN' && (

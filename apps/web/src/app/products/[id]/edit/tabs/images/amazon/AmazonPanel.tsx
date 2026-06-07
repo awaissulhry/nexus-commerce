@@ -37,11 +37,13 @@ import {
   type AmazonSlot,
 } from './useAmazonImages'
 import { CopyToMarketsModal } from './CopyToMarketsModal'
+import { CopyToVariantsModal } from './CopyToVariantsModal'
 import { useMatrixColumnPrefs } from './useMatrixColumnPrefs'
 import { MatrixColumnsModal } from './MatrixColumnsModal'
 import { computeSlotGroups } from './groupCoverage'
 import { MediaViewsMenu } from './MediaViewsMenu'
 import { buildCrossMarketUpserts } from './crossMarketCopy'
+import { buildVariantCopyUpserts } from './variantCopy'
 import type { ChannelLiveImage, ListingImage, PendingUpsert, ProductImage, VariantSummary, WorkspaceProduct, AmazonJobSummary } from '../types'
 
 interface CopyResult { copied: number; skipped: number }
@@ -259,6 +261,7 @@ export default function AmazonPanel({
 
   // CM — cross-market copy (whole-market or per-slot) → staged upserts.
   const [copyPicker, setCopyPicker] = useState<{ cells: Array<{ group: string | null; slot: string }>; label: string } | null>(null)
+  const [variantPicker, setVariantPicker] = useState<{ cells: Array<{ group: string | null; slot: AmazonSlot }> } | null>(null)
 
   // BE — bulk-edit mode + actions.
   const [bulkMode, setBulkMode] = useState(false)
@@ -373,6 +376,21 @@ export default function AmazonPanel({
     })
     upserts.forEach((u) => addPendingUpsert(u))
     setCopyPicker(null)
+  }
+
+  function runVariantCopy(targetGroups: string[]) {
+    if (!variantPicker) return
+    const upserts = buildVariantCopyUpserts({
+      cells: variantPicker.cells,
+      targetGroups,
+      activeAxis,
+      activeMarketplace: amazon.activeMarketplace,
+      resolveCell: (g, s) => amazon.resolveCell(g, s as AmazonSlot),
+      listingImages,
+    })
+    upserts.forEach((u) => addPendingUpsert(u))
+    onToast(`Copied to ${targetGroups.length} variant${targetGroups.length === 1 ? '' : 's'} — Save, then Publish`)
+    setVariantPicker(null)
   }
 
   function handleCopyRow(groupValue: string, toMarketplace: string) {
@@ -851,6 +869,9 @@ export default function AmazonPanel({
                     })
                 : undefined
             }
+            onCopyCellsToVariants={
+              amazon.variantGroups.length >= 2 ? (cells) => setVariantPicker({ cells }) : undefined
+            }
             onClearRow={handleClearRow}
             onCellFileDrop={handleCellFileDrop}
             onCellRevert={handleRevertCell}
@@ -966,6 +987,17 @@ export default function AmazonPanel({
           whatLabel={copyPicker.label}
           onConfirm={runCopy}
           onClose={() => setCopyPicker(null)}
+        />
+      )}
+
+      {variantPicker && (
+        <CopyToVariantsModal
+          sourceLabel={variantPicker.cells.length === 1 ? '1 image' : `${variantPicker.cells.length} images`}
+          targetOptions={amazon.variantGroups
+            .map((g) => g.groupValue)
+            .filter((g) => !variantPicker.cells.some((c) => c.group === g))}
+          onConfirm={runVariantCopy}
+          onClose={() => setVariantPicker(null)}
         />
       )}
 
