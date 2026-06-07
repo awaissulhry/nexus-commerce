@@ -26,9 +26,9 @@ async function resolveCtx(marketplace: string): Promise<{ profileId: string; reg
   return conn ? { profileId: conn.profileId, region: (conn.region as AdsRegion) ?? 'EU' } : null
 }
 
-async function audit(actionType: string, entityType: string, entityId: string, payloadAfter: object, userId?: string) {
+async function audit(actionType: string, entityType: string, entityId: string, payloadAfter: object, userId?: string, payloadBefore: object = {}) {
   await prisma.advertisingActionLog.create({
-    data: { userId: userId ?? null, actionType, entityType, entityId, payloadBefore: {}, payloadAfter, amazonResponseStatus: 'SUCCESS' },
+    data: { userId: userId ?? null, actionType, entityType, entityId, payloadBefore, payloadAfter, amazonResponseStatus: 'SUCCESS' },
   }).catch(() => {})
 }
 
@@ -219,6 +219,8 @@ export async function updatePlacementBidding(input: PlacementBiddingInput): Prom
   const adjustments = input.adjustments
     .filter((a) => a.placement)
     .map((a) => ({ placement: a.placement, percentage: Math.max(0, Math.min(900, Math.round(a.percentage))) }))
+  // D1 — snapshot the prior placement bias so a mis-firing change can be rolled back.
+  const priorAdjustments = ((c.dynamicBidding as { placementBidding?: Array<{ placement: string; percentage: number }> })?.placementBidding) ?? []
   const db = { ...((c.dynamicBidding as Record<string, unknown>) ?? {}), placementBidding: adjustments }
   let mode = 'local'
   if (c.externalCampaignId && c.marketplace) {
@@ -236,7 +238,7 @@ export async function updatePlacementBidding(input: PlacementBiddingInput): Prom
     }
   }
   await prisma.campaign.update({ where: { id: input.campaignId }, data: { dynamicBidding: db as never, ...(input.biddingStrategy ? { biddingStrategy: input.biddingStrategy === 'autoForSales' ? 'AUTO_FOR_SALES' : input.biddingStrategy === 'manual' ? 'MANUAL' : 'LEGACY_FOR_SALES' } : {}) } })
-  await audit('update_placement_bidding', 'CAMPAIGN', input.campaignId, { adjustments, mode }, input.userId)
+  await audit('update_placement_bidding', 'CAMPAIGN', input.campaignId, { adjustments, mode }, input.userId, { adjustments: priorAdjustments })
   logger.info('[AX2.2] updatePlacementBidding', { campaignId: input.campaignId, adjustments, mode })
   return { ok: true, adjustments, mode }
 }

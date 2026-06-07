@@ -235,7 +235,15 @@ export async function runRankDefendOnce(opts: { dryRun?: boolean; onlyPlanId?: s
       // a real run auto-pause it so it can't fan out to an unexpected fleet.
       if (plan.maxCampaigns != null && camps.length > plan.maxCampaigns) {
         logger.warn('[rank-defend] plan exceeds maxCampaigns — refusing', { planId: plan.id, resolved: camps.length, max: plan.maxCampaigns })
-        if (!dryRun) { try { await prisma.productRankPlan.update({ where: { id: plan.id }, data: { enabled: false, pausedAt: new Date(), lastSummary: { at: new Date().toISOString(), autoPaused: true, reason: `family resolved to ${camps.length} campaigns > maxCampaigns ${plan.maxCampaigns}` } as never } }) } catch { /* best-effort */ } }
+        if (!dryRun) {
+          try { await prisma.productRankPlan.update({ where: { id: plan.id }, data: { enabled: false, pausedAt: new Date(), lastSummary: { at: new Date().toISOString(), autoPaused: true, reason: `family resolved to ${camps.length} campaigns > maxCampaigns ${plan.maxCampaigns}` } as never } }) } catch { /* best-effort */ }
+          // D2 — surface the blast-radius auto-pause instead of only logging: a plan that silently
+          // disarms itself (e.g. an ASIN match fanned out to a fleet) must reach the operator.
+          try {
+            const { notifyAutomation } = await import('../services/advertising/ads-automation-notify.service.js')
+            await notifyAutomation({ type: 'rank_plan_mistarget', severity: 'danger', title: 'Rank plan auto-paused — blast-radius guard', body: `A rank plan resolved to ${camps.length} campaigns (cap ${plan.maxCampaigns}) for ${plan.marketplace} and was auto-disabled before it could fan out. Re-scope the plan's product/ASIN match, then re-enable.`, href: '/marketing/ads-console/rank?mode=plan', meta: { planId: plan.id, productId: plan.productId, marketplace: plan.marketplace, resolved: camps.length, max: plan.maxCampaigns } })
+          } catch { /* notify is best-effort */ }
+        }
         continue
       }
       planFamilies.push({ plan, campaigns: camps })

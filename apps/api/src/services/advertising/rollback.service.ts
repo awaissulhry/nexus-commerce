@@ -75,6 +75,15 @@ async function reverseOne(
   }
 
   try {
+    // D1 — placement-bias rollback (the rank engine's main lever). actionType-specific because the
+    // entity is CAMPAIGN but the affected field is dynamicBidding.placementBidding, not budget/status.
+    if (log.actionType === 'update_placement_bidding') {
+      const beforeAdj = before.adjustments as Array<{ placement: string; percentage: number }> | undefined
+      if (!Array.isArray(beforeAdj)) return { ok: true, skipped: true, reason: 'no prior placement snapshot to restore' }
+      const { updatePlacementBidding } = await import('./ads-create.service.js')
+      const r = await updatePlacementBidding({ campaignId: log.entityId, adjustments: beforeAdj })
+      return r.ok ? { ok: true } : { ok: false, reason: 'placement restore failed' }
+    }
     if (log.entityType === 'CAMPAIGN') {
       // Build patch from before-snapshot fields the action affected.
       const after = log.payloadAfter as Record<string, unknown>
