@@ -29,11 +29,17 @@ export default function ImagePickerModal({ productId, masterImages, onSelect, on
     try {
       const fd = new FormData()
       fd.append('file', files[0])
-      const res = await beFetch(`/api/products/${productId}/images?type=ALT`, {
+      // force=true so a near-duplicate of an existing gallery image isn't
+      // rejected (409) — the operator explicitly chose to upload this one. The
+      // POST creates the master ProductImage (the hub), then onSelect assigns it.
+      const res = await beFetch(`/api/products/${productId}/images?type=ALT&force=true`, {
         method: 'POST',
         body: fd,
       })
-      if (!res.ok) throw new Error(`Upload failed: ${res.status}`)
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body?.error ? `Upload failed: ${body.error}` : `Upload failed (${res.status})`)
+      }
       const created: ProductImage = await res.json()
       onSelect(created.url, created.id)
       onClose()
