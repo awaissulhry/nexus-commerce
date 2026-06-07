@@ -75,6 +75,37 @@ hold), **Gradual** (ramp ±15), **Chase** (climb to 300 when winning), **Push** 
 to 300). Built-ins ship with no Ceiling, so own-top/defend **snap to their Placement % and
 hold** (100% / 50%); raise a Ceiling to opt a target back into rank-chasing.
 
+## Blended placements (BL) — Top + Rest of Search + Product pages in ONE window
+
+By default a target drives a **single** search placement and zeros the other (Top XOR
+Rest), and never Product pages. A **blended** target drives **all three at once**. Set
+`RankTarget.lanes` (BL.1 schema) to a per-placement array; the engine
+(`decideAndMaybeApply`, BL.2) then runs `computeStep` **per lane** with that placement's
+own feedback signal and writes them in **one combined `placementBidding` push**
+(`buildBlendedAdjustments`, BL.3 — declared lanes coexist, a dropped lane → 0, foreign
+placements preserved, no-churn diff). Per-lane signal availability is asymmetric and
+labelled honestly in the UI:
+
+| Lane | Bias control | Closed-loop chase signal |
+|---|---|---|
+| **Top of Search** | ✅ 0–900% | ✅ Amazon Top-of-Search IS (real) |
+| **Rest of Search** | ✅ 0–900% | 🟡 SQP brand impression share (approx, RM2) |
+| **Product pages** | ✅ 0–900% | 🔴 none → set-and-hold (open-loop) |
+
+Plus a **base-bid lever** (`bidMode`): `hold` (default, don't touch), `absolute` (set the
+**ad-group default bid** to `bidValueCents`; the placement % stack on it), or `suppress`
+(floor to ~2¢, placements stay set). `deltaPct` (±% per-keyword) is reserved — it needs
+baseline memory, a safe follow-up. **Amazon math:** effective bid(placement) = base bid ×
+(1 + placement %); the editor shows the **effective bid per lane** live (BL.5) so stacking
+is visible. Caveat: Amazon enforces only ONE campaign-level ACOS/strategy — a per-lane
+ACOS cap is **advisory** (eases that lane), the family ACOS cap stays the real guardrail.
+
+Edited in **✎ Edit targets → Global defaults → ▸ Blend** (`RankBlendEditor.tsx`, BL.4):
+toggle each placement, set its bias/ceiling/IS, pick the base-bid mode. **Empty lanes =
+single-placement (legacy)** — fully backward compatible, opt-in. Per-product scope
+overrides still apply to the flat single-placement fields (lane-level overrides are a
+follow-up).
+
 ## API (`apps/api/src/routes/advertising.routes.ts`)
 
 - `GET/POST /advertising/rank-plans`, `GET/PATCH/DELETE /advertising/rank-plans/:id` — CRUD (POST 409 on dup per `@@unique`).
