@@ -93,18 +93,24 @@ labelled honestly in the UI:
 | **Product pages** | ✅ 0–900% | 🔴 none → set-and-hold (open-loop) |
 
 Plus a **base-bid lever** (`bidMode`): `hold` (default, don't touch), `absolute` (set the
-**ad-group default bid** to `bidValueCents`; the placement % stack on it), or `suppress`
-(floor to ~2¢, placements stay set). `deltaPct` (±% per-keyword) is reserved — it needs
-baseline memory, a safe follow-up. **Amazon math:** effective bid(placement) = base bid ×
-(1 + placement %); the editor shows the **effective bid per lane** live (BL.5) so stacking
-is visible. Caveat: Amazon enforces only ONE campaign-level ACOS/strategy — a per-lane
-ACOS cap is **advisory** (eases that lane), the family ACOS cap stays the real guardrail.
+**ad-group default bid** to `bidValueCents`; the placement % stack on it), `deltaPct`
+(BL.7 — scale **every keyword + ad-group bid** by `bidDeltaPct` % from a STABLE baseline
+`AdGroup/AdTarget.baseBidFromCents`, so repeated cron ticks never compound and it reverts
+to baseline verbatim when the directive clears — the dayparting "bid +15% in peak"
+lever that preserves per-keyword tuning), or `suppress` (floor to ~2¢, placements stay
+set). **Amazon math:** effective bid(placement) = base bid × (1 + placement %); the editor
+shows the **effective bid per lane** live (BL.5) so stacking is visible. Caveat: Amazon
+enforces only ONE campaign-level ACOS/strategy — a per-lane ACOS cap is **advisory** (eases
+that lane), the family ACOS cap stays the real guardrail.
 
-Edited in **✎ Edit targets → Global defaults → ▸ Blend** (`RankBlendEditor.tsx`, BL.4):
-toggle each placement, set its bias/ceiling/IS, pick the base-bid mode. **Empty lanes =
-single-placement (legacy)** — fully backward compatible, opt-in. Per-product scope
-overrides still apply to the flat single-placement fields (lane-level overrides are a
-follow-up).
+Edited in **✎ Edit targets → ▸ Blend** (`RankBlendEditor.tsx`, BL.4): toggle each
+placement, set its bias/ceiling/IS, pick the base-bid mode. **Empty lanes =
+single-placement (legacy)** — fully backward compatible, opt-in. **Per-campaign / per-product
+blends (BL.9):** the Blend drawer opens in the scope view too, staging a `{scope}`-specific
+blend into the override map (`applyTargetOverrides` merges per-scope `lanes` + base-bid; a
+campaign's own blend wins over the global target — badge shows `blend ×N*`). The live
+per-placement decision (Top 100→150% · Rest 0→50% · base €0.50) is surfaced in the cockpit
+family list + plan preview (BL.8).
 
 ## API (`apps/api/src/routes/advertising.routes.ts`)
 
