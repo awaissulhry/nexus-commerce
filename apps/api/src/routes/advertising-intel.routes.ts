@@ -269,6 +269,50 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
     return { ok: true, started: true, marketplace: b.marketplace, note: 'ingest running in background; poll GET /advertising/search-query-performance for results' }
   })
 
+  // ── RM4 — AMS (Amazon Marketing Stream) subscription management. Creating the hourly perf-dataset
+  // subscriptions (sp-traffic + sp-conversion) is what makes Amazon push hourly data → SQS →
+  // AmazonAdsHourlyPerformance → the rank loss-proxy + intraday spend circuit-breaker. Until a
+  // subscription exists, hourlyRows stays 0 and those signals are inert. ──────────────────────────
+  const amsRegionFor = (m?: string | null): 'NA' | 'EU' | 'FE' =>
+    !m ? 'EU' : ['US', 'CA', 'MX', 'BR'].includes(m) ? 'NA' : ['JP', 'AU', 'SG', 'IN'].includes(m) ? 'FE' : 'EU'
+
+  fastify.get('/advertising/ams/status', async (_request, reply) => {
+    const { amsStatus } = await import('../services/advertising/ads-marketing-stream.service.js')
+    reply.header('Cache-Control', 'no-store')
+    return amsStatus()
+  })
+
+  fastify.get('/advertising/ams/subscriptions', async (request, reply) => {
+    const q = (request.query ?? {}) as { marketplace?: string }
+    const { listAmsSubscriptions } = await import('../services/advertising/ads-marketing-stream.service.js')
+    const conns = await prisma.amazonAdsConnection.findMany({ where: { isActive: true, ...(q.marketplace ? { marketplace: q.marketplace } : {}) }, select: { marketplace: true, profileId: true } })
+    const out: Record<string, unknown> = {}
+    for (const c of conns) { try { out[c.marketplace] = await listAmsSubscriptions(c.profileId, amsRegionFor(c.marketplace)) } catch (e) { out[c.marketplace] = { error: (e as Error).message } } }
+    return out
+  })
+
+  // Create the sp-traffic + sp-conversion subscriptions for active production connections.
+  // Idempotent — lists first + skips datasets already subscribed. Hourly data then flows over the
+  // next hour(s) as Amazon delivers it to the SQS queue the poller already drains.
+  fastify.post('/advertising/ams/subscribe', async (request, reply) => {
+    const b = (request.body ?? {}) as { marketplace?: string }
+    const { createAmsSubscription, listAmsSubscriptions, AMS_DATASETS } = await import('../services/advertising/ads-marketing-stream.service.js')
+    const conns = await prisma.amazonAdsConnection.findMany({ where: { isActive: true, mode: 'production', ...(b.marketplace ? { marketplace: b.marketplace } : {}) }, select: { marketplace: true, profileId: true } })
+    if (!conns.length) { reply.status(400); return { error: `no active production AmazonAdsConnection${b.marketplace ? ` for ${b.marketplace}` : ''}` } }
+    const results: Array<{ marketplace: string; dataSetId: string; status: string; detail?: string }> = []
+    for (const c of conns) {
+      const region = amsRegionFor(c.marketplace)
+      let have = new Set<string>()
+      try { const ls = (await listAmsSubscriptions(c.profileId, region)) as { subscriptions?: Array<{ dataSetId?: string }> }; have = new Set((ls?.subscriptions ?? []).map((s) => s.dataSetId ?? '')) } catch { /* list best-effort */ }
+      for (const ds of AMS_DATASETS) {
+        if (have.has(ds)) { results.push({ marketplace: c.marketplace, dataSetId: ds, status: 'already_subscribed' }); continue }
+        try { await createAmsSubscription({ profileId: c.profileId, region, dataSetId: ds }); results.push({ marketplace: c.marketplace, dataSetId: ds, status: 'created' }) }
+        catch (e) { results.push({ marketplace: c.marketplace, dataSetId: ds, status: 'error', detail: (e as Error).message }) }
+      }
+    }
+    return { results }
+  })
+
   // Fleet view — every advertised product's target ACOS, revenue-ranked.
   fastify.get('/advertising/target-acos/fleet', async (request, reply) => {
     const q = request.query as { marketplace?: string; windowDays?: string; mode?: string }
