@@ -14,7 +14,8 @@ const { findUnique, updateJob, getSpClient } = vi.hoisted(() => ({
 vi.mock('../db.js', () => ({ default: { amazonFlatFileFeedJob: { findUnique, update: updateJob } } }))
 vi.mock('../lib/amazon-sp-client.js', () => ({ getAmazonSpClient: getSpClient }))
 
-import { parseProcessingReport, backoffMs, reconcileFeedJob } from './amazon-flat-file-feed.service.js'
+import { gzipSync } from 'node:zlib'
+import { parseProcessingReport, backoffMs, reconcileFeedJob, decodeReportBytes } from './amazon-flat-file-feed.service.js'
 
 describe('parseProcessingReport — JSON_LISTINGS_FEED (issues[]/summary)', () => {
   const report = JSON.stringify({
@@ -118,6 +119,32 @@ describe('parseProcessingReport — pending vs confirmed (false-positive guard)'
       summary: { errors: 1, warnings: 0, messagesProcessed: 1, messagesAccepted: 0, messagesInvalid: 1 },
     })
     const { pending, summary } = parseProcessingReport(r, ['A'])
+    expect(pending).toBeFalsy()
+    expect(summary.messagesWithError).toBe(1)
+    expect(summary.messagesSuccessful).toBe(0)
+  })
+})
+
+// THE root cause: Amazon serves the processing report GZIP-compressed and we read
+// it as plain text → garbled → unparseable → every feed looked "accepted".
+describe('decodeReportBytes — gzip report decompression', () => {
+  const reject = JSON.stringify({
+    issues: [{ sku: 'A', code: '90220', severity: 'ERROR', message: 'outer required' }],
+    summary: { errors: 1, warnings: 0, messagesProcessed: 1, messagesAccepted: 0, messagesInvalid: 1 },
+  })
+
+  it('gunzips a GZIP-declared body', () => {
+    expect(decodeReportBytes(gzipSync(Buffer.from(reject)), 'GZIP')).toBe(reject)
+  })
+  it('gunzips by magic bytes (1f 8b) even when algorithm is absent', () => {
+    expect(decodeReportBytes(gzipSync(Buffer.from(reject)), undefined)).toBe(reject)
+  })
+  it('returns plain (uncompressed) text unchanged', () => {
+    expect(decodeReportBytes(Buffer.from(reject), undefined)).toBe(reject)
+  })
+  it('end-to-end: gzip bytes → decode → parse → REAL rejection (no false success)', () => {
+    const text = decodeReportBytes(gzipSync(Buffer.from(reject)), 'GZIP')
+    const { pending, summary } = parseProcessingReport(text, ['A'])
     expect(pending).toBeFalsy()
     expect(summary.messagesWithError).toBe(1)
     expect(summary.messagesSuccessful).toBe(0)

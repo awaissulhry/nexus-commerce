@@ -12,6 +12,7 @@
  * tab-delimited fallbacks kept for safety.
  */
 
+import { gunzipSync } from 'node:zlib'
 import prisma from '../db.js'
 import { getAmazonSpClient } from '../lib/amazon-sp-client.js'
 import { logger } from '../utils/logger.js'
@@ -175,17 +176,30 @@ export function backoffMs(pollCount: number): number {
 }
 
 /**
- * Download the processing report with a hard timeout. Amazon's report-document
- * URLs expire/stall, and an unbounded fetch here could hang the whole reconcile
- * (manual poll or cron) until the gateway 502'd. AbortController guarantees a
- * bounded wall-clock cost regardless of Amazon's CDN.
+ * Decode a processing-report document body. Amazon serves the JSON_LISTINGS_FEED
+ * report GZIP-compressed; reading it as plain text yields garbled bytes →
+ * JSON.parse fails → the per-SKU results are lost and the feed wrongly looks
+ * "accepted" (the root cause of the false-positive). Decompress by the declared
+ * algorithm OR by gzip magic bytes (1f 8b) as a fallback. Mirrors the proven
+ * amazon-image-feed / ads-reports decode path.
  */
-async function fetchReportText(url: string, timeoutMs: number): Promise<string> {
+export function decodeReportBytes(buf: Buffer, compressionAlgorithm?: string): string {
+  const isGzip = compressionAlgorithm === 'GZIP' || (buf.length > 1 && buf[0] === 0x1f && buf[1] === 0x8b)
+  return isGzip ? gunzipSync(buf).toString('utf-8') : buf.toString('utf-8')
+}
+
+/**
+ * Download the processing report with a hard timeout, then decode it (gunzip if
+ * needed). Amazon's report-document URLs expire/stall, and an unbounded fetch
+ * here could hang the whole reconcile (manual poll or cron) until the gateway
+ * 502'd. AbortController guarantees a bounded wall-clock cost.
+ */
+async function fetchReportText(url: string, compressionAlgorithm: string | undefined, timeoutMs: number): Promise<string> {
   const ctrl = new AbortController()
   const timer = setTimeout(() => ctrl.abort(), timeoutMs)
   try {
     const res = await fetch(url, { signal: ctrl.signal })
-    return await res.text()
+    return decodeReportBytes(Buffer.from(await res.arrayBuffer()), compressionAlgorithm)
   } finally {
     clearTimeout(timer)
   }
@@ -248,7 +262,7 @@ export async function reconcileFeedJob(feedId: string, opts?: { force?: boolean 
   if (terminal && resultDocId) {
     try {
       const docRes: any = await sp.callAPI({ operation: 'getFeedDocument', endpoint: 'feeds', path: { feedDocumentId: resultDocId } })
-      const reportText = await fetchReportText(docRes.url, 20_000)
+      const reportText = await fetchReportText(docRes.url, docRes.compressionAlgorithm, 20_000)
       const parsed = parseProcessingReport(reportText, (job?.skus as string[] | undefined) ?? undefined)
       if (parsed.pending) {
         reportPending = true
