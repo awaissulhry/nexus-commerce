@@ -25,6 +25,7 @@ import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import { resolveAmazonImages } from './amazon-image-feed.service.js'
 import { validateAmazonPublish } from './amazon-publish-validator.service.js'
+import { resolveSlotTaxonomy } from './amazon-slot-taxonomy.service.js'
 
 export const ALL_AMAZON_MARKETPLACES = ['IT', 'DE', 'FR', 'ES', 'UK'] as const
 type Marketplace = typeof ALL_AMAZON_MARKETPLACES[number]
@@ -104,13 +105,20 @@ async function runMarketplace(
   variantIds: string[] | undefined,
   folderPrefix: string,
   filenameTemplate: FilenameTemplate,
+  productType: string,
 ): Promise<MarketplaceRunResult> {
+  // Resolve the FULL writable slot taxonomy (incl. PS / safety-data-sheet
+  // locators) so the export covers every slot the publish would. Without the
+  // explicit slot list, resolveAmazonImages defaults to MAIN/PT/SWCH only and
+  // silently drops PS images — the export then looks complete but isn't.
+  const taxonomy = await resolveSlotTaxonomy(marketplace, productType)
   const [resolved, validation] = await Promise.all([
     resolveAmazonImages(
       productId,
       marketplace,
       variantIds,
       activeAxis ?? undefined,
+      taxonomy.slots.map((s) => s.slot),
     ),
     validateAmazonPublish({
       productId,
@@ -182,9 +190,10 @@ export async function generateAmazonZip(
 
   const product = await prisma.product.findUnique({
     where: { id: productId },
-    select: { sku: true, imageAxisPreference: true },
+    select: { sku: true, imageAxisPreference: true, productType: true },
   })
   if (!product) throw new Error(`Product ${productId} not found`)
+  const productType = product.productType ?? 'PRODUCT'
 
   // IA.1 — Honor the operator's chosen axis. Falls back to the
   // product's stored preference so a script-driven export still
@@ -203,7 +212,7 @@ export async function generateAmazonZip(
     // onto Seller Central's bulk-upload page without colliding ASINs
     // that sell on multiple markets.
     for (const m of ALL_AMAZON_MARKETPLACES) {
-      const r = await runMarketplace(zip, productId, m, activeAxis, variantIds, `${m}/`, filenameTemplate)
+      const r = await runMarketplace(zip, productId, m, activeAxis, variantIds, `${m}/`, filenameTemplate, productType)
       totalFileCount += r.fileCount
       allSkipped.push(...r.skippedNoAsin.map((sku) => `${m}/${sku}`))
       allErrors.push(...r.errors)
@@ -212,7 +221,7 @@ export async function generateAmazonZip(
     if (!ALL_AMAZON_MARKETPLACES.includes(mkt as Marketplace)) {
       throw new Error(`Invalid marketplace: ${marketplace}`)
     }
-    const r = await runMarketplace(zip, productId, mkt as Marketplace, activeAxis, variantIds, '', filenameTemplate)
+    const r = await runMarketplace(zip, productId, mkt as Marketplace, activeAxis, variantIds, '', filenameTemplate, productType)
     totalFileCount = r.fileCount
     allSkipped.push(...r.skippedNoAsin)
     allErrors.push(...r.errors)
@@ -259,18 +268,20 @@ export async function buildAmazonZipManifest(input: {
   const mkt = input.marketplace.toUpperCase()
   const product = await prisma.product.findUnique({
     where: { id: input.productId },
-    select: { imageAxisPreference: true },
+    select: { imageAxisPreference: true, productType: true },
   })
   if (!product) throw new Error(`Product ${input.productId} not found`)
   const activeAxis = input.activeAxis ?? product.imageAxisPreference ?? null
+  const productType = product.productType ?? 'PRODUCT'
   const markets: Marketplace[] = mkt === 'ALL'
     ? [...ALL_AMAZON_MARKETPLACES]
     : [mkt as Marketplace]
 
   const perMarket: ZipManifestMarket[] = []
   for (const m of markets) {
+    const taxonomy = await resolveSlotTaxonomy(m, productType)
     const [resolved, validation] = await Promise.all([
-      resolveAmazonImages(input.productId, m, input.variantIds, activeAxis ?? undefined),
+      resolveAmazonImages(input.productId, m, input.variantIds, activeAxis ?? undefined, taxonomy.slots.map((s) => s.slot)),
       validateAmazonPublish({ productId: input.productId, marketplace: m, activeAxis, variantIds: input.variantIds }),
     ])
     const withAsin = resolved.filter((v) => v.amazonAsin)
