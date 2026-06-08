@@ -38,6 +38,7 @@ export interface PipelineHealth {
   deliveryStale?: boolean
   schedulingStalled?: boolean
   maxDeliveredAgeDays?: number | null
+  overdueUndelivered?: number
   schedulingBacklog?: number
   warnings?: string[]
 }
@@ -118,7 +119,7 @@ export function PipelineHealthBanner({ health }: { health: PipelineHealth }) {
                   health.crons.find((c) => c.jobName === 'review-request-mailer')?.lastSuccessAt ??
                     null,
                 )}
-                . Expected every 4h. Check{' '}
+                . Expected hourly. Check{' '}
                 <code className="px-1 py-0.5 rounded bg-rose-100 dark:bg-rose-900/40">
                   NEXUS_ENABLE_REVIEW_INGEST=1
                 </code>{' '}

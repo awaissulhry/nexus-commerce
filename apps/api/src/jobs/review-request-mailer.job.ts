@@ -430,10 +430,37 @@ export async function runReviewMailerOnce(): Promise<MailerTickResult> {
     }
   }
 
+  // RRL.3 — self-monitor. This tick already swept deliveredAt and
+  // scheduled. If the pipeline's OUTPUT is still starved (deliveredAt not
+  // advancing while orders ship, or a scheduling backlog), something
+  // upstream broke — emit a loud, dated, actionable log.error EVERY HOUR
+  // so a silent stall (the failure that hid for days) becomes immediately
+  // visible in observability without anyone opening the dashboard.
+  let pipelineWarn = ''
+  try {
+    const { computeReviewPipelineFreshness } = await import('../services/reviews/review-pipeline-health.service.js')
+    const f = await computeReviewPipelineFreshness()
+    if (f.deliveryStale || f.schedulingStalled) {
+      pipelineWarn = ` PIPELINE_ALERT[${f.warnings.join(' | ')}]`
+      logger.error('[review-mailer] pipeline starvation detected after tick', {
+        deliveryStale: f.deliveryStale,
+        schedulingStalled: f.schedulingStalled,
+        maxDeliveredAgeDays: f.maxDeliveredAgeDays,
+        schedulingBacklog: f.schedulingBacklog,
+        recentShipped: f.recentShipped,
+        warnings: f.warnings,
+      })
+    }
+  } catch (err) {
+    logger.warn('[review-mailer] freshness self-check failed', {
+      error: err instanceof Error ? err.message : String(err),
+    })
+  }
+
   const durationMs = Date.now() - startedAt
   lastRunAt = new Date()
   const retried = retriedRows.count
-  lastSummary = `deliverySwept=${deliverySwept} scheduled=${scheduleResult.scheduled} retried=${retried} due=${due.length} sent=${sent} sentimentEmails=${sentimentEmailsSent} failed=${failed} skipped=${skipped} durationMs=${durationMs}`
+  lastSummary = `deliverySwept=${deliverySwept} scheduled=${scheduleResult.scheduled} retried=${retried} due=${due.length} sent=${sent} sentimentEmails=${sentimentEmailsSent} failed=${failed} skipped=${skipped} durationMs=${durationMs}${pipelineWarn}`
   return { deliverySwept, scheduled: scheduleResult.scheduled, retried, due: due.length, sent, sentimentEmails: sentimentEmailsSent, failed, skipped, durationMs }
 }
 

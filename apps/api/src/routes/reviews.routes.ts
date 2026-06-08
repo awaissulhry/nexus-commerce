@@ -1210,6 +1210,7 @@ const reviewsRoutes: FastifyPluginAsync = async (fastify) => {
       deliveryStale: freshness.deliveryStale,
       schedulingStalled: freshness.schedulingStalled,
       maxDeliveredAgeDays: freshness.maxDeliveredAgeDays,
+      overdueUndelivered: freshness.overdueUndelivered,
       schedulingBacklog: freshness.schedulingBacklog,
       warnings: freshness.warnings,
     }
