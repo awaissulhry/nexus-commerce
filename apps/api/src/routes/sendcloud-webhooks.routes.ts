@@ -324,9 +324,15 @@ export async function sendcloudWebhookRoutes(app: FastifyInstance) {
             })
           }
           if (newStatus === 'DELIVERED') {
+            // RRL.4 — stamp source=CARRIER_WEBHOOK. This is a REAL delivery
+            // confirmation (a carrier "delivered" scan), so it must be marked
+            // authoritative — otherwise the review pipeline's hourly ship+3d
+            // estimate sweep (which fills unsourced rows) would overwrite this
+            // real timestamp with a guess. CARRIER_WEBHOOK outranks the
+            // heuristic in canOverwriteWithHeuristic(), so this stays put.
             await prisma.order.updateMany({
               where: { id: shipment.order.id, deliveredAt: null },
-              data: { deliveredAt: occurredAt },
+              data: { deliveredAt: occurredAt, deliveredAtSource: 'CARRIER_WEBHOOK' },
             })
           }
         }

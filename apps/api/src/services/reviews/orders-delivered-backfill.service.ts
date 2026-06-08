@@ -167,9 +167,15 @@ export async function applyShipDeliveryHeuristic(): Promise<{ scanned: number; u
       deletedAt: null,
       status: 'SHIPPED',
       shippedAt: { not: null, gte: since },
-      // Only fill where we don't already have an authoritative date. Legacy
-      // HEURISTIC_FBM_5D rows are included so they recompute to the new 3d value.
-      OR: [{ deliveredAtSource: null }, { deliveredAtSource: { in: ['HEURISTIC_FBA_3D', 'HEURISTIC_FBM_3D', 'HEURISTIC_FBM_5D'] } }],
+      // RRL.4 — only ESTIMATE when there is genuinely no delivery date yet, or
+      // when refreshing our own prior estimate. Previously this matched
+      // `deliveredAtSource: null`, which also caught rows that already have a
+      // REAL deliveredAt written without a source (e.g. the Sendcloud
+      // CARRIER_WEBHOOK path before RRL.4) — the hourly sweep would clobber that
+      // real date with the ship+3bd guess. Keying the first clause off
+      // `deliveredAt: null` preserves any existing date; legacy HEURISTIC_FBM_5D
+      // rows still recompute to the new 3d value via the second clause.
+      OR: [{ deliveredAt: null }, { deliveredAtSource: { in: ['HEURISTIC_FBA_3D', 'HEURISTIC_FBM_3D', 'HEURISTIC_FBM_5D'] } }],
     },
     select: { id: true, shippedAt: true, fulfillmentMethod: true, deliveredAt: true, deliveredAtSource: true },
   })
