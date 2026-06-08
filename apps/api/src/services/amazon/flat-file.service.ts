@@ -323,6 +323,32 @@ export function buildSchemaEnumCodeMap(properties: Record<string, any>): Record<
   return result
 }
 
+/**
+ * Per-field scalar hints for the feed builder: which top-level fields are
+ * localized (their schema carries a `language_tag` property — only those should
+ * get a language_tag in the feed) and which are number/boolean typed (so the
+ * generic emit can coerce "5"→5 and "true"→true instead of submitting the
+ * strings Amazon rejects for typed attributes). Sub-properties are coerced inline
+ * in buildJsonFeedBody, so only top-level fields are classified here.
+ */
+export function buildSchemaFieldHints(properties: Record<string, any>): {
+  localizedFields: Set<string>; numericFields: Set<string>; booleanFields: Set<string>
+} {
+  const localizedFields = new Set<string>()
+  const numericFields = new Set<string>()
+  const booleanFields = new Set<string>()
+  for (const [fieldId, prop] of Object.entries(properties)) {
+    const p = prop as Record<string, any>
+    const itemProps: Record<string, any> = p?.items?.properties ?? {}
+    if (itemProps.language_tag) localizedFields.add(fieldId)
+    const valueNode = itemProps.value ?? p
+    const t = valueNode?.type ?? p?.type
+    if (t === 'number' || t === 'integer') numericFields.add(fieldId)
+    else if (t === 'boolean') booleanFields.add(fieldId)
+  }
+  return { localizedFields, numericFields, booleanFields }
+}
+
 /** Extract localised titles from schema properties into a flat map. */
 function buildSchemaLabels(properties: Record<string, any>): Record<string, string> {
   const map: Record<string, string> = {}
@@ -1107,18 +1133,23 @@ export class AmazonFlatFileService {
   }
 
   /**
-   * Per-field label→code map for a product type's enum fields, used to convert
-   * the editor's display labels (e.g. "Pakistan") back to Amazon's required
-   * codes (e.g. "PK") when building the JSON feed. Reuses the same cached schema
-   * generateManifest reads, so it costs nothing on a warm cache.
+   * Schema-derived hints for building a correct JSON feed: enum label→code map
+   * (convert "Pakistan"→"PK"), the set of localized fields (only these carry a
+   * language_tag), and number/boolean typed fields (coerce away string values).
+   * Reuses the same cached schema generateManifest reads — free on a warm cache.
    */
-  async getEnumCodeMap(marketplace: string, productType: string): Promise<Record<string, Record<string, string>>> {
+  async getFeedSchemaHints(marketplace: string, productType: string): Promise<{
+    enumCodeMap: Record<string, Record<string, string>>
+    localizedFields: Set<string>
+    numericFields: Set<string>
+    booleanFields: Set<string>
+  }> {
     const mp = marketplace.toUpperCase()
     const pt = productType.toUpperCase()
     const cached = await this.schemas.getSchema({ channel: 'AMAZON', marketplace: mp, productType: pt })
     const def = (cached.schemaDefinition ?? {}) as Record<string, any>
     const properties = (def.properties ?? {}) as Record<string, any>
-    return buildSchemaEnumCodeMap(properties)
+    return { enumCodeMap: buildSchemaEnumCodeMap(properties), ...buildSchemaFieldHints(properties) }
   }
 
   buildJsonFeedBody(
@@ -1126,19 +1157,45 @@ export class AmazonFlatFileService {
     marketplace: string,
     sellerId: string,
     expandedFields: Record<string, string> = {},
-    enumCodeMap: Record<string, Record<string, string>> = {},
+    feedSchema: {
+      enumCodeMap?: Record<string, Record<string, string>>
+      localizedFields?: Set<string>
+      numericFields?: Set<string>
+      booleanFields?: Set<string>
+    } = {},
   ): string {
     const mp = marketplace.toUpperCase()
     const marketplaceId = MARKETPLACE_ID_MAP[mp] ?? MARKETPLACE_ID_MAP.IT
     const languageTag = LANGUAGE_TAG_MAP[mp] ?? 'it_IT'
 
+    const enumCodeMap = feedSchema.enumCodeMap ?? {}
+    const numericFields = feedSchema.numericFields ?? new Set<string>()
+    const booleanFields = feedSchema.booleanFields ?? new Set<string>()
+    const localizedFields = feedSchema.localizedFields
+
     // Enum fields are shown in the editor as display LABELS (e.g. "Pakistan") but
     // Amazon's JSON feed requires the underlying CODE (e.g. "PK"). Convert
-    // label→code at emit time from the schema-derived map; a value that is
-    // already a code (or has no mapping) passes through unchanged. Keyed by the
+    // label→code; a value already a code (or unmapped) passes through. Keyed by
     // field id, or "field.sub" for sub-property enums (e.g. "closure.type").
     const toCode = (fieldKey: string, value: string): string =>
       enumCodeMap[fieldKey]?.[value] ?? value
+
+    // Generic top-level value: enum label→code, else schema-typed number/boolean
+    // coercion (Amazon rejects "5"/"true" strings where a number/boolean is
+    // required), else the raw string.
+    const emitValue = (fieldKey: string, raw: string): unknown => {
+      const coded = enumCodeMap[fieldKey]?.[raw]
+      if (coded !== undefined) return coded
+      if (numericFields.has(fieldKey)) { const n = Number(raw); return Number.isFinite(n) ? n : raw }
+      if (booleanFields.has(fieldKey)) return raw === 'true' || raw === 'TRUE' || raw === '1'
+      return raw
+    }
+
+    // Only localized fields carry a language_tag. With no schema (localizedFields
+    // undefined) keep the legacy behaviour (tag everything) so a missing schema
+    // never strips a real localized tag.
+    const isLocalized = (fieldKey: string): boolean =>
+      localizedFields ? localizedFields.has(fieldKey) : true
 
     // Fields with complex/explicit SP-API structure — handled case-by-case below
     const EXPLICIT_KEYS = new Set([
@@ -1234,8 +1291,11 @@ export class AmazonFlatFileService {
           attrs.fulfillment_availability = [fa]
         }
 
-        if (String(row.parentage_level).toLowerCase() === 'parent' && row.variation_theme) {
-          attrs.variation_theme = wrap(String(row.variation_theme))
+        if (String(row.parentage_level).toLowerCase() === 'parent') {
+          // HIGH-5 — a parent must declare its parentage_level, not just the
+          // variation theme, or Amazon won't register it as a variation parent.
+          attrs.parentage_level = [{ value: 'parent', marketplace_id: marketplaceId }]
+          if (row.variation_theme) attrs.variation_theme = wrap(String(row.variation_theme))
         }
         if (String(row.parentage_level).toLowerCase() === 'child' && row.parent_sku) {
           attrs.parentage_level              = [{ value: 'child', marketplace_id: marketplaceId }]
@@ -1276,15 +1336,19 @@ export class AmazonFlatFileService {
           if (k.includes('image_locator')) {
             attrs[k] = [{ media_location: String(v), marketplace_id: marketplaceId }]
           } else {
-            attrs[k] = [{ value: toCode(k, String(v)), marketplace_id: marketplaceId, language_tag: languageTag }]
+            const cell: Record<string, any> = { value: emitValue(k, String(v)), marketplace_id: marketplaceId }
+            if (isLocalized(k)) cell.language_tag = languageTag
+            attrs[k] = [cell]
           }
         }
         // Emit multi-instance arrays
         for (const [base, items] of Object.entries(pendingArrays)) {
           items.sort((a, b) => a.idx - b.idx)
-          attrs[base] = items.map((item) => ({
-            value: toCode(base, item.value), marketplace_id: marketplaceId, language_tag: languageTag,
-          }))
+          attrs[base] = items.map((item) => {
+            const cell: Record<string, any> = { value: toCode(base, item.value), marketplace_id: marketplaceId }
+            if (isLocalized(base)) cell.language_tag = languageTag
+            return cell
+          })
         }
         // Emit sub-property objects — convert any enum sub-value (e.g. closure.type,
         // apparel_size.size_system) from its display label to Amazon's code.

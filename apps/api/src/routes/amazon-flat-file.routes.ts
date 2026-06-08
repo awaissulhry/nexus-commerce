@@ -224,22 +224,36 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
       })
     }
 
-    // FFA — enum fields are edited as display labels (e.g. "Pakistan") but Amazon's
-    // JSON feed needs the codes (e.g. "PK"). Build a label→code map from the schema
-    // for every product type in the batch; a missing/failed schema submits as-is.
+    // FFA — schema-aware feed build: enum display labels→codes ("Pakistan"→"PK"),
+    // number/boolean coercion, and language_tag only on localized fields. Merge
+    // hints across every product type in the batch; a missing/failed schema
+    // submits values as-is (and tags everything, to never strip a real tag).
     const enumCodeMap: Record<string, Record<string, string>> = {}
+    const localizedFields = new Set<string>()
+    const numericFields = new Set<string>()
+    const booleanFields = new Set<string>()
     try {
       const productTypes = [...new Set(
         rows.map((r) => String(r.product_type ?? productType ?? '').toUpperCase()).filter(Boolean),
       )]
       for (const pt of productTypes) {
-        Object.assign(enumCodeMap, await flatFileService.getEnumCodeMap(mp, pt))
+        const h = await flatFileService.getFeedSchemaHints(mp, pt)
+        Object.assign(enumCodeMap, h.enumCodeMap)
+        h.localizedFields.forEach((f) => localizedFields.add(f))
+        h.numericFields.forEach((f) => numericFields.add(f))
+        h.booleanFields.forEach((f) => booleanFields.add(f))
       }
     } catch (err: any) {
-      request.log.warn({ err: err?.message }, 'flat-file/submit: enum code map unavailable — submitting values as-is')
+      request.log.warn({ err: err?.message }, 'flat-file/submit: schema hints unavailable — submitting values as-is')
     }
 
-    const body = flatFileService.buildJsonFeedBody(rows, mp, sellerId, expandedFields, enumCodeMap)
+    const body = flatFileService.buildJsonFeedBody(rows, mp, sellerId, expandedFields, {
+      enumCodeMap,
+      numericFields,
+      booleanFields,
+      // Only when we actually have schema data — otherwise tag everything (legacy).
+      localizedFields: localizedFields.size > 0 ? localizedFields : undefined,
+    })
 
     try {
       const sp = await getSpClient()

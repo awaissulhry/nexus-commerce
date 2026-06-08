@@ -11,7 +11,7 @@
  * the readback the way getExistingRows does.
  */
 import { describe, it, expect } from 'vitest'
-import { AmazonFlatFileService, isBlankFeedValue, applySnapshotOverlay, buildSchemaEnumCodeMap } from './flat-file.service.js'
+import { AmazonFlatFileService, isBlankFeedValue, applySnapshotOverlay, buildSchemaEnumCodeMap, buildSchemaFieldHints } from './flat-file.service.js'
 
 const svc = new AmazonFlatFileService({} as any, {} as any)
 // private but pure — call through an any-cast (same args syncRowsToPlatform uses)
@@ -190,8 +190,8 @@ describe('buildJsonFeedBody — operationType (partial vs full)', () => {
 // The feed must convert label→code from the schema-derived map.
 describe('enum label→code conversion (country_of_origin etc.)', () => {
   const svc3 = new AmazonFlatFileService({} as any, {} as any)
-  const build = (row: any, enumCodeMap: any) =>
-    JSON.parse(svc3.buildJsonFeedBody([row], 'IT', 'SELLER', {}, enumCodeMap)).messages[0]
+  const build = (row: any, feedSchema: any = {}) =>
+    JSON.parse(svc3.buildJsonFeedBody([row], 'IT', 'SELLER', {}, feedSchema)).messages[0]
 
   describe('buildSchemaEnumCodeMap', () => {
     it('pairs enum codes with enumNames labels (label→code)', () => {
@@ -210,7 +210,7 @@ describe('enum label→code conversion (country_of_origin etc.)', () => {
     })
   })
 
-  const coo = { country_of_origin: { Pakistan: 'PK', Italy: 'IT' } }
+  const coo = { enumCodeMap: { country_of_origin: { Pakistan: 'PK', Italy: 'IT' } } }
   it('converts a selected label to the Amazon code', () => {
     expect(build({ item_sku: 'C1', country_of_origin: 'Pakistan' }, coo).attributes.country_of_origin[0].value).toBe('PK')
   })
@@ -222,5 +222,55 @@ describe('enum label→code conversion (country_of_origin etc.)', () => {
   })
   it('no map → value unchanged (backward compatible)', () => {
     expect(build({ item_sku: 'C4', country_of_origin: 'Pakistan' }, {}).attributes.country_of_origin[0].value).toBe('Pakistan')
+  })
+})
+
+// Batch 2 — schema-typed coercion (MED-2), language_tag scoping (MED-1),
+// and the parent-row parentage_level emit (HIGH-5).
+describe('feed schema hints — types, localization, parent', () => {
+  const svc4 = new AmazonFlatFileService({} as any, {} as any)
+  const build = (row: any, feedSchema: any = {}) =>
+    JSON.parse(svc4.buildJsonFeedBody([row], 'IT', 'SELLER', {}, feedSchema)).messages[0]
+
+  describe('buildSchemaFieldHints', () => {
+    it('classifies localized / numeric / boolean fields from the schema', () => {
+      const props = {
+        item_name: { items: { properties: { value: { type: 'string' }, language_tag: {}, marketplace_id: {} } } },
+        thread_count: { items: { properties: { value: { type: 'integer' }, marketplace_id: {} } } },
+        is_waterproof: { items: { properties: { value: { type: 'boolean' }, marketplace_id: {} } } },
+        country_of_origin: { items: { properties: { value: { type: 'string', enum: ['PK'] }, marketplace_id: {} } } },
+      }
+      const h = buildSchemaFieldHints(props)
+      expect(h.localizedFields.has('item_name')).toBe(true)
+      expect(h.localizedFields.has('country_of_origin')).toBe(false)
+      expect(h.numericFields.has('thread_count')).toBe(true)
+      expect(h.booleanFields.has('is_waterproof')).toBe(true)
+    })
+  })
+
+  it('MED-2: numeric field coerced from string to number', () => {
+    const m = build({ item_sku: 'N1', thread_count: '5' }, { numericFields: new Set(['thread_count']) })
+    expect(m.attributes.thread_count[0].value).toBe(5)
+  })
+  it('MED-2: boolean field coerced from "true" to a real boolean', () => {
+    const m = build({ item_sku: 'N2', is_waterproof: 'true' }, { booleanFields: new Set(['is_waterproof']) })
+    expect(m.attributes.is_waterproof[0].value).toBe(true)
+  })
+  it('MED-1: language_tag only on localized fields when a schema is given', () => {
+    const m = build(
+      { item_sku: 'L1', material: 'Cordura', country_of_origin: 'PK' },
+      { localizedFields: new Set(['material']) },
+    )
+    expect(m.attributes.material[0].language_tag).toBe('it_IT')
+    expect(m.attributes.country_of_origin[0].language_tag).toBeUndefined()
+  })
+  it('MED-1: no schema → language_tag preserved on everything (legacy-safe)', () => {
+    const m = build({ item_sku: 'L2', material: 'Cordura' }, {})
+    expect(m.attributes.material[0].language_tag).toBe('it_IT')
+  })
+  it('HIGH-5: a parent row emits parentage_level=parent (+ theme)', () => {
+    const m = build({ item_sku: 'P1', parentage_level: 'Parent', variation_theme: 'SIZE', _isNew: true })
+    expect(m.attributes.parentage_level[0].value).toBe('parent')
+    expect(m.attributes.variation_theme[0].value).toBe('SIZE')
   })
 })

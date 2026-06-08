@@ -72,6 +72,16 @@ interface SubmissionResult {
   error: string | null
 }
 
+// Bullets are the only multi-instance columns buildRow emits — map bullet_point_N
+// → bullet_point so buildJsonFeedBody reassembles them into the bullet_point array
+// instead of emitting stray "bullet_point_1" attributes (HIGH-3).
+const COCKPIT_EXPANDED_FIELDS: Record<string, string> = {
+  bullet_point_1: 'bullet_point',
+  bullet_point_2: 'bullet_point',
+  bullet_point_3: 'bullet_point',
+  bullet_point_4: 'bullet_point',
+}
+
 /** Build a flat-file row from a ChannelListing + product. Pulls the
  *  same shape the flat-file editor would produce so the SP-API call
  *  receives identical attribute envelopes. */
@@ -79,8 +89,9 @@ function buildRow(args: {
   listing: any
   product: any
   marketplace: string
+  parentSku?: string | null
 }): Record<string, unknown> {
-  const { listing, product, marketplace } = args
+  const { listing, product, marketplace, parentSku } = args
   const platform = (listing.platformAttributes ?? {}) as Record<string, any>
   const attrs = (platform.attributes ?? {}) as Record<string, any>
 
@@ -193,7 +204,8 @@ function buildRow(args: {
   if (variationTheme) row.variation_theme = variationTheme
   if (product.parentId) {
     row.parentage_level = 'child'
-    row.parent_sku = product.parentId
+    // HIGH-4 — Amazon needs the parent's seller SKU, not our internal UUID.
+    if (parentSku) row.parent_sku = parentSku
   } else if (product.isParent) {
     row.parentage_level = 'parent'
   }
@@ -248,6 +260,17 @@ export default async function amazonCockpitPublishRoutes(
       return reply.code(404).send({ error: 'Product not found' })
     }
 
+    // HIGH-4 — resolve the parent's seller SKU once; buildRow needs the SKU, not
+    // the internal parentId UUID, for the child→parent variation relationship.
+    let parentSku: string | null = null
+    if (product.parentId) {
+      const parent = await prisma.product.findUnique({
+        where: { id: product.parentId },
+        select: { sku: true },
+      })
+      parentSku = parent?.sku ?? null
+    }
+
     // SP-API client is loaded once and reused across markets — the
     // SDK handles per-marketplace request routing via marketplaceIds.
     let sp: any = null
@@ -286,7 +309,7 @@ export default async function amazonCockpitPublishRoutes(
           continue
         }
 
-        const row = buildRow({ listing, product, marketplace: mp })
+        const row = buildRow({ listing, product, marketplace: mp, parentSku })
         if (dryRun) {
           submissions.push({
             ...result,
@@ -298,10 +321,21 @@ export default async function amazonCockpitPublishRoutes(
           continue
         }
 
+        // HIGH-3 — schema-aware build (enum codes, localized fields, number/bool
+        // coercion) + bullet expansion, so cockpit publishes match the flat-file
+        // path instead of submitting labels and stray bullet attributes.
+        let feedSchema: any = {}
+        try {
+          feedSchema = await flatFileService.getFeedSchemaHints(mp, String(row.product_type ?? ''))
+        } catch (err: any) {
+          request.log.warn({ err: err?.message, marketplace: mp }, 'cockpit publish: schema hints unavailable')
+        }
         const feedBody = flatFileService.buildJsonFeedBody(
           [row as any],
           mp,
           sellerId,
+          COCKPIT_EXPANDED_FIELDS,
+          feedSchema,
         )
 
         // Step 1: create feed document.
