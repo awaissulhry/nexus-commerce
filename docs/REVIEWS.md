@@ -154,8 +154,12 @@ The **Sentiment funnel** tile on the dashboard shows pending / positive / negati
 | `NEXUS_ENABLE_AMAZON_SOLICITATIONS=true` | Real Amazon Solicitations API calls | Dry-run only (SKIPPED with NOT_IMPLEMENTED). |
 | `NEXUS_ENABLE_OUTBOUND_EMAILS=true` | All emails (sentiment, eBay/Shopify, support) | Dry-run logs only. |
 | `RESEND_API_KEY=re_…` | Email transport | Email sends fail. |
-| `NEXUS_REVIEW_MAILER_SCHEDULE` (optional) | Override the default `0 */4 * * *` | Defaults to every 4h. |
-| `NEXUS_ORDERS_DELIVERED_BACKFILL_SCHEDULE` (optional) | Override the default `30 3 * * *` | Defaults to 03:30 UTC daily. |
+| `NEXUS_REVIEW_MAILER_SCHEDULE` (optional) | Override the default `0 * * * *` | Defaults to hourly. The hourly tick now also advances `deliveredAt` (RRL.2). |
+| `NEXUS_ORDERS_DELIVERED_BACKFILL_SCHEDULE` (optional) | Override the default `30 3 * * *` | Defaults to 03:30 UTC daily. Backstop only — the delivery sweep also runs hourly inside the mailer (RRL.2). |
+| `NEXUS_REVIEW_DELIVERY_OVERDUE_ALERT` (optional) | Starvation alert sensitivity — # of overdue-undelivered Amazon orders that trips the alert (RRL.3) | Defaults to `10`. |
+| `NEXUS_REVIEW_DELIVERY_OVERDUE_DAYS` (optional) | How many calendar days post-ship counts as "overdue" with no `deliveredAt` (RRL.3) | Defaults to `6` (weekend-proof vs the 3-business-day estimate). |
+| `NEXUS_REVIEW_SCHEDULING_BACKLOG_ALERT` (optional) | # of delivered-but-unscheduled orders (4–30d window) that trips the scheduling-stall alert | Defaults to `15`. |
+| `NEXUS_ENABLE_DELIVERED_REPORT_FETCH=1` (optional) | Also fetch the real Amazon all-orders report for authoritative Delivered dates in the daily backfill | Off — heuristic-only (the report returns ~0 Delivered rows for FBA and is slow). |
 | `NEXUS_SUPPORT_INBOX=support@xavia.it` | Where negative-feedback diversion emails route | Defaults to `support@xavia.it`. |
 | `NEXUS_WEB_URL` (optional) | Base URL for `/r/[token]/*` landing pages | Defaults to `https://nexus-commerce-three.vercel.app`. |
 | `SHOPIFY_REVIEW_DOMAIN` (optional) | Shopify review landing | Field blank in email. |
@@ -166,7 +170,9 @@ The **Sentiment funnel** tile on the dashboard shows pending / positive / negati
 
 | Symptom | Likely cause | Fix |
 |---|---|---|
-| Dashboard shows 0 scheduled despite many delivered orders | `Order.deliveredAt` not set on those orders | Wait for RV.7 cron (03:30 UTC daily). Or manually trigger via `/api/sync-logs/cron/orders-delivered-backfill/trigger`. Or use per-order "Mark delivered" button. |
+| No NEW requests appear for days despite daily sales | `Order.deliveredAt` stopped advancing (the scheduler keys off it). Since RRL.2 the delivery sweep runs hourly inside the mailer, so this should self-heal — check the `review-request-mailer` cron's summary for `deliverySwept=N` and the health banner's `overdueUndelivered` count. | If `overdueUndelivered` is high, the mailer/sweep isn't running — check `NEXUS_ENABLE_REVIEW_INGEST=1` + Railway logs. Manually trigger `/api/sync-logs/cron/orders-delivered-backfill/trigger` to catch up immediately. |
+| Dashboard shows 0 scheduled despite many delivered orders | `Order.deliveredAt` not set on those orders | The hourly mailer sweep (RRL.2) should fill these within the hour. To force it now: `/api/sync-logs/cron/orders-delivered-backfill/trigger`. Or use the per-order "Mark delivered" button. |
+| Order IDs look truncated / wrong on the Upcoming queue | Fixed in RRL.1 — the column used to `slice(0,14)`. | Full `channelOrderId` now renders, linked to the order detail page. Hard-refresh if you see the old build. |
 | All Solicitations land as SKIPPED with NOT_IMPLEMENTED | `NEXUS_ENABLE_AMAZON_SOLICITATIONS` is not set or `!= "true"` in Railway env. | Set it to `true` and redeploy. |
 | Many FAILED rows showing HTTP 403 | These are Amazon's "already solicited" duplicate-protection — should auto-classify as SKIPPED. If not, the classifier regex isn't matching. | Check the row's `errorMessage` content — should contain "already". |
 | Sentiment emails not sending | `NEXUS_ENABLE_OUTBOUND_EMAILS=true` not set, OR `RESEND_API_KEY` missing. | Set both. |
@@ -187,6 +193,7 @@ The **Sentiment funnel** tile on the dashboard shows pending / positive / negati
 | RV.7 | `a2f84aaa` | 2026-05-23 | Real Amazon-report-driven `deliveredAt` via `GET_FLAT_FILE_ALL_ORDERS_DATA_BY_LAST_UPDATE_GENERAL`. Daily 03:30 UTC cron. |
 | RV.8 | `6cdef63a` | 2026-05-23 | Conversion-rate analytics + per-marketplace + per-productType breakdowns + 30d sparkline + operator manual. |
 | RV.9 | (this commit) | 2026-05-23 | Operational polish: first-run nudge (RV.9.1), stuck-cron sweeper + pipeline health banner (RV.9.2), DE/FR/ES email localization (RV.9.3), per-rule conversion analytics (RV.9.4), GDPR/CAN-SPAM EmailSuppression + unsubscribe (RV.9.5), end-to-end test mode (RV.9.6), Review → ReviewRequest/Rule attribution persistence (RV.9.7). |
+| RRL.1–4, 6 | `36fd4653`…`9f221ed7` | 2026-06-09 | **Loop reliability** (see §18). Fixed the silent starvation where `deliveredAt` stopped advancing (the daily 03:30 backfill cron got skipped across container restarts), and the truncated order IDs. |
 
 ---
 
@@ -407,3 +414,56 @@ Closes the long-standing `/orders/reviews/rules` gaps:
   incentive language, asking for positive/5-star reviews, external links,
   and review-removal requests (Amazon/eBay policy). Warnings only, never
   blocks. `POST /api/review-rules/lint`.
+
+---
+
+## 18. RRL — Request-loop reliability (2026-06-09)
+
+**Symptom that triggered this:** `/marketing/reviews/requests` showed no new
+orders for 2–3 days despite daily sales, and the order IDs looked wrong.
+
+**Root cause.** The whole request pipeline keys off `Order.deliveredAt`
+(`schedulePendingOrders` only ever looks at orders that have it set). The only
+*sync-window-independent* writer of `deliveredAt` was the
+`orders-delivered-backfill` cron — and it ran **once daily at a fixed 03:30
+UTC**. `node-cron` is in-memory and does **not** replay missed ticks, so a
+container restart across that minute silently skips the whole day. The
+incremental orders poll (`LastUpdatedAfter >= MAX(purchaseDate)`) can't fill the
+gap — an FBA order that shipped and went quiet is outside the poll window when
+its ship+3-business-day estimate comes due, so the sync-time heuristic never
+fires on it. Net: `deliveredAt` froze and the (otherwise healthy) scheduler
+starved. The staleness guard didn't catch it because its threshold was 5 days.
+
+**Fixes:**
+
+- **RRL.1 — order-ID display.** The Upcoming queue truncated `channelOrderId`
+  via `slice(0,14)`, so 19-char Amazon IDs rendered malformed. Now shows the
+  full ID, linked to the order detail page.
+- **RRL.2 — self-feeding loop.** The delivery-estimate sweep
+  (`applyShipDeliveryHeuristic`, sync-window-independent) now runs **hourly
+  inside the `review-request-mailer` tick**, before scheduling — so
+  `deliveredAt` advances every hour regardless of the daily cron's fate. The
+  heuristic is called directly (never the hang-prone report fetch). The daily
+  cron stays as a backstop. Mailer summary reports `deliverySwept=N`.
+- **RRL.3 — proactive alerting.** Replaced the noisy `maxDeliveredAgeDays`
+  trigger (the business-day estimate clusters deliveries around weekends, so it
+  reads ~3 even when healthy) with a **weekend-proof** signal: count Amazon
+  orders shipped ≥6 calendar days ago that still have no `deliveredAt`. ≥10 ⇒
+  alert. The hourly mailer recomputes freshness after each tick and
+  `log.error`s loudly if still starved — visible in observability every hour,
+  no dashboard visit needed. Thresholds env-tunable.
+- **RRL.4 — real delivery wins over the estimate.** The Sendcloud DELIVERED
+  webhook now stamps `deliveredAtSource = CARRIER_WEBHOOK` (was leaving it
+  null), and the sweep only estimates when `deliveredAt IS NULL` (or refreshing
+  its own prior estimate). So a real carrier delivery date is never overwritten
+  by the ship+3d guess. (For Amazon FBA, SP-API rarely exposes a per-order
+  Delivered date, so the estimate remains the practical signal there — clamped
+  by Amazon's own 5–30d Solicitations window. The `AMAZON_REPORT` path stays
+  available behind `NEXUS_ENABLE_DELIVERED_REPORT_FETCH`.)
+- **RRL.6 — test guard.** `evaluatePipelineFreshness` extracted as a pure
+  function with `review-pipeline-health.vitest.test.ts` so the starvation
+  alerting can't silently regress.
+
+**To verify it's healthy:** the health banner shows `overdueUndelivered` ≈ 0 and
+the `review-request-mailer` summary shows `deliverySwept=N scheduled=N …`. A
+real freeze now trips a loud alert within ~2–3 days instead of hiding for weeks.

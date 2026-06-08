@@ -42,6 +42,52 @@ export interface PipelineFreshness {
   warnings: string[]
 }
 
+/**
+ * Pure decision layer — given the raw counts, decide whether the pipeline is
+ * starving and produce the operator warnings. Extracted from the DB layer so
+ * the alerting logic (the "never silently starve again" safety net) is unit-
+ * testable without a database. See review-pipeline-health.vitest.test.ts.
+ */
+export interface PipelineFreshnessInput {
+  now: number
+  maxDeliveredAt: Date | null
+  recentShipped: number
+  overdueUndelivered: number
+  schedulingBacklog: number
+}
+
+export function evaluatePipelineFreshness(input: PipelineFreshnessInput): PipelineFreshness {
+  const { now, maxDeliveredAt, recentShipped, overdueUndelivered, schedulingBacklog } = input
+  const maxDeliveredAgeDays = maxDeliveredAt ? Math.round(((now - maxDeliveredAt.getTime()) / DAY) * 10) / 10 : null
+  // Starving = a real backlog of overdue-undelivered shipped orders. (We keep
+  // maxDeliveredAgeDays for display, but it's not the trigger — it's noisy.)
+  const deliveryStale = overdueUndelivered >= DELIVERY_OVERDUE_ALERT
+  const schedulingStalled = schedulingBacklog >= SCHEDULING_BACKLOG_ALERT
+
+  const warnings: string[] = []
+  if (deliveryStale) {
+    warnings.push(
+      `${overdueUndelivered} Amazon orders shipped ≥${DELIVERY_OVERDUE_DAYS}d ago still have no deliveredAt — the delivery sweep that feeds the review scheduler has stalled. It runs hourly inside the review-request-mailer; check that cron + NEXUS_ENABLE_REVIEW_INGEST.`,
+    )
+  }
+  if (schedulingStalled) {
+    warnings.push(
+      `${schedulingBacklog} delivered orders (in the 4–30d request window) have no review request — scheduling may be stalled. Trigger the mailer or check NEXUS_ENABLE_REVIEW_INGEST.`,
+    )
+  }
+
+  return {
+    deliveryStale,
+    maxDeliveredAt: maxDeliveredAt?.toISOString() ?? null,
+    maxDeliveredAgeDays,
+    recentShipped,
+    overdueUndelivered,
+    schedulingBacklog,
+    schedulingStalled,
+    warnings,
+  }
+}
+
 export async function computeReviewPipelineFreshness(): Promise<PipelineFreshness> {
   const now = Date.now()
   const [maxDel, recentShipped, overdueUndelivered, backlog] = await Promise.all([
@@ -79,33 +125,11 @@ export async function computeReviewPipelineFreshness(): Promise<PipelineFreshnes
     }),
   ])
 
-  const maxDeliveredAt = maxDel._max.deliveredAt
-  const maxDeliveredAgeDays = maxDeliveredAt ? Math.round(((now - maxDeliveredAt.getTime()) / DAY) * 10) / 10 : null
-  // Starving = a real backlog of overdue-undelivered shipped orders. (We keep
-  // maxDeliveredAgeDays for display, but it's not the trigger — it's noisy.)
-  const deliveryStale = overdueUndelivered >= DELIVERY_OVERDUE_ALERT
-  const schedulingStalled = backlog >= SCHEDULING_BACKLOG_ALERT
-
-  const warnings: string[] = []
-  if (deliveryStale) {
-    warnings.push(
-      `${overdueUndelivered} Amazon orders shipped ≥${DELIVERY_OVERDUE_DAYS}d ago still have no deliveredAt — the delivery sweep that feeds the review scheduler has stalled. It runs hourly inside the review-request-mailer; check that cron + NEXUS_ENABLE_REVIEW_INGEST.`,
-    )
-  }
-  if (schedulingStalled) {
-    warnings.push(
-      `${backlog} delivered orders (in the 4–30d request window) have no review request — scheduling may be stalled. Trigger the mailer or check NEXUS_ENABLE_REVIEW_INGEST.`,
-    )
-  }
-
-  return {
-    deliveryStale,
-    maxDeliveredAt: maxDeliveredAt?.toISOString() ?? null,
-    maxDeliveredAgeDays,
+  return evaluatePipelineFreshness({
+    now,
+    maxDeliveredAt: maxDel._max.deliveredAt,
     recentShipped,
     overdueUndelivered,
     schedulingBacklog: backlog,
-    schedulingStalled,
-    warnings,
-  }
+  })
 }
