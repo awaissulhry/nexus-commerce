@@ -198,11 +198,11 @@ export default function AmazonPanel({
     return amazon.variantGroups.filter((g) => filterValues.has(g.groupValue))
   }, [amazon.variantGroups, filterValues])
 
-  async function handleExportZip(marketplace: AmazonMarketplace) {
+  async function handleExportZip(marketplace: AmazonMarketplace, includePs = true) {
     setIsExporting(true)
     try {
-      if (marketplace === 'ALL') await exportAllMarkets()
-      else await exportSingleMarket(marketplace)
+      if (marketplace === 'ALL') await exportAllMarkets(includePs)
+      else await exportSingleMarket(marketplace, includePs)
     } catch (err) {
       onToast(err instanceof Error ? err.message : 'Export failed')
     } finally {
@@ -222,11 +222,11 @@ export default function AmazonPanel({
   // One flat ZIP for a single market — drops straight into that market's
   // Seller Central bulk upload. activeAxis is required so the resolver honours
   // the per-group (per-colour) overrides.
-  async function exportSingleMarket(marketplace: AmazonMarketplace) {
+  async function exportSingleMarket(marketplace: AmazonMarketplace, includePs: boolean) {
     const res = await beFetch(`/api/products/${productId}/amazon-images/export-zip`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ marketplace, activeAxis }),
+      body: JSON.stringify({ marketplace, activeAxis, includePs }),
     })
     if (!res.ok) {
       const body = await res.json().catch(() => ({}))
@@ -247,7 +247,7 @@ export default function AmazonPanel({
   // All markets → ONE download containing a ready-to-upload ZIP per market
   // (IT.zip, DE.zip, …) so each can be uploaded individually to its market.
   // Driven market-by-market with live progress instead of a silent spinner.
-  async function exportAllMarkets() {
+  async function exportAllMarkets(includePs: boolean) {
     const markets = ['IT', 'DE', 'FR', 'ES', 'UK'] as const
     const JSZip = (await import('jszip')).default
     const parent = new JSZip()
@@ -258,7 +258,7 @@ export default function AmazonPanel({
       const res = await beFetch(`/api/products/${productId}/amazon-images/export-zip`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ marketplace: m, activeAxis }),
+        body: JSON.stringify({ marketplace: m, activeAxis, includePs }),
       })
       if (!res.ok) {
         const body = await res.json().catch(() => ({}))
@@ -1072,7 +1072,7 @@ export default function AmazonPanel({
           productId={productId}
           marketplace={exportPreview.marketplace}
           activeAxis={activeAxis ?? null}
-          onExport={(mkt) => handleExportZip(mkt as AmazonMarketplace)}
+          onExport={(mkt, includePs) => handleExportZip(mkt as AmazonMarketplace, includePs)}
           onClose={() => setExportPreview(null)}
         />
       )}

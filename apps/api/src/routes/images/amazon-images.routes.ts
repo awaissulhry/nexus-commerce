@@ -383,7 +383,7 @@ const amazonImagesRoutes: FastifyPluginAsync = async (fastify) => {
     '/products/:productId/amazon-images/export-zip',
     async (request, reply) => {
       const { productId } = request.params
-      const { marketplace, activeAxis, variantIds, filenameTemplate } = request.body ?? ({} as any)
+      const { marketplace, activeAxis, variantIds, filenameTemplate, includePs } = request.body ?? ({} as any)
 
       const mkt = (marketplace ?? '').toUpperCase()
       const isAll = mkt === 'ALL'
@@ -399,7 +399,7 @@ const amazonImagesRoutes: FastifyPluginAsync = async (fastify) => {
 
       try {
         const { buffer, filename, fileCount, skippedNoAsin, errors } =
-          await generateAmazonZip({ productId, marketplace: mkt, activeAxis, variantIds, filenameTemplate })
+          await generateAmazonZip({ productId, marketplace: mkt, activeAxis, variantIds, filenameTemplate, includePs })
 
         if (fileCount === 0) {
           return reply.code(422).send({
@@ -431,7 +431,7 @@ const amazonImagesRoutes: FastifyPluginAsync = async (fastify) => {
   // preview + completeness report so nothing is silently missing.
   fastify.get<{
     Params: { productId: string }
-    Querystring: { marketplace?: string; activeAxis?: string }
+    Querystring: { marketplace?: string; activeAxis?: string; includePs?: string }
   }>(
     '/products/:productId/amazon-images/export-zip/manifest',
     async (request, reply) => {
@@ -441,6 +441,7 @@ const amazonImagesRoutes: FastifyPluginAsync = async (fastify) => {
           productId: request.params.productId,
           marketplace: mkt,
           activeAxis: request.query.activeAxis ?? null,
+          includePs: request.query.includePs !== 'false',
         })
         return manifest
       } catch (err) {

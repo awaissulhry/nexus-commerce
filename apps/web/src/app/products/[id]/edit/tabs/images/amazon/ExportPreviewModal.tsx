@@ -32,12 +32,13 @@ export function ExportPreviewModal({
   productId: string
   marketplace: string
   activeAxis: string | null
-  onExport: (marketplace: string) => void
+  onExport: (marketplace: string, includePs: boolean) => void
   onClose: () => void
 }) {
   const [manifest, setManifest] = useState<Manifest | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [includePs, setIncludePs] = useState(true)
   const isAll = marketplace.toUpperCase() === 'ALL'
 
   useEffect(() => {
@@ -46,7 +47,7 @@ export function ExportPreviewModal({
       setLoading(true)
       setError(null)
       try {
-        const q = new URLSearchParams({ marketplace, ...(activeAxis ? { activeAxis } : {}) })
+        const q = new URLSearchParams({ marketplace, includePs: String(includePs), ...(activeAxis ? { activeAxis } : {}) })
         const res = await beFetch(`/api/products/${productId}/amazon-images/export-zip/manifest?${q.toString()}`)
         if (!res.ok) throw new Error(`Preview failed (${res.status})`)
         const data = (await res.json()) as Manifest
@@ -58,7 +59,7 @@ export function ExportPreviewModal({
       }
     })()
     return () => { cancelled = true }
-  }, [productId, marketplace, activeAxis])
+  }, [productId, marketplace, activeAxis, includePs])
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
@@ -106,10 +107,14 @@ export function ExportPreviewModal({
               {manifest.totalBlocked > 0 && <> · <span className="text-amber-600 dark:text-amber-400">{manifest.totalBlocked} blocked</span></>}
               {manifest.totalSkippedNoAsin > 0 && <> · <span className="text-amber-600 dark:text-amber-400">{manifest.totalSkippedNoAsin} no-ASIN</span></>}
             </div>
+            <label className="flex items-center gap-2 mb-3 text-sm text-slate-700 dark:text-slate-300 cursor-pointer select-none">
+              <input type="checkbox" checked={includePs} onChange={(e) => setIncludePs(e.target.checked)} className="rounded" />
+              Include safety (PS) images
+            </label>
             <button
               type="button"
               disabled={manifest.totalEstimatedFiles === 0}
-              onClick={() => { onExport(marketplace); onClose() }}
+              onClick={() => { onExport(marketplace, includePs); onClose() }}
               className="w-full inline-flex items-center justify-center gap-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
             >
               <Download className="w-4 h-4" />
