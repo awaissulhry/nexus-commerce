@@ -59,6 +59,7 @@ interface Stats {
   retrying?: number
   upcoming: Array<{
     id: string
+    orderId: string
     scheduledFor: string | null
     channel: string
     order: {
@@ -283,7 +284,17 @@ export default async function ReviewRequestsPage() {
                           : '—'}
                       </td>
                       <td className="px-3 py-2 font-mono text-xs text-slate-700 dark:text-slate-300">
-                        {order?.channelOrderId?.slice(0, 14) ?? '—'}
+                        {order?.channelOrderId ? (
+                          <Link
+                            href={`/orders/${r.orderId}`}
+                            className="text-blue-600 dark:text-blue-400 hover:underline"
+                            title={`Open order ${order.channelOrderId}`}
+                          >
+                            {order.channelOrderId}
+                          </Link>
+                        ) : (
+                          '—'
+                        )}
                       </td>
                       <td className="px-3 py-2">
                         <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded ring-1 ring-inset bg-slate-50 text-slate-600 ring-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:ring-slate-700">
