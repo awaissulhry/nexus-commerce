@@ -224,7 +224,22 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
       })
     }
 
-    const body = flatFileService.buildJsonFeedBody(rows, mp, sellerId, expandedFields)
+    // FFA — enum fields are edited as display labels (e.g. "Pakistan") but Amazon's
+    // JSON feed needs the codes (e.g. "PK"). Build a label→code map from the schema
+    // for every product type in the batch; a missing/failed schema submits as-is.
+    const enumCodeMap: Record<string, Record<string, string>> = {}
+    try {
+      const productTypes = [...new Set(
+        rows.map((r) => String(r.product_type ?? productType ?? '').toUpperCase()).filter(Boolean),
+      )]
+      for (const pt of productTypes) {
+        Object.assign(enumCodeMap, await flatFileService.getEnumCodeMap(mp, pt))
+      }
+    } catch (err: any) {
+      request.log.warn({ err: err?.message }, 'flat-file/submit: enum code map unavailable — submitting values as-is')
+    }
+
+    const body = flatFileService.buildJsonFeedBody(rows, mp, sellerId, expandedFields, enumCodeMap)
 
     try {
       const sp = await getSpClient()

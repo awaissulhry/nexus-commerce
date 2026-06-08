@@ -11,7 +11,7 @@
  * the readback the way getExistingRows does.
  */
 import { describe, it, expect } from 'vitest'
-import { AmazonFlatFileService, isBlankFeedValue, applySnapshotOverlay } from './flat-file.service.js'
+import { AmazonFlatFileService, isBlankFeedValue, applySnapshotOverlay, buildSchemaEnumCodeMap } from './flat-file.service.js'
 
 const svc = new AmazonFlatFileService({} as any, {} as any)
 // private but pure — call through an any-cast (same args syncRowsToPlatform uses)
@@ -182,5 +182,45 @@ describe('buildJsonFeedBody — operationType (partial vs full)', () => {
     const m = build({ item_sku: 'D1', record_action: 'delete', _isNew: false })
     expect(m.operationType).toBe('DELETE')
     expect(m.requirements).toBeUndefined()
+  })
+})
+
+// country_of_origin (and every strict enum) was submitted as the display LABEL
+// ("Pakistan") instead of Amazon's CODE ("PK") → code 90244, all SKUs rejected.
+// The feed must convert label→code from the schema-derived map.
+describe('enum label→code conversion (country_of_origin etc.)', () => {
+  const svc3 = new AmazonFlatFileService({} as any, {} as any)
+  const build = (row: any, enumCodeMap: any) =>
+    JSON.parse(svc3.buildJsonFeedBody([row], 'IT', 'SELLER', {}, enumCodeMap)).messages[0]
+
+  describe('buildSchemaEnumCodeMap', () => {
+    it('pairs enum codes with enumNames labels (label→code)', () => {
+      const props = {
+        country_of_origin: { items: { properties: { value: { enum: ['PK', 'IT'], enumNames: ['Pakistan', 'Italy'] } } } },
+      }
+      expect(buildSchemaEnumCodeMap(props).country_of_origin).toEqual({ Pakistan: 'PK', Italy: 'IT' })
+    })
+    it('skips fields where label === code (no conversion needed)', () => {
+      const props = { size_name: { items: { properties: { value: { enum: ['M', 'L'] } } } } }
+      expect(buildSchemaEnumCodeMap(props).size_name).toBeUndefined()
+    })
+    it('maps sub-property enums under "field.sub"', () => {
+      const props = { closure: { items: { properties: { type: { enum: ['button'], enumNames: ['Button'] } } } } }
+      expect(buildSchemaEnumCodeMap(props)['closure.type']).toEqual({ Button: 'button' })
+    })
+  })
+
+  const coo = { country_of_origin: { Pakistan: 'PK', Italy: 'IT' } }
+  it('converts a selected label to the Amazon code', () => {
+    expect(build({ item_sku: 'C1', country_of_origin: 'Pakistan' }, coo).attributes.country_of_origin[0].value).toBe('PK')
+  })
+  it('passes a value that is already a code through unchanged', () => {
+    expect(build({ item_sku: 'C2', country_of_origin: 'PK' }, coo).attributes.country_of_origin[0].value).toBe('PK')
+  })
+  it('passes an unmapped value through unchanged', () => {
+    expect(build({ item_sku: 'C3', country_of_origin: 'Atlantis' }, coo).attributes.country_of_origin[0].value).toBe('Atlantis')
+  })
+  it('no map → value unchanged (backward compatible)', () => {
+    expect(build({ item_sku: 'C4', country_of_origin: 'Pakistan' }, {}).attributes.country_of_origin[0].value).toBe('Pakistan')
   })
 })

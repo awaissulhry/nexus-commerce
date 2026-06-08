@@ -244,6 +244,85 @@ export function buildSchemaEnums(properties: Record<string, any>): Record<string
   return result
 }
 
+/**
+ * Like extractEnumOptions, but returns code↔label PAIRS. Amazon's schema gives
+ * `enum` (the codes it accepts, e.g. "PK") parallel to `enumNames` (display
+ * labels, e.g. "Pakistan"). The editor shows labels; the JSON feed must send
+ * codes. When only codes exist, label === code.
+ */
+function extractEnumPairs(inner: Record<string, any>): Array<{ code: string; label: string }> {
+  const codes: any[] = (inner?.enum ?? inner?.['x-amazon-attributes']?.validValues ?? []) as any[]
+  if (!Array.isArray(codes) || codes.length === 0) return []
+  const names: any[] = Array.isArray(inner?.enumNames) ? inner.enumNames : []
+  return codes.map((c, i) => ({ code: String(c), label: String(names[i] ?? c) }))
+}
+
+/** Mirror of findEnumNode that returns code↔label pairs instead of labels. */
+function findEnumPairs(node: Record<string, any>, depth = 0): Array<{ code: string; label: string }> {
+  if (!node || typeof node !== 'object' || depth > 5) return []
+  const direct = extractEnumPairs(node)
+  if (direct.length) return direct
+  for (const key of ['anyOf', 'oneOf'] as const) {
+    if (Array.isArray(node[key])) {
+      for (const branch of node[key]) {
+        const v = findEnumPairs(branch as Record<string, any>, depth + 1)
+        if (v.length) return v
+      }
+    }
+  }
+  const itemProps: Record<string, any> = node?.items?.properties ?? {}
+  const valueNode = itemProps.value
+  if (valueNode) {
+    const v = findEnumPairs(valueNode, depth + 1)
+    if (v.length) return v
+  }
+  const SKIP_PROPS = new Set(['value', 'marketplace_id', 'language_tag'])
+  for (const [subId, subNode] of Object.entries(itemProps)) {
+    if (SKIP_PROPS.has(subId)) continue
+    const v = findEnumPairs(subNode as Record<string, any>, depth + 1)
+    if (v.length) return v
+  }
+  return []
+}
+
+/**
+ * Build a label→code map per enum field (and per "field.sub" sub-property) so
+ * the feed builder can convert the display label the editor stored (e.g.
+ * "Pakistan") back to Amazon's required code (e.g. "PK"). Only includes fields
+ * where at least one label differs from its code (all-equal fields need no
+ * conversion). Mirrors buildSchemaEnums' traversal so the keys line up exactly.
+ */
+export function buildSchemaEnumCodeMap(properties: Record<string, any>): Record<string, Record<string, string>> {
+  const result: Record<string, Record<string, string>> = {}
+  const SKIP_SUB = new Set(['marketplace_id', 'language_tag', 'value'])
+
+  const toMap = (pairs: Array<{ code: string; label: string }>): Record<string, string> | null => {
+    const m: Record<string, string> = {}
+    let differs = false
+    for (const { code, label } of pairs) {
+      if (!label) continue
+      m[label] = code
+      if (label !== code) differs = true
+    }
+    return differs ? m : null
+  }
+
+  for (const [fieldId, prop] of Object.entries(properties)) {
+    const p = prop as Record<string, any>
+    const valueNode = p?.items?.properties?.value ?? p
+    const top = toMap(findEnumPairs(valueNode))
+    if (top) result[fieldId] = top
+
+    const subProps: Record<string, any> = p?.items?.properties ?? {}
+    for (const [subId, subProp] of Object.entries(subProps)) {
+      if (SKIP_SUB.has(subId)) continue
+      const sub = toMap(findEnumPairs(subProp as Record<string, any>))
+      if (sub) result[`${fieldId}.${subId}`] = sub
+    }
+  }
+  return result
+}
+
 /** Extract localised titles from schema properties into a flat map. */
 function buildSchemaLabels(properties: Record<string, any>): Record<string, string> {
   const map: Record<string, string> = {}
@@ -1027,15 +1106,39 @@ export class AmazonFlatFileService {
     })
   }
 
+  /**
+   * Per-field label→code map for a product type's enum fields, used to convert
+   * the editor's display labels (e.g. "Pakistan") back to Amazon's required
+   * codes (e.g. "PK") when building the JSON feed. Reuses the same cached schema
+   * generateManifest reads, so it costs nothing on a warm cache.
+   */
+  async getEnumCodeMap(marketplace: string, productType: string): Promise<Record<string, Record<string, string>>> {
+    const mp = marketplace.toUpperCase()
+    const pt = productType.toUpperCase()
+    const cached = await this.schemas.getSchema({ channel: 'AMAZON', marketplace: mp, productType: pt })
+    const def = (cached.schemaDefinition ?? {}) as Record<string, any>
+    const properties = (def.properties ?? {}) as Record<string, any>
+    return buildSchemaEnumCodeMap(properties)
+  }
+
   buildJsonFeedBody(
     rows: FlatFileRow[],
     marketplace: string,
     sellerId: string,
     expandedFields: Record<string, string> = {},
+    enumCodeMap: Record<string, Record<string, string>> = {},
   ): string {
     const mp = marketplace.toUpperCase()
     const marketplaceId = MARKETPLACE_ID_MAP[mp] ?? MARKETPLACE_ID_MAP.IT
     const languageTag = LANGUAGE_TAG_MAP[mp] ?? 'it_IT'
+
+    // Enum fields are shown in the editor as display LABELS (e.g. "Pakistan") but
+    // Amazon's JSON feed requires the underlying CODE (e.g. "PK"). Convert
+    // label→code at emit time from the schema-derived map; a value that is
+    // already a code (or has no mapping) passes through unchanged. Keyed by the
+    // field id, or "field.sub" for sub-property enums (e.g. "closure.type").
+    const toCode = (fieldKey: string, value: string): string =>
+      enumCodeMap[fieldKey]?.[value] ?? value
 
     // Fields with complex/explicit SP-API structure — handled case-by-case below
     const EXPLICIT_KEYS = new Set([
@@ -1173,19 +1276,24 @@ export class AmazonFlatFileService {
           if (k.includes('image_locator')) {
             attrs[k] = [{ media_location: String(v), marketplace_id: marketplaceId }]
           } else {
-            attrs[k] = [{ value: String(v), marketplace_id: marketplaceId, language_tag: languageTag }]
+            attrs[k] = [{ value: toCode(k, String(v)), marketplace_id: marketplaceId, language_tag: languageTag }]
           }
         }
         // Emit multi-instance arrays
         for (const [base, items] of Object.entries(pendingArrays)) {
           items.sort((a, b) => a.idx - b.idx)
           attrs[base] = items.map((item) => ({
-            value: item.value, marketplace_id: marketplaceId, language_tag: languageTag,
+            value: toCode(base, item.value), marketplace_id: marketplaceId, language_tag: languageTag,
           }))
         }
-        // Emit sub-property objects
+        // Emit sub-property objects — convert any enum sub-value (e.g. closure.type,
+        // apparel_size.size_system) from its display label to Amazon's code.
         for (const [base, val] of Object.entries(subPropMap)) {
-          attrs[base] = [{ ...val, marketplace_id: marketplaceId }]
+          const coded: Record<string, any> = {}
+          for (const [sub, sv] of Object.entries(val)) {
+            coded[sub] = typeof sv === 'string' ? toCode(`${base}.${sub}`, sv) : sv
+          }
+          attrs[base] = [{ ...coded, marketplace_id: marketplaceId }]
         }
 
         // FFA — drop any blank/whitespace attribute so a single empty pulled cell
