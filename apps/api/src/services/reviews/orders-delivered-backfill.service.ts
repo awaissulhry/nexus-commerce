@@ -159,7 +159,7 @@ async function applyDeliveredRows(rows: DeliveredRow[]): Promise<{
  * independently of the (flaky) report fetch. Idempotent — recomputes the same
  * value for already-heuristic rows and skips the write.
  */
-async function applyShipDeliveryHeuristic(): Promise<{ scanned: number; updated: number }> {
+export async function applyShipDeliveryHeuristic(): Promise<{ scanned: number; updated: number }> {
   const since = new Date(Date.now() - HEURISTIC_MAX_SHIP_AGE_DAYS * 24 * 60 * 60 * 1000)
   const candidates = await prisma.order.findMany({
     where: {

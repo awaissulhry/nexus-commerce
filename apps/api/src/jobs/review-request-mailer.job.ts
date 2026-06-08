@@ -52,6 +52,7 @@ function backoffNextRetryAt(attemptCount: number): Date | null {
 }
 
 interface MailerTickResult {
+  deliverySwept?: number
   scheduled: number
   due: number
   sent: number
@@ -84,6 +85,33 @@ export async function runReviewMailerOnce(): Promise<MailerTickResult> {
       pausedBy: state.pausedBy,
     })
     return { scheduled: 0, due: 0, sent: 0, failed: 0, skipped: 0, retried: 0, paused: true, durationMs }
+  }
+
+  // RRL.2 — advance deliveredAt INSIDE the hourly mailer tick, before
+  // scheduling. The scheduler keys entirely off Order.deliveredAt, and the
+  // only sync-window-independent writer was the orders-delivered-backfill
+  // cron — which runs once daily at a fixed 03:30 UTC. node-cron is
+  // in-memory and does NOT replay missed ticks, so a container restart
+  // across that minute silently skips the whole day and the scheduler
+  // starves (observed: deliveredAt frozen 3d, zero new requests). Folding
+  // the cheap, idempotent delivery-estimate sweep into the proven hourly
+  // mailer guarantees deliveredAt keeps advancing every hour. We call the
+  // heuristic directly (not runOrdersDeliveredBackfill) so the hang-prone
+  // SP-API report fetch can never block the tick, regardless of
+  // NEXUS_ENABLE_DELIVERED_REPORT_FETCH. The daily cron stays as a backstop.
+  let deliverySwept = 0
+  try {
+    const { applyShipDeliveryHeuristic } = await import('../services/reviews/orders-delivered-backfill.service.js')
+    const swept = await applyShipDeliveryHeuristic()
+    deliverySwept = swept.updated
+    if (swept.updated > 0) {
+      logger.info('[review-mailer] delivery sweep advanced deliveredAt', swept)
+    }
+  } catch (err) {
+    // Never let a delivery-sweep failure stop the rest of the tick.
+    logger.warn('[review-mailer] delivery sweep failed (scheduling continues)', {
+      error: err instanceof Error ? err.message : String(err),
+    })
   }
 
   // Step 1: schedule newly delivered orders
@@ -405,8 +433,8 @@ export async function runReviewMailerOnce(): Promise<MailerTickResult> {
   const durationMs = Date.now() - startedAt
   lastRunAt = new Date()
   const retried = retriedRows.count
-  lastSummary = `scheduled=${scheduleResult.scheduled} retried=${retried} due=${due.length} sent=${sent} sentimentEmails=${sentimentEmailsSent} failed=${failed} skipped=${skipped} durationMs=${durationMs}`
-  return { scheduled: scheduleResult.scheduled, retried, due: due.length, sent, sentimentEmails: sentimentEmailsSent, failed, skipped, durationMs }
+  lastSummary = `deliverySwept=${deliverySwept} scheduled=${scheduleResult.scheduled} retried=${retried} due=${due.length} sent=${sent} sentimentEmails=${sentimentEmailsSent} failed=${failed} skipped=${skipped} durationMs=${durationMs}`
+  return { deliverySwept, scheduled: scheduleResult.scheduled, retried, due: due.length, sent, sentimentEmails: sentimentEmailsSent, failed, skipped, durationMs }
 }
 
 export async function runReviewMailerCron(): Promise<void> {
