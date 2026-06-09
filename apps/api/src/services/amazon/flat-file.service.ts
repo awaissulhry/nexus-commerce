@@ -1584,13 +1584,15 @@ export class AmazonFlatFileService {
 
         // ── StockLevel + StockMovement ──────────────────────────────
         if (primaryLocation && qty !== null && !isNaN(qty) && qty >= 0) {
-          const existingStock = await this.prisma.stockLevel.findUnique({
+          // A child product has no ProductVariation, so variationId is null — and
+          // Prisma rejects a null component in a compound-unique findUnique (null ≠
+          // null in SQL), which aborted the row's save. findFirst with the same
+          // filter is the correct lookup; the unique constraint still guarantees ≤1.
+          const existingStock = await this.prisma.stockLevel.findFirst({
             where: {
-              locationId_productId_variationId: {
-                locationId: primaryLocation.id,
-                productId:  product.id,
-                variationId: null as any,
-              },
+              locationId:  primaryLocation.id,
+              productId:   product.id,
+              variationId: null,
             },
           })
 

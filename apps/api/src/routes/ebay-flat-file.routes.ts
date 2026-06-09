@@ -865,13 +865,14 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
         }
 
         if (primaryLocation && stockQty !== null) {
-          const existingStock = await prisma.stockLevel.findUnique({
+          // findFirst (not findUnique) — variationId is null for products without a
+          // ProductVariation, and Prisma rejects a null component in a compound-
+          // unique findUnique. The unique constraint still guarantees ≤1 match.
+          const existingStock = await prisma.stockLevel.findFirst({
             where: {
-              locationId_productId_variationId: {
-                locationId: primaryLocation.id,
-                productId,
-                variationId: null as any,
-              },
+              locationId: primaryLocation.id,
+              productId,
+              variationId: null,
             },
           });
 
