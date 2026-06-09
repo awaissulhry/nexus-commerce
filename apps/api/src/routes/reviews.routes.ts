@@ -62,9 +62,14 @@ const reviewsRoutes: FastifyPluginAsync = async (fastify) => {
     if (q.productId) where.productId = q.productId
     if (q.assignee) where.assignee = q.assignee
     if (q.triageStatus) {
-      // null triageStatus is treated as NEW.
-      where.triageStatus =
-        q.triageStatus === 'NEW' ? { in: ['NEW', null] } : q.triageStatus
+      // null triageStatus is treated as NEW. Prisma's `in` can't contain null
+      // (throws "Expected ListStringFieldRefInput or Null"), so express the NEW
+      // case as an OR — held in AND so it doesn't collide with the search OR below.
+      if (q.triageStatus === 'NEW') {
+        where.AND = [{ OR: [{ triageStatus: 'NEW' }, { triageStatus: null }] }]
+      } else {
+        where.triageStatus = q.triageStatus
+      }
     }
     if (q.sinceDays) {
       const d = Number(q.sinceDays)

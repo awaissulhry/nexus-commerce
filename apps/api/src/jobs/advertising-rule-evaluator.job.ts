@@ -547,7 +547,14 @@ async function buildSearchTermConvertingContexts() {
   const since = new Date(); since.setUTCDate(since.getUTCDate() - 30); since.setUTCHours(0, 0, 0, 0)
   const terms = await prisma.amazonAdsSearchTerm.groupBy({
     by: ['query', 'campaignId', 'adGroupId', 'marketplace'],
-    where: { date: { gte: since }, matchType: { in: ['BROAD', 'PHRASE', null] } },
+    // Prisma's `in` cannot contain null — match the null (auto-targeting, no
+    // match type) case via OR instead. Putting null inside `in` threw
+    // "Expected ListStringFieldRefInput or Null" every tick, silently breaking
+    // the whole evaluator (surfaced by the RRL.7 overdueCrons alert).
+    where: {
+      date: { gte: since },
+      OR: [{ matchType: { in: ['BROAD', 'PHRASE'] } }, { matchType: null }],
+    },
     _sum: { orders7d: true, clicks: true, costMicros: true, sales7dCents: true },
     having: { orders7d: { _sum: { gte: CONVERTING_MIN_ORDERS } } },
   })
