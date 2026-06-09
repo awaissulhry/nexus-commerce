@@ -261,6 +261,9 @@ const syncLogsRoutes: FastifyPluginAsync = async (fastify) => {
         'queueDepth',
         'activeErrorGroups',
         'staleCrons',
+        // RRL.7 — review-pipeline + generic stopped-cron reliability metrics.
+        'overdueCrons',
+        'reviewOverdueUndelivered',
       ]
       const validOps = ['gt', 'gte', 'lt', 'lte']
       if (!validMetrics.includes(b.metric)) {
