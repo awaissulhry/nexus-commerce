@@ -251,6 +251,7 @@ const amazonImagesRoutes: FastifyPluginAsync = async (fastify) => {
       })
       const raw = (res.rawResponse ?? {}) as any
       const search = await amazonSpApiClient.searchListingsItems({ sellerId, marketplaceId, asin: request.query.asin || 'B0BMS6ZZ4H', pageSize: 20 })
+      const catalog = await amazonSpApiClient.getCatalogItemImages(res.asin || request.query.asin || 'B0BMS6ZZ4H', marketplaceId)
       const attrs = raw.attributes ?? {}
       const imageAttributes: Record<string, unknown> = {}
       for (const k of Object.keys(attrs)) if (/image/i.test(k)) imageAttributes[k] = attrs[k]
@@ -271,6 +272,7 @@ const amazonImagesRoutes: FastifyPluginAsync = async (fastify) => {
         issues: raw.issues ?? [],
         relationships: raw.relationships ?? [],
         search,
+        catalog,
       }
     } catch (err) {
       return reply.code(500).send({ error: err instanceof Error ? err.message : String(err) })

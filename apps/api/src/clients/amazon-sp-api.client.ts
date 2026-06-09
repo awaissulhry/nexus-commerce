@@ -1091,6 +1091,40 @@ export class AmazonSpApiClient {
   }
 
   /**
+   * Catalog Items API — the images Amazon actually DISPLAYS for an ASIN (global
+   * catalog level), with their source m.media-amazon links. Read-only diagnosis:
+   * shows whether our feed reached the catalog vs what's currently shown.
+   */
+  async getCatalogItemImages(asin: string, marketplaceId: string): Promise<{
+    success: boolean
+    httpStatus: number
+    images?: Array<{ variant: string; link: string; w?: number; h?: number }>
+    error?: string
+  }> {
+    try {
+      const accessToken = await this.getAccessToken()
+      const url = new URL(`https://sellingpartnerapi-${this.region}.amazon.com/catalog/2022-04-01/items/${asin}`)
+      url.searchParams.set('marketplaceIds', marketplaceId)
+      url.searchParams.set('includedData', 'images,summaries')
+      const response = await this.fetchWithRetry(
+        url.toString(),
+        { method: 'GET', headers: { 'x-amzn-requestid': `nexus-${Date.now()}`, 'x-amz-access-token': accessToken } },
+        `getCatalogItem(${asin})`,
+      )
+      const data = (await response.json().catch(() => ({}))) as {
+        images?: Array<{ images?: Array<{ variant: string; link: string; width?: number; height?: number }> }>
+      }
+      if (response.status >= 400) {
+        return { success: false, httpStatus: response.status, error: this.parseErrors(data as never) ?? JSON.stringify(data).slice(0, 300) }
+      }
+      const group = Array.isArray(data.images) ? data.images[0]?.images ?? [] : []
+      return { success: true, httpStatus: response.status, images: group.map((i) => ({ variant: i.variant, link: i.link, w: i.width, h: i.height })) }
+    } catch (error) {
+      return { success: false, httpStatus: 0, error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  /**
    * Batch submit multiple listings
    * Respects rate limiting for each request
    */
