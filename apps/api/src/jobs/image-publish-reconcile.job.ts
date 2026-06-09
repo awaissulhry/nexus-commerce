@@ -35,7 +35,7 @@ export async function runImagePublishReconcileOnce(): Promise<string> {
       submittedAt: { lt: new Date(Date.now() - 2 * 60 * 1000) },
     },
     select: { id: true },
-    take: 50,
+    take: 15,
   })
   let advanced = 0
   for (const j of stale) {
@@ -58,8 +58,13 @@ export async function runImagePublishReconcileOnce(): Promise<string> {
     take: 30,
   })
   let refetched = 0
+  // Cap report re-fetches per tick — getFeedDocument is rate-limited (~1/45s,
+  // small burst). Hammering all blind feeds at once throttles and stalls; a few
+  // per 3-min tick drains the backlog without tripping the limit.
+  const MAX_REFETCH_PER_TICK = 4
   for (const j of recentDone) {
     if ((j.resultSummary as any)?.processingReport) continue
+    if (refetched >= MAX_REFETCH_PER_TICK) break
     try { await pollAndUpdateFeedJob(j.id); refetched += 1 } catch { /* keep going */ }
   }
 

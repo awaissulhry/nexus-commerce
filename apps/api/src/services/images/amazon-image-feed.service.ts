@@ -31,6 +31,7 @@ import {
   SLOT_TO_ATTRIBUTE,
   submitAmazonListingsBatch,
   pollAmazonFeedStatus,
+  withTimeout,
   type AmazonSlot,
 } from '../channel-batch/amazon-batch-feed.service.js'
 import { resolveSlotTaxonomy } from './amazon-slot-taxonomy.service.js'
@@ -548,12 +549,21 @@ async function fetchProcessingReport(resultFeedDocumentId: string): Promise<unkn
       },
       options: { auto_request_tokens: true, auto_request_throttled: true },
     })
-    const docRes: any = await sp.callAPI({
-      operation: 'getFeedDocument',
-      endpoint: 'feeds',
-      path: { feedDocumentId: resultFeedDocumentId },
-    })
-    const raw = await fetch(docRes.url)
+    const docRes: any = await withTimeout(
+      sp.callAPI({ operation: 'getFeedDocument', endpoint: 'feeds', path: { feedDocumentId: resultFeedDocumentId } }),
+      25_000,
+      'getFeedDocument',
+    )
+    // Hard-timeout the result-doc download too — a slow/hanging S3 URL must not
+    // stall the poll (this is what left every feed's report unread).
+    const ctrl = new AbortController()
+    const fetchTimer = setTimeout(() => ctrl.abort(), 15_000)
+    let raw: Response
+    try {
+      raw = await fetch(docRes.url, { signal: ctrl.signal })
+    } finally {
+      clearTimeout(fetchTimer)
+    }
     const buf = Buffer.from(await raw.arrayBuffer())
     // Amazon returns the result document GZIP-compressed. Decompress before
     // parsing — otherwise JSON.parse throws, we return null, and the per-image

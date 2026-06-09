@@ -293,6 +293,25 @@ export async function submitAmazonListingsBatch(
  * processingReport document and map per-SKU outcomes to
  * BulkActionItem rows.
  */
+/**
+ * Race a promise against a hard timeout. SP-API calls with
+ * `auto_request_throttled` block for the full rate-limit window (getFeedDocument
+ * is ~1 req/45s), and the raw result-doc fetch has no timeout — either can hang a
+ * poll for minutes (the report read-back was hanging 120s+). The race unblocks the
+ * caller deterministically; a timed-out call is simply retried on the next tick.
+ */
+export async function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
+  let timer: NodeJS.Timeout | undefined
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms)
+  })
+  try {
+    return await Promise.race([p, timeout])
+  } finally {
+    if (timer) clearTimeout(timer)
+  }
+}
+
 export async function pollAmazonFeedStatus(feedId: string): Promise<{
   feedId: string
   processingStatus: string
@@ -315,11 +334,11 @@ export async function pollAmazonFeedStatus(feedId: string): Promise<{
     },
     options: { auto_request_tokens: true, auto_request_throttled: true },
   })
-  const res: any = await sp.callAPI({
-    operation: 'getFeed',
-    endpoint: 'feeds',
-    path: { feedId },
-  })
+  const res: any = await withTimeout(
+    sp.callAPI({ operation: 'getFeed', endpoint: 'feeds', path: { feedId } }),
+    25_000,
+    'getFeed',
+  )
   return {
     feedId,
     processingStatus: res.processingStatus,
