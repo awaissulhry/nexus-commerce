@@ -236,12 +236,12 @@ const amazonImagesRoutes: FastifyPluginAsync = async (fastify) => {
   // feed isn't reflected on the listing. Calls getListingsItem only (read-only).
   fastify.get<{
     Params: { productId: string; sku: string }
-    Querystring: { marketplace?: string }
+    Querystring: { marketplace?: string; sellerId?: string }
   }>('/products/:productId/amazon-images/debug-live/:sku', async (request, reply) => {
     const mkt = (request.query.marketplace ?? 'ES').toUpperCase()
     const marketplaceId = marketplaceCodeToId(mkt)
     if (!marketplaceId) return reply.code(400).send({ error: `bad marketplace ${mkt}` })
-    const sellerId = process.env.AMAZON_SELLER_ID ?? process.env.AMAZON_MERCHANT_ID ?? ''
+    const sellerId = request.query.sellerId || process.env.AMAZON_SELLER_ID || process.env.AMAZON_MERCHANT_ID || ''
     try {
       const res = await amazonSpApiClient.getListingsItem({
         sellerId,
@@ -256,6 +256,10 @@ const amazonImagesRoutes: FastifyPluginAsync = async (fastify) => {
       return {
         sku: request.params.sku,
         marketplace: mkt,
+        sellerIdUsed: sellerId,
+        sellerIdLen: sellerId.length,
+        success: res.success,
+        error: (res as any).error ?? null,
         asin: res.asin,
         status: res.status,
         processedImagesCount: (res.images ?? []).length,
