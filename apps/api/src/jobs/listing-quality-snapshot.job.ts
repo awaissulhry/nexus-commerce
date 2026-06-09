@@ -135,7 +135,7 @@ export async function runListingQualitySnapshotOnce(): Promise<RunSummary> {
           // the same success-but-broken shape that hid the review freeze.
           // Bucket by message so the cron summary names the dominant cause.
           const reason = err instanceof Error ? err.message : String(err)
-          const key = reason.slice(0, 80)
+          const key = reason.slice(0, 300)
           summary.errorReasons[key] = (summary.errorReasons[key] ?? 0) + 1
         }
       }),
