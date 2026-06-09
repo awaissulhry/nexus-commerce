@@ -102,8 +102,10 @@ export function mapAwsRegionToSpApiSlug(region: string): string {
   if (r.startsWith('ap-')) return 'fe'
   // Europe: eu-*, me-*, af-*
   if (r.startsWith('eu-') || r.startsWith('me-') || r.startsWith('af-')) return 'eu'
-  // Unknown — default to na (most common for Xavia / US seller account)
-  return 'na'
+  // Unknown — default to eu: Xavia operates on EU marketplaces (IT/DE/FR/ES/UK)
+  // and the listings feed runs on eu, so the read-back client must match or
+  // getListingsItem hits the wrong region and 404s on every EU listing.
+  return 'eu'
 }
 
 export class AmazonSpApiClient {
@@ -125,7 +127,10 @@ export class AmazonSpApiClient {
     this.refreshToken = process.env.AMAZON_REFRESH_TOKEN || ''
     // SP-API endpoint slugs are 'na' | 'eu' | 'fe' — not AWS region names.
     // Map AWS region names → SP-API slugs so AMAZON_REGION=us-east-1 works.
-    this.region = mapAwsRegionToSpApiSlug(process.env.AMAZON_REGION || 'na')
+    // Default EU to match the listings-feed path (which uses `?? 'eu'`). Xavia
+    // sells on EU marketplaces; defaulting NA here made every getListingsItem hit
+    // the North America endpoint → 404 on all EU listings → blind read-back.
+    this.region = mapAwsRegionToSpApiSlug(process.env.AMAZON_REGION || 'eu')
 
     if (!this.clientId || !this.clientSecret || !this.refreshToken) {
       logger.warn('Amazon SP-API credentials not fully configured', {
