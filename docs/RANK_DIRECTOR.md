@@ -112,6 +112,19 @@ campaign's own blend wins over the global target — badge shows `blend ×N*`). 
 per-placement decision (Top 100→150% · Rest 0→50% · base €0.50) is surfaced in the cockpit
 family list + plan preview (BL.8).
 
+## Taking a market live (the write-gate is PER-MARKET)
+
+The switcher + campaign lists span all markets, but **edits only reach Amazon for a market
+that is fully live** — the gate (`ads-write-gate.ts`) needs, per marketplace: an
+`AmazonAdsConnection` with `mode=production` **and** `writesEnabledAt`, **plus** each
+campaign's `liveBidWritesEnabled`. New markets ship `sandbox` + writes-off + default-deny
+(a safety default), so by default only the market you explicitly enabled (IT) is live;
+others view/select fine but changes stay in Nexus. To take a market live (MM-series,
+2026-06-09, all in `/settings/advertising`): **1.** Promote to production (`set-mode`) →
+**2.** Enable writes (`preview-writes`→`enable-writes`) → **3.** Allowlist {market}
+campaigns (`POST /campaigns/live-writes/bulk`). The rank cockpit shows a loud "{market} is
+not live" banner (MM.3) when the selected market isn't fully enabled.
+
 ## API (`apps/api/src/routes/advertising.routes.ts`)
 
 - `GET/POST /advertising/rank-plans`, `GET/PATCH/DELETE /advertising/rank-plans/:id` — CRUD (POST 409 on dup per `@@unique`).
