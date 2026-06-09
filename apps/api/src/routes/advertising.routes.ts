@@ -688,6 +688,20 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     return { ok: true, campaignId: id, liveBidWritesEnabled: enabled }
   })
 
+  // MM.2 — bulk live-write allowlist for a whole marketplace (or an explicit set), so an
+  // operator taking a market live doesn't flip dozens of campaigns one-by-one. Flips the
+  // per-campaign allowlist only; the connection gate (mode=production + writesEnabledAt)
+  // still independently governs whether anything actually reaches Amazon.
+  fastify.post('/advertising/campaigns/live-writes/bulk', async (request, reply) => {
+    const b = request.body as { marketplace?: string; enabled?: boolean; campaignIds?: string[] }
+    const enabled = !!b.enabled
+    if (!b.marketplace && !(b.campaignIds && b.campaignIds.length)) { reply.status(400); return { error: 'marketplace or campaignIds required' } }
+    const where = b.campaignIds?.length ? { id: { in: b.campaignIds } } : { marketplace: b.marketplace }
+    const r = await prisma.campaign.updateMany({ where, data: { liveBidWritesEnabled: enabled } })
+    logger.warn('[ADS-LIVE-ALLOWLIST-BULK]', { marketplace: b.marketplace, campaignIds: b.campaignIds?.length, enabled, count: r.count, actor: actorFromHeaders(request.headers as Record<string, unknown>) })
+    return { ok: true, count: r.count, enabled }
+  })
+
   // ── Apex A.2a: preview pending live writes for a campaign ───────────────
   // Shows exactly what would hit Amazon before the grace window expires: each
   // queued mutation's resolved external id + field changes + a request sketch,

@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import {
   BarChart3, CheckCircle2, AlertCircle, Loader2, Shield,
-  Eye, EyeOff, Trash2, RefreshCw, Zap, Lock,
+  Eye, EyeOff, Trash2, RefreshCw, Zap, Lock, Rocket, Undo2, ListChecks,
 } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -70,6 +70,7 @@ export default function AdvertisingSettingsPage() {
   const [showSecrets, setShowSecrets] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
+  const [busyAction, setBusyAction] = useState<string | null>(null) // MM — profileId being promoted/allowlisted
 
   const [form, setForm] = useState({
     profileId: '',
@@ -152,7 +153,8 @@ export default function AdvertisingSettingsPage() {
 
   const handleEnableWrites = async (profileId: string) => {
     if (!confirm('Enable live writes? This will allow the system to change bids and budgets on Amazon.')) return
-    // First set mode=production via preview, then enable writes
+    // Two-step: preview-writes (REQUIRES the connection already be production — promote it
+    // first via "Promote to production") issues a token, then enable-writes commits it.
     const previewRes = await fetch(`${getBackendUrl()}/api/advertising/connection/preview-writes`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -183,6 +185,37 @@ export default function AdvertisingSettingsPage() {
       body: JSON.stringify({ profileId }),
     })
     fetchConnections()
+  }
+
+  // MM.1 — promote a sandbox connection to production (or demote back). Production is the
+  // precondition for "Enable writes" — without it, that flow 409s. Demoting clears writes.
+  const handleSetMode = async (profileId: string, marketplace: string, mode: 'production' | 'sandbox') => {
+    const msg = mode === 'production'
+      ? `Promote ${marketplace} to PRODUCTION? Real API calls will be possible for this market (you still must Enable writes + allowlist campaigns before any bid changes go live).`
+      : `Switch ${marketplace} back to SANDBOX? This also disables live writes immediately.`
+    if (!confirm(msg)) return
+    setBusyAction(profileId)
+    try {
+      const res = await fetch(`${getBackendUrl()}/api/advertising/connection/set-mode`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ profileId, mode }),
+      })
+      if (!res.ok) { const d = await res.json().catch(() => ({})); alert(`Set mode failed: ${d.error ?? res.status}`) }
+      await fetchConnections()
+    } finally { setBusyAction(null) }
+  }
+
+  // MM.2 — allowlist every campaign in a marketplace in one shot (vs per-campaign).
+  const handleBulkAllowlist = async (profileId: string, marketplace: string, enabled: boolean) => {
+    if (enabled && !confirm(`Allowlist ALL ${marketplace} campaigns for live writes? Combined with the connection being live, the rank engine + manual edits can then change their bids/budgets on Amazon.`)) return
+    setBusyAction(profileId)
+    try {
+      const res = await fetch(`${getBackendUrl()}/api/advertising/campaigns/live-writes/bulk`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ marketplace, enabled }),
+      })
+      const d = await res.json().catch(() => ({}))
+      if (res.ok) alert(`${enabled ? 'Allowlisted' : 'Removed from allowlist'} ${d.count ?? 0} ${marketplace} campaign(s).`)
+      else alert(`Bulk allowlist failed: ${d.error ?? res.status}`)
+    } finally { setBusyAction(null) }
   }
 
   return (
@@ -246,6 +279,14 @@ export default function AdvertisingSettingsPage() {
                       {testResult.message}
                     </div>
                   )}
+                  {/* MM.1 — make the 3-step go-live path explicit */}
+                  <div className="text-xs text-slate-400">
+                    {conn.mode !== 'production'
+                      ? 'Next: Promote to production →'
+                      : !conn.writesEnabledAt
+                        ? 'Next: Enable writes →'
+                        : 'Live · then allowlist this market’s campaigns so the engine can change their bids'}
+                  </div>
                 </div>
                 <div className="flex items-center gap-1.5 flex-shrink-0 flex-wrap justify-end">
                   <button
@@ -256,7 +297,26 @@ export default function AdvertisingSettingsPage() {
                     {testing === conn.profileId ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
                     Test
                   </button>
-                  {conn.writesEnabledAt ? (
+                  {/* MM.1 — promote sandbox → production (precondition for Enable writes), or demote back */}
+                  {conn.mode !== 'production' ? (
+                    <button
+                      onClick={() => handleSetMode(conn.profileId, conn.marketplace, 'production')}
+                      disabled={busyAction === conn.profileId}
+                      className="inline-flex items-center gap-1 rounded border border-blue-200 bg-blue-50 px-2 py-1 text-xs text-blue-700 hover:bg-blue-100 disabled:opacity-50"
+                    >
+                      {busyAction === conn.profileId ? <Loader2 className="h-3 w-3 animate-spin" /> : <Rocket className="h-3 w-3" />} Promote to production
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => handleSetMode(conn.profileId, conn.marketplace, 'sandbox')}
+                      disabled={busyAction === conn.profileId}
+                      className="inline-flex items-center gap-1 rounded border border-slate-200 bg-white px-2 py-1 text-xs text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+                    >
+                      <Undo2 className="h-3 w-3" /> Back to sandbox
+                    </button>
+                  )}
+                  {/* writes enable/disable — only meaningful once production */}
+                  {conn.mode === 'production' && (conn.writesEnabledAt ? (
                     <button
                       onClick={() => handleDisableWrites(conn.profileId)}
                       className="inline-flex items-center gap-1 rounded border border-rose-200 bg-rose-50 px-2 py-1 text-xs text-rose-700 hover:bg-rose-100"
@@ -269,6 +329,16 @@ export default function AdvertisingSettingsPage() {
                       className="inline-flex items-center gap-1 rounded border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs text-emerald-700 hover:bg-emerald-100"
                     >
                       <Zap className="h-3 w-3" /> Enable writes
+                    </button>
+                  ))}
+                  {/* MM.2 — bulk allowlist this market's campaigns (only once writes are live) */}
+                  {conn.writesEnabledAt && (
+                    <button
+                      onClick={() => handleBulkAllowlist(conn.profileId, conn.marketplace, true)}
+                      disabled={busyAction === conn.profileId}
+                      className="inline-flex items-center gap-1 rounded border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
+                    >
+                      {busyAction === conn.profileId ? <Loader2 className="h-3 w-3 animate-spin" /> : <ListChecks className="h-3 w-3" />} Allowlist {conn.marketplace} campaigns
                     </button>
                   )}
                   <button

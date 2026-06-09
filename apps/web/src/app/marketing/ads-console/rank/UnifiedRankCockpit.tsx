@@ -55,6 +55,7 @@ export function UnifiedRankCockpit() {
   const [autonomy, setAutonomy] = useState<Autonomy | null>(null)
   const [pending, setPending] = useState(0)
   const [gateOpen, setGateOpen] = useState<boolean | null>(null)
+  const [conns, setConns] = useState<Array<{ marketplace: string; mode: string; writesEnabledAt: string | null }>>([]) // MM.3 — per-market live status
   const [trayOpen, setTrayOpen] = useState(false)
   const [trayTab, setTrayTab] = useState<'staged' | 'history'>('staged')
   const [cmdkOpen, setCmdkOpen] = useState(false)
@@ -80,6 +81,9 @@ export function UnifiedRankCockpit() {
   const setCampaignId = useCallback((id: string) => setParams({ campaignId: id || null }), [setParams])
 
   useEffect(() => { void fetch(`${getBackendUrl()}/api/advertising/campaigns?limit=500`, { cache: 'no-store' }).then(r => r.json()).then(d => setCampaigns((d.items ?? []) as Camp[])).catch(() => {}) }, [])
+  // MM.3 — connection live-status per market, so we can warn loudly when the selected
+  // market is sandbox / writes-off (changes would never reach Amazon).
+  useEffect(() => { void fetch(`${getBackendUrl()}/api/advertising/connections`, { cache: 'no-store' }).then(r => r.json()).then(d => setConns((d.items ?? []) as Array<{ marketplace: string; mode: string; writesEnabledAt: string | null }>)).catch(() => {}) }, [])
   useEffect(() => { void fetch(`${getBackendUrl()}/api/advertising/autonomy/status`, { cache: 'no-store' }).then(r => r.json()).then(d => setAutonomy(d as Autonomy)).catch(() => {}) }, [])
   const loadPending = useCallback(() => {
     if (!campaignId) { setPending(0); setGateOpen(null); return }
@@ -126,6 +130,9 @@ export function UnifiedRankCockpit() {
   useEffect(() => { if (!toast) return; const t = setTimeout(() => setToast(''), 4000); return () => clearTimeout(t) }, [toast, setToast])
 
   const inMarket = useMemo(() => campaigns.filter(c => c.marketplace === market), [campaigns, market])
+  // MM.3 — is the SELECTED market actually able to push to Amazon? (production + writes on)
+  const mktConn = useMemo(() => conns.find(c => c.marketplace === market), [conns, market])
+  const marketLive = !!mktConn && mktConn.mode === 'production' && !!mktConn.writesEnabledAt
   // RC4.13 — Active (ENABLED) / Inactive (paused or archived) / All. Drives every
   // campaign list (search, palette, bulk). Picker stays market-specific via inMarket.
   const matchStatus = useCallback((c: Camp) => (statusFilter === 'all' ? true : statusFilter === 'active' ? c.status === 'ENABLED' : c.status !== 'ENABLED'), [statusFilter])
@@ -213,6 +220,22 @@ export function UnifiedRankCockpit() {
         )}
       </div>
       {toast && <div className="az-urc-toast" role="status" aria-live="polite"><Undo2 size={13} /> {toast}</div>}
+
+      {/* MM.3 — loud, unmissable warning when this market can't reach Amazon. Conns load
+          async, so only warn once we actually have the connection list (conns.length). */}
+      {conns.length > 0 && !marketLive && (
+        <div className="az-urc-notlive" role="status">
+          <AlertTriangle size={15} />
+          <span><b>{market} is not live.</b> {!mktConn ? `There’s no Amazon Ads connection for ${market}.` : mktConn.mode !== 'production' ? `The ${market} connection is in sandbox.` : `Live writes are turned off for ${market}.`} Changes you make here stay in Nexus and <b>never reach Amazon</b>.</span>
+          <a href="/settings/advertising" target="_blank" rel="noopener noreferrer">Take {market} live →</a>
+        </div>
+      )}
+      {conns.length > 0 && marketLive && view === 'cockpit' && campaignId && gateOpen === false && (
+        <div className="az-urc-notlive soft" role="status">
+          <AlertTriangle size={15} />
+          <span>This campaign isn’t on the live-write allowlist — its changes stay staged. Open its write-gate in staged changes, or allowlist all {market} campaigns in <a href="/settings/advertising" target="_blank" rel="noopener noreferrer">Settings</a>.</span>
+        </div>
+      )}
 
       {view === 'overview' && <RankOverview market={market} onMode={m => router.push(`/marketing/ads-console/rank?mode=${m}`)} />}
       {view === 'managed' && <ManagedCampaigns market={market} onJump={goCockpit} onChanged={loadPending} />}
