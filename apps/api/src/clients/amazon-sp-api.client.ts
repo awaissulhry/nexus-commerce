@@ -119,7 +119,7 @@ export class AmazonSpApiClient {
   private readonly clientId: string
   private readonly clientSecret: string
   private readonly refreshToken: string
-  private readonly region: string
+  readonly region: string
 
   constructor() {
     this.clientId = process.env.AMAZON_LWA_CLIENT_ID || process.env.AMAZON_CLIENT_ID || ''
