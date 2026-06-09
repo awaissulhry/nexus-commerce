@@ -968,7 +968,10 @@ export class AmazonSpApiClient {
           method: 'GET',
           headers: {
             'x-amzn-requestid': `nexus-${Date.now()}`,
-            Authorization: `Bearer ${accessToken}`,
+            // SP-API auth is the LWA token in x-amz-access-token — NOT
+            // Authorization:Bearer. The wrong header made every getListingsItem
+            // 404 (bad-auth), which we misread as "listing not found".
+            'x-amz-access-token': accessToken,
           },
         },
         `getListingsItem(${sku})`,
@@ -1068,7 +1071,7 @@ export class AmazonSpApiClient {
       }
       const response = await this.fetchWithRetry(
         url.toString(),
-        { method: 'GET', headers: { 'x-amzn-requestid': `nexus-${Date.now()}`, Authorization: `Bearer ${accessToken}` } },
+        { method: 'GET', headers: { 'x-amzn-requestid': `nexus-${Date.now()}`, 'x-amz-access-token': accessToken } },
         'searchListingsItems',
       )
       const data = (await response.json().catch(() => ({}))) as {
