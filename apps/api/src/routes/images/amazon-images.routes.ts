@@ -236,7 +236,7 @@ const amazonImagesRoutes: FastifyPluginAsync = async (fastify) => {
   // feed isn't reflected on the listing. Calls getListingsItem only (read-only).
   fastify.get<{
     Params: { productId: string; sku: string }
-    Querystring: { marketplace?: string; sellerId?: string }
+    Querystring: { marketplace?: string; sellerId?: string; asin?: string }
   }>('/products/:productId/amazon-images/debug-live/:sku', async (request, reply) => {
     const mkt = (request.query.marketplace ?? 'ES').toUpperCase()
     const marketplaceId = marketplaceCodeToId(mkt)
@@ -250,6 +250,7 @@ const amazonImagesRoutes: FastifyPluginAsync = async (fastify) => {
         includedData: ['summaries', 'attributes', 'images', 'issues', 'relationships'] as any,
       })
       const raw = (res.rawResponse ?? {}) as any
+      const search = await amazonSpApiClient.searchListingsItems({ sellerId, marketplaceId, asin: request.query.asin || 'B0BMS6ZZ4H', pageSize: 20 })
       const attrs = raw.attributes ?? {}
       const imageAttributes: Record<string, unknown> = {}
       for (const k of Object.keys(attrs)) if (/image/i.test(k)) imageAttributes[k] = attrs[k]
@@ -269,6 +270,7 @@ const amazonImagesRoutes: FastifyPluginAsync = async (fastify) => {
         imageAttributes,
         issues: raw.issues ?? [],
         relationships: raw.relationships ?? [],
+        search,
       }
     } catch (err) {
       return reply.code(500).send({ error: err instanceof Error ? err.message : String(err) })

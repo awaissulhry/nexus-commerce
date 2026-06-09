@@ -1038,6 +1038,56 @@ export class AmazonSpApiClient {
   }
 
   /**
+   * Search the seller's listings items for a marketplace (optionally filtered by
+   * ASIN) to discover the REAL seller SKUs. Read-only — used to diagnose why
+   * getListingsItem 404s and to find the live listing SKU.
+   */
+  async searchListingsItems(opts: {
+    sellerId: string
+    marketplaceId: string
+    asin?: string
+    pageSize?: number
+  }): Promise<{
+    success: boolean
+    httpStatus: number
+    numberOfResults?: number
+    items?: Array<{ sku: string; asin: string | null; status: unknown }>
+    error?: string
+  }> {
+    try {
+      const accessToken = await this.getAccessToken()
+      const url = new URL(
+        `https://sellingpartnerapi-${this.region}.amazon.com/listings/2021-08-01/items/${opts.sellerId}`,
+      )
+      url.searchParams.set('marketplaceIds', opts.marketplaceId)
+      url.searchParams.set('includedData', 'summaries')
+      url.searchParams.set('pageSize', String(opts.pageSize ?? 10))
+      if (opts.asin) {
+        url.searchParams.set('identifiers', opts.asin)
+        url.searchParams.set('identifiersType', 'ASIN')
+      }
+      const response = await this.fetchWithRetry(
+        url.toString(),
+        { method: 'GET', headers: { 'x-amzn-requestid': `nexus-${Date.now()}`, Authorization: `Bearer ${accessToken}` } },
+        'searchListingsItems',
+      )
+      const data = (await response.json().catch(() => ({}))) as {
+        numberOfResults?: number
+        items?: Array<{ sku: string; summaries?: Array<{ asin?: string; status?: unknown }> }>
+      }
+      if (response.status >= 400) {
+        return { success: false, httpStatus: response.status, error: this.parseErrors(data as never) ?? JSON.stringify(data).slice(0, 300) }
+      }
+      const items = Array.isArray(data.items)
+        ? data.items.map((it) => ({ sku: it.sku, asin: it.summaries?.[0]?.asin ?? null, status: it.summaries?.[0]?.status ?? null }))
+        : []
+      return { success: true, httpStatus: response.status, numberOfResults: data.numberOfResults, items }
+    } catch (error) {
+      return { success: false, httpStatus: 0, error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  /**
    * Batch submit multiple listings
    * Respects rate limiting for each request
    */
