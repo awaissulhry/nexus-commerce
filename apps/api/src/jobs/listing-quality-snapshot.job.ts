@@ -24,6 +24,7 @@ interface RunSummary {
   products: number
   snapshots: number
   errors: number
+  errorReasons: Record<string, number>
 }
 
 function dimensionsToRecord(dims: QualityDimensionScore[]): Record<string, number> {
@@ -33,7 +34,7 @@ function dimensionsToRecord(dims: QualityDimensionScore[]): Record<string, numbe
 }
 
 export async function runListingQualitySnapshotOnce(): Promise<RunSummary> {
-  const summary: RunSummary = { products: 0, snapshots: 0, errors: 0 }
+  const summary: RunSummary = { products: 0, snapshots: 0, errors: 0, errorReasons: {} }
 
   // Load ACTIVE products
   const products = await prisma.product.findMany({
@@ -126,8 +127,16 @@ export async function runListingQualitySnapshotOnce(): Promise<RunSummary> {
           })
 
           summary.snapshots += result.perChannel.length
-        } catch {
+        } catch (err) {
           summary.errors++
+          // RRL.8 — surface WHY. This was an empty catch, so a SYSTEMIC failure
+          // (no AI provider key, kill switch on, exhausted budget) that fails
+          // every product looked like a healthy "SUCCESS, 0 snapshots" tick —
+          // the same success-but-broken shape that hid the review freeze.
+          // Bucket by message so the cron summary names the dominant cause.
+          const reason = err instanceof Error ? err.message : String(err)
+          const key = reason.slice(0, 80)
+          summary.errorReasons[key] = (summary.errorReasons[key] ?? 0) + 1
         }
       }),
     )
@@ -140,8 +149,11 @@ export async function runListingQualitySnapshotCron(): Promise<void> {
   try {
     await recordCronRun('listing-quality-snapshot', async () => {
       const s = await runListingQualitySnapshotOnce()
-      const msg = `products=${s.products} snapshots=${s.snapshots} errors=${s.errors}`
-      logger.info('listing-quality-snapshot cron: completed', { ...s })
+      const topReason = Object.entries(s.errorReasons).sort((a, b) => b[1] - a[1])[0]
+      const reasonStr = topReason ? ` topError="${topReason[0]}"(${topReason[1]})` : ''
+      const msg = `products=${s.products} snapshots=${s.snapshots} errors=${s.errors}${reasonStr}`
+      if (s.errors > 0) logger.warn('listing-quality-snapshot cron: errors', { errorReasons: s.errorReasons })
+      logger.info('listing-quality-snapshot cron: completed', { products: s.products, snapshots: s.snapshots, errors: s.errors })
       return msg
     })
   } catch (err) {
