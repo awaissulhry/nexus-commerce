@@ -160,6 +160,7 @@ The **Sentiment funnel** tile on the dashboard shows pending / positive / negati
 | `NEXUS_REVIEW_DELIVERY_OVERDUE_DAYS` (optional) | How many calendar days post-ship counts as "overdue" with no `deliveredAt` (RRL.3) | Defaults to `6` (weekend-proof vs the 3-business-day estimate). |
 | `NEXUS_REVIEW_SCHEDULING_BACKLOG_ALERT` (optional) | # of delivered-but-unscheduled orders (4–30d window) that trips the scheduling-stall alert | Defaults to `15`. |
 | `NEXUS_ENABLE_DELIVERED_REPORT_FETCH=1` (optional) | Also fetch the real Amazon all-orders report for authoritative Delivered dates in the daily backfill | Off — heuristic-only (the report returns ~0 Delivered rows for FBA and is slow). |
+| `NEXUS_ALERT_EMAIL` (optional) | Where the seeded reliability alerts (review starvation + stopped crons, RRL.7) email | Falls back to `NEXUS_SUPPORT_INBOX` → `support@xavia.it`. |
 | `NEXUS_SUPPORT_INBOX=support@xavia.it` | Where negative-feedback diversion emails route | Defaults to `support@xavia.it`. |
 | `NEXUS_WEB_URL` (optional) | Base URL for `/r/[token]/*` landing pages | Defaults to `https://nexus-commerce-three.vercel.app`. |
 | `SHOPIFY_REVIEW_DOMAIN` (optional) | Shopify review landing | Field blank in email. |
@@ -463,6 +464,20 @@ starved. The staleness guard didn't catch it because its threshold was 5 days.
 - **RRL.6 — test guard.** `evaluatePipelineFreshness` extracted as a pure
   function with `review-pipeline-health.vitest.test.ts` so the starvation
   alerting can't silently regress.
+- **RRL.7 — proactive notification (not just logs).** Two new metrics in the
+  alert system (`/sync-logs/alerts`) + two seeded, idempotent default rules so
+  the operator is actively pinged (email/Slack), not relying on the banner:
+  - `reviewOverdueUndelivered` ≥ 10 → "Review pipeline starved" (this exact
+    failure, including the never-ran case).
+  - `overdueCrons` ≥ 1 → "Critical cron stopped" — a **generic** detector that
+    infers each cron's cadence from its own success history and flags any that
+    silently stopped. Backstops the node-cron fixed-time-skip class across all
+    ~36 daily/weekly crons, with no hand-maintained list. (The pre-existing
+    `staleCrons` metric only caught *stuck* RUNNING crons, never a *missed* one
+    — which is why the original freeze went unnoticed.)
+  Email routes to `NEXUS_ALERT_EMAIL` → `NEXUS_SUPPORT_INBOX` → `support@xavia.it`
+  (needs `NEXUS_ENABLE_OUTBOUND_EMAILS=true` + `RESEND_API_KEY`; the `log`
+  channel always works). Rules are editable/disable-able in the UI.
 
 **To verify it's healthy:** the health banner shows `overdueUndelivered` ≈ 0 and
 the `review-request-mailer` summary shows `deliverySwept=N scheduled=N …`. A

@@ -38,6 +38,8 @@ const METRICS = [
   { value: 'queueDepth', label: 'Queue depth', unit: '' },
   { value: 'activeErrorGroups', label: 'Active error groups', unit: '' },
   { value: 'staleCrons', label: 'Stale RUNNING crons', unit: '' },
+  { value: 'overdueCrons', label: 'Crons silently stopped', unit: '' },
+  { value: 'reviewOverdueUndelivered', label: 'Review pipeline starved (overdue-undelivered)', unit: '' },
 ] as const
 const OPERATORS = [
   { value: 'gt', label: '>' },

@@ -736,6 +736,12 @@ async function start() {
     // and fires AlertEvent + dispatches notifications when conditions
     // cross thresholds. Default-ON.
     startAlertEvaluatorCron();
+    // RRL.7 — seed the default reliability alert rules (review-pipeline
+    // starvation + a cron silently stopping) so the operator is actively
+    // notified, not just via logs/the dashboard banner. Idempotent.
+    void import('./services/alert-evaluator.service.js')
+      .then(({ seedDefaultAlertRules }) => seedDefaultAlertRules())
+      .catch((e) => logger.warn('[startup] seedDefaultAlertRules failed (non-fatal)', { error: e instanceof Error ? e.message : String(e) }));
 
     // W4.10 — Repricing evaluator cron (every 5 min). Walks every
     // enabled RepricingRule, builds market context from the latest

@@ -96,12 +96,77 @@ async function metricStaleCrons(_ctx: MetricContext): Promise<number> {
   })
 }
 
+// RRL.7 — review-pipeline OUTPUT freshness as an alertable metric. staleCrons
+// above only catches STUCK crons (RUNNING > 2h); it cannot catch a cron that
+// silently NEVER RAN (no row) or ran SUCCESS while producing nothing — which is
+// exactly how the review pipeline froze. This surfaces the same weekend-proof
+// "overdue-undelivered" backlog the dashboard banner uses, so an AlertRule can
+// email/Slack the operator the moment the loop starves.
+async function metricReviewOverdueUndelivered(_ctx: MetricContext): Promise<number> {
+  const { computeReviewPipelineFreshness } = await import('./reviews/review-pipeline-health.service.js')
+  const f = await computeReviewPipelineFreshness()
+  return f.overdueUndelivered
+}
+
+// RRL.7 — generic "a cron that WAS running silently stopped" detector. The
+// fixed-time daily crons (≈36 of them) share node-cron's silent-skip exposure:
+// an in-memory timer that a container restart can skip with no replay. Rather
+// than hand-maintain a per-cron cadence map (which rots), infer each cron's
+// own cadence from its success history and flag any whose latest success is
+// far past that cadence. Self-tuning, false-alarm-free (a never-run / disabled
+// cron has no successes so it's never evaluated; the review pipeline's own
+// never-ran case is covered by metricReviewOverdueUndelivered above).
+export interface CronSuccessRow {
+  jobName: string
+  startedAt: Date
+}
+
+const HOUR = 60 * 60 * 1000
+
+export function detectOverdueCrons(rows: CronSuccessRow[], now: number): string[] {
+  const byJob = new Map<string, number[]>()
+  for (const r of rows) {
+    const arr = byJob.get(r.jobName) ?? []
+    arr.push(r.startedAt.getTime())
+    byJob.set(r.jobName, arr)
+  }
+  const overdue: string[] = []
+  for (const [jobName, tsList] of byJob) {
+    // Need enough history to trust the inferred cadence.
+    if (tsList.length < 3) continue
+    tsList.sort((a, b) => a - b)
+    const gaps: number[] = []
+    for (let i = 1; i < tsList.length; i++) gaps.push(tsList[i] - tsList[i - 1])
+    gaps.sort((a, b) => a - b)
+    const medianGap = gaps[Math.floor(gaps.length / 2)]
+    const lastSuccess = tsList[tsList.length - 1]
+    // Overdue = silent for >3× the normal cadence (and at least cadence+2h so a
+    // tiny-interval cron can't trip on minor jitter). A daily cron (~24h median)
+    // flags after ~72h; an hourly one after ~3h.
+    const threshold = Math.max(medianGap * 3, medianGap + 2 * HOUR)
+    if (now - lastSuccess > threshold) overdue.push(jobName)
+  }
+  return overdue
+}
+
+async function metricOverdueCrons(_ctx: MetricContext): Promise<number> {
+  // 14d of successful runs is enough to infer cadence for daily/weekly crons
+  // while bounding the row count. Select only what detectOverdueCrons needs.
+  const rows = await prisma.cronRun.findMany({
+    where: { status: 'SUCCESS', startedAt: { gte: new Date(Date.now() - 14 * 24 * HOUR) } },
+    select: { jobName: true, startedAt: true },
+  })
+  return detectOverdueCrons(rows, Date.now()).length
+}
+
 const METRIC_FNS: Record<string, (ctx: MetricContext) => Promise<number>> = {
   errorRate: metricErrorRate,
   latencyP95: metricLatencyP95,
   queueDepth: metricQueueDepth,
   activeErrorGroups: metricActiveErrorGroups,
   staleCrons: metricStaleCrons,
+  reviewOverdueUndelivered: metricReviewOverdueUndelivered,
+  overdueCrons: metricOverdueCrons,
 }
 
 interface DispatchResult {
@@ -359,4 +424,61 @@ export async function runAlertEvaluator(): Promise<EvalResult> {
   }
 
   return result
+}
+
+/**
+ * RRL.7 — seed the two default reliability alert rules so the operator is
+ * actively notified (not just a log line / dashboard banner) when:
+ *   1. the review-request pipeline starves (deliveredAt stops advancing), and
+ *   2. ANY cron that was running silently stops (the node-cron skip class).
+ *
+ * Idempotent: matched by name, only created if absent — so the operator can
+ * freely retune thresholds, change channels, or disable them in the UI without
+ * this re-creating them. Email routes to NEXUS_ALERT_EMAIL → NEXUS_SUPPORT_INBOX
+ * → support@xavia.it; the 'log' channel always works even with email off. Add a
+ * 'slack:#alerts' channel in the UI once NEXUS_SLACK_WEBHOOK_URL is set.
+ */
+export async function seedDefaultAlertRules(): Promise<{ created: string[] }> {
+  const email = process.env.NEXUS_ALERT_EMAIL ?? process.env.NEXUS_SUPPORT_INBOX ?? 'support@xavia.it'
+  const channels = ['log', `email:${email}`]
+  const defaults = [
+    {
+      name: 'Review pipeline starved',
+      description:
+        'Amazon orders shipped ≥6d ago with no deliveredAt — the review-request scheduler is being starved (the loop has stopped feeding itself). See /marketing/reviews/requests.',
+      metric: 'reviewOverdueUndelivered',
+      operator: 'gte',
+      threshold: 10,
+    },
+    {
+      name: 'Critical cron stopped',
+      description:
+        'A cron that was running on a regular cadence has gone silent well past its normal interval (node-cron in-memory timers can be skipped across restarts with no replay).',
+      metric: 'overdueCrons',
+      operator: 'gte',
+      threshold: 1,
+    },
+  ]
+  const created: string[] = []
+  for (const d of defaults) {
+    const existing = await prisma.alertRule.findFirst({ where: { name: d.name } })
+    if (existing) continue
+    await prisma.alertRule.create({
+      data: {
+        name: d.name,
+        description: d.description,
+        metric: d.metric,
+        operator: d.operator,
+        threshold: d.threshold,
+        windowMinutes: 15,
+        notificationChannels: channels as never,
+        enabled: true,
+      },
+    })
+    created.push(d.name)
+  }
+  if (created.length > 0) {
+    logger.info('[alert-evaluator] seeded default reliability alert rules', { created, email })
+  }
+  return { created }
 }
