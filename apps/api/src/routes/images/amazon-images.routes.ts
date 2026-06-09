@@ -35,6 +35,7 @@ import { adoptAmazonImages, reconcileAmazonImages } from '../../services/images/
 import { buildMirrorDiff } from '../../services/images/amazon-mirror-diff.service.js'
 import { fillSlotsFromGallery } from '../../services/images/amazon-fill-gallery.service.js'
 import { marketplaceCodeToId } from '../../utils/marketplace-code.js'
+import { amazonSpApiClient } from '../../clients/amazon-sp-api.client.js'
 import prisma from '../../db.js'
 
 const VALID_MARKETPLACES = new Set(['IT', 'DE', 'FR', 'ES', 'UK'])
@@ -224,6 +225,45 @@ const amazonImagesRoutes: FastifyPluginAsync = async (fastify) => {
         activeAxis: request.query.activeAxis,
       })
       return diff
+    } catch (err) {
+      return reply.code(500).send({ error: err instanceof Error ? err.message : String(err) })
+    }
+  })
+
+  // ── GET .../amazon-images/debug-live/:sku — TEMP read-only probe ───
+  // For one SKU+marketplace: the image ATTRIBUTES our feed sets vs the
+  // PROCESSED images Amazon returns vs any issues — to pin down why an accepted
+  // feed isn't reflected on the listing. Calls getListingsItem only (read-only).
+  fastify.get<{
+    Params: { productId: string; sku: string }
+    Querystring: { marketplace?: string }
+  }>('/products/:productId/amazon-images/debug-live/:sku', async (request, reply) => {
+    const mkt = (request.query.marketplace ?? 'ES').toUpperCase()
+    const marketplaceId = marketplaceCodeToId(mkt)
+    if (!marketplaceId) return reply.code(400).send({ error: `bad marketplace ${mkt}` })
+    const sellerId = process.env.AMAZON_SELLER_ID ?? process.env.AMAZON_MERCHANT_ID ?? ''
+    try {
+      const res = await amazonSpApiClient.getListingsItem({
+        sellerId,
+        sku: request.params.sku,
+        marketplaceId,
+        includedData: ['summaries', 'attributes', 'images', 'issues', 'relationships'] as any,
+      })
+      const raw = (res.rawResponse ?? {}) as any
+      const attrs = raw.attributes ?? {}
+      const imageAttributes: Record<string, unknown> = {}
+      for (const k of Object.keys(attrs)) if (/image/i.test(k)) imageAttributes[k] = attrs[k]
+      return {
+        sku: request.params.sku,
+        marketplace: mkt,
+        asin: res.asin,
+        status: res.status,
+        processedImagesCount: (res.images ?? []).length,
+        imageAttributeKeys: Object.keys(imageAttributes),
+        imageAttributes,
+        issues: raw.issues ?? [],
+        relationships: raw.relationships ?? [],
+      }
     } catch (err) {
       return reply.code(500).send({ error: err instanceof Error ? err.message : String(err) })
     }
