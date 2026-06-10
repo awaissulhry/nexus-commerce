@@ -136,12 +136,18 @@ export function buildJsonListingsFeedBody(
       if ((op.deleteSlots ?? []).includes('MAIN')) {
         throw new Error(`Refusing to delete MAIN image locator for SKU ${op.sku}`)
       }
+      // Image-locator attribute VALUES are marketplace-scoped — Amazon's
+      // documented format is [{ media_location, marketplace_id }]. We were sending
+      // only media_location, which Amazon ACCEPTS (not invalid, so never flagged)
+      // but does NOT apply — the image is "accepted" yet never ingested into the
+      // catalog. Scope the value to this feed's marketplace, exactly like the
+      // delete selector below (which Amazon already requires + accepts).
       const replacePatches = op.slots
         .filter(({ slot }) => map[slot])
         .map(({ slot, url }) => ({
           op: 'replace',
           path: `/attributes/${map[slot]}`,
-          value: [{ media_location: url }] as unknown,
+          value: [{ media_location: url, marketplace_id: input.marketplaceIds[0] }] as unknown,
         }))
       // Amazon's PATCH `delete` REQUIRES a value selector identifying which
       // marketplace's value to remove. Omitting it is rejected as "Invalid empty
