@@ -67,7 +67,10 @@ export function UnifiedRankCockpit() {
   const router = useRouter()
   const RANK_PATH = '/marketing/ads-console/rank'
   const setParams = useCallback((patch: Record<string, string | null>) => {
-    const next = new URLSearchParams(sp.toString())
+    // Read the LIVE URL at call-time (not the captured `sp`) so a stale closure — e.g. a
+    // memoised handler that didn't re-create when sp changed — can't rebuild the URL from
+    // an old market and silently revert it. (Fixes "switch to DE → pick campaign → back to IT".)
+    const next = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : sp.toString())
     for (const [k, v] of Object.entries(patch)) { if (v == null || v === '') next.delete(k); else next.set(k, v) }
     router.replace(`${RANK_PATH}?${next.toString()}`, { scroll: false })
   }, [sp, router])
@@ -162,7 +165,7 @@ export function UnifiedRankCockpit() {
     const c = campaigns.find(x => x.id === id)
     if (c && c.status !== 'ENABLED') setStatusFilter('all') // keep a picked paused campaign visible in the browse list
     setCampaignId(id); setSearch(''); setSearchOpen(false)
-  }, [campaigns])
+  }, [campaigns, setCampaignId])
 
   // RC5.1 / RK.1 — jump to a specific campaign in the cockpit via the URL (reliable
   // deep-link). Widen the status filter if the target is paused/archived so it's
