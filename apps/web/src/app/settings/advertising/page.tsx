@@ -160,15 +160,17 @@ export default function AdvertisingSettingsPage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ profileId }),
     })
+    const previewData = await previewRes.json().catch(() => ({}))
     if (!previewRes.ok) {
-      const d = await previewRes.json()
-      alert(`Preview failed: ${d.error ?? 'unknown error'}`)
+      alert(`Preview failed: ${previewData.error ?? 'unknown error'}`)
       return
     }
+    // enable-writes requires the one-time token preview issued (NOT profileId) — that's
+    // the two-step safety handshake. Thread it through (the bug was sending profileId).
     const writeRes = await fetch(`${getBackendUrl()}/api/advertising/connection/enable-writes`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ profileId }),
+      body: JSON.stringify({ confirmationToken: previewData.confirmationToken }),
     })
     if (writeRes.ok) {
       fetchConnections()
