@@ -38,6 +38,66 @@ const AD_SYNC_TYPES = [
   "AD_BIDDING_STRATEGY_UPDATE",
 ] as const;
 
+// ── eBay payload helpers (Phase 0.1) ───────────────────────────────────────
+// On eBay, price lives on the OFFER and quantity on the inventory_item — two
+// different endpoints — and createOrReplaceInventoryItem REPLACES the whole
+// item, so we GET-merge-PUT to avoid wiping listing content. The prior single
+// inventory_item PUT put price on the item, used the wrong qty key, and
+// hardcoded USD, so master price/stock changes silently never reached eBay.
+
+export function ebayCurrencyForMarket(marketplaceId: string | undefined): string {
+  return marketplaceId === "EBAY_GB" ? "GBP" : "EUR";
+}
+
+/** Merge quantity/content into an existing inventory_item so the createOrReplace
+ *  PUT doesn't drop the rest of the listing. */
+export function mergeEbayInventoryItem(
+  existing: Record<string, any>,
+  payload: { quantity?: number; title?: string; description?: string; images?: string[] },
+): Record<string, any> {
+  const merged: Record<string, any> = { ...existing };
+  if (payload.quantity !== undefined) {
+    merged.availability = {
+      ...(existing.availability ?? {}),
+      shipToLocationAvailability: { quantity: payload.quantity },
+    };
+  }
+  if (payload.title || payload.description || (payload.images && payload.images.length > 0)) {
+    merged.product = { ...(existing.product ?? {}) };
+    if (payload.title) merged.product.title = payload.title;
+    if (payload.description) merged.product.description = payload.description;
+    if (payload.images && payload.images.length > 0) merged.product.imageUrls = payload.images;
+  }
+  return merged;
+}
+
+/** Update an existing offer's price, preserving its other fields. */
+export function buildEbayOfferUpdate(
+  existingOffer: Record<string, any>,
+  price: number,
+  currency: string,
+): Record<string, any> {
+  return {
+    ...existingOffer,
+    pricingSummary: { price: { value: price.toFixed(2), currency } },
+  };
+}
+
+// Amazon EU marketplace IDs (Phase 0.2). The price PATCH was hardcoded to the
+// US marketplace (ATVPDKIKX0DER) for an Amazon-IT seller; resolve the listing's
+// real marketplace, defaulting to IT (the primary market) — never US.
+const AMAZON_MARKETPLACE_IDS: Record<string, string> = {
+  IT: "APJ6JRA9NG5V4", DE: "A1PA6795UKMFR9", FR: "A13V1IB3VIYZZH", ES: "A1RKKUPIHCS9HS",
+  NL: "A1805IZSGTT6HS", SE: "A2NODRKZP88ZB9", PL: "A1C3SOZRARQ6R3", BE: "AMEN7PMS3EDWL",
+  IE: "A28R8C7NBKEWEA", UK: "A1F83G8C2ARO7P", GB: "A1F83G8C2ARO7P", US: "ATVPDKIKX0DER",
+};
+
+export function resolveAmazonMarketplaceId(mp: string | undefined): string {
+  if (!mp) return AMAZON_MARKETPLACE_IDS.IT;
+  if (/^A[A-Z0-9]{9,}$/.test(mp)) return mp; // already a full Amazon marketplace id
+  return AMAZON_MARKETPLACE_IDS[mp.toUpperCase()] ?? AMAZON_MARKETPLACE_IDS.IT;
+}
+
 // ── Data Structures ──────────────────────────────────────────────────────
 
 interface SyncPayload {
@@ -326,7 +386,7 @@ export class OutboundSyncService {
     const sellerId =
       process.env.AMAZON_SELLER_ID ?? process.env.AMAZON_MERCHANT_ID ?? "";
 
-    const amazonPayload = this.constructAmazonPayload(payload);
+    const amazonPayload = this.constructAmazonPayload(payload, marketplaceId);
     const digest = digestPayload(amazonPayload);
 
     const fail = (
@@ -483,8 +543,11 @@ export class OutboundSyncService {
     const sku = product?.sku ?? queueItem.externalListingId ?? "(unknown sku)";
     const marketplaceId = payload?.marketplaceId ?? "EBAY_IT";
 
-    const ebayPayload = this.constructEbayPayload(payload);
-    const digest = digestPayload(ebayPayload);
+    const digest = digestPayload({
+      price: payload.price,
+      quantity: payload.quantity,
+      content: !!(payload.title || payload.description || (payload.images && payload.images.length > 0)),
+    });
 
     const fail = (
       outcome: "gated" | "rate-limited" | "circuit-open" | "failed" | "timeout",
@@ -566,7 +629,7 @@ export class OutboundSyncService {
 
     // 5. Dry-run short-circuit
     if (mode === "dry-run") {
-      console.log(`[EBAY] Dry-run sync for ${sku}:`, ebayPayload);
+      console.log(`[EBAY] Dry-run sync for ${sku}:`, { price: payload.price, quantity: payload.quantity });
       recordEbayOutcome(connection.id, marketplaceId, true);
       writeAttemptLog({
         channel: "EBAY",
@@ -601,36 +664,99 @@ export class OutboundSyncService {
       return fail("failed", mode, connection.id, message, Date.now() - t0);
     }
 
-    // 7. Real PUT to inventory_item endpoint. createOrReplaceInventoryItem
-    // accepts the same body shape we use for first-time publish; it
-    // upserts so partial updates (price, quantity) merge with whatever
-    // eBay already has on file.
+    // 7. Apply the update. Quantity/content → inventory_item (GET-merge-PUT so
+    // the full-replace never wipes existing content); price → the OFFER
+    // (different endpoint). Either or both may run depending on the payload.
     const apiBase = getEbayApiBaseForMode(mode);
-    const url = `${apiBase}/sell/inventory/v1/inventory_item/${encodeURIComponent(sku)}`;
-    let response: Response;
-    try {
-      response = await fetch(url, {
-        method: "PUT",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-          "Content-Language": "en-US",
-          Accept: "application/json",
-        },
-        body: JSON.stringify(ebayPayload),
-      });
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
+    const currency = ebayCurrencyForMarket(marketplaceId);
+    const headers = {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    };
+
+    const ebayFail = (
+      message: string,
+      outcome: "failed" | "timeout" = "failed",
+    ): SyncResult => {
       recordEbayOutcome(connection.id, marketplaceId, false);
-      return fail("timeout", mode, connection.id, message, Date.now() - t0);
+      writeAttemptLog({
+        channel: "EBAY",
+        marketplace: marketplaceId,
+        sellerId: connection.id,
+        sku,
+        productId: product?.id ?? null,
+        mode,
+        outcome,
+        payloadDigest: digest,
+        errorMessage: message.slice(0, 500),
+        durationMs: Date.now() - t0,
+      });
+      return {
+        success: false,
+        queueId,
+        channel: "EBAY",
+        status: "FAILED",
+        message: `Failed to sync to eBay`,
+        error: message,
+      };
+    };
+
+    try {
+      // 7a. Quantity (+ any content) → inventory_item.
+      const touchesItem =
+        payload.quantity !== undefined ||
+        !!payload.title ||
+        !!payload.description ||
+        !!(payload.images && payload.images.length > 0);
+      if (touchesItem) {
+        const itemUrl = `${apiBase}/sell/inventory/v1/inventory_item/${encodeURIComponent(sku)}`;
+        let existing: Record<string, any> = {};
+        const getRes = await fetch(itemUrl, { method: "GET", headers });
+        if (getRes.ok) existing = (await getRes.json().catch(() => ({}))) as Record<string, any>;
+        const putRes = await fetch(itemUrl, {
+          method: "PUT",
+          headers: { ...headers, "Content-Language": "en-US" },
+          body: JSON.stringify(mergeEbayInventoryItem(existing, payload)),
+        });
+        if (!(putRes.ok || putRes.status === 204)) {
+          return ebayFail(`inventory_item PUT ${putRes.status}: ${(await putRes.text().catch(() => "")).slice(0, 300)}`);
+        }
+      }
+
+      // 7b. Price → offer (resolve the offer by SKU, then PUT its pricingSummary).
+      if (payload.price !== undefined) {
+        const offersRes = await fetch(
+          `${apiBase}/sell/inventory/v1/offer?sku=${encodeURIComponent(sku)}`,
+          { method: "GET", headers },
+        );
+        if (!offersRes.ok) {
+          return ebayFail(`get offers ${offersRes.status}: ${(await offersRes.text().catch(() => "")).slice(0, 300)}`);
+        }
+        const offersData = (await offersRes.json().catch(() => ({}))) as {
+          offers?: Array<Record<string, any>>;
+        };
+        const offer = offersData.offers?.[0];
+        if (!offer?.offerId) {
+          return ebayFail(`No eBay offer for SKU "${sku}" — publish the listing before syncing price.`);
+        }
+        const offerRes = await fetch(
+          `${apiBase}/sell/inventory/v1/offer/${encodeURIComponent(offer.offerId)}`,
+          {
+            method: "PUT",
+            headers: { ...headers, "Content-Language": "en-US" },
+            body: JSON.stringify(buildEbayOfferUpdate(offer, payload.price, currency)),
+          },
+        );
+        if (!offerRes.ok) {
+          return ebayFail(`offer PUT ${offerRes.status}: ${(await offerRes.text().catch(() => "")).slice(0, 300)}`);
+        }
+      }
+    } catch (err) {
+      return ebayFail(err instanceof Error ? err.message : String(err), "timeout");
     }
 
-    const succeeded = response.ok || response.status === 204;
-    let errorBody: string | null = null;
-    if (!succeeded) {
-      errorBody = await response.text().catch(() => "");
-    }
-    recordEbayOutcome(connection.id, marketplaceId, succeeded);
+    recordEbayOutcome(connection.id, marketplaceId, true);
     writeAttemptLog({
       channel: "EBAY",
       marketplace: marketplaceId,
@@ -638,24 +764,10 @@ export class OutboundSyncService {
       sku,
       productId: product?.id ?? null,
       mode,
-      outcome: succeeded ? "success" : "failed",
+      outcome: "success",
       payloadDigest: digest,
-      errorMessage: succeeded
-        ? null
-        : `createOrReplaceInventoryItem ${response.status}: ${(errorBody ?? "").slice(0, 500)}`,
       durationMs: Date.now() - t0,
     });
-
-    if (!succeeded) {
-      return {
-        success: false,
-        queueId,
-        channel: "EBAY",
-        status: "FAILED",
-        message: `Failed to sync to eBay`,
-        error: `createOrReplaceInventoryItem ${response.status}: ${(errorBody ?? "").slice(0, 500)}`,
-      };
-    }
     return {
       success: true,
       queueId,
@@ -907,7 +1019,7 @@ export class OutboundSyncService {
    * Construct Amazon SP-API payload
    * PATCH /listings/2021-08-01/items/{sellerId}/{sku}
    */
-  private constructAmazonPayload(payload: SyncPayload): Record<string, any> {
+  private constructAmazonPayload(payload: SyncPayload, marketplaceId?: string): Record<string, any> {
     const amazonPayload: Record<string, any> = {
       attributes: {},
     };
@@ -916,7 +1028,9 @@ export class OutboundSyncService {
       amazonPayload.attributes.price = [
         {
           value: payload.price,
-          marketplaceId: "ATVPDKIKX0DER", // US marketplace
+          // Phase 0.2 — scope to the listing's actual Amazon marketplace
+          // (defaults to IT, never the US marketplace it was hardcoded to).
+          marketplaceId: resolveAmazonMarketplaceId(marketplaceId),
         },
       ];
     }
@@ -946,71 +1060,6 @@ export class OutboundSyncService {
     }
 
     return amazonPayload;
-  }
-
-  /**
-   * Construct eBay Inventory API payload
-   * PUT /sell/inventory/v1/inventory_item/{sku}
-   */
-  private constructEbayPayload(payload: SyncPayload): Record<string, any> {
-    const ebayPayload: Record<string, any> = {};
-
-    if (payload.quantity !== undefined) {
-      ebayPayload.availability = {
-        availableQuantity: payload.quantity,
-      };
-    }
-
-    if (payload.price !== undefined) {
-      ebayPayload.price = {
-        value: payload.price.toString(),
-        currency: "USD",
-      };
-    }
-
-    if (payload.title) {
-      ebayPayload.title = payload.title;
-    }
-
-    if (payload.description) {
-      ebayPayload.description = payload.description;
-    }
-
-    if (payload.images && payload.images.length > 0) {
-      ebayPayload.images = payload.images.map((url) => ({
-        imageUrl: url,
-      }));
-    }
-
-    return ebayPayload;
-  }
-
-  /**
-   * Construct Shopify payload
-   */
-  private constructShopifyPayload(payload: SyncPayload): Record<string, any> {
-    const shopifyPayload: Record<string, any> = {
-      product: {},
-    };
-
-    if (payload.title) {
-      shopifyPayload.product.title = payload.title;
-    }
-
-    if (payload.description) {
-      shopifyPayload.product.body_html = payload.description;
-    }
-
-    if (payload.price !== undefined || payload.quantity !== undefined) {
-      shopifyPayload.product.variants = [
-        {
-          price: payload.price,
-          inventory_quantity: payload.quantity,
-        },
-      ];
-    }
-
-    return shopifyPayload;
   }
 
   /**

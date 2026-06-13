@@ -193,23 +193,34 @@ async function processChannelSyncJob(job: Job) {
     }
 
     // ─────────────────────────────────────────────────────────────────────
-    // STEP 5: Update sync status to IN_SYNC
+    // STEP 5: Update sync status — but ONLY on a real publish.
+    // Phase 0.3 — the per-channel handlers above only BUILD a payload; the real
+    // outbound push runs via OutboundSyncQueue (outbound-sync.service). So a
+    // 'noop' result must NOT mark the listing IN_SYNC/SUCCESS (that was a silent
+    // false success). Leave the listing's status untouched and log honestly.
     // ─────────────────────────────────────────────────────────────────────
-    await prisma.channelListing.update({
-      where: { id: channelListing.id },
-      data: {
-        syncStatus: 'IN_SYNC',
-        lastSyncedAt: new Date(),
-        lastSyncStatus: 'SUCCESS',
-      },
-    })
-
-    logger.info('✅ Sync completed successfully', {
-      channelListingId: channelListing.id,
-      productId,
-      targetChannel,
-      syncResult,
-    })
+    if (syncResult?.status === 'noop') {
+      logger.warn('[channel-sync] payload built but NOT published here — real push runs via OutboundSyncQueue', {
+        channelListingId: channelListing.id,
+        productId,
+        targetChannel,
+      })
+    } else {
+      await prisma.channelListing.update({
+        where: { id: channelListing.id },
+        data: {
+          syncStatus: 'IN_SYNC',
+          lastSyncedAt: new Date(),
+          lastSyncStatus: 'SUCCESS',
+        },
+      })
+      logger.info('✅ Sync completed successfully', {
+        channelListingId: channelListing.id,
+        productId,
+        targetChannel,
+        syncResult,
+      })
+    }
 
     processedCount++
     return { status: 'SUCCESS', channelListingId: channelListing.id, syncResult }
@@ -255,7 +266,9 @@ async function syncToAmazon(product: any, channelListing: any): Promise<any> {
   try {
     const payload = await syncProductToAmazon(product, channelListing)
     
-    logger.info('✅ [SYNC COMPLETE] Amazon sync successful', {
+    // Phase 0.3 — syncProductToAmazon only BUILDS a payload; it does not call
+    // Amazon. The real push runs via OutboundSyncQueue. Don't claim success.
+    logger.warn('[channel-sync] Amazon payload built but NOT sent (real push via OutboundSyncQueue)', {
       channel: 'AMAZON',
       sku: product.sku,
       price: payload.price,
@@ -264,7 +277,7 @@ async function syncToAmazon(product: any, channelListing: any): Promise<any> {
     return {
       channel: 'AMAZON',
       sku: product.sku,
-      status: 'synced',
+      status: 'noop',
       payload,
     }
   } catch (error) {
@@ -284,7 +297,8 @@ async function syncToEbay(product: any, channelListing: any): Promise<any> {
   try {
     const payload = await syncProductToEbay(product, channelListing)
     
-    logger.info('✅ [SYNC COMPLETE] eBay sync successful', {
+    // Phase 0.3 — payload-only builder; the real push runs via OutboundSyncQueue.
+    logger.warn('[channel-sync] eBay payload built but NOT sent (real push via OutboundSyncQueue)', {
       channel: 'EBAY',
       sku: product.sku,
       price: payload.price,
@@ -293,7 +307,7 @@ async function syncToEbay(product: any, channelListing: any): Promise<any> {
     return {
       channel: 'EBAY',
       sku: product.sku,
-      status: 'synced',
+      status: 'noop',
       payload,
     }
   } catch (error) {
@@ -313,7 +327,8 @@ async function syncToShopify(product: any, channelListing: any): Promise<any> {
   try {
     const payload = await syncProductToShopify(product, channelListing)
     
-    logger.info('✅ [SYNC COMPLETE] Shopify sync successful', {
+    // Phase 0.3 — payload-only builder; the real push runs via OutboundSyncQueue.
+    logger.warn('[channel-sync] Shopify payload built but NOT sent (real push via OutboundSyncQueue)', {
       channel: 'SHOPIFY',
       sku: product.sku,
       price: payload.price,
@@ -322,7 +337,7 @@ async function syncToShopify(product: any, channelListing: any): Promise<any> {
     return {
       channel: 'SHOPIFY',
       sku: product.sku,
-      status: 'synced',
+      status: 'noop',
       payload,
     }
   } catch (error) {
