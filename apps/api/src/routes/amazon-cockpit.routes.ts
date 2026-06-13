@@ -13,6 +13,7 @@
 import type { FastifyPluginAsync } from 'fastify'
 import { Prisma } from '@prisma/client'
 import prisma from '../db.js'
+import { casUpdateChannelListing } from '../services/channel-listing-cas.js'
 
 const amazonCockpitRoutes: FastifyPluginAsync = async (fastify) => {
   // ── GET /api/amazon/cockpit/template-candidates ─────────────────────
@@ -187,9 +188,10 @@ const amazonCockpitRoutes: FastifyPluginAsync = async (fastify) => {
             },
           })
         } else {
-          await prisma.channelListing.update({
-            where: { id: target!.id },
-            data: { platformAttributes: nextPlatform as Prisma.InputJsonValue },
+          // A3 — bump version (no CAS: this is a deliberate bulk apply) so the
+          // flat-file editor detects the change and won't silently clobber it.
+          await casUpdateChannelListing(prisma, target!.id, undefined, {
+            platformAttributes: nextPlatform as Prisma.InputJsonValue,
           })
         }
         results.push({ productId: targetId, ok: true, snapshotId: snapshotEntry.id })

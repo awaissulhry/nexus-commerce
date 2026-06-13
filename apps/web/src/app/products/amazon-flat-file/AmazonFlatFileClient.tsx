@@ -2141,6 +2141,16 @@ export default function AmazonFlatFileClient({
       if (!res.ok) throw new Error(data.error ?? 'Sync failed')
       setSyncStatus('synced')
       localDivergedRef.current = false // FFX.2 — grid is now persisted to the DB
+      // A3 — refresh _version from the save so a legitimate second save (same
+      // operator, no re-pull) doesn't hit a false optimistic-concurrency conflict.
+      const newVersions: Record<string, number> =
+        data?.versions && typeof data.versions === 'object' ? data.versions : {}
+      if (Object.keys(newVersions).length) {
+        setRows((prev) => prev.map((r) => {
+          const v = newVersions[String(r.item_sku ?? '')]
+          return v != null ? { ...r, _version: v } : r
+        }))
+      }
       setTimeout(() => setSyncStatus('idle'), 4000)
       // FFA.6 — surface per-SKU sync failures instead of silently reporting "synced".
       const syncErrors: Array<{ sku: string; error: string }> = Array.isArray(data?.errors) ? data.errors : []

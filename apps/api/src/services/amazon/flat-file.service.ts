@@ -17,6 +17,7 @@
 import type { PrismaClient } from '@nexus/database'
 import { CategorySchemaService } from '../categories/schema-sync.service.js'
 import { parseLocaleNumber, parseLocaleInt } from '../../lib/parse-locale-number.js'
+import { casUpdateChannelListing, isVersionConflict } from '../channel-listing-cas.js'
 
 // ── Constants ──────────────────────────────────────────────────────────
 
@@ -697,6 +698,7 @@ export function applySnapshotOverlay(snapshot: Record<string, any>, liveRow: Fla
     _isNew: false,
     _status: 'idle',
     _listingId: liveRow._listingId,
+    _version: liveRow._version,
     _asin: liveRow._asin,
     _listingStatus: liveRow._listingStatus,
     _fieldStates: liveRow._fieldStates,
@@ -1051,6 +1053,7 @@ export class AmazonFlatFileService {
       // toggles so the flat file UI can show INHERITED vs OVERRIDE indicators per row.
       if (listing) {
         row._listingId = listing.id
+        row._version = (listing as any).version ?? null
         row._fieldStates = {
           price:        ((listing as any).followMasterPrice        ?? true) ? 'INHERITED' : 'OVERRIDE',
           title:        ((listing as any).followMasterTitle        ?? true) ? 'INHERITED' : 'OVERRIDE',
@@ -1432,7 +1435,7 @@ export class AmazonFlatFileService {
     const marketplaceId = MARKETPLACE_ID_MAP[mp] ?? MARKETPLACE_ID_MAP.IT
     const languageTag   = LANGUAGE_TAG_MAP[mp] ?? 'it_IT'
     const channelMarket = `AMAZON_${mp}`
-    const result = { synced: 0, created: 0, skipped: 0, errors: [] as Array<{ sku: string; error: string }> }
+    const result = { synced: 0, created: 0, skipped: 0, errors: [] as Array<{ sku: string; error: string }>, versions: {} as Record<string, number> }
 
     const validRows = rows.filter((r) => {
       const sku = String(r.item_sku ?? '').trim()
@@ -1548,11 +1551,27 @@ export class AmazonFlatFileService {
         }
 
         if (existing) {
-          await this.prisma.channelListing.update({
-            where: { id: existing.id },
-            data: { ...listingPayload, version: { increment: 1 } },
-          })
-          result.synced++
+          try {
+            // A3 — optimistic concurrency: CAS on the version the grid was pulled
+            // at, so a concurrent edit (cockpit / another operator) is rejected
+            // here instead of silently clobbering their change.
+            const updated = await casUpdateChannelListing(
+              this.prisma,
+              existing.id,
+              row._version != null ? Number(row._version) : undefined,
+              listingPayload,
+            )
+            result.synced++
+            // A3 — return the new version so the grid can refresh _version and a
+            // legitimate second save (same operator, no re-pull) doesn't conflict.
+            if (updated?.version != null) result.versions[sku] = Number(updated.version)
+          } catch (e) {
+            if (isVersionConflict(e)) {
+              result.errors.push({ sku, error: 'Changed elsewhere since you pulled — re-pull this product before saving (version conflict).' })
+            } else {
+              throw e
+            }
+          }
         } else {
           await this.prisma.channelListing.create({
             data: { productId: product.id, ...listingPayload } as any,
