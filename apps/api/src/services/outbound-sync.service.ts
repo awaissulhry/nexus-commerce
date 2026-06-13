@@ -99,6 +99,54 @@ export function resolveAmazonMarketplaceId(mp: string | undefined): string {
   return AMAZON_MARKETPLACE_IDS[mp.toUpperCase()] ?? AMAZON_MARKETPLACE_IDS.IT;
 }
 
+const AMAZON_LANG_TAG: Record<string, string> = {
+  IT: "it_IT", DE: "de_DE", FR: "fr_FR", ES: "es_ES", NL: "nl_NL",
+  SE: "sv_SE", PL: "pl_PL", BE: "fr_BE", IE: "en_IE", UK: "en_GB", GB: "en_GB", US: "en_US",
+};
+
+/**
+ * A4.0 — build a CORRECT Amazon Listings Items PATCH body. The old
+ * constructAmazonPayload emitted non-schema attribute names (`title`, `price`,
+ * `fulfillmentAvailability`) inside a bare `{attributes}` object — Amazon's PATCH
+ * needs `{ productType, patches: [{op,path:/attributes/<name>,value}] }` with the
+ * real schema names (item_name / product_description / bullet_point /
+ * purchasable_offer / fulfillment_availability) and value shapes. Mirrors the
+ * proven buildJsonFeedBody attribute shapes; same serializer semantics everywhere.
+ */
+export function buildAmazonListingPatch(
+  payload: SyncPayload,
+  marketplaceCode: string,
+  productType: string,
+): Record<string, any> {
+  const code = (marketplaceCode || "IT").toUpperCase();
+  const marketplaceId = resolveAmazonMarketplaceId(code);
+  const language_tag = AMAZON_LANG_TAG[code] ?? "it_IT";
+  const currency = code === "UK" || code === "GB" ? "GBP" : "EUR";
+  const attrs: Record<string, any> = {};
+
+  if (payload.title) {
+    attrs.item_name = [{ value: String(payload.title), marketplace_id: marketplaceId, language_tag }];
+  }
+  if (payload.description) {
+    attrs.product_description = [{ value: String(payload.description), marketplace_id: marketplaceId, language_tag }];
+  }
+  const bullets = (payload as any).bulletPoints;
+  if (Array.isArray(bullets) && bullets.length > 0) {
+    attrs.bullet_point = bullets.filter(Boolean).map((b: any) => ({ value: String(b), marketplace_id: marketplaceId, language_tag }));
+  }
+  if (payload.price !== undefined) {
+    attrs.purchasable_offer = [{ currency, our_price: [{ schedule: [{ value_with_tax: payload.price }] }], marketplace_id: marketplaceId }];
+  }
+  if (payload.quantity !== undefined) {
+    attrs.fulfillment_availability = [{ fulfillment_channel_code: "DEFAULT", quantity: payload.quantity, marketplace_id: marketplaceId }];
+  }
+
+  return {
+    productType,
+    patches: Object.entries(attrs).map(([k, v]) => ({ op: "replace", path: `/attributes/${k}`, value: v })),
+  };
+}
+
 // ── Data Structures ──────────────────────────────────────────────────────
 
 interface SyncPayload {
@@ -418,7 +466,18 @@ export class OutboundSyncService {
     const sellerId =
       process.env.AMAZON_SELLER_ID ?? process.env.AMAZON_MERCHANT_ID ?? "";
 
-    const amazonPayload = this.constructAmazonPayload(payload, marketplaceId);
+    // A4.0 — resolve the Amazon product type (required by the Listings PATCH) and
+    // build the CORRECT patch body (schema attribute names + value shapes),
+    // replacing the malformed constructAmazonPayload.
+    let productType = String((payload as any).productType ?? '').toUpperCase();
+    if (!productType && queueItem.channelListingId) {
+      const cl = await prisma.channelListing
+        .findUnique({ where: { id: queueItem.channelListingId }, select: { platformAttributes: true } })
+        .catch(() => null);
+      productType = String((cl?.platformAttributes as any)?.productType ?? '').toUpperCase();
+    }
+    if (!productType) productType = String((product as any)?.productType ?? '').toUpperCase();
+    const amazonPayload = buildAmazonListingPatch(payload, marketplaceId, productType);
 
     // A1.3 — delegate the gate→circuit→rate-limit→dry-run→audit chain to the
     // shared ListingPublishService; inject Amazon's gate functions + the actual
@@ -940,52 +999,8 @@ export class OutboundSyncService {
     }
   }
 
-  /**
-   * Construct Amazon SP-API payload
-   * PATCH /listings/2021-08-01/items/{sellerId}/{sku}
-   */
-  private constructAmazonPayload(payload: SyncPayload, marketplaceId?: string): Record<string, any> {
-    const amazonPayload: Record<string, any> = {
-      attributes: {},
-    };
-
-    if (payload.price !== undefined) {
-      amazonPayload.attributes.price = [
-        {
-          value: payload.price,
-          // Phase 0.2 — scope to the listing's actual Amazon marketplace
-          // (defaults to IT, never the US marketplace it was hardcoded to).
-          marketplaceId: resolveAmazonMarketplaceId(marketplaceId),
-        },
-      ];
-    }
-
-    if (payload.quantity !== undefined) {
-      amazonPayload.attributes.fulfillmentAvailability = [
-        {
-          fulfillmentChannelCode: "DEFAULT",
-          quantity: payload.quantity,
-        },
-      ];
-    }
-
-    if (payload.title) {
-      amazonPayload.attributes.title = [{ value: payload.title }];
-    }
-
-    if (payload.description) {
-      amazonPayload.attributes.description = [{ value: payload.description }];
-    }
-
-    if (payload.categoryAttributes) {
-      // Merge category-specific attributes
-      Object.entries(payload.categoryAttributes).forEach(([key, value]) => {
-        amazonPayload.attributes[key] = [{ value }];
-      });
-    }
-
-    return amazonPayload;
-  }
+  /* A4.0 — constructAmazonPayload removed; replaced by the module-level
+   * buildAmazonListingPatch (correct schema names + Listings PATCH shape). */
 
   /**
    * Construct WooCommerce payload

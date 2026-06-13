@@ -18,6 +18,7 @@ import {
   mergeEbayInventoryItem,
   buildEbayOfferUpdate,
   resolveAmazonMarketplaceId,
+  buildAmazonListingPatch,
 } from './outbound-sync.service.js'
 
 describe('Phase 0.1 — eBay sync payload helpers', () => {
@@ -66,5 +67,44 @@ describe('Phase 0.2 — Amazon marketplace resolution (never US by default)', ()
   })
   it('passes a full Amazon marketplace id through unchanged', () => {
     expect(resolveAmazonMarketplaceId('A1PA6795UKMFR9')).toBe('A1PA6795UKMFR9')
+  })
+})
+
+// A4.0 — the queue's Amazon push was malformed: non-schema names (title/price)
+// in a bare {attributes} body. The Listings PATCH needs {productType, patches:[]}
+// with real schema names + value shapes.
+describe('A4.0 — buildAmazonListingPatch (correct Listings PATCH)', () => {
+  it('emits { productType, patches } — NOT a bare { attributes }', () => {
+    const body = buildAmazonListingPatch({ price: 19.99 }, 'IT', 'OUTERWEAR')
+    expect(body.productType).toBe('OUTERWEAR')
+    expect(Array.isArray(body.patches)).toBe(true)
+    expect((body as any).attributes).toBeUndefined()
+    expect(body.patches[0].op).toBe('replace')
+  })
+  it('price → purchasable_offer (not "price") with our_price schedule + currency + marketplace', () => {
+    const body = buildAmazonListingPatch({ price: 19.99 }, 'IT', 'OUTERWEAR')
+    const p = body.patches.find((x: any) => x.path === '/attributes/purchasable_offer')
+    expect(p.value[0].our_price[0].schedule[0].value_with_tax).toBe(19.99)
+    expect(p.value[0].currency).toBe('EUR')
+    expect(p.value[0].marketplace_id).toBe('APJ6JRA9NG5V4')
+    expect(body.patches.find((x: any) => x.path === '/attributes/price')).toBeUndefined()
+  })
+  it('title → item_name with marketplace_id + language_tag', () => {
+    const p = buildAmazonListingPatch({ title: 'X' } as any, 'DE', 'OUTERWEAR').patches[0]
+    expect(p.path).toBe('/attributes/item_name')
+    expect(p.value[0]).toMatchObject({ value: 'X', marketplace_id: 'A1PA6795UKMFR9', language_tag: 'de_DE' })
+  })
+  it('description → product_description; bulletPoints → bullet_point[]; quantity → fulfillment_availability', () => {
+    const body = buildAmazonListingPatch({ description: 'd', bulletPoints: ['a', 'b'], quantity: 5 } as any, 'IT', 'OUTERWEAR')
+    const paths = body.patches.map((x: any) => x.path)
+    expect(paths).toContain('/attributes/product_description')
+    expect(paths).toContain('/attributes/fulfillment_availability')
+    const bp = body.patches.find((x: any) => x.path === '/attributes/bullet_point')
+    expect(bp.value.length).toBe(2)
+    const fa = body.patches.find((x: any) => x.path === '/attributes/fulfillment_availability')
+    expect(fa.value[0]).toMatchObject({ fulfillment_channel_code: 'DEFAULT', quantity: 5 })
+  })
+  it('GB market → GBP currency', () => {
+    expect(buildAmazonListingPatch({ price: 10 }, 'UK', 'OUTERWEAR').patches[0].value[0].currency).toBe('GBP')
   })
 })
