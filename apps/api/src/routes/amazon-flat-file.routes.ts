@@ -21,6 +21,7 @@ import {
   MARKETPLACE_ID_MAP,
 } from '../services/amazon/flat-file.service.js'
 import { translateEnumValues } from '../services/amazon/value-translate.service.js'
+import { getAmazonPublishMode } from '../services/amazon-publish-gate.service.js'
 import { enqueueContentSyncIfEnabled } from '../services/content-auto-publish.service.js'
 import { productEventService } from '../services/product-event.service.js'
 import { runFlatFileAiInstruction } from '../services/flat-file-ai.service.js'
@@ -214,7 +215,9 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
       return reply.code(400).send({ error: 'Max 2000 rows per submission' })
     }
 
-    const dryRun = process.env.NEXUS_AMAZON_BATCH_DRYRUN === '1'
+    // A1.2 — unified publish gate (master flag + mode) instead of the legacy
+    // NEXUS_AMAZON_BATCH_DRYRUN. Only 'live' actually submits a feed.
+    const dryRun = getAmazonPublishMode() !== 'live'
     if (dryRun) {
       return reply.send({
         feedId: `dryrun-flat-${Date.now()}`,

@@ -9,6 +9,7 @@
  */
 
 import { logger } from '../utils/logger.js'
+import { getAmazonPublishMode } from '../services/amazon-publish-gate.service.js'
 
 interface LWATokenResponse {
   access_token: string
@@ -477,8 +478,17 @@ export class AmazonSpApiClient {
     status?: string
     error?: string
     rawResponse?: SPAPIResponse
+    dryRun?: boolean
   }> {
     const { sellerId, sku, payload } = options
+
+    // A1.1 — gate at the client layer so no caller can write when publishing is
+    // disabled/dry-run (previously only the caller gated this method).
+    const mode = getAmazonPublishMode()
+    if (mode === 'gated' || mode === 'dry-run') {
+      logger.info(`SP-API submitListingPayload (mode=${mode}, no HTTP)`, { sku, sellerId })
+      return { success: true, sku, status: 'ACCEPTED', dryRun: true }
+    }
 
     try {
       // Get access token (rate limit applied per attempt by fetchWithRetry)
@@ -585,8 +595,17 @@ export class AmazonSpApiClient {
     submissionId?: string
     error?: string
     issues?: SPAPIResponse['issues']
+    dryRun?: boolean
   }> {
     const { sellerId, sku, marketplaceId, productType, price, currencyCode, taxInclusive } = options
+
+    // A1.1 — gate at the client layer. This is the path repricing reached
+    // ungated; it now obeys NEXUS_ENABLE_AMAZON_PUBLISH + AMAZON_PUBLISH_MODE.
+    const mode = getAmazonPublishMode()
+    if (mode === 'gated' || mode === 'dry-run') {
+      logger.info(`SP-API patchListingPrice (mode=${mode}, no HTTP)`, { sku, sellerId, marketplaceId })
+      return { success: true, sku, status: 'ACCEPTED', submissionId: `dry-run-${Date.now()}`, dryRun: true }
+    }
 
     try {
       const accessToken = await this.getAccessToken()
@@ -717,9 +736,12 @@ export class AmazonSpApiClient {
     // bookkeeping (status transitions, listing.created emit) runs end-
     // to-end without any side effect on Amazon. We mint a synthetic
     // submissionId so logs can still grep for it.
-    const mode = (process.env.AMAZON_PUBLISH_MODE ?? 'dry-run').toLowerCase()
-    if (mode === 'dry-run' || mode === 'dryrun') {
-      logger.info('SP-API putListingsItem (dry-run, no HTTP)', {
+    // A1.1 — single gate model. getAmazonPublishMode() folds in the master flag
+    // (NEXUS_ENABLE_AMAZON_PUBLISH → 'gated') AND the mode, so the client never
+    // writes when disabled — not only when AMAZON_PUBLISH_MODE=dry-run.
+    const mode = getAmazonPublishMode()
+    if (mode === 'gated' || mode === 'dry-run') {
+      logger.info(`SP-API putListingsItem (mode=${mode}, no HTTP)`, {
         sku,
         sellerId,
         marketplaceId,

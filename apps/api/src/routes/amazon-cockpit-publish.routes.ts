@@ -33,6 +33,7 @@ import {
   AmazonFlatFileService,
   MARKETPLACE_ID_MAP,
 } from '../services/amazon/flat-file.service.js'
+import { getAmazonPublishMode } from '../services/amazon-publish-gate.service.js'
 
 const amazon = new AmazonService()
 const schemaService = new CategorySchemaService(prisma, amazon)
@@ -229,7 +230,9 @@ export default async function amazonCockpitPublishRoutes(
           .filter(Boolean)
       : []
     const dryRunRequested = body.dryRun === true
-    const envDryRun = process.env.NEXUS_AMAZON_BATCH_DRYRUN === '1'
+    // A1.2 — unified publish gate (master flag + mode) instead of the legacy
+    // NEXUS_AMAZON_BATCH_DRYRUN.
+    const envDryRun = getAmazonPublishMode() !== 'live'
     const dryRun = dryRunRequested || envDryRun
 
     if (marketplaces.length === 0) {
