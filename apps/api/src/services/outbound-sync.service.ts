@@ -196,10 +196,58 @@ export class OutboundSyncService {
     }
   }
 
+  /** A2.1 — route one queue item to the right channel sync method. */
+  private async dispatchSync(item: any): Promise<SyncResult> {
+    switch (item.targetChannel) {
+      case "AMAZON": return this.syncToAmazon(item);
+      case "EBAY": return this.syncToEbay(item);
+      case "SHOPIFY": return this.syncToShopify(item);
+      case "WOOCOMMERCE": return this.syncToWoocommerce(item);
+      default: throw new Error(`Unknown channel: ${item.targetChannel}`);
+    }
+  }
+
   /**
-   * Process all pending syncs in the queue
+   * A2.1 — process exactly ONE queue row (the row a BullMQ job owns) instead of
+   * draining the whole table. Guards (PENDING / not CANCELLED / past holdUntil),
+   * marks IN_PROGRESS, dispatches, and returns the result. The caller owns the
+   * final status write (the BullMQ worker's per-job update), so this never
+   * touches any other row.
    */
-  async processPendingSyncs(): Promise<ProcessingStats> {
+  async processSingle(queueId: string): Promise<SyncResult> {
+    const item = await prisma.outboundSyncQueue.findUnique({
+      where: { id: queueId },
+      include: { product: true },
+    });
+    if (!item) {
+      return { success: false, queueId, channel: "UNKNOWN", status: "FAILED", message: `Queue row ${queueId} not found`, error: "queue-row-not-found" };
+    }
+    if ((item.syncStatus as any) === "CANCELLED") {
+      return { success: false, queueId, channel: item.targetChannel, status: "SKIPPED", message: "Cancelled during grace period", error: "cancelled" };
+    }
+    if (item.syncStatus !== "PENDING") {
+      return { success: false, queueId, channel: item.targetChannel, status: "SKIPPED", message: `Not PENDING (${item.syncStatus})`, error: "not-pending" };
+    }
+    if (item.holdUntil && item.holdUntil > new Date()) {
+      return { success: false, queueId, channel: item.targetChannel, status: "SKIPPED", message: "Still within grace window", error: "held" };
+    }
+    await prisma.outboundSyncQueue.update({ where: { id: item.id }, data: { syncStatus: "IN_PROGRESS" } });
+    try {
+      return await this.dispatchSync(item);
+    } catch (err) {
+      // dispatch threw (e.g. unknown channel) — don't leave the row stuck IN_PROGRESS.
+      await prisma.outboundSyncQueue.update({ where: { id: item.id }, data: { syncStatus: "PENDING" } }).catch(() => {});
+      throw err;
+    }
+  }
+
+  /**
+   * Process all pending syncs in the queue.
+   * A2.3 — `opts.skip` lets the cron act as a BACKSTOP when BullMQ is enabled: it
+   * skips rows that already have a live BullMQ job, so the cron only sweeps
+   * orphans (rows written without a job, or jobs that died).
+   */
+  async processPendingSyncs(opts?: { skip?: (queueId: string) => Promise<boolean> }): Promise<ProcessingStats> {
     const stats: ProcessingStats = {
       processed: 0,
       succeeded: 0,
@@ -234,6 +282,10 @@ export class OutboundSyncService {
       console.log(`Processing ${pendingItems.length} pending syncs`);
 
       for (const item of pendingItems) {
+        if (opts?.skip && (await opts.skip(item.id))) {
+          stats.skipped++;
+          continue;
+        }
         try {
           // Mark as in progress
           await prisma.outboundSyncQueue.update({
@@ -241,20 +293,7 @@ export class OutboundSyncService {
             data: { syncStatus: "IN_PROGRESS" },
           });
 
-          let result: SyncResult;
-
-          // Route to appropriate sync method
-          if (item.targetChannel === "AMAZON") {
-            result = await this.syncToAmazon(item);
-          } else if (item.targetChannel === "EBAY") {
-            result = await this.syncToEbay(item);
-          } else if (item.targetChannel === "SHOPIFY") {
-            result = await this.syncToShopify(item);
-          } else if (item.targetChannel === "WOOCOMMERCE") {
-            result = await this.syncToWoocommerce(item);
-          } else {
-            throw new Error(`Unknown channel: ${item.targetChannel}`);
-          }
+          const result = await this.dispatchSync(item);
 
           if (result.success) {
             // Mark as successful
@@ -309,6 +348,10 @@ export class OutboundSyncService {
       console.log(`Processing ${retryItems.length} retry items`);
 
       for (const item of retryItems) {
+        if (opts?.skip && (await opts.skip(item.id))) {
+          stats.skipped++;
+          continue;
+        }
         try {
           // Mark as in progress
           await prisma.outboundSyncQueue.update({
@@ -316,19 +359,7 @@ export class OutboundSyncService {
             data: { syncStatus: "IN_PROGRESS" },
           });
 
-          let result: SyncResult;
-
-          if (item.targetChannel === "AMAZON") {
-            result = await this.syncToAmazon(item);
-          } else if (item.targetChannel === "EBAY") {
-            result = await this.syncToEbay(item);
-          } else if (item.targetChannel === "SHOPIFY") {
-            result = await this.syncToShopify(item);
-          } else if (item.targetChannel === "WOOCOMMERCE") {
-            result = await this.syncToWoocommerce(item);
-          } else {
-            throw new Error(`Unknown channel: ${item.targetChannel}`);
-          }
+          const result = await this.dispatchSync(item);
 
           if (result.success) {
             await prisma.outboundSyncQueue.update({

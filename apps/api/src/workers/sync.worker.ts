@@ -16,6 +16,31 @@ let syncCount = 0
 let errorCount = 0
 
 /**
+ * A2.3 — when BullMQ is enabled, build a predicate that skips rows already owned
+ * by a live BullMQ job, so this cron only sweeps orphans (rows written without a
+ * job, or jobs that died) instead of racing the BullMQ worker on every row. When
+ * BullMQ is off, returns null → the cron is the sole consumer and drains all.
+ */
+async function buildBullMQSkip(): Promise<((queueId: string) => Promise<boolean>) | null> {
+  if (process.env.ENABLE_QUEUE_WORKERS !== '1') return null
+  try {
+    const { outboundSyncQueue } = await import('../lib/queue.js')
+    return async (queueId: string): Promise<boolean> => {
+      try {
+        const job = await outboundSyncQueue.getJob(queueId)
+        if (!job) return false
+        const state = await job.getState()
+        return ['waiting', 'active', 'delayed', 'prioritized', 'waiting-children'].includes(state)
+      } catch {
+        return false // Redis hiccup → don't skip; process it (BullMQ may be down → we're the backstop)
+      }
+    }
+  } catch {
+    return null // queue lib unavailable → process everything
+  }
+}
+
+/**
  * Initialize the background sync worker
  * Runs every minute (* * * * *)
  */
@@ -43,8 +68,9 @@ export function initializeSyncWorker() {
         cycleNumber: syncCount + 1,
       })
 
-      // Call the existing OutboundSyncService
-      const result = await OutboundSyncService.processPendingSyncs()
+      // A2.3 — backstop mode: skip BullMQ-owned rows when BullMQ is enabled.
+      const skip = await buildBullMQSkip()
+      const result = await OutboundSyncService.processPendingSyncs(skip ? { skip } : undefined)
 
       const processingTime = Date.now() - cycleStartTime
 

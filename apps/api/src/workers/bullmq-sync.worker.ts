@@ -295,9 +295,13 @@ async function processOutboundSyncJob(job: Job) {
       logger.info('🔄 Processing variation sync', { queueId, productId })
       syncResult = await variationSyncProcessor.processVariationSync(queueRecord)
     } else {
-      // Standard sync via OutboundSyncService
+      // A2.2 — process ONLY this job's row. Was processPendingSyncs(), which
+      // drained the WHOLE table per job (and set this queueId's status from the
+      // batch's aggregate result). processSingle returns a real SyncResult for
+      // this row, so the per-job status/retry update below is correct and the
+      // jobId=queueId dedup finally takes effect.
       logger.info('🔄 Processing standard sync', { queueId, productId, targetChannel })
-      syncResult = await OutboundSyncService.processPendingSyncs()
+      syncResult = await OutboundSyncService.processSingle(queueId)
     }
 
     // ─────────────────────────────────────────────────────────────────────
