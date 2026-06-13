@@ -23,6 +23,7 @@ import {
   writeAttemptLog,
 } from "./channel-publish-audit.service.js";
 import { ebayAuthService } from "./ebay-auth.service.js";
+import { listingPublishService } from "./listing-publish.service.js";
 
 // Advertising mutations (bids/budgets/state) ride the same OutboundSyncQueue
 // table but are owned exclusively by the dedicated ads-sync worker
@@ -387,146 +388,39 @@ export class OutboundSyncService {
       process.env.AMAZON_SELLER_ID ?? process.env.AMAZON_MERCHANT_ID ?? "";
 
     const amazonPayload = this.constructAmazonPayload(payload, marketplaceId);
-    const digest = digestPayload(amazonPayload);
 
-    const fail = (
-      outcome: "gated" | "rate-limited" | "circuit-open" | "failed" | "timeout",
-      mode: "gated" | "dry-run" | "sandbox" | "live",
-      message: string,
-      durationMs?: number,
-    ): SyncResult => {
-      writeAttemptLog({
-        channel: "AMAZON",
-        marketplace: marketplaceId,
-        sellerId: sellerId || "(unset)",
-        sku,
-        productId: product?.id ?? null,
-        mode,
-        outcome,
-        payloadDigest: digest,
-        errorMessage: message,
-        durationMs: durationMs ?? null,
-      });
-      return {
-        success: false,
-        queueId,
-        channel: "AMAZON",
-        status: "FAILED",
-        message: `Failed to sync to Amazon`,
-        error: message,
-      };
-    };
-
-    // 1. Feature flag (resolved as 'gated' mode)
-    const mode = getAmazonPublishMode();
-    if (mode === "gated") {
-      return fail(
-        "gated",
-        "gated",
-        "NEXUS_ENABLE_AMAZON_PUBLISH=false — set true to enable Amazon outbound sync.",
-      );
-    }
-    if (!sellerId) {
-      return fail(
-        "failed",
-        mode,
-        "AMAZON_SELLER_ID is not configured. Set the env var before enabling outbound sync.",
-      );
-    }
-
-    // 2. Circuit breaker
-    const circuit = checkAmazonCircuit(sellerId, marketplaceId);
-    if (!circuit.ok) {
-      return fail("circuit-open", mode, circuit.error ?? "Circuit open");
-    }
-
-    // 3. Rate limiter
-    const t0 = Date.now();
-    const acquired = await acquireAmazonPublishToken(sellerId, marketplaceId);
-    if (!acquired.ok) {
-      return fail(
-        "rate-limited",
-        mode,
-        acquired.error ?? "Rate limited",
-        Date.now() - t0,
-      );
-    }
-
-    // 4. Dry-run short-circuit. We log + audit + return synthetic
-    // success so the queue row's `syncStatus` flips to SUCCESS for
-    // the operator's downstream view; no HTTP. The 'mode'='dry-run'
-    // audit row is the source of truth that no real call occurred.
-    if (mode === "dry-run") {
-      console.log(`[AMAZON] Dry-run sync for ${sku}:`, amazonPayload);
-      recordAmazonOutcome(sellerId, marketplaceId, true);
-      writeAttemptLog({
-        channel: "AMAZON",
-        marketplace: marketplaceId,
-        sellerId,
-        sku,
-        productId: product?.id ?? null,
-        mode: "dry-run",
-        outcome: "success",
-        payloadDigest: digest,
-        durationMs: Date.now() - t0,
-      });
-      return {
-        success: true,
-        queueId,
-        channel: "AMAZON",
-        status: "SUCCESS",
-        message: `Product ${sku} dry-run synced to Amazon`,
-      };
-    }
-
-    // 5. Real call. The client picks live vs sandbox host based on
-    // AMAZON_PUBLISH_MODE inside its own logic. submitListingPayload
-    // expects the JSON-Patch-style body that constructAmazonPayload
-    // already produces.
-    let result: Awaited<ReturnType<typeof amazonSpApiClient.submitListingPayload>>;
-    try {
-      result = await amazonSpApiClient.submitListingPayload({
-        sellerId,
-        sku,
-        payload: amazonPayload,
-      });
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      recordAmazonOutcome(sellerId, marketplaceId, false);
-      return fail("timeout", mode, message, Date.now() - t0);
-    }
-
-    const succeeded = result.success;
-    recordAmazonOutcome(sellerId, marketplaceId, succeeded);
-    writeAttemptLog({
+    // A1.3 — delegate the gate→circuit→rate-limit→dry-run→audit chain to the
+    // shared ListingPublishService; inject Amazon's gate functions + the actual
+    // SP-API call. (Behavior-preserving extraction of the former inline chain.)
+    const r = await listingPublishService.publish({
       channel: "AMAZON",
-      marketplace: marketplaceId,
-      sellerId,
+      marketplaceId,
       sku,
       productId: product?.id ?? null,
-      mode,
-      outcome: succeeded ? "success" : "failed",
-      payloadDigest: digest,
-      errorMessage: result.error ?? null,
-      durationMs: Date.now() - t0,
+      digest: digestPayload(amazonPayload),
+      gate: {
+        getMode: getAmazonPublishMode,
+        checkCircuit: checkAmazonCircuit,
+        acquireToken: acquireAmazonPublishToken,
+        recordOutcome: recordAmazonOutcome,
+      },
+      resolveSeller: async () =>
+        sellerId
+          ? { id: sellerId }
+          : { error: "AMAZON_SELLER_ID is not configured. Set the env var before enabling outbound sync." },
+      execute: async ({ sellerId: sid }) => {
+        const res = await amazonSpApiClient.submitListingPayload({ sellerId: sid, sku, payload: amazonPayload });
+        return { ok: res.success, error: res.error };
+      },
     });
 
-    if (!succeeded) {
-      return {
-        success: false,
-        queueId,
-        channel: "AMAZON",
-        status: "FAILED",
-        message: `Failed to sync to Amazon`,
-        error: result.error ?? "Unknown SP-API error",
-      };
-    }
     return {
-      success: true,
+      success: r.success,
       queueId,
       channel: "AMAZON",
-      status: "SUCCESS",
-      message: `Product ${sku} synced to Amazon`,
+      status: r.status,
+      message: r.message,
+      error: r.error,
     };
   }
 
