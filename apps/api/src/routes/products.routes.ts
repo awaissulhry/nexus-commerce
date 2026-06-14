@@ -16,6 +16,7 @@ import { parseZipUpload } from '../services/products/bulk-zip-upload.service.js'
 import { auditLogService } from '../services/audit-log.service.js'
 import { idempotencyService } from '../services/idempotency.service.js'
 import { masterPriceService } from '../services/master-price.service.js'
+import { masterContentService } from '../services/master-content.service.js'
 import { applyStockMovement } from '../services/stock-movement.service.js'
 import { listEtag, matches } from '../utils/list-etag.js'
 import { productEventService } from '../services/product-event.service.js'
@@ -2869,6 +2870,41 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
               error: err instanceof Error ? err.message : String(err),
             })
           }
+        }
+      }
+
+      // A4 — master CONTENT fan-out. The bulk transaction already wrote
+      // Product.name/description/bulletPoints; now cascade them to each product's
+      // ChannelListings (snapshot + queue a CONTENT_UPDATE for following listings)
+      // so master content edits actually reach the marketplaces — the headline
+      // "edit master → propagate" feature that was wired through dead code.
+      // masterAlreadyWritten skips the redundant master write; cascade=true also
+      // fans to children (whose Product content the bulk tx already updated).
+      const contentByProduct = new Map<string, { title?: string; description?: string; bulletPoints?: string[] }>()
+      const addContent = (pid: string, field: string, value: unknown) => {
+        const bag = contentByProduct.get(pid) ?? {}
+        if (field === 'name') bag.title = value == null ? '' : String(value)
+        else if (field === 'description') bag.description = value == null ? '' : String(value)
+        else if (field === 'bulletPoints') bag.bulletPoints = Array.isArray(value) ? value.map((x) => String(x)) : []
+        contentByProduct.set(pid, bag)
+      }
+      for (const v of validated) {
+        if (v.field !== 'name' && v.field !== 'description' && v.field !== 'bulletPoints') continue
+        addContent(v.id, v.field, v.value)
+        if (v.cascade) {
+          for (const childId of childrenByParent.get(v.id) ?? []) addContent(childId, v.field, v.value)
+        }
+      }
+      for (const [productId, contentChanges] of contentByProduct) {
+        try {
+          await masterContentService.update(productId, contentChanges, {
+            masterAlreadyWritten: true,
+            actor: null,
+            reason: 'bulk-grid-patch',
+            idempotencyKey: `bulk:${startTs}:${productId}:content`,
+          })
+        } catch (err) {
+          errors.push({ id: productId, field: 'content', error: err instanceof Error ? err.message : String(err) })
         }
       }
 
