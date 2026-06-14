@@ -175,6 +175,33 @@ export function isFbaListing(
   );
 }
 
+/**
+ * B3 — map a master CONTENT_UPDATE payload to a Shopify Admin API product
+ * update body. Title is pushed only when non-empty (Shopify rejects an empty
+ * product title); description → body_html (an explicit '' clears the body).
+ * Returns null when there's no Shopify-supported field to push (e.g. a
+ * bullets-only change) OR the product id is unusable — caller skips the PUT.
+ * Pure + testable. (bulletPoints → body_html merge = follow-up B3.1.)
+ */
+export function buildShopifyProductUpdate(
+  shopifyProductId: string | number | null | undefined,
+  payload: { title?: string | null; description?: string | null },
+): { product: Record<string, unknown> } | null {
+  const numId = typeof shopifyProductId === "string" ? parseInt(shopifyProductId, 10) : shopifyProductId;
+  if (!numId || Number.isNaN(numId)) return null;
+  const product: Record<string, unknown> = { id: numId };
+  let has = false;
+  if (payload.title != null && String(payload.title).trim() !== "") {
+    product.title = String(payload.title);
+    has = true;
+  }
+  if (payload.description !== undefined) {
+    product.body_html = payload.description == null ? "" : String(payload.description);
+    has = true;
+  }
+  return has ? { product } : null;
+}
+
 // ── Data Structures ──────────────────────────────────────────────────────
 
 interface SyncPayload {
@@ -860,27 +887,76 @@ export class OutboundSyncService {
       Accept: "application/json",
     };
 
-    // Resolve variant (needed for both price + inventory_item_id for qty)
+    // Resolve variant (needed for price + inventory_item_id for qty) and the
+    // parent product id (B3 — content lives on the product, not the variant).
     let variantId: string | null =
       (channelListing?.platformAttributes as Record<string, any>)?.variantId ?? null;
     let inventoryItemId: string | null =
       (channelListing?.platformAttributes as Record<string, any>)?.inventoryItemId ?? null;
+    let shopifyProductId: string | null =
+      (channelListing?.platformAttributes as Record<string, any>)?.shopifyProductId ?? null;
 
-    if (!variantId || !inventoryItemId) {
+    if (!variantId || !inventoryItemId || !shopifyProductId) {
       const varRes = await fetch(
-        `${apiBase}/variants.json?sku=${encodeURIComponent(sku)}&fields=id,inventory_item_id`,
+        `${apiBase}/variants.json?sku=${encodeURIComponent(sku)}&fields=id,inventory_item_id,product_id`,
         { headers },
       ).catch(() => null);
       if (varRes?.ok) {
         const varData = await varRes.json().catch(() => null) as {
-          variants?: Array<{ id: string; inventory_item_id: string }>
+          variants?: Array<{ id: string; inventory_item_id: string; product_id: string }>
         } | null;
         const v = varData?.variants?.[0];
         if (v) {
           variantId = String(v.id);
           inventoryItemId = String(v.inventory_item_id);
+          shopifyProductId = String(v.product_id);
         }
       }
+    }
+
+    // ── B3 — Content update (title/description → Shopify product) ─────────
+    // Keyed on syncType so a content sync can NEVER fall through to the
+    // quantity path below (which sets inventory to payload.quantity ?? 0 and
+    // would zero stock on a content-only change).
+    if (syncType === "CONTENT_UPDATE") {
+      const update = buildShopifyProductUpdate(shopifyProductId, payload);
+      if (!update) {
+        if (!shopifyProductId) {
+          return { success: false, queueId, channel: "SHOPIFY", status: "FAILED",
+            message: `No Shopify product for SKU ${sku} — publish the listing first`,
+            error: "shopify product_id not resolved." };
+        }
+        // Product id is fine but nothing Shopify supports yet (e.g. bullets-only).
+        return { success: true, queueId, channel: "SHOPIFY", status: "SUCCESS",
+          message: `Shopify content: no pushable field for ${sku} (skipped)` };
+      }
+
+      const t0 = Date.now();
+      const contentRes = await fetch(`${apiBase}/products/${shopifyProductId}.json`, {
+        method: "PUT",
+        headers,
+        body: JSON.stringify(update),
+      }).catch((err: Error) => ({ ok: false, status: 0, text: async () => err.message } as any));
+
+      const succeeded = contentRes.ok;
+      const errBody = succeeded ? null : await contentRes.text().catch(() => "");
+      writeAttemptLog({
+        channel: "SHOPIFY", marketplace: "GLOBAL", sellerId: shopName,
+        sku, productId: product?.id ?? null, mode: "live",
+        outcome: succeeded ? "success" : "failed",
+        payloadDigest: digestPayload(payload),
+        errorMessage: succeeded ? null : `products PUT ${contentRes.status}: ${(errBody ?? "").slice(0, 300)}`,
+        durationMs: Date.now() - t0,
+      });
+      recordShopifyOutcome(shopName, succeeded, succeeded ? undefined : `products PUT ${contentRes.status}`);
+
+      if (!succeeded) {
+        return { success: false, queueId, channel: "SHOPIFY", status: "FAILED",
+          message: "Failed to update Shopify product content",
+          error: `products PUT ${contentRes.status}: ${(errBody ?? "").slice(0, 300)}` };
+      }
+      return { success: true, queueId, channel: "SHOPIFY", status: "SUCCESS",
+        message: `Shopify content updated: ${sku}` };
     }
 
     // ── P3.0 — Price update ──────────────────────────────────────────────

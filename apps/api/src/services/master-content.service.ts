@@ -17,8 +17,8 @@
  *                               the listing keeps its override, no push.
  *
  * quantity is already propagated via stock-movement (QUANTITY_UPDATE); images via
- * their own cascade. Shopify content push is a B-track gap, so CONTENT_UPDATE is
- * only enqueued for content-capable channels (Amazon, eBay) — never a no-op push.
+ * their own cascade. CONTENT_UPDATE is enqueued for content-capable channels —
+ * Amazon, eBay, and (B3) Shopify (title → product.title, description → body_html).
  */
 
 import type { PrismaClient } from '@prisma/client'
@@ -28,7 +28,7 @@ import { outboundSyncQueue } from '../lib/queue.js'
 import { logger } from '../utils/logger.js'
 
 const DEFAULT_HOLD_MS = 30 * 1000
-const CONTENT_CHANNELS = new Set(['AMAZON', 'EBAY']) // Shopify content push = B-SHOP1 follow-up
+const CONTENT_CHANNELS = new Set(['AMAZON', 'EBAY', 'SHOPIFY']) // B3 — Shopify content push live (title + body_html)
 
 export interface MasterContentChanges {
   /** Product.name (the master title). */

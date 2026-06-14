@@ -20,6 +20,7 @@ import {
   resolveAmazonMarketplaceId,
   buildAmazonListingPatch,
   isFbaListing,
+  buildShopifyProductUpdate,
 } from './outbound-sync.service.js'
 
 describe('Phase 0.1 — eBay sync payload helpers', () => {
@@ -159,5 +160,36 @@ describe('B2 — isFbaListing resolution', () => {
   it('nothing set → false (safe FBM default)', () => {
     expect(isFbaListing(null, null)).toBe(false)
     expect(isFbaListing({}, {})).toBe(false)
+  })
+})
+
+describe('B3 — buildShopifyProductUpdate (Shopify content push)', () => {
+  it('title + description → product { id, title, body_html }', () => {
+    expect(buildShopifyProductUpdate('123', { title: 'Casco', description: '<p>desc</p>' }))
+      .toEqual({ product: { id: 123, title: 'Casco', body_html: '<p>desc</p>' } })
+  })
+  it('accepts a numeric id', () => {
+    expect(buildShopifyProductUpdate(456, { title: 'X' })!.product.id).toBe(456)
+  })
+  it('empty/whitespace title is NOT pushed (Shopify rejects an empty title)', () => {
+    expect(buildShopifyProductUpdate('1', { title: '   ' })).toBeNull()
+    const u = buildShopifyProductUpdate('1', { title: '  ', description: 'd' })
+    expect(u!.product).not.toHaveProperty('title')
+    expect(u!.product.body_html).toBe('d')
+  })
+  it('description "" clears body_html (master cleared)', () => {
+    expect(buildShopifyProductUpdate('1', { description: '' })!.product.body_html).toBe('')
+  })
+  it('description null → body_html ""', () => {
+    expect(buildShopifyProductUpdate('1', { description: null })!.product.body_html).toBe('')
+  })
+  it('no pushable field (bullets-only / empty) → null', () => {
+    expect(buildShopifyProductUpdate('1', {})).toBeNull()
+  })
+  it('invalid / missing product id → null', () => {
+    expect(buildShopifyProductUpdate(null, { title: 'X' })).toBeNull()
+    expect(buildShopifyProductUpdate(undefined, { title: 'X' })).toBeNull()
+    expect(buildShopifyProductUpdate('abc', { title: 'X' })).toBeNull()
+    expect(buildShopifyProductUpdate(0, { title: 'X' })).toBeNull()
   })
 })
