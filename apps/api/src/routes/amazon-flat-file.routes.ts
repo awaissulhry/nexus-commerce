@@ -22,6 +22,15 @@ import {
 } from '../services/amazon/flat-file.service.js'
 import { translateEnumValues } from '../services/amazon/value-translate.service.js'
 import { getAmazonPublishMode } from '../services/amazon-publish-gate.service.js'
+import { preflightRow } from '../services/listing-preflight.service.js'
+
+/** A5 — required columns (id + label) from a live schema manifest, for preflight. */
+function requiredColumnsFromManifest(manifest: any): Array<{ id: string; label: string }> {
+  const cols = (manifest?.groups ?? []).flatMap((g: any) => g?.columns ?? [])
+  return cols
+    .filter((c: any) => c?.required === true)
+    .map((c: any) => ({ id: String(c.id), label: String(c.labelEn ?? c.id) }))
+}
 import { enqueueContentSyncIfEnabled } from '../services/content-auto-publish.service.js'
 import { productEventService } from '../services/product-event.service.js'
 import { runFlatFileAiInstruction } from '../services/flat-file-ai.service.js'
@@ -215,6 +224,22 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
       return reply.code(400).send({ error: 'Max 2000 rows per submission' })
     }
 
+    // A5 — pre-flight: surface missing-required / invalid-GTIN / missing-image as a
+    // per-row checklist alongside the feedId (warn, not block). Computed before the
+    // dry-run gate so the common (dry-run) path returns it too. Best-effort.
+    let preflight: Array<{ sku: string; issues: any[] }> = []
+    if (productType) {
+      try {
+        const manifest = await flatFileService.generateManifest(mp, String(productType))
+        const required = requiredColumnsFromManifest(manifest)
+        preflight = rows
+          .map((r: any) => ({ sku: String(r.item_sku ?? ''), issues: preflightRow(r, required) }))
+          .filter((p) => p.issues.length > 0)
+      } catch (err: any) {
+        request.log.warn({ err: err?.message }, 'flat-file/submit: preflight unavailable')
+      }
+    }
+
     // A1.2 — unified publish gate (master flag + mode) instead of the legacy
     // NEXUS_AMAZON_BATCH_DRYRUN. Only 'live' actually submits a feed.
     const dryRun = getAmazonPublishMode() !== 'live'
@@ -224,6 +249,7 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
         feedDocumentId: `dryrun-doc-${Date.now()}`,
         messageCount: rows.length,
         dryRun: true,
+        preflight,
       })
     }
 
@@ -318,10 +344,34 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
         feedDocumentId: docRes.feedDocumentId,
         messageCount: rows.length,
         dryRun: false,
+        preflight,
       })
     } catch (err: any) {
       request.log.error(err, 'flat-file/submit failed')
       return reply.code(500).send({ error: err?.message ?? 'Submission failed' })
+    }
+  })
+
+  // ── POST /api/amazon/flat-file/preflight ────────────────────────────
+  // A5 — schema-driven pre-flight WITHOUT submitting a feed: per-row checklist of
+  // missing-required (90220 class) / invalid-GTIN / missing-image. Warn-only — the
+  // editor can show it before the operator commits a submit.
+  fastify.post<{
+    Body: { rows?: any[]; marketplace?: string; productType?: string }
+  }>('/amazon/flat-file/preflight', async (request, reply) => {
+    const { rows = [], marketplace = 'IT', productType } = request.body ?? {}
+    const mp = String(marketplace).toUpperCase()
+    if (!productType) return reply.send({ preflight: [], checkedRows: rows.length })
+    try {
+      const manifest = await flatFileService.generateManifest(mp, String(productType))
+      const required = requiredColumnsFromManifest(manifest)
+      const preflight = rows
+        .map((r: any) => ({ sku: String(r?.item_sku ?? ''), issues: preflightRow(r, required) }))
+        .filter((p) => p.issues.length > 0)
+      return reply.send({ preflight, checkedRows: rows.length })
+    } catch (err: any) {
+      request.log.error(err, 'flat-file/preflight failed')
+      return reply.code(500).send({ error: err?.message ?? 'Preflight failed' })
     }
   })
 
