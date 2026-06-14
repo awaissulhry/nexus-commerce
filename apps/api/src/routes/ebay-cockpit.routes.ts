@@ -1122,6 +1122,10 @@ export default async function ebayCockpitRoutes(fastify: FastifyInstance) {
         returnPolicyId: (platform.returnPolicyId as string | undefined) ?? undefined,
         merchantLocationKey: (platform.merchantLocationKey as string | undefined) ?? undefined,
       },
+      // B1 — send the captured eBay Motors fitment (was persisted but dropped).
+      compatibility: (platform.compatibility as
+        | { universal?: boolean; fitments?: Array<{ year?: string | number; make?: string; model?: string; submodel?: string | null }> }
+        | undefined) ?? undefined,
     })
 
     // ── Persist outcome ────────────────────────────────────────────

@@ -100,6 +100,9 @@ export interface EbayPublishResult {
   error?: string
   /** Which step failed (createInventory|createOffer|publishOffer). */
   failedStep?: string
+  /** B1 — non-fatal: fitment couldn't be set (e.g. category without
+   *  compatibility support). The listing still published. */
+  compatibilityWarning?: string
 }
 
 interface EbayPayload {
@@ -129,6 +132,50 @@ interface EbayPayload {
     returnPolicyId?: string
     merchantLocationKey?: string
   }
+  /** B1 — eBay Motors fitment (captured in the cockpit, persisted to
+   *  ChannelListing.platformAttributes.compatibility). Sent via the
+   *  Inventory API product_compatibility resource at publish. */
+  compatibility?: {
+    universal?: boolean
+    fitments?: Array<{
+      year?: string | number
+      make?: string
+      model?: string
+      submodel?: string | null
+    }>
+  }
+}
+
+/**
+ * B1 — map captured eBay Motors fitment to the Inventory API
+ * product_compatibility body. Returns null when there's nothing to send
+ * (universal fit, or no fitment with at least a make+model) so the caller
+ * skips the PUT. Pure + unit-tested.
+ */
+export function buildEbayCompatibilityBody(
+  compatibility: EbayPayload['compatibility'],
+): { compatibleProducts: Array<{ compatibilityProperties: Array<{ name: string; value: string }> }> } | null {
+  if (!compatibility || compatibility.universal) return null
+  const fitments = Array.isArray(compatibility.fitments) ? compatibility.fitments : []
+  const compatibleProducts = fitments
+    .map((f) => {
+      const props: Array<{ name: string; value: string }> = []
+      const year = String(f?.year ?? '').trim()
+      const make = String(f?.make ?? '').trim()
+      const model = String(f?.model ?? '').trim()
+      const submodel = f?.submodel ? String(f.submodel).trim() : ''
+      // eBay motorsports compatibility property names. Order is not significant
+      // (name/value pairs) but we keep a stable Year→Make→Model→Submodel order.
+      if (year) props.push({ name: 'Year', value: year })
+      if (make) props.push({ name: 'Make', value: make })
+      if (model) props.push({ name: 'Model', value: model })
+      if (submodel) props.push({ name: 'Submodel', value: submodel })
+      return props
+    })
+    // A meaningful fitment needs at least a make + model; drop anything blanker.
+    .filter((props) => props.some((p) => p.name === 'Make') && props.some((p) => p.name === 'Model'))
+    .map((compatibilityProperties) => ({ compatibilityProperties }))
+  return compatibleProducts.length > 0 ? { compatibleProducts } : null
 }
 
 export class EbayPublishAdapter {
@@ -363,6 +410,40 @@ export class EbayPublishAdapter {
       })
     }
 
+    // ── Step 1b (B1): product compatibility (eBay Motors fitment) ─
+    // Fitment is captured in the cockpit + persisted, but was DROPPED at
+    // publish. Send it now via the Inventory API product_compatibility
+    // resource, keyed by the SKU we just created (so the published listing
+    // carries fitment from the start). Soft-fail: a category that doesn't
+    // support compatibility (most apparel) must not block the listing.
+    let compatibilityWarning: string | undefined
+    const compatBody = buildEbayCompatibilityBody(payload.compatibility)
+    if (compatBody) {
+      try {
+        const compatRes = await ebayFetchWithRetry(
+          `${apiBase}/sell/inventory/v1/inventory_item/${encodeURIComponent(
+            payload.sku,
+          )}/product_compatibility`,
+          { method: 'PUT', headers, body: JSON.stringify(compatBody) },
+          `createOrReplaceProductCompatibility(${payload.sku})`,
+        )
+        if (!compatRes.ok && compatRes.status !== 204) {
+          const body = await compatRes.text().catch(() => '')
+          compatibilityWarning = `compatibility not set (${compatRes.status}): ${body.slice(0, 300)}`
+          logger.warn('eBay product_compatibility rejected — publishing without fitment', {
+            sku: payload.sku,
+            status: compatRes.status,
+          })
+        }
+      } catch (err) {
+        compatibilityWarning = `compatibility not set: ${err instanceof Error ? err.message : String(err)}`
+        logger.warn('eBay product_compatibility call failed — publishing without fitment', {
+          sku: payload.sku,
+          error: err instanceof Error ? err.message : String(err),
+        })
+      }
+    }
+
     // ── Step 2: createOffer ──────────────────────────────────────
     // Fulfillment / payment / return policies are required for a
     // publishable offer. Read pre-configured ids from
@@ -568,6 +649,7 @@ export class EbayPublishAdapter {
       listingUrl: listingId
         ? marketplaceListingUrl(payload.marketplaceId, listingId)
         : undefined,
+      compatibilityWarning,
     })
   }
 }
