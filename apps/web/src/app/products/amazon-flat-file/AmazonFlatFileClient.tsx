@@ -2005,6 +2005,51 @@ export default function AmazonFlatFileClient({
   // ── Submit ─────────────────────────────────────────────────────────
 
   const handleSubmitToMarkets = useCallback(async (markets: Set<string>) => {
+    // Gather the dirty/new rows for a market — the active market from state, the
+    // others from their localStorage snapshot. Shared by pre-flight + the submit.
+    const gatherRows = (mp: string): Row[] => {
+      if (mp === marketplace) return rows.filter((r) => r._dirty || r._isNew)
+      try {
+        const raw = localStorage.getItem(rowStorageKey(mp, productType))
+        const saved: Row[] = raw ? JSON.parse(raw) : []
+        return saved.filter((r) => r._dirty || r._isNew)
+      } catch { return [] }
+    }
+
+    // A5 — pre-flight BEFORE the feed goes out: per market, check required fields /
+    // barcodes / main image against the live schema and let the operator review.
+    // Non-blocking — they can submit anyway. Advisory: a check failure never blocks.
+    type PreflightFlag = { sku: string; issues: Array<{ severity: string; message: string }> }
+    try {
+      const toCheck = [...markets].map((mp) => ({ mp, rows: gatherRows(mp) })).filter((m) => m.rows.length > 0)
+      const checks = await Promise.all(toCheck.map(async ({ mp, rows: toSend }) => {
+        try {
+          const res = await fetch(`${getBackendUrl()}/api/amazon/flat-file/preflight`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ rows: toSend, marketplace: mp, productType }),
+          })
+          if (!res.ok) return { mp, flagged: [] as PreflightFlag[] }
+          const data = await res.json()
+          return { mp, flagged: (data.preflight ?? []) as PreflightFlag[] }
+        } catch { return { mp, flagged: [] as PreflightFlag[] } }
+      }))
+      const withIssues = checks.filter((c) => c.flagged.length > 0)
+      if (withIssues.length) {
+        const total = withIssues.reduce((n, c) => n + c.flagged.length, 0)
+        const preview = withIssues
+          .flatMap((c) => c.flagged.map((p) => `• ${c.mp} · ${p.sku || '(no SKU)'}: ${p.issues.map((i) => i.message).join('; ')}`))
+          .slice(0, 8)
+        const more = total > preview.length ? `\n…and ${total - preview.length} more row(s)` : ''
+        const proceed = confirm(
+          `Pre-flight flagged ${total} row(s) before submitting:\n\n${preview.join('\n')}${more}\n\nAmazon may reject these. Submit anyway?`,
+        )
+        if (!proceed) return
+      }
+    } catch {
+      // Pre-flight is advisory — never block a deliberate submit on a check failure.
+    }
+
     setSubmitting(true)
     setSubmitPanelOpen(false)
     setFeedEntries([])
@@ -2030,17 +2075,7 @@ export default function AmazonFlatFileClient({
 
     const settled = await Promise.allSettled(
       [...markets].map(async (mp) => {
-        let toSend: Row[]
-        if (mp === marketplace) {
-          toSend = rows.filter((r) => r._dirty || r._isNew)
-        } else {
-          const key = rowStorageKey(mp, productType)
-          try {
-            const raw = localStorage.getItem(key)
-            const saved: Row[] = raw ? JSON.parse(raw) : []
-            toSend = saved.filter((r) => r._dirty || r._isNew)
-          } catch { toSend = [] }
-        }
+        const toSend = gatherRows(mp)
         if (!toSend.length) return { mp, feedId: '', skipped: true }
         const res = await fetch(`${getBackendUrl()}/api/amazon/flat-file/submit`, {
           method: 'POST',
