@@ -117,11 +117,13 @@ export function buildAmazonListingPatch(
   payload: SyncPayload,
   marketplaceCode: string,
   productType: string,
+  fulfillmentMethod?: string | null,
 ): Record<string, any> {
   const code = (marketplaceCode || "IT").toUpperCase();
   const marketplaceId = resolveAmazonMarketplaceId(code);
   const language_tag = AMAZON_LANG_TAG[code] ?? "it_IT";
   const currency = code === "UK" || code === "GB" ? "GBP" : "EUR";
+  const isFba = String(fulfillmentMethod ?? "").toUpperCase() === "FBA";
   const attrs: Record<string, any> = {};
 
   if (payload.title) {
@@ -137,7 +139,11 @@ export function buildAmazonListingPatch(
   if (payload.price !== undefined) {
     attrs.purchasable_offer = [{ currency, our_price: [{ schedule: [{ value_with_tax: payload.price }] }], marketplace_id: marketplaceId }];
   }
-  if (payload.quantity !== undefined) {
+  // B2 — FBA stock is owned by Amazon. Pushing a merchant fulfillment_availability
+  // (DEFAULT channel) for an FBA SKU flips the offer to FBM and overwrites Amazon's
+  // managed quantity. So only emit a merchant quantity for FBM (or unknown — the
+  // common, safe default). For FBA we leave fulfillment untouched (handled upstream).
+  if (payload.quantity !== undefined && !isFba) {
     attrs.fulfillment_availability = [{ fulfillment_channel_code: "DEFAULT", quantity: payload.quantity, marketplace_id: marketplaceId }];
   }
 
@@ -145,6 +151,28 @@ export function buildAmazonListingPatch(
     productType,
     patches: Object.entries(attrs).map(([k, v]) => ({ op: "replace", path: `/attributes/${k}`, value: v })),
   };
+}
+
+/**
+ * B2 — is this Amazon listing FBA (Amazon-fulfilled)? The listing's explicit
+ * method wins; else a persisted AMAZON_* fulfillment channel code (what was last
+ * written to the offer); else — only when the listing method is unset — the
+ * product-level method. Default false (safe FBM). Pure + testable; mirrors the
+ * flat-file truth (amazon/flat-file.service.ts:1013).
+ */
+export function isFbaListing(
+  listing: { fulfillmentMethod?: string | null; platformAttributes?: any } | null | undefined,
+  product: { fulfillmentMethod?: string | null } | null | undefined,
+): boolean {
+  const faChannel = String(
+    (listing?.platformAttributes as any)?.fulfillment_availability?.[0]?.fulfillment_channel_code ?? "",
+  ).toUpperCase();
+  return (
+    listing?.fulfillmentMethod === "FBA" ||
+    faChannel.startsWith("AMAZON") ||
+    (listing?.fulfillmentMethod == null &&
+      String(product?.fulfillmentMethod ?? "").toUpperCase() === "FBA")
+  );
 }
 
 // ── Data Structures ──────────────────────────────────────────────────────
@@ -470,14 +498,38 @@ export class OutboundSyncService {
     // build the CORRECT patch body (schema attribute names + value shapes),
     // replacing the malformed constructAmazonPayload.
     let productType = String((payload as any).productType ?? '').toUpperCase();
-    if (!productType && queueItem.channelListingId) {
-      const cl = await prisma.channelListing
-        .findUnique({ where: { id: queueItem.channelListingId }, select: { platformAttributes: true } })
+    // B2 — load the listing ONCE for both productType and fulfillment method.
+    let cl: any = null;
+    if (queueItem.channelListingId) {
+      cl = await prisma.channelListing
+        .findUnique({
+          where: { id: queueItem.channelListingId },
+          select: { platformAttributes: true, fulfillmentMethod: true },
+        })
         .catch(() => null);
-      productType = String((cl?.platformAttributes as any)?.productType ?? '').toUpperCase();
     }
+    if (!productType) productType = String((cl?.platformAttributes as any)?.productType ?? '').toUpperCase();
     if (!productType) productType = String((product as any)?.productType ?? '').toUpperCase();
-    const amazonPayload = buildAmazonListingPatch(payload, marketplaceId, productType);
+
+    // B2 — FBA SKUs must not receive a merchant quantity push (it flips the offer
+    // to FBM). Resolve the listing's fulfillment method (listing → persisted channel
+    // code → product) and let buildAmazonListingPatch drop the qty attribute for FBA.
+    const isFba = isFbaListing(cl, product);
+    const amazonPayload = buildAmazonListingPatch(payload, marketplaceId, productType, isFba ? "FBA" : "FBM");
+
+    // B2 — an FBA quantity-only update yields zero patches (we never touch Amazon's
+    // FBA stock). Don't submit an empty patch — return a terminal, no-retry skip.
+    if (!Array.isArray(amazonPayload.patches) || amazonPayload.patches.length === 0) {
+      return {
+        success: true,
+        queueId,
+        channel: "AMAZON",
+        status: "SKIPPED",
+        message: isFba
+          ? "Skipped — FBA quantity is managed by Amazon (no merchant-qty push)"
+          : "Skipped — empty patch (nothing to push)",
+      };
+    }
 
     // A1.3 — delegate the gate→circuit→rate-limit→dry-run→audit chain to the
     // shared ListingPublishService; inject Amazon's gate functions + the actual

@@ -19,6 +19,7 @@ import {
   buildEbayOfferUpdate,
   resolveAmazonMarketplaceId,
   buildAmazonListingPatch,
+  isFbaListing,
 } from './outbound-sync.service.js'
 
 describe('Phase 0.1 — eBay sync payload helpers', () => {
@@ -106,5 +107,57 @@ describe('A4.0 — buildAmazonListingPatch (correct Listings PATCH)', () => {
   })
   it('GB market → GBP currency', () => {
     expect(buildAmazonListingPatch({ price: 10 }, 'UK', 'OUTERWEAR').patches[0].value[0].currency).toBe('GBP')
+  })
+})
+
+describe('B2 — FBM/FBA-aware quantity push', () => {
+  const hasFa = (body: any) => body.patches.some((x: any) => x.path === '/attributes/fulfillment_availability')
+
+  it('FBM → emits fulfillment_availability with DEFAULT channel', () => {
+    const body = buildAmazonListingPatch({ quantity: 5 } as any, 'IT', 'OUTERWEAR', 'FBM')
+    const fa = body.patches.find((x: any) => x.path === '/attributes/fulfillment_availability')
+    expect(fa.value[0]).toMatchObject({ fulfillment_channel_code: 'DEFAULT', quantity: 5 })
+  })
+  it('unknown method → still emits (safe FBM default; preserves prior behavior)', () => {
+    expect(hasFa(buildAmazonListingPatch({ quantity: 5 } as any, 'IT', 'OUTERWEAR'))).toBe(true)
+  })
+  it('FBA → OMITS fulfillment_availability (Amazon owns the stock)', () => {
+    expect(hasFa(buildAmazonListingPatch({ quantity: 5 } as any, 'IT', 'OUTERWEAR', 'FBA'))).toBe(false)
+  })
+  it('FBA is case-insensitive', () => {
+    expect(hasFa(buildAmazonListingPatch({ quantity: 5 } as any, 'IT', 'OUTERWEAR', 'fba'))).toBe(false)
+  })
+  it('FBA + quantity-only → EMPTY patch set (caller skips the submit)', () => {
+    expect(buildAmazonListingPatch({ quantity: 5 } as any, 'IT', 'OUTERWEAR', 'FBA').patches.length).toBe(0)
+  })
+  it('FBA + price → still emits price; only the qty attribute is dropped', () => {
+    const body = buildAmazonListingPatch({ price: 19.99, quantity: 5 } as any, 'IT', 'OUTERWEAR', 'FBA')
+    const paths = body.patches.map((x: any) => x.path)
+    expect(paths).toContain('/attributes/purchasable_offer')
+    expect(paths).not.toContain('/attributes/fulfillment_availability')
+    expect(body.patches.length).toBe(1)
+  })
+})
+
+describe('B2 — isFbaListing resolution', () => {
+  it('listing.fulfillmentMethod=FBA → true', () => {
+    expect(isFbaListing({ fulfillmentMethod: 'FBA' }, null)).toBe(true)
+  })
+  it('listing.fulfillmentMethod=FBM wins over product=FBA → false', () => {
+    expect(isFbaListing({ fulfillmentMethod: 'FBM' }, { fulfillmentMethod: 'FBA' })).toBe(false)
+  })
+  it('persisted AMAZON_EU channel code → true', () => {
+    expect(isFbaListing({ platformAttributes: { fulfillment_availability: [{ fulfillment_channel_code: 'AMAZON_EU' }] } }, null)).toBe(true)
+  })
+  it('persisted DEFAULT channel code → false', () => {
+    expect(isFbaListing({ platformAttributes: { fulfillment_availability: [{ fulfillment_channel_code: 'DEFAULT' }] } }, null)).toBe(false)
+  })
+  it('listing method unset → falls back to product method', () => {
+    expect(isFbaListing({ fulfillmentMethod: null }, { fulfillmentMethod: 'FBA' })).toBe(true)
+    expect(isFbaListing(null, { fulfillmentMethod: 'FBM' })).toBe(false)
+  })
+  it('nothing set → false (safe FBM default)', () => {
+    expect(isFbaListing(null, null)).toBe(false)
+    expect(isFbaListing({}, {})).toBe(false)
   })
 })
