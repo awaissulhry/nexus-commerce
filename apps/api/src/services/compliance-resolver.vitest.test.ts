@@ -12,6 +12,7 @@ import {
   buildCompliancePayload,
   evaluateCompliance,
   buildAmazonComplianceColumns,
+  buildShopifyComplianceMetafields,
   type ResponsiblePerson,
 } from './compliance-resolver.service.js'
 
@@ -100,5 +101,25 @@ describe('C1 — buildAmazonComplianceColumns', () => {
   it('emits only keys with data (no RP, no manufacturer)', () => {
     const p = buildCompliancePayload({ id: 'p', countryOfOrigin: 'IT', certificates: [] }, null)
     expect(Object.keys(buildAmazonComplianceColumns(p))).toEqual(['country_of_origin'])
+  })
+})
+
+describe('C3 — buildShopifyComplianceMetafields', () => {
+  it('maps country/manufacturer/RP into the compliance namespace', () => {
+    const p = buildCompliancePayload({ id: 'p', countryOfOrigin: 'IT', manufacturer: 'Xavia', certificates: [] }, RP)
+    const m = buildShopifyComplianceMetafields(p)
+    const byKey = Object.fromEntries(m.map((x) => [x.key, x]))
+    expect(byKey.country_of_origin).toMatchObject({ namespace: 'compliance', type: 'single_line_text_field', value: 'IT' })
+    expect(byKey.manufacturer.value).toBe('Xavia')
+    expect(byKey.responsible_person.value).toBe('Xavia Srl')
+    expect(byKey.responsible_person_address).toMatchObject({ type: 'multi_line_text_field' })
+    expect(byKey.responsible_person_address.value).toContain('Via Roma 1')
+  })
+  it('no RP name → no responsible_person metafields', () => {
+    const p = buildCompliancePayload({ id: 'p', countryOfOrigin: 'IT', certificates: [] }, null)
+    expect(buildShopifyComplianceMetafields(p).map((x) => x.key)).toEqual(['country_of_origin'])
+  })
+  it('nothing → empty array', () => {
+    expect(buildShopifyComplianceMetafields(buildCompliancePayload({ id: 'p', certificates: [] }, null))).toEqual([])
   })
 })

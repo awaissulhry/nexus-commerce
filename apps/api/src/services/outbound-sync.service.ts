@@ -24,6 +24,7 @@ import {
 } from "./channel-publish-audit.service.js";
 import { ebayAuthService } from "./ebay-auth.service.js";
 import { listingPublishService } from "./listing-publish.service.js";
+import { resolveComplianceById, buildShopifyComplianceMetafields } from "./compliance-resolver.service.js";
 
 // Advertising mutations (bids/budgets/state) ride the same OutboundSyncQueue
 // table but are owned exclusively by the dedicated ads-sync worker
@@ -919,23 +920,40 @@ export class OutboundSyncService {
     // quantity path below (which sets inventory to payload.quantity ?? 0 and
     // would zero stock on a content-only change).
     if (syncType === "CONTENT_UPDATE") {
+      // B3 content (title/body_html) + C3 GPSR compliance metafields, in ONE
+      // product PUT. Compliance rides the content sync (a dedicated compliance-
+      // only trigger is a follow-up). Both best-effort.
       const update = buildShopifyProductUpdate(shopifyProductId, payload);
-      if (!update) {
-        if (!shopifyProductId) {
+      let metafields: Array<{ namespace: string; key: string; type: string; value: string }> = [];
+      if (product?.id) {
+        const cp = await resolveComplianceById(product.id).catch(() => null);
+        if (cp) metafields = buildShopifyComplianceMetafields(cp);
+      }
+
+      if (!shopifyProductId) {
+        // Hard error only when there's actually something to push.
+        if (update || metafields.length > 0) {
           return { success: false, queueId, channel: "SHOPIFY", status: "FAILED",
             message: `No Shopify product for SKU ${sku} — publish the listing first`,
             error: "shopify product_id not resolved." };
         }
-        // Product id is fine but nothing Shopify supports yet (e.g. bullets-only).
+        return { success: true, queueId, channel: "SHOPIFY", status: "SUCCESS",
+          message: `Shopify content: nothing to push for ${sku} (skipped)` };
+      }
+      // Nothing pushable (no content field, no compliance metafield) → skip.
+      if (!update && metafields.length === 0) {
         return { success: true, queueId, channel: "SHOPIFY", status: "SUCCESS",
           message: `Shopify content: no pushable field for ${sku} (skipped)` };
       }
+
+      const productBody: Record<string, any> = update?.product ?? { id: parseInt(shopifyProductId, 10) };
+      if (metafields.length > 0) productBody.metafields = metafields;
 
       const t0 = Date.now();
       const contentRes = await fetch(`${apiBase}/products/${shopifyProductId}.json`, {
         method: "PUT",
         headers,
-        body: JSON.stringify(update),
+        body: JSON.stringify({ product: productBody }),
       }).catch((err: Error) => ({ ok: false, status: 0, text: async () => err.message } as any));
 
       const succeeded = contentRes.ok;
@@ -955,8 +973,9 @@ export class OutboundSyncService {
           message: "Failed to update Shopify product content",
           error: `products PUT ${contentRes.status}: ${(errBody ?? "").slice(0, 300)}` };
       }
+      const metaNote = metafields.length > 0 ? ` + ${metafields.length} compliance metafield(s)` : "";
       return { success: true, queueId, channel: "SHOPIFY", status: "SUCCESS",
-        message: `Shopify content updated: ${sku}` };
+        message: `Shopify content updated: ${sku}${metaNote}` };
     }
 
     // ── P3.0 — Price update ──────────────────────────────────────────────

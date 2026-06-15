@@ -170,6 +170,30 @@ export function buildAmazonComplianceColumns(payload: CompliancePayload): Record
   return cols
 }
 
+/**
+ * C3 — map the canonical payload to Shopify product metafields (custom
+ * `compliance` namespace; text field types). Returns [] when there's nothing to
+ * push. Mapping to Shopify's STANDARD storefront GPSR metaobjects (for native
+ * compliance-section display) is a follow-up (C3.1).
+ */
+export function buildShopifyComplianceMetafields(
+  payload: CompliancePayload,
+): Array<{ namespace: string; key: string; type: string; value: string }> {
+  const out: Array<{ namespace: string; key: string; type: string; value: string }> = []
+  const push = (key: string, type: string, value: string | null | undefined) => {
+    if (value != null && String(value).trim() !== '') out.push({ namespace: 'compliance', key, type, value: String(value) })
+  }
+  push('country_of_origin', 'single_line_text_field', payload.countryOfOrigin)
+  push('manufacturer', 'single_line_text_field', payload.manufacturer)
+  const rp = payload.responsiblePerson
+  if (rp?.name) {
+    push('responsible_person', 'single_line_text_field', rp.name)
+    const addr = [...(rp.addressLines ?? []), rp.email, rp.phone].filter(Boolean).join('\n')
+    push('responsible_person_address', 'multi_line_text_field', addr)
+  }
+  return out
+}
+
 /** The single BrandSettings row → the canonical responsible person. */
 export async function getResponsiblePerson(): Promise<ResponsiblePerson | null> {
   const b = await prisma.brandSettings.findFirst().catch(() => null)
