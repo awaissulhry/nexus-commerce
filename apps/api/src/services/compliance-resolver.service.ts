@@ -164,7 +164,9 @@ export function evaluateCompliance(
   }
 
   if (payload.dangerousGoods && platform === 'AMAZON') {
-    issues.push({ code: 'amazon_hazmat_declaration', severity: 'warn', message: `Hazmat product (UN class ${payload.dangerousGoods.hazmatClass ?? '?'}). Amazon requires a separate hazmat declaration upload on Seller Central.` })
+    const dg = payload.dangerousGoods
+    const ref = [dg.unNumber, dg.hazmatClass ? `class ${dg.hazmatClass}` : null].filter(Boolean).join(', ') || '?'
+    issues.push({ code: 'amazon_hazmat_declaration', severity: 'warn', message: `Hazmat product (${ref}). Amazon requires a separate hazmat declaration upload on Seller Central.` })
   }
 
   if (!payload.hsCode && isCrossBorder) {
@@ -237,6 +239,23 @@ export function buildSafetyStatements(payload: {
 }
 
 /**
+ * C5.1 — a human-readable dangerous-goods statement from the UN class + number
+ * (e.g. gas-canister airbag vests). Returns null when there's no DG data. Pure.
+ */
+export function buildDangerousGoodsStatement(
+  dg: { hazmatClass?: string | null; unNumber?: string | null } | null | undefined,
+): string | null {
+  if (!dg) return null
+  const un = dg.unNumber ? String(dg.unNumber).trim() : ''
+  const cls = dg.hazmatClass ? String(dg.hazmatClass).trim() : ''
+  if (!un && !cls) return null
+  const parts: string[] = []
+  if (un) parts.push(un)
+  if (cls) parts.push(`hazard class ${cls}`)
+  return `Dangerous goods: ${parts.join(' — ')}`
+}
+
+/**
  * C3 — map the canonical payload to Shopify product metafields (custom
  * `compliance` namespace; text field types). C4.2 adds the structured CE/PPE
  * fields. Returns [] when there's nothing to push. Mapping to Shopify's STANDARD
@@ -267,6 +286,7 @@ export function buildShopifyComplianceMetafields(
   }
   const stmts = buildSafetyStatements(payload)
   if (stmts.length > 0) push('impact_protectors', 'multi_line_text_field', stmts.join('\n'))
+  push('dangerous_goods', 'single_line_text_field', buildDangerousGoodsStatement(payload.dangerousGoods))
   return out
 }
 

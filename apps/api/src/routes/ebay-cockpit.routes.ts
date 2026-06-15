@@ -1138,6 +1138,7 @@ export default async function ebayCockpitRoutes(fastify: FastifyInstance) {
             responsiblePerson: compliance.responsiblePerson,
             garmentClass: compliance.garmentClass,
             impactProtectors: compliance.impactProtectors,
+            dangerousGoods: compliance.dangerousGoods,
           }
         : undefined,
     })

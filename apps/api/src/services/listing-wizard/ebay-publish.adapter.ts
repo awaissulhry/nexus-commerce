@@ -33,7 +33,7 @@ import {
   digestPayload,
   writeAttemptLog,
 } from '../channel-publish-audit.service.js'
-import { buildSafetyStatements } from '../compliance-resolver.service.js'
+import { buildSafetyStatements, buildDangerousGoodsStatement } from '../compliance-resolver.service.js'
 
 const ebayCategoryService = new EbayCategoryService()
 
@@ -161,6 +161,8 @@ interface EbayPayload {
     // C4.2 — structured CE/PPE → productSafety statements.
     garmentClass?: string | null
     impactProtectors?: Array<{ zone?: string | null; standard?: string | null; level?: string | null }>
+    // C5.1 — dangerous goods → an extra productSafety statement.
+    dangerousGoods?: { hazmatClass?: string | null; unNumber?: string | null } | null
   }
 }
 
@@ -195,8 +197,11 @@ export function buildEbayRegulatory(
   }
 
   // C4.2 — productSafety statements from the structured CE/PPE data (garment
-  // class + EN 1621 protectors). Pictograms need eBay code IDs → deferred.
+  // class + EN 1621 protectors). C5.1 — + a dangerous-goods statement. Pictograms
+  // need eBay code IDs → deferred.
   const statements = buildSafetyStatements({ garmentClass: compliance.garmentClass, impactProtectors: compliance.impactProtectors })
+  const dgStmt = buildDangerousGoodsStatement(compliance.dangerousGoods)
+  if (dgStmt) statements.push(dgStmt)
   if (statements.length > 0) regulatory.productSafety = { statements }
 
   return Object.keys(regulatory).length > 0 ? regulatory : null

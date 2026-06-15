@@ -14,6 +14,7 @@ import {
   buildAmazonComplianceColumns,
   buildShopifyComplianceMetafields,
   buildSafetyStatements,
+  buildDangerousGoodsStatement,
   type ResponsiblePerson,
 } from './compliance-resolver.service.js'
 
@@ -185,6 +186,30 @@ describe('C4.2 — buildSafetyStatements', () => {
   it('empty → []', () => {
     expect(buildSafetyStatements({})).toEqual([])
     expect(buildSafetyStatements({ impactProtectors: [{ zone: '', standard: '', level: '' }] })).toEqual([])
+  })
+})
+
+describe('C5.1 — dangerous goods', () => {
+  it('buildDangerousGoodsStatement: UN + class', () => {
+    expect(buildDangerousGoodsStatement({ hazmatClass: '2', unNumber: 'UN1950' })).toBe('Dangerous goods: UN1950 — hazard class 2')
+  })
+  it('buildDangerousGoodsStatement: number only / class only', () => {
+    expect(buildDangerousGoodsStatement({ unNumber: 'UN1950' })).toBe('Dangerous goods: UN1950')
+    expect(buildDangerousGoodsStatement({ hazmatClass: '9' })).toBe('Dangerous goods: hazard class 9')
+  })
+  it('buildDangerousGoodsStatement: empty → null', () => {
+    expect(buildDangerousGoodsStatement(null)).toBeNull()
+    expect(buildDangerousGoodsStatement({})).toBeNull()
+  })
+  it('Shopify dangerous_goods metafield from hazmat', () => {
+    const p = buildCompliancePayload({ id: 'p', hazmatClass: '2', hazmatUnNumber: 'UN1950', certificates: [] }, null)
+    const byKey = Object.fromEntries(buildShopifyComplianceMetafields(p).map((x) => [x.key, x]))
+    expect(byKey.dangerous_goods.value).toBe('Dangerous goods: UN1950 — hazard class 2')
+  })
+  it('Amazon hazmat warn carries the UN number', () => {
+    const p = buildCompliancePayload({ id: 'p', hazmatClass: '2', hazmatUnNumber: 'UN1950', certificates: [] }, null)
+    const w = evaluateCompliance(p, 'IT', 'AMAZON').find((i) => i.code === 'amazon_hazmat_declaration')
+    expect(w?.message).toContain('UN1950')
   })
 })
 

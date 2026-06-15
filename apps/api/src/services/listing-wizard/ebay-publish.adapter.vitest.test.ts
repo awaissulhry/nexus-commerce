@@ -99,4 +99,9 @@ describe('C2 — buildEbayRegulatory', () => {
   it('C4.2 — no structured data → no productSafety', () => {
     expect(buildEbayRegulatory({ manufacturer: 'X' })!.productSafety).toBeUndefined()
   })
+  it('C5.1 — dangerous goods → extra productSafety statement', () => {
+    const reg = buildEbayRegulatory({ garmentClass: 'A', dangerousGoods: { hazmatClass: '2', unNumber: 'UN1950' } })
+    const ps = reg!.productSafety as { statements: string[] }
+    expect(ps.statements).toContain('Dangerous goods: UN1950 — hazard class 2')
+  })
 })
