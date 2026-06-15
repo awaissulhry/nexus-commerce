@@ -15,6 +15,7 @@ import {
   buildShopifyComplianceMetafields,
   buildSafetyStatements,
   buildDangerousGoodsStatement,
+  complianceBlockers,
   type ResponsiblePerson,
 } from './compliance-resolver.service.js'
 
@@ -210,6 +211,29 @@ describe('C5.1 — dangerous goods', () => {
     const p = buildCompliancePayload({ id: 'p', hazmatClass: '2', hazmatUnNumber: 'UN1950', certificates: [] }, null)
     const w = evaluateCompliance(p, 'IT', 'AMAZON').find((i) => i.code === 'amazon_hazmat_declaration')
     expect(w?.message).toContain('UN1950')
+  })
+})
+
+describe('C5.2 — complianceBlockers (publish gate)', () => {
+  const NB: ResponsiblePerson = { name: 'X', addressLines: ['A'], email: null, phone: null, taxId: null }
+  it('PPE Cat III + EU + no CE → blockers (block-severity only)', () => {
+    const p = buildCompliancePayload({ id: 'p', ppeCategory: 'CAT_III', certificates: [] }, null)
+    const blocks = complianceBlockers(p, 'IT', 'AMAZON')
+    expect(blocks.length).toBeGreaterThan(0)
+    expect(blocks.every((i) => i.severity === 'block')).toBe(true)
+    expect(blocks.some((i) => i.code === 'ce_cert_missing')).toBe(true)
+  })
+  it('compliant PPE → no blockers', () => {
+    const p = buildCompliancePayload(
+      { id: 'p', ppeCategory: 'CAT_III', countryOfOrigin: 'IT', hsCode: '6', declarationOfConformityUrl: 'https://x/d.pdf',
+        certificates: [{ certType: 'CE', certNumber: 'C', standard: null, issuingBody: null, issuedAt: null, expiresAt: new Date('2030-01-01'), fileUrl: null }] },
+      NB,
+    )
+    expect(complianceBlockers(p, 'IT', 'AMAZON')).toEqual([])
+  })
+  it('non-EU → no blockers even without CE', () => {
+    const p = buildCompliancePayload({ id: 'p', ppeCategory: 'CAT_III', certificates: [] }, null)
+    expect(complianceBlockers(p, 'US', 'AMAZON')).toEqual([])
   })
 })
 

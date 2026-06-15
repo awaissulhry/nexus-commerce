@@ -185,6 +185,16 @@ export function evaluateCompliance(
   return issues
 }
 
+/** C5.2 — the BLOCK-severity compliance issues only (the publish gate). */
+export function complianceBlockers(
+  payload: CompliancePayload,
+  marketplace: string,
+  platform: string = 'AMAZON',
+  now: Date = new Date(),
+): ComplianceIssue[] {
+  return evaluateCompliance(payload, marketplace, platform, now).filter((i) => i.severity === 'block')
+}
+
 /**
  * Pure — map the canonical payload to Amazon flat-file column values, using the
  * attribute keys the Amazon cockpit already reads (AC.4 ComplianceCard). Only

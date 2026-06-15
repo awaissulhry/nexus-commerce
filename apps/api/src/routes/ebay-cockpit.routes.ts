@@ -95,7 +95,8 @@ import prisma from '../db.js'
 import { csvDocument } from '../lib/csv.js'
 import { EbayCategoryService } from '../services/ebay-category.service.js'
 import { EbayPublishAdapter } from '../services/listing-wizard/ebay-publish.adapter.js'
-import { resolveComplianceById } from '../services/compliance-resolver.service.js'
+import { resolveComplianceById, complianceBlockers } from '../services/compliance-resolver.service.js'
+import { getEbayPublishMode } from '../services/ebay-publish-gate.service.js'
 import { getProvider, isAiKillSwitchOn } from '../services/ai/providers/index.js'
 
 const ebayCategoryService = new EbayCategoryService()
@@ -995,11 +996,12 @@ export default async function ebayCockpitRoutes(fastify: FastifyInstance) {
     Body: {
       productId: string
       marketplace: string
+      overrideCompliance?: boolean
     }
   }>('/ebay/cockpit/publish', async (request, reply) => {
     const body = request.body
     if (!body) return reply.code(400).send({ error: 'Body is required' })
-    const { productId, marketplace } = body
+    const { productId, marketplace, overrideCompliance } = body
     if (!productId || !marketplace) {
       return reply.code(400).send({ error: 'productId, marketplace are required' })
     }
@@ -1101,6 +1103,22 @@ export default async function ebayCockpitRoutes(fastify: FastifyInstance) {
     // C2 — resolve EU GPSR data (responsible person + manufacturer) from the master
     // so the publish carries the offer `regulatory` container. Best-effort.
     const compliance = await resolveComplianceById(productId).catch(() => null)
+
+    // C5.2 — block a LIVE publish on a blocking compliance issue (PPE Cat II/III
+    // on EU with a missing/expired CE cert). overrideCompliance bypasses (logged).
+    if (compliance && getEbayPublishMode() === 'live') {
+      const blocks = complianceBlockers(compliance, marketplace, 'EBAY')
+      if (blocks.length > 0) {
+        if (!overrideCompliance) {
+          return reply.code(422).send({
+            error: 'Compliance block — fix the issue(s) or resubmit with overrideCompliance:true.',
+            complianceBlocks: blocks.map((b) => b.message),
+          })
+        }
+        request.log.warn({ productId, marketplace }, 'ebay/cockpit/publish: compliance block OVERRIDDEN by operator')
+      }
+    }
+
     const adapter = new EbayPublishAdapter()
     const result = await adapter.publish({
       sku: product.sku,

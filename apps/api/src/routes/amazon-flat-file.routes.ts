@@ -212,9 +212,9 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
   // ── POST /api/amazon/flat-file/submit ───────────────────────────────
   // Accepts an array of rows, submits them as a JSON_LISTINGS_FEED to SP-API.
   fastify.post<{
-    Body: { rows: any[]; marketplace?: string; expandedFields?: Record<string, string>; productType?: string }
+    Body: { rows: any[]; marketplace?: string; expandedFields?: Record<string, string>; productType?: string; overrideCompliance?: boolean }
   }>('/amazon/flat-file/submit', async (request, reply) => {
-    const { rows, marketplace = 'IT', expandedFields = {}, productType } = request.body
+    const { rows, marketplace = 'IT', expandedFields = {}, productType, overrideCompliance } = request.body
     const mp = marketplace.toUpperCase()
     const marketplaceId = MARKETPLACE_ID_MAP[mp] ?? MARKETPLACE_ID_MAP.IT
     const sellerId = getSellerId()
@@ -237,6 +237,8 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
     // C1 — resolved once here, reused by the compliance merge below (live path).
     let complianceBySku = new Map<string, any>()
     let manifestColIds: Set<string> | null = null
+    // C5.2 — block-severity compliance issues (the live-publish gate).
+    const complianceBlocks: Array<{ sku: string; messages: string[] }> = []
     if (productType) {
       try {
         const manifest = await flatFileService.generateManifest(mp, String(productType))
@@ -248,7 +250,10 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
             const issues = preflightRow(r, required)
             const cp = complianceBySku.get(String(r.item_sku ?? ''))
             if (cp) {
-              for (const ci of evaluateCompliance(cp, mp, 'AMAZON')) {
+              const cIssues = evaluateCompliance(cp, mp, 'AMAZON')
+              const blocks = cIssues.filter((ci) => ci.severity === 'block')
+              if (blocks.length > 0) complianceBlocks.push({ sku: String(r.item_sku ?? ''), messages: blocks.map((b) => b.message) })
+              for (const ci of cIssues) {
                 issues.push({ field: 'compliance', severity: ci.severity === 'block' ? 'error' : 'warning', message: ci.message })
               }
             }
@@ -271,6 +276,19 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
         dryRun: true,
         preflight,
       })
+    }
+
+    // C5.2 — block a LIVE publish on a blocking compliance issue (PPE Cat II/III
+    // on EU with a missing/expired CE certificate). An explicit overrideCompliance
+    // bypasses the gate (logged to the audit). Dry-run never reaches here.
+    if (complianceBlocks.length > 0) {
+      if (!overrideCompliance) {
+        return reply.code(422).send({
+          error: `Compliance block — ${complianceBlocks.length} SKU(s) cannot be published. Fix the issue(s) or resubmit with overrideCompliance:true.`,
+          complianceBlocks,
+        })
+      }
+      request.log.warn({ skus: complianceBlocks.map((b) => b.sku) }, 'flat-file/submit: compliance block OVERRIDDEN by operator')
     }
 
     // FFA — schema-aware feed build: enum display labels→codes ("Pakistan"→"PK"),
