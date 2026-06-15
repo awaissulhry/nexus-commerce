@@ -23,6 +23,11 @@ import {
 import { translateEnumValues } from '../services/amazon/value-translate.service.js'
 import { getAmazonPublishMode } from '../services/amazon-publish-gate.service.js'
 import { preflightRow } from '../services/listing-preflight.service.js'
+import {
+  resolveComplianceForSkus,
+  evaluateCompliance,
+  buildAmazonComplianceColumns,
+} from '../services/compliance-resolver.service.js'
 
 /** A5 — required columns (id + label) from a live schema manifest, for preflight. */
 function requiredColumnsFromManifest(manifest: any): Array<{ id: string; label: string }> {
@@ -225,15 +230,30 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
     }
 
     // A5 — pre-flight: surface missing-required / invalid-GTIN / missing-image as a
-    // per-row checklist alongside the feedId (warn, not block). Computed before the
-    // dry-run gate so the common (dry-run) path returns it too. Best-effort.
+    // per-row checklist alongside the feedId (warn, not block). C1 adds the EU
+    // compliance issues (PPE/CE/GPSR/hazmat) per row's product+market. Computed
+    // before the dry-run gate so the common (dry-run) path returns it too.
     let preflight: Array<{ sku: string; issues: any[] }> = []
+    // C1 — resolved once here, reused by the compliance merge below (live path).
+    let complianceBySku = new Map<string, any>()
+    let manifestColIds: Set<string> | null = null
     if (productType) {
       try {
         const manifest = await flatFileService.generateManifest(mp, String(productType))
         const required = requiredColumnsFromManifest(manifest)
+        manifestColIds = new Set(manifest.groups.flatMap((g: any) => g.columns ?? []).map((c: any) => String(c.id)))
+        complianceBySku = await resolveComplianceForSkus(rows.map((r: any) => String(r.item_sku ?? '')))
         preflight = rows
-          .map((r: any) => ({ sku: String(r.item_sku ?? ''), issues: preflightRow(r, required) }))
+          .map((r: any) => {
+            const issues = preflightRow(r, required)
+            const cp = complianceBySku.get(String(r.item_sku ?? ''))
+            if (cp) {
+              for (const ci of evaluateCompliance(cp, mp, 'AMAZON')) {
+                issues.push({ field: 'compliance', severity: ci.severity === 'block' ? 'error' : 'warning', message: ci.message })
+              }
+            }
+            return { sku: String(r.item_sku ?? ''), issues }
+          })
           .filter((p) => p.issues.length > 0)
       } catch (err: any) {
         request.log.warn({ err: err?.message }, 'flat-file/submit: preflight unavailable')
@@ -274,6 +294,22 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
       }
     } catch (err: any) {
       request.log.warn({ err: err?.message }, 'flat-file/submit: schema hints unavailable — submitting values as-is')
+    }
+
+    // C1 — fill EU compliance columns from the master (country of origin,
+    // manufacturer, GPSR responsible person) onto each row before serializing.
+    // Schema-safe (only a column the product type's manifest defines) AND
+    // non-clobbering (an operator-entered value always wins). Best-effort.
+    if (manifestColIds && complianceBySku.size > 0) {
+      for (const row of rows as any[]) {
+        const cp = complianceBySku.get(String(row.item_sku ?? ''))
+        if (!cp) continue
+        for (const [k, v] of Object.entries(buildAmazonComplianceColumns(cp))) {
+          if (!manifestColIds.has(k)) continue
+          const cur = row[k]
+          if (cur == null || String(cur).trim() === '') row[k] = v
+        }
+      }
     }
 
     const body = flatFileService.buildJsonFeedBody(rows, mp, sellerId, expandedFields, {
