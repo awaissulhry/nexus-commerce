@@ -1131,8 +1131,14 @@ export default async function ebayCockpitRoutes(fastify: FastifyInstance) {
         | { universal?: boolean; fitments?: Array<{ year?: string | number; make?: string; model?: string; submodel?: string | null }> }
         | undefined) ?? undefined,
       // C2 — GPSR regulatory container (EU responsible person + manufacturer).
+      // C4.2 — + structured CE/PPE (garment class + protectors → productSafety).
       compliance: compliance
-        ? { manufacturer: compliance.manufacturer, responsiblePerson: compliance.responsiblePerson }
+        ? {
+            manufacturer: compliance.manufacturer,
+            responsiblePerson: compliance.responsiblePerson,
+            garmentClass: compliance.garmentClass,
+            impactProtectors: compliance.impactProtectors,
+          }
         : undefined,
     })
 

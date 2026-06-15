@@ -33,6 +33,7 @@ import {
   digestPayload,
   writeAttemptLog,
 } from '../channel-publish-audit.service.js'
+import { buildSafetyStatements } from '../compliance-resolver.service.js'
 
 const ebayCategoryService = new EbayCategoryService()
 
@@ -157,6 +158,9 @@ interface EbayPayload {
       email?: string | null
       phone?: string | null
     } | null
+    // C4.2 — structured CE/PPE → productSafety statements.
+    garmentClass?: string | null
+    impactProtectors?: Array<{ zone?: string | null; standard?: string | null; level?: string | null }>
   }
 }
 
@@ -189,6 +193,11 @@ export function buildEbayRegulatory(
   if (compliance.manufacturer) {
     regulatory.manufacturer = { companyName: compliance.manufacturer, country }
   }
+
+  // C4.2 — productSafety statements from the structured CE/PPE data (garment
+  // class + EN 1621 protectors). Pictograms need eBay code IDs → deferred.
+  const statements = buildSafetyStatements({ garmentClass: compliance.garmentClass, impactProtectors: compliance.impactProtectors })
+  if (statements.length > 0) regulatory.productSafety = { statements }
 
   return Object.keys(regulatory).length > 0 ? regulatory : null
 }

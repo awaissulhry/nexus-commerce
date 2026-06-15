@@ -87,4 +87,16 @@ describe('C2 — buildEbayRegulatory', () => {
     expect(buildEbayRegulatory({})).toBeNull()
     expect(buildEbayRegulatory({ responsiblePerson: { name: '' } })).toBeNull()
   })
+  it('C4.2 — garment class + protectors → productSafety.statements', () => {
+    const reg = buildEbayRegulatory({
+      garmentClass: 'AA',
+      impactProtectors: [{ zone: 'back', standard: 'EN_1621_2', level: '2' }],
+    })
+    const ps = reg!.productSafety as { statements: string[] }
+    expect(ps.statements).toContain('EN 17092 Class AA protective motorcycle garment')
+    expect(ps.statements).toContain('back protector: EN 1621-2 Level 2')
+  })
+  it('C4.2 — no structured data → no productSafety', () => {
+    expect(buildEbayRegulatory({ manufacturer: 'X' })!.productSafety).toBeUndefined()
+  })
 })

@@ -13,6 +13,7 @@ import {
   evaluateCompliance,
   buildAmazonComplianceColumns,
   buildShopifyComplianceMetafields,
+  buildSafetyStatements,
   type ResponsiblePerson,
 } from './compliance-resolver.service.js'
 
@@ -145,5 +146,55 @@ describe('C3 — buildShopifyComplianceMetafields', () => {
   })
   it('nothing → empty array', () => {
     expect(buildShopifyComplianceMetafields(buildCompliancePayload({ id: 'p', certificates: [] }, null))).toEqual([])
+  })
+  it('C4.2 — structured CE/PPE metafields (class, notified body, DoC url, protectors)', () => {
+    const p = buildCompliancePayload(
+      {
+        id: 'p', garmentClass: 'AA', notifiedBodyNumber: '0494', notifiedBodyName: 'Ricotest',
+        declarationOfConformityUrl: 'https://x/doc.pdf',
+        impactProtectors: [{ zone: 'back', standard: 'EN_1621_2', level: '2' }],
+        certificates: [],
+      },
+      null,
+    )
+    const byKey = Object.fromEntries(buildShopifyComplianceMetafields(p).map((x) => [x.key, x]))
+    expect(byKey.garment_class.value).toBe('AA')
+    expect(byKey.notified_body.value).toBe('0494 — Ricotest')
+    expect(byKey.declaration_of_conformity).toMatchObject({ type: 'url', value: 'https://x/doc.pdf' })
+    expect(byKey.impact_protectors.value).toContain('back protector: EN 1621-2 Level 2')
+  })
+  it('C4.2 — non-URL DoC is not emitted as a url metafield', () => {
+    const p = buildCompliancePayload({ id: 'p', declarationOfConformityUrl: 'not-a-url', certificates: [] }, null)
+    expect(buildShopifyComplianceMetafields(p).some((x) => x.key === 'declaration_of_conformity')).toBe(false)
+  })
+})
+
+describe('C4.2 — buildSafetyStatements', () => {
+  it('garment class + protectors → readable statements', () => {
+    const s = buildSafetyStatements({
+      garmentClass: 'AAA',
+      impactProtectors: [
+        { zone: 'back', standard: 'EN_1621_2', level: '2' },
+        { zone: 'shoulder', standard: 'EN_1621_1', level: '1' },
+      ],
+    })
+    expect(s[0]).toBe('EN 17092 Class AAA protective motorcycle garment')
+    expect(s).toContain('back protector: EN 1621-2 Level 2')
+    expect(s).toContain('shoulder protector: EN 1621-1 Level 1')
+  })
+  it('empty → []', () => {
+    expect(buildSafetyStatements({})).toEqual([])
+    expect(buildSafetyStatements({ impactProtectors: [{ zone: '', standard: '', level: '' }] })).toEqual([])
+  })
+})
+
+describe('C4.2 — DoC-missing rule', () => {
+  it('PPE Cat II + EU + CE present + no DoC → doc_missing warn', () => {
+    const p = buildCompliancePayload({ id: 'p', ppeCategory: 'CAT_II', certificates: [{ certType: 'CE', certNumber: 'C', standard: null, issuingBody: null, issuedAt: null, expiresAt: new Date('2030-01-01'), fileUrl: null }] }, null)
+    expect(evaluateCompliance(p, 'IT', 'AMAZON', new Date('2026-06-15')).some((i) => i.code === 'doc_missing' && i.severity === 'warn')).toBe(true)
+  })
+  it('DoC present → no doc_missing', () => {
+    const p = buildCompliancePayload({ id: 'p', ppeCategory: 'CAT_II', declarationOfConformityUrl: 'https://x/d.pdf', certificates: [{ certType: 'CE', certNumber: 'C', standard: null, issuingBody: null, issuedAt: null, expiresAt: new Date('2030-01-01'), fileUrl: null }] }, null)
+    expect(evaluateCompliance(p, 'IT', 'AMAZON', new Date('2026-06-15')).some((i) => i.code === 'doc_missing')).toBe(false)
   })
 })

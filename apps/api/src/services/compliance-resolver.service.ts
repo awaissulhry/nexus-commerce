@@ -152,6 +152,10 @@ export function evaluateCompliance(
     } else if (ce.expiresAt && ce.expiresAt < new Date(now.getTime() + 90 * 24 * 60 * 60 * 1000)) {
       issues.push({ code: 'ce_cert_expiring', severity: 'warn', message: `CE certificate expires within 90 days (${iso(ce.expiresAt)}).` })
     }
+    // C4.2 — GPSR wants the Declaration of Conformity accessible for CE-marked PPE.
+    if (!payload.declarationOfConformityUrl) {
+      issues.push({ code: 'doc_missing', severity: 'warn', message: 'Declaration of Conformity link not set — GPSR requires it accessible for CE-marked PPE.' })
+    }
   }
 
   const reach = payload.certificates.find((c) => c.certType === 'REACH')
@@ -202,11 +206,42 @@ export function buildAmazonComplianceColumns(payload: CompliancePayload): Record
   return cols
 }
 
+/** Format an EN protector standard code for display: EN_1621_2 → 'EN 1621-2'. */
+function formatProtectorStandard(s: string): string {
+  return String(s).replace(/^EN_(\d+)_(\d+)$/i, 'EN $1-$2').replace(/_/g, ' ')
+}
+
+/**
+ * C4.2 — human-readable safety statements from the structured CE/PPE data
+ * (EN 17092 garment class + EN 1621 impact protectors). Shared by the eBay
+ * productSafety container + the Shopify metafield summary. Pure.
+ */
+export function buildSafetyStatements(payload: {
+  garmentClass?: string | null
+  impactProtectors?: Array<{ zone?: string | null; standard?: string | null; level?: string | null }>
+}): string[] {
+  const out: string[] = []
+  if (payload.garmentClass) {
+    out.push(`EN 17092 Class ${payload.garmentClass} protective motorcycle garment`)
+  }
+  for (const p of payload.impactProtectors ?? []) {
+    const std = p?.standard ? formatProtectorStandard(String(p.standard)) : ''
+    const lvl = p?.level ? `Level ${p.level}` : ''
+    const tail = [std, lvl].filter(Boolean).join(' ')
+    const zone = p?.zone ? String(p.zone) : ''
+    if (!tail && !zone) continue
+    const label = zone ? `${zone} protector` : 'protector'
+    out.push(tail ? `${label}: ${tail}` : label)
+  }
+  return out
+}
+
 /**
  * C3 — map the canonical payload to Shopify product metafields (custom
- * `compliance` namespace; text field types). Returns [] when there's nothing to
- * push. Mapping to Shopify's STANDARD storefront GPSR metaobjects (for native
- * compliance-section display) is a follow-up (C3.1).
+ * `compliance` namespace; text field types). C4.2 adds the structured CE/PPE
+ * fields. Returns [] when there's nothing to push. Mapping to Shopify's STANDARD
+ * storefront GPSR metaobjects (native compliance-section display) is a
+ * follow-up (C3.1).
  */
 export function buildShopifyComplianceMetafields(
   payload: CompliancePayload,
@@ -223,6 +258,15 @@ export function buildShopifyComplianceMetafields(
     const addr = [...(rp.addressLines ?? []), rp.email, rp.phone].filter(Boolean).join('\n')
     push('responsible_person_address', 'multi_line_text_field', addr)
   }
+  // C4.2 — structured CE/PPE.
+  push('garment_class', 'single_line_text_field', payload.garmentClass)
+  const nb = payload.notifiedBody
+  if (nb?.number || nb?.name) push('notified_body', 'single_line_text_field', [nb?.number, nb?.name].filter(Boolean).join(' — '))
+  if (payload.declarationOfConformityUrl && /^https?:\/\//i.test(payload.declarationOfConformityUrl)) {
+    push('declaration_of_conformity', 'url', payload.declarationOfConformityUrl)
+  }
+  const stmts = buildSafetyStatements(payload)
+  if (stmts.length > 0) push('impact_protectors', 'multi_line_text_field', stmts.join('\n'))
   return out
 }
 
