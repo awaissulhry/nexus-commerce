@@ -95,6 +95,7 @@ import prisma from '../db.js'
 import { csvDocument } from '../lib/csv.js'
 import { EbayCategoryService } from '../services/ebay-category.service.js'
 import { EbayPublishAdapter } from '../services/listing-wizard/ebay-publish.adapter.js'
+import { resolveComplianceById } from '../services/compliance-resolver.service.js'
 import { getProvider, isAiKillSwitchOn } from '../services/ai/providers/index.js'
 
 const ebayCategoryService = new EbayCategoryService()
@@ -1097,6 +1098,9 @@ export default async function ebayCockpitRoutes(fastify: FastifyInstance) {
     const condition = conditionId ? CONDITION_MAP[conditionId] ?? 'NEW' : 'NEW'
 
     const marketplaceId = normaliseMarketplace(marketplace)
+    // C2 — resolve EU GPSR data (responsible person + manufacturer) from the master
+    // so the publish carries the offer `regulatory` container. Best-effort.
+    const compliance = await resolveComplianceById(productId).catch(() => null)
     const adapter = new EbayPublishAdapter()
     const result = await adapter.publish({
       sku: product.sku,
@@ -1126,6 +1130,10 @@ export default async function ebayCockpitRoutes(fastify: FastifyInstance) {
       compatibility: (platform.compatibility as
         | { universal?: boolean; fitments?: Array<{ year?: string | number; make?: string; model?: string; submodel?: string | null }> }
         | undefined) ?? undefined,
+      // C2 — GPSR regulatory container (EU responsible person + manufacturer).
+      compliance: compliance
+        ? { manufacturer: compliance.manufacturer, responsiblePerson: compliance.responsiblePerson }
+        : undefined,
     })
 
     // ── Persist outcome ────────────────────────────────────────────

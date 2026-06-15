@@ -8,7 +8,7 @@ import { describe, it, expect, vi } from 'vitest'
 // importing the pure mapper never spins up a real PrismaClient.
 vi.mock('../../db.js', () => ({ default: {} }))
 
-import { buildEbayCompatibilityBody } from './ebay-publish.adapter.js'
+import { buildEbayCompatibilityBody, buildEbayRegulatory } from './ebay-publish.adapter.js'
 
 describe('B1 — buildEbayCompatibilityBody', () => {
   it('maps year/make/model/submodel → compatibilityProperties (stable order)', () => {
@@ -56,5 +56,35 @@ describe('B1 — buildEbayCompatibilityBody', () => {
       ],
     })
     expect(body!.compatibleProducts).toHaveLength(2)
+  })
+})
+
+describe('C2 — buildEbayRegulatory', () => {
+  const rp = { name: 'Xavia Srl', addressLines: ['Via Roma 1', '20100 Milano'], email: 'c@xavia.it', phone: '+39 02 1' }
+
+  it('responsible person → responsiblePersons[] with EU type + folded address + country', () => {
+    const reg = buildEbayRegulatory({ responsiblePerson: rp })
+    const p = (reg!.responsiblePersons as any[])[0]
+    expect(p).toMatchObject({
+      companyName: 'Xavia Srl', country: 'IT', types: ['EU_RESPONSIBLE_PERSON'],
+      addressLine1: 'Via Roma 1', addressLine2: '20100 Milano', email: 'c@xavia.it', phone: '+39 02 1',
+    })
+  })
+  it('manufacturer → manufacturer.companyName + country', () => {
+    expect(buildEbayRegulatory({ manufacturer: 'Xavia Mfg' })!.manufacturer)
+      .toEqual({ companyName: 'Xavia Mfg', country: 'IT' })
+  })
+  it('country override is honoured', () => {
+    expect((buildEbayRegulatory({ manufacturer: 'X' }, 'DE')!.manufacturer as any).country).toBe('DE')
+  })
+  it('single address line → addressLine1 only (no addressLine2)', () => {
+    const p = (buildEbayRegulatory({ responsiblePerson: { name: 'X', addressLines: ['Solo'] } })!.responsiblePersons as any[])[0]
+    expect(p.addressLine1).toBe('Solo')
+    expect(p).not.toHaveProperty('addressLine2')
+  })
+  it('no usable data → null', () => {
+    expect(buildEbayRegulatory(null)).toBeNull()
+    expect(buildEbayRegulatory({})).toBeNull()
+    expect(buildEbayRegulatory({ responsiblePerson: { name: '' } })).toBeNull()
   })
 })

@@ -103,6 +103,9 @@ export interface EbayPublishResult {
   /** B1 — non-fatal: fitment couldn't be set (e.g. category without
    *  compatibility support). The listing still published. */
   compatibilityWarning?: string
+  /** C2 — non-fatal: the GPSR/regulatory container was rejected, so the offer
+   *  was created without it. The listing still published. */
+  regulatoryWarning?: string
 }
 
 interface EbayPayload {
@@ -144,6 +147,50 @@ interface EbayPayload {
       submodel?: string | null
     }>
   }
+  /** C2 — EU GPSR data (from the canonical compliance resolver). Emitted as the
+   *  Inventory API offer `regulatory` container at publish. */
+  compliance?: {
+    manufacturer?: string | null
+    responsiblePerson?: {
+      name?: string | null
+      addressLines?: string[]
+      email?: string | null
+      phone?: string | null
+    } | null
+  }
+}
+
+/**
+ * C2 — map canonical EU compliance to eBay's Inventory API offer `regulatory`
+ * container: an EU responsible person + the manufacturer (the GPSR core). The
+ * free-form address lines fold into addressLine1/2; country defaults to the
+ * seller's establishment (Xavia → IT). Returns null when there's nothing usable
+ * so the caller omits `regulatory`. Pure + unit-tested. (productSafety pictograms
+ * = C4; DoC documents[] = a later doc-upload phase.)
+ */
+export function buildEbayRegulatory(
+  compliance: EbayPayload['compliance'],
+  country: string = 'IT',
+): Record<string, unknown> | null {
+  if (!compliance) return null
+  const regulatory: Record<string, unknown> = {}
+
+  const rp = compliance.responsiblePerson
+  if (rp?.name) {
+    const lines = (rp.addressLines ?? []).filter(Boolean).map(String)
+    const person: Record<string, unknown> = { companyName: rp.name, country, types: ['EU_RESPONSIBLE_PERSON'] }
+    if (lines[0]) person.addressLine1 = lines[0]
+    if (lines.length > 1) person.addressLine2 = lines.slice(1).join(', ')
+    if (rp.email) person.email = rp.email
+    if (rp.phone) person.phone = rp.phone
+    regulatory.responsiblePersons = [person]
+  }
+
+  if (compliance.manufacturer) {
+    regulatory.manufacturer = { companyName: compliance.manufacturer, country }
+  }
+
+  return Object.keys(regulatory).length > 0 ? regulatory : null
 }
 
 /**
@@ -584,7 +631,14 @@ export class EbayPublishAdapter {
       }
     }
 
-    const offerRes = await ebayFetchWithRetry(
+    // C2 — GPSR/regulatory (EU responsible person + manufacturer) on the offer.
+    // If it's present but the offer is rejected, retry once WITHOUT it so a
+    // compliance-data problem never blocks the listing (surfaced as a warning).
+    let regulatoryWarning: string | undefined
+    const regulatory = buildEbayRegulatory(payload.compliance)
+    if (regulatory) offerBody.regulatory = regulatory
+
+    let offerRes = await ebayFetchWithRetry(
       `${apiBase}/sell/inventory/v1/offer`,
       {
         method: 'POST',
@@ -593,6 +647,20 @@ export class EbayPublishAdapter {
       },
       `createOffer(${payload.sku})`,
     )
+    if (!offerRes.ok && regulatory) {
+      const body = await offerRes.text().catch(() => '')
+      regulatoryWarning = `GPSR/regulatory not sent (createOffer ${offerRes.status}): ${body.slice(0, 300)}`
+      logger.warn('eBay createOffer rejected with regulatory — retrying without it', {
+        sku: payload.sku,
+        status: offerRes.status,
+      })
+      delete offerBody.regulatory
+      offerRes = await ebayFetchWithRetry(
+        `${apiBase}/sell/inventory/v1/offer`,
+        { method: 'POST', headers, body: JSON.stringify(offerBody) },
+        `createOffer(${payload.sku}) [no-regulatory retry]`,
+      )
+    }
     if (!offerRes.ok) {
       const body = await offerRes.text().catch(() => '')
       return finalize({
@@ -650,6 +718,7 @@ export class EbayPublishAdapter {
         ? marketplaceListingUrl(payload.marketplaceId, listingId)
         : undefined,
       compatibilityWarning,
+      regulatoryWarning,
     })
   }
 }

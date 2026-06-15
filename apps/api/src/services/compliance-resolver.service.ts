@@ -183,6 +183,24 @@ export async function getResponsiblePerson(): Promise<ResponsiblePerson | null> 
   }
 }
 
+/** Single-product resolve (cockpit publish paths). */
+export async function resolveComplianceById(productId: string): Promise<CompliancePayload | null> {
+  const [rp, product] = await Promise.all([
+    getResponsiblePerson(),
+    prisma.product.findUnique({
+      where: { id: productId },
+      select: {
+        id: true, sku: true, countryOfOrigin: true, manufacturer: true, hsCode: true,
+        ppeCategory: true, hazmatClass: true, hazmatUnNumber: true,
+        certificates: {
+          select: { certType: true, certNumber: true, standard: true, issuingBody: true, issuedAt: true, expiresAt: true, fileUrl: true },
+        },
+      },
+    }),
+  ])
+  return product ? buildCompliancePayload(product as ComplianceProductInput, rp) : null
+}
+
 /**
  * Batch loader for the submit path: one BrandSettings read + one products+certs
  * read → Map<sku, CompliancePayload>. Keyed by SKU because flat-file rows carry
