@@ -207,6 +207,7 @@ import { startAbcClassificationCron } from "./jobs/abc-classification.job.js";
 import { startCycleCountSchedulerCron } from "./jobs/cycle-count-scheduler.job.js";
 import { startYearEndSnapshotCron } from "./jobs/year-end-snapshot.job.js";
 import { startLotExpiryAlertCron } from "./jobs/lot-expiry-alert.job.js";
+import { startCertExpiryAlertCron } from "./jobs/cert-expiry-alert.job.js";
 import { startScheduledChangesCron } from "./jobs/scheduled-changes.job.js";
 import { startPurgeSoftDeletedCron } from "./jobs/purge-soft-deleted-products.job.js";
 import { startRetentionSweepCron } from "./jobs/data-retention-sweep.job.js";
@@ -1315,6 +1316,13 @@ async function start() {
     // NEXUS_ENABLE_LOT_EXPIRY_ALERT_CRON=0.
     if (process.env.NEXUS_ENABLE_LOT_EXPIRY_ALERT_CRON !== '0') {
       startLotExpiryAlertCron();
+    }
+
+    // C5.3 — CE/compliance certificate expiry sweep (daily 06:40). Flags certs
+    // expiring within 90d or already expired so the operator renews before a
+    // listing is blocked. Default-on; opt out via NEXUS_ENABLE_CERT_EXPIRY_ALERT_CRON=0.
+    if (process.env.NEXUS_ENABLE_CERT_EXPIRY_ALERT_CRON !== '0') {
+      startCertExpiryAlertCron();
     }
 
     // F.3 — scheduled product changes worker. Every minute, picks up
