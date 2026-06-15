@@ -384,6 +384,14 @@ model Product {
   // needed for aerosols, chain lube, etc. in Xavia's accessories range).
   hazmatClass    String? // UN hazard class e.g. "3", "8", "9"
   hazmatUnNumber String? // UN number e.g. "UN1950"
+  // C4 — structured CE/PPE protective-gear data (motorcycle apparel). All
+  // nullable; captured in the ComplianceTab + fed to the compliance resolver →
+  // all 3 channels (eBay productSafety, Shopify metafields, Amazon attrs).
+  garmentClass               String? // EN 17092 class: 'AAA' | 'AA' | 'A' | 'B' | 'C'
+  notifiedBodyNumber         String? // 4-digit Notified Body id, e.g. '0494'
+  notifiedBodyName           String? // e.g. 'Ricotest'
+  declarationOfConformityUrl String? // Declaration of Conformity (DoC) link
+  impactProtectors           Json? // [{ zone, standard, level }] — EN 1621-1/-2/-4
   // Back-relation to per-product certificate rows (CE, EN-13595, REACH…)
   certificates   ProductCertificate[]
 

@@ -33,6 +33,12 @@ export interface ComplianceCertificate {
   fileUrl: string | null
 }
 
+export interface ImpactProtector {
+  zone: string | null
+  standard: string | null
+  level: string | null
+}
+
 export interface CompliancePayload {
   productId: string
   sku: string | null
@@ -44,6 +50,11 @@ export interface CompliancePayload {
   responsiblePerson: ResponsiblePerson | null
   certificates: ComplianceCertificate[]
   ceCert: { certNumber: string | null; expiresAt: Date | null } | null
+  // C4 — structured CE/PPE protective-gear data.
+  garmentClass: string | null
+  notifiedBody: { number: string | null; name: string | null } | null
+  declarationOfConformityUrl: string | null
+  impactProtectors: ImpactProtector[]
 }
 
 export interface ComplianceIssue {
@@ -61,6 +72,11 @@ export interface ComplianceProductInput {
   ppeCategory?: string | null
   hazmatClass?: string | null
   hazmatUnNumber?: string | null
+  garmentClass?: string | null
+  notifiedBodyNumber?: string | null
+  notifiedBodyName?: string | null
+  declarationOfConformityUrl?: string | null
+  impactProtectors?: unknown
   certificates?: ComplianceCertificate[]
 }
 
@@ -80,6 +96,18 @@ export function buildCompliancePayload(
   const certificates = product.certificates ?? []
   const ce = certificates.find((c) => c.certType === 'CE') ?? null
   const hasDg = Boolean(product.hazmatClass || product.hazmatUnNumber)
+  const nb = product.notifiedBodyNumber || product.notifiedBodyName
+    ? { number: product.notifiedBodyNumber ?? null, name: product.notifiedBodyName ?? null }
+    : null
+  const impactProtectors: ImpactProtector[] = Array.isArray(product.impactProtectors)
+    ? (product.impactProtectors as any[])
+        .map((p) => ({
+          zone: p?.zone != null ? String(p.zone) : null,
+          standard: p?.standard != null ? String(p.standard) : null,
+          level: p?.level != null ? String(p.level) : null,
+        }))
+        .filter((p) => p.zone || p.standard || p.level)
+    : []
   return {
     productId: product.id,
     sku: product.sku ?? null,
@@ -91,6 +119,10 @@ export function buildCompliancePayload(
     responsiblePerson: rp,
     certificates,
     ceCert: ce ? { certNumber: ce.certNumber, expiresAt: ce.expiresAt } : null,
+    garmentClass: product.garmentClass ?? null,
+    notifiedBody: nb,
+    declarationOfConformityUrl: product.declarationOfConformityUrl ?? null,
+    impactProtectors,
   }
 }
 
@@ -216,6 +248,8 @@ export async function resolveComplianceById(productId: string): Promise<Complian
       select: {
         id: true, sku: true, countryOfOrigin: true, manufacturer: true, hsCode: true,
         ppeCategory: true, hazmatClass: true, hazmatUnNumber: true,
+        garmentClass: true, notifiedBodyNumber: true, notifiedBodyName: true,
+        declarationOfConformityUrl: true, impactProtectors: true,
         certificates: {
           select: { certType: true, certNumber: true, standard: true, issuingBody: true, issuedAt: true, expiresAt: true, fileUrl: true },
         },
@@ -241,6 +275,8 @@ export async function resolveComplianceForSkus(skus: string[]): Promise<Map<stri
       select: {
         id: true, sku: true, countryOfOrigin: true, manufacturer: true, hsCode: true,
         ppeCategory: true, hazmatClass: true, hazmatUnNumber: true,
+        garmentClass: true, notifiedBodyNumber: true, notifiedBodyName: true,
+        declarationOfConformityUrl: true, impactProtectors: true,
         certificates: {
           select: { certType: true, certNumber: true, standard: true, issuingBody: true, issuedAt: true, expiresAt: true, fileUrl: true },
         },

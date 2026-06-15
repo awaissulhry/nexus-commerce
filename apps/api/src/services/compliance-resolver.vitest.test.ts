@@ -48,6 +48,30 @@ describe('C1 — buildCompliancePayload', () => {
     expect(p.ceCert).toBeNull()
     expect(p.responsiblePerson).toBeNull()
   })
+  it('C4 — structured CE/PPE: garment class, notified body, DoC, protectors', () => {
+    const p = buildCompliancePayload(
+      {
+        id: 'p3', garmentClass: 'AA', notifiedBodyNumber: '0494', notifiedBodyName: 'Ricotest',
+        declarationOfConformityUrl: 'https://x/doc.pdf',
+        impactProtectors: [
+          { zone: 'back', standard: 'EN_1621_2', level: 2 },
+          { zone: '', standard: '', level: '' }, // blank → dropped
+        ],
+        certificates: [],
+      },
+      null,
+    )
+    expect(p.garmentClass).toBe('AA')
+    expect(p.notifiedBody).toEqual({ number: '0494', name: 'Ricotest' })
+    expect(p.declarationOfConformityUrl).toBe('https://x/doc.pdf')
+    expect(p.impactProtectors).toEqual([{ zone: 'back', standard: 'EN_1621_2', level: '2' }])
+  })
+  it('C4 — no structured data → null/empty', () => {
+    const p = buildCompliancePayload({ id: 'p4', certificates: [] }, null)
+    expect(p.garmentClass).toBeNull()
+    expect(p.notifiedBody).toBeNull()
+    expect(p.impactProtectors).toEqual([])
+  })
 })
 
 describe('C1 — evaluateCompliance', () => {

@@ -61,8 +61,16 @@ interface ProductStub {
   ppeCategory: string | null
   hazmatClass: string | null
   hazmatUnNumber: string | null
+  // C4 — structured CE/PPE (optional: parent passes the full product object).
+  garmentClass?: string | null
+  notifiedBodyNumber?: string | null
+  notifiedBodyName?: string | null
+  declarationOfConformityUrl?: string | null
+  impactProtectors?: Array<{ zone?: string | null; standard?: string | null; level?: string | null }> | null
   version: number
 }
+
+interface Protector { zone: string; standard: string; level: string }
 
 interface ComplianceTabProps {
   product: ProductStub
@@ -103,6 +111,27 @@ const CERT_TYPES: { value: string; label: string; labelIt: string }[] = [
   { value: 'ATEX', label: 'ATEX (explosive atmospheres)', labelIt: 'ATEX (atmosfere esplosive)' },
   { value: 'OTHER', label: 'Other', labelIt: 'Altro' },
 ]
+
+// C4 — EN 17092 garment class + EN 1621 impact protectors.
+const GARMENT_CLASSES: { value: string; label: string }[] = [
+  { value: 'AAA', label: 'AAA — highest (abrasion + impact)' },
+  { value: 'AA', label: 'AA — high' },
+  { value: 'A', label: 'A — moderate' },
+  { value: 'B', label: 'B — abrasion only (no impact)' },
+  { value: 'C', label: 'C — impact-protector ensemble only' },
+]
+const PROTECTOR_ZONES = ['shoulder', 'elbow', 'back', 'chest', 'hip', 'knee']
+const PROTECTOR_STANDARDS: { value: string; label: string }[] = [
+  { value: 'EN_1621_1', label: 'EN 1621-1 (limb)' },
+  { value: 'EN_1621_2', label: 'EN 1621-2 (back)' },
+  { value: 'EN_1621_4', label: 'EN 1621-4 (airbag)' },
+]
+const PROTECTOR_LEVELS = ['1', '2']
+
+const toProtectors = (raw: unknown): Protector[] =>
+  Array.isArray(raw)
+    ? (raw as any[]).map((p) => ({ zone: String(p?.zone ?? ''), standard: String(p?.standard ?? ''), level: String(p?.level ?? '') }))
+    : []
 
 const DAYS_TO_EXPIRY_WARN = 90
 
@@ -293,6 +322,12 @@ export default function ComplianceTab({ product, discardSignal, onDirtyChange }:
   )
   const [hazmatClass, setHazmatClass] = useState(product.hazmatClass ?? '')
   const [hazmatUnNumber, setHazmatUnNumber] = useState(product.hazmatUnNumber ?? '')
+  // C4 — structured CE/PPE state
+  const [garmentClass, setGarmentClass] = useState(product.garmentClass ?? '')
+  const [notifiedBodyNumber, setNotifiedBodyNumber] = useState(product.notifiedBodyNumber ?? '')
+  const [notifiedBodyName, setNotifiedBodyName] = useState(product.notifiedBodyName ?? '')
+  const [docUrl, setDocUrl] = useState(product.declarationOfConformityUrl ?? '')
+  const [protectors, setProtectors] = useState<Protector[]>(toProtectors(product.impactProtectors))
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
 
@@ -301,15 +336,25 @@ export default function ComplianceTab({ product, discardSignal, onDirtyChange }:
   const origPpe = useRef(product.ppeCategory ?? '')
   const origHazmatClass = useRef(product.hazmatClass ?? '')
   const origHazmatUn = useRef(product.hazmatUnNumber ?? '')
+  const origGarmentClass = useRef(product.garmentClass ?? '')
+  const origNbNumber = useRef(product.notifiedBodyNumber ?? '')
+  const origNbName = useRef(product.notifiedBodyName ?? '')
+  const origDocUrl = useRef(product.declarationOfConformityUrl ?? '')
+  const origProtectors = useRef(JSON.stringify(toProtectors(product.impactProtectors)))
 
   const reportDirty = useCallback(() => {
     let count = 0
     if (ppeCategory !== origPpe.current) count++
     if (hazmatClass !== origHazmatClass.current) count++
     if (hazmatUnNumber !== origHazmatUn.current) count++
+    if (garmentClass !== origGarmentClass.current) count++
+    if (notifiedBodyNumber !== origNbNumber.current) count++
+    if (notifiedBodyName !== origNbName.current) count++
+    if (docUrl !== origDocUrl.current) count++
+    if (JSON.stringify(protectors) !== origProtectors.current) count++
     dirtyRef.current = count
     onDirtyChange(count)
-  }, [ppeCategory, hazmatClass, hazmatUnNumber, onDirtyChange])
+  }, [ppeCategory, hazmatClass, hazmatUnNumber, garmentClass, notifiedBodyNumber, notifiedBodyName, docUrl, protectors, onDirtyChange])
 
   useEffect(() => { reportDirty() }, [reportDirty])
 
@@ -320,6 +365,11 @@ export default function ComplianceTab({ product, discardSignal, onDirtyChange }:
     setHazmatEnabled(!!(product.hazmatClass || product.hazmatUnNumber))
     setHazmatClass(product.hazmatClass ?? '')
     setHazmatUnNumber(product.hazmatUnNumber ?? '')
+    setGarmentClass(product.garmentClass ?? '')
+    setNotifiedBodyNumber(product.notifiedBodyNumber ?? '')
+    setNotifiedBodyName(product.notifiedBodyName ?? '')
+    setDocUrl(product.declarationOfConformityUrl ?? '')
+    setProtectors(toProtectors(product.impactProtectors))
     dirtyRef.current = 0
     onDirtyChange(0)
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -351,6 +401,16 @@ export default function ComplianceTab({ product, discardSignal, onDirtyChange }:
         changes.push({ id: product.id, field: 'hazmatClass', value: hazmatClass || null })
       if (hazmatUnNumber !== origHazmatUn.current)
         changes.push({ id: product.id, field: 'hazmatUnNumber', value: hazmatUnNumber || null })
+      if (garmentClass !== origGarmentClass.current)
+        changes.push({ id: product.id, field: 'garmentClass', value: garmentClass || null })
+      if (notifiedBodyNumber !== origNbNumber.current)
+        changes.push({ id: product.id, field: 'notifiedBodyNumber', value: notifiedBodyNumber || null })
+      if (notifiedBodyName !== origNbName.current)
+        changes.push({ id: product.id, field: 'notifiedBodyName', value: notifiedBodyName || null })
+      if (docUrl !== origDocUrl.current)
+        changes.push({ id: product.id, field: 'declarationOfConformityUrl', value: docUrl || null })
+      if (JSON.stringify(protectors) !== origProtectors.current)
+        changes.push({ id: product.id, field: 'impactProtectors', value: protectors.filter((p) => p.zone || p.standard || p.level) })
 
       if (changes.length === 0) { setSaving(false); return }
 
@@ -369,6 +429,11 @@ export default function ComplianceTab({ product, discardSignal, onDirtyChange }:
       origPpe.current = ppeCategory
       origHazmatClass.current = hazmatClass
       origHazmatUn.current = hazmatUnNumber
+      origGarmentClass.current = garmentClass
+      origNbNumber.current = notifiedBodyNumber
+      origNbName.current = notifiedBodyName
+      origDocUrl.current = docUrl
+      origProtectors.current = JSON.stringify(protectors)
       dirtyRef.current = 0
       onDirtyChange(0)
     } catch (e: unknown) {
@@ -435,6 +500,13 @@ export default function ComplianceTab({ product, discardSignal, onDirtyChange }:
       note: 'Required for products containing substances of concern (SVHC).',
     },
   ]
+
+  const addProtector = () => setProtectors((ps) => [...ps, { zone: '', standard: '', level: '' }])
+  const removeProtector = (i: number) => setProtectors((ps) => ps.filter((_, idx) => idx !== i))
+  const updateProtector = (i: number, key: keyof Protector, val: string) =>
+    setProtectors((ps) => ps.map((p, idx) => (idx === i ? { ...p, [key]: val } : p)))
+  const fieldCls =
+    'w-full rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-1.5 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500'
 
   const isDirty = dirtyRef.current > 0
 
@@ -504,6 +576,72 @@ export default function ComplianceTab({ product, discardSignal, onDirtyChange }:
                 </div>
               </div>
             </label>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Protective equipment (CE/PPE structured data) ────────────── */}
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden">
+        <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center gap-2">
+          <ShieldCheck className="w-4 h-4 text-indigo-500" />
+          <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Protective equipment (CE/PPE)</h2>
+          <span className="ml-auto text-xs text-slate-500 dark:text-slate-400">EN 17092 · EN 1621</span>
+        </div>
+        <div className="px-5 py-4 space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Garment class (EN 17092)</label>
+              <select value={garmentClass} onChange={(e) => setGarmentClass(e.target.value)} className={fieldCls}>
+                <option value="">— none —</option>
+                {GARMENT_CLASSES.map((g) => <option key={g.value} value={g.value}>{g.label}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Declaration of Conformity URL</label>
+              <input value={docUrl} onChange={(e) => setDocUrl(e.target.value)} placeholder="https://…/doc.pdf" className={fieldCls} />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Notified Body number</label>
+              <input value={notifiedBodyNumber} onChange={(e) => setNotifiedBodyNumber(e.target.value)} placeholder="e.g. 0494" className={fieldCls} />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Notified Body name</label>
+              <input value={notifiedBodyName} onChange={(e) => setNotifiedBodyName(e.target.value)} placeholder="e.g. Ricotest" className={fieldCls} />
+            </div>
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-xs font-medium text-slate-600 dark:text-slate-400">Impact protectors (EN 1621)</label>
+              <Button size="sm" variant="ghost" onClick={addProtector} className="gap-1">
+                <Plus className="w-3.5 h-3.5" /> Add protector
+              </Button>
+            </div>
+            {protectors.length === 0 ? (
+              <p className="text-xs text-slate-400 dark:text-slate-500">No protectors added.</p>
+            ) : (
+              <div className="space-y-2">
+                {protectors.map((p, i) => (
+                  <div key={i} className="grid grid-cols-[1fr_1fr_auto_auto] gap-2 items-center">
+                    <select value={p.zone} onChange={(e) => updateProtector(i, 'zone', e.target.value)} className={fieldCls} aria-label="Protector zone">
+                      <option value="">zone…</option>
+                      {PROTECTOR_ZONES.map((z) => <option key={z} value={z}>{z}</option>)}
+                    </select>
+                    <select value={p.standard} onChange={(e) => updateProtector(i, 'standard', e.target.value)} className={fieldCls} aria-label="Protector standard">
+                      <option value="">standard…</option>
+                      {PROTECTOR_STANDARDS.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+                    </select>
+                    <select value={p.level} onChange={(e) => updateProtector(i, 'level', e.target.value)} className={cn(fieldCls, 'w-24')} aria-label="Protector level">
+                      <option value="">lvl</option>
+                      {PROTECTOR_LEVELS.map((l) => <option key={l} value={l}>Level {l}</option>)}
+                    </select>
+                    <IconButton onClick={() => removeProtector(i)} size="sm" aria-label="Remove protector" className="text-slate-400 hover:text-red-500">
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </IconButton>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>

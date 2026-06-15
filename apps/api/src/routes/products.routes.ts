@@ -1940,6 +1940,12 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
       'ppeCategory',
       'hazmatClass',
       'hazmatUnNumber',
+      // C4 — structured CE/PPE protective-gear data
+      'garmentClass',
+      'notifiedBodyNumber',
+      'notifiedBodyName',
+      'declarationOfConformityUrl',
+      'impactProtectors',
       // GTIN.3 / Step 4 variant flow — the list-wizard's "promote to
       // parent" action PATCHes isParent=true and "link variant to
       // parent" PATCHes parentId. Both write into Product directly;
@@ -2315,6 +2321,33 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
             error: 'ppeCategory must be CAT_I, CAT_II, or CAT_III',
           })
           continue
+        }
+      } else if (c.field === 'garmentClass') {
+        // C4 — EN 17092 garment class. Empty / null clears.
+        const VALID_CLASS = new Set(['AAA', 'AA', 'A', 'B', 'C'])
+        if (value === null || value === undefined || value === '') {
+          value = null
+        } else if (!VALID_CLASS.has(String(value).toUpperCase())) {
+          errors.push({ id: c.id, field: c.field, error: 'garmentClass must be AAA, AA, A, B, or C (EN 17092)' })
+          continue
+        } else {
+          value = String(value).toUpperCase()
+        }
+      } else if (c.field === 'impactProtectors') {
+        // C4 — JSON array of { zone, standard, level }. Empty / null clears.
+        if (value === null || value === undefined || value === '') {
+          value = null
+        } else if (!Array.isArray(value)) {
+          errors.push({ id: c.id, field: c.field, error: 'impactProtectors must be an array of { zone, standard, level }' })
+          continue
+        } else {
+          value = (value as any[])
+            .map((p) => ({
+              zone: p?.zone != null ? String(p.zone) : null,
+              standard: p?.standard != null ? String(p.standard) : null,
+              level: p?.level != null ? String(p.level) : null,
+            }))
+            .filter((p) => p.zone || p.standard || p.level)
         }
       } else if (c.field === 'isParent') {
         // GTIN.3 / Step 4 — boolean coercion. Accept true/false +
