@@ -74,12 +74,16 @@ const cache = new TtlCache<ProviderCatalog>({
   maxEntries: 8,
 })
 
-// Drop non-text-generation models from the picker (embeddings, image /
-// video / speech generators, Gemma open weights, tuning helpers). For
-// Gemini the generateContent filter already covers most of these; this
-// is belt-and-suspenders and also trims Anthropic's list.
+// Drop everything that isn't a general text-generation chat model from
+// the picker. Live discovery confirmed Google's models API returns far
+// more than chat under generateContent: image generators (Nano Banana
+// = *-image, imagen), music (Lyria), video (Veo), speech (tts),
+// robotics, computer-use, and packaged agent products (Deep Research,
+// Antigravity). It also still lists the retired 2.0 line (shut down
+// 2026-06-01) — filter that too so the picker can't re-introduce the
+// dead-default bug. Open weights (Gemma) and tuning helpers go as well.
 const ID_BLOCKLIST =
-  /embedding|imagen|veo|gemma|learnlm|aqa|tts|image-generation|text-to/i
+  /embedding|imagen|image|veo|gemma|learnlm|aqa|tts|lyria|robotics|computer-use|antigravity|deep-research|nano-banana|text-to|gemini-2\.0/i
 
 function toCatalogModel(
   provider: CatalogProvider,
