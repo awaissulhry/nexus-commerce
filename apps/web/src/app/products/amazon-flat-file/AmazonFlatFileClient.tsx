@@ -386,6 +386,34 @@ export default function AmazonFlatFileClient({
   const [ptLoading, setPtLoading] = useState(false)
 
   const [manifest, setManifest] = useState<Manifest | null>(initialManifest)
+
+  // MT.3 — multi-category sheet. sheetTypes = the product types in this sheet.
+  // >1 ⇒ "union mode": the grid renders the UNION of all types' columns (from
+  // /union-template). One type ⇒ the existing single-type editor, untouched.
+  const [sheetTypes, setSheetTypes] = useState<string[]>([initialProductType])
+  const [unionManifest, setUnionManifest] = useState<Manifest | null>(null)
+  const isUnionMode = sheetTypes.length > 1
+  // The render side reads effectiveManifest; the (single-type) load path keeps
+  // using `manifest`, so single-type mode can't regress.
+  const effectiveManifest = useMemo(() => unionManifest ?? manifest, [unionManifest, manifest])
+
+  // MT.3 — changing the primary product type (the single-type dropdown) resets
+  // the sheet to that one category.
+  useEffect(() => { setSheetTypes([productType]) }, [productType])
+
+  // MT.3 — fetch the UNION manifest whenever the sheet holds >1 product type.
+  // Single type ⇒ clear it (effectiveManifest falls back to the single manifest).
+  useEffect(() => {
+    if (sheetTypes.length <= 1) { setUnionManifest(null); return }
+    let alive = true
+    const qs = `marketplace=${marketplace}&productTypes=${encodeURIComponent(sheetTypes.map((t) => t.toUpperCase()).join(','))}`
+    fetch(`${getBackendUrl()}/api/amazon/flat-file/union-template?${qs}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((m) => { if (alive && m) setUnionManifest(m) })
+      .catch(() => { /* union manifest is advisory; single-type still works */ })
+    return () => { alive = false }
+  }, [sheetTypes, marketplace])
+
   // Always start from the canonical DB state (SSR initialRows). If localStorage
   // has dirty rows from a previous session we surface a restore banner instead
   // of silently loading stale data — this ensures the flat file always opens
@@ -493,8 +521,8 @@ export default function AmazonFlatFileClient({
 
   // Derived: open = all manifest groups minus whatever the user has closed
   const openGroups = useMemo(
-    () => new Set((manifest?.groups ?? []).map((g) => g.id).filter((id) => !closedGroups.has(id))),
-    [manifest, closedGroups],
+    () => new Set((effectiveManifest?.groups ?? []).map((g) => g.id).filter((id) => !closedGroups.has(id))),
+    [effectiveManifest, closedGroups],
   )
 
   // User-defined group order — persisted in localStorage
@@ -848,13 +876,13 @@ export default function AmazonFlatFileClient({
 
   // Respect saved drag order; fall back to Amazon's order for new groups
   const orderedGroups = useMemo<ColumnGroup[]>(() => {
-    const groups = manifest?.groups ?? []
+    const groups = effectiveManifest?.groups ?? []
     if (!groupOrder.length) return groups
     const byId = new Map(groups.map((g) => [g.id, g]))
     const ordered = groupOrder.map((id) => byId.get(id)).filter(Boolean) as ColumnGroup[]
     const rest = groups.filter((g) => !groupOrder.includes(g.id))
     return [...ordered, ...rest]
-  }, [manifest, groupOrder])
+  }, [effectiveManifest, groupOrder])
 
   const visibleGroups = useMemo(
     () => orderedGroups.filter((g) => openGroups.has(g.id)),
@@ -886,8 +914,8 @@ export default function AmazonFlatFileClient({
   useEffect(() => { allColumnsRef.current = allColumns }, [allColumns])
 
   const manifestColumns = useMemo<Column[]>(
-    () => (manifest?.groups ?? []).flatMap((g) => g.columns),
-    [manifest],
+    () => (effectiveManifest?.groups ?? []).flatMap((g) => g.columns),
+    [effectiveManifest],
   )
 
   // Field ID → label map. Powers the PullDiffModal so the diff table
@@ -2081,7 +2109,7 @@ export default function AmazonFlatFileClient({
         const res = await fetch(`${getBackendUrl()}/api/amazon/flat-file/submit`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ rows: toSend, marketplace: mp, expandedFields: manifest?.expandedFields ?? {}, productType }),
+          body: JSON.stringify({ rows: toSend, marketplace: mp, expandedFields: effectiveManifest?.expandedFields ?? {}, productType }),
         })
         const data = await res.json()
         if (!res.ok) throw new Error(`[${mp}] ${data.error ?? 'Submit failed'}`)
@@ -2182,7 +2210,7 @@ export default function AmazonFlatFileClient({
           rows: rowsToSync,
           marketplace,
           productType,
-          expandedFields: manifest.expandedFields ?? {},
+          expandedFields: effectiveManifest?.expandedFields ?? {},
           isPublished,
         }),
       })
@@ -3116,6 +3144,33 @@ export default function AmazonFlatFileClient({
                 title="Refresh schema from Amazon — updates columns/groups, keeps row edits">
                 <RefreshCw className="w-3 h-3 mr-1" />Refresh schema
               </Button>
+            )}
+            {/* MT.3 — multi-category: add more product types to edit them in ONE
+                sheet. The dropdown sets the primary type; these chips add the rest
+                (≥2 types ⇒ union mode: the grid shows the union of all columns). */}
+            {productTypes.length > 1 && (
+              <div className="flex items-center gap-1 flex-wrap">
+                {sheetTypes.slice(1).map((t) => (
+                  <span key={t} className="inline-flex items-center gap-1 rounded-md border border-indigo-300 bg-indigo-50 dark:bg-indigo-900/30 px-2 py-0.5 text-[11px] font-medium text-indigo-700 dark:text-indigo-300">
+                    {t}
+                    <button onClick={() => setSheetTypes((s) => s.filter((x) => x !== t))} className="hover:text-red-500" title={`Remove ${t}`}>✕</button>
+                  </span>
+                ))}
+                <select
+                  value=""
+                  onChange={(e) => { const v = e.target.value; if (v) setSheetTypes((s) => [...new Set([...s, v])]) }}
+                  className="rounded-md border border-dashed border-slate-300 dark:border-slate-600 bg-transparent px-2 py-0.5 text-[11px] text-slate-500 hover:border-indigo-400 focus:outline-none"
+                  title="Add another category to this sheet (multi-category)"
+                >
+                  <option value="">+ Add category</option>
+                  {productTypes.map((p) => p.value).filter((v) => !sheetTypes.includes(v)).map((v) => (
+                    <option key={v} value={v}>{v}</option>
+                  ))}
+                </select>
+                {isUnionMode && (
+                  <span className="text-[10px] font-semibold text-indigo-500" title="Editing multiple categories in one sheet">UNION · {sheetTypes.length} types</span>
+                )}
+              </div>
             )}
           </div>
 
