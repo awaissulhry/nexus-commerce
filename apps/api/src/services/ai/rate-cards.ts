@@ -73,6 +73,13 @@ export const ANTHROPIC_RATES: Record<string, RateCard> = {
   'claude-sonnet-4-6': { inputPer1M: 3.0, outputPer1M: 15.0 },
   'claude-haiku-4-5-20251001': { inputPer1M: 1.0, outputPer1M: 5.0 },
   'claude-haiku-4-5': { inputPer1M: 1.0, outputPer1M: 5.0 },
+  // Legacy but still served (bare names — rateInfoFor strips the dated
+  // suffix that /v1/models returns, e.g. claude-opus-4-5-20251101 →
+  // claude-opus-4-5). Prices per Anthropic's models page, 2026-06-16;
+  // frozen snapshots, so these rarely move.
+  'claude-opus-4-5': { inputPer1M: 5.0, outputPer1M: 25.0 },
+  'claude-sonnet-4-5': { inputPer1M: 3.0, outputPer1M: 15.0 },
+  'claude-opus-4-1': { inputPer1M: 15.0, outputPer1M: 75.0 },
 }
 export const ANTHROPIC_DEFAULT_MODEL = 'claude-haiku-4-5-20251001'
 

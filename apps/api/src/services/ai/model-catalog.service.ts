@@ -104,6 +104,19 @@ function toCatalogModel(
   }
 }
 
+// Known-priced models first (the curated current set), then cheapest,
+// then alphabetical — so recommended models lead and previews, floating
+// "-latest" aliases, and anything not-yet-priced sink to the bottom.
+// There is no hardcoded "deprecated" list to keep current: the
+// costEstimated flag is the signal, and discovery sets it automatically.
+function compareModels(a: CatalogModel, b: CatalogModel): number {
+  return (
+    Number(a.costEstimated) - Number(b.costEstimated) ||
+    a.inputPer1M - b.inputPer1M ||
+    a.id.localeCompare(b.id)
+  )
+}
+
 async function discoverAnthropic(): Promise<ProviderCatalog> {
   const apiKey = process.env.ANTHROPIC_API_KEY
   if (!apiKey) return { provider: 'anthropic', configured: false, models: [] }
@@ -127,6 +140,7 @@ async function discoverAnthropic(): Promise<ProviderCatalog> {
         Boolean(m.id && !ID_BLOCKLIST.test(m.id)),
       )
       .map((m) => toCatalogModel('anthropic', m.id, m.display_name))
+      .sort(compareModels)
     return { provider: 'anthropic', configured: true, models }
   } catch (err) {
     return {
@@ -168,6 +182,7 @@ async function discoverGemini(): Promise<ProviderCatalog> {
       }))
       .filter((m) => Boolean(m.id && !ID_BLOCKLIST.test(m.id)))
       .map((m) => toCatalogModel('gemini', m.id, m.displayName))
+      .sort(compareModels)
     return { provider: 'gemini', configured: true, models }
   } catch (err) {
     return {
