@@ -6,7 +6,7 @@
  */
 
 import cron from 'node-cron'
-import OutboundSyncService from '../services/outbound-sync.service.js'
+import OutboundSyncService, { withTimeout } from '../services/outbound-sync.service.js'
 import { logger } from '../utils/logger.js'
 
 // Lock mechanism to prevent overlapping sync jobs
@@ -27,12 +27,15 @@ async function buildBullMQSkip(): Promise<((queueId: string) => Promise<boolean>
     const { outboundSyncQueue } = await import('../lib/queue.js')
     return async (queueId: string): Promise<boolean> => {
       try {
-        const job = await outboundSyncQueue.getJob(queueId)
+        // PD-Q — Redis can HANG (not just error) when unreachable; a bare await
+        // here wedged the whole sync loop (isProcessing stuck → backlog). Bound
+        // the Redis calls so a hang fails open (process the row, we're the backstop).
+        const job = await withTimeout(outboundSyncQueue.getJob(queueId), 3000, 'getJob')
         if (!job) return false
-        const state = await job.getState()
+        const state = await withTimeout(job.getState(), 3000, 'getState')
         return ['waiting', 'active', 'delayed', 'prioritized', 'waiting-children'].includes(state)
       } catch {
-        return false // Redis hiccup → don't skip; process it (BullMQ may be down → we're the backstop)
+        return false // Redis hiccup/timeout → don't skip; process it (BullMQ may be down → we're the backstop)
       }
     }
   } catch {
@@ -47,15 +50,30 @@ async function buildBullMQSkip(): Promise<((queueId: string) => Promise<boolean>
 export function initializeSyncWorker() {
   logger.info('🤖 Initializing Autopilot Sync Worker...')
 
+  // PD-Q — if a cycle ever wedges (hung downstream call), isProcessing would
+  // stick true forever and every later cycle would skip → silent backlog. After
+  // STALE_LOCK_MS we presume the previous cycle dead and force-reset, so the
+  // worker self-heals instead of deadlocking.
+  const STALE_LOCK_MS = Math.max(60_000, Number(process.env.NEXUS_SYNC_STALE_LOCK_MS ?? '300000') || 300_000)
+
   // Schedule the cron job to run every minute
   const job = cron.schedule('* * * * *', async () => {
     // Prevent overlapping executions
     if (isProcessing) {
-      logger.warn('⏳ Previous sync still processing, skipping this cycle', {
-        lastProcessingTime: new Date(lastProcessingTime).toISOString(),
-        elapsedSeconds: Math.round((Date.now() - lastProcessingTime) / 1000),
-      })
-      return
+      const heldMs = Date.now() - lastProcessingTime
+      if (heldMs > STALE_LOCK_MS) {
+        logger.error('🔓 Sync worker lock stuck — force-resetting (previous cycle presumed dead)', {
+          heldMs,
+          lastProcessingTime: new Date(lastProcessingTime).toISOString(),
+        })
+        isProcessing = false // fall through and run this cycle
+      } else {
+        logger.warn('⏳ Previous sync still processing, skipping this cycle', {
+          lastProcessingTime: new Date(lastProcessingTime).toISOString(),
+          elapsedSeconds: Math.round(heldMs / 1000),
+        })
+        return
+      }
     }
 
     isProcessing = true

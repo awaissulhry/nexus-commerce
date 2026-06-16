@@ -240,6 +240,23 @@ interface ProcessingStats {
 
 // ── Outbound Sync Service ────────────────────────────────────────────────
 
+/**
+ * PD-Q — bound a promise so one hung downstream call (SP-API / Redis) can never
+ * wedge the sync loop. On timeout it rejects; the caller's per-item catch marks
+ * the row FAILED-retryable and moves on.
+ */
+export function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
+  return Promise.race([
+    p,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms),
+    ),
+  ]);
+}
+
+/** Per-item dispatch ceiling for the backstop loop (env-overridable). */
+const DISPATCH_TIMEOUT_MS = Math.max(5_000, Number(process.env.NEXUS_SYNC_DISPATCH_TIMEOUT_MS ?? '45000') || 45_000);
+
 export class OutboundSyncService {
   private stats = {
     queued: 0,
@@ -337,7 +354,7 @@ export class OutboundSyncService {
     }
     await prisma.outboundSyncQueue.update({ where: { id: item.id }, data: { syncStatus: "IN_PROGRESS" } });
     try {
-      return await this.dispatchSync(item);
+      return await withTimeout(this.dispatchSync(item), DISPATCH_TIMEOUT_MS, `dispatchSync(${item.targetChannel}/${item.id})`);
     } catch (err) {
       // dispatch threw (e.g. unknown channel) — don't leave the row stuck IN_PROGRESS.
       await prisma.outboundSyncQueue.update({ where: { id: item.id }, data: { syncStatus: "PENDING" } }).catch(() => {});
@@ -397,7 +414,12 @@ export class OutboundSyncService {
             data: { syncStatus: "IN_PROGRESS" },
           });
 
-          const result = await this.dispatchSync(item);
+          // PD-Q — a hung SP-API/Redis call must not deadlock the whole loop.
+          const result = await withTimeout(
+            this.dispatchSync(item),
+            DISPATCH_TIMEOUT_MS,
+            `dispatchSync(${item.targetChannel}/${item.id})`,
+          );
 
           if (result.success) {
             // Mark as successful
@@ -463,7 +485,12 @@ export class OutboundSyncService {
             data: { syncStatus: "IN_PROGRESS" },
           });
 
-          const result = await this.dispatchSync(item);
+          // PD-Q — a hung SP-API/Redis call must not deadlock the whole loop.
+          const result = await withTimeout(
+            this.dispatchSync(item),
+            DISPATCH_TIMEOUT_MS,
+            `dispatchSync(${item.targetChannel}/${item.id})`,
+          );
 
           if (result.success) {
             await prisma.outboundSyncQueue.update({

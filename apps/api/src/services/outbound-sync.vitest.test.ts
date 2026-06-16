@@ -21,6 +21,7 @@ import {
   buildAmazonListingPatch,
   isFbaListing,
   buildShopifyProductUpdate,
+  withTimeout,
 } from './outbound-sync.service.js'
 
 describe('Phase 0.1 — eBay sync payload helpers', () => {
@@ -160,6 +161,18 @@ describe('B2 — isFbaListing resolution', () => {
   it('nothing set → false (safe FBM default)', () => {
     expect(isFbaListing(null, null)).toBe(false)
     expect(isFbaListing({}, {})).toBe(false)
+  })
+})
+
+describe('PD-Q — withTimeout (anti-deadlock guard)', () => {
+  it('resolves when the promise wins the race', async () => {
+    await expect(withTimeout(Promise.resolve(42), 1000, 'fast')).resolves.toBe(42)
+  })
+  it('rejects when the timeout wins (a hung promise)', async () => {
+    await expect(withTimeout(new Promise<number>(() => {}), 20, 'hung')).rejects.toThrow(/timed out after 20ms/)
+  })
+  it('propagates the inner rejection unchanged', async () => {
+    await expect(withTimeout(Promise.reject(new Error('boom')), 1000, 'x')).rejects.toThrow('boom')
   })
 })
 
