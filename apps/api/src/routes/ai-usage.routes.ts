@@ -4,6 +4,11 @@
  *   GET /api/ai/providers
  *     → { providers: [{ name, configured, defaultModel }] }
  *
+ *   GET /api/ai/models?refresh=1
+ *     → { killSwitch, providers: [{ provider, configured, models[], error? }] }
+ *     Live-discovered catalog (Anthropic + Gemini models APIs, cached
+ *     1h) joined with the rate card. ?refresh=1 bypasses the cache.
+ *
  *   GET /api/ai/usage/summary?days=7
  *     → { range, byProvider, byFeature, totals }
  *
@@ -30,6 +35,7 @@ import {
   isAiKillSwitchOn,
   listProviders,
 } from '../services/ai/providers/index.js'
+import { getModelCatalog } from '../services/ai/model-catalog.service.js'
 import {
   listPromptTemplates,
   recordPromptTemplateEdit,
@@ -408,6 +414,18 @@ const aiUsageRoutes: FastifyPluginAsync = async (fastify) => {
     // `j.providers` as an array so the change is backward-compatible.
     return listProviders()
   })
+
+  fastify.get<{ Querystring: { refresh?: string } }>(
+    '/ai/models',
+    async (request) => {
+      // AI-2.2: live-discovered model catalog per provider, joined with
+      // the rate card. `?refresh=1` bypasses the 1h cache for the
+      // settings "refresh models" button.
+      const refresh = request.query?.refresh
+      const force = refresh === '1' || refresh === 'true'
+      return getModelCatalog({ force })
+    },
+  )
 
   fastify.get<{ Querystring: { days?: string } }>(
     '/ai/usage/summary',

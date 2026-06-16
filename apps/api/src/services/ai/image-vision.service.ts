@@ -24,10 +24,12 @@
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import prisma from '../../db.js'
 import { getProvider, isAiKillSwitchOn } from './providers/index.js'
-import { priceFor } from './rate-cards.js'
+import { GEMINI_DEFAULT_MODEL, priceFor } from './rate-cards.js'
 import { logUsage } from './usage-logger.service.js'
 
-const VISION_MODEL = 'gemini-2.0-flash'
+// IR.6.2 + AI-2.1: use the live Gemini default rather than a pinned id
+// (the previously-pinned gemini-2.0-flash was retired 2026-06-01).
+const VISION_MODEL = GEMINI_DEFAULT_MODEL
 
 export interface VisionResult {
   hasWhiteBackground: boolean

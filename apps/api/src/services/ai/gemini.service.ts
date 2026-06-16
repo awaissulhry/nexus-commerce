@@ -1,4 +1,5 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GEMINI_DEFAULT_MODEL } from "./rate-cards.js";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -123,7 +124,7 @@ export class GeminiService {
     categoryId?: string,
     aspects?: CategoryAspect[]
   ): Promise<EbayListingData> {
-    const model = this.getClient().getGenerativeModel({ model: "gemini-2.0-flash" });
+    const model = this.getClient().getGenerativeModel({ model: GEMINI_DEFAULT_MODEL });
 
     /* ── Build structured context blocks for the prompt ────────── */
 

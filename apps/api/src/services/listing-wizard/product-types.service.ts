@@ -24,6 +24,7 @@ import { AmazonService } from '../marketplaces/amazon.service.js'
 import { CategorySchemaService } from '../categories/schema-sync.service.js'
 import { amazonMarketplaceId } from '../categories/marketplace-ids.js'
 import { EbayCategoryService } from '../ebay-category.service.js'
+import { GEMINI_DEFAULT_MODEL } from '../ai/rate-cards.js'
 import {
   BUNDLED_AMAZON_PRODUCT_TYPES,
   findHintFromNexusProductType,
@@ -281,7 +282,7 @@ export class ProductTypesService {
     candidates: ProductTypeListItem[],
   ): Promise<RankedSuggestion[]> {
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!)
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
+    const model = genAI.getGenerativeModel({ model: GEMINI_DEFAULT_MODEL })
 
     const candidateLines = candidates
       .slice(0, 60) // keep prompt small even when SP-API returns the full list

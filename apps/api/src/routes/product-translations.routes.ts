@@ -41,6 +41,7 @@ import {
   ListingContentService,
   type ContentField,
 } from '../services/ai/listing-content.service.js'
+import { GEMINI_DEFAULT_MODEL } from '../services/ai/rate-cards.js'
 
 const listingContentService = new ListingContentService()
 
@@ -328,7 +329,7 @@ const productTranslationsRoutes: FastifyPluginAsync = async (fastify) => {
       // Map ContentField result → ProductTranslation columns.
       const updates: Record<string, unknown> = {
         source: 'ai-gemini',
-        sourceModel: 'gemini-2.0-flash',
+        sourceModel: GEMINI_DEFAULT_MODEL,
         reviewedAt: null,
       }
       const fieldsTranslated: string[] = []
@@ -401,7 +402,7 @@ const productTranslationsRoutes: FastifyPluginAsync = async (fastify) => {
             ? (updates.keywords as string[])
             : [],
           source: 'ai-gemini',
-          sourceModel: 'gemini-2.0-flash',
+          sourceModel: GEMINI_DEFAULT_MODEL,
           reviewedAt: null,
         },
         update: updates,
