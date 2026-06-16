@@ -17,6 +17,7 @@ import {
   acquireShopifyPublishToken,
   checkShopifyCircuit,
   recordShopifyOutcome,
+  getShopifyPublishMode,
 } from "./shopify-publish-gate.service.js";
 import {
   digestPayload,
@@ -885,6 +886,16 @@ export class OutboundSyncService {
   private async syncToShopify(queueItem: any): Promise<SyncResult> {
     const { product, payload, channelListing, id: queueId, syncType } = queueItem;
     const sku = product?.sku ?? queueItem.externalListingId ?? "(unknown sku)";
+
+    // PD.4 — Shopify publish-mode gate. Shopify used to write live the instant
+    // creds existed (no mode switch — accidental-live risk). Only 'live' writes;
+    // anything else is a dry-run no-op (marked SKIPPED, not green SUCCESS).
+    const shopifyMode = getShopifyPublishMode();
+    if (shopifyMode !== "live") {
+      return { success: true, queueId, channel: "SHOPIFY", status: "SKIPPED",
+        message: `Shopify ${shopifyMode} — not published (set NEXUS_ENABLE_SHOPIFY_PUBLISH=true + SHOPIFY_PUBLISH_MODE=live)`,
+        dryRun: true };
+    }
 
     const shopName = process.env.SHOPIFY_SHOP_NAME ?? "";
     const accessToken = process.env.SHOPIFY_ACCESS_TOKEN ?? process.env.SHOPIFY_ADMIN_API_TOKEN ?? "";

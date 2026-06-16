@@ -27,6 +27,7 @@ import {
 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
+import { PublishModeBadge } from '@/components/PublishModeBadge'
 
 type Phase = 'preflight' | 'confirm' | 'running' | 'success' | 'failure'
 type Step = 'createInventory' | 'createOffer' | 'publishOffer'
@@ -183,6 +184,8 @@ export default function PublishDrawer(props: Props) {
             <div className="text-xs text-slate-500 mt-0.5">
               Inventory API · three-step flow
             </div>
+            {/* PD.4 — eBay publish-mode truth (a non-LIVE badge = not published). */}
+            <PublishModeBadge channel="ebay" className="mt-1.5" />
           </div>
           {phase !== 'running' && (
             <button

@@ -14,6 +14,28 @@
 
 import { logger } from '../utils/logger.js'
 
+// ── Publish mode gate ────────────────────────────────────────────────────
+//
+// PD.4 — Shopify previously published live the instant SHOPIFY_SHOP_NAME +
+// token were set, with no mode switch (unlike Amazon/eBay) — an accidental-live
+// risk. This brings it in line: NEXUS_ENABLE_SHOPIFY_PUBLISH (default false) +
+// SHOPIFY_PUBLISH_MODE (default 'dry-run'). Only 'live' actually writes.
+
+export type ShopifyPublishMode = 'gated' | 'dry-run' | 'live'
+
+export function isShopifyPublishEnabled(): boolean {
+  const raw = process.env.NEXUS_ENABLE_SHOPIFY_PUBLISH
+  return raw === 'true' || raw === '1' || raw === 'yes'
+}
+
+export function getShopifyPublishMode(): ShopifyPublishMode {
+  if (!isShopifyPublishEnabled()) return 'gated'
+  const raw = (process.env.SHOPIFY_PUBLISH_MODE ?? 'dry-run').toLowerCase()
+  if (raw === 'live' || raw === 'production') return 'live'
+  // Anything else (including 'dry-run', empty, typos) → dry-run (default-safe).
+  return 'dry-run'
+}
+
 // ── Rate limiter ─────────────────────────────────────────────────────────
 
 interface RateBucket {

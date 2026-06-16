@@ -9,6 +9,7 @@ import { productEventService } from '../services/product-event.service.js'
 import { getProvider } from '../services/ai/providers/index.js'
 import { getAmazonPublishMode, isAmazonPublishEnabled } from '../services/amazon-publish-gate.service.js'
 import { getEbayPublishMode, isEbayPublishEnabled } from '../services/ebay-publish-gate.service.js'
+import { getShopifyPublishMode, isShopifyPublishEnabled } from '../services/shopify-publish-gate.service.js'
 import { refreshAmazonParticipations } from '../services/amazon-participations.service.js'
 import {
   KNOWN_BULK_ACTION_TYPES,
@@ -2612,7 +2613,7 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
         liveReady: isAmazonPublishEnabled() && amazonMode === 'live' && !!sellerId && lwaPresent,
       },
       ebay: { enabled: isEbayPublishEnabled(), mode: getEbayPublishMode() },
-      shopify: { configured: shopifyConfigured, gate: 'none (live-on-creds)' },
+      shopify: { enabled: isShopifyPublishEnabled(), mode: getShopifyPublishMode(), configured: shopifyConfigured },
       pendingQueue: { total: pendingTotal, byChannel },
     }
 
