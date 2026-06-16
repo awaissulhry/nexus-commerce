@@ -7,6 +7,9 @@ import { publishListingEvent, subscribeListingEvents } from '../services/listing
 import { listEtag, matches } from '../utils/list-etag.js'
 import { productEventService } from '../services/product-event.service.js'
 import { getProvider } from '../services/ai/providers/index.js'
+import { getAmazonPublishMode, isAmazonPublishEnabled } from '../services/amazon-publish-gate.service.js'
+import { getEbayPublishMode, isEbayPublishEnabled } from '../services/ebay-publish-gate.service.js'
+import { refreshAmazonParticipations } from '../services/amazon-participations.service.js'
 import {
   KNOWN_BULK_ACTION_TYPES,
   type BulkActionType,
@@ -2574,6 +2577,62 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
   // ─────────────────────────────────────────────────────────────────
   // GET /api/listings/publish-status — live Phase B audit feed.
   //
+  // PD.0 — publish-readiness: the operator's "am I actually live?" check.
+  // Reports each channel's gate mode + whether creds/seller-id are present +
+  // the pending OutboundSyncQueue size (so a go-live flip is controlled, not a
+  // flood). ?probe=1 does a READ-ONLY SP-API call (getMarketplaceParticipations)
+  // to prove Amazon creds actually reach Amazon — it never publishes. Curl this
+  // before and after flipping the Railway flags to confirm live.
+  fastify.get<{ Querystring: { probe?: string } }>('/listings/publish-readiness', async (request, reply) => {
+    const probe = request.query?.probe === '1' || request.query?.probe === 'true'
+    const sellerId = process.env.AMAZON_SELLER_ID ?? process.env.AMAZON_MERCHANT_ID ?? ''
+    const lwaPresent = !!(process.env.AMAZON_LWA_CLIENT_ID && process.env.AMAZON_LWA_CLIENT_SECRET && process.env.AMAZON_REFRESH_TOKEN)
+    const shopifyConfigured = !!(process.env.SHOPIFY_SHOP_NAME && (process.env.SHOPIFY_ACCESS_TOKEN || process.env.SHOPIFY_ADMIN_API_TOKEN))
+
+    let pendingTotal = 0
+    let byChannel: Array<{ channel: string; count: number }> = []
+    try {
+      const grouped = await prisma.outboundSyncQueue.groupBy({
+        by: ['targetChannel'],
+        where: { syncStatus: 'PENDING' },
+        _count: { _all: true },
+      })
+      byChannel = grouped.map((g) => ({ channel: String(g.targetChannel), count: g._count?._all ?? 0 }))
+      pendingTotal = byChannel.reduce((n, c) => n + c.count, 0)
+    } catch { /* best-effort */ }
+
+    const amazonMode = getAmazonPublishMode()
+    const result: Record<string, unknown> = {
+      amazon: {
+        enabled: isAmazonPublishEnabled(),
+        mode: amazonMode,
+        sellerIdPresent: !!sellerId,
+        lwaCredsPresent: lwaPresent,
+        liveReady: isAmazonPublishEnabled() && amazonMode === 'live' && !!sellerId && lwaPresent,
+      },
+      ebay: { enabled: isEbayPublishEnabled(), mode: getEbayPublishMode() },
+      shopify: { configured: shopifyConfigured, gate: 'none (live-on-creds)' },
+      pendingQueue: { total: pendingTotal, byChannel },
+    }
+
+    if (probe) {
+      try {
+        const part = await refreshAmazonParticipations()
+        result.probe = {
+          amazon: {
+            ok: true,
+            note: 'getMarketplaceParticipations succeeded — LWA creds + seller token are valid and reach Amazon (no publish performed).',
+            marketplaces: part.marketplaces.map((m) => ({ code: m.code, marketplaceId: m.marketplaceId, status: m.status })),
+          },
+        }
+      } catch (e: unknown) {
+        result.probe = { amazon: { ok: false, error: e instanceof Error ? e.message : String(e) } }
+      }
+    }
+
+    return reply.send(result)
+  })
+
   // M.7 — wraps the V.1 verification script's queries in an API so
   // the operator can monitor Phase B rollout from the UI instead of
   // a terminal. Same 7 sections (skipping the env-reminder one); the

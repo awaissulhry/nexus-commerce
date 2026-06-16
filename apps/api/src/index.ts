@@ -208,6 +208,8 @@ import { startCycleCountSchedulerCron } from "./jobs/cycle-count-scheduler.job.j
 import { startYearEndSnapshotCron } from "./jobs/year-end-snapshot.job.js";
 import { startLotExpiryAlertCron } from "./jobs/lot-expiry-alert.job.js";
 import { startCertExpiryAlertCron } from "./jobs/cert-expiry-alert.job.js";
+import { getAmazonPublishMode } from "./services/amazon-publish-gate.service.js";
+import { getEbayPublishMode } from "./services/ebay-publish-gate.service.js";
 import { startScheduledChangesCron } from "./jobs/scheduled-changes.job.js";
 import { startPurgeSoftDeletedCron } from "./jobs/purge-soft-deleted-products.job.js";
 import { startRetentionSweepCron } from "./jobs/data-retention-sweep.job.js";
@@ -1324,6 +1326,14 @@ async function start() {
     if (process.env.NEXUS_ENABLE_CERT_EXPIRY_ALERT_CRON !== '0') {
       startCertExpiryAlertCron();
     }
+
+    // PD.0 — publish-mode banner at boot. 10k+ gated Amazon attempts went
+    // unnoticed for 30 days because the mode was never surfaced. A 'gated' or
+    // 'dry-run' line here means NOTHING reaches the channel — set
+    // NEXUS_ENABLE_AMAZON_PUBLISH=true + AMAZON_PUBLISH_MODE=live to go live.
+    logger.info(
+      `📣 PUBLISH MODES at boot — Amazon=${getAmazonPublishMode()} eBay=${getEbayPublishMode()} Shopify=${process.env.SHOPIFY_SHOP_NAME ? 'live-on-creds (no gate)' : 'unconfigured'}`,
+    );
 
     // F.3 — scheduled product changes worker. Every minute, picks up
     // ScheduledProductChange rows whose scheduledFor <= now() and
