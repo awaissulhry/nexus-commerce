@@ -16,6 +16,7 @@
  */
 
 import { getProvider, isAiKillSwitchOn } from './providers/index.js'
+import { resolveModelForFeature } from './model-resolver.service.js'
 import { logUsage } from './usage-logger.service.js'
 import type { ProviderName } from './providers/types.js'
 
@@ -122,11 +123,13 @@ export async function generateAltText(
     )
   }
   const prompt = buildPrompt(input)
+  const model = await resolveModelForFeature('alt-text', provider)
   const startedAt = Date.now()
   let result
   try {
     result = await provider.generate({
       prompt,
+      model,
       jsonMode: true,
       maxOutputTokens: 256,
       temperature: 0.3,
@@ -137,7 +140,7 @@ export async function generateAltText(
   } catch (err) {
     logUsage({
       provider: provider.name,
-      model: provider.defaultModel,
+      model,
       feature: input.feature ?? 'bulk-alt-text',
       entityType: input.imageId ? 'ProductImage' : input.productId ? 'Product' : undefined,
       entityId: input.imageId ?? input.productId,

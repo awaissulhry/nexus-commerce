@@ -10,6 +10,7 @@
 
 import prisma from '../../db.js'
 import { getProvider } from '../ai/providers/index.js'
+import { resolveModelForFeature } from '../ai/model-resolver.service.js'
 import { logUsage } from '../ai/usage-logger.service.js'
 import { getMasterAttributeSchema, type MasterAttribute } from './master-schema.service.js'
 import { parseAiJson } from './mapping-suggest-ai.service.js'
@@ -70,6 +71,7 @@ export async function suggestMasterAttributes(productId: string): Promise<{ sugg
   const provider = getProvider()
   if (!provider) return { suggestions: [], aiUsed: false, reason: 'AI unavailable (kill-switch on or no provider configured).' }
 
+  const model = await resolveModelForFeature('pim-master-fill', provider)
   const lc = (product.localizedContent as Record<string, { title?: string; description?: string }> | null) ?? {}
   const title = lc.en?.title || lc.it?.title || product.name || ''
   const description = lc.en?.description || lc.it?.description || product.description || ''
@@ -83,7 +85,7 @@ export async function suggestMasterAttributes(productId: string): Promise<{ sugg
   const startedAt = Date.now()
   let raw: string
   try {
-    const res = await provider.generate({ prompt, jsonMode: true, maxOutputTokens: 1536, temperature: 0.1, feature: 'pim-master-fill' })
+    const res = await provider.generate({ prompt, model, jsonMode: true, maxOutputTokens: 1536, temperature: 0.1, feature: 'pim-master-fill' })
     raw = res.text
     logUsage({
       provider: res.usage.provider,
@@ -99,7 +101,7 @@ export async function suggestMasterAttributes(productId: string): Promise<{ sugg
   } catch (err) {
     logUsage({
       provider: provider.name,
-      model: provider.defaultModel,
+      model,
       feature: 'pim-master-fill',
       inputTokens: 0,
       outputTokens: 0,

@@ -10494,6 +10494,23 @@ model AiUsageLog {
   @@index([createdAt])
 }
 
+// ── AI-2.2: per-feature AI model selection ─────────────────────────────
+// One row per AI feature pinning which provider+model that feature uses;
+// the sentinel featureKey "__global__" holds the global default.
+// Resolution (model-resolver.service.ts): feature pref → global default
+// → provider default (gemini-2.5-flash / claude-haiku-4-5). Purely
+// additive — ships empty, an unset feature uses the default, so every
+// existing AI call is unchanged until an operator opts in.
+model AiFeatureModelPref {
+  id         String   @id @default(cuid())
+  featureKey String   @unique // catalog key, or "__global__"
+  provider   String // "gemini" | "anthropic"
+  model      String // model id, e.g. "gemini-2.5-flash"
+  updatedBy  String? // userId who set it (audit trail)
+  updatedAt  DateTime @updatedAt
+  createdAt  DateTime @default(now())
+}
+
 // ── AI-2.1 (list-wizard): prompts as data ──────────────────────────────
 // Lifts the four hardcoded LLM prompts out of
 // apps/api/src/services/ai/listing-content.service.ts so they can be

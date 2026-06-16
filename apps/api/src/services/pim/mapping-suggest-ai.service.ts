@@ -13,6 +13,7 @@
 
 import prisma from '../../db.js'
 import { getProvider } from '../ai/providers/index.js'
+import { resolveModelForFeature } from '../ai/model-resolver.service.js'
 import { logUsage } from '../ai/usage-logger.service.js'
 import { getResolvedRules } from './schema-mapping.service.js'
 import { suggestSourceForField, type MappingSuggestion, type SuggestConfidence } from './mapping-suggest.service.js'
@@ -96,12 +97,14 @@ export async function suggestMappingsAI(input: {
     return { suggestions: [], aiUsed: false, reason: 'AI unavailable (kill-switch on or no provider configured).', scanned: tail.length }
   }
 
+  const model = await resolveModelForFeature('pim-mapping-suggest', provider)
   const batch = tail.slice(0, 120) // one cheap call
   const startedAt = Date.now()
   let raw: string
   try {
     const res = await provider.generate({
       prompt: buildPrompt(input.channel, batch),
+      model,
       jsonMode: true,
       maxOutputTokens: 2048,
       temperature: 0.1,
@@ -122,7 +125,7 @@ export async function suggestMappingsAI(input: {
   } catch (err) {
     logUsage({
       provider: provider.name,
-      model: provider.defaultModel,
+      model,
       feature: 'pim-map-suggest',
       inputTokens: 0,
       outputTokens: 0,

@@ -33,9 +33,16 @@ import prisma from '../db.js'
 import { readBudgetLimits } from '../services/ai/budget.service.js'
 import {
   isAiKillSwitchOn,
+  isValidProviderName,
   listProviders,
 } from '../services/ai/providers/index.js'
 import { getModelCatalog } from '../services/ai/model-catalog.service.js'
+import {
+  clearFeaturePref,
+  getFeaturePrefOverview,
+  isWritableFeatureKey,
+  setFeaturePref,
+} from '../services/ai/model-resolver.service.js'
 import {
   listPromptTemplates,
   recordPromptTemplateEdit,
@@ -424,6 +431,49 @@ const aiUsageRoutes: FastifyPluginAsync = async (fastify) => {
       const refresh = request.query?.refresh
       const force = refresh === '1' || refresh === 'true'
       return getModelCatalog({ force })
+    },
+  )
+
+  // AI-2.2: per-feature model selection. Overview = catalog + each
+  // feature's override + effective resolution + the global default.
+  fastify.get('/ai/feature-prefs', async () => getFeaturePrefOverview())
+
+  fastify.put<{
+    Params: { feature: string }
+    Body: { provider?: string; model?: string }
+  }>('/ai/feature-prefs/:feature', async (request, reply) => {
+    const featureKey = request.params.feature
+    if (!isWritableFeatureKey(featureKey)) {
+      return reply.code(400).send({ error: `unknown feature "${featureKey}"` })
+    }
+    const provider = (request.body?.provider ?? '').trim().toLowerCase()
+    const model = (request.body?.model ?? '').trim()
+    if (!isValidProviderName(provider)) {
+      return reply.code(400).send({ error: `invalid provider "${provider}"` })
+    }
+    if (!model) {
+      return reply.code(400).send({ error: 'model is required' })
+    }
+    // Reject a provider with no API key at write time — pinning it would
+    // only 503 at call time. Checked independent of the kill switch so an
+    // operator can still configure prefs while AI is paused.
+    const configured = listProviders().providers.some(
+      (p) => p.name === provider && p.configured,
+    )
+    if (!configured) {
+      return reply
+        .code(400)
+        .send({ error: `provider "${provider}" has no API key configured` })
+    }
+    await setFeaturePref({ featureKey, provider, model })
+    return getFeaturePrefOverview()
+  })
+
+  fastify.delete<{ Params: { feature: string } }>(
+    '/ai/feature-prefs/:feature',
+    async (request) => {
+      await clearFeaturePref(request.params.feature)
+      return getFeaturePrefOverview()
     },
   )
 

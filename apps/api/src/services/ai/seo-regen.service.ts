@@ -13,6 +13,7 @@
  */
 
 import { getProvider, isAiKillSwitchOn } from './providers/index.js'
+import { resolveModelForFeature } from './model-resolver.service.js'
 import { logUsage } from './usage-logger.service.js'
 import type { ProviderName } from './providers/types.js'
 
@@ -139,11 +140,13 @@ export async function regenerateProductSeo(
   }
 
   const prompt = buildPrompt(input)
+  const model = await resolveModelForFeature('seo-regen', provider)
   const startedAt = Date.now()
   let result
   try {
     result = await provider.generate({
       prompt,
+      model,
       jsonMode: true,
       maxOutputTokens: 1024,
       temperature: 0.4,
@@ -154,7 +157,7 @@ export async function regenerateProductSeo(
   } catch (err) {
     logUsage({
       provider: provider.name,
-      model: provider.defaultModel,
+      model,
       feature: input.feature ?? 'bulk-seo-regen',
       entityType: input.productId ? 'Product' : undefined,
       entityId: input.productId,

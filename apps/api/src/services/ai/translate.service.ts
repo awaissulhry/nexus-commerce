@@ -15,6 +15,7 @@
  */
 
 import { getProvider, isAiKillSwitchOn } from './providers/index.js'
+import { resolveModelForFeature } from './model-resolver.service.js'
 import { logUsage } from './usage-logger.service.js'
 import type { ProviderName } from './providers/types.js'
 
@@ -154,11 +155,13 @@ export async function translateProductCopy(
   }
 
   const prompt = buildPrompt(input, fields)
+  const model = await resolveModelForFeature('translate', provider)
   const startedAt = Date.now()
   let result
   try {
     result = await provider.generate({
       prompt,
+      model,
       jsonMode: true,
       maxOutputTokens: 4096,
       temperature: 0.2,
@@ -169,7 +172,7 @@ export async function translateProductCopy(
   } catch (err) {
     logUsage({
       provider: provider.name,
-      model: provider.defaultModel,
+      model,
       feature: input.feature ?? 'bulk-translate',
       entityType: input.productId ? 'Product' : undefined,
       entityId: input.productId,
