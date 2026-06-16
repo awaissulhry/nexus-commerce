@@ -78,3 +78,43 @@ export function preflightRow(row: Record<string, any>, requiredColumns: Required
 
   return issues
 }
+
+/** Minimal shape of a (union) manifest column needed for per-type validation. */
+interface UnionManifestLike {
+  productTypes?: string[]
+  groups: Array<{
+    columns?: Array<{ id: string; labelEn?: string; applicableProductTypes?: string[]; requiredForProductTypes?: string[] }>
+  }>
+}
+
+export interface PerTypeValidation {
+  /** Required columns for each product type (validate each row against its own). */
+  requiredByType: Map<string, RequiredColumn[]>
+  /** Column ids that APPLY to each product type (compliance fill / cell relevance). */
+  applicableByType: Map<string, Set<string>>
+}
+
+/**
+ * MT.2 — from a UNION manifest (MT.1), derive per-product-type required + applicable
+ * column sets so a mixed-category sheet validates each row against ITS OWN product
+ * type (a Pants row isn't flagged for a Jacket-only required field, and vice versa).
+ * A column with no applicableProductTypes (legacy single-type manifest) applies to
+ * every type. Pure + testable.
+ */
+export function buildPerTypeValidation(union: UnionManifestLike): PerTypeValidation {
+  const types = union.productTypes ?? []
+  const cols = union.groups.flatMap((g) => g.columns ?? [])
+  const requiredByType = new Map<string, RequiredColumn[]>()
+  const applicableByType = new Map<string, Set<string>>()
+  for (const t of types) {
+    requiredByType.set(
+      t,
+      cols.filter((c) => (c.requiredForProductTypes ?? []).includes(t)).map((c) => ({ id: String(c.id), label: String(c.labelEn ?? c.id) })),
+    )
+    applicableByType.set(
+      t,
+      new Set(cols.filter((c) => !c.applicableProductTypes || c.applicableProductTypes.includes(t)).map((c) => String(c.id))),
+    )
+  }
+  return { requiredByType, applicableByType }
+}

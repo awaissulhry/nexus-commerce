@@ -3,7 +3,7 @@
  * schema-required + GTIN + image checks are fully unit-testable.
  */
 import { describe, it, expect } from 'vitest'
-import { validateGtin, findMissingRequired, preflightRow } from './listing-preflight.service.js'
+import { validateGtin, findMissingRequired, preflightRow, buildPerTypeValidation } from './listing-preflight.service.js'
 
 describe('validateGtin (mod-10 check digit)', () => {
   it('valid EAN-13', () => expect(validateGtin('4006381333931').valid).toBe(true))
@@ -47,5 +47,31 @@ describe('preflightRow', () => {
     const issues = preflightRow({ item_name: 'X', ean: '4006381333931' }, req)
     expect(issues.some((i) => i.field === 'main_product_image_locator' && i.severity === 'warning')).toBe(true)
     expect(issues.filter((i) => i.severity === 'error')).toEqual([])
+  })
+})
+
+describe('MT.2 — buildPerTypeValidation (per-row validation for mixed sheets)', () => {
+  const union = {
+    productTypes: ['JACKET', 'PANTS'],
+    groups: [{ columns: [
+      { id: 'item_sku', labelEn: 'SKU', applicableProductTypes: ['JACKET', 'PANTS'], requiredForProductTypes: ['JACKET', 'PANTS'] },
+      { id: 'material', labelEn: 'Material', applicableProductTypes: ['JACKET', 'PANTS'], requiredForProductTypes: ['JACKET'] },
+      { id: 'inseam', labelEn: 'Inseam', applicableProductTypes: ['PANTS'], requiredForProductTypes: ['PANTS'] },
+    ] }],
+  }
+  const { requiredByType, applicableByType } = buildPerTypeValidation(union)
+
+  it('required is per-type (material required for Jacket only; inseam for Pants only)', () => {
+    expect(requiredByType.get('JACKET')!.map((c) => c.id)).toEqual(['item_sku', 'material'])
+    expect(requiredByType.get('PANTS')!.map((c) => c.id)).toEqual(['item_sku', 'inseam'])
+  })
+  it('applicable is per-type (a Jacket row excludes the Pants-only inseam)', () => {
+    expect(applicableByType.get('JACKET')!.has('inseam')).toBe(false)
+    expect(applicableByType.get('PANTS')!.has('inseam')).toBe(true)
+    expect(applicableByType.get('JACKET')!.has('item_sku')).toBe(true)
+  })
+  it('a column with no applicableProductTypes applies to every type (legacy)', () => {
+    const u = { productTypes: ['JACKET'], groups: [{ columns: [{ id: 'legacy', labelEn: 'L' }] }] }
+    expect(buildPerTypeValidation(u).applicableByType.get('JACKET')!.has('legacy')).toBe(true)
   })
 })

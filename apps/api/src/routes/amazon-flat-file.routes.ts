@@ -22,20 +22,13 @@ import {
 } from '../services/amazon/flat-file.service.js'
 import { translateEnumValues } from '../services/amazon/value-translate.service.js'
 import { getAmazonPublishMode } from '../services/amazon-publish-gate.service.js'
-import { preflightRow } from '../services/listing-preflight.service.js'
+import { preflightRow, buildPerTypeValidation } from '../services/listing-preflight.service.js'
 import {
   resolveComplianceForSkus,
   evaluateCompliance,
   buildAmazonComplianceColumns,
 } from '../services/compliance-resolver.service.js'
 
-/** A5 — required columns (id + label) from a live schema manifest, for preflight. */
-function requiredColumnsFromManifest(manifest: any): Array<{ id: string; label: string }> {
-  const cols = (manifest?.groups ?? []).flatMap((g: any) => g?.columns ?? [])
-  return cols
-    .filter((c: any) => c?.required === true)
-    .map((c: any) => ({ id: String(c.id), label: String(c.labelEn ?? c.id) }))
-}
 import { enqueueContentSyncIfEnabled } from '../services/content-auto-publish.service.js'
 import { productEventService } from '../services/product-event.service.js'
 import { runFlatFileAiInstruction } from '../services/flat-file-ai.service.js'
@@ -267,18 +260,27 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
     let preflight: Array<{ sku: string; issues: any[] }> = []
     // C1 — resolved once here, reused by the compliance merge below (live path).
     let complianceBySku = new Map<string, any>()
-    let manifestColIds: Set<string> | null = null
+    // MT.2 — per product-type APPLICABLE column sets, so the compliance merge
+    // (live path) gates each row against ITS product type, not a batch manifest.
+    let applicableByType: Map<string, Set<string>> | null = null
     // C5.2 — block-severity compliance issues (the live-publish gate).
     const complianceBlocks: Array<{ sku: string; messages: string[] }> = []
-    if (productType) {
+    // MT.2 — a row's own product type (mixed-category sheet); fall back to the
+    // batch-level productType for legacy single-type submits.
+    const rowType = (r: any) => String(r.product_type ?? productType ?? '').toUpperCase()
+    const batchTypes = [...new Set(rows.map(rowType).filter(Boolean))]
+    if (batchTypes.length > 0) {
       try {
-        const manifest = await flatFileService.generateManifest(mp, String(productType))
-        const required = requiredColumnsFromManifest(manifest)
-        manifestColIds = new Set(manifest.groups.flatMap((g: any) => g.columns ?? []).map((c: any) => String(c.id)))
+        // MT.1 union manifest across every product type in the batch → MT.2
+        // per-type required + applicable sets.
+        const union = await flatFileService.generateUnionManifest(mp, batchTypes)
+        const { requiredByType, applicableByType: appByType } = buildPerTypeValidation(union)
+        applicableByType = appByType
         complianceBySku = await resolveComplianceForSkus(rows.map((r: any) => String(r.item_sku ?? '')))
         preflight = rows
           .map((r: any) => {
-            const issues = preflightRow(r, required)
+            // Validate each row against its OWN product type's required columns.
+            const issues = preflightRow(r, requiredByType.get(rowType(r)) ?? [])
             const cp = complianceBySku.get(String(r.item_sku ?? ''))
             if (cp) {
               const cIssues = evaluateCompliance(cp, mp, 'AMAZON')
@@ -349,12 +351,16 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
     // manufacturer, GPSR responsible person) onto each row before serializing.
     // Schema-safe (only a column the product type's manifest defines) AND
     // non-clobbering (an operator-entered value always wins). Best-effort.
-    if (manifestColIds && complianceBySku.size > 0) {
+    // MT.2 — gate each row's compliance fill against ITS product type's
+    // applicable columns (a mixed-category sheet), not one batch manifest.
+    if (applicableByType && complianceBySku.size > 0) {
       for (const row of rows as any[]) {
         const cp = complianceBySku.get(String(row.item_sku ?? ''))
         if (!cp) continue
+        const applicable = applicableByType.get(rowType(row))
+        if (!applicable) continue
         for (const [k, v] of Object.entries(buildAmazonComplianceColumns(cp))) {
-          if (!manifestColIds.has(k)) continue
+          if (!applicable.has(k)) continue
           const cur = row[k]
           if (cur == null || String(cur).trim() === '') row[k] = v
         }
@@ -446,14 +452,17 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
   }>('/amazon/flat-file/preflight', async (request, reply) => {
     const { rows = [], marketplace = 'IT', productType } = request.body ?? {}
     const mp = String(marketplace).toUpperCase()
-    if (!productType) return reply.send({ preflight: [], checkedRows: rows.length })
+    // MT.2 — validate each row against ITS OWN product type (mixed-category sheet).
+    const rowType = (r: any) => String(r?.product_type ?? productType ?? '').toUpperCase()
+    const batchTypes = [...new Set(rows.map(rowType).filter(Boolean))]
+    if (batchTypes.length === 0) return reply.send({ preflight: [], checkedRows: rows.length })
     try {
-      const manifest = await flatFileService.generateManifest(mp, String(productType))
-      const required = requiredColumnsFromManifest(manifest)
+      const union = await flatFileService.generateUnionManifest(mp, batchTypes)
+      const { requiredByType } = buildPerTypeValidation(union)
       const preflight = rows
-        .map((r: any) => ({ sku: String(r?.item_sku ?? ''), issues: preflightRow(r, required) }))
+        .map((r: any) => ({ sku: String(r?.item_sku ?? ''), issues: preflightRow(r, requiredByType.get(rowType(r)) ?? []) }))
         .filter((p) => p.issues.length > 0)
-      return reply.send({ preflight, checkedRows: rows.length })
+      return reply.send({ preflight, checkedRows: rows.length, productTypes: batchTypes })
     } catch (err: any) {
       request.log.error(err, 'flat-file/preflight failed')
       return reply.code(500).send({ error: err?.message ?? 'Preflight failed' })
