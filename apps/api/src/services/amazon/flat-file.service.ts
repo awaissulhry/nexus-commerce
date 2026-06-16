@@ -69,6 +69,14 @@ export interface FlatFileColumn {
    * Set from our group structure since Amazon's schema doesn't expose this directly.
    */
   applicableParentage?: ('VARIATION_PARENT' | 'VARIATION_CHILD' | 'STANDALONE')[]
+  /**
+   * MT.1 — only on a UNION manifest (multiple product types in one sheet):
+   * which product types define this column, and which of them REQUIRE it. Lets
+   * the grid grey a cell that doesn't apply to a row's product type, and lets
+   * validation check required-ness per-row. undefined on a single-type manifest.
+   */
+  applicableProductTypes?: string[]
+  requiredForProductTypes?: string[]
   /** Amazon field usage level from x-amazon-attributes.usage */
   guidance?: 'REQUIRED' | 'RECOMMENDED' | 'OPTIONAL'
   maxLength?: number
@@ -86,6 +94,9 @@ export interface FlatFileColumnGroup {
 export interface FlatFileManifest {
   marketplace: string
   productType: string
+  /** MT.1 — on a UNION manifest, the product types it covers (productType is a
+   *  composite "A+B" label then). undefined/single-element on a single-type one. */
+  productTypes?: string[]
   variationThemes: string[]
   fetchedAt: string
   groups: FlatFileColumnGroup[]
@@ -708,6 +719,66 @@ export function applySnapshotOverlay(snapshot: Record<string, any>, liveRow: Fla
 
 // ── Main service ───────────────────────────────────────────────────────
 
+/**
+ * MT.1 — merge per-product-type manifests (manifests[i] is for types[i]) into a
+ * single UNION manifest: groups by id, columns by id, each column tagged with
+ * applicableProductTypes + requiredForProductTypes (required at union level if ANY
+ * type requires it; enum options unioned). Pure + unit-testable.
+ */
+export function mergeManifestsIntoUnion(manifests: FlatFileManifest[], types: string[]): FlatFileManifest {
+  if (manifests.length === 0) throw new Error('mergeManifestsIntoUnion: no manifests')
+  type UnionCol = FlatFileColumn & { applicableProductTypes: string[]; requiredForProductTypes: string[] }
+  const groupOrder: string[] = []
+  const groupById = new Map<string, FlatFileColumnGroup>()
+  const colMaps = new Map<string, Map<string, UnionCol>>()
+
+  manifests.forEach((m, i) => {
+    const pt = types[i]
+    for (const g of m.groups) {
+      if (!groupById.has(g.id)) {
+        groupById.set(g.id, { ...g, columns: [] })
+        colMaps.set(g.id, new Map())
+        groupOrder.push(g.id)
+      }
+      const outGroup = groupById.get(g.id)!
+      const colMap = colMaps.get(g.id)!
+      for (const c of g.columns) {
+        let mc = colMap.get(c.id)
+        if (!mc) {
+          mc = { ...c, required: false, options: c.options ? [...c.options] : undefined, applicableProductTypes: [], requiredForProductTypes: [] }
+          colMap.set(c.id, mc)
+          outGroup.columns.push(mc)
+        }
+        if (!mc.applicableProductTypes!.includes(pt)) mc.applicableProductTypes!.push(pt)
+        if (c.required) {
+          mc.required = true
+          if (!mc.requiredForProductTypes!.includes(pt)) mc.requiredForProductTypes!.push(pt)
+        }
+        if (c.options && c.options.length) {
+          mc.options = [...new Set([...(mc.options ?? []), ...c.options])]
+        }
+      }
+    }
+  })
+
+  const expandedFields: Record<string, string> = {}
+  const variationThemes = new Set<string>()
+  for (const m of manifests) {
+    Object.assign(expandedFields, m.expandedFields ?? {})
+    for (const vt of m.variationThemes ?? []) variationThemes.add(vt)
+  }
+
+  return {
+    marketplace: manifests[0].marketplace,
+    productType: types.join('+'),
+    productTypes: [...types],
+    variationThemes: [...variationThemes],
+    fetchedAt: new Date().toISOString(),
+    groups: groupOrder.map((id) => groupById.get(id)!),
+    expandedFields,
+  }
+}
+
 export class AmazonFlatFileService {
   constructor(
     private readonly prisma: PrismaClient,
@@ -928,6 +999,29 @@ export class AmazonFlatFileService {
       groups: [infraGroup, variationsGroup, ...schemaGroups],
       expandedFields,
     }
+  }
+
+  /**
+   * MT.1 — UNION manifest across multiple product types for one sheet. Reuses the
+   * cached per-type generateManifest, then merges groups (by id) and columns (by
+   * id), tagging each column with the product types that define it
+   * (applicableProductTypes) and the ones that REQUIRE it (requiredForProductTypes).
+   * A column is required at the union level if ANY type requires it; enum options
+   * union across types. The feed serializer already keys off each row's own
+   * product_type, so only the editor + validation consume this view.
+   */
+  async generateUnionManifest(
+    marketplace: string,
+    productTypes: string[],
+    forceRefresh = false,
+  ): Promise<FlatFileManifest> {
+    const types = [...new Set(productTypes.map((t) => String(t).toUpperCase()).filter(Boolean))]
+    if (types.length === 0) throw new Error('generateUnionManifest: at least one productType is required')
+
+    const manifests = await Promise.all(
+      types.map((t) => this.generateManifest(marketplace, t, forceRefresh)),
+    )
+    return mergeManifestsIntoUnion(manifests, types)
   }
 
   async getExistingRows(

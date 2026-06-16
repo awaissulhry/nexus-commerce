@@ -191,6 +191,37 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
     }
   })
 
+  // ── GET /api/amazon/flat-file/union-template ────────────────────────
+  // MT.1 — UNION column manifest across MULTIPLE product types for one sheet.
+  // ?productTypes=JACKET,PANTS (comma-separated). Each column carries
+  // applicableProductTypes + requiredForProductTypes so the editor can grey a
+  // cell that doesn't apply to a row's type and validate required-ness per row.
+  // Additive: the single-type /template endpoint is unchanged.
+  fastify.get<{
+    Querystring: { marketplace?: string; productTypes?: string; force?: string }
+  }>('/amazon/flat-file/union-template', async (request, reply) => {
+    const marketplace = (request.query.marketplace ?? 'IT').toUpperCase()
+    const types = (request.query.productTypes ?? '')
+      .split(',').map((t) => t.trim().toUpperCase()).filter(Boolean)
+    const force = request.query.force === '1'
+    if (types.length === 0) {
+      return reply.code(400).send({ error: 'productTypes is required (comma-separated)' })
+    }
+    const cacheKey = `union:${marketplace}:${[...types].sort().join(',')}`
+    try {
+      if (!force) {
+        const cached = manifestCache.get(cacheKey)
+        if (cached !== undefined) return reply.send(cached)
+      }
+      const manifest = await flatFileService.generateUnionManifest(marketplace, types, force)
+      if (!force) manifestCache.set(cacheKey, manifest)
+      return reply.send(manifest)
+    } catch (err: any) {
+      request.log.error(err, 'flat-file/union-template failed')
+      return reply.code(500).send({ error: err?.message ?? 'Failed to generate union manifest' })
+    }
+  })
+
   // ── GET /api/amazon/flat-file/rows ──────────────────────────────────
   // Returns existing products pre-filled as flat file rows.
   fastify.get<{
