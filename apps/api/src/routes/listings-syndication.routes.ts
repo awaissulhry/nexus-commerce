@@ -2583,8 +2583,9 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
   // flood). ?probe=1 does a READ-ONLY SP-API call (getMarketplaceParticipations)
   // to prove Amazon creds actually reach Amazon — it never publishes. Curl this
   // before and after flipping the Railway flags to confirm live.
-  fastify.get<{ Querystring: { probe?: string } }>('/listings/publish-readiness', async (request, reply) => {
+  fastify.get<{ Querystring: { probe?: string; stuck?: string } }>('/listings/publish-readiness', async (request, reply) => {
     const probe = request.query?.probe === '1' || request.query?.probe === 'true'
+    const wantStuck = request.query?.stuck === '1' || request.query?.stuck === 'true'
     const sellerId = process.env.AMAZON_SELLER_ID ?? process.env.AMAZON_MERCHANT_ID ?? ''
     const lwaPresent = !!(process.env.AMAZON_LWA_CLIENT_ID && process.env.AMAZON_LWA_CLIENT_SECRET && process.env.AMAZON_REFRESH_TOKEN)
     const shopifyConfigured = !!(process.env.SHOPIFY_SHOP_NAME && (process.env.SHOPIFY_ACCESS_TOKEN || process.env.SHOPIFY_ADMIN_API_TOKEN))
@@ -2628,6 +2629,42 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
       } catch (e: unknown) {
         result.probe = { amazon: { ok: false, error: e instanceof Error ? e.message : String(e) } }
       }
+    }
+
+    // PD — read-only diagnostic of the stuck PENDING rows (why isn't the async
+    // outbound-sync queue draining?). Surfaces syncType / hold / age / retries /
+    // last error so the stall cause is visible without prod DB access.
+    if (wantStuck) {
+      const now = Date.now()
+      const rows = await prisma.outboundSyncQueue.findMany({
+        where: { syncStatus: 'PENDING' },
+        orderBy: { createdAt: 'asc' },
+        take: 30,
+        select: {
+          id: true, targetChannel: true, targetRegion: true, syncType: true,
+          retryCount: true, maxRetries: true, isDead: true,
+          holdUntil: true, nextRetryAt: true, createdAt: true,
+          errorMessage: true, errorCode: true, externalListingId: true,
+          product: { select: { sku: true } },
+        },
+      }).catch(() => [])
+      result.stuck = (rows as any[]).map((r) => ({
+        id: r.id,
+        channel: r.targetChannel,
+        region: r.targetRegion,
+        syncType: r.syncType,
+        sku: r.product?.sku ?? null,
+        externalListingId: r.externalListingId,
+        ageMinutes: Math.round((now - new Date(r.createdAt).getTime()) / 60000),
+        holdUntil: r.holdUntil,
+        held: r.holdUntil ? new Date(r.holdUntil).getTime() > now : false,
+        nextRetryAt: r.nextRetryAt,
+        retryCount: r.retryCount,
+        maxRetries: r.maxRetries,
+        isDead: r.isDead,
+        errorCode: r.errorCode,
+        errorMessage: r.errorMessage ? String(r.errorMessage).slice(0, 300) : null,
+      }))
     }
 
     return reply.send(result)
