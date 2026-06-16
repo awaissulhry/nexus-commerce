@@ -21,6 +21,7 @@
  */
 
 import { logger } from '../../utils/logger.js'
+import { getAmazonPublishMode } from '../amazon-publish-gate.service.js'
 
 // M1/M3 — slot codes are dynamic (schema-discovered): MAIN, PT01..PTnn,
 // PS01..PSnn (product-safety / GPSR), SWCH. The constants below are the
@@ -198,7 +199,10 @@ export function buildJsonListingsFeedBody(
 }
 
 function isDryRunEnv(): boolean {
-  return process.env.NEXUS_AMAZON_BATCH_DRYRUN === '1'
+  // PD.2 — unified onto the single publish gate. The legacy
+  // NEXUS_AMAZON_BATCH_DRYRUN let batch feeds (image-feeds, bulk-ops) submit LIVE
+  // while the gated paths didn't — a dangerous split. Only 'live' submits now.
+  return getAmazonPublishMode() !== 'live'
 }
 
 export async function submitAmazonListingsBatch(

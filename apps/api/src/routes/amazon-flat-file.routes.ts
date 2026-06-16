@@ -439,9 +439,11 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
     // ?refresh=1 forces a live re-fetch past the terminal fast-path — used to
     // re-validate / repair a feed that finalized against a premature empty report.
     const force = request.query?.refresh === '1' || request.query?.refresh === 'true'
-    const dryRun = process.env.NEXUS_AMAZON_BATCH_DRYRUN === '1'
 
-    if (dryRun || feedId.startsWith('dryrun-')) {
+    // PD.2 — a dryrun feedId is self-identifying; the legacy global flag is gone
+    // (it forced EVERY feed poll to a fake DONE when NEXUS_AMAZON_BATCH_DRYRUN=1,
+    // even for real feeds — a way to mask a real feed's true status).
+    if (feedId.startsWith('dryrun-')) {
       return reply.send({
         feedId,
         processingStatus: 'DONE',
@@ -625,9 +627,10 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
 
     const marketplaceId = MARKETPLACE_ID_MAP[(marketplace ?? 'IT').toUpperCase()] ?? MARKETPLACE_ID_MAP.IT
 
-    // If SP-API not configured, return empty gracefully
-    const dryRun = process.env.NEXUS_AMAZON_BATCH_DRYRUN === '1'
-    if (dryRun) return reply.send({ images: {} })
+    // PD.2 — fetch-images is a READ (searchCatalogItems); skip only when the
+    // Amazon integration is fully gated (publishing disabled). Reads are safe in
+    // dry-run/sandbox/live. Was the legacy NEXUS_AMAZON_BATCH_DRYRUN flag.
+    if (getAmazonPublishMode() === 'gated') return reply.send({ images: {} })
 
     try {
       const sp = await getSpClient()
