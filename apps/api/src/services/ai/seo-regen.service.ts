@@ -12,8 +12,11 @@
  *     160-char meta description cap, keyword-front-loaded.
  */
 
-import { getProvider, isAiKillSwitchOn } from './providers/index.js'
-import { resolveModelForFeature } from './model-resolver.service.js'
+import { isAiKillSwitchOn } from './providers/index.js'
+import {
+  getProviderForFeature,
+  resolveModelForFeature,
+} from './model-resolver.service.js'
 import { logUsage } from './usage-logger.service.js'
 import type { ProviderName } from './providers/types.js'
 
@@ -132,7 +135,7 @@ export async function regenerateProductSeo(
       'AI is temporarily disabled (NEXUS_AI_KILL_SWITCH is on). Contact an admin to re-enable.',
     )
   }
-  const provider = getProvider(input.provider ?? null)
+  const provider = await getProviderForFeature('seo-regen', input.provider ?? null)
   if (!provider) {
     throw new Error(
       'No AI provider configured — set GEMINI_API_KEY or ANTHROPIC_API_KEY',

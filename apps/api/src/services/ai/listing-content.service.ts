@@ -20,7 +20,10 @@ import {
   type BudgetCheckScope,
 } from './budget.service.js'
 import { getProvider, isAiKillSwitchOn } from './providers/index.js'
-import { resolveModelForFeature } from './model-resolver.service.js'
+import {
+  getProviderForFeature,
+  resolveModelForFeature,
+} from './model-resolver.service.js'
 import {
   sanitizeOutboundPrompt,
   totalRedactions,
@@ -462,7 +465,7 @@ export class ListingContentService {
         'AI is temporarily disabled (NEXUS_AI_KILL_SWITCH is on). Contact an admin to re-enable.',
       )
     }
-    const provider = getProvider(params.provider)
+    const provider = await getProviderForFeature('listing-content', params.provider)
     if (!provider) {
       throw new Error(
         'No AI provider configured — set GEMINI_API_KEY or ANTHROPIC_API_KEY',
@@ -706,7 +709,7 @@ export class ListingContentService {
         'AI is temporarily disabled (NEXUS_AI_KILL_SWITCH is on). Contact an admin to re-enable.',
       )
     }
-    const provider = getProvider(params.provider)
+    const provider = await getProviderForFeature('listing-content', params.provider)
     if (!provider) {
       throw new Error(
         'No AI provider configured — set GEMINI_API_KEY or ANTHROPIC_API_KEY',
@@ -774,7 +777,7 @@ export class ListingContentService {
         'AI is temporarily disabled (NEXUS_AI_KILL_SWITCH is on). Contact an admin to re-enable.',
       )
     }
-    const provider = getProvider(params.provider)
+    const provider = await getProviderForFeature('listing-content', params.provider)
     if (!provider) {
       throw new Error(
         'No AI provider configured — set GEMINI_API_KEY or ANTHROPIC_API_KEY',
@@ -986,7 +989,7 @@ Rules:
         'AI is temporarily disabled (NEXUS_AI_KILL_SWITCH is on). Contact an admin to re-enable.',
       )
     }
-    const provider = getProvider(params.provider)
+    const provider = await getProviderForFeature('listing-content', params.provider)
     if (!provider) {
       throw new Error(
         'No AI provider configured — set GEMINI_API_KEY or ANTHROPIC_API_KEY',
@@ -1204,7 +1207,7 @@ Return one entry per channel. Prices as numbers (not strings). Skip compareAtPri
         'AI is temporarily disabled (NEXUS_AI_KILL_SWITCH is on). Contact an admin to re-enable.',
       )
     }
-    const provider = getProvider(params.provider)
+    const provider = await getProviderForFeature('listing-content', params.provider)
     if (!provider) {
       throw new Error(
         'No AI provider configured — set GEMINI_API_KEY or ANTHROPIC_API_KEY',

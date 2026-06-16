@@ -41,8 +41,10 @@ import {
   isPrimaryLanguage,
   languageForMarketplace,
 } from '../services/products/translation-resolver.service.js'
-import { getProvider } from '../services/ai/providers/index.js'
-import { resolveModelForFeature } from '../services/ai/model-resolver.service.js'
+import {
+  getProviderForFeature,
+  resolveModelForFeature,
+} from '../services/ai/model-resolver.service.js'
 
 const ALLOWED_FIELDS = new Set<ContentField>([
   'title',
@@ -439,7 +441,7 @@ const productsAiRoutes: FastifyPluginAsync = async (fastify) => {
     },
     async (request, reply) => {
       const { id } = request.params
-      const provider = getProvider(request.body?.provider)
+      const provider = await getProviderForFeature('products-ai', request.body?.provider)
       if (!provider) {
         return reply.code(503).send({
           error:

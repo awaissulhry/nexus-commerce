@@ -12,8 +12,10 @@
  */
 
 import prisma from '../../db.js'
-import { getProvider } from '../ai/providers/index.js'
-import { resolveModelForFeature } from '../ai/model-resolver.service.js'
+import {
+  getProviderForFeature,
+  resolveModelForFeature,
+} from '../ai/model-resolver.service.js'
 import { logUsage } from '../ai/usage-logger.service.js'
 import { getResolvedRules } from './schema-mapping.service.js'
 import { suggestSourceForField, type MappingSuggestion, type SuggestConfidence } from './mapping-suggest.service.js'
@@ -92,7 +94,7 @@ export async function suggestMappingsAI(input: {
     return { suggestions: [], aiUsed: false, reason: 'No long-tail fields — the heuristic covered everything.', scanned: 0 }
   }
 
-  const provider = getProvider()
+  const provider = await getProviderForFeature('pim-mapping-suggest')
   if (!provider) {
     return { suggestions: [], aiUsed: false, reason: 'AI unavailable (kill-switch on or no provider configured).', scanned: tail.length }
   }

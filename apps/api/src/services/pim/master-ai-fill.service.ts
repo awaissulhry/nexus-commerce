@@ -9,8 +9,10 @@
  */
 
 import prisma from '../../db.js'
-import { getProvider } from '../ai/providers/index.js'
-import { resolveModelForFeature } from '../ai/model-resolver.service.js'
+import {
+  getProviderForFeature,
+  resolveModelForFeature,
+} from '../ai/model-resolver.service.js'
 import { logUsage } from '../ai/usage-logger.service.js'
 import { getMasterAttributeSchema, type MasterAttribute } from './master-schema.service.js'
 import { parseAiJson } from './mapping-suggest-ai.service.js'
@@ -68,7 +70,7 @@ export async function suggestMasterAttributes(productId: string): Promise<{ sugg
   })
   if (empty.length === 0) return { suggestions: [], aiUsed: false, reason: 'All schema attributes are already filled.' }
 
-  const provider = getProvider()
+  const provider = await getProviderForFeature('pim-master-fill')
   if (!provider) return { suggestions: [], aiUsed: false, reason: 'AI unavailable (kill-switch on or no provider configured).' }
 
   const model = await resolveModelForFeature('pim-master-fill', provider)

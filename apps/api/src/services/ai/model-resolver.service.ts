@@ -24,7 +24,11 @@
 import prisma from '../../db.js'
 import { TtlCache } from '../../utils/ttl-cache.js'
 import { AI_FEATURES, GLOBAL_FEATURE_KEY, isKnownFeature } from './ai-features.js'
-import { getProvider, isAiKillSwitchOn } from './providers/index.js'
+import {
+  getProvider,
+  isAiKillSwitchOn,
+  isValidProviderName,
+} from './providers/index.js'
 import type { LLMProvider, ProviderName } from './providers/types.js'
 
 interface PrefRow {
@@ -75,6 +79,41 @@ export async function resolveModelForFeature(
   )
 }
 
+/**
+ * Provider-pinning resolver — which provider a feature should run on,
+ * honouring the operator's selection so the global default (or a
+ * per-feature pick) can flip the whole app to a vendor ("everything on
+ * Claude") with no env var. Order: explicit per-call request →
+ * per-feature pref → global default → env AI_PROVIDER / first configured.
+ * Returns null only on kill switch / no configured provider, exactly like
+ * getProvider, so existing call-site null-checks keep working. Pair with
+ * resolveModelForFeature() to choose the model within the provider.
+ */
+export async function getProviderForFeature(
+  feature: string,
+  requested?: string | null,
+): Promise<LLMProvider | null> {
+  if (isAiKillSwitchOn()) return null
+  const req = requested?.trim().toLowerCase()
+  // 1. An explicit per-call provider wins, when it's actually configured.
+  if (req && isValidProviderName(req)) {
+    const p = getProvider(req)
+    if (p && p.name === req) return p
+  }
+  const prefs = await loadPrefs().catch(() => new Map<string, PrefRow>())
+  const pin = (row?: PrefRow): LLMProvider | null => {
+    if (!row || !isValidProviderName(row.provider)) return null
+    const p = getProvider(row.provider)
+    return p && p.name === row.provider ? p : null
+  }
+  // 2. Per-feature pref provider, then 3. global default provider.
+  return (
+    pin(prefs.get(feature)) ??
+    pin(prefs.get(GLOBAL_FEATURE_KEY)) ??
+    getProvider(req ?? null)
+  )
+}
+
 /* ── Pref CRUD (settings API) ──────────────────────────────────────── */
 
 export interface SetPrefInput {
@@ -120,23 +159,29 @@ export function isWritableFeatureKey(key: string): boolean {
  */
 export async function getFeaturePrefOverview() {
   const prefs = await loadPrefs()
-  // Assume the env-default / first-configured provider for the "effective"
-  // column — the same provider a call with no explicit ?provider lands on.
-  const active = getProvider(null)
+  // The provider a no-override feature resolves to (global default → env
+  // / first-configured). Each feature can pin its own provider via a pref.
+  const base = await getProviderForFeature('__base__')
   const features = await Promise.all(
-    AI_FEATURES.map(async (f) => ({
-      key: f.key,
-      label: f.label,
-      description: f.description,
-      override: prefs.get(f.key) ?? null,
-      effective: active
-        ? { provider: active.name, model: await resolveModelForFeature(f.key, active) }
-        : null,
-    })),
+    AI_FEATURES.map(async (f) => {
+      const provider = await getProviderForFeature(f.key)
+      return {
+        key: f.key,
+        label: f.label,
+        description: f.description,
+        override: prefs.get(f.key) ?? null,
+        effective: provider
+          ? {
+              provider: provider.name,
+              model: await resolveModelForFeature(f.key, provider),
+            }
+          : null,
+      }
+    }),
   )
   return {
     killSwitch: isAiKillSwitchOn(),
-    activeProvider: active?.name ?? null,
+    activeProvider: base?.name ?? null,
     global: prefs.get(GLOBAL_FEATURE_KEY) ?? null,
     features,
   }

@@ -16,8 +16,10 @@
  */
 
 import prisma from '../../db.js'
-import { getProvider } from '../ai/providers/index.js'
-import { resolveModelForFeature } from '../ai/model-resolver.service.js'
+import {
+  getProviderForFeature,
+  resolveModelForFeature,
+} from '../ai/model-resolver.service.js'
 import { logUsage } from '../ai/usage-logger.service.js'
 import { EbayCategoryService } from '../ebay-category.service.js'
 import { upsertValueMap } from './value-map.service.js'
@@ -44,7 +46,7 @@ async function translateValuesToEnglish(
     for (const v of values) out[v] = v
     return out
   }
-  const provider = getProvider()
+  const provider = await getProviderForFeature('pim-ebay-value-map')
   if (!provider) return {}
   const model = await resolveModelForFeature('pim-ebay-value-map', provider)
   const startedAt = Date.now()
