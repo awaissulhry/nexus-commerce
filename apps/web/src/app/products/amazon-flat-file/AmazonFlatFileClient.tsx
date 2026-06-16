@@ -26,6 +26,7 @@ import {
 } from '../_shared/FlatFileIconToolbar'
 import { cn } from '@/lib/utils'
 import { getBackendUrl } from '@/lib/backend-url'
+import { PublishModeBadge } from '@/components/PublishModeBadge'
 import { useOrderEventsRefresh } from '@/hooks/use-order-events-refresh'
 import { useToast } from '@/components/ui/Toast'
 import FeedSubmissionsPanel from './FeedSubmissionsPanel'
@@ -2084,7 +2085,9 @@ export default function AmazonFlatFileClient({
         })
         const data = await res.json()
         if (!res.ok) throw new Error(`[${mp}] ${data.error ?? 'Submit failed'}`)
-        return { mp, feedId: data.feedId, skipped: false }
+        // PD.1 — carry the dry-run flag through so the UI never shows a gated/
+        // dry-run no-op as a successful publish (it hid a 30-day outage).
+        return { mp, feedId: data.feedId, skipped: false, dryRun: !!data.dryRun }
       })
     )
 
@@ -2092,18 +2095,21 @@ export default function AmazonFlatFileClient({
     const errors: string[] = []
     const skipped: string[] = []
     const submitted: string[] = []
+    const dryRunMarkets: string[] = []
     for (const result of settled) {
       if (result.status === 'fulfilled') {
         if (result.value.skipped) { skipped.push(result.value.mp) }
         else {
           entries.push({ market: result.value.mp, feedId: result.value.feedId, status: 'IN_QUEUE', results: [] })
           submitted.push(result.value.mp)
+          if (result.value.dryRun) dryRunMarkets.push(result.value.mp)
         }
       } else if (result.status === 'rejected') {
         errors.push(result.reason?.message ?? 'Submit failed')
       }
     }
     setFeedEntries(entries)
+    const isDry = (mp: string) => dryRunMarkets.includes(mp)
     // FFS.7 — explicit summary: skipped markets were silently dropped before
     // (leading to duplicate re-submits), and partial failures were invisible.
     if (errors.length) {
@@ -2112,7 +2118,15 @@ export default function AmazonFlatFileClient({
     }
     if (submitted.length) {
       const skip = skipped.length ? ` · skipped ${skipped.join(', ')} (no edited rows)` : ''
-      toast.success(`Submitted to ${submitted.join(', ')}${skip}`)
+      const realMarkets = submitted.filter((mp) => !isDry(mp))
+      // PD.1 — a dry-run/gated response must NOT read as a successful publish.
+      if (dryRunMarkets.length === submitted.length) {
+        toast.warning(`⚠ DRY-RUN — validated but NOT published to ${submitted.join(', ')}. Amazon publish mode is not live, so no feed was sent.${skip}`)
+      } else if (dryRunMarkets.length > 0) {
+        toast.warning(`Submitted to ${realMarkets.join(', ')} · DRY-RUN (not published): ${dryRunMarkets.join(', ')}${skip}`)
+      } else {
+        toast.success(`Submitted to ${submitted.join(', ')}${skip}`)
+      }
       setServerFeedCount((c) => (c ?? 0) + submitted.length) // #1 — keep the count live within the session
     } else if (skipped.length && !errors.length) {
       toast.warning(`Nothing submitted — ${skipped.join(', ')} had no edited rows to send`)
@@ -2130,7 +2144,7 @@ export default function AmazonFlatFileClient({
           ? rows.filter((r) => r._dirty || r._isNew).length
           : 0,
         status: 'IN_QUEUE',
-        dryRun: false,
+        dryRun: isDry(entry.market),
       })
     }
     // Create a version snapshot
@@ -2823,6 +2837,10 @@ export default function AmazonFlatFileClient({
               {' · ⌘Z to undo'}
             </span>
           )}
+
+          {/* PD.1 — publish-mode truth, right where you publish. A non-LIVE
+              badge means a submit is validated but NOT sent to Amazon. */}
+          <PublishModeBadge channel="amazon" />
 
           {/* Submit to Amazon */}
           <div className="relative">

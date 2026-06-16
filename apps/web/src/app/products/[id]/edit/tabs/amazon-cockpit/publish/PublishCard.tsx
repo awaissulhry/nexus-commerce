@@ -21,6 +21,7 @@
 //      inline.
 
 import { useEffect, useState } from 'react'
+import { PublishModeBadge } from '@/components/PublishModeBadge'
 import {
   Send,
   Loader2,
@@ -132,6 +133,9 @@ export default function PublishCard({
     {},
   )
   const [detailsOpen, setDetailsOpen] = useState(false)
+  // PD.1 — whether the last publish was a dry-run/gated no-op (so the card can
+  // say so instead of letting "submitted → DONE" read as a real publish).
+  const [publishDryRun, setPublishDryRun] = useState(false)
 
   function toggle(code: string) {
     setSelected((s) => {
@@ -211,8 +215,11 @@ export default function PublishCard({
       setPerMarket(next)
       const okCount = j.submissions.filter((s) => s.ok).length
       const failCount = j.submissions.length - okCount
+      setPublishDryRun(!!j.dryRun)
       announce(
-        `Submitted to ${okCount} marketplace${okCount === 1 ? '' : 's'}${failCount > 0 ? `, ${failCount} failed` : ''}. Polling feed status…`,
+        j.dryRun
+          ? `⚠ DRY-RUN — validated but NOT published. Amazon publish mode is not live, so nothing was sent for ${okCount} marketplace${okCount === 1 ? '' : 's'}.`
+          : `Submitted to ${okCount} marketplace${okCount === 1 ? '' : 's'}${failCount > 0 ? `, ${failCount} failed` : ''}. Polling feed status…`,
       )
       postCockpitEvent({
         type: 'publish_submitted',
@@ -407,7 +414,16 @@ export default function PublishCard({
             {t('products.edit.cockpit.amazon.publish.subtitle')}
           </span>
         </div>
+        {/* PD.1 — current publish mode, right at the publish action. */}
+        <PublishModeBadge channel="amazon" />
       </div>
+
+      {/* PD.1 — a dry-run/gated publish must not read as a successful one. */}
+      {publishDryRun && (
+        <div className="rounded-md border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-[11px] font-medium text-amber-800 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
+          ⚠ Last publish was a <strong>DRY-RUN</strong> — validated, but nothing was sent to Amazon (publish mode is not live). Set <code>AMAZON_PUBLISH_MODE=live</code> to publish for real.
+        </div>
+      )}
 
       {/* Per-market gate list */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-1.5">
