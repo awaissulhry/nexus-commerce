@@ -15,6 +15,10 @@ import AiWizardTemplatesClient, {
 import AiBrandVoicesClient, {
   type BrandVoiceRow,
 } from './AiBrandVoicesClient'
+import AiModelsClient, {
+  type ModelCatalog,
+  type PrefsOverview,
+} from './AiModelsClient'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -35,6 +39,8 @@ export default async function AiSettingsPage() {
     promptsRes,
     wizardTemplatesRes,
     brandVoicesRes,
+    modelsRes,
+    featurePrefsRes,
   ] = await Promise.all([
     fetch(`${backend}/api/ai/providers`, { cache: 'no-store' }),
     fetch(`${backend}/api/ai/usage/summary?days=7`, { cache: 'no-store' }),
@@ -47,6 +53,8 @@ export default async function AiSettingsPage() {
     fetch(`${backend}/api/ai/prompt-templates`, { cache: 'no-store' }),
     fetch(`${backend}/api/wizard-templates`, { cache: 'no-store' }),
     fetch(`${backend}/api/ai/brand-voices`, { cache: 'no-store' }),
+    fetch(`${backend}/api/ai/models`, { cache: 'no-store' }),
+    fetch(`${backend}/api/ai/feature-prefs`, { cache: 'no-store' }),
   ])
 
   const providersJson = providersRes.ok ? await providersRes.json() : null
@@ -68,6 +76,12 @@ export default async function AiSettingsPage() {
   const brandVoices: BrandVoiceRow[] = brandVoicesRes.ok
     ? ((await brandVoicesRes.json()).rows ?? [])
     : []
+  const modelCatalog: ModelCatalog | null = modelsRes.ok
+    ? await modelsRes.json()
+    : null
+  const featurePrefs: PrefsOverview | null = featurePrefsRes.ok
+    ? await featurePrefsRes.json()
+    : null
 
   return (
     <div className="space-y-6">
@@ -79,6 +93,10 @@ export default async function AiSettingsPage() {
         recent={recent}
         posture={posture}
         topWizards={topWizards}
+      />
+      <AiModelsClient
+        initialCatalog={modelCatalog}
+        initialPrefs={featurePrefs}
       />
       <AiPromptsClient initialRows={prompts} />
       <AiBrandVoicesClient initialRows={brandVoices} />
