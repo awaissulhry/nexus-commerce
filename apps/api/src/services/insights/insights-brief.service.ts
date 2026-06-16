@@ -19,6 +19,7 @@
  */
 
 import { AnthropicProvider } from '../ai/providers/anthropic.provider.js'
+import { resolveModelForFeature } from '../ai/model-resolver.service.js'
 import type { InsightsFilters } from './index.js'
 import { computeInsightsSummary } from './insights-summary.service.js'
 import { computeInsightsBreakdown } from './insights-breakdown.service.js'
@@ -179,8 +180,10 @@ export async function computeExecutiveBrief(
     }
   }
 
+  const model = await resolveModelForFeature('insights-brief', provider)
   const result = await provider.generate({
     prompt,
+    model,
     jsonMode: true,
     maxOutputTokens: 2048,
     temperature: 0.5,

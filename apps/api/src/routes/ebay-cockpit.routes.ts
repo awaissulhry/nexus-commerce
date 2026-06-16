@@ -98,6 +98,7 @@ import { EbayPublishAdapter } from '../services/listing-wizard/ebay-publish.adap
 import { resolveComplianceById, complianceBlockers } from '../services/compliance-resolver.service.js'
 import { getEbayPublishMode } from '../services/ebay-publish-gate.service.js'
 import { getProvider, isAiKillSwitchOn } from '../services/ai/providers/index.js'
+import { resolveModelForFeature } from '../services/ai/model-resolver.service.js'
 
 const ebayCategoryService = new EbayCategoryService()
 
@@ -1243,6 +1244,7 @@ export default async function ebayCockpitRoutes(fastify: FastifyInstance) {
     if (!provider) {
       return reply.code(500).send({ error: 'Anthropic provider not configured. Set ANTHROPIC_API_KEY.' })
     }
+    const modelId = await resolveModelForFeature('ebay-cockpit', provider)
 
     // Load context — product + listing + (for aspects) the category
     // schema so the AI knows which aspects exist + which are missing.
@@ -1299,6 +1301,7 @@ export default async function ebayCockpitRoutes(fastify: FastifyInstance) {
       try {
         const res = await provider.generate({
           prompt,
+          model: modelId,
           jsonMode: true,
           maxOutputTokens: 1024,
           temperature: 0.3,
@@ -1350,6 +1353,7 @@ export default async function ebayCockpitRoutes(fastify: FastifyInstance) {
       try {
         const res = await provider.generate({
           prompt: compatPrompt,
+          model: modelId,
           jsonMode: true,
           maxOutputTokens: 1024,
           temperature: 0.2,
@@ -1434,6 +1438,7 @@ export default async function ebayCockpitRoutes(fastify: FastifyInstance) {
     try {
       const res = await provider.generate({
         prompt,
+        model: modelId,
         jsonMode: true,
         maxOutputTokens: 2048,
         temperature: 0.2,

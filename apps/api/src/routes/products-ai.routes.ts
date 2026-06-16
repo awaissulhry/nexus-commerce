@@ -42,6 +42,7 @@ import {
   languageForMarketplace,
 } from '../services/products/translation-resolver.service.js'
 import { getProvider } from '../services/ai/providers/index.js'
+import { resolveModelForFeature } from '../services/ai/model-resolver.service.js'
 
 const ALLOWED_FIELDS = new Set<ContentField>([
   'title',
@@ -446,6 +447,7 @@ const productsAiRoutes: FastifyPluginAsync = async (fastify) => {
         })
       }
 
+      const model = await resolveModelForFeature('products-ai', provider)
       const product = await prisma.product.findUnique({
         where: { id },
         select: {
@@ -500,6 +502,7 @@ const productsAiRoutes: FastifyPluginAsync = async (fastify) => {
       try {
         const result = await provider.generate({
           prompt,
+          model,
           temperature: 0.2, // low — we want deterministic-ish answers
           jsonMode: true,
           feature: 'products-ai-suggest-fields',
@@ -557,7 +560,7 @@ const productsAiRoutes: FastifyPluginAsync = async (fastify) => {
         const message = err instanceof Error ? err.message : String(err)
         logUsage({
           provider: provider.name,
-          model: provider.defaultModel,
+          model,
           feature: 'products-ai-suggest-fields',
           entityType: 'Product',
           entityId: id,

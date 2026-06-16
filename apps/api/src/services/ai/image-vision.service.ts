@@ -25,6 +25,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai'
 import prisma from '../../db.js'
 import { getProvider, isAiKillSwitchOn } from './providers/index.js'
 import { GEMINI_DEFAULT_MODEL, priceFor } from './rate-cards.js'
+import { resolveModelForFeature } from './model-resolver.service.js'
 import { logUsage } from './usage-logger.service.js'
 
 // IR.6.2 + AI-2.1: use the live Gemini default rather than a pinned id
@@ -94,6 +95,7 @@ export async function analyzeProductImage(opts: {
 
   const provider = getProvider('gemini')
   if (!provider) throw new Error('Gemini provider not configured')
+  const modelId = await resolveModelForFeature('image-vision', provider)
 
   const apiKey = process.env.GEMINI_API_KEY
   if (!apiKey) throw new Error('GEMINI_API_KEY is not set')
@@ -111,7 +113,7 @@ export async function analyzeProductImage(opts: {
     // Direct SDK call — vision needs multimodal parts, the provider
     // abstraction only handles text. Keep that boundary clean.
     const client = new GoogleGenerativeAI(apiKey)
-    const model = client.getGenerativeModel({ model: VISION_MODEL })
+    const model = client.getGenerativeModel({ model: modelId })
     const response = await model.generateContent({
       contents: [{
         role: 'user',
@@ -160,13 +162,13 @@ export async function analyzeProductImage(opts: {
   } finally {
     logUsage({
       provider: 'gemini',
-      model: VISION_MODEL,
+      model: modelId,
       feature: 'image-vision-analysis',
       entityType: 'ProductImage',
       entityId: opts.productImageId,
       inputTokens,
       outputTokens,
-      costUSD: priceFor('gemini', VISION_MODEL, inputTokens, outputTokens),
+      costUSD: priceFor('gemini', modelId, inputTokens, outputTokens),
       latencyMs: Date.now() - started,
       ok,
       errorMessage,

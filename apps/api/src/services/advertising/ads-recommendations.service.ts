@@ -185,10 +185,12 @@ export async function generateAdsBrief(result: RecommendationsResult, language: 
   const deterministic = `${result.recommendations.length} recommendations across ${Object.entries(result.counts).filter(([, n]) => n).map(([k, n]) => `${n} ${k}`).join(', ')}. Potential ~€${(result.potentialMonthlyImpactCents / 100).toFixed(0)}/mo at stake. Start with the high-severity items.`
   try {
     const { AnthropicProvider } = await import('../ai/providers/anthropic.provider.js')
+    const { resolveModelForFeature } = await import('../ai/model-resolver.service.js')
     const provider = new AnthropicProvider()
     if (!provider.isConfigured()) return { tldr: deterministic, modelUsed: 'rules-only' }
+    const model = await resolveModelForFeature('ads-recommendations', provider)
     const prompt = `You are an Amazon Ads strategist. Given these rule-derived recommendations, write a concise 3-4 sentence action brief (${language === 'it' ? 'in Italian' : 'in English'}) telling the operator what to prioritise and why. Be specific and confident. Recommendations:\n${top}`
-    const r = await provider.generate({ prompt, maxOutputTokens: 400, temperature: 0.4 })
+    const r = await provider.generate({ prompt, model, maxOutputTokens: 400, temperature: 0.4 })
     return { tldr: (r.text || '').trim() || deterministic, modelUsed: 'anthropic' }
   } catch {
     return { tldr: deterministic, modelUsed: 'rules-only' }

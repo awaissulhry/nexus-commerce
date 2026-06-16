@@ -86,11 +86,6 @@ export const AI_FEATURES: AiFeature[] = [
     description: 'AI improvements inside the eBay listing cockpit.',
   },
   {
-    key: 'terminology',
-    label: 'Terminology assist',
-    description: 'Glossary-aware phrasing for Italian listing content.',
-  },
-  {
     key: 'wizard-product-types',
     label: 'Product-type ranking',
     description: 'AI ranking of candidate product types in the List Wizard.',

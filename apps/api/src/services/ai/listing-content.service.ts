@@ -20,6 +20,7 @@ import {
   type BudgetCheckScope,
 } from './budget.service.js'
 import { getProvider, isAiKillSwitchOn } from './providers/index.js'
+import { resolveModelForFeature } from './model-resolver.service.js'
 import {
   sanitizeOutboundPrompt,
   totalRedactions,
@@ -1632,11 +1633,15 @@ Return JSON only:
       0.6 + variant * 0.07 + extraTemperatureBump,
     )
     const { sanitized, redactions } = sanitizeOutboundPrompt(prompt)
+    // AI-2.2: honour the operator's per-feature model for all listing
+    // content, while still respecting an explicit per-call override.
+    const model =
+      modelOverride ?? (await resolveModelForFeature('listing-content', provider))
     const result = await provider.generate({
       prompt: sanitized,
       temperature,
       jsonMode: true,
-      ...(modelOverride ? { model: modelOverride } : {}),
+      model,
     })
     return { ...result, redactions }
   }

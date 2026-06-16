@@ -7,6 +7,7 @@
  */
 
 import { getProvider, isAiKillSwitchOn } from './ai/providers/index.js'
+import { resolveModelForFeature } from './ai/model-resolver.service.js'
 import { ANTHROPIC_DEFAULT_MODEL } from './ai/rate-cards.js'
 import { logger } from '../utils/logger.js'
 
@@ -61,7 +62,7 @@ export async function runFlatFileAiInstruction(
     throw new Error('Anthropic provider not configured. Set ANTHROPIC_API_KEY.')
   }
 
-  const effectiveModel = model ?? ANTHROPIC_DEFAULT_MODEL
+  const effectiveModel = model ?? (await resolveModelForFeature('flat-file-ai', provider))
 
   // Trim rows to MAX_ROWS and strip any remaining meta/internal fields
   const safeRows = rows.slice(0, MAX_ROWS).map((r) => {
