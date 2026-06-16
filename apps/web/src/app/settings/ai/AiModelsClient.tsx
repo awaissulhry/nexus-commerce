@@ -53,6 +53,7 @@ interface FeatureRow {
   key: string
   label: string
   description: string
+  lockedProvider?: string | null
   override: Pref | null
   effective: { provider: string; model: string } | null
 }
@@ -266,24 +267,37 @@ export default function AiModelsClient({
                         </div>
                       </td>
                       <td className="px-3 py-2">
-                        <ModelSelect
-                          ariaLabel={`Model for ${f.label}`}
-                          value={prefValue(f.override)}
-                          providers={configured}
-                          extraModel={
-                            // keep a stored override visible even if the
-                            // provider/model fell out of the live catalog
-                            overridden && !byId.has(prefValue(f.override))
-                              ? f.override
-                              : null
-                          }
-                          disabled={savingKey === f.key}
-                          onChange={(v) => void setPref(f.key, v)}
-                        />
-                        {!overridden && f.effective && (
-                          <div className="text-sm text-slate-400 dark:text-slate-500 mt-1 font-mono">
-                            → {f.effective.model}
+                        {f.lockedProvider ? (
+                          <div className="text-sm text-slate-500 dark:text-slate-400 flex items-center gap-2 flex-wrap">
+                            <span className="inline-flex items-center gap-1 border border-slate-200 dark:border-slate-700 rounded px-1.5 py-0.5">
+                              {PROVIDER_LABEL[f.lockedProvider] ?? f.lockedProvider} only
+                            </span>
+                            {f.effective && (
+                              <span className="font-mono">{f.effective.model}</span>
+                            )}
                           </div>
+                        ) : (
+                          <>
+                            <ModelSelect
+                              ariaLabel={`Model for ${f.label}`}
+                              value={prefValue(f.override)}
+                              providers={configured}
+                              extraModel={
+                                // keep a stored override visible even if the
+                                // provider/model fell out of the live catalog
+                                overridden && !byId.has(prefValue(f.override))
+                                  ? f.override
+                                  : null
+                              }
+                              disabled={savingKey === f.key}
+                              onChange={(v) => void setPref(f.key, v)}
+                            />
+                            {!overridden && f.effective && (
+                              <div className="text-sm text-slate-400 dark:text-slate-500 mt-1 font-mono">
+                                → {f.effective.model}
+                              </div>
+                            )}
+                          </>
                         )}
                       </td>
                       <td className="px-3 py-2 whitespace-nowrap text-slate-600 dark:text-slate-300">

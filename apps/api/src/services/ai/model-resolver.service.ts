@@ -23,7 +23,12 @@
 
 import prisma from '../../db.js'
 import { TtlCache } from '../../utils/ttl-cache.js'
-import { AI_FEATURES, GLOBAL_FEATURE_KEY, isKnownFeature } from './ai-features.js'
+import {
+  AI_FEATURES,
+  GLOBAL_FEATURE_KEY,
+  isKnownFeature,
+  lockedProviderFor,
+} from './ai-features.js'
 import {
   getProvider,
   isAiKillSwitchOn,
@@ -94,6 +99,10 @@ export async function getProviderForFeature(
   requested?: string | null,
 ): Promise<LLMProvider | null> {
   if (isAiKillSwitchOn()) return null
+  // Hard-locked features (Gemini Vision, etc.) ignore global / per-feature
+  // provider selection — they can only run on their bound vendor.
+  const locked = lockedProviderFor(feature)
+  if (locked) return getProvider(locked)
   const req = requested?.trim().toLowerCase()
   // 1. An explicit per-call provider wins, when it's actually configured.
   if (req && isValidProviderName(req)) {
@@ -169,6 +178,7 @@ export async function getFeaturePrefOverview() {
         key: f.key,
         label: f.label,
         description: f.description,
+        lockedProvider: f.lockedProvider ?? null,
         override: prefs.get(f.key) ?? null,
         effective: provider
           ? {
