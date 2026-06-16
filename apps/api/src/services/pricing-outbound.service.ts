@@ -174,7 +174,10 @@ async function pushAmazonPrice(
   })
 
   // Record the override + sync state.
-  if (result.success && listing) {
+  // PD.3 — a gated/dry-run patch publishes NOTHING; it must not write a green
+  // SUCCESS/IN_SYNC state or a price-override row that reads as "pushed".
+  const dryRun = (result as { dryRun?: boolean }).dryRun === true
+  if (result.success && !dryRun && listing) {
     await prisma.channelListingOverride.create({
       data: {
         channelListingId: listing.id,
@@ -193,6 +196,11 @@ async function pushAmazonPrice(
         syncStatus: 'IN_SYNC',
         lastSyncError: null,
       },
+    })
+  } else if (dryRun && listing) {
+    await prisma.channelListing.update({
+      where: { id: listing.id },
+      data: { lastSyncStatus: 'DRY_RUN', lastSyncError: null },
     })
   } else if (!result.success && listing) {
     await prisma.channelListing.update({

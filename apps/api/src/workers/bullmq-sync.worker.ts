@@ -311,7 +311,8 @@ async function processOutboundSyncJob(job: Job) {
       await prisma.outboundSyncQueue.update({
         where: { id: queueId },
         data: {
-          syncStatus: 'SUCCESS',
+          // PD.3 — a dry-run/sandbox no-op published nothing; don't show it green.
+          syncStatus: syncResult.dryRun ? 'SKIPPED' : 'SUCCESS',
           syncedAt: new Date(),
           payload: {
             ...(queueRecord.payload as any),

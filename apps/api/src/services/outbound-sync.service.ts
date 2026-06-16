@@ -228,6 +228,10 @@ interface SyncResult {
   status: string;
   message: string;
   error?: string;
+  /** PD.3 — true when the "success" was a dry-run/sandbox no-op (nothing actually
+   *  published). The worker marks these SKIPPED, not SUCCESS, so the grid doesn't
+   *  show false green. */
+  dryRun?: boolean;
 }
 
 interface ProcessingStats {
@@ -426,7 +430,8 @@ export class OutboundSyncService {
             await prisma.outboundSyncQueue.update({
               where: { id: item.id },
               data: {
-                syncStatus: "SUCCESS",
+                // PD.3 — a dry-run/sandbox no-op must not show as green SUCCESS.
+                syncStatus: result.dryRun ? "SKIPPED" : "SUCCESS",
                 syncedAt: new Date(),
               },
             });
@@ -496,7 +501,8 @@ export class OutboundSyncService {
             await prisma.outboundSyncQueue.update({
               where: { id: item.id },
               data: {
-                syncStatus: "SUCCESS",
+                // PD.3 — a dry-run/sandbox no-op must not show as green SUCCESS.
+                syncStatus: result.dryRun ? "SKIPPED" : "SUCCESS",
                 syncedAt: new Date(),
               },
             });
@@ -618,6 +624,7 @@ export class OutboundSyncService {
       status: r.status,
       message: r.message,
       error: r.error,
+      dryRun: r.mode !== "live", // PD.3 — a non-live "success" published nothing.
     };
   }
 
