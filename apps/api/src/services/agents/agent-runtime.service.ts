@@ -343,6 +343,7 @@ export async function runChat(inp: ChatInput): Promise<ChatOutput> {
       system,
       messages: inp.messages.map((m) => ({ role: m.role, content: m.content })),
       ctx: { userId: inp.userId },
+      agentRunId: run.id,
     })
     const toolsUsed = loop.steps
       .filter((s) => s.type === 'tool')

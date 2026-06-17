@@ -27,7 +27,17 @@ export interface AgentTool {
   /** Hard floor — can NEVER be auto-run (pricing/publish/customer comms/
    *  spend/fiscal). Enforced in code; the policy layer cannot downgrade it. */
   alwaysAsk?: boolean
+  /** Default-on approval for a mutating tool below high tier (e.g.
+   *  apply-content). high / alwaysAsk already imply approval. */
+  requiresApprovalDefault?: boolean
+  /** Dry-run preview (no side effects). Always safe to run. */
   handler: (
+    args: Record<string, unknown>,
+    ctx: ToolContext,
+  ) => Promise<ToolResult>
+  /** The real mutation — runs ONLY after approval (or directly when the
+   *  tool requires no approval). Absent ⇒ preview-only. */
+  execute?: (
     args: Record<string, unknown>,
     ctx: ToolContext,
   ) => Promise<ToolResult>

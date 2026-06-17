@@ -82,7 +82,10 @@ export async function resolveToolPolicy(
       ? db.riskTier
       : tool.riskTier
   const requiresApproval =
-    !!tool.alwaysAsk || tier === 'high' || (db?.requiresApproval ?? false)
+    !!tool.alwaysAsk ||
+    tier === 'high' ||
+    !!tool.requiresApprovalDefault ||
+    (db?.requiresApproval ?? false)
   return {
     name: tool.name,
     category: tool.category,
@@ -120,7 +123,8 @@ export async function seedToolPolicies(): Promise<{ created: number }> {
           name: t.name,
           riskTier: t.alwaysAsk ? 'high' : t.riskTier,
           enabled: true,
-          requiresApproval: !!t.alwaysAsk || t.riskTier === 'high',
+          requiresApproval:
+            !!t.alwaysAsk || t.riskTier === 'high' || !!t.requiresApprovalDefault,
         },
       })
       created++

@@ -13,8 +13,8 @@
  */
 
 import { priceFor } from '../ai/rate-cards.js'
-import { getTool, listTools } from './tool-registry.js'
-import { resolveToolPolicy } from './tool-policy.service.js'
+import { listTools } from './tool-registry.js'
+import { runOrQueueTool } from './approval-gate.service.js'
 import type { ToolContext } from './tool-types.js'
 
 const ENDPOINT = 'https://api.anthropic.com/v1/messages'
@@ -156,26 +156,31 @@ async function callClaude(
   return res.json()
 }
 
-// Inline policy-guarded execution (kept here to avoid an import cycle with
-// the runtime). Read/draft run; requiresApproval tools return a preview.
+// Tool execution inside the loop, through the governed gate: read/draft
+// run immediately; a tool that requiresApproval is QUEUED (AgentApproval)
+// and the model is told it is pending — never executed inline.
 async function execTool(
   name: string,
   input: Record<string, unknown>,
   ctx: ToolContext,
+  agentRunId: string,
 ): Promise<unknown> {
-  const policy = await resolveToolPolicy(name)
-  const tool = getTool(name)
-  if (!policy || !tool) return { error: `unknown tool: ${name}` }
-  if (!policy.enabled) return { error: `tool ${name} is disabled` }
-  const res = await tool.handler(input, ctx)
-  if (policy.requiresApproval) {
+  const out = await runOrQueueTool(name, input, ctx, agentRunId)
+  if (out.mode === 'queued')
+    return {
+      queued: true,
+      approvalId: out.approvalId,
+      preview: out.preview,
+      note: 'Queued for operator approval — NOT executed.',
+    }
+  if (out.mode === 'preview')
     return {
       requiresApproval: true,
-      preview: res.preview ?? res.data,
-      note: 'Not executed — needs operator approval (coming in Phase 3).',
+      preview: out.preview,
+      note: 'Needs approval; execution arrives in a later phase.',
     }
-  }
-  return res.ok ? res.data : { error: res.error }
+  if (out.mode === 'executed') return out.ok ? out.data : { error: out.error }
+  return { error: out.error }
 }
 
 export async function runToolLoop(opts: {
@@ -183,6 +188,7 @@ export async function runToolLoop(opts: {
   system: string
   messages: LoopMessage[]
   ctx: ToolContext
+  agentRunId: string
   maxSteps?: number
 }): Promise<LoopResult> {
   const maxSteps = opts.maxSteps ?? 8
@@ -216,7 +222,12 @@ export async function runToolLoop(opts: {
       for (const block of res.content ?? []) {
         if (block.type === 'tool_use') {
           const tt = Date.now()
-          const result = await execTool(block.name, block.input ?? {}, opts.ctx)
+          const result = await execTool(
+            block.name,
+            block.input ?? {},
+            opts.ctx,
+            opts.agentRunId,
+          )
           steps.push({
             type: 'tool',
             name: block.name,

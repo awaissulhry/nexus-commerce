@@ -20,6 +20,11 @@ import {
   setToolPolicy,
   seedToolPolicies,
 } from '../services/agents/tool-policy.service.js'
+import {
+  listApprovals,
+  decideApproval,
+  requestApproval,
+} from '../services/agents/approval-gate.service.js'
 
 const agentRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post<{
@@ -116,6 +121,53 @@ const agentRoutes: FastifyPluginAsync = async (fastify) => {
 
   // Seed the editable AgentTool policy rows from the code registry.
   fastify.post('/agent/tools/seed', async () => seedToolPolicies())
+
+  // ── ACP.3a — governed-action approval gate ──────────────────────────
+  fastify.get<{ Querystring: { status?: string } }>(
+    '/agent/approvals',
+    async (request) => ({
+      approvals: await listApprovals(request.query?.status),
+    }),
+  )
+
+  // Request approval for a mutating action (copilot button / testing).
+  fastify.post<{
+    Body: { toolName?: string; args?: Record<string, unknown> }
+  }>('/agent/actions/request', async (request, reply) => {
+    const toolName = request.body?.toolName
+    if (!toolName) return reply.code(400).send({ error: 'toolName is required' })
+    return requestApproval(toolName, request.body?.args ?? {}, {})
+  })
+
+  fastify.post<{ Params: { id: string }; Body: { reason?: string } }>(
+    '/agent/approvals/:id/approve',
+    async (request, reply) => {
+      const r = await decideApproval(
+        request.params.id,
+        'approve',
+        null,
+        request.body?.reason,
+      )
+      if (!r.ok && r.error === 'approval not found')
+        return reply.code(404).send(r)
+      return r
+    },
+  )
+
+  fastify.post<{ Params: { id: string }; Body: { reason?: string } }>(
+    '/agent/approvals/:id/reject',
+    async (request, reply) => {
+      const r = await decideApproval(
+        request.params.id,
+        'reject',
+        null,
+        request.body?.reason,
+      )
+      if (!r.ok && r.error === 'approval not found')
+        return reply.code(404).send(r)
+      return r
+    },
+  )
 }
 
 export default agentRoutes

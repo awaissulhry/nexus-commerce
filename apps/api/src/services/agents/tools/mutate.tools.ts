@@ -104,7 +104,81 @@ const sendCustomerMessage: AgentTool = {
   },
 }
 
+// apply-content — the reversible "copilot fixes the listing" action:
+// writes drafted title / bullets / description to the MASTER product (not
+// live to any channel). Medium tier but routed through the approval gate
+// (requiresApprovalDefault) so the loop is proven on a safe action.
+const applyContent: AgentTool = {
+  name: 'apply-content',
+  category: 'products',
+  riskTier: 'medium',
+  readOnly: false,
+  requiresApprovalDefault: true,
+  description:
+    'Apply a drafted title / bullet points / description to the master product (reversible; requires approval).',
+  async handler(args) {
+    const id = String(args.productId ?? '')
+    if (!id) return { ok: false, error: 'productId is required' }
+    const p = await prisma.product.findUnique({
+      where: { id },
+      select: { name: true, bulletPoints: true, description: true },
+    })
+    if (!p) return { ok: false, error: 'Product not found' }
+    const changes: Record<string, { from: unknown; to: unknown }> = {}
+    if (args.title != null) changes.title = { from: p.name, to: String(args.title) }
+    if (Array.isArray(args.bulletPoints))
+      changes.bulletPoints = {
+        from: p.bulletPoints,
+        to: (args.bulletPoints as unknown[]).map(String),
+      }
+    if (args.description != null)
+      changes.description = { from: p.description, to: String(args.description) }
+    if (Object.keys(changes).length === 0)
+      return {
+        ok: false,
+        error: 'nothing to apply (title / bulletPoints / description)',
+      }
+    return {
+      ok: true,
+      preview: {
+        action: 'apply-content',
+        productId: id,
+        changes,
+        note: 'Reversible master-content edit; requires approval to apply.',
+      },
+    }
+  },
+  async execute(args) {
+    const id = String(args.productId ?? '')
+    if (!id) return { ok: false, error: 'productId is required' }
+    const p = await prisma.product.findUnique({
+      where: { id },
+      select: { name: true, bulletPoints: true, description: true },
+    })
+    if (!p) return { ok: false, error: 'Product not found' }
+    const data: Record<string, unknown> = {}
+    const undo: Record<string, unknown> = {}
+    if (args.title != null) {
+      undo.name = p.name
+      data.name = String(args.title)
+    }
+    if (Array.isArray(args.bulletPoints)) {
+      undo.bulletPoints = p.bulletPoints
+      data.bulletPoints = (args.bulletPoints as unknown[]).map(String)
+    }
+    if (args.description != null) {
+      undo.description = p.description
+      data.description = String(args.description)
+    }
+    if (Object.keys(data).length === 0)
+      return { ok: false, error: 'nothing to apply' }
+    await prisma.product.update({ where: { id }, data })
+    return { ok: true, data: { applied: Object.keys(data), undo } }
+  },
+}
+
 export const MUTATE_TOOLS: AgentTool[] = [
+  applyContent,
   setPrice,
   publishListing,
   sendCustomerMessage,
