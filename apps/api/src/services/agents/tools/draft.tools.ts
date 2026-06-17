@@ -12,7 +12,7 @@ import {
 } from '../../ai/model-resolver.service.js'
 import { logUsage } from '../../ai/usage-logger.service.js'
 
-async function aiDraft(
+export async function aiDraft(
   feature: string,
   prompt: string,
   entityType?: string,

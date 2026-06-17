@@ -25,6 +25,10 @@ import {
   decideApproval,
   requestApproval,
 } from '../services/agents/approval-gate.service.js'
+import {
+  listAutonomousAgents,
+  runAutonomousAgent,
+} from '../services/agents/autonomous-agent.service.js'
 
 const agentRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post<{
@@ -164,6 +168,27 @@ const agentRoutes: FastifyPluginAsync = async (fastify) => {
         request.body?.reason,
       )
       if (!r.ok && r.error === 'approval not found')
+        return reply.code(404).send(r)
+      return r
+    },
+  )
+
+  // ── ACP.4a — autonomous agents ──────────────────────────────────────
+  // List the autonomous agents (scheduled / on-demand workers that queue
+  // proposals into the approval inbox).
+  fastify.get('/agent/agents', async () => ({
+    agents: listAutonomousAgents(),
+  }))
+
+  // Run an autonomous agent now (operator-triggered). It scans + queues
+  // proposals; nothing is applied without an approval.
+  fastify.post<{ Params: { key: string }; Body: { maxItems?: number } }>(
+    '/agent/agents/:key/run',
+    async (request, reply) => {
+      const r = await runAutonomousAgent(request.params.key, 'manual', {
+        maxItems: request.body?.maxItems,
+      })
+      if (!r.ok && r.error?.startsWith('unknown agent'))
         return reply.code(404).send(r)
       return r
     },

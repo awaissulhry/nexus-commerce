@@ -50,6 +50,7 @@ import { runPickupDispatchSweep } from './pickup-dispatch.job.js'
 import { runSavedViewAlertsSweep } from './saved-view-alerts.job.js'
 import { runStockoutCronOnce } from './stockout-detector.job.js'
 import { runAbcCronOnce } from './abc-classification.job.js'
+import { runListingQualityKeeperCron } from './listing-quality-keeper.job.js'
 import { runAutomationRuleCronOnce } from './automation-rule-evaluator.job.js'
 import { runCycleCountSchedulerOnce } from './cycle-count-scheduler.job.js'
 import { runScheduledChangesOnce } from './scheduled-changes.job.js'
@@ -168,6 +169,7 @@ export const CRON_REGISTRY: Record<string, () => Promise<unknown>> = {
   'saved-view-alerts': () => runSavedViewAlertsSweep(),
   'stockout-detector': () => runStockoutCronOnce(),
   'abc-classification': () => runAbcCronOnce(),
+  'listing-quality-keeper': () => runListingQualityKeeperCron(),
   'automation-rule-evaluator': () => runAutomationRuleCronOnce(),
   'cycle-count-scheduler': () => runCycleCountSchedulerOnce(),
   'scheduled-changes': () => runScheduledChangesOnce(),

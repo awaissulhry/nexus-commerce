@@ -205,6 +205,7 @@ import { startAutoPoCron } from "./jobs/auto-po-replenishment.job.js";
 import { startLeadTimeStatsCron } from "./jobs/lead-time-stats.job.js";
 import { startStockoutDetectorCron } from "./jobs/stockout-detector.job.js";
 import { startAbcClassificationCron } from "./jobs/abc-classification.job.js";
+import { startListingQualityKeeperCron } from "./jobs/listing-quality-keeper.job.js";
 import { startCycleCountSchedulerCron } from "./jobs/cycle-count-scheduler.job.js";
 import { startYearEndSnapshotCron } from "./jobs/year-end-snapshot.job.js";
 import { startLotExpiryAlertCron } from "./jobs/lot-expiry-alert.job.js";
@@ -1092,6 +1093,15 @@ async function start() {
     // NEXUS_ENABLE_ABC_CRON=0.
     if (process.env.NEXUS_ENABLE_ABC_CRON !== '0') {
       startAbcClassificationCron();
+    }
+
+    // ACP.4a — Listing-Quality Keeper. Daily 06:45 UTC. Autonomous agent
+    // that scans active products for content gaps and QUEUES reversible
+    // apply-content proposals into the approval inbox (never auto-applies;
+    // capped + deduped). Default-on; opt out via
+    // NEXUS_ENABLE_LISTING_QUALITY_KEEPER=0.
+    if (process.env.NEXUS_ENABLE_LISTING_QUALITY_KEEPER !== '0') {
+      startListingQualityKeeperCron();
     }
 
     // W4.6 — automation rule evaluator. Every 15 minutes, walks
