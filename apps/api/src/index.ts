@@ -140,6 +140,7 @@ import forecastRoutes from "./routes/forecast.routes.js";
 import aiUsageRoutes from "./routes/ai-usage.routes.js";
 import agentRoutes from "./routes/agents.routes.js";
 import amazonReportsRoutes from "./routes/amazon-reports.routes.js";
+import amazonEconomicsRoutes from "./routes/amazon-economics.routes.js";
 import savedViewAlertsRoutes from "./routes/saved-view-alerts.routes.js";
 // saved-views CRUD lives in products-catalog.routes.ts (P.3); the
 // duplicate plugin in routes/saved-views.routes.ts (O.27) was crashing
@@ -600,6 +601,7 @@ app.register(forecastRoutes, { prefix: '/api' });
 app.register(aiUsageRoutes, { prefix: '/api' });
 app.register(agentRoutes, { prefix: '/api' });
 app.register(amazonReportsRoutes, { prefix: '/api' });
+app.register(amazonEconomicsRoutes, { prefix: '/api' });
 app.register(savedViewAlertsRoutes, { prefix: '/api' });
 // savedViewsRoutes register removed — see import comment above.
 // /api/saved-views{,/...} is owned by products-catalog.routes.ts.
