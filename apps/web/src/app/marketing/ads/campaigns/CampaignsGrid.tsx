@@ -19,7 +19,7 @@ interface Camp {
 type Mode = 'metrics' | 'edit'
 const num = (v: unknown) => (typeof v === 'number' ? v : Number(v) || 0)
 const eur = (v: number) => `€${v.toLocaleString('en-IE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-const pct = (v: number | null | undefined) => (v == null ? '—' : `${(v * (v <= 1 ? 100 : 1)).toFixed(2)}%`)
+const pct = (v: unknown) => { if (v == null || v === '') return '—'; const n = Number(v); return Number.isFinite(n) ? `${(n <= 1 ? n * 100 : n).toFixed(2)}%` : '—' }
 
 const METRIC_COLS = ['Spend', 'Sales', 'ACoS', 'ROAS', 'Impressions', 'Clicks', 'CPC', 'CVR', 'CTR', 'PPC Orders'] as const
 const EDIT_COLS = ['Target ACoS', 'Bid Automation', 'Min/Max Budget', 'Rules', 'Bidding Strategy', 'Start Date'] as const
@@ -38,7 +38,7 @@ const RANGE_FIELDS: Array<{ key: string; label: string; unit: '%' | '€' | '' }
 function metricVal(c: Camp, key: string): number {
   const spend = num(c.spend), sales = num(c.sales), clicks = num(c.clicks), impr = num(c.impressions), orders = num(c.ppcOrders ?? c.orders)
   switch (key) {
-    case 'acos': return c.acos != null ? (c.acos <= 1 ? c.acos * 100 : c.acos) : (sales ? (spend / sales) * 100 : 0)
+    case 'acos': { const a = c.acos != null ? Number(c.acos) : (sales ? spend / sales : 0); return a <= 1 ? a * 100 : a }
     case 'roas': return c.roas != null ? Number(c.roas) : (spend ? sales / spend : 0)
     case 'spend': return spend; case 'sales': return sales; case 'clicks': return clicks; case 'ppcOrders': return orders
     case 'cpc': return clicks ? spend / clicks : 0; case 'ctr': return impr ? (clicks / impr) * 100 : 0
@@ -98,8 +98,8 @@ export function CampaignsGrid() {
     switch (col) {
       case 'Spend': return eur(spend)
       case 'Sales': return eur(sales)
-      case 'ACoS': return c.acos == null ? (sales ? `${((spend / sales) * 100).toFixed(2)}%` : '—') : pct(c.acos)
-      case 'ROAS': return c.roas == null ? (spend ? (sales / spend).toFixed(2) : '—') : (c.roas as number).toFixed(2)
+      case 'ACoS': { const a = pct(c.acos); return a !== '—' ? a : (sales ? `${((spend / sales) * 100).toFixed(2)}%` : '—') }
+      case 'ROAS': { const r = c.roas != null ? Number(c.roas) : (spend ? sales / spend : NaN); return Number.isFinite(r) ? r.toFixed(2) : '—' }
       case 'Impressions': return impr.toLocaleString()
       case 'Clicks': return clicks.toLocaleString()
       case 'CPC': return clicks ? eur(spend / clicks) : '—'
