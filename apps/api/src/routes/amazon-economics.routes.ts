@@ -12,6 +12,7 @@ import {
   getRealAmazonFeeRates,
   getRealFeeRatesBySku,
   getFeeImpact,
+  getRealReferralRateResolver,
 } from '../services/amazon-real-fees.service.js'
 
 const clampDays = (raw?: string) =>
@@ -46,6 +47,19 @@ const amazonEconomicsRoutes: FastifyPluginAsync = async (fastify) => {
           ? Math.min(Math.max(parseInt(request.query.limit, 10) || 15, 1), 100)
           : 15,
       ),
+  )
+
+  // R1.4b — the real referral rate the profit rollup now uses (resolver).
+  fastify.get<{ Querystring: { days?: string } }>(
+    '/amazon/economics/referral-rates',
+    async (request) => {
+      const r = await getRealReferralRateResolver(clampDays(request.query?.days))
+      return {
+        overallPct: r.overallPct,
+        byMarketplace: r.byMarketplace,
+        sampleSkus: r.sampleSkus,
+      }
+    },
   )
 }
 

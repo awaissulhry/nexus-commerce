@@ -321,3 +321,134 @@ export async function getFeeImpact(days = 90, limit = 15): Promise<FeeImpact> {
     topAffected: rows.slice(0, limit),
   }
 }
+
+// ── R1.4b — real referral-rate resolver (feeds the profit calc) ─────────
+// Referral-only (amazonFee + otherFees, NOT fba — the rollup tracks FBA
+// separately, so this avoids double-counting). Per-SKU where coverage is
+// sufficient, else marketplace, else overall.
+
+export interface ReferralResolver {
+  byMarketplace: { marketplace: string; pct: number | null; revenue: number }[]
+  overallPct: number | null
+  sampleSkus: { productId: string | null; pct: number | null; revenue: number }[]
+  /** Returns the referral fraction (0.19 = 19%) + which tier it came from. */
+  resolve(
+    productId: string | null,
+    marketplace: string,
+  ): { pct: number | null; source: 'sku' | 'marketplace' | 'overall' | 'none' }
+}
+
+const MIN_COVERAGE_REVENUE = 50 // €50 of attributed revenue → trust the per-SKU rate
+
+export async function getRealReferralRateResolver(
+  days = 90,
+): Promise<ReferralResolver> {
+  const since = new Date(Date.now() - days * DAY)
+  const fts = await prisma.financialTransaction.findMany({
+    where: {
+      transactionType: 'Order',
+      order: { channel: 'AMAZON', purchaseDate: { gte: since } },
+    },
+    select: {
+      orderId: true,
+      amazonFee: true,
+      otherFees: true,
+      order: { select: { marketplace: true } },
+    },
+  })
+  const refByOrder = new Map<string, number>()
+  const mktByOrder = new Map<string, string>()
+  for (const ft of fts) {
+    const ref = Math.abs(num(ft.amazonFee)) + Math.abs(num(ft.otherFees))
+    refByOrder.set(ft.orderId, (refByOrder.get(ft.orderId) ?? 0) + ref)
+    if (ft.order?.marketplace) mktByOrder.set(ft.orderId, ft.order.marketplace)
+  }
+  const orderIds = [...refByOrder.keys()]
+  const items = orderIds.length
+    ? await prisma.orderItem.findMany({
+        where: { orderId: { in: orderIds } },
+        select: { orderId: true, productId: true, price: true, quantity: true },
+      })
+    : []
+  const orderRev = new Map<string, number>()
+  for (const it of items)
+    orderRev.set(
+      it.orderId,
+      (orderRev.get(it.orderId) ?? 0) + num(it.price) * it.quantity,
+    )
+
+  type RR = { rev: number; ref: number }
+  const perProduct = new Map<string, RR>()
+  const perMarket = new Map<string, RR>()
+  const overall: RR = { rev: 0, ref: 0 }
+  for (const it of items) {
+    const itemRev = num(it.price) * it.quantity
+    const base = orderRev.get(it.orderId) ?? 0
+    const orderRef = refByOrder.get(it.orderId) ?? 0
+    const attributed = base > 0 ? orderRef * (itemRev / base) : 0
+    if (it.productId) {
+      const a = perProduct.get(it.productId) ?? { rev: 0, ref: 0 }
+      a.rev += itemRev
+      a.ref += attributed
+      perProduct.set(it.productId, a)
+    }
+    const mkt = mktByOrder.get(it.orderId) ?? 'UNKNOWN'
+    const m = perMarket.get(mkt) ?? { rev: 0, ref: 0 }
+    m.rev += itemRev
+    m.ref += attributed
+    perMarket.set(mkt, m)
+    overall.rev += itemRev
+    overall.ref += attributed
+  }
+  const rate = (a: RR): number | null => (a.rev > 0 ? a.ref / a.rev : null)
+  const overallPct = rate(overall)
+
+  const resolve = (productId: string | null, marketplace: string) => {
+    if (productId) {
+      const p = perProduct.get(productId)
+      if (p && p.rev >= MIN_COVERAGE_REVENUE) {
+        const r = rate(p)
+        if (r != null) return { pct: r, source: 'sku' as const }
+      }
+    }
+    const m = perMarket.get(marketplace)
+    if (m && m.rev >= MIN_COVERAGE_REVENUE) {
+      const r = rate(m)
+      if (r != null) return { pct: r, source: 'marketplace' as const }
+    }
+    if (overallPct != null) return { pct: overallPct, source: 'overall' as const }
+    return { pct: null, source: 'none' as const }
+  }
+
+  return {
+    byMarketplace: [...perMarket.entries()]
+      .map(([marketplace, a]) => ({
+        marketplace,
+        pct: rate(a) != null ? round2(rate(a)! * 100) : null,
+        revenue: round2(a.rev),
+      }))
+      .sort((x, y) => y.revenue - x.revenue),
+    overallPct: overallPct != null ? round2(overallPct * 100) : null,
+    sampleSkus: [...perProduct.entries()]
+      .map(([productId, a]) => ({
+        productId,
+        pct: rate(a) != null ? round2(rate(a)! * 100) : null,
+        revenue: round2(a.rev),
+      }))
+      .sort((x, y) => y.revenue - x.revenue)
+      .slice(0, 8),
+    resolve,
+  }
+}
+
+// Cached ~1h so the daily rollup builds it once per run, not per product.
+let _refResolver: { at: number; r: ReferralResolver } | null = null
+export async function getCachedReferralResolver(
+  days = 90,
+): Promise<ReferralResolver> {
+  if (_refResolver && Date.now() - _refResolver.at < 3_600_000)
+    return _refResolver.r
+  const r = await getRealReferralRateResolver(days)
+  _refResolver = { at: Date.now(), r }
+  return r
+}

@@ -18,6 +18,7 @@
  */
 
 import prisma from '../../db.js'
+import { getCachedReferralResolver } from '../amazon-real-fees.service.js'
 import { logger } from '../../utils/logger.js'
 
 interface RollupSummary {
@@ -114,17 +115,19 @@ async function lookupReferralFeePct(
   productId: string,
   marketplace: string,
 ): Promise<number | null> {
-  // ChannelListing carries per-marketplace referralFeePercent at line 1440.
+  // R1.4b — use the REAL referral rate derived from Amazon financial events
+  // (per-SKU where coverage is sufficient, else marketplace, else overall).
+  // The resolver is cached ~1h so this is one aggregate per rollup run.
+  const resolver = await getCachedReferralResolver()
+  const { pct } = resolver.resolve(productId, marketplace)
+  if (pct != null) return pct
+  // Last resort: the operator-set manual rate, if any (pre-R1.4b behaviour).
   const cl = await prisma.channelListing.findFirst({
-    where: {
-      productId,
-      marketplace,
-      referralFeePercent: { not: null },
-    },
+    where: { productId, marketplace, referralFeePercent: { not: null } },
     select: { referralFeePercent: true },
   })
   if (!cl?.referralFeePercent) return null
-  return Number(cl.referralFeePercent) / 100 // stored as 15.00 = 15%
+  return Number(cl.referralFeePercent) / 100
 }
 
 async function upsertRow(args: {
