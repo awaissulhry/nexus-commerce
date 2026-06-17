@@ -398,9 +398,27 @@ export default function AmazonFlatFileClient({
   const [sheetTypes, setSheetTypes] = useState<string[]>([initialProductType])
   const [unionManifest, setUnionManifest] = useState<Manifest | null>(null)
   const isUnionMode = sheetTypes.length > 1
+  // MT.5 — when set (union mode), the grid shows only this category's columns
+  // (+ shared/infra), so a wide union sheet stays navigable.
+  const [filterType, setFilterType] = useState<string | null>(null)
   // The render side reads effectiveManifest; the (single-type) load path keeps
   // using `manifest`, so single-type mode can't regress.
-  const effectiveManifest = useMemo(() => unionManifest ?? manifest, [unionManifest, manifest])
+  const effectiveManifest = useMemo(() => {
+    const base = unionManifest ?? manifest
+    // MT.5 — in union mode, constrain the Product Type cell to a strict dropdown
+    // of the sheet's categories, so each row's category is picked (not typed).
+    if (!base || !unionManifest) return base
+    const opts = ['', ...sheetTypes.map((t) => t.toUpperCase())]
+    return {
+      ...base,
+      groups: base.groups.map((g) => ({
+        ...g,
+        columns: g.columns.map((c) =>
+          c.id === 'product_type' ? { ...c, kind: 'enum' as ColumnKind, options: opts, selectionOnly: true } : c,
+        ),
+      })),
+    }
+  }, [unionManifest, manifest, sheetTypes])
 
   // MT.3 — changing the primary product type (the single-type dropdown) OR the
   // marketplace resets the sheet to that one category. Resetting on a market
@@ -897,9 +915,21 @@ export default function AmazonFlatFileClient({
 
   // Column-mode search: filter columns within visible groups
   const displayGroups = useMemo<ColumnGroup[]>(() => {
-    if (!searchQuery || searchMode !== 'columns') return visibleGroups
+    let groups = visibleGroups
+    // MT.5 — filter the union grid to one category's columns (+ shared/infra
+    // columns, which have no applicableProductTypes). Only when the filter is
+    // an active sheet category.
+    if (filterType && sheetTypes.map((t) => t.toUpperCase()).includes(filterType)) {
+      groups = groups
+        .map((g) => ({
+          ...g,
+          columns: g.columns.filter((c) => !c.applicableProductTypes || c.applicableProductTypes.includes(filterType)),
+        }))
+        .filter((g) => g.columns.length > 0)
+    }
+    if (!searchQuery || searchMode !== 'columns') return groups
     const q = searchQuery.toLowerCase()
-    return visibleGroups
+    return groups
       .map((g) => ({
         ...g,
         columns: g.columns.filter(
@@ -911,7 +941,7 @@ export default function AmazonFlatFileClient({
         ),
       }))
       .filter((g) => g.columns.length > 0)
-  }, [visibleGroups, searchQuery, searchMode])
+  }, [visibleGroups, searchQuery, searchMode, filterType, sheetTypes])
 
   const allColumns = useMemo<Column[]>(
     () => displayGroups.flatMap((g) => g.columns),
@@ -3226,7 +3256,13 @@ export default function AmazonFlatFileClient({
                   ))}
                 </select>
                 {isUnionMode && (
-                  <span className="text-[10px] font-semibold text-indigo-500" title="Editing multiple categories in one sheet">UNION · {sheetTypes.length} types</span>
+                  <div className="flex items-center gap-0.5 ml-1 text-[10px]" title="Show only one category's columns">
+                    <span className="text-slate-400 font-medium mr-0.5">show:</span>
+                    <button onClick={() => setFilterType(null)} className={cn('px-1.5 py-0.5 rounded font-semibold transition-colors', !filterType ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300' : 'text-slate-400 hover:text-slate-600')}>All</button>
+                    {sheetTypes.map((t) => t.toUpperCase()).map((t) => (
+                      <button key={t} onClick={() => setFilterType((f) => (f === t ? null : t))} className={cn('px-1.5 py-0.5 rounded font-semibold transition-colors', filterType === t ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300' : 'text-slate-400 hover:text-slate-600')}>{t}</button>
+                    ))}
+                  </div>
                 )}
               </div>
             )}
