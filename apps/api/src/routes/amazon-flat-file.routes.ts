@@ -22,6 +22,7 @@ import {
   flatFileExportColumns,
 } from '../services/amazon/flat-file.service.js'
 import { renderExport } from '../services/export/renderers.js'
+import { parseCsv, parseXlsx, parseJson, detectFileKind, sniffDelimiter } from '../services/import/parsers.js'
 import { translateEnumValues } from '../services/amazon/value-translate.service.js'
 import { getAmazonPublishMode } from '../services/amazon-publish-gate.service.js'
 import { preflightRow, buildPerTypeValidation } from '../services/listing-preflight.service.js'
@@ -554,6 +555,41 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
     try {
       const rows = flatFileService.parseTsv(content, productType.toUpperCase())
       return reply.send({ rows, count: rows.length })
+    } catch (err: any) {
+      return reply.code(400).send({ error: err?.message ?? 'Parse failed' })
+    }
+  })
+
+  // ── POST /api/amazon/flat-file/parse ────────────────────────────────
+  // FX.2 — parse an uploaded EXTERNAL file (CSV / TSV / XLSX / JSON) into raw
+  // { headers, rows }. Unlike /parse-tsv (which strips Amazon's metadata header
+  // and normalizes to Amazon column ids), this returns the file's OWN headers
+  // untouched — the raw external shape the FX.3 smart-mapper maps onto flat-file
+  // columns. Text formats (csv/tsv/json) send `text`; xlsx sends base64 `bytesBase64`.
+  fastify.post<{
+    Body: { filename?: string; text?: string; bytesBase64?: string }
+  }>('/amazon/flat-file/parse', async (request, reply) => {
+    const { filename, text, bytesBase64 } = request.body
+    if (!text && !bytesBase64) {
+      return reply.code(400).send({ error: 'Provide file content (text or bytesBase64)' })
+    }
+    if ((text?.length ?? 0) > 15_000_000 || (bytesBase64?.length ?? 0) > 20_000_000) {
+      return reply.code(400).send({ error: 'File too large (max ~15 MB)' })
+    }
+    try {
+      const kind = detectFileKind(filename) // csv | xlsx | json (.tsv/.txt → csv family)
+      let parsed
+      if (kind === 'xlsx') {
+        if (!bytesBase64) return reply.code(400).send({ error: 'xlsx upload requires bytesBase64' })
+        parsed = await parseXlsx(new Uint8Array(Buffer.from(bytesBase64, 'base64')))
+      } else if (kind === 'json') {
+        if (text == null) return reply.code(400).send({ error: 'json upload requires text' })
+        parsed = parseJson(text)
+      } else {
+        if (text == null) return reply.code(400).send({ error: 'csv/tsv upload requires text' })
+        parsed = parseCsv(text, sniffDelimiter(filename, text)) // sniff comma vs tab
+      }
+      return reply.send({ kind, headers: parsed.headers, rows: parsed.rows, count: parsed.rows.length })
     } catch (err: any) {
       return reply.code(400).send({ error: err?.message ?? 'Parse failed' })
     }

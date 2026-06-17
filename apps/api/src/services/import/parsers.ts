@@ -40,6 +40,22 @@ export function detectFileKind(filename: string | null | undefined): FileKind {
   return 'csv'
 }
 
+/**
+ * Choose a delimiter for a text table. An explicit .tsv/.tab filename wins;
+ * a .csv filename forces comma; otherwise sniff the first non-empty line —
+ * tab-dominant → tab, else comma. Lets one CSV parser serve both comma- and
+ * tab-separated external files without a separate TSV file-kind.
+ */
+export function sniffDelimiter(filename: string | null | undefined, text: string): ',' | '\t' {
+  const lower = (filename ?? '').toLowerCase()
+  if (lower.endsWith('.tsv') || lower.endsWith('.tab')) return '\t'
+  if (lower.endsWith('.csv')) return ','
+  const firstLine = text.split(/\r?\n/).find((l) => l.trim() !== '') ?? ''
+  const tabs = (firstLine.match(/\t/g) ?? []).length
+  const commas = (firstLine.match(/,/g) ?? []).length
+  return tabs > commas ? '\t' : ','
+}
+
 function dedupeHeaders(headers: string[]): string[] {
   const seen = new Map<string, number>()
   return headers.map((h) => {
@@ -54,14 +70,17 @@ function dedupeHeaders(headers: string[]): string[] {
   })
 }
 
-export function parseCsv(text: string): ParsedFile {
+export function parseCsv(text: string, delimiter: string = ','): ParsedFile {
   // csv-parse can do header-aware parsing in one pass, but we want
   // to control the dedupe semantics ourselves (our normalisation
   // is consistent with XLSX above) — so parse rows, lift the first
-  // non-empty as headers, and zip.
+  // non-empty as headers, and zip. `delimiter` defaults to comma so
+  // every existing caller is unchanged; pass '\t' for tab-separated
+  // (external TSV) files.
   const records = parseCsvSync(text, {
     skip_empty_lines: true,
     relax_column_count: true,
+    delimiter,
   }) as string[][]
   if (records.length === 0) return { headers: [], rows: [] }
   const headers = dedupeHeaders(records[0])
