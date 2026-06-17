@@ -34,6 +34,12 @@ export function GuidedBuilder() {
   const [loadingProducts, setLoadingProducts] = useState(true)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [search, setSearch] = useState('')
+  // Step 2 (Campaign Setup) state
+  const [includeProductTarget, setIncludeProductTarget] = useState(true)
+  const [agCfg, setAgCfg] = useState<Record<string, { bid: string; budget: string }>>({})
+  const [showNaming, setShowNaming] = useState(false)
+  const [includeSB, setIncludeSB] = useState(false)
+  const [includeSD, setIncludeSD] = useState(false)
 
   useEffect(() => {
     void fetch(`${getBackendUrl()}/api/advertising/by-product`, { cache: 'no-store' })
@@ -55,6 +61,28 @@ export function GuidedBuilder() {
   const exit = () => router.push('/marketing/ads-console/campaigns')
   const filtered = products.filter((p) => !search.trim() || p.name.toLowerCase().includes(search.toLowerCase()))
   const canNext = step === 0 ? !!productGroupName.trim() && selected.size > 0 : true
+  const ALGO_LABEL: Record<BidStrategy, string> = { maxImpressions: 'Max Impressions', targetAcos: 'Target ACoS', maxOrders: 'Max Orders', custom: 'Custom', none: 'None' }
+  const grp = productGroupName.trim() || 'Guided campaign'
+  const spAdGroups = ['Auto', 'Research', 'Performance', ...(includeProductTarget ? ['Product Target'] : [])]
+  const agOf = (k: string) => agCfg[k] ?? { bid: '0.45', budget: '25.00' }
+  const setAg = (k: string, f: 'bid' | 'budget', v: string) => setAgCfg((m) => ({ ...m, [k]: { ...agOf(k), [f]: v } }))
+  // a render FUNCTION (not a nested component) so the bid/budget inputs don't remount + lose focus each keystroke
+  const renderSpTable = (prefix: string, ags: string[]) => (
+    <div className="az-cb-tbl">
+      <div className="az-cb-tr az-cb-th"><span>Ad Group</span><span>Default Bid</span><span>Budget</span><span>Bid Algorithm</span></div>
+      {ags.map((ag) => {
+        const k = `${prefix}:${ag}`
+        return (
+          <div className="az-cb-tr" key={k}>
+            <span className="ag"><span className="agname">{grp} - {prefix} - {ag}</span><span className="agsub">{grp} - {prefix} - {ag} Ad Group</span></span>
+            <span className="bidc"><span className="fld"><span className="cur">€</span><input value={agOf(k).bid} onChange={(e) => setAg(k, 'bid', e.target.value)} /></span><em>Suggested: €{agOf(k).bid}</em></span>
+            <span className="bidc"><span className="fld"><span className="cur">€</span><input value={agOf(k).budget} onChange={(e) => setAg(k, 'budget', e.target.value)} /></span><em>Suggested: €{agOf(k).budget}</em></span>
+            <span className="algo">{ALGO_LABEL[bidStrategy]}</span>
+          </div>
+        )
+      })}
+    </div>
+  )
 
   return (
     <div className="az-cb">
@@ -131,9 +159,50 @@ export function GuidedBuilder() {
           </div>
         )}
 
-        {step > 0 && (
+        {step === 1 && (
+          <div className="az-cb-card">
+            <div className="az-cb-camp">
+              <div className="az-cb-camp-hd">
+                <b>Sponsored Product Campaign</b>
+                <label className="az-cb-chk"><input type="checkbox" checked={includeProductTarget} onChange={(e) => setIncludeProductTarget(e.target.checked)} /> Include Product Target Campaign</label>
+              </div>
+              {renderSpTable('SP', spAdGroups)}
+              <button type="button" className="az-cb-link" onClick={() => setShowNaming((s) => !s)}>{showNaming ? '▴' : '▾'} Advanced Naming Options</button>
+              {showNaming && <div className="az-cb-sub" style={{ marginTop: 8 }}>Campaign + ad-group names are generated from the product group name; custom naming schemes arrive with the structure builder.</div>}
+            </div>
+
+            <div className="az-cb-camp">
+              <div className="az-cb-camp-hd">
+                <b>Sponsored Brand Campaign</b>
+                <label className="az-cb-chk"><input type="checkbox" checked={includeSB} onChange={(e) => setIncludeSB(e.target.checked)} /> Include</label>
+              </div>
+              {includeSB ? (
+                <div className="az-cb-sbset">
+                  <label className="az-cb-field"><span>Brand</span><select className="az-cb-input"><option>Select brand to add SB campaign into setup</option></select></label>
+                  <div className="az-cb-field"><span>Sponsored Brand Ad Type</span>
+                    <div className="az-cb-radios">
+                      <label><input type="radio" name="sbtype" defaultChecked /> Product Collection</label>
+                      <label><input type="radio" name="sbtype" /> Store Spotlight</label>
+                      <label><input type="radio" name="sbtype" /> Brand Video</label>
+                    </div>
+                  </div>
+                  {renderSpTable('SB', ['Performance', 'Research', 'Product Target'])}
+                </div>
+              ) : <div className="az-cb-sub">Requires Brand Registry. Toggle on to add a Sponsored Brands campaign (ad type, landing page, creative).</div>}
+            </div>
+
+            <div className="az-cb-camp">
+              <div className="az-cb-camp-hd">
+                <b>Sponsored Display Campaign</b>
+                <label className="az-cb-chk"><input type="checkbox" checked={includeSD} onChange={(e) => setIncludeSD(e.target.checked)} /> Include</label>
+              </div>
+              {includeSD ? renderSpTable('SD', ['Product Target']) : <div className="az-cb-sub">Toggle on to add a Sponsored Display (product-targeting) campaign.</div>}
+            </div>
+          </div>
+        )}
+        {step > 1 && (
           <div className="az-cb-card az-cb-soon">
-            <b>{STEPS[step]}</b> — this step is being built next (CB.{step + 1}). The wizard shell, stepper and navigation are live; this panel fills in as each step ships.
+            <b>{STEPS[step]}</b> — building next (CB.{step + 1}). The wizard shell, stepper and navigation are live; this panel fills in as each step ships.
           </div>
         )}
       </div>

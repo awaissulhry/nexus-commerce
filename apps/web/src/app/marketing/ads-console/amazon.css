@@ -802,6 +802,31 @@
 .az-cb-btn.dark:hover { background: #1a60c4; }
 .az-cb-btn.dark:disabled { background: #bcd3f3; border-color: #bcd3f3; cursor: not-allowed; }
 .az-cb-soon { padding: 26px 24px; color: var(--ink3); font-size: 13px; line-height: 1.5; }
+/* CB Step 2 — campaign setup tables */
+.az-cb-camp { padding: 18px 0; border-bottom: 1px solid var(--divider); }
+.az-cb-camp:last-child { border-bottom: none; }
+.az-cb-camp-hd { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.az-cb-camp-hd > b { font-size: 15px; color: var(--ink); }
+.az-cb-chk { display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--ink2); cursor: pointer; }
+.az-cb-tbl { border: 1px solid var(--divider); border-radius: 9px; overflow: hidden; }
+.az-cb-tr { display: grid; grid-template-columns: 2fr 1.3fr 1.3fr 1fr; align-items: center; gap: 14px; padding: 11px 14px; border-bottom: 1px solid var(--divider); }
+.az-cb-tr:last-child { border-bottom: none; }
+.az-cb-th { background: var(--bg3); font-size: 11px; font-weight: 700; color: var(--ink3); padding: 9px 14px; }
+.az-cb-tr .ag { display: flex; flex-direction: column; gap: 2px; }
+.az-cb-tr .agname { font-size: 12.5px; font-weight: 600; color: var(--ink); }
+.az-cb-tr .agsub { font-size: 11px; color: var(--ink3); }
+.az-cb-tr .bidc { display: flex; flex-direction: column; gap: 3px; }
+.az-cb-tr .bidc .fld { display: inline-flex; align-items: center; border: 1px solid var(--border); border-radius: 6px; padding: 0 8px; background: #fff; max-width: 130px; }
+.az-cb-tr .bidc .fld .cur { font-size: 12px; color: var(--ink3); }
+.az-cb-tr .bidc .fld input { border: none; outline: none; font: inherit; font-size: 13px; padding: 7px 4px; width: 100%; background: transparent; }
+.az-cb-tr .bidc em { font-size: 10px; color: var(--ink3); font-style: normal; }
+.az-cb-tr .algo { font-size: 12.5px; color: var(--ink2); font-weight: 600; }
+.az-cb-link { margin-top: 11px; background: none; border: none; color: #1f6fde; font-size: 12.5px; font-weight: 600; cursor: pointer; padding: 0; }
+.az-cb-sbset { display: flex; flex-direction: column; gap: 14px; }
+.az-cb-field { display: flex; flex-direction: column; gap: 6px; }
+.az-cb-field > span { font-size: 12.5px; font-weight: 600; color: var(--ink2); }
+.az-cb-radios { display: flex; flex-direction: column; gap: 8px; font-size: 13px; color: var(--ink); }
+.az-cb-radios label { display: inline-flex; align-items: center; gap: 7px; cursor: pointer; }
 
 /* RC4.2+ — progressive station cards (absorbed modes) */
 .az-station { margin-top: 14px; border: 1px solid var(--divider); border-radius: 12px; background: #fff; overflow: hidden; }
