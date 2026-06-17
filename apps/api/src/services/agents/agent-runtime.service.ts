@@ -20,6 +20,7 @@ import { isAiKillSwitchOn } from '../ai/providers/index.js'
 import { logUsage } from '../ai/usage-logger.service.js'
 import { getTool } from './tool-registry.js'
 import { resolveToolPolicy } from './tool-policy.service.js'
+import { runToolLoop } from './tool-loop.service.js'
 
 const FEATURE = 'products-copilot'
 
@@ -220,5 +221,181 @@ export async function invokeTool(
     error: res.error,
     requiresApproval: policy.requiresApproval,
     riskTier: policy.riskTier,
+  }
+}
+
+export interface ChatInput {
+  agentKey?: string
+  messages: { role: 'user' | 'assistant'; content: string }[]
+  pageContext?: {
+    route?: string
+    productId?: string
+    entityType?: string
+    entityId?: string
+  }
+  userId?: string | null
+}
+
+export interface ChatOutput {
+  runId: string
+  ok: boolean
+  reply?: string
+  toolsUsed?: string[]
+  costUSD?: number
+  model?: string
+  error?: string
+}
+
+/**
+ * ACP.2a — the read-only products copilot. Runs the model with the tool
+ * registry (Anthropic tool-use loop); on a non-Anthropic active provider
+ * it falls back to a text-only answer (Gemini function-calling is a
+ * follow-up). Records the whole exchange on AgentRun.
+ */
+export async function runChat(inp: ChatInput): Promise<ChatOutput> {
+  const started = Date.now()
+  const agentKey = inp.agentKey ?? 'products-copilot'
+  const pc = inp.pageContext
+  const entityType = pc?.entityType ?? (pc?.productId ? 'Product' : null)
+  const entityId = pc?.entityId ?? pc?.productId ?? null
+  const run = await prisma.agentRun.create({
+    data: {
+      agentKey,
+      trigger: 'manual',
+      status: 'running',
+      entityType,
+      entityId,
+      input: {
+        messages: inp.messages,
+        pageContext: pc ?? null,
+      } as Prisma.InputJsonValue,
+      userId: inp.userId ?? null,
+    },
+  })
+
+  try {
+    if (isAiKillSwitchOn())
+      throw new Error('AI is temporarily disabled (kill switch).')
+    const provider = await getProviderForFeature(FEATURE)
+    if (!provider) throw new Error('No AI provider configured.')
+    const model = await resolveModelForFeature(FEATURE, provider)
+
+    const system = [
+      'You are the Nexus products copilot. You are READ-ONLY: read, analyse,',
+      'and draft suggestions using the tools — never claim to have changed,',
+      'priced, published, or sent anything. When a tool returns',
+      'requiresApproval, tell the operator the action is prepared but needs',
+      'their approval (coming soon). Be concise and specific; prefer calling',
+      'a tool over guessing.',
+      pc?.route ? `\nThe operator is on ${pc.route}.` : '',
+      pc?.productId
+        ? `They are focused on productId "${pc.productId}" — use it when a tool needs a productId and none is given.`
+        : '',
+    ]
+      .filter(Boolean)
+      .join('\n')
+
+    // Non-Anthropic active provider → text-only fallback (no tools yet).
+    if (provider.name !== 'anthropic') {
+      const last = inp.messages[inp.messages.length - 1]?.content ?? ''
+      const r = await provider.generate({
+        prompt: `${system}\n\nOperator: ${last}`,
+        model,
+        feature: FEATURE,
+        maxOutputTokens: 1024,
+      })
+      logUsage({
+        provider: r.usage.provider,
+        model: r.usage.model,
+        feature: FEATURE,
+        inputTokens: r.usage.inputTokens,
+        outputTokens: r.usage.outputTokens,
+        costUSD: r.usage.costUSD,
+        ok: true,
+      })
+      await prisma.agentRun.update({
+        where: { id: run.id },
+        data: {
+          status: 'done',
+          ok: true,
+          output: { reply: r.text, toolsUsed: [] } as Prisma.InputJsonValue,
+          inputTokens: r.usage.inputTokens,
+          outputTokens: r.usage.outputTokens,
+          costUSD: r.usage.costUSD,
+          model: r.usage.model,
+          provider: r.usage.provider,
+          latencyMs: Date.now() - started,
+          endedAt: new Date(),
+        },
+      })
+      return {
+        runId: run.id,
+        ok: true,
+        reply: r.text,
+        toolsUsed: [],
+        costUSD: r.usage.costUSD,
+        model: r.usage.model,
+      }
+    }
+
+    const loop = await runToolLoop({
+      model,
+      system,
+      messages: inp.messages.map((m) => ({ role: m.role, content: m.content })),
+      ctx: { userId: inp.userId },
+    })
+    const toolsUsed = loop.steps
+      .filter((s) => s.type === 'tool')
+      .map((s) => s.name)
+    logUsage({
+      provider: 'anthropic',
+      model,
+      feature: FEATURE,
+      inputTokens: loop.inputTokens,
+      outputTokens: loop.outputTokens,
+      costUSD: loop.costUSD,
+      ok: true,
+      entityType: entityType ?? undefined,
+      entityId: entityId ?? undefined,
+    })
+    await prisma.agentRun.update({
+      where: { id: run.id },
+      data: {
+        status: 'done',
+        ok: true,
+        output: { reply: loop.text, toolsUsed } as Prisma.InputJsonValue,
+        steps: loop.steps as unknown as Prisma.InputJsonValue,
+        inputTokens: loop.inputTokens,
+        outputTokens: loop.outputTokens,
+        costUSD: loop.costUSD,
+        model,
+        provider: 'anthropic',
+        latencyMs: Date.now() - started,
+        endedAt: new Date(),
+      },
+    })
+    return {
+      runId: run.id,
+      ok: true,
+      reply: loop.text,
+      toolsUsed,
+      costUSD: loop.costUSD,
+      model,
+    }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    await prisma.agentRun
+      .update({
+        where: { id: run.id },
+        data: {
+          status: 'failed',
+          ok: false,
+          errorMessage: msg,
+          latencyMs: Date.now() - started,
+          endedAt: new Date(),
+        },
+      })
+      .catch(() => {})
+    return { runId: run.id, ok: false, error: msg }
   }
 }

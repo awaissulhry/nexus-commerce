@@ -10,7 +10,11 @@
 
 import type { FastifyPluginAsync } from 'fastify'
 import prisma from '../db.js'
-import { runAgent, invokeTool } from '../services/agents/agent-runtime.service.js'
+import {
+  runAgent,
+  invokeTool,
+  runChat,
+} from '../services/agents/agent-runtime.service.js'
 import {
   listToolPolicies,
   setToolPolicy,
@@ -39,6 +43,34 @@ const agentRoutes: FastifyPluginAsync = async (fastify) => {
         .code(out.error?.includes('kill switch') ? 503 : 500)
         .send(out)
     }
+    return out
+  })
+
+  // ACP.2a — read-only products copilot (model-driven tool-use loop).
+  fastify.post<{
+    Body: {
+      agentKey?: string
+      messages?: { role: 'user' | 'assistant'; content: string }[]
+      pageContext?: {
+        route?: string
+        productId?: string
+        entityType?: string
+        entityId?: string
+      }
+    }
+  }>('/agent/chat', async (request, reply) => {
+    const messages = request.body?.messages
+    if (!Array.isArray(messages) || messages.length === 0)
+      return reply.code(400).send({ error: 'messages[] is required' })
+    const out = await runChat({
+      agentKey: request.body?.agentKey,
+      messages,
+      pageContext: request.body?.pageContext,
+    })
+    if (!out.ok)
+      return reply
+        .code(out.error?.includes('kill switch') ? 503 : 500)
+        .send(out)
     return out
   })
 
