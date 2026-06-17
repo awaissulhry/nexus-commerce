@@ -158,6 +158,9 @@ interface Row {
   _rowId: string
   _isNew?: boolean
   _dirty?: boolean
+  /** GX.5 — a trailing blank "canvas" row (Sheets-style). Never counted, saved,
+   *  submitted or exported; materializes into a real row on first edit. */
+  _ghost?: boolean
   _status?: 'idle' | 'pending' | 'success' | 'error'
   _feedMessage?: string
   _productId?: string
@@ -321,6 +324,27 @@ function makeEmptyRow(productType: string, _marketplace: string, parentage = '')
     parent_sku: '',
     variation_theme: '',
   }
+}
+
+// GX.5 — how many trailing blank "canvas" rows to keep so you can always just
+// start typing (auto-grow, like Sheets).
+const GHOST_BUFFER = 8
+// A ghost row: blank + NOT _isNew/_dirty, so it's excluded from counts, save,
+// submit and export until edited (which flips it to a real row).
+function makeGhostRow(productType: string): Row {
+  return {
+    _rowId: `ghost-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    _isNew: false, _dirty: false, _ghost: true, _status: 'idle',
+    item_sku: '',
+    product_type: productType,
+    record_action: 'full_update',
+    parentage_level: '',
+    parent_sku: '',
+    variation_theme: '',
+  }
+}
+function makeGhostRows(productType: string, n: number): Row[] {
+  return Array.from({ length: n }, () => makeGhostRow(productType))
 }
 
 // ── Storage key helpers ────────────────────────────────────────────────
@@ -975,6 +999,7 @@ export default function AmazonFlatFileClient({
   const cellErrors = useMemo<Map<string, ValidationIssue>>(() => {
     const m = new Map<string, ValidationIssue>()
     for (const row of rows) {
+      if (row._ghost) continue // GX.5 — don't validate blank canvas rows
       for (const col of manifestColumns) {
         const rawVal = row[col.id]
         const val = rawVal != null ? String(rawVal) : ''
@@ -995,16 +1020,20 @@ export default function AmazonFlatFileClient({
 
   // Row-mode search + multi-level sort (display-only, never mutates rows)
   const displayRows = useMemo<Row[]>(() => {
+    // GX.5 — process only REAL rows through search/sort/filter/grouping; the
+    // trailing ghost (blank canvas) rows are re-appended at the bottom below.
+    const ghostRows = rows.filter((r) => r._ghost)
+    const baseRows = rows.filter((r) => !r._ghost)
     let result: Row[]
     if (searchQuery && searchMode === 'rows') {
       const q = searchQuery.toLowerCase()
-      result = rows.filter((row) =>
+      result = baseRows.filter((row) =>
         Object.entries(row).some(
           ([k, v]) => !k.startsWith('_') && v != null && String(v).toLowerCase().includes(q),
         ),
       )
     } else {
-      result = rows
+      result = baseRows
     }
 
     if (sortConfig.length > 0) {
@@ -1083,9 +1112,32 @@ export default function AmazonFlatFileClient({
       result = grouped
     }
 
+    // GX.5 — re-append the blank canvas at the bottom, but only in the default
+    // (unfiltered) view; a search / row-filter result shouldn't be padded.
+    const isDefaultView = !(searchQuery && searchMode === 'rows')
+      && ffFilter.parentage === 'any' && ffFilter.hasAsin === 'any' && !ffFilter.missingRequired
+    if (isDefaultView) result = result === baseRows ? [...baseRows, ...ghostRows] : [...result, ...ghostRows]
+
     displayRowsRef.current = result
     return result
   }, [rows, searchQuery, searchMode, sortConfig, collapsedParents, ffFilter, manifest, manifestColumns])
+
+  // GX.5 — keep a buffer of trailing ghost rows so there's always a blank canvas
+  // to type into (auto-grow). Tops up after a ghost materializes or on load.
+  // Converges: once the buffer is full the guard is false, so no render loop.
+  useEffect(() => {
+    if (!productType) return
+    const ghosts = rows.reduce((n, r) => n + (r._ghost ? 1 : 0), 0)
+    if (ghosts >= GHOST_BUFFER) return
+    setRows((prev) => {
+      const g = prev.reduce((n, r) => n + (r._ghost ? 1 : 0), 0)
+      return g >= GHOST_BUFFER ? prev : [...prev, ...makeGhostRows(productType, GHOST_BUFFER - g)]
+    })
+  }, [rows, productType])
+
+  // GX.5 — the visible rows excluding the blank canvas, for counts + select-all.
+  const realDisplayRows = useMemo(() => displayRows.filter((r) => !r._ghost), [displayRows])
+  const realRowCount = useMemo(() => rows.reduce((n, r) => n + (r._ghost ? 0 : 1), 0), [rows])
 
   // BF.1 — flat list of every visible cell for FindReplaceBar
   const findCells = useMemo<FindCell[]>(() => {
@@ -1623,7 +1675,8 @@ export default function AmazonFlatFileClient({
     return familyId ? `${base}-family-${familyId}` : base
   }
   function saveRows(mp: string, pt: string, r: Row[]) {
-    try { localStorage.setItem(rowStorageKey(mp, pt), JSON.stringify(r)) } catch {}
+    // GX.5 — never persist ghost (blank canvas) rows; they're re-created on load.
+    try { localStorage.setItem(rowStorageKey(mp, pt), JSON.stringify(r.filter((row) => !row._ghost))) } catch {}
   }
   function loadSavedRows(mp: string, pt: string): Row[] | null {
     try {
@@ -2088,13 +2141,17 @@ export default function AmazonFlatFileClient({
     if (firstNew) setTimeout(() => setActiveCell({ rowId: firstNew._rowId as string, colId: 'item_sku' }), 30)
   }, [productType, marketplace, pushSnapshot])
 
+  // GX.5 — editing a ghost (blank canvas) row materializes it into a real new
+  // row; the buffer effect then re-adds a fresh ghost below (auto-grow).
+  const materializeGhost = (r: Row): Partial<Row> => (r._ghost ? { _ghost: false, _isNew: true } : {})
+
   const updateCell = useCallback((rowId: string, colId: string, value: unknown) => {
     pushSnapshot()
-    setRows((prev) => prev.map((r) => r._rowId === rowId ? { ...r, [colId]: value, _dirty: true } : r))
+    setRows((prev) => prev.map((r) => r._rowId === rowId ? { ...r, [colId]: value, _dirty: true, ...materializeGhost(r) } : r))
   }, [])
 
   const liveUpdateCell = useCallback((rowId: string, colId: string, value: unknown) => {
-    setRows((prev) => prev.map((r) => r._rowId === rowId ? { ...r, [colId]: value, _dirty: true } : r))
+    setRows((prev) => prev.map((r) => r._rowId === rowId ? { ...r, [colId]: value, _dirty: true, ...materializeGhost(r) } : r))
   }, [])
 
   const navigate = useCallback((rowId: string, colId: string, dir: 'right' | 'left' | 'down' | 'up') => {
@@ -2764,7 +2821,8 @@ export default function AmazonFlatFileClient({
     const mf = effectiveManifest ?? manifest
     if (!mf) return
     const selectedOnly = selectedRows.size > 0
-    const outRows = selectedOnly ? rows.filter((r) => selectedRows.has(r._rowId as string)) : rows
+    const exportable = rows.filter((r) => !r._ghost) // GX.5 — never export blank canvas rows
+    const outRows = selectedOnly ? exportable.filter((r) => selectedRows.has(r._rowId as string)) : exportable
     if (!outRows.length) { toast.warning('No rows to export'); return }
     // Export in the editor's on-screen column order (orderedGroups — respects the
     // saved group drag-order), not the raw Amazon schema order, so the file's
@@ -2799,7 +2857,7 @@ export default function AmazonFlatFileClient({
     saveRows(marketplace, storageTypeRef.current, rows)
     setSaveFlash(true)
     setTimeout(() => setSaveFlash(false), 2000)
-    void syncToPlatform(rows, false)
+    void syncToPlatform(rows.filter((r) => !r._ghost), false)
   }, [rows, marketplace, productType, createVersion, syncToPlatform])
 
   const handleDiscard = useCallback(() => {
@@ -3211,7 +3269,7 @@ export default function AmazonFlatFileClient({
                 {pullPanelOpen && (
                   <PullFromAmazonPanel
                     selectedCount={selectedRows.size}
-                    visibleCount={displayRows.length}
+                    visibleCount={realDisplayRows.length}
                     totalCount={rows.length}
                     currentMarket={marketplace}
                     pulling={pulling}
@@ -3391,7 +3449,7 @@ export default function AmazonFlatFileClient({
               </div>
               {searchQuery && (
                 <span className="text-xs text-slate-400 tabular-nums whitespace-nowrap">
-                  {searchMode === 'rows' ? `${displayRows.length}/${rows.length}` : `${allColumns.length} col${allColumns.length !== 1 ? 's' : ''}`}
+                  {searchMode === 'rows' ? `${realDisplayRows.length}/${realRowCount}` : `${allColumns.length} col${allColumns.length !== 1 ? 's' : ''}`}
                 </span>
               )}
               {/* BF.3 — extended row filter */}
@@ -3690,18 +3748,18 @@ export default function AmazonFlatFileClient({
                   <input
                     type="checkbox"
                     className="w-3.5 h-3.5 accent-blue-600"
-                    checked={displayRows.length > 0 && selectedRows.size === displayRows.length}
+                    checked={realDisplayRows.length > 0 && selectedRows.size === realDisplayRows.length}
                     ref={(el) => {
-                      if (el) el.indeterminate = selectedRows.size > 0 && selectedRows.size < displayRows.length
+                      if (el) el.indeterminate = selectedRows.size > 0 && selectedRows.size < realDisplayRows.length
                     }}
                     onChange={(e) => {
                       if (e.target.checked) {
-                        setSelectedRows(new Set(displayRows.map((r) => r._rowId as string)))
+                        setSelectedRows(new Set(realDisplayRows.map((r) => r._rowId as string)))
                       } else {
                         setSelectedRows(new Set())
                       }
                     }}
-                    title={selectedRows.size === displayRows.length ? 'Deselect all' : 'Select all'}
+                    title={selectedRows.size === realDisplayRows.length ? 'Deselect all' : 'Select all'}
                   />
                 </th>
                 <th
@@ -3943,7 +4001,7 @@ export default function AmazonFlatFileClient({
       {/* ── Status bar ─────────────────────────────────────── */}
       {manifest && (
         <div className="border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 py-1 flex items-center gap-4 text-xs text-slate-400 select-none flex-shrink-0">
-          <span>{displayRows.length} row{displayRows.length !== 1 ? 's' : ''}</span>
+          <span>{realDisplayRows.length} row{realDisplayRows.length !== 1 ? 's' : ''}</span>
           {normSel && (() => {
             const rCount = normSel.rMax - normSel.rMin + 1
             const cCount = normSel.cMax - normSel.cMin + 1
@@ -4669,6 +4727,7 @@ function SpreadsheetRow({ row, rowIdx, columns, colToGroup, selected, activeCell
             editInitialChar={isCellEditing ? editInitialChar : null}
             cellBg={stickyLeft !== undefined ? gColor(groupColor).band : gColor(groupColor).cell}
             grayed={!appliesToType}
+            isGhost={!!row._ghost}
             width={w}
             cellHeight={rowHeight}
             isSelected={isSelected}
@@ -4850,6 +4909,8 @@ function ProductTypeDropdown({ value, options, loading, onChange }: ProductTypeD
 interface CellProps {
   col: Column; value: unknown; isActive: boolean; cellBg: string
   grayed: boolean
+  /** GX.5 — a trailing blank canvas row: suppress the "⚠ required" placeholder. */
+  isGhost?: boolean
   width: number
   cellHeight: number
   ri: number; ci: number
@@ -4911,7 +4972,7 @@ function SpreadsheetCellImpl({ col, value, isActive, cellBg, width, cellHeight, 
   isSelected, selEdges, isCorner, isFillTarget, fillTargetEdges,
   isEditing, editInitialChar, isClipboard, clipboardEdges,
   validIssue, stickyLeft, isMatch, toneCls,
-  guidanceLevel,
+  guidanceLevel, isGhost,
   onCellPointerDown, onCellDoubleClick, onFillHandlePointerDown, onFillDrop,
   onDeactivate, onChange, onLiveChange, onPushSnapshot, onNavigate }: CellProps) {
   const displayValue = value != null ? String(value) : ''
@@ -5109,7 +5170,7 @@ function SpreadsheetCellImpl({ col, value, isActive, cellBg, width, cellHeight, 
             strictInvalid ? 'text-amber-600 dark:text-amber-400'
             : isEmpty ? 'text-slate-300 dark:text-slate-600 italic' : 'text-slate-800 dark:text-slate-200')}>
             {strictInvalid && <AlertCircle className="w-3 h-3 shrink-0" aria-hidden />}
-            <span className="truncate">{displayValue || (col.required ? '⚠ required' : col.options[0] ? `e.g. ${col.options[0]}` : '—')}</span>
+            <span className="truncate">{displayValue || ((col.required && !isGhost) ? '⚠ required' : col.options[0] ? `e.g. ${col.options[0]}` : '—')}</span>
           </span>
           <ChevronDown className="w-3 h-3 text-slate-400 flex-shrink-0 opacity-0 group-hover/cell:opacity-100 transition-opacity" />
         </div>
@@ -5171,7 +5232,7 @@ function SpreadsheetCellImpl({ col, value, isActive, cellBg, width, cellHeight, 
         style={{ ...cellStyle, ...selStyle }}>
         {fillHandle}
         <div className="px-1.5 flex items-center text-xs text-slate-800 dark:text-slate-200 truncate" style={hStyle}>
-          {displayValue || <span className="text-slate-300 dark:text-slate-600 italic">{col.required ? '⚠ required' : ''}</span>}
+          {displayValue || <span className="text-slate-300 dark:text-slate-600 italic">{(col.required && !isGhost) ? '⚠ required' : ''}</span>}
         </div>
       </td>
     )
@@ -5219,9 +5280,9 @@ function SpreadsheetCellImpl({ col, value, isActive, cellBg, width, cellHeight, 
       style={{ ...cellStyle, ...selStyle }} title={guidanceTitle ?? validIssue?.msg ?? col.description}>
       {fillHandle}
       <div className={cn('px-1.5 flex items-center text-xs truncate',
-        isEmpty ? (col.required ? 'text-red-400 dark:text-red-500 italic' : 'text-slate-300 dark:text-slate-600') : 'text-slate-800 dark:text-slate-200')}
+        isEmpty ? ((col.required && !isGhost) ? 'text-red-400 dark:text-red-500 italic' : 'text-slate-300 dark:text-slate-600') : 'text-slate-800 dark:text-slate-200')}
         style={hStyle}>
-        {displayValue || (col.required ? '⚠ required' : '')}
+        {displayValue || ((col.required && !isGhost) ? '⚠ required' : '')}
       </div>
     </td>
   )
@@ -5247,6 +5308,7 @@ function areCellPropsEqual(a: CellProps, b: CellProps): boolean {
     a.editInitialChar === b.editInitialChar &&
     a.cellBg === b.cellBg &&
     a.grayed === b.grayed &&
+    a.isGhost === b.isGhost &&
     a.width === b.width &&
     a.cellHeight === b.cellHeight &&
     a.isSelected === b.isSelected &&
