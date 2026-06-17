@@ -793,6 +793,10 @@ export default function AmazonFlatFileClient({
   const selAnchorRef = useRef<{ ri: number; ci: number } | null>(null)
   const selEndRef = useRef<{ ri: number; ci: number } | null>(null)
   const isEditingRef = useRef(false)
+  // GX.9 — column-anchor for Sheets-style row entry: Tab across a row's fields,
+  // then Enter drops to the next row at the column where the row entry started.
+  // Set by Tab, used by Enter, reset by any other navigation.
+  const entryAnchorColRef = useRef<number | null>(null)
 
   useEffect(() => { selAnchorRef.current = selAnchor }, [selAnchor])
   useEffect(() => { selEndRef.current = selEnd }, [selEnd])
@@ -1417,6 +1421,7 @@ export default function AmazonFlatFileClient({
   }, [normSel, pushSnapshot])
 
   const handleCellPointerDown = useCallback((ri: number, ci: number, shiftKey: boolean) => {
+    entryAnchorColRef.current = null // clicking a cell starts a fresh row-entry anchor
     if (shiftKey && selAnchor) {
       setSelEnd({ ri, ci })
       setIsEditing(false)
@@ -1442,7 +1447,8 @@ export default function AmazonFlatFileClient({
     if (row && col) setActiveCell({ rowId: row._rowId as string, colId: col.id })
   }, [])
 
-  const moveSelection = useCallback((dCol: number, dRow: number, extend = false) => {
+  const moveSelection = useCallback((dCol: number, dRow: number, extend = false, keepEntryAnchor = false) => {
+    if (!keepEntryAnchor) entryAnchorColRef.current = null // any non-Tab/Enter nav resets the row-entry anchor
     const maxRi = displayRowsRef.current.length - 1
     const maxCi = allColumnsRef.current.length - 1
     const anchor = selAnchorRef.current
@@ -1590,6 +1596,7 @@ export default function AmazonFlatFileClient({
       // Ctrl+Home / Ctrl+End
       if (mod && e.key === 'Home') {
         e.preventDefault()
+        entryAnchorColRef.current = null
         setSelAnchor({ ri: 0, ci: 0 }); setSelEnd({ ri: 0, ci: 0 })
         const row = displayRowsRef.current[0]; const col = allColumnsRef.current[0]
         if (row && col) setActiveCell({ rowId: row._rowId as string, colId: col.id })
@@ -1598,6 +1605,7 @@ export default function AmazonFlatFileClient({
       }
       if (mod && e.key === 'End') {
         e.preventDefault()
+        entryAnchorColRef.current = null
         const ri = displayRowsRef.current.length - 1; const ci = allColumnsRef.current.length - 1
         setSelAnchor({ ri, ci }); setSelEnd({ ri, ci })
         const row = displayRowsRef.current[ri]; const col = allColumnsRef.current[ci]
@@ -1618,8 +1626,18 @@ export default function AmazonFlatFileClient({
         if (e.key === 'ArrowUp')    { e.preventDefault(); moveSelection(0, -1); return }
         if (e.key === 'ArrowRight') { e.preventDefault(); moveSelection(1, 0); return }
         if (e.key === 'ArrowLeft')  { e.preventDefault(); moveSelection(-1, 0); return }
-        if (e.key === 'Enter')      { e.preventDefault(); moveSelection(0, 1); return }
-        if (e.key === 'Tab')        { e.preventDefault(); moveSelection(1, 0); return }
+        if (e.key === 'Enter') {
+          e.preventDefault()
+          const a = entryAnchorColRef.current, ci = selAnchorRef.current?.ci ?? 0
+          moveSelection(a !== null ? a - ci : 0, 1, false, true) // back to anchor column, down a row
+          return
+        }
+        if (e.key === 'Tab') {
+          e.preventDefault()
+          if (entryAnchorColRef.current === null) entryAnchorColRef.current = selAnchorRef.current?.ci ?? 0
+          moveSelection(1, 0, false, true)
+          return
+        }
       }
       if (e.shiftKey && !mod) {
         if (e.key === 'ArrowDown')  { e.preventDefault(); moveSelection(0, 1, true); return }
@@ -1647,6 +1665,7 @@ export default function AmazonFlatFileClient({
       if (e.key === 'Escape') {
         setClipboardRange(null)
         setContextMenu(null)
+        entryAnchorColRef.current = null
         if (selAnchorRef.current) setSelEnd(selAnchorRef.current)
         return
       }
@@ -2258,10 +2277,15 @@ export default function AmazonFlatFileClient({
     const colIds = allColumnsRef.current.map((c) => c.id)
     const rowIds = displayRowsRef.current.map((r) => r._rowId as string)
     let ci = colIds.indexOf(colId), ri = rowIds.indexOf(rowId)
-    if (dir === 'right') ci = Math.min(ci + 1, colIds.length - 1)
-    else if (dir === 'left') ci = Math.max(ci - 1, 0)
-    else if (dir === 'down') ri = Math.min(ri + 1, rowIds.length - 1)
-    else ri = Math.max(ri - 1, 0)
+    // GX.9 — column-anchor: Tab sets the anchor, Enter returns to it (row entry).
+    if (dir === 'right') {
+      if (entryAnchorColRef.current === null) entryAnchorColRef.current = ci
+      ci = Math.min(ci + 1, colIds.length - 1)
+    } else if (dir === 'left') { entryAnchorColRef.current = null; ci = Math.max(ci - 1, 0) }
+    else if (dir === 'down') {
+      ri = Math.min(ri + 1, rowIds.length - 1)
+      if (entryAnchorColRef.current !== null) ci = Math.min(entryAnchorColRef.current, colIds.length - 1)
+    } else { entryAnchorColRef.current = null; ri = Math.max(ri - 1, 0) }
     const nc = colIds[ci], nr = rowIds[ri]
     if (nc && nr) {
       setActiveCell({ rowId: nr, colId: nc })
