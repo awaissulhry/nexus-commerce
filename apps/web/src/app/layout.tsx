@@ -1,15 +1,33 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { Inter, Space_Grotesk, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 
-// P0 — Inter (variable) as the app font, exposed as the --font-sans CSS
-// variable that tailwind.config.ts fontFamily.sans + the body default
-// reference. `display: swap` keeps text visible during load; Inter is
-// metrically close to the old system stack so there's no layout shift.
+// P0 — Inter (variable) as the app body font, exposed as --font-sans.
+// `display: swap` keeps text visible during load; Inter is metrically
+// close to the old system stack so there's no layout shift.
 const inter = Inter({
   subsets: ["latin", "latin-ext"],
   variable: "--font-sans",
   display: "swap",
+});
+
+// P0-FC — Space Grotesk (geometric display) for headings + hero
+// numerals, and JetBrains Mono for tabular data/metrics. The
+// "command-center" type pairing of the futuristic console language.
+// Exposed as --font-display / --font-mono (tailwind fontFamily.display
+// / .mono). Loaded globally but only applied via the display/mono
+// utility classes, so body text stays Inter.
+const display = Space_Grotesk({
+  subsets: ["latin"],
+  variable: "--font-display",
+  display: "swap",
+  weight: ["400", "500", "600", "700"],
+});
+const mono = JetBrains_Mono({
+  subsets: ["latin"],
+  variable: "--font-mono",
+  display: "swap",
+  weight: ["400", "500", "600", "700"],
 });
 import AppSidebar from "@/components/layout/AppSidebar";
 import AppShell from "@/components/layout/AppShell";
@@ -50,7 +68,7 @@ export default async function RootLayout({
   const locale = await getServerLocale();
   const t = await getServerT();
   return (
-    <html lang={locale} className={inter.variable}>
+    <html lang={locale} className={`${inter.variable} ${display.variable} ${mono.variable}`}>
       <body>
         {/* U.13 — skip-to-content link (WCAG 2.4.1 Bypass Blocks).
             Visually hidden until keyboard-focused, then anchors at

@@ -47,6 +47,13 @@
   --warning-soft: 255 251 235; --warning-line: 253 230 138; --warning-strong: 180 83 9;
   --danger-soft:  255 241 242; --danger-line:  254 205 211; --danger-strong:  190 18 60;
   --info-soft:    239 246 255; --info-line:    191 219 254; --info-strong:    29 78 216;
+
+  /* P0-FC — Quantum accent (indigo→cyan). Available app-wide so
+     text-accent / bg-accent / ring-accent resolve everywhere. */
+  --accent:        99 102 241;  /* indigo-500 */
+  --accent-from:   99 102 241;  /* indigo-500 */
+  --accent-to:     34 211 238;  /* cyan-400  */
+  --accent-bright: 34 211 238;  /* cyan-400  */
 }
 
 .dark {
@@ -72,6 +79,93 @@
   --warning-soft: 56 33 6;  --warning-line: 146 64 14; --warning-strong: 252 211 77;
   --danger-soft:  60 16 24; --danger-line:  159 18 57; --danger-strong:  253 164 175;
   --info-soft:    17 32 66; --info-line:    30 64 175; --info-strong:    147 197 253;
+
+  /* Brighter accent on dark so the glow reads. */
+  --accent: 129 140 248; /* indigo-400 */
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   P0-FC — Futuristic "Console" theme (UI_REBUILD_STRATEGY.md).
+
+   SCOPED to .theme-console so it does NOT flip the live app. The
+   /design/console preview wraps itself in `.dark .theme-console`:
+   `.dark` supplies the dark text/status tokens, `.theme-console`
+   deepens the canvas to a blue-black and brightens the accent. When
+   approved, P2 promotes this to the global shell.
+   ═══════════════════════════════════════════════════════════════════ */
+.theme-console {
+  --surface-canvas: 8 10 20;     /* #08 0A 14 — deep blue-black */
+  --surface-card:   17 20 34;    /* lifted panel */
+  --surface-raised: 26 30 50;    /* elevated */
+  --surface-sunken: 5 7 14;      /* wells */
+  --border-subtle:  41 47 70;
+  --border-default: 56 64 92;
+  --border-strong:  84 94 128;
+  --accent: 129 140 248;         /* indigo-400 */
+}
+
+/* Frosted glass — for chrome, nav, cards, modals (NOT dense tables).
+   Enough opacity + blur that text on it stays legible (balanced glass). */
+.theme-console .glass {
+  background-color: rgb(255 255 255 / 0.045);
+  backdrop-filter: blur(14px) saturate(150%);
+  -webkit-backdrop-filter: blur(14px) saturate(150%);
+  border: 1px solid rgb(255 255 255 / 0.09);
+  box-shadow: inset 0 1px 0 0 rgb(255 255 255 / 0.07),
+    0 8px 32px -12px rgb(0 0 0 / 0.7);
+}
+.theme-console .glass-strong {
+  background-color: rgb(23 27 44 / 0.72);
+  backdrop-filter: blur(16px) saturate(160%);
+  -webkit-backdrop-filter: blur(16px) saturate(160%);
+  border: 1px solid rgb(255 255 255 / 0.10);
+  box-shadow: inset 0 1px 0 0 rgb(255 255 255 / 0.08),
+    0 12px 40px -12px rgb(0 0 0 / 0.75);
+}
+
+/* Atmosphere — two faint accent glows + a subtle grid, behind content.
+   Pure decoration; sits at low opacity so it never fights legibility. */
+.theme-console .console-atmosphere {
+  position: relative;
+  background-color: rgb(var(--surface-canvas));
+  background-image:
+    radial-gradient(60rem 40rem at 12% -10%, rgb(99 102 241 / 0.18), transparent 60%),
+    radial-gradient(50rem 36rem at 100% 0%, rgb(34 211 238 / 0.12), transparent 55%);
+}
+.theme-console .console-grid::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(to right, rgb(255 255 255 / 0.035) 1px, transparent 1px),
+    linear-gradient(to bottom, rgb(255 255 255 / 0.035) 1px, transparent 1px);
+  background-size: 44px 44px;
+  -webkit-mask-image: radial-gradient(70% 60% at 50% 0%, black, transparent 85%);
+  mask-image: radial-gradient(70% 60% at 50% 0%, black, transparent 85%);
+}
+
+/* Accent gradient text — for hero numerals / wordmark. */
+.text-gradient-accent {
+  background-image: linear-gradient(
+    100deg,
+    rgb(var(--accent-from)),
+    rgb(var(--accent-to))
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Live-pulse dot. */
+@keyframes console-pulse {
+  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgb(var(--accent) / 0.5); }
+  50%      { opacity: 0.7; box-shadow: 0 0 0 4px rgb(var(--accent) / 0); }
+}
+.console-pulse { animation: console-pulse 2s ease-in-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .console-pulse { animation: none; }
 }
 
 /* ─── Disabled button contrast pass ─────────────────────────────────

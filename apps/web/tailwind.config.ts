@@ -43,6 +43,11 @@ const config: Config = {
           'Arial',
           'sans-serif',
         ],
+        // P0-FC — Space Grotesk display for headings/hero numerals.
+        display: ['var(--font-display)', 'var(--font-sans)', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        // JetBrains Mono for tabular data/metrics (upgrades existing
+        // font-mono call sites too — a strict rendering improvement).
+        mono: ['var(--font-mono)', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'Consolas', 'monospace'],
       },
 
       // ── Font weight (P0) ──────────────────────────────────────────
@@ -104,6 +109,13 @@ const config: Config = {
         elevated: '0 4px 12px -2px rgb(15 23 42 / 0.08), 0 2px 4px -2px rgb(15 23 42 / 0.04)',
         modal:    '0 12px 32px -4px rgb(15 23 42 / 0.18), 0 4px 8px -4px rgb(15 23 42 / 0.08)',
         drawer:   '-8px 0 24px -8px rgb(15 23 42 / 0.12)',
+        // P0-FC — accent glow (the futuristic tell). Uses --accent so it
+        // tracks the chosen signature colour. For focus/active/primary
+        // + luminous data. `glow-card` is a soft ambient lift for glass.
+        'glow-sm':   '0 0 12px -2px rgb(var(--accent) / 0.40)',
+        'glow':      '0 0 22px -2px rgb(var(--accent) / 0.45)',
+        'glow-lg':   '0 0 44px -4px rgb(var(--accent) / 0.50)',
+        'glow-card': '0 8px 32px -8px rgb(2 6 23 / 0.60), 0 0 0 1px rgb(255 255 255 / 0.04)',
       },
 
       // ── Animation ────────────────────────────────────────────────
@@ -192,6 +204,17 @@ const config: Config = {
         danger:  { ...colors.rose,    soft: 'rgb(var(--danger-soft) / <alpha-value>)',  line: 'rgb(var(--danger-line) / <alpha-value>)',  strong: 'rgb(var(--danger-strong) / <alpha-value>)' },
         info:    { ...colors.blue,    soft: 'rgb(var(--info-soft) / <alpha-value>)',    line: 'rgb(var(--info-line) / <alpha-value>)',    strong: 'rgb(var(--info-strong) / <alpha-value>)' },
         neutral: colors.slate,
+        // P0-FC — Quantum signature accent (indigo→cyan), var-backed so
+        // the gradient/glow can be re-themed in one place. `accent` =
+        // primary solid; from/to = the gradient stops; bright = cyan end
+        // for highlights. Enables text-accent, bg-accent, ring-accent,
+        // from-accent-from, to-accent-to, border-accent.
+        accent: {
+          DEFAULT: 'rgb(var(--accent) / <alpha-value>)',
+          from:    'rgb(var(--accent-from) / <alpha-value>)',
+          to:      'rgb(var(--accent-to) / <alpha-value>)',
+          bright:  'rgb(var(--accent-bright) / <alpha-value>)',
+        },
         // Surface tokens — now var-backed so dark mode (class) flips
         // them automatically. Light values are pixel-identical to the
         // old static hexes, so existing bg-surface-* / border-surface-*
