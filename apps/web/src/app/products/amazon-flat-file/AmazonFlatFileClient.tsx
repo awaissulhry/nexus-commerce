@@ -329,22 +329,23 @@ function makeEmptyRow(productType: string, _marketplace: string, parentage = '')
 // GX.5 — how many trailing blank "canvas" rows to keep so you can always just
 // start typing (auto-grow, like Sheets).
 const GHOST_BUFFER = 8
-// A ghost row: blank + NOT _isNew/_dirty, so it's excluded from counts, save,
-// submit and export until edited (which flips it to a real row).
-function makeGhostRow(productType: string): Row {
+// A ghost row: FULLY blank + NOT _isNew/_dirty, so it looks like a Sheets blank
+// canvas and is excluded from counts, save, submit and export. product_type +
+// record_action are filled only when it materializes into a real row on edit.
+function makeGhostRow(): Row {
   return {
     _rowId: `ghost-${Date.now()}-${Math.random().toString(36).slice(2)}`,
     _isNew: false, _dirty: false, _ghost: true, _status: 'idle',
     item_sku: '',
-    product_type: productType,
-    record_action: 'full_update',
+    product_type: '',
+    record_action: '',
     parentage_level: '',
     parent_sku: '',
     variation_theme: '',
   }
 }
-function makeGhostRows(productType: string, n: number): Row[] {
-  return Array.from({ length: n }, () => makeGhostRow(productType))
+function makeGhostRows(n: number): Row[] {
+  return Array.from({ length: n }, () => makeGhostRow())
 }
 
 // ── Storage key helpers ────────────────────────────────────────────────
@@ -1131,7 +1132,7 @@ export default function AmazonFlatFileClient({
     if (ghosts >= GHOST_BUFFER) return
     setRows((prev) => {
       const g = prev.reduce((n, r) => n + (r._ghost ? 1 : 0), 0)
-      return g >= GHOST_BUFFER ? prev : [...prev, ...makeGhostRows(productType, GHOST_BUFFER - g)]
+      return g >= GHOST_BUFFER ? prev : [...prev, ...makeGhostRows(GHOST_BUFFER - g)]
     })
   }, [rows, productType])
 
@@ -1618,8 +1619,12 @@ export default function AmazonFlatFileClient({
         return
       }
 
-      // Printable key: enter edit mode replacing content
+      // Printable key: enter edit mode replacing content. preventDefault so the
+      // browser doesn't ALSO type the char into the freshly-focused input — the
+      // char becomes the input's defaultValue (via editInitialChar). Without this
+      // the first letter was entered twice ("A" → "AA").
       if (e.key.length === 1 && !mod) {
+        e.preventDefault()
         setIsEditing(true)
         setEditInitialChar(e.key)
       }
@@ -2201,16 +2206,21 @@ export default function AmazonFlatFileClient({
 
   // GX.5 — editing a ghost (blank canvas) row materializes it into a real new
   // row; the buffer effect then re-adds a fresh ghost below (auto-grow).
-  const materializeGhost = (r: Row): Partial<Row> => (r._ghost ? { _ghost: false, _isNew: true } : {})
+  // Fills the infra fields a real row needs (the ghost was fully blank). Spread
+  // BEFORE the edited cell so if the user is editing product_type itself, their
+  // value wins.
+  const materializeGhost = (r: Row): Partial<Row> => (r._ghost
+    ? { _ghost: false, _isNew: true, product_type: productType, record_action: 'full_update' }
+    : {})
 
   const updateCell = useCallback((rowId: string, colId: string, value: unknown) => {
     pushSnapshot()
-    setRows((prev) => prev.map((r) => r._rowId === rowId ? { ...r, [colId]: value, _dirty: true, ...materializeGhost(r) } : r))
-  }, [])
+    setRows((prev) => prev.map((r) => r._rowId === rowId ? { ...r, ...materializeGhost(r), [colId]: value, _dirty: true } : r))
+  }, [productType])
 
   const liveUpdateCell = useCallback((rowId: string, colId: string, value: unknown) => {
-    setRows((prev) => prev.map((r) => r._rowId === rowId ? { ...r, [colId]: value, _dirty: true, ...materializeGhost(r) } : r))
-  }, [])
+    setRows((prev) => prev.map((r) => r._rowId === rowId ? { ...r, ...materializeGhost(r), [colId]: value, _dirty: true } : r))
+  }, [productType])
 
   const navigate = useCallback((rowId: string, colId: string, dir: 'right' | 'left' | 'down' | 'up') => {
     const colIds = allColumnsRef.current.map((c) => c.id)
@@ -2991,7 +3001,7 @@ export default function AmazonFlatFileClient({
   ] : []
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col"
+    <div className="h-screen bg-slate-50 dark:bg-slate-950 flex flex-col"
       onDragOver={(e) => { if (!importOpen && e.dataTransfer.types.includes('Files')) e.preventDefault() }}
       onDrop={(e) => {
         // FX.7 — drop a spreadsheet on the grid to open the import wizard pre-loaded.
@@ -3720,7 +3730,7 @@ export default function AmazonFlatFileClient({
 
       {/* ── Spreadsheet + AI panel ────────────────────────────── */}
       {manifest && !loading && (
-        <div className="flex-1 flex overflow-hidden">
+        <div className="flex-1 flex overflow-hidden min-h-0">
         <div
           className="flex-1 overflow-auto"
           onContextMenu={(e) => {
