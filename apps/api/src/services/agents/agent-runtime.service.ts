@@ -24,6 +24,36 @@ import { runToolLoop } from './tool-loop.service.js'
 
 const FEATURE = 'products-copilot'
 
+/** ACP.7 — page-aware framing so the same copilot adapts to the surface
+ *  it's mounted on (catalog vs orders vs inventory vs pricing). */
+function pageProfile(route?: string | null): { role: string; focus: string } {
+  const r = route ?? ''
+  if (r.startsWith('/orders'))
+    return {
+      role: 'orders copilot',
+      focus: 'orders, buyers, fulfillment status, and customer messages',
+    }
+  if (r.startsWith('/fulfillment'))
+    return {
+      role: 'inventory copilot',
+      focus: 'stock levels, channel drift, and replenishment',
+    }
+  if (r.startsWith('/pricing'))
+    return {
+      role: 'pricing copilot',
+      focus: 'prices, margins, and repricing',
+    }
+  if (r.startsWith('/products'))
+    return {
+      role: 'catalog copilot',
+      focus: 'products, listings, content, and images',
+    }
+  return {
+    role: 'commerce copilot',
+    focus: 'the catalog, orders, stock, and pricing',
+  }
+}
+
 interface RunAgentInput {
   agentKey: string
   input: string
@@ -280,13 +310,15 @@ export async function runChat(inp: ChatInput): Promise<ChatOutput> {
     if (!provider) throw new Error('No AI provider configured.')
     const model = await resolveModelForFeature(FEATURE, provider)
 
+    const profile = pageProfile(pc?.route)
     const system = [
-      'You are the Nexus products copilot. You are READ-ONLY: read, analyse,',
-      'and draft suggestions using the tools — never claim to have changed,',
-      'priced, published, or sent anything. When a tool returns',
-      'requiresApproval, tell the operator the action is prepared but needs',
-      'their approval (coming soon). Be concise and specific; prefer calling',
-      'a tool over guessing.',
+      `You are the Nexus ${profile.role}. Help the operator with ${profile.focus}.`,
+      'Use the tools to read data and draft suggestions. You can also PREPARE',
+      'high-stakes actions (price changes, publishing, customer messages): when',
+      'you call one it is QUEUED for the operator’s approval — never applied',
+      'directly. Tell them you have queued it for approval. Never claim an',
+      'action has taken effect unless a tool result says so. Be concise and',
+      'specific; prefer calling a tool over guessing.',
       pc?.route ? `\nThe operator is on ${pc.route}.` : '',
       pc?.productId
         ? `They are focused on productId "${pc.productId}" — use it when a tool needs a productId and none is given.`

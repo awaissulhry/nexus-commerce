@@ -1,13 +1,16 @@
 'use client'
 
 /**
- * ACP.2b — products copilot drawer.
+ * ACP.2b/7 — the page copilot drawer (shared).
  *
- * A self-contained floating "Ask AI" widget that talks to the read-only
- * copilot (POST /api/agent/chat) with the current page context. Renders
- * the reply + a compact tool-trace line ("used: listing-health,
- * draft-seo"). Read-only — no apply buttons (that is Phase 3). Built to
- * be droppable on any page (Phase 7) via the `pageContext` prop.
+ * A self-contained floating "Ask AI" widget that talks to the copilot
+ * (POST /api/agent/chat) with the current page context. The model reads /
+ * analyses / drafts via the tool registry and can PREPARE high-stakes
+ * actions, which queue in the approval inbox (never applied directly).
+ *
+ * Droppable on ANY page: pass `pageContext` (route drives the model's
+ * page-aware framing on the backend) plus optional `title` + `suggestions`
+ * to tailor the drawer's copy to that page's task (ACP.7).
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -28,10 +31,22 @@ const MUTATING_TOOLS = new Set([
   'send-customer-message',
 ])
 
+const DEFAULT_SUGGESTIONS = [
+  'How are sales tracking this month?',
+  'What looks anomalous right now?',
+  'What should I act on next?',
+]
+
 export default function AiCopilot({
   pageContext,
+  title = 'Copilot',
+  suggestions = DEFAULT_SUGGESTIONS,
+  placeholder = 'Ask…',
 }: {
   pageContext: { route: string; productId?: string }
+  title?: string
+  suggestions?: string[]
+  placeholder?: string
 }) {
   const backend = getBackendUrl()
   const [open, setOpen] = useState(false)
@@ -94,17 +109,17 @@ export default function AiCopilot({
       {open && (
         <div
           role="dialog"
-          aria-label="Products copilot"
+          aria-label={`${title} copilot`}
           className="fixed inset-y-0 right-0 z-50 w-full sm:w-[440px] bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-700 shadow-2xl flex flex-col"
         >
           <header className="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-700">
             <div className="flex items-center gap-2">
               <Sparkles className="w-4 h-4 text-slate-700 dark:text-slate-300" />
               <span className="font-semibold text-slate-900 dark:text-slate-100">
-                Products copilot
+                {title}
               </span>
               <span className="inline-flex items-center gap-1 text-sm text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900 rounded px-1.5 py-0.5">
-                <ShieldCheck className="w-3 h-3" /> read-only
+                <ShieldCheck className="w-3 h-3" /> proposes · you approve
               </span>
             </div>
             <button
@@ -121,14 +136,13 @@ export default function AiCopilot({
             {messages.length === 0 && (
               <div className="text-base text-slate-500 dark:text-slate-400">
                 <p className="mb-2">
-                  Ask about your catalog — I can read products, orders, stock,
-                  pricing, and listing health, and draft content. I only
-                  suggest; I never change anything.
+                  Ask about this page. I read your data and draft suggestions;
+                  any change I prepare is queued for your approval.
                 </p>
                 <ul className="list-disc pl-5 space-y-1 text-sm">
-                  <li>&ldquo;Which SKUs are missing images?&rdquo;</li>
-                  <li>&ldquo;What&apos;s blocking GALE-JACKET from publishing?&rdquo;</li>
-                  <li>&ldquo;Draft better bullets + SEO for SKU&nbsp;…&rdquo;</li>
+                  {suggestions.map((s, i) => (
+                    <li key={i}>&ldquo;{s}&rdquo;</li>
+                  ))}
                 </ul>
               </div>
             )}
@@ -195,7 +209,7 @@ export default function AiCopilot({
                   }
                 }}
                 rows={2}
-                placeholder="Ask about your catalog…"
+                placeholder={placeholder}
                 disabled={loading}
                 className="flex-1 resize-none text-base border border-slate-200 dark:border-slate-700 rounded-md px-3 py-2 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 disabled:opacity-50"
               />
@@ -214,8 +228,8 @@ export default function AiCopilot({
               </button>
             </div>
             <p className="mt-1.5 text-sm text-slate-400 dark:text-slate-500">
-              Read-only — suggestions only. High-stakes actions (pricing,
-              publishing, messages) will need your approval.
+              Suggestions are free; high-stakes actions (pricing, publishing,
+              messages) queue for your approval.
             </p>
           </div>
         </div>
