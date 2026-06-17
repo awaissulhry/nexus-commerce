@@ -106,7 +106,7 @@ export default function TopBar() {
 
         {/* Settings */}
         <Link
-          href="/engine/channels"
+          href="/settings/channels"
           className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
           title="Settings"
         >
