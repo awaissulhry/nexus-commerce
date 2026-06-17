@@ -17,6 +17,7 @@ import {
   getRealFbaPerUnitResolver,
 } from '../services/amazon-real-fees.service.js'
 import { runTrueProfitRollupOnce } from '../services/advertising/true-profit-rollup.service.js'
+import { getSettlementFeeSummary } from '../services/amazon-settlements.service.js'
 import { logger } from '../utils/logger.js'
 
 const clampDays = (raw?: string) =>
@@ -75,6 +76,17 @@ const amazonEconomicsRoutes: FastifyPluginAsync = async (fastify) => {
       )
       return { blendedPct: r.blendedPct, byMarketplace: r.byMarketplace }
     },
+  )
+
+  // R1.3 — storage (+ all) fees parsed from settlement rawBody (were €0).
+  fastify.get<{ Querystring: { days?: string } }>(
+    '/amazon/economics/storage-fees',
+    async (request) =>
+      getSettlementFeeSummary(
+        request.query?.days
+          ? Math.min(Math.max(parseInt(request.query.days, 10) || 180, 1), 730)
+          : 180,
+      ),
   )
 
   // R1.4d — the real per-unit FBA fee the profit calc now uses.

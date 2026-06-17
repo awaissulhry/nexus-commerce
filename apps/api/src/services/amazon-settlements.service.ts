@@ -181,6 +181,106 @@ export function parseSettlementSummary(rawBody: string): ParsedSettlement | null
   return { startDate, endDate, depositDate, totalAmount, currencyCode, transactionCount }
 }
 
+// ── R1.3 — settlement fee lines (storage + other fees) ─────────────────
+// The summary row gives the deposit total; the PER-TRANSACTION lines carry
+// the real fee breakdown (storage, long-term storage, etc.) that's been
+// stored in rawBody but never parsed. Fees are stored as negative amounts;
+// we report magnitudes.
+
+export interface SettlementFeeBreakdown {
+  storageEur: number
+  longTermStorageEur: number
+  /** Every distinct amount-description → summed magnitude (top fees). */
+  byDescription: Record<string, number>
+}
+
+const r2 = (n: number) => Math.round(n * 100) / 100
+
+export function parseSettlementFeeLines(rawBody: string): SettlementFeeBreakdown {
+  const lines = rawBody.split('\n').map((l) => l.trim()).filter(Boolean)
+  const empty: SettlementFeeBreakdown = {
+    storageEur: 0,
+    longTermStorageEur: 0,
+    byDescription: {},
+  }
+  if (lines.length < 2) return empty
+  const header = lines[0].split('\t')
+  const descIdx = header.indexOf('amount-description')
+  const amtIdx = header.indexOf('amount')
+  if (descIdx < 0 || amtIdx < 0) return empty
+
+  let storage = 0
+  let lts = 0
+  const byDescription: Record<string, number> = {}
+  for (let i = 1; i < lines.length; i++) {
+    const cols = lines[i].split('\t')
+    const desc = (cols[descIdx] ?? '').trim()
+    if (!desc) continue
+    const amt = Math.abs(parseFloat(cols[amtIdx] ?? '0') || 0)
+    if (amt === 0) continue
+    const d = desc.toLowerCase()
+    if (d.includes('long') && d.includes('storage')) lts += amt
+    else if (d.includes('storage')) storage += amt
+    byDescription[desc] = r2((byDescription[desc] ?? 0) + amt)
+  }
+  return { storageEur: r2(storage), longTermStorageEur: r2(lts), byDescription }
+}
+
+export interface SettlementFeeSummary {
+  settlements: number
+  totalStorageEur: number
+  totalLongTermStorageEur: number
+  /** Top fee descriptions across settlements (magnitude desc). */
+  topFees: { description: string; amountEur: number }[]
+  periods: {
+    startDate: Date | null
+    endDate: Date | null
+    storageEur: number
+    longTermStorageEur: number
+  }[]
+}
+
+/** Parse storage (+ all) fees out of recent settlements' rawBody. */
+export async function getSettlementFeeSummary(
+  days = 180,
+): Promise<SettlementFeeSummary> {
+  const since = new Date(Date.now() - days * 86_400_000)
+  const settlements = await prisma.settlementReport.findMany({
+    where: { OR: [{ endDate: { gte: since } }, { depositDate: { gte: since } }] },
+    select: { startDate: true, endDate: true, rawBody: true },
+    orderBy: { endDate: 'desc' },
+  })
+  let totalStorage = 0
+  let totalLts = 0
+  const merged: Record<string, number> = {}
+  const periods: SettlementFeeSummary['periods'] = []
+  for (const s of settlements) {
+    if (!s.rawBody) continue
+    const f = parseSettlementFeeLines(s.rawBody)
+    totalStorage += f.storageEur
+    totalLts += f.longTermStorageEur
+    for (const [k, v] of Object.entries(f.byDescription))
+      merged[k] = r2((merged[k] ?? 0) + v)
+    periods.push({
+      startDate: s.startDate,
+      endDate: s.endDate,
+      storageEur: f.storageEur,
+      longTermStorageEur: f.longTermStorageEur,
+    })
+  }
+  const topFees = Object.entries(merged)
+    .map(([description, amountEur]) => ({ description, amountEur }))
+    .sort((a, b) => b.amountEur - a.amountEur)
+    .slice(0, 12)
+  return {
+    settlements: settlements.length,
+    totalStorageEur: r2(totalStorage),
+    totalLongTermStorageEur: r2(totalLts),
+    topFees,
+    periods,
+  }
+}
+
 export interface SyncMarketplaceResult {
   marketplaceId: string
   reportsListed: number
