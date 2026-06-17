@@ -54,6 +54,11 @@ export function GuidedBuilder() {
   const [ruleName, setRuleName] = useState('')
   const [ruleMode, setRuleMode] = useState<'automate' | 'isolation'>('automate')
   const [laneCfg, setLaneCfg] = useState<Record<string, { search: boolean; create: string[]; neg: string[] }>>({})
+  // CB.5 — launch state
+  const [market, setMarket] = useState('IT')
+  const [launching, setLaunching] = useState(false)
+  const [preview, setPreview] = useState<null | { market: string; campaigns: Array<{ name: string; adGroup: string; targeting: string; productAds: number; keywords: number }>; totalCampaigns: number; totalProductAds: number; totalKeywords: number }>(null)
+  const [launchMsg, setLaunchMsg] = useState('')
 
   useEffect(() => {
     void fetch(`${getBackendUrl()}/api/advertising/by-product`, { cache: 'no-store' })
@@ -96,6 +101,20 @@ export function GuidedBuilder() {
   const addAllSuggested = () => setAddedKw((a) => { const seen = new Set(a.map((x) => `${x.text}|${x.match}`)); return [...a, ...suggestions.filter((s) => !seen.has(`${s}|${matchType}`)).map((s) => ({ text: s, match: matchType, bid: '0.45' }))] })
   const addNewKw = () => { const lines = newKw.split(/[\n,]+/).map((s) => s.trim()).filter(Boolean); setAddedKw((a) => { const seen = new Set(a.map((x) => `${x.text}|${x.match}`)); const fresh = lines.filter((l) => !seen.has(`${l}|${matchType}`)).map((l) => ({ text: l, match: matchType, bid: '0.45' })); return [...a, ...fresh] }); setNewKw('') }
   const removeKw = (i: number) => setAddedKw((a) => a.filter((_, idx) => idx !== i))
+  // CB.5 — launch helpers (preview → confirm → gated create)
+  const LIVE_MARKETS = ['IT', 'DE']
+  const launchPayload = (dryRun: boolean) => ({
+    market, productGroupName: grp, bidStrategy,
+    defaultBidEur: Number(agOf('SP:Auto').bid) || 0.45,
+    dailyBudgetEur: Number(agOf('SP:Auto').budget) || 25,
+    asins: products.filter((p) => selected.has(p.id)).map((p) => p.asin).filter(Boolean),
+    includeProductTarget,
+    keywords: addedKw.map((k) => ({ text: k.text, match: k.match, bid: Number(k.bid) || undefined })),
+    dryRun,
+  })
+  const post = (dryRun: boolean) => fetch(`${getBackendUrl()}/api/advertising/campaign-builder/launch`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(launchPayload(dryRun)) }).then((r) => r.json())
+  const doPreview = async () => { setLaunching(true); setLaunchMsg(''); try { const r = await post(true); if (r.plan) setPreview(r.plan); else setLaunchMsg(r.error ?? 'Could not build preview.') } catch { setLaunchMsg('Preview failed.') } finally { setLaunching(false) } }
+  const doLaunch = async () => { setLaunching(true); try { const r = await post(false); if (r.ok) { setPreview(null); setLaunchMsg(`Created ${r.created?.length ?? 0} campaign(s) on ${market} (${r.mode === 'sandbox' || r.mode === 'local' ? 'sandbox — not live on Amazon' : 'LIVE on Amazon'}).`) } else setLaunchMsg(r.error ?? 'Launch failed.') } catch { setLaunchMsg('Launch failed.') } finally { setLaunching(false) } }
   // a render FUNCTION (not a nested component) so the bid/budget inputs don't remount + lose focus each keystroke
   const renderSpTable = (prefix: string, ags: string[]) => (
     <div className="az-cb-tbl">
@@ -121,7 +140,10 @@ export function GuidedBuilder() {
           <div className="az-cb-kicker">Helium 10 Ads</div>
           <h1 className="az-cb-title">Campaign Builder <span className="az-cb-beta">BETA</span></h1>
         </div>
-        <button type="button" className="az-cb-exit" onClick={exit}>Exit Builder</button>
+        <div className="az-cb-headr">
+          <label className="az-cb-mktsel"><span>Market</span><select value={market} onChange={(e) => setMarket(e.target.value)}>{['IT', 'DE', 'FR', 'ES', 'NL', 'BE', 'SE', 'PL', 'IE', 'UK'].map((m) => <option key={m} value={m}>{m}{LIVE_MARKETS.includes(m) ? ' · live' : ''}</option>)}</select></label>
+          <button type="button" className="az-cb-exit" onClick={exit}>Exit Builder</button>
+        </div>
       </div>
 
       <ol className="az-cb-steps">
@@ -346,8 +368,29 @@ export function GuidedBuilder() {
         <span className="grow" />
         {step < STEPS.length - 1
           ? <button type="button" className="az-cb-btn dark" disabled={!canNext} onClick={() => setStep((s) => s + 1)}>Next</button>
-          : <button type="button" className="az-cb-btn dark" disabled>Launch Campaigns</button>}
+          : <button type="button" className="az-cb-btn dark" disabled={launching || selected.size === 0} onClick={() => void doPreview()}>{launching ? 'Working…' : 'Launch Campaigns'}</button>}
       </div>
+
+      {launchMsg && <div className="az-cb-toast" role="status">{launchMsg}<button type="button" onClick={() => setLaunchMsg('')} aria-label="Dismiss">✕</button></div>}
+      {preview && (
+        <div className="az-cb-modal" role="dialog" aria-modal="true" onClick={() => setPreview(null)}>
+          <div className="box" onClick={(e) => e.stopPropagation()}>
+            <div className="hd">Review what will be created on <b>{preview.market}</b></div>
+            {LIVE_MARKETS.includes(preview.market)
+              ? <div className="note live"><b>{preview.market} is live</b> — confirming creates these as <b>real campaigns on Amazon</b>. New campaigns aren&rsquo;t auto-allowlisted, so their bids won&rsquo;t change until you opt them in.</div>
+              : <div className="note sandbox">{preview.market} is not live — these are created in <b>sandbox</b> (nothing reaches Amazon) until you take {preview.market} live in Settings.</div>}
+            <div className="sum">{preview.totalCampaigns} campaign{preview.totalCampaigns === 1 ? '' : 's'} · {preview.totalProductAds} product ad{preview.totalProductAds === 1 ? '' : 's'} · {preview.totalKeywords} keyword{preview.totalKeywords === 1 ? '' : 's'}</div>
+            <div className="list">
+              {preview.campaigns.map((c) => <div className="row" key={c.name}><span className="nm">{c.name}</span><span className="meta">{c.targeting} · {c.productAds} ASIN{c.productAds === 1 ? '' : 's'}{c.keywords ? ` · ${c.keywords} kw` : ''}</span></div>)}
+            </div>
+            <div className="ft">
+              <button type="button" className="az-cb-btn" onClick={() => setPreview(null)}>Cancel</button>
+              <span className="grow" />
+              <button type="button" className="az-cb-btn dark" disabled={launching} onClick={() => void doLaunch()}>{launching ? 'Creating…' : `Create on ${preview.market}`}</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

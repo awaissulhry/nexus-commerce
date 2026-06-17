@@ -702,6 +702,54 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     return { ok: true, count: r.count, enabled }
   })
 
+  // CB.5 — guided Campaign Builder launch. dryRun=true returns the PLAN (what would be
+  // created) without writing; dryRun=false creates SP campaigns + ad groups + product ads
+  // + keywords through the gated create primitives (real only on a live+gate-open market,
+  // local/sandbox otherwise; new campaigns are NOT auto-allowlisted, so their bids can't
+  // change until the operator opts them in). Preview-then-create per operator choice.
+  fastify.post('/advertising/campaign-builder/launch', async (request, reply) => {
+    const b = request.body as {
+      market?: string; productGroupName?: string; bidStrategy?: string; defaultBidEur?: number; dailyBudgetEur?: number
+      asins?: string[]; includeProductTarget?: boolean; keywords?: Array<{ text: string; match?: string; bid?: number }>; dryRun?: boolean
+    }
+    const market = b.market || 'IT'
+    const grp = (b.productGroupName || 'Guided campaign').trim()
+    const asins = (b.asins ?? []).filter(Boolean)
+    if (!asins.length) { reply.status(400); return { error: 'no products selected' } }
+    const bid = b.defaultBidEur ?? 0.45
+    const budget = b.dailyBudgetEur ?? 25
+    const biddingStrategy: 'legacyForSales' | 'autoForSales' | 'manual' = b.bidStrategy === 'maxOrders' ? 'autoForSales' : 'legacyForSales'
+    const roles: Array<{ role: string; targeting: 'AUTO' | 'MANUAL'; keywords: boolean }> = [
+      { role: 'Auto', targeting: 'AUTO', keywords: false },
+      { role: 'Research', targeting: 'MANUAL', keywords: true },
+      { role: 'Performance', targeting: 'MANUAL', keywords: true },
+      ...(b.includeProductTarget ? [{ role: 'Product Target', targeting: 'MANUAL' as const, keywords: false }] : []),
+    ]
+    const kws = b.keywords ?? []
+    const plan = {
+      market,
+      campaigns: roles.map((r) => ({ name: `${grp} - SP - ${r.role}`, adGroup: `${grp} - SP - ${r.role} Ad Group`, targeting: r.targeting, productAds: asins.length, keywords: r.keywords ? kws.length : 0 })),
+      totalCampaigns: roles.length, totalProductAds: asins.length * roles.length, totalKeywords: kws.filter(() => true).length * roles.filter((r) => r.keywords).length,
+    }
+    if (b.dryRun) return { ok: true, dryRun: true, plan }
+
+    const { createCampaignLocal, createAdGroupLocal, createKeywordLocal, createProductAdLocal } = await import('../services/advertising/ads-create.service.js')
+    const created: Array<{ role: string; campaignId: string; externalCampaignId: string | null; mode: string }> = []
+    let mode = 'local'
+    for (const r of roles) {
+      try {
+        const camp = await createCampaignLocal({ name: `${grp} - SP - ${r.role}`, type: 'SP', marketplace: market, targetingType: r.targeting, dailyBudgetEur: budget, biddingStrategy })
+        mode = camp.mode
+        const ag = await createAdGroupLocal({ campaignId: camp.id, name: `${grp} - SP - ${r.role} Ad Group`, defaultBidEur: bid })
+        for (const asin of asins) { try { await createProductAdLocal({ adGroupId: ag.id, asin }) } catch (e) { logger.warn('[CB-launch] product ad failed', { asin, error: (e as Error).message }) } }
+        if (r.keywords) for (const k of kws) { try { await createKeywordLocal({ adGroupId: ag.id, keywordText: k.text, matchType: ((k.match || 'Broad').toUpperCase() as 'EXACT' | 'PHRASE' | 'BROAD'), bidEur: k.bid ?? bid }) } catch (e) { logger.warn('[CB-launch] keyword failed', { kw: k.text, error: (e as Error).message }) } }
+        created.push({ role: r.role, campaignId: camp.id, externalCampaignId: camp.externalCampaignId, mode: camp.mode })
+      } catch (e) { logger.error('[CB-launch] campaign create failed', { role: r.role, market, error: (e as Error).message }) }
+    }
+    logger.warn('[CB-launch] guided builder created campaigns', { market, grp, created: created.length, mode, actor: actorFromHeaders(request.headers as Record<string, unknown>) })
+    return { ok: true, created, mode, plan }
+  })
+
   // ── Apex A.2a: preview pending live writes for a campaign ───────────────
   // Shows exactly what would hit Amazon before the grace window expires: each
   // queued mutation's resolved external id + field changes + a request sketch,
