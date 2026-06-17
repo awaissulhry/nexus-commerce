@@ -877,15 +877,36 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
       if (format !== 'csv' && format !== 'xlsx') {
         return reply.code(400).send({ error: `Unsupported export format "${format}"` })
       }
+      // Amazon flat-file values are single-line; collapse any embedded newline/tab
+      // inside a cell to a space so one record never splits across physical lines
+      // (the thing that makes Numbers/Excel show "missing"/misaligned columns).
+      // Mirrors buildTsvExport's behaviour for parity.
+      const flatRows = (rows as Record<string, unknown>[]).map((r) => {
+        const o: Record<string, unknown> = {}
+        for (const k of Object.keys(r)) {
+          const v = r[k]
+          o[k] = typeof v === 'string' ? v.replace(/[\t\r\n]+/g, ' ').replace(/ {2,}/g, ' ').trim() : v
+        }
+        return o
+      })
       const { bytes, contentType } = await renderExport({
         format,
         columns: flatFileExportColumns(manifest),
-        rows,
+        rows: flatRows,
         filename: `amazon_${pt}_${mp}`,
       })
+      let outBytes = bytes
+      if (format === 'csv') {
+        // UTF-8 BOM so a double-click opens as UTF-8 in Numbers/Excel and Italian
+        // accents (à, è, ò…) render correctly. Re-import strips it (FX.6a BOM strip).
+        const bom = new Uint8Array([0xef, 0xbb, 0xbf])
+        outBytes = new Uint8Array(bom.length + bytes.length)
+        outBytes.set(bom)
+        outBytes.set(bytes, bom.length)
+      }
       reply.header('Content-Type', format === 'csv' ? 'text/csv; charset=utf-8' : contentType)
       reply.header('Content-Disposition', `attachment; filename="amazon_${pt}_${mp}_${stamp}.${format}"`)
-      return reply.send(Buffer.from(bytes))
+      return reply.send(Buffer.from(outBytes))
     } catch (err: any) {
       return reply.code(500).send({ error: err?.message ?? 'Export failed' })
     }
