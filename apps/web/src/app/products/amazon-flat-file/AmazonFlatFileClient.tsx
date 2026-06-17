@@ -121,6 +121,11 @@ interface Column {
   selectionOnly?: boolean
   /** Which parentage levels this field applies to (undefined = all) */
   applicableParentage?: string[]
+  /** MT.3 — union manifest: which product types define this column + which
+   *  require it. Lets a cell grey out for a row whose product_type it doesn't
+   *  apply to. undefined on a single-type manifest. */
+  applicableProductTypes?: string[]
+  requiredForProductTypes?: string[]
   /** Usage level from Amazon schema: REQUIRED / RECOMMENDED / OPTIONAL */
   guidance?: string
   maxLength?: number
@@ -4439,6 +4444,12 @@ function SpreadsheetRow({ row, rowIdx, columns, colToGroup, selected, activeCell
           return col.applicableParentage.includes(rowType) ? null : 'not-applicable' as const
         })()
 
+        // MT.3b — in a union (multi-category) sheet, grey a cell whose column
+        // doesn't apply to THIS row's product_type. Single-type manifests have
+        // no applicableProductTypes ⇒ always applicable (no greying).
+        const appliesToType = !col.applicableProductTypes
+          || col.applicableProductTypes.includes(String(row.product_type ?? '').toUpperCase())
+
         return (
           <SpreadsheetCell
             key={col.id}
@@ -4448,7 +4459,7 @@ function SpreadsheetRow({ row, rowIdx, columns, colToGroup, selected, activeCell
             isEditing={isCellEditing}
             editInitialChar={isCellEditing ? editInitialChar : null}
             cellBg={stickyLeft !== undefined ? gColor(groupColor).band : gColor(groupColor).cell}
-            grayed={false}
+            grayed={!appliesToType}
             width={w}
             cellHeight={rowHeight}
             isSelected={isSelected}
