@@ -21,6 +21,13 @@ interface ChatMsg {
   toolsUsed?: string[]
 }
 
+const MUTATING_TOOLS = new Set([
+  'apply-content',
+  'set-price',
+  'publish-listing',
+  'send-customer-message',
+])
+
 export default function AiCopilot({
   pageContext,
 }: {
@@ -145,6 +152,18 @@ export default function AiCopilot({
                     used: {m.toolsUsed.join(' → ')}
                   </div>
                 )}
+                {m.role === 'assistant' &&
+                  m.toolsUsed?.some((t) => MUTATING_TOOLS.has(t)) && (
+                    <div className="mt-2 text-sm text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 rounded px-2 py-1">
+                      An action was prepared and{' '}
+                      <span className="font-medium">queued for your approval</span>{' '}
+                      — review it in{' '}
+                      <a href="/settings/ai" className="underline hover:no-underline">
+                        Settings → AI → Agent approvals
+                      </a>
+                      .
+                    </div>
+                  )}
               </div>
             ))}
 
