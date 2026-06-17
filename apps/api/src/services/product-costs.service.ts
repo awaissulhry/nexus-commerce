@@ -46,8 +46,10 @@ export async function getCostGrid(): Promise<CostGrid> {
   for (const s of sales)
     if (s.productId) unitsByProduct.set(s.productId, s._sum.quantity ?? 0)
 
+  // All active SKUs (incl. variants) — cost is per sellable SKU, not just
+  // masters; the variants are what actually sell + need costing.
   const products = await prisma.product.findMany({
-    where: { deletedAt: null, status: 'ACTIVE', parentId: null },
+    where: { deletedAt: null, status: 'ACTIVE' },
     select: { id: true, sku: true, name: true, basePrice: true, costPrice: true },
   })
   const real = await getRealCombinedRateByMarketplace(90).catch(() => null)
