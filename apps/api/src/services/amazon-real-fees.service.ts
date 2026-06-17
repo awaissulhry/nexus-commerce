@@ -452,3 +452,95 @@ export async function getCachedReferralResolver(
   _refResolver = { at: Date.now(), r }
   return r
 }
+
+// ── R1.4c — real COMBINED Amazon fee rate per marketplace ──────────────
+// referral + fba + payment + other, attributed to ORDER-ITEM revenue (the
+// base insights-profit applies fees to — so the rate is correct against
+// that base, not over-counted vs Amazon's gross-revenue figure).
+
+export interface CombinedRateByMarketplace {
+  byMarketplace: { marketplace: string; pct: number | null; revenue: number }[]
+  blendedPct: number | null
+  /** marketplace → fraction (0.224 = 22.4%); for the profit calc. */
+  map: Map<string, number>
+  blended: number | null
+}
+
+export async function getRealCombinedRateByMarketplace(
+  days = 90,
+): Promise<CombinedRateByMarketplace> {
+  const since = new Date(Date.now() - days * DAY)
+  const fts = await prisma.financialTransaction.findMany({
+    where: {
+      transactionType: 'Order',
+      order: { channel: 'AMAZON', purchaseDate: { gte: since } },
+    },
+    select: {
+      orderId: true,
+      amazonFee: true,
+      fbaFee: true,
+      paymentServicesFee: true,
+      otherFees: true,
+      order: { select: { marketplace: true } },
+    },
+  })
+  const feeByOrder = new Map<string, number>()
+  const mktByOrder = new Map<string, string>()
+  for (const ft of fts) {
+    const f =
+      Math.abs(num(ft.amazonFee)) +
+      Math.abs(num(ft.fbaFee)) +
+      Math.abs(num(ft.paymentServicesFee)) +
+      Math.abs(num(ft.otherFees))
+    feeByOrder.set(ft.orderId, (feeByOrder.get(ft.orderId) ?? 0) + f)
+    if (ft.order?.marketplace) mktByOrder.set(ft.orderId, ft.order.marketplace)
+  }
+  const orderIds = [...feeByOrder.keys()]
+  const items = orderIds.length
+    ? await prisma.orderItem.findMany({
+        where: { orderId: { in: orderIds } },
+        select: { orderId: true, price: true, quantity: true },
+      })
+    : []
+  const orderRev = new Map<string, number>()
+  for (const it of items)
+    orderRev.set(
+      it.orderId,
+      (orderRev.get(it.orderId) ?? 0) + num(it.price) * it.quantity,
+    )
+  const perMkt = new Map<string, { rev: number; fee: number }>()
+  const overall = { rev: 0, fee: 0 }
+  for (const it of items) {
+    const itemRev = num(it.price) * it.quantity
+    const base = orderRev.get(it.orderId) ?? 0
+    const orderFee = feeByOrder.get(it.orderId) ?? 0
+    const attributed = base > 0 ? orderFee * (itemRev / base) : 0
+    const mkt = mktByOrder.get(it.orderId) ?? 'UNKNOWN'
+    const m = perMkt.get(mkt) ?? { rev: 0, fee: 0 }
+    m.rev += itemRev
+    m.fee += attributed
+    perMkt.set(mkt, m)
+    overall.rev += itemRev
+    overall.fee += attributed
+  }
+  const frac = (a: { rev: number; fee: number }) =>
+    a.rev > 0 ? a.fee / a.rev : null
+  const map = new Map<string, number>()
+  for (const [m, a] of perMkt) {
+    const r = frac(a)
+    if (r != null) map.set(m, r)
+  }
+  const blended = frac(overall)
+  return {
+    byMarketplace: [...perMkt.entries()]
+      .map(([marketplace, a]) => ({
+        marketplace,
+        pct: frac(a) != null ? round2(frac(a)! * 100) : null,
+        revenue: round2(a.rev),
+      }))
+      .sort((x, y) => y.revenue - x.revenue),
+    blendedPct: blended != null ? round2(blended * 100) : null,
+    map,
+    blended,
+  }
+}

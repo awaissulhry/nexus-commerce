@@ -13,6 +13,7 @@ import {
   getRealFeeRatesBySku,
   getFeeImpact,
   getRealReferralRateResolver,
+  getRealCombinedRateByMarketplace,
 } from '../services/amazon-real-fees.service.js'
 import { runTrueProfitRollupOnce } from '../services/advertising/true-profit-rollup.service.js'
 import { logger } from '../utils/logger.js'
@@ -61,6 +62,17 @@ const amazonEconomicsRoutes: FastifyPluginAsync = async (fastify) => {
         byMarketplace: r.byMarketplace,
         sampleSkus: r.sampleSkus,
       }
+    },
+  )
+
+  // R1.4c — the real combined Amazon fee rate the P&L (insights-profit) uses.
+  fastify.get<{ Querystring: { days?: string } }>(
+    '/amazon/economics/combined-rates',
+    async (request) => {
+      const r = await getRealCombinedRateByMarketplace(
+        clampDays(request.query?.days),
+      )
+      return { blendedPct: r.blendedPct, byMarketplace: r.byMarketplace }
     },
   )
 

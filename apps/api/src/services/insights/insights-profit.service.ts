@@ -25,6 +25,7 @@
  */
 
 import prisma from '../../db.js'
+import { getRealCombinedRateByMarketplace } from '../amazon-real-fees.service.js'
 import {
   type InsightsFilters,
   resolveWindowRange,
@@ -289,15 +290,38 @@ function emptyAcc(): Acc {
   return { revenueCents: 0, cogsCents: 0, feesCents: 0, units: 0, orders: new Set() }
 }
 
+/** R1.4c — real combined Amazon fee rate (per marketplace → fraction). */
+interface AmazonRealRate {
+  map: Map<string, number>
+  blended: number | null
+}
+
 /** I7 — fees computed in cents. pct math is exact when applied to integer
- *  cents and rounded at the end. */
-function computeFeeCents(channel: string, revenueCents: number, orders: number): number {
-  const pct = CHANNEL_FEE_PCT[channel] ?? 0.1
+ *  cents and rounded at the end. R1.4c — Amazon uses the REAL combined fee
+ *  rate (per-marketplace, else blended) when available; else the static
+ *  estimate. */
+function computeFeeCents(
+  channel: string,
+  revenueCents: number,
+  orders: number,
+  amazon?: { marketplace?: string; rate?: AmazonRealRate },
+): number {
+  let pct = CHANNEL_FEE_PCT[channel] ?? 0.1
+  if (channel === 'AMAZON' && amazon?.rate) {
+    const m =
+      amazon.marketplace != null
+        ? amazon.rate.map.get(amazon.marketplace)
+        : undefined
+    pct = m ?? amazon.rate.blended ?? pct
+  }
   const fixedCents = CHANNEL_FEE_FIXED_CENTS[channel] ?? 0
   return Math.round(revenueCents * pct) + fixedCents * orders
 }
 
-function aggregate(items: RawOrderItem[]): {
+function aggregate(
+  items: RawOrderItem[],
+  amazonRate?: AmazonRealRate,
+): {
   total: Acc
   byChannel: Map<string, Acc>
   /** I6 — per-(channel, marketplace, currency) P&L bucket. */
@@ -387,14 +411,26 @@ function aggregate(items: RawOrderItem[]): {
   }
 
   for (const [ch, slot] of byChannel.entries()) {
-    slot.feesCents = computeFeeCents(ch, slot.revenueCents, slot.orders.size)
+    slot.feesCents = computeFeeCents(ch, slot.revenueCents, slot.orders.size, {
+      rate: amazonRate,
+    })
   }
   for (const [, slot] of byMarketplace.entries()) {
-    slot.feesCents = computeFeeCents(slot.channel, slot.revenueCents, slot.orders.size)
+    slot.feesCents = computeFeeCents(
+      slot.channel,
+      slot.revenueCents,
+      slot.orders.size,
+      { marketplace: slot.marketplace, rate: amazonRate },
+    )
   }
   total.feesCents = [...byChannel.values()].reduce((s, a) => s + a.feesCents, 0)
   for (const [, slot] of bySku.entries()) {
-    slot.feesCents = computeFeeCents(slot.channel, slot.revenueCents, slot.orders.size)
+    slot.feesCents = computeFeeCents(
+      slot.channel,
+      slot.revenueCents,
+      slot.orders.size,
+      { rate: amazonRate },
+    )
   }
   return {
     total,
@@ -426,8 +462,14 @@ export async function computeProfitReport(
       compare ? loadRefunds(compare.from, compare.to, filters) : Promise.resolve(0),
     ])
 
-  const currentAgg = aggregate(currentItems)
-  const compareAgg = aggregate(compareItems)
+  // R1.4c — real combined Amazon fee rate (per marketplace) replaces the
+  // static 15%. Best-effort: if the lookup fails, the static table stands.
+  const realAmazon = await getRealCombinedRateByMarketplace(90).catch(() => null)
+  const amazonRate = realAmazon
+    ? { map: realAmazon.map, blended: realAmazon.blended }
+    : undefined
+  const currentAgg = aggregate(currentItems, amazonRate)
+  const compareAgg = aggregate(compareItems, amazonRate)
 
   // I7 — convert ad-spend + refunds (loaded as major units from micros÷1e6
   // and refundCents÷100) into cents once, do all arithmetic in cents, then
