@@ -5272,16 +5272,12 @@ function SpreadsheetCellImpl({ col, value, isActive, cellBg, width, cellHeight, 
           {fillHandle}
           <textarea ref={inputRef as any} defaultValue={editInitialChar !== null ? editInitialChar : displayValue}
             onInput={(e) => {
-              const val = (e.target as HTMLTextAreaElement).value
-              setLiveLen(val.length)
-              if (!snapshotPushedRef.current) {
-                originalValueRef.current = displayValue
-                onPushSnapshot()
-                snapshotPushedRef.current = true
-              }
-              onLiveChange(val)
+              // GX.8 — same local-edit model as the text/number cell (GX.3): only the
+              // counter while typing; commitInput() writes the row once on exit.
+              setLiveLen((e.target as HTMLTextAreaElement).value.length)
             }}
             onBlur={() => {
+              if (!cancelledRef.current) commitInput()
               cancelledRef.current = false
               onDeactivate()
             }}
