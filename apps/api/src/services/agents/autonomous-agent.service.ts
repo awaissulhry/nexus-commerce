@@ -150,16 +150,16 @@ export async function runAutonomousAgent(
 
 /**
  * Whether an autonomous agent's SCHEDULED run is enabled. Backed by
- * AgentDefinition.enabled, defaulting to ON when no row exists (so agents
- * stay default-on until an operator toggles them). Manual runs ignore
- * this — an explicit "Run now" always executes.
+ * AgentDefinition.enabled, defaulting to OFF when no row exists — agents
+ * do NOT run on schedule until an operator turns them on in the Control
+ * Center. Manual "Run now" ignores this (an explicit action always runs).
  */
 export async function isAgentScheduleEnabled(key: string): Promise<boolean> {
   const def = await prisma.agentDefinition.findUnique({
     where: { key },
     select: { enabled: true },
   })
-  return def ? def.enabled : true
+  return def ? def.enabled : false
 }
 
 /** Toggle an autonomous agent's scheduled runs from the Control Center. */
@@ -254,7 +254,7 @@ export async function getAgentOverview(): Promise<AgentOverviewRow[]> {
       name: a.name,
       description: a.description,
       schedule: a.schedule ?? null,
-      enabled: enabledByKey.has(a.key) ? !!enabledByKey.get(a.key) : true,
+      enabled: enabledByKey.has(a.key) ? !!enabledByKey.get(a.key) : false,
       lastRun: lr
         ? {
             status: lr.status,

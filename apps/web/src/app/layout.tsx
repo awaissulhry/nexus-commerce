@@ -11,6 +11,7 @@ import { GlobalAccountHealthBanner } from "@/components/dashboard/GlobalAccountH
 import { CompetitiveAlertWatcher } from "@/components/dashboard/CompetitiveAlertWatcher";
 import { ToastProvider } from "@/components/ui/Toast";
 import { ConfirmProvider } from "@/components/ui/ConfirmProvider";
+import CopilotMount from "@/components/CopilotMount";
 import { getServerLocale, getServerT } from "@/lib/i18n/server";
 
 export const metadata: Metadata = {
@@ -78,6 +79,10 @@ export default async function RootLayout({
             >
               {children}
             </AppShell>
+            {/* ACP.7b — page-aware copilot on EVERY route (incl. standalone
+                surfaces); excludes public customer pages. One mount, no
+                per-page edits. */}
+            <CopilotMount />
           </ConfirmProvider>
         </ToastProvider>
       </body>

@@ -28,25 +28,53 @@ const FEATURE = 'products-copilot'
  *  it's mounted on (catalog vs orders vs inventory vs pricing). */
 function pageProfile(route?: string | null): { role: string; focus: string } {
   const r = route ?? ''
-  if (r.startsWith('/orders'))
+  const on = (...ps: string[]) => ps.some((p) => r === p || r.startsWith(`${p}/`))
+  if (on('/orders'))
     return {
       role: 'orders copilot',
       focus: 'orders, buyers, fulfillment status, and customer messages',
     }
-  if (r.startsWith('/fulfillment'))
+  if (on('/fulfillment', '/inventory'))
     return {
       role: 'inventory copilot',
       focus: 'stock levels, channel drift, and replenishment',
     }
-  if (r.startsWith('/pricing'))
+  if (on('/pricing'))
+    return { role: 'pricing copilot', focus: 'prices, margins, and repricing' }
+  if (on('/listings'))
     return {
-      role: 'pricing copilot',
-      focus: 'prices, margins, and repricing',
+      role: 'listings copilot',
+      focus: 'channel listings, publish readiness, and listing content',
     }
-  if (r.startsWith('/products'))
+  if (on('/products', '/catalog', '/list'))
     return {
       role: 'catalog copilot',
       focus: 'products, listings, content, and images',
+    }
+  if (on('/marketing'))
+    return {
+      role: 'marketing copilot',
+      focus: 'campaigns, advertising performance, and content',
+    }
+  if (on('/customers'))
+    return {
+      role: 'customers copilot',
+      focus: 'customers, segments, and their orders',
+    }
+  if (on('/insights', '/analytics', '/performance', '/reports', '/dashboard'))
+    return {
+      role: 'insights copilot',
+      focus: 'sales, profit, anomalies, and performance metrics',
+    }
+  if (on('/sync-logs', '/monitoring', '/logs', '/audit-log', '/reconciliation', '/outbound', '/engine'))
+    return {
+      role: 'operations copilot',
+      focus: 'sync health, anomalies, and channel reconciliation',
+    }
+  if (on('/settings'))
+    return {
+      role: 'settings copilot',
+      focus: 'AI configuration, spend, and pending approvals',
     }
   return {
     role: 'commerce copilot',
