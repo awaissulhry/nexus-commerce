@@ -62,7 +62,8 @@ export async function runOrQueueTool(
   // Requires approval — build the dry-run preview.
   const pv = await tool.handler(args, ctx)
   if (!pv.ok) return { ok: false, mode: 'error', error: pv.error }
-  // A tool with no execute() yet (3b targets) stays preview-only.
+  // A preview-only tool (no execute()) can never be queued — it just
+  // returns its dry-run preview.
   if (!tool.execute) {
     return { ok: true, mode: 'preview', preview: pv.preview ?? pv.data }
   }
@@ -142,12 +143,12 @@ export async function decideApproval(
   if (!tool?.execute) {
     await prisma.agentApproval.update({
       where: { id },
-      data: { status: 'approved', reason: 'approved; execution not wired (Phase 3b)' },
+      data: { status: 'approved', reason: 'approved; this tool is preview-only (no execute)' },
     })
     return {
       ok: true,
       status: 'approved',
-      error: 'execution for this tool is not wired yet (Phase 3b)',
+      error: 'this tool is preview-only — there is no action to execute',
     }
   }
   try {
