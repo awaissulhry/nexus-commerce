@@ -8,6 +8,72 @@
   box-sizing: border-box;
 }
 
+/* ═══════════════════════════════════════════════════════════════════
+   P0 — Design-language tokens (UI_REBUILD_STRATEGY.md).
+
+   CSS variables that back the semantic tokens in tailwind.config.ts
+   (text-*, bg-canvas/card/raised/sunken, border-subtle/default/strong,
+   *-soft/line/strong). Each is space-separated RGB so Tailwind's
+   `rgb(var(--x) / <alpha-value>)` opacity syntax works.
+
+   The whole point: ONE definition flips light↔dark. Light values are
+   chosen so existing surfaces are pixel-identical; the dark block is
+   the previously-missing half of the dark-mode story.
+   ═══════════════════════════════════════════════════════════════════ */
+:root {
+  /* Text — every value passes WCAG AA on card + canvas (light). */
+  --text-primary:   15 23 42;    /* slate-900  ~17:1  */
+  --text-secondary: 71 85 105;   /* slate-600  ~7.5:1 */
+  --text-tertiary:  100 116 139; /* slate-500  ~4.7:1 (AA body) */
+  --text-disabled:  148 163 184; /* slate-400  decorative / disabled only */
+  --text-inverse:   248 250 252; /* slate-50 — on dark fills */
+  --text-link:      37 99 235;   /* blue-600   ~5.2:1 */
+
+  /* Surfaces — solid elevation, no translucency. */
+  --surface-canvas: 248 250 252; /* slate-50  — page */
+  --surface-card:   255 255 255; /* white     — panels/cards */
+  --surface-raised: 255 255 255; /* white     — elevated (+ shadow) */
+  --surface-sunken: 241 245 249; /* slate-100 — inset wells */
+  --surface-overlay: 15 23 42;   /* scrim base (used at /60) */
+
+  /* Borders — default is visible (slate-300), not the old slate-200. */
+  --border-subtle:  226 232 240; /* slate-200 — nested rules */
+  --border-default: 203 213 225; /* slate-300 — grid lines */
+  --border-strong:  148 163 184; /* slate-400 — section dividers */
+
+  /* Status — SOLID soft surfaces (replace bg-*-950/40). soft=fill,
+     line=border, strong=text; strong-on-soft passes AA. */
+  --success-soft: 236 253 245; --success-line: 167 243 208; --success-strong: 4 120 87;
+  --warning-soft: 255 251 235; --warning-line: 253 230 138; --warning-strong: 180 83 9;
+  --danger-soft:  255 241 242; --danger-line:  254 205 211; --danger-strong:  190 18 60;
+  --info-soft:    239 246 255; --info-line:    191 219 254; --info-strong:    29 78 216;
+}
+
+.dark {
+  --text-primary:   248 250 252; /* slate-50  */
+  --text-secondary: 203 213 225; /* slate-300 */
+  --text-tertiary:  148 163 184; /* slate-400 */
+  --text-disabled:  100 116 139; /* slate-500 */
+  --text-inverse:   15 23 42;    /* slate-900 */
+  --text-link:      96 165 250;  /* blue-400  */
+
+  --surface-canvas: 2 6 23;      /* slate-950 — page */
+  --surface-card:   15 23 42;    /* slate-900 — panels */
+  --surface-raised: 30 41 59;    /* slate-800 — elevated */
+  --surface-sunken: 2 6 23;      /* slate-950 — wells */
+  --surface-overlay: 2 6 23;
+
+  --border-subtle:  30 41 59;    /* slate-800 */
+  --border-default: 51 65 85;    /* slate-700 */
+  --border-strong:  71 85 105;   /* slate-600 */
+
+  /* Dark status — SOLID deep fills (not /40 tints) + light text. */
+  --success-soft: 6 46 35;  --success-line: 6 95 70;   --success-strong: 110 231 183;
+  --warning-soft: 56 33 6;  --warning-line: 146 64 14; --warning-strong: 252 211 77;
+  --danger-soft:  60 16 24; --danger-line:  159 18 57; --danger-strong:  253 164 175;
+  --info-soft:    17 32 66; --info-line:    30 64 175; --info-strong:    147 197 253;
+}
+
 /* ─── Disabled button contrast pass ─────────────────────────────────
    The codebase has ~126 native <button> sites that use the Tailwind
    class `disabled:opacity-50`. That works fine on a white tray but
@@ -48,7 +114,16 @@ html {
 }
 
 body {
-  background-color: #f9fafb;
+  /* P0 — var-backed so dark mode flips; Inter as the default family
+     with a hardened fallback chain; antialiasing so Inter renders
+     crisp (not heavy) — directly addresses the "too thin" complaint. */
+  background-color: rgb(var(--surface-canvas));
+  color: rgb(var(--text-primary));
+  font-family: var(--font-sans), ui-sans-serif, system-ui, -apple-system,
+    'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
 /* Toast slide-in animation. Used by /components/ui/Toast.tsx via the

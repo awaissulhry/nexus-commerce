@@ -1,5 +1,16 @@
 import type { Metadata } from "next";
+import { Inter } from "next/font/google";
 import "./globals.css";
+
+// P0 — Inter (variable) as the app font, exposed as the --font-sans CSS
+// variable that tailwind.config.ts fontFamily.sans + the body default
+// reference. `display: swap` keeps text visible during load; Inter is
+// metrically close to the old system stack so there's no layout shift.
+const inter = Inter({
+  subsets: ["latin", "latin-ext"],
+  variable: "--font-sans",
+  display: "swap",
+});
 import AppSidebar from "@/components/layout/AppSidebar";
 import AppShell from "@/components/layout/AppShell";
 import CommandPalette from "@/components/CommandPalette";
@@ -39,7 +50,7 @@ export default async function RootLayout({
   const locale = await getServerLocale();
   const t = await getServerT();
   return (
-    <html lang={locale}>
+    <html lang={locale} className={inter.variable}>
       <body>
         {/* U.13 — skip-to-content link (WCAG 2.4.1 Bypass Blocks).
             Visually hidden until keyboard-focused, then anchors at
