@@ -99,6 +99,7 @@ export const pricingWatchdog: AutonomousAgent = {
       proposed: 0,
       skippedExisting: 0,
       errors: 0,
+      costUSD: 0, // no LLM drafts — pricing math is deterministic.
       proposals: [],
     }
 

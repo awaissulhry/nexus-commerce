@@ -100,6 +100,7 @@ export const listingQualityKeeper: AutonomousAgent = {
       proposed: 0,
       skippedExisting: 0,
       errors: 0,
+      costUSD: 0,
       proposals: [],
     }
 
@@ -185,6 +186,7 @@ export const listingQualityKeeper: AutonomousAgent = {
           .join('\n')
 
         const draft = await aiDraft('listing-content', prompt, 'Product', p.id)
+        result.costUSD += draft.costUSD
         const parsed = parseJsonLoose(draft.suggestion)
         if (!parsed) {
           result.errors++

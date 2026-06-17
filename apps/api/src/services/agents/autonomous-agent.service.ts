@@ -26,6 +26,8 @@ export interface AutonomousAgentResult {
   proposed: number
   skippedExisting: number
   errors: number
+  /** AI-2 spend incurred by this run (e.g. the Keeper's content drafts). */
+  costUSD: number
   proposals: {
     productId: string
     sku: string
@@ -113,6 +115,7 @@ export async function runAutonomousAgent(
         status: 'done',
         ok: true,
         output: result as unknown as Prisma.InputJsonValue,
+        costUSD: result.costUSD ?? 0,
         latencyMs: Date.now() - started,
         endedAt: new Date(),
       },
