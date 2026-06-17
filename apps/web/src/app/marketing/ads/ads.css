@@ -108,7 +108,8 @@
 .h10-bud .cur { color: #8a93a1; font-size: 12px; }
 .h10-bud input { border: none; outline: none; font: inherit; font-size: 12px; font-weight: 600; color: #2b3440; width: 64px; text-align: right; background: transparent; }
 .h10-am-grid td.num .h10-stratsel, .h10-am-grid td.num .h10-bud { float: right; }
-.h10-am-editbar { position: sticky; bottom: 0; display: flex; align-items: center; gap: 10px; background: #fff; border: 1px solid #d8dde4; border-radius: 10px; padding: 11px 16px; box-shadow: 0 -4px 18px rgba(20, 28, 38, 0.10); }
+/* right padding clears the global "Ask AI" floating widget pinned bottom-right */
+.h10-am-editbar { position: sticky; bottom: 12px; display: flex; align-items: center; gap: 10px; background: #fff; border: 1px solid #d8dde4; border-radius: 10px; padding: 11px 150px 11px 16px; box-shadow: 0 6px 22px rgba(20, 28, 38, 0.16); }
 .h10-am-editbar .lbl { font-size: 13px; color: #3a4452; }
 .h10-am-editbar .lbl b { color: #1c2530; }
 .h10-am-editbar .grow { flex: 1; }
