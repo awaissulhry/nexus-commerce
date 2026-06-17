@@ -1188,6 +1188,34 @@ export default function AmazonFlatFileClient({
     }
   }, [selAnchor, selEnd])
 
+  // GX.7 — Sheets-style aggregates of the selected cells (status bar).
+  const selectionStats = useMemo(() => {
+    if (!normSel) return null
+    const parseNum = (raw: string): number | null => {
+      let t = raw.trim().replace(/[^\d.,-]/g, '')
+      if (!t) return null
+      const hasDot = t.includes('.'), hasComma = t.includes(',')
+      if (hasDot && hasComma) t = t.lastIndexOf(',') > t.lastIndexOf('.') ? t.replace(/\./g, '').replace(',', '.') : t.replace(/,/g, '')
+      else if (hasComma) { const p = t.split(','); t = (p.length === 2 && p[1].length <= 2) ? `${p[0]}.${p[1]}` : t.replace(/,/g, '') }
+      const n = parseFloat(t)
+      return Number.isFinite(n) ? n : null
+    }
+    const { rMin, rMax, cMin, cMax } = normSel
+    let nonEmpty = 0, numCount = 0, sum = 0, min = Infinity, max = -Infinity
+    for (let ri = rMin; ri <= rMax; ri++) {
+      const row = displayRows[ri]; if (!row) continue
+      for (let ci = cMin; ci <= cMax; ci++) {
+        const col = allColumns[ci]; if (!col) continue
+        const s = row[col.id] == null ? '' : String(row[col.id]).trim()
+        if (!s) continue
+        nonEmpty++
+        const n = parseNum(s)
+        if (n != null) { numCount++; sum += n; if (n < min) min = n; if (n > max) max = n }
+      }
+    }
+    return { nonEmpty, numCount, sum, avg: numCount ? sum / numCount : 0, min, max }
+  }, [normSel, displayRows, allColumns])
+
   const fillTarget = useMemo<NormSel | null>(() => {
     if (!isFillDragging || !fillDragEnd || !normSel) return null
     const { rMin, rMax, cMin, cMax } = normSel
@@ -4040,6 +4068,15 @@ export default function AmazonFlatFileClient({
             return (
               <span className="text-blue-500">
                 {total === 1 ? '1 cell' : `${rCount} × ${cCount} = ${total} cells`} selected
+              </span>
+            )
+          })()}
+          {selectionStats && selectionStats.nonEmpty >= 2 && (() => {
+            const fmt = (n: number) => (Number.isInteger(n) ? String(n) : n.toLocaleString(undefined, { maximumFractionDigits: 2 }))
+            return (
+              <span className="text-slate-500 dark:text-slate-400 tabular-nums">
+                Count {selectionStats.nonEmpty}
+                {selectionStats.numCount >= 1 && <> · Sum {fmt(selectionStats.sum)} · Avg {fmt(selectionStats.avg)} · Min {fmt(selectionStats.min)} · Max {fmt(selectionStats.max)}</>}
               </span>
             )
           })()}
