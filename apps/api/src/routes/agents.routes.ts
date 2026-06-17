@@ -10,8 +10,12 @@
 
 import type { FastifyPluginAsync } from 'fastify'
 import prisma from '../db.js'
-import { runAgent } from '../services/agents/agent-runtime.service.js'
-import { listTools } from '../services/agents/tool-registry.js'
+import { runAgent, invokeTool } from '../services/agents/agent-runtime.service.js'
+import {
+  listToolPolicies,
+  setToolPolicy,
+  seedToolPolicies,
+} from '../services/agents/tool-policy.service.js'
 
 const agentRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post<{
@@ -53,14 +57,33 @@ const agentRoutes: FastifyPluginAsync = async (fastify) => {
     },
   )
 
-  fastify.get('/agent/tools', async () => ({
-    tools: listTools().map((t) => ({
-      name: t.name,
-      description: t.description,
-      riskTier: t.riskTier,
-      readOnly: t.readOnly,
-    })),
-  }))
+  // Effective tool policy (code defaults merged with operator overrides).
+  fastify.get('/agent/tools', async () => ({ tools: await listToolPolicies() }))
+
+  // Operator policy edit (respects the always-ask hard floor).
+  fastify.put<{
+    Params: { name: string }
+    Body: {
+      riskTier?: string
+      enabled?: boolean
+      requiresApproval?: boolean
+      rateLimitPerHour?: number | null
+      dailyBudgetUSD?: number | null
+    }
+  }>('/agent/tools/:name', async (request, reply) => {
+    const r = await setToolPolicy(request.params.name, request.body ?? {})
+    if (!r.ok) return reply.code(400).send(r)
+    return { ok: true, tools: await listToolPolicies() }
+  })
+
+  // Invoke a single tool directly (testing + the Phase 2 copilot loop).
+  fastify.post<{ Params: { name: string }; Body: Record<string, unknown> }>(
+    '/agent/tools/:name/invoke',
+    async (request) => invokeTool(request.params.name, request.body ?? {}, {}),
+  )
+
+  // Seed the editable AgentTool policy rows from the code registry.
+  fastify.post('/agent/tools/seed', async () => seedToolPolicies())
 }
 
 export default agentRoutes

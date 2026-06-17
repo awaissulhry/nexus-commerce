@@ -19,6 +19,7 @@ import {
 import { isAiKillSwitchOn } from '../ai/providers/index.js'
 import { logUsage } from '../ai/usage-logger.service.js'
 import { getTool } from './tool-registry.js'
+import { resolveToolPolicy } from './tool-policy.service.js'
 
 const FEATURE = 'products-copilot'
 
@@ -178,5 +179,46 @@ export async function runAgent(inp: RunAgentInput): Promise<RunAgentOutput> {
       })
       .catch(() => {})
     return { runId: run.id, ok: false, error: msg }
+  }
+}
+
+export interface InvokeResult {
+  tool: string
+  ok: boolean
+  data?: unknown
+  preview?: unknown
+  error?: string
+  requiresApproval?: boolean
+  riskTier?: string
+}
+
+/**
+ * Policy-guarded single-tool invocation — used by the tool endpoint and,
+ * in Phase 2, by the copilot's tool-use loop. Read/draft tools run; a tool
+ * that `requiresApproval` returns its dry-run preview WITHOUT executing
+ * (the approval gate + real execution land in Phase 3).
+ */
+export async function invokeTool(
+  name: string,
+  args: Record<string, unknown>,
+  ctx: { userId?: string | null } = {},
+): Promise<InvokeResult> {
+  if (isAiKillSwitchOn())
+    return { tool: name, ok: false, error: 'AI is temporarily disabled.' }
+  const policy = await resolveToolPolicy(name)
+  if (!policy) return { tool: name, ok: false, error: `unknown tool: ${name}` }
+  if (!policy.enabled)
+    return { tool: name, ok: false, error: `tool ${name} is disabled` }
+  const tool = getTool(name)
+  if (!tool) return { tool: name, ok: false, error: `unknown tool: ${name}` }
+  const res = await tool.handler(args, ctx)
+  return {
+    tool: name,
+    ok: res.ok,
+    data: policy.requiresApproval ? undefined : res.data,
+    preview: res.preview ?? (policy.requiresApproval ? res.data : undefined),
+    error: res.error,
+    requiresApproval: policy.requiresApproval,
+    riskTier: policy.riskTier,
   }
 }
