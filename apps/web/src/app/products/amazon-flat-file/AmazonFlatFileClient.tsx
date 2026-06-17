@@ -1474,6 +1474,38 @@ export default function AmazonFlatFileClient({
     setFillDragEnd({ ri, ci })
   }, [])
 
+  // GX.9 — edge autoscroll: while drag-selecting cells, hold near the top/bottom
+  // edge of the grid and it scrolls + extends the selection (Sheets behaviour).
+  const gridScrollRef = useRef<HTMLDivElement | null>(null)
+  const autoScrollRef = useRef<{ raf: number; vy: number; x: number; y: number } | null>(null)
+  const stopAutoScroll = useCallback(() => {
+    if (autoScrollRef.current) { cancelAnimationFrame(autoScrollRef.current.raf); autoScrollRef.current = null }
+  }, [])
+  const runAutoScroll = useCallback(() => {
+    const a = autoScrollRef.current; const cont = gridScrollRef.current
+    if (!a || !cont) return
+    cont.scrollTop += a.vy
+    const el = document.elementFromPoint(a.x, a.y) as HTMLElement | null
+    const td = el?.closest('[data-ri]') as HTMLElement | null
+    if (td) {
+      const ri = parseInt(td.dataset.ri ?? '', 10), ci = parseInt(td.dataset.ci ?? '', 10)
+      if (!isNaN(ri) && !isNaN(ci)) setSelEnd((p) => (p?.ri === ri && p?.ci === ci ? p : { ri, ci }))
+    }
+    a.raf = requestAnimationFrame(runAutoScroll)
+  }, [])
+  const updateAutoScroll = useCallback((vy: number, x: number, y: number) => {
+    if (vy === 0) { stopAutoScroll(); return }
+    if (autoScrollRef.current) { Object.assign(autoScrollRef.current, { vy, x, y }) }
+    else { autoScrollRef.current = { raf: requestAnimationFrame(runAutoScroll), vy, x, y } }
+  }, [runAutoScroll, stopAutoScroll])
+  // Safety: always stop autoscroll on any pointer release, even outside the grid.
+  useEffect(() => {
+    const stop = () => stopAutoScroll()
+    window.addEventListener('pointerup', stop)
+    window.addEventListener('pointercancel', stop)
+    return () => { window.removeEventListener('pointerup', stop); window.removeEventListener('pointercancel', stop) }
+  }, [stopAutoScroll])
+
   const handleFillDrop = useCallback(() => {
     if (isFillDragging) executeFill()
   }, [isFillDragging, executeFill])
@@ -3732,6 +3764,7 @@ export default function AmazonFlatFileClient({
       {manifest && !loading && (
         <div className="flex-1 flex overflow-hidden min-h-0">
         <div
+          ref={gridScrollRef}
           className="flex-1 overflow-auto"
           onContextMenu={(e) => {
             e.preventDefault()
@@ -3776,6 +3809,15 @@ export default function AmazonFlatFileClient({
           }}
           onPointerMove={(e) => {
             if (e.buttons !== 1) return
+            // GX.9 — edge autoscroll while drag-selecting cells
+            const sc = gridScrollRef.current
+            if (sc && selAnchor && !isFillDragging && rowDragRef.current === null) {
+              const r = sc.getBoundingClientRect()
+              const EDGE = 48
+              const vy = e.clientY < r.top + EDGE ? -Math.max(2, Math.ceil((r.top + EDGE - e.clientY) / 3))
+                : e.clientY > r.bottom - EDGE ? Math.max(2, Math.ceil((e.clientY - (r.bottom - EDGE)) / 3)) : 0
+              updateAutoScroll(vy, e.clientX, e.clientY)
+            } else stopAutoScroll()
             const el = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null
 
             // Row # column drag — extend row selection vertically
@@ -3804,7 +3846,7 @@ export default function AmazonFlatFileClient({
               setActiveCell(null)
             }
           }}
-          onPointerUp={() => { rowDragRef.current = null; if (isFillDragging) executeFill() }}
+          onPointerUp={() => { rowDragRef.current = null; stopAutoScroll(); if (isFillDragging) executeFill() }}
         >
           <table className="border-collapse text-sm w-max min-w-full">
             <thead className="sticky top-0 z-20 bg-white dark:bg-slate-900">
