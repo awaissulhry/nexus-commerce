@@ -9,7 +9,7 @@ import {
   AlertCircle, AlertTriangle, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight,
   Clock, Copy, Download, FileSpreadsheet, GitBranch, GitFork, History, Image as ImageIcon, Keyboard, Loader2, Pin, Plus, RefreshCw, RotateCcw,
   Search, Send, Trash2, Upload, X, ArrowRightLeft,
-  Undo2, Redo2, GripVertical,
+  Undo2, Redo2, GripVertical, Wand2,
 } from 'lucide-react'
 import dynamic from 'next/dynamic'
 import { evaluateRule, TONE_CLASSES, type ConditionalRule } from '@/app/_shared/bulk-edit/conditional-format'
@@ -17,6 +17,7 @@ import { type FindCell } from '@/app/_shared/bulk-edit/find-replace'
 import { FF_FILTER_DEFAULT, type FFFilterState } from '../_shared/FFFilterPanel'
 import { FFSavedViews, type FFViewState } from '../_shared/FFSavedViews'
 import { type PullDiffApplyResult } from './PullDiffModal'
+import { type ImportApplyResult } from './ImportWizardModal'
 import { PendingPullBanner } from '../_shared/PendingPullBanner'
 import { FLAT_FILE_SHORTCUTS } from '../_shared/flat-file-shortcuts'
 import {
@@ -81,6 +82,10 @@ const CascadeModal = dynamic(
 )
 const FlatFileAiPanel = dynamic(
   () => import('../_shared/FlatFileAiPanel').then((m) => m.FlatFileAiPanel),
+  { ssr: false },
+)
+const ImportWizardModal = dynamic(
+  () => import('./ImportWizardModal').then((m) => m.ImportWizardModal),
   { ssr: false },
 )
 
@@ -664,6 +669,7 @@ export default function AmazonFlatFileClient({
   // Diff modal state — populated when a pull job completes and the
   // operator hasn't reviewed the results yet.
   const [pullDiffOpen, setPullDiffOpen] = useState(false)
+  const [importOpen, setImportOpen] = useState(false) // FX.5b — smart import wizard
   const [pullDiffData, setPullDiffData] = useState<{
     pulledRows: Row[]
     selectedColumns: 'all' | PullGroupId[]
@@ -2708,6 +2714,29 @@ export default function AmazonFlatFileClient({
     }).catch(() => { /* best-effort */ })
   }, [pullDiffData, pushSnapshot, marketplace, productType])
 
+  // FX.5b — apply the smart-import wizard's chosen cells into the grid: update
+  // existing rows in place (by _rowId) + append new rows; one undoable snapshot.
+  const handleImportApply = useCallback((result: ImportApplyResult) => {
+    pushSnapshot()
+    setRows((prev) => {
+      const next = [...prev]
+      const idxById = new Map(next.map((r, i) => [String(r._rowId), i]))
+      for (const u of result.updates) {
+        const idx = idxById.get(u.rowId)
+        if (idx == null) continue
+        next[idx] = { ...next[idx], ...u.cells, _dirty: true }
+      }
+      for (const n of result.newRows) {
+        const row = makeEmptyRow(productType, marketplace)
+        Object.assign(row, n.cells, { _dirty: true, _isNew: true })
+        next.push(row)
+      }
+      return next
+    })
+    setImportOpen(false)
+    toast.success(`Imported ${result.cellCount} value${result.cellCount === 1 ? '' : 's'} · ⌘Z to undo`)
+  }, [pushSnapshot, productType, marketplace])
+
   // FX.1 — export the grid to TSV (Amazon template), CSV, or XLSX. Uses
   // effectiveManifest so a multi-category (MT) union sheet exports every column;
   // honors the current row selection so "export selected" is partial export.
@@ -2858,6 +2887,7 @@ export default function AmazonFlatFileClient({
           {/* ── Menus — left side ── */}
           <div className="flex items-center gap-0.5 flex-shrink-0">
             <MenuDropdown label="File" items={[
+              { label: 'Smart import (CSV/Excel/JSON)…', icon: <Wand2 className="w-3.5 h-3.5" />, onClick: () => setImportOpen(true), disabled: !effectiveManifest },
               { label: 'Import TSV…', icon: <Upload className="w-3.5 h-3.5" />, onClick: () => fileInputRef.current?.click() },
               { separator: true },
               { label: `Export as TSV (Amazon)${selectedRows.size > 0 ? ` · ${selectedRows.size} sel` : ''}`, icon: <Download className="w-3.5 h-3.5" />, onClick: () => void exportFile('tsv'), disabled: !rows.length },
@@ -4118,6 +4148,21 @@ export default function AmazonFlatFileClient({
           columnLabels={columnLabelMap}
           onApply={handlePullDiffApply}
           onClose={() => { setPullDiffOpen(false); setPullDiffData(null) }}
+        />
+      )}
+
+      {/* FX.5b — Smart import wizard (external CSV/Excel/TSV/JSON → grid) */}
+      {importOpen && (
+        <ImportWizardModal
+          open={importOpen}
+          marketplace={marketplace}
+          productType={productType}
+          productTypes={sheetTypes}
+          currentRows={rows}
+          columnLabels={columnLabelMap}
+          columnIds={manifestColumns.map((c) => c.id)}
+          onApply={handleImportApply}
+          onClose={() => setImportOpen(false)}
         />
       )}
 
