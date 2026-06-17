@@ -2747,10 +2747,15 @@ export default function AmazonFlatFileClient({
     const selectedOnly = selectedRows.size > 0
     const outRows = selectedOnly ? rows.filter((r) => selectedRows.has(r._rowId as string)) : rows
     if (!outRows.length) { toast.warning('No rows to export'); return }
+    // Export in the editor's on-screen column order (orderedGroups — respects the
+    // saved group drag-order), not the raw Amazon schema order, so the file's
+    // columns match exactly what's shown in the grid. Safe for Amazon uploads:
+    // the flat file matches columns by header name, not position.
+    const exportManifest = { ...mf, groups: orderedGroups.length ? orderedGroups : mf.groups }
     try {
       const res = await fetch(`${getBackendUrl()}/api/amazon/flat-file/export`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ manifest: mf, rows: outRows, format }),
+        body: JSON.stringify({ manifest: exportManifest, rows: outRows, format }),
       })
       if (!res.ok) { toast.error('Export failed'); return }
       const blob = await res.blob()
@@ -2765,7 +2770,7 @@ export default function AmazonFlatFileClient({
     } catch {
       toast.error('Export failed')
     }
-  }, [manifest, effectiveManifest, rows, selectedRows, productType, marketplace])
+  }, [manifest, effectiveManifest, orderedGroups, rows, selectedRows, productType, marketplace])
 
   // ── Save / Discard ────────────────────────────────────────────────
   const [saveFlash, setSaveFlash] = useState(false)
