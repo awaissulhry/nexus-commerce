@@ -46,6 +46,10 @@ const EXCLUDE = [
   /ebay-flat-file/i,
   /flatfile/i,
   /[/\\]app[/\\]design[/\\]/,
+  // Always-dark chrome: the sidebar is bg-slate-900 (not under .dark),
+  // so text-slate-400 is the CORRECT light-on-dark muted there — the
+  // light-mode tokens would render too dark. Exempt it from the sweep.
+  /[/\\]layout[/\\]AppSidebar\.tsx$/,
 ]
 
 const shouldSkip = (path) => EXCLUDE.some((re) => re.test(path))

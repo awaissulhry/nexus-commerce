@@ -37,30 +37,16 @@ import {
   FileEdit,
   LayoutGrid,
   CalendarDays,
-  BadgeCheck,
-  BookOpen,
-  Palette,
   Zap,
-  LayoutTemplate,
   ShoppingCart,
   Cable,
-  Send,
   Sun,
   Moon,
   Monitor,
   GitCompare,
   Inbox,
   Trash2,
-  AlertTriangle,
-  Bookmark,
-  Calculator,
-  Download,
-  LineChart,
-  MonitorPlay,
   Receipt,
-  Sparkles,
-  TableProperties,
-  Users,
   type LucideIcon,
 } from 'lucide-react'
 import { useTheme } from '@/lib/theme/use-theme'
@@ -368,7 +354,7 @@ export default function AppSidebar() {
           <button
             type="button"
             onClick={dispatchCmdK}
-            className="text-tertiary hover:text-white p-1.5 rounded hover:bg-slate-800 transition-colors"
+            className="text-slate-400 hover:text-white p-1.5 rounded hover:bg-slate-800 transition-colors"
             title="Search (⌘K)"
           >
             <Search className="w-4 h-4" />
@@ -384,9 +370,9 @@ export default function AppSidebar() {
         >
           <div className="min-w-0">
             <div className="text-base font-medium text-white truncate">Xavia Racing</div>
-            <div className="text-xs text-tertiary truncate">Workspace</div>
+            <div className="text-xs text-slate-400 truncate">Workspace</div>
           </div>
-          <ChevronDown className="w-3 h-3 text-tertiary flex-shrink-0" />
+          <ChevronDown className="w-3 h-3 text-slate-400 flex-shrink-0" />
         </button>
       </div>
 
@@ -608,72 +594,22 @@ export default function AppSidebar() {
             label="Calendar"
             active={pathname.startsWith('/marketing/calendar')}
           />
-          <NavParentItem
-            storageKey="marketing.content"
+          {/* P2 — consolidated: the Content hub page holds A+, Brand
+              Story, Brand Kit, automation, Templates, publish + analytics
+              as its own in-page nav. One sidebar entry, nothing hidden. */}
+          <NavItem
             href="/marketing/content"
             icon={ImageIcon}
-            label="Content Hub"
-            active={pathname === '/marketing/content'}
-            childRoutes={[
-              '/marketing/content/publish',
-              '/marketing/content/analytics',
-              '/marketing/aplus',
-              '/marketing/brand-story',
-              '/marketing/brand-kit',
-              '/marketing/automation',
-              '/marketing/templates',
-            ]}
-          >
-            <NavItem
-              href="/marketing/content/publish"
-              icon={Send}
-              label="Channel publish"
-              nested
-              active={pathname === '/marketing/content/publish'}
-            />
-            <NavItem
-              href="/marketing/content/analytics"
-              icon={BarChart3}
-              label="Storage analytics"
-              nested
-              active={pathname === '/marketing/content/analytics'}
-            />
-            <NavItem
-              href="/marketing/aplus"
-              icon={BadgeCheck}
-              label="A+ Content"
-              nested
-              active={pathname.startsWith('/marketing/aplus')}
-            />
-            <NavItem
-              href="/marketing/brand-story"
-              icon={BookOpen}
-              label="Brand Story"
-              nested
-              active={pathname.startsWith('/marketing/brand-story')}
-            />
-            <NavItem
-              href="/marketing/brand-kit"
-              icon={Palette}
-              label="Brand Kit"
-              nested
-              active={pathname.startsWith('/marketing/brand-kit')}
-            />
-            <NavItem
-              href="/marketing/automation"
-              icon={Zap}
-              label="Content automation"
-              nested
-              active={pathname.startsWith('/marketing/automation')}
-            />
-            <NavItem
-              href="/marketing/templates"
-              icon={LayoutTemplate}
-              label="Templates"
-              nested
-              active={pathname.startsWith('/marketing/templates')}
-            />
-          </NavParentItem>
+            label="Content"
+            active={
+              pathname.startsWith('/marketing/content') ||
+              pathname.startsWith('/marketing/aplus') ||
+              pathname.startsWith('/marketing/brand-story') ||
+              pathname.startsWith('/marketing/brand-kit') ||
+              pathname.startsWith('/marketing/automation') ||
+              pathname.startsWith('/marketing/templates')
+            }
+          />
           <NavItem
             href="/marketing/reviews"
             icon={Star}
@@ -699,29 +635,16 @@ export default function AppSidebar() {
             label="Pricing"
             active={pathname.startsWith('/pricing')}
           />
+          {/* P2 — consolidated: the /insights hub holds all 15 lenses in
+              its own nav. Sidebar keeps just the two most-used as quick
+              links; the rest are one click into the hub. */}
           <NavParentItem
             storageKey="insights"
             href="/insights"
             icon={BarChart3}
             label="Insights"
             active={pathname === '/insights'}
-            childRoutes={[
-              '/insights/sales',
-              '/insights/profit',
-              '/insights/advertising',
-              '/insights/products',
-              '/insights/customers',
-              '/insights/inventory',
-              '/insights/fiscal',
-              '/insights/forecast',
-              '/insights/brief',
-              '/insights/anomalies',
-              '/insights/scenarios',
-              '/insights/builder',
-              '/insights/exports',
-              '/insights/live',
-              '/insights/notebook',
-            ]}
+            childRoutes={['/insights/sales', '/insights/profit']}
           >
             <NavItem
               href="/insights/sales"
@@ -736,97 +659,6 @@ export default function AppSidebar() {
               label="Profit & cost"
               nested
               active={pathname === '/insights/profit'}
-            />
-            <NavItem
-              href="/insights/advertising"
-              icon={Megaphone}
-              label="Advertising"
-              nested
-              active={pathname === '/insights/advertising'}
-            />
-            <NavItem
-              href="/insights/products"
-              icon={Package}
-              label="Products"
-              nested
-              active={pathname === '/insights/products'}
-            />
-            <NavItem
-              href="/insights/customers"
-              icon={Users}
-              label="Customers"
-              nested
-              active={pathname === '/insights/customers'}
-            />
-            <NavItem
-              href="/insights/inventory"
-              icon={Truck}
-              label="Inventory"
-              nested
-              active={pathname === '/insights/inventory'}
-            />
-            <NavItem
-              href="/insights/fiscal"
-              icon={Receipt}
-              label="Italian fiscal"
-              nested
-              active={pathname === '/insights/fiscal'}
-            />
-            <NavItem
-              href="/insights/forecast"
-              icon={LineChart}
-              label="Forecast"
-              nested
-              active={pathname === '/insights/forecast'}
-            />
-            <NavItem
-              href="/insights/brief"
-              icon={Sparkles}
-              label="AI brief"
-              nested
-              active={pathname === '/insights/brief'}
-            />
-            <NavItem
-              href="/insights/anomalies"
-              icon={AlertTriangle}
-              label="Anomalies"
-              nested
-              active={pathname === '/insights/anomalies'}
-            />
-            <NavItem
-              href="/insights/scenarios"
-              icon={Calculator}
-              label="Scenarios"
-              nested
-              active={pathname === '/insights/scenarios'}
-            />
-            <NavItem
-              href="/insights/builder"
-              icon={TableProperties}
-              label="Report builder"
-              nested
-              active={pathname === '/insights/builder'}
-            />
-            <NavItem
-              href="/insights/exports"
-              icon={Download}
-              label="Export hub"
-              nested
-              active={pathname === '/insights/exports'}
-            />
-            <NavItem
-              href="/insights/live"
-              icon={MonitorPlay}
-              label="Live monitor"
-              nested
-              active={pathname === '/insights/live'}
-            />
-            <NavItem
-              href="/insights/notebook"
-              icon={Bookmark}
-              label="Notebook"
-              nested
-              active={pathname === '/insights/notebook'}
             />
           </NavParentItem>
         </NavGroup>
@@ -848,8 +680,13 @@ export default function AppSidebar() {
             }
             active={pathname === '/inbox'}
           />
-          {/* L.2.1 — /sync-logs is the unified observability hub. */}
-          <NavItem
+          {/* L.2.1 — /sync-logs is the unified observability hub.
+              P2 — Sync Health / Audit Log / Outbound Queue /
+              Reconciliation nest here (their natural home) instead of 6
+              flat Monitoring rows. Inbox stays top-level for its live
+              alert badge. */}
+          <NavParentItem
+            storageKey="monitoring"
             href="/sync-logs"
             icon={Activity}
             label="Sync Logs"
@@ -861,31 +698,37 @@ export default function AppSidebar() {
               pathname === '/logs' ||
               pathname.startsWith('/sync-logs/')
             }
-          />
-          <NavItem
-            href="/dashboard/health"
-            icon={HeartPulse}
-            label="Sync Health"
-            active={pathname === '/dashboard/health'}
-          />
-          <NavItem
-            href="/audit-log"
-            icon={History}
-            label="Audit Log"
-            active={pathname === '/audit-log'}
-          />
-          <NavItem
-            href="/outbound"
-            icon={Boxes}
-            label="Outbound Queue"
-            active={pathname === '/outbound'}
-          />
-          <NavItem
-            href="/reconciliation"
-            icon={GitCompare}
-            label="Reconciliation"
-            active={pathname.startsWith('/reconciliation')}
-          />
+            childRoutes={['/dashboard/health', '/audit-log', '/outbound', '/reconciliation']}
+          >
+            <NavItem
+              href="/dashboard/health"
+              icon={HeartPulse}
+              label="Sync Health"
+              nested
+              active={pathname === '/dashboard/health'}
+            />
+            <NavItem
+              href="/audit-log"
+              icon={History}
+              label="Audit Log"
+              nested
+              active={pathname === '/audit-log'}
+            />
+            <NavItem
+              href="/outbound"
+              icon={Boxes}
+              label="Outbound Queue"
+              nested
+              active={pathname === '/outbound'}
+            />
+            <NavItem
+              href="/reconciliation"
+              icon={GitCompare}
+              label="Reconciliation"
+              nested
+              active={pathname.startsWith('/reconciliation')}
+            />
+          </NavParentItem>
         </NavGroup>
 
         <NavGroup label="System">
@@ -948,7 +791,7 @@ export default function AppSidebar() {
                   <li key={item.id}>
                     <Link
                       href={item.href}
-                      className="block text-sm text-tertiary hover:text-white truncate transition-colors"
+                      className="block text-sm text-slate-400 hover:text-white truncate transition-colors"
                       title={item.label}
                     >
                       {item.label}
@@ -972,7 +815,7 @@ export default function AppSidebar() {
           </div>
           <div className="flex-1 min-w-0 text-left">
             <div className="text-base font-medium text-white truncate">Awa</div>
-            <div className="text-sm text-tertiary truncate">Xavia Racing</div>
+            <div className="text-sm text-slate-400 truncate">Xavia Racing</div>
           </div>
         </button>
       </div>
@@ -1029,7 +872,7 @@ function NavItem({ href, icon: Icon, label, count, indicator, active, nested }: 
             ? 'bg-blue-600/30 text-blue-100 font-medium'
             : 'bg-blue-600 text-white font-medium'
           : nested
-          ? 'text-tertiary hover:bg-slate-800 hover:text-slate-100'
+          ? 'text-slate-400 hover:bg-slate-800 hover:text-slate-100'
           : 'text-slate-300 hover:bg-slate-800 hover:text-white',
         indicator === 'disconnected' && 'opacity-60 hover:opacity-100'
       )}
@@ -1049,7 +892,7 @@ function NavItem({ href, icon: Icon, label, count, indicator, active, nested }: 
                 'text-xs tabular-nums px-1.5 py-0.5 rounded',
                 active
                   ? 'bg-blue-700 text-blue-100'
-                  : 'bg-slate-800 text-tertiary'
+                  : 'bg-slate-800 text-slate-400'
               )}
             >
               {count}
@@ -1143,7 +986,7 @@ function NavParentItem({
                 'text-xs tabular-nums px-1.5 py-0.5 rounded',
                 active
                   ? 'bg-blue-700 text-blue-100'
-                  : 'bg-slate-800 text-tertiary'
+                  : 'bg-slate-800 text-slate-400'
               )}
             >
               {count}
@@ -1263,7 +1106,7 @@ function ChannelNav({
                 'text-xs tabular-nums px-1.5 py-0.5 rounded',
                 isOnChannel
                   ? 'bg-blue-700 text-blue-100'
-                  : 'bg-slate-800 text-tertiary',
+                  : 'bg-slate-800 text-slate-400',
               )}
             >
               {count}
@@ -1280,7 +1123,7 @@ function ChannelNav({
               'flex-shrink-0 px-2 py-1.5 rounded-r-md transition-colors',
               isOnChannel
                 ? 'text-blue-100 hover:bg-blue-700'
-                : 'text-tertiary hover:bg-slate-700/60 hover:text-white',
+                : 'text-slate-400 hover:bg-slate-700/60 hover:text-white',
             )}
           >
             {expanded ? (
@@ -1317,7 +1160,7 @@ function ChannelNav({
                   'flex items-center gap-2.5 mx-2 ml-9 px-3 py-1 rounded-md text-base transition-colors',
                   active
                     ? 'bg-blue-600/30 text-white'
-                    : 'text-tertiary hover:bg-slate-800 hover:text-white',
+                    : 'text-slate-400 hover:bg-slate-800 hover:text-white',
                 )}
               >
                 {dotClass && (
@@ -1407,7 +1250,7 @@ function SidebarThemeToggle() {
       onClick={cycleTheme}
       title={nextLabel}
       aria-label={nextLabel}
-      className="text-tertiary hover:text-white p-1.5 rounded hover:bg-slate-800 transition-colors"
+      className="text-slate-400 hover:text-white p-1.5 rounded hover:bg-slate-800 transition-colors"
     >
       <Icon className="w-4 h-4" />
     </button>
