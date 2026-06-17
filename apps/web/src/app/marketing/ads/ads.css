@@ -64,3 +64,19 @@
 .h10-toggle { display: inline-block; width: 30px; height: 17px; border-radius: 999px; background: #cbd2db; position: relative; vertical-align: middle; }
 .h10-toggle::after { content: ''; position: absolute; top: 2px; left: 2px; width: 13px; height: 13px; border-radius: 999px; background: #fff; }
 .h10-rulecount { color: #8a93a1; }
+/* CBN.2b — filter bar */
+.h10-am-fpanel { background: #fff; border: 1px solid #e6e9ee; border-radius: 10px; padding: 12px 14px; }
+.h10-am-fpanel .frow { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 11px 14px; }
+.h10-am-fpanel .ffield { display: flex; flex-direction: column; gap: 4px; }
+.h10-am-fpanel .ffield > span { font-size: 11px; font-weight: 600; color: #6b7480; }
+.h10-am-fpanel .ffield select { border: 1px solid #d8dde4; border-radius: 7px; padding: 6px 8px; font: inherit; font-size: 12.5px; background: #fff; }
+.h10-am-fpanel .mm { display: flex; gap: 6px; }
+.h10-am-fpanel .mm input { width: 100%; min-width: 0; border: 1px solid #d8dde4; border-radius: 7px; padding: 6px 8px; font: inherit; font-size: 12px; }
+.h10-am-fpanel .fft { display: flex; align-items: center; margin-top: 10px; padding-top: 10px; border-top: 1px solid #eef1f5; }
+.h10-am-fpanel .fft .grow { flex: 1; }
+.h10-am-link { background: none; border: none; color: #1f6fde; font-size: 12px; font-weight: 600; cursor: pointer; padding: 4px 8px; }
+.h10-am-search.sm { min-width: 0; padding: 6px 9px; }
+.h10-am-search.sm input { font-size: 12px; }
+.h10-am-toolbar .seg { display: inline-flex; border: 1px solid #d8dde4; border-radius: 8px; overflow: hidden; margin-left: 12px; }
+.h10-am-toolbar .seg button { border: none; background: #fff; padding: 6px 12px; font: inherit; font-size: 12px; font-weight: 600; color: #5b6573; cursor: pointer; }
+.h10-am-toolbar .seg button.on { background: #1f6fde; color: #fff; }

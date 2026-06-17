@@ -26,12 +26,38 @@ const EDIT_COLS = ['Target ACoS', 'Bid Automation', 'Min/Max Budget', 'Rules', '
 
 const STRAT_LABEL: Record<string, string> = { LEGACY_FOR_SALES: 'Down only', AUTO_FOR_SALES: 'Up and Down', MANUAL: 'Fixed' }
 
+// Filter bar range fields (label · unit) — matches the H10 Ad Manager filter row.
+const RANGE_FIELDS: Array<{ key: string; label: string; unit: '%' | '€' | '' }> = [
+  { key: 'acos', label: 'ACoS', unit: '%' }, { key: 'roas', label: 'ROAS', unit: '' },
+  { key: 'spend', label: 'Spend', unit: '€' }, { key: 'sales', label: 'Sales', unit: '€' },
+  { key: 'clicks', label: 'Clicks', unit: '' }, { key: 'ppcOrders', label: 'PPC Orders', unit: '' },
+  { key: 'cpc', label: 'CPC', unit: '€' }, { key: 'ctr', label: 'CTR', unit: '%' },
+  { key: 'cvr', label: 'CVR', unit: '%' }, { key: 'impressions', label: 'Impressions', unit: '' },
+  { key: 'dailyBudget', label: 'Daily Budget', unit: '€' },
+]
+function metricVal(c: Camp, key: string): number {
+  const spend = num(c.spend), sales = num(c.sales), clicks = num(c.clicks), impr = num(c.impressions), orders = num(c.ppcOrders ?? c.orders)
+  switch (key) {
+    case 'acos': return c.acos != null ? (c.acos <= 1 ? c.acos * 100 : c.acos) : (sales ? (spend / sales) * 100 : 0)
+    case 'roas': return c.roas != null ? Number(c.roas) : (spend ? sales / spend : 0)
+    case 'spend': return spend; case 'sales': return sales; case 'clicks': return clicks; case 'ppcOrders': return orders
+    case 'cpc': return clicks ? spend / clicks : 0; case 'ctr': return impr ? (clicks / impr) * 100 : 0
+    case 'cvr': return clicks ? (orders / clicks) * 100 : 0; case 'impressions': return impr; case 'dailyBudget': return num(c.dailyBudget)
+  }
+  return 0
+}
+type Range = { min: string; max: string }
+const PRESET_KEY = 'h10-am-filters'
+
 export function CampaignsGrid() {
   const [rows, setRows] = useState<Camp[]>([])
   const [loading, setLoading] = useState(true)
   const [mode, setMode] = useState<Mode>('metrics')
   const [search, setSearch] = useState('')
   const [sel, setSel] = useState<Set<string>>(new Set())
+  const [status, setStatus] = useState('all')
+  const [ranges, setRanges] = useState<Record<string, Range>>({})
+  const [presetMsg, setPresetMsg] = useState('')
 
   useEffect(() => {
     void fetch(`${getBackendUrl()}/api/advertising/campaigns?limit=500`, { cache: 'no-store' })
@@ -39,12 +65,29 @@ export function CampaignsGrid() {
       .then((d) => setRows((d.items ?? []) as Camp[]))
       .catch(() => {})
       .finally(() => setLoading(false))
+    try { const s = localStorage.getItem(PRESET_KEY); if (s) { const p = JSON.parse(s); setStatus(p.status ?? 'all'); setRanges(p.ranges ?? {}) } } catch { /* ignore */ }
   }, [])
+
+  const setRange = (key: string, side: 'min' | 'max', v: string) => setRanges((m) => ({ ...m, [key]: { ...(m[key] ?? { min: '', max: '' }), [side]: v } }))
+  const clearFilters = () => { setStatus('all'); setRanges({}); setSearch('') }
+  const savePreset = () => { try { localStorage.setItem(PRESET_KEY, JSON.stringify({ status, ranges })); setPresetMsg('Saved'); setTimeout(() => setPresetMsg(''), 1500) } catch { /* ignore */ } }
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
-    return q ? rows.filter((c) => c.name.toLowerCase().includes(q)) : rows
-  }, [rows, search])
+    return rows.filter((c) => {
+      if (q && !c.name.toLowerCase().includes(q)) return false
+      if (status === 'enabled' && c.status !== 'ENABLED') return false
+      if (status === 'paused' && c.status !== 'PAUSED') return false
+      if (status === 'archived' && c.status !== 'ARCHIVED') return false
+      for (const f of RANGE_FIELDS) {
+        const r = ranges[f.key]; if (!r || (!r.min && !r.max)) continue
+        const v = metricVal(c, f.key)
+        if (r.min && v < Number(r.min)) return false
+        if (r.max && v > Number(r.max)) return false
+      }
+      return true
+    })
+  }, [rows, search, status, ranges])
 
   const allSel = filtered.length > 0 && filtered.every((c) => sel.has(c.id))
   const toggleAll = () => setSel(allSel ? new Set() : new Set(filtered.map((c) => c.id)))
@@ -77,20 +120,37 @@ export function CampaignsGrid() {
 
   return (
     <div className="h10-am">
-      {/* filter bar placeholder (CBN.2b) */}
-      <div className="h10-am-filters">
-        <div className="h10-am-search"><Search size={14} /><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search campaigns…" /></div>
-        <div className="seg">
-          <button type="button" className={mode === 'metrics' ? 'on' : ''} onClick={() => setMode('metrics')}>Metrics</button>
-          <button type="button" className={mode === 'edit' ? 'on' : ''} onClick={() => setMode('edit')}>Edit Campaigns</button>
+      {/* filter bar */}
+      <div className="h10-am-fpanel">
+        <div className="frow">
+          <label className="ffield"><span>Status</span><select value={status} onChange={(e) => setStatus(e.target.value)}><option value="all">All</option><option value="enabled">Enabled</option><option value="paused">Paused</option><option value="archived">Archived</option></select></label>
+          <label className="ffield"><span>Bid Automation</span><select defaultValue="All"><option>All</option><option>On</option><option>Off</option></select></label>
+          <label className="ffield"><span>Rule</span><select defaultValue="All campaigns"><option>All campaigns</option><option>Has rules</option><option>No rules</option></select></label>
+          <div className="ffield"><span>Search</span><div className="h10-am-search sm"><Search size={13} /><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Campaign name…" /></div></div>
+          {RANGE_FIELDS.map((f) => (
+            <div className="ffield" key={f.key}>
+              <span>{f.label}{f.unit ? ` (${f.unit})` : ''}</span>
+              <div className="mm">
+                <input placeholder="Min" value={ranges[f.key]?.min ?? ''} onChange={(e) => setRange(f.key, 'min', e.target.value)} />
+                <input placeholder="Max" value={ranges[f.key]?.max ?? ''} onChange={(e) => setRange(f.key, 'max', e.target.value)} />
+              </div>
+            </div>
+          ))}
         </div>
-        <span className="grow" />
-        <span className="h10-am-presethint">Filters + Save Preset — next (CBN.2b)</span>
+        <div className="fft">
+          <span className="grow" />
+          <button type="button" className="h10-am-link" onClick={savePreset}>{presetMsg || 'Save Filter Preset'}</button>
+          <button type="button" className="h10-am-link" onClick={clearFilters}>Clear</button>
+        </div>
       </div>
 
       {/* toolbar */}
       <div className="h10-am-toolbar">
-        <span className="cnt">{sel.size > 0 ? <b>Selected {sel.size}</b> : `Viewing 1-${Math.min(filtered.length, 500)} of ${rows.length} Campaigns`}</span>
+        <span className="cnt">{sel.size > 0 ? <b>Selected {sel.size}</b> : `Viewing 1-${Math.min(filtered.length, 500)} of ${filtered.length} Campaigns`}</span>
+        <div className="seg">
+          <button type="button" className={mode === 'metrics' ? 'on' : ''} onClick={() => setMode('metrics')}>Metrics</button>
+          <button type="button" className={mode === 'edit' ? 'on' : ''} onClick={() => setMode('edit')}>Edit Campaigns</button>
+        </div>
         {sel.size > 0 && <>
           <button type="button" className="h10-am-btn">Bulk Actions</button>
           <button type="button" className="h10-am-btn">Edit Campaigns</button>
