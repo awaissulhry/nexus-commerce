@@ -17,7 +17,7 @@ import { usePathname } from 'next/navigation'
 import type { ReactNode } from 'react'
 
 /** Route prefixes that render with NO Nexus chrome (full-screen). */
-const STANDALONE_PREFIXES = ['/marketing/ads-console']
+const STANDALONE_PREFIXES = ['/marketing/ads-console', '/marketing/ads']
 
 export default function AppShell({
   sidebar,
