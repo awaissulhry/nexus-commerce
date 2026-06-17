@@ -5187,14 +5187,12 @@ function SpreadsheetCell({ col, value, isActive, cellBg, width, cellHeight, ri, 
         <input ref={inputRef as any} type="text" inputMode={col.kind === 'number' ? 'decimal' : undefined}
           defaultValue={editInitialChar !== null ? editInitialChar : displayValue} maxLength={col.maxLength}
           onInput={(e) => {
-            const val = (e.target as HTMLInputElement).value
-            setLiveLen(val.length)
-            if (!snapshotPushedRef.current) {
-              originalValueRef.current = displayValue
-              onPushSnapshot()
-              snapshotPushedRef.current = true
-            }
-            onLiveChange(val)
+            // GX.3 — edit LOCALLY: only update the char counter while typing. No
+            // setRows per keystroke (that re-rendered all ~62k cells on every key —
+            // the real "typing feels laggy"). The input is uncontrolled, so the
+            // typed text shows without React; commitInput() writes the final value
+            // to the row once, on Tab/Enter/blur.
+            setLiveLen((e.target as HTMLInputElement).value.length)
           }}
           onBlur={() => {
             if (!cancelledRef.current) commitInput()
