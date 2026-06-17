@@ -10511,6 +10511,115 @@ model AiFeatureModelPref {
   createdAt  DateTime @default(now())
 }
 
+// ── ACP: Agent Control Plane (docs/AGENT_CONTROL_PLANE.md) ──────────────
+// Phase 0 foundation. Five additive tables; ship empty + dark, fill per
+// phase. The agent layer orchestrates the existing cron/rules/BullMQ
+// backbone and routes models through AI-2 — it does not replace them.
+
+// A configured agent — interactive copilot or autonomous worker.
+model AgentDefinition {
+  id            String     @id @default(cuid())
+  key           String     @unique // stable id, e.g. "products-copilot"
+  name          String
+  description   String?
+  kind          String // "interactive" | "autonomous"
+  surface       String? // page/route served, e.g. "/products"
+  autonomyTier  String     @default("suggest") // suggest | low | medium | high (cap)
+  modelFeature  String? // AI-2 feature key for model routing
+  systemPrompt  String?    @db.Text
+  toolNames     String[]   @default([]) // tools (code registry) this agent may use
+  triggerType   String     @default("on_demand") // on_demand | event | schedule
+  triggerConfig Json? // cron expr / event filter
+  enabled       Boolean    @default(false) // ship dark; enable per-phase
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+  runs          AgentRun[]
+}
+
+// One execution (autonomous run or interactive copilot turn) — the
+// observability + audit spine. `steps` is the ordered tool/model trace.
+model AgentRun {
+  id           String          @id @default(cuid())
+  agentId      String?
+  agent        AgentDefinition? @relation(fields: [agentId], references: [id])
+  agentKey     String // denormalized so history survives def deletion
+  trigger      String // manual | event | schedule
+  status       String          @default("running") // running | awaiting_approval | done | failed | cancelled
+  entityType   String?
+  entityId     String?
+  input        Json?
+  output       Json?
+  steps        Json? // [{type:'tool'|'model', name, args, result, ms, costUSD}]
+  inputTokens  Int             @default(0)
+  outputTokens Int             @default(0)
+  costUSD      Decimal         @default(0) @db.Decimal(12, 6)
+  model        String?
+  provider     String?
+  latencyMs    Int?
+  ok           Boolean         @default(true)
+  errorMessage String?
+  userId       String? // who triggered (null for autonomous)
+  createdAt    DateTime        @default(now())
+  endedAt      DateTime?
+  approvals    AgentApproval[]
+
+  @@index([agentKey, createdAt])
+  @@index([status, createdAt])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+}
+
+// Per-tool operator policy. The code registry holds the schema+handler;
+// this row decides whether/how the tool may run. Keyed by tool name.
+model AgentTool {
+  id               String   @id @default(cuid())
+  name             String   @unique // matches the code tool name
+  riskTier         String   @default("low") // low | medium | high
+  enabled          Boolean  @default(true)
+  requiresApproval Boolean  @default(false) // override; high tier is always true in policy
+  rateLimitPerHour Int?
+  dailyBudgetUSD   Decimal? @db.Decimal(12, 6)
+  updatedBy        String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+// A high-stakes action awaiting human approval — the governed-autonomy
+// gate. Carries a dry-run preview of the action's effect.
+model AgentApproval {
+  id          String   @id @default(cuid())
+  agentRunId  String
+  agentRun    AgentRun @relation(fields: [agentRunId], references: [id], onDelete: Cascade)
+  toolName    String
+  riskTier    String
+  args        Json // the proposed action
+  preview     Json? // dry-run diff / preview of effect
+  status      String   @default("pending") // pending | approved | rejected | expired | executed
+  requestedAt DateTime @default(now())
+  decidedBy   String?
+  decidedAt   DateTime?
+  reason      String?
+  expiresAt   DateTime?
+
+  @@index([status, requestedAt])
+}
+
+// Per-agent / per-entity memory for continuity + learning.
+model AgentMemory {
+  id         String   @id @default(cuid())
+  scope      String // agent key, or "global"
+  entityType String?
+  entityId   String?
+  key        String
+  value      Json
+  updatedBy  String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([scope, entityType, entityId, key])
+  @@index([scope, entityType, entityId])
+}
+
 // ── AI-2.1 (list-wizard): prompts as data ──────────────────────────────
 // Lifts the four hardcoded LLM prompts out of
 // apps/api/src/services/ai/listing-content.service.ts so they can be
