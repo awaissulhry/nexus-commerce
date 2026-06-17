@@ -22,7 +22,7 @@ export function Tabs({ tabs, activeTab, onChange, trailing, className }: TabsPro
   return (
     <div
       className={cn(
-        'flex items-center gap-0 border-b border-slate-200 -mb-px overflow-x-auto',
+        'flex items-center gap-0 border-b border-default -mb-px overflow-x-auto',
         className
       )}
     >
@@ -36,11 +36,11 @@ export function Tabs({ tabs, activeTab, onChange, trailing, className }: TabsPro
             className={cn(
               // U.60 — flex-shrink-0 belt-and-braces with whitespace-nowrap
               // so a tab never squishes into a constrained parent.
-              'flex items-center gap-1.5 h-10 px-4 text-md font-medium border-b-2 transition-colors whitespace-nowrap flex-shrink-0',
-              'focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30',
+              'flex items-center gap-1.5 h-10 px-4 text-md font-label border-b-2 transition-colors whitespace-nowrap flex-shrink-0',
+              'focus:outline-none focus-visible:ring-2 focus-visible:ring-info-500/30',
               isActive
-                ? 'border-blue-600 text-blue-600'
-                : 'border-transparent text-slate-600 hover:text-slate-900',
+                ? 'border-info-600 text-info-700'
+                : 'border-transparent text-secondary hover:text-primary',
               tab.disabled && 'opacity-50 cursor-not-allowed'
             )}
           >
@@ -49,7 +49,7 @@ export function Tabs({ tabs, activeTab, onChange, trailing, className }: TabsPro
               <span
                 className={cn(
                   'inline-flex items-center justify-center rounded text-xs tabular-nums px-1.5 py-0.5 min-w-[18px]',
-                  isActive ? 'bg-blue-50 text-blue-700' : 'bg-slate-100 text-slate-600'
+                  isActive ? 'bg-info-soft text-info-strong' : 'bg-sunken text-secondary'
                 )}
               >
                 {tab.count}

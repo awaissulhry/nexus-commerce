@@ -14,15 +14,18 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   icon?: ReactNode
 }
 
+// P1 — semantic tokens. secondary/ghost auto-flip in dark via the
+// surface/text tokens (no dark: variants needed); the solid primary/
+// danger keep a dark step for a brighter fill on dark canvas.
 const VARIANT: Record<Variant, string> = {
   primary:
-    'bg-blue-600 hover:bg-blue-700 text-white border-blue-600 dark:bg-blue-500 dark:hover:bg-blue-600 dark:border-blue-500',
+    'bg-info-600 hover:bg-info-700 text-white border-info-600 dark:bg-info-500 dark:hover:bg-info-600 dark:border-info-500',
   secondary:
-    'bg-white hover:bg-slate-50 text-slate-900 border-slate-200 dark:bg-slate-900 dark:hover:bg-slate-800 dark:text-slate-100 dark:border-slate-700',
+    'bg-card hover:bg-sunken dark:hover:bg-raised text-primary border-default',
   ghost:
-    'bg-transparent hover:bg-slate-100 text-slate-700 border-transparent dark:hover:bg-slate-800 dark:text-slate-300',
+    'bg-transparent hover:bg-sunken dark:hover:bg-raised text-secondary hover:text-primary border-transparent',
   danger:
-    'bg-red-600 hover:bg-red-700 text-white border-red-600 dark:bg-red-500 dark:hover:bg-red-600 dark:border-red-500',
+    'bg-danger-600 hover:bg-danger-700 text-white border-danger-600 dark:bg-danger-500 dark:hover:bg-danger-600 dark:border-danger-500',
 }
 
 const SIZE: Record<Size, string> = {
@@ -38,11 +41,11 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         ref={ref}
         disabled={disabled || loading}
         className={cn(
-          'inline-flex items-center justify-center font-medium border rounded-md transition-colors',
+          'inline-flex items-center justify-center font-label border rounded-md transition-colors',
           // U.13 — focus-visible (not focus) so keyboard users get
           // the ring but mouse-clickers don't get a sticky outline
           // after every click. Matches WAI-ARIA 1.3 guidance.
-          'focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 focus-visible:ring-offset-1 focus-visible:ring-offset-white dark:focus-visible:ring-offset-slate-900',
+          'focus:outline-none focus-visible:ring-2 focus-visible:ring-info-500/50 focus-visible:ring-offset-1 focus-visible:ring-offset-white dark:focus-visible:ring-offset-slate-900',
           // Disabled state — keep the button legible at 4.5:1 contrast
           // regardless of the parent background (white tray, dark
           // slate-900 bulk bar, rose/emerald confirmation tray, …).

@@ -16,6 +16,15 @@
  */
 
 import { useState } from 'react'
+import { Search, Trash2, Plus, Package, Pencil } from 'lucide-react'
+import { Button } from '@/components/ui/Button'
+import { IconButton } from '@/components/ui/IconButton'
+import { Card } from '@/components/ui/Card'
+import { Badge } from '@/components/ui/Badge'
+import { StatusBadge } from '@/components/ui/StatusBadge'
+import { Input } from '@/components/ui/Input'
+import { Tabs } from '@/components/ui/Tabs'
+import { EmptyState } from '@/components/ui/EmptyState'
 
 const COMFORTABLE = [
   { token: 'text-4xl', cls: 'text-4xl', px: '32 / 38', sample: 'Display' },
@@ -94,6 +103,7 @@ function AaPill({ pass }: { pass: boolean }) {
 
 export default function DesignSystemPage() {
   const [dark, setDark] = useState(false)
+  const [tab, setTab] = useState('all')
 
   return (
     <div className={dark ? 'dark' : ''}>
@@ -317,9 +327,92 @@ export default function DesignSystemPage() {
             </div>
           </Section>
 
+          {/* Primitives (P1) — the shared atoms rebuilt onto the tokens */}
+          <Section
+            title="Primitives"
+            desc="The shared ui/ components, rebuilt onto these tokens. Fixing the atoms propagates legibility to every page that imports them — toggle dark above to see them auto-flip."
+          >
+            <div className="space-y-8">
+              <div>
+                <p className="mb-3 text-sm font-label uppercase tracking-wide text-tertiary">Buttons</p>
+                <div className="flex flex-wrap items-center gap-3">
+                  <Button variant="primary">Primary</Button>
+                  <Button variant="secondary">Secondary</Button>
+                  <Button variant="ghost">Ghost</Button>
+                  <Button variant="danger">Danger</Button>
+                  <Button variant="primary" icon={<Plus className="h-3.5 w-3.5" />}>With icon</Button>
+                  <Button variant="primary" loading>Loading</Button>
+                  <Button variant="primary" disabled>Disabled</Button>
+                  <Button variant="secondary" size="sm">Small</Button>
+                  <Button variant="secondary" size="lg">Large</Button>
+                </div>
+              </div>
+
+              <div>
+                <p className="mb-3 text-sm font-label uppercase tracking-wide text-tertiary">Icon buttons</p>
+                <div className="flex flex-wrap items-center gap-3">
+                  <IconButton aria-label="Search"><Search className="h-3.5 w-3.5" /></IconButton>
+                  <IconButton aria-label="Edit" variant="outline"><Pencil className="h-3.5 w-3.5" /></IconButton>
+                  <IconButton aria-label="Add" variant="solid" tone="info"><Plus className="h-3.5 w-3.5" /></IconButton>
+                  <IconButton aria-label="Delete" tone="danger"><Trash2 className="h-3.5 w-3.5" /></IconButton>
+                </div>
+              </div>
+
+              <div>
+                <p className="mb-3 text-sm font-label uppercase tracking-wide text-tertiary">Badges & status</p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge>Default</Badge>
+                  <Badge variant="success">Success</Badge>
+                  <Badge variant="warning">Warning</Badge>
+                  <Badge variant="danger">Danger</Badge>
+                  <Badge variant="info">Info</Badge>
+                  <StatusBadge status="ACTIVE" />
+                  <StatusBadge status="DRAFT" />
+                </div>
+              </div>
+
+              <div>
+                <p className="mb-3 text-sm font-label uppercase tracking-wide text-tertiary">Inputs</p>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                  <Input label="SKU" placeholder="XAV-J100-BK-M" />
+                  <Input label="Price" prefix="€" suffix="EUR" defaultValue="129.00" mono />
+                  <Input label="Title" error="Required field" defaultValue="" />
+                </div>
+              </div>
+
+              <div>
+                <p className="mb-3 text-sm font-label uppercase tracking-wide text-tertiary">Tabs</p>
+                <Tabs
+                  tabs={[
+                    { id: 'all', label: 'All', count: 265 },
+                    { id: 'active', label: 'Active', count: 241 },
+                    { id: 'draft', label: 'Drafts', count: 18 },
+                    { id: 'arch', label: 'Archived', count: 6, disabled: true },
+                  ]}
+                  activeTab={tab}
+                  onChange={setTab}
+                />
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                <Card title="Card title" description="Card description with secondary text.">
+                  <p className="text-md text-secondary">
+                    Body content on a solid surface, visible border, AA text.
+                  </p>
+                </Card>
+                <EmptyState
+                  icon={Package}
+                  title="No products yet"
+                  description="Import your catalogue or create your first product to get started."
+                  action={{ label: 'Add product', onClick: () => {} }}
+                />
+              </div>
+            </div>
+          </Section>
+
           <footer className="py-10">
             <p className="text-sm text-tertiary">
-              P0 · design tokens. Additive — existing pages are unchanged until the P3 sweep adopts these tokens.
+              P0 tokens · P1 primitives. The clean design system — every atom rebuilt on AA-contrast semantic tokens.
             </p>
           </footer>
         </div>

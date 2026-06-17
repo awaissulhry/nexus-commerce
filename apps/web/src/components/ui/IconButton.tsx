@@ -45,25 +45,28 @@ interface IconButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 
 // Per-tone colour mappings. Each row is a (text, hover-bg) pair.
 // Tone is independent of variant — variant controls density (solid
 // background vs ghost vs outline), tone controls the colour family.
+// P1 — neutral repointed to semantic tokens (auto-dark); coloured
+// tones use the soft/line/strong status set so their hover/border
+// flip cleanly in dark too.
 const TONE_GHOST: Record<Tone, string> = {
-  neutral: 'text-slate-500 hover:text-slate-900 hover:bg-slate-100',
-  info:    'text-info-600 hover:text-info-800 hover:bg-info-50',
-  danger:  'text-danger-600 hover:text-danger-800 hover:bg-danger-50',
-  warning: 'text-warning-700 hover:text-warning-900 hover:bg-warning-50',
+  neutral: 'text-tertiary hover:text-primary hover:bg-sunken',
+  info:    'text-info-strong hover:bg-info-soft',
+  danger:  'text-danger-strong hover:bg-danger-soft',
+  warning: 'text-warning-strong hover:bg-warning-soft',
 }
 
 const TONE_SOLID: Record<Tone, string> = {
-  neutral: 'bg-slate-700 hover:bg-slate-800 text-white',
+  neutral: 'bg-slate-700 hover:bg-slate-800 text-white dark:bg-slate-600 dark:hover:bg-slate-500',
   info:    'bg-info-600 hover:bg-info-700 text-white',
   danger:  'bg-danger-600 hover:bg-danger-700 text-white',
   warning: 'bg-warning-500 hover:bg-warning-600 text-white',
 }
 
 const TONE_OUTLINE: Record<Tone, string> = {
-  neutral: 'border border-slate-200 text-slate-700 hover:bg-slate-50',
-  info:    'border border-info-200 text-info-700 hover:bg-info-50',
-  danger:  'border border-danger-200 text-danger-700 hover:bg-danger-50',
-  warning: 'border border-warning-200 text-warning-700 hover:bg-warning-50',
+  neutral: 'border border-default text-secondary hover:bg-sunken',
+  info:    'border border-info-line text-info-strong hover:bg-info-soft',
+  danger:  'border border-danger-line text-danger-strong hover:bg-danger-soft',
+  warning: 'border border-warning-line text-warning-strong hover:bg-warning-soft',
 }
 
 // Size = the square. Icons inside should be ~70% of the size.

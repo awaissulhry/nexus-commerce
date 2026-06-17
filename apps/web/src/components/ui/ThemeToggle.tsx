@@ -33,9 +33,8 @@ export function ThemeToggle({ className }: { className?: string }) {
       title={NEXT_LABEL[mode]}
       aria-label={NEXT_LABEL[mode]}
       className={cn(
-        'inline-flex items-center justify-center w-8 h-8 rounded-md text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition-colors',
-        'dark:text-slate-400 dark:hover:text-white dark:hover:bg-slate-800',
-        'focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40',
+        'inline-flex items-center justify-center w-8 h-8 rounded-md text-tertiary hover:text-primary hover:bg-sunken dark:hover:bg-raised transition-colors',
+        'focus:outline-none focus-visible:ring-2 focus-visible:ring-info-500/40',
         className,
       )}
     >

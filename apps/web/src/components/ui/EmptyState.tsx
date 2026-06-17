@@ -19,12 +19,12 @@ export function EmptyState({ icon: Icon, title, description, action }: EmptyStat
   ) : null
 
   return (
-    <div className="flex flex-col items-center justify-center py-12 px-6 text-center bg-white border border-slate-200 rounded-lg">
-      <div className="w-12 h-12 rounded-lg bg-slate-100 flex items-center justify-center mb-3">
-        <Icon className="w-6 h-6 text-slate-400" />
+    <div className="flex flex-col items-center justify-center py-12 px-6 text-center bg-card border border-default rounded-lg">
+      <div className="w-12 h-12 rounded-lg bg-sunken flex items-center justify-center mb-3">
+        <Icon className="w-6 h-6 text-tertiary" />
       </div>
-      <h3 className="text-lg font-semibold text-slate-900 mb-1">{title}</h3>
-      <p className="text-md text-slate-500 max-w-sm mb-4">{description}</p>
+      <h3 className="text-lg font-heading text-primary mb-1">{title}</h3>
+      <p className="text-md text-secondary max-w-sm mb-4">{description}</p>
       {action?.href ? <Link href={action.href}>{button}</Link> : button}
     </div>
   )
