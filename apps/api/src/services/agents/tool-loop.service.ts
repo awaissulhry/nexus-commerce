@@ -59,6 +59,35 @@ const SCHEMAS: Record<
     properties: { productId: { type: 'string' } },
     required: ['productId'],
   },
+  'product-analytics': {
+    properties: {
+      productId: { type: 'string' },
+      days: { type: 'number', description: 'window in days (default 30)' },
+    },
+    required: ['productId'],
+  },
+  'channel-stock-drift': {
+    properties: {
+      productId: { type: 'string', description: 'optional — omit for all products' },
+      limit: { type: 'number' },
+    },
+  },
+  'replenishment-forecast': {
+    properties: { productId: { type: 'string' } },
+    required: ['productId'],
+  },
+  'insights-metric': {
+    properties: {
+      days: { type: 'number', description: 'window in days (default 30)' },
+    },
+  },
+  'detect-anomalies': {
+    properties: { limit: { type: 'number' } },
+  },
+  'draft-alt-text': {
+    properties: { productId: { type: 'string' } },
+    required: ['productId'],
+  },
   'draft-listing-content': {
     properties: { productId: { type: 'string' } },
     required: ['productId'],
