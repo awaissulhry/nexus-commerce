@@ -482,13 +482,6 @@ export default function AppSidebar() {
             indicator="disconnected"
             active={pathname.startsWith('/listings/shopify')}
           />
-          <NavItem
-            href="/listings/woocommerce"
-            icon={ShoppingBag}
-            label="WooCommerce"
-            indicator="disconnected"
-            active={pathname.startsWith('/listings/woocommerce')}
-          />
         </NavGroup>
 
         <NavGroup label="Fulfillment">
