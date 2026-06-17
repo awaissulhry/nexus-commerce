@@ -859,6 +859,25 @@
 .az-cb-kwright .r .kw { color: var(--ink); }
 .az-cb-kwright .r .mt { color: var(--ink3); }
 .az-cb-kwright .r button { background: none; border: none; color: var(--ink3); cursor: pointer; font-size: 12px; }
+/* CB Step 4 — review & launch + baked rule */
+.az-cb-review { font-size: 13px; color: var(--ink2); display: flex; flex-direction: column; gap: 6px; }
+.az-cb-review b { color: var(--ink); }
+.az-cb-matrix { margin-top: 14px; border: 1px solid var(--divider); border-radius: 9px; overflow: hidden; }
+.az-cb-matrix .mh, .az-cb-matrix .mr { display: grid; grid-template-columns: 2fr 1.2fr 1.6fr 1.4fr; gap: 12px; align-items: center; padding: 10px 14px; }
+.az-cb-matrix .mh { background: var(--bg3); font-size: 11px; font-weight: 700; color: var(--ink3); }
+.az-cb-matrix .mr { border-top: 1px solid var(--divider); font-size: 12.5px; }
+.az-cb-matrix .agc { font-weight: 600; color: var(--ink); }
+.az-cb-matrix .ck { text-align: center; }
+.az-cb-matrix .chips { display: flex; gap: 5px; }
+.az-cb-matrix .chips button { width: 27px; height: 27px; border-radius: 6px; border: 1px solid var(--border); background: #fff; color: var(--ink3); font-size: 11px; font-weight: 700; cursor: pointer; }
+.az-cb-matrix .chips button.on { background: #1f6fde; border-color: #1f6fde; color: #fff; }
+.az-cb-matrix .chips.neg button.on { background: #c0392b; border-color: #c0392b; }
+.az-cb-crit { margin-top: 16px; display: flex; flex-direction: column; gap: 11px; }
+.az-cb-crit .row { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; font-size: 12.5px; color: var(--ink2); }
+.az-cb-crit .tag { font-size: 10px; font-weight: 800; padding: 2px 9px; border-radius: 999px; }
+.az-cb-crit .tag.if { background: #ede9fe; color: #6d28d9; }
+.az-cb-crit .tag.then { background: #dcfce7; color: #15803d; }
+.az-cb-crit .lab { font-weight: 600; }
 
 /* RC4.2+ — progressive station cards (absorbed modes) */
 .az-station { margin-top: 14px; border: 1px solid var(--divider); border-radius: 12px; background: #fff; overflow: hidden; }

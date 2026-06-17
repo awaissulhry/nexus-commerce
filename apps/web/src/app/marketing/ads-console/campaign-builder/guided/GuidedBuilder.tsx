@@ -49,6 +49,11 @@ export function GuidedBuilder() {
   const [addedKw, setAddedKw] = useState<Array<{ text: string; match: string; bid: string }>>([])
   const [showNegs, setShowNegs] = useState(false)
   const [negKw, setNegKw] = useState('')
+  // Step 4 (Review & Launch) state
+  const [ruleTab, setRuleTab] = useState<'harvest' | 'negative'>('harvest')
+  const [ruleName, setRuleName] = useState('')
+  const [ruleMode, setRuleMode] = useState<'automate' | 'isolation'>('automate')
+  const [laneCfg, setLaneCfg] = useState<Record<string, { search: boolean; create: string[]; neg: string[] }>>({})
 
   useEffect(() => {
     void fetch(`${getBackendUrl()}/api/advertising/by-product`, { cache: 'no-store' })
@@ -286,9 +291,52 @@ export function GuidedBuilder() {
             )}
           </div>
         )}
-        {step > 2 && (
-          <div className="az-cb-card az-cb-soon">
-            <b>{STEPS[step]}</b> — building next (CB.{step + 1}). The wizard shell, stepper and navigation are live; this panel fills in as each step ships.
+        {step === 3 && (
+          <div className="az-cb-card">
+            <div className="az-cb-camp">
+              <div className="az-cb-h"><b>Review</b></div>
+              <div className="az-cb-review">
+                <div>Product group: <b>{grp}</b> · {selected.size} product{selected.size === 1 ? '' : 's'}</div>
+                <div>Sponsored Products: <b>{spAdGroups.length}</b> ad group{spAdGroups.length === 1 ? '' : 's'} · bid algorithm <b>{ALGO_LABEL[bidStrategy]}</b></div>
+                {includeSB && <div>Sponsored Brands: <b>included</b></div>}
+                {includeSD && <div>Sponsored Display: <b>included</b></div>}
+                <div>Keywords: <b>{addedKw.length}</b></div>
+              </div>
+            </div>
+
+            <div className="az-cb-camp">
+              <div className="az-cb-kwtabs">
+                <button type="button" className={ruleTab === 'harvest' ? 'on' : ''} onClick={() => setRuleTab('harvest')}>Keyword Harvesting</button>
+                <button type="button" className={ruleTab === 'negative' ? 'on' : ''} onClick={() => setRuleTab('negative')}>Negative Targeting</button>
+              </div>
+              <label className="az-cb-field" style={{ maxWidth: 380 }}><span>Rule Name</span><input className="az-cb-input" value={ruleName} onChange={(e) => setRuleName(e.target.value)} placeholder={`${grp} Promotion`} /></label>
+              <div className="az-cb-mt" style={{ marginTop: 12 }}>
+                <label><input type="radio" name="rulemode" checked={ruleMode === 'automate'} onChange={() => setRuleMode('automate')} /> Automate</label>
+                <label><input type="radio" name="rulemode" checked={ruleMode === 'isolation'} onChange={() => setRuleMode('isolation')} /> Search Term Isolation</label>
+              </div>
+              <div className="az-cb-matrix">
+                <div className="mh"><span>Ad Group</span><span>Look for Search Terms</span><span>Create New Targets</span><span>Create New Negative Targets</span></div>
+                {spAdGroups.map((ag) => {
+                  const k = `SP:${ag}`
+                  const c = laneCfg[k] ?? { search: true, create: [] as string[], neg: [] as string[] }
+                  const setL = (patch: Partial<typeof c>) => setLaneCfg((m) => ({ ...m, [k]: { ...c, ...patch } }))
+                  const tog = (arr: string[], v: string) => (arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v])
+                  return (
+                    <div className="mr" key={k}>
+                      <span className="agc">{grp} - SP - {ag}</span>
+                      <span className="ck"><input type="checkbox" checked={c.search} onChange={(e) => setL({ search: e.target.checked })} /></span>
+                      <span className="chips">{['Broad', 'Phrase', 'Exact', 'Product'].map((t) => <button type="button" key={t} className={c.create.includes(t) ? 'on' : ''} onClick={() => setL({ create: tog(c.create, t) })} title={t}>{t === 'Product' ? 'PT' : t[0]}</button>)}</span>
+                      <span className="chips neg">{['Phrase', 'Exact', 'Product'].map((t) => <button type="button" key={t} className={c.neg.includes(t) ? 'on' : ''} onClick={() => setL({ neg: tog(c.neg, t) })} title={`Negative ${t}`}>{t === 'Product' ? 'PT' : t[0]}</button>)}</span>
+                    </div>
+                  )
+                })}
+              </div>
+              <div className="az-cb-crit">
+                <div className="row"><span className="tag if">IF</span><select className="az-cb-input sm"><option>PPC Orders</option><option>ACOS</option><option>Spend</option><option>Clicks</option></select><select className="az-cb-input sm"><option>&ge;</option><option>&gt;</option><option>&le;</option></select><input className="az-cb-input sm" defaultValue="1" /></div>
+                <div className="row"><span className="tag then">THEN</span><span>Create new target &amp; set the starting bid to</span><select className="az-cb-input sm"><option>Set to Current CPC</option><option>Set to Ad Group Default</option><option>Set Custom Bid</option><option>Set to Current CPC + %</option></select></div>
+                <div className="row"><span className="lab">Lookback period</span><select className="az-cb-input sm"><option>Last 60 Days</option><option>Last 30 Days</option><option>Last 90 Days</option></select><span>Exclude</span><select className="az-cb-input sm"><option>Last 3 Days</option><option>None</option></select></div>
+              </div>
+            </div>
           </div>
         )}
       </div>
