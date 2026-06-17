@@ -14,7 +14,10 @@
 import cron from 'node-cron'
 import { logger } from '../utils/logger.js'
 import { recordCronRun } from '../utils/cron-observability.js'
-import { runAutonomousAgent } from '../services/agents/autonomous-agent.service.js'
+import {
+  runAutonomousAgent,
+  isAgentScheduleEnabled,
+} from '../services/agents/autonomous-agent.service.js'
 
 const JOB = 'listing-quality-keeper'
 const SCHEDULE = '45 6 * * *'
@@ -23,6 +26,10 @@ let scheduledTask: ReturnType<typeof cron.schedule> | null = null
 
 export async function runListingQualityKeeperCron(): Promise<void> {
   try {
+    if (!(await isAgentScheduleEnabled('listing-quality-keeper'))) {
+      logger.info('listing-quality-keeper cron: disabled in Control Center — skipping')
+      return
+    }
     await recordCronRun(JOB, async () => {
       const r = await runAutonomousAgent('listing-quality-keeper', 'schedule')
       if (!r.ok) throw new Error(r.error ?? 'agent run failed')

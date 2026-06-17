@@ -26,8 +26,9 @@ import {
   requestApproval,
 } from '../services/agents/approval-gate.service.js'
 import {
-  listAutonomousAgents,
   runAutonomousAgent,
+  getAgentOverview,
+  setAgentEnabled,
 } from '../services/agents/autonomous-agent.service.js'
 
 const agentRoutes: FastifyPluginAsync = async (fastify) => {
@@ -83,16 +84,33 @@ const agentRoutes: FastifyPluginAsync = async (fastify) => {
     return out
   })
 
-  fastify.get<{ Querystring: { limit?: string } }>(
+  // Recent AgentRun audit rows — slim projection for the Control Center
+  // activity feed (full input/output/steps omitted). Optional agentKey filter.
+  fastify.get<{ Querystring: { limit?: string; agentKey?: string } }>(
     '/agent/runs',
     async (request) => {
       const limit = Math.min(
         Math.max(parseInt(request.query?.limit ?? '20', 10) || 20, 1),
         100,
       )
+      const agentKey = request.query?.agentKey
       const rows = await prisma.agentRun.findMany({
+        where: agentKey ? { agentKey } : {},
         orderBy: { createdAt: 'desc' },
         take: limit,
+        select: {
+          id: true,
+          agentKey: true,
+          trigger: true,
+          status: true,
+          ok: true,
+          costUSD: true,
+          model: true,
+          provider: true,
+          latencyMs: true,
+          errorMessage: true,
+          createdAt: true,
+        },
       })
       return { rows }
     },
@@ -173,12 +191,25 @@ const agentRoutes: FastifyPluginAsync = async (fastify) => {
     },
   )
 
-  // ── ACP.4a — autonomous agents ──────────────────────────────────────
-  // List the autonomous agents (scheduled / on-demand workers that queue
-  // proposals into the approval inbox).
+  // ── ACP.4a/5a — autonomous agents + Control Center ──────────────────
+  // Each autonomous agent with its enable state, last run, and how many
+  // proposals it currently has waiting in the approval inbox.
   fastify.get('/agent/agents', async () => ({
-    agents: listAutonomousAgents(),
+    agents: await getAgentOverview(),
   }))
+
+  // Toggle an agent's SCHEDULED runs (manual "Run now" always works).
+  fastify.put<{ Params: { key: string }; Body: { enabled?: boolean } }>(
+    '/agent/agents/:key',
+    async (request, reply) => {
+      const r = await setAgentEnabled(
+        request.params.key,
+        request.body?.enabled === true,
+      )
+      if (!r.ok) return reply.code(404).send(r)
+      return { ...r, agents: await getAgentOverview() }
+    },
+  )
 
   // Run an autonomous agent now (operator-triggered). It scans + queues
   // proposals; nothing is applied without an approval.

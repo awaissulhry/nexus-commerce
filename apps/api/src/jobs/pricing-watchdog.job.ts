@@ -14,7 +14,10 @@
 import cron from 'node-cron'
 import { logger } from '../utils/logger.js'
 import { recordCronRun } from '../utils/cron-observability.js'
-import { runAutonomousAgent } from '../services/agents/autonomous-agent.service.js'
+import {
+  runAutonomousAgent,
+  isAgentScheduleEnabled,
+} from '../services/agents/autonomous-agent.service.js'
 
 const JOB = 'pricing-watchdog'
 const SCHEDULE = '0 7 * * *'
@@ -23,6 +26,10 @@ let scheduledTask: ReturnType<typeof cron.schedule> | null = null
 
 export async function runPricingWatchdogCron(): Promise<void> {
   try {
+    if (!(await isAgentScheduleEnabled('pricing-watchdog'))) {
+      logger.info('pricing-watchdog cron: disabled in Control Center — skipping')
+      return
+    }
     await recordCronRun(JOB, async () => {
       const r = await runAutonomousAgent('pricing-watchdog', 'schedule')
       if (!r.ok) throw new Error(r.error ?? 'agent run failed')

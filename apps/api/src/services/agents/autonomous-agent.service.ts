@@ -38,6 +38,8 @@ export interface AutonomousAgent {
   key: string
   name: string
   description: string
+  /** Human-readable cadence for the Control Center (e.g. 'Daily 06:45 UTC'). */
+  schedule?: string
   run(ctx: { runId: string; maxItems: number }): Promise<AutonomousAgentResult>
 }
 
@@ -139,4 +141,127 @@ export async function runAutonomousAgent(
       .catch(() => {})
     return { runId: run.id, ok: false, agentKey: key, error: msg }
   }
+}
+
+// ── ACP.5a — Control Center: per-agent enable + overview ───────────────
+
+/**
+ * Whether an autonomous agent's SCHEDULED run is enabled. Backed by
+ * AgentDefinition.enabled, defaulting to ON when no row exists (so agents
+ * stay default-on until an operator toggles them). Manual runs ignore
+ * this — an explicit "Run now" always executes.
+ */
+export async function isAgentScheduleEnabled(key: string): Promise<boolean> {
+  const def = await prisma.agentDefinition.findUnique({
+    where: { key },
+    select: { enabled: true },
+  })
+  return def ? def.enabled : true
+}
+
+/** Toggle an autonomous agent's scheduled runs from the Control Center. */
+export async function setAgentEnabled(
+  key: string,
+  enabled: boolean,
+): Promise<{ ok: boolean; enabled?: boolean; error?: string }> {
+  const agent = getAutonomousAgent(key)
+  if (!agent) return { ok: false, error: `unknown agent: ${key}` }
+  await prisma.agentDefinition.upsert({
+    where: { key },
+    update: { enabled },
+    create: {
+      key,
+      name: agent.name,
+      description: agent.description,
+      kind: 'autonomous',
+      triggerType: 'schedule',
+      enabled,
+    },
+  })
+  return { ok: true, enabled }
+}
+
+export interface AgentOverviewRow {
+  key: string
+  name: string
+  description: string
+  schedule: string | null
+  enabled: boolean
+  lastRun: {
+    status: string
+    ok: boolean
+    trigger: string
+    at: Date
+    summary: string | null
+  } | null
+  pendingCount: number
+}
+
+function summarizeResult(output: unknown): string | null {
+  if (!output || typeof output !== 'object') return null
+  const o = output as Partial<AutonomousAgentResult>
+  if (typeof o.proposed !== 'number') return null
+  return `proposed ${o.proposed} · flagged ${o.flagged ?? 0} · scanned ${o.scanned ?? 0}${o.errors ? ` · errors ${o.errors}` : ''}`
+}
+
+/** The Control Center's agent panel: each autonomous agent with its
+ *  enable state, last run, and how many proposals it currently has
+ *  waiting in the approval inbox. */
+export async function getAgentOverview(): Promise<AgentOverviewRow[]> {
+  const agents = Object.values(AGENTS)
+  const keys = agents.map((a) => a.key)
+
+  const [defs, pending, lastRuns] = await Promise.all([
+    prisma.agentDefinition.findMany({
+      where: { key: { in: keys } },
+      select: { key: true, enabled: true },
+    }),
+    prisma.agentApproval.findMany({
+      where: { status: 'pending' },
+      select: { agentRun: { select: { agentKey: true } } },
+    }),
+    Promise.all(
+      keys.map((k) =>
+        prisma.agentRun.findFirst({
+          where: { agentKey: k },
+          orderBy: { createdAt: 'desc' },
+          select: {
+            status: true,
+            ok: true,
+            trigger: true,
+            createdAt: true,
+            output: true,
+          },
+        }),
+      ),
+    ),
+  ])
+
+  const enabledByKey = new Map(defs.map((d) => [d.key, d.enabled]))
+  const pendingByKey = new Map<string, number>()
+  for (const p of pending) {
+    const k = p.agentRun?.agentKey
+    if (k) pendingByKey.set(k, (pendingByKey.get(k) ?? 0) + 1)
+  }
+
+  return agents.map((a, i) => {
+    const lr = lastRuns[i]
+    return {
+      key: a.key,
+      name: a.name,
+      description: a.description,
+      schedule: a.schedule ?? null,
+      enabled: enabledByKey.has(a.key) ? !!enabledByKey.get(a.key) : true,
+      lastRun: lr
+        ? {
+            status: lr.status,
+            ok: lr.ok,
+            trigger: lr.trigger,
+            at: lr.createdAt,
+            summary: summarizeResult(lr.output),
+          }
+        : null,
+      pendingCount: pendingByKey.get(a.key) ?? 0,
+    }
+  })
 }

@@ -123,7 +123,7 @@ export default function AiApprovalsClient() {
   )
 
   return (
-    <section className="space-y-2">
+    <section id="agent-approvals" className="space-y-2 scroll-mt-20">
       <div className="flex items-center justify-between">
         <h2 className="text-md font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider inline-flex items-center gap-1.5">
           <Inbox className="w-3 h-3" />

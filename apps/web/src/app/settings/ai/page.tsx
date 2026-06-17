@@ -20,6 +20,7 @@ import AiModelsClient, {
   type PrefsOverview,
 } from './AiModelsClient'
 import AiApprovalsClient from './AiApprovalsClient'
+import AiAgentsClient from './AiAgentsClient'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -100,6 +101,7 @@ export default async function AiSettingsPage() {
         initialPrefs={featurePrefs}
       />
       <AiApprovalsClient />
+      <AiAgentsClient />
       <AiPromptsClient initialRows={prompts} />
       <AiBrandVoicesClient initialRows={brandVoices} />
       <AiWizardTemplatesClient initialRows={wizardTemplates} />

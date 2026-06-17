@@ -90,6 +90,7 @@ export const pricingWatchdog: AutonomousAgent = {
   name: 'Pricing Watchdog',
   description:
     'Scans active products priced below their floor or below cost and queues set-price proposals that raise them to a sane margin (always-ask).',
+  schedule: 'Daily 07:00 UTC',
 
   async run({ runId, maxItems }): Promise<AutonomousAgentResult> {
     const result: AutonomousAgentResult = {

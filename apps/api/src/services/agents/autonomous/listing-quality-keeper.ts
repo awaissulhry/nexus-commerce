@@ -91,6 +91,7 @@ export const listingQualityKeeper: AutonomousAgent = {
   name: 'Listing-Quality Keeper',
   description:
     'Scans active products for missing bullet points / description / thin titles and queues reversible content-fix proposals.',
+  schedule: 'Daily 06:45 UTC',
 
   async run({ runId, maxItems }): Promise<AutonomousAgentResult> {
     const result: AutonomousAgentResult = {
