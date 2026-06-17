@@ -8,17 +8,30 @@
  */
 
 import type { FastifyPluginAsync } from 'fastify'
-import { getRealAmazonFeeRates } from '../services/amazon-real-fees.service.js'
+import {
+  getRealAmazonFeeRates,
+  getRealFeeRatesBySku,
+} from '../services/amazon-real-fees.service.js'
+
+const clampDays = (raw?: string) =>
+  raw ? Math.min(Math.max(parseInt(raw, 10) || 90, 1), 365) : 90
 
 const amazonEconomicsRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get<{ Querystring: { days?: string } }>(
     '/amazon/economics/fee-rates',
-    async (request) => {
-      const days = request.query?.days
-        ? Math.min(Math.max(parseInt(request.query.days, 10) || 90, 1), 365)
-        : 90
-      return getRealAmazonFeeRates(days)
-    },
+    async (request) => getRealAmazonFeeRates(clampDays(request.query?.days)),
+  )
+
+  // R1.2 — per-SKU real fee rate (allocated from each order's actual fees).
+  fastify.get<{
+    Querystring: { days?: string; limit?: string; productId?: string }
+  }>('/amazon/economics/fee-rates/by-sku', async (request) =>
+    getRealFeeRatesBySku(clampDays(request.query?.days), {
+      productId: request.query?.productId,
+      limit: request.query?.limit
+        ? Math.min(Math.max(parseInt(request.query.limit, 10) || 50, 1), 500)
+        : 50,
+    }),
   )
 }
 
