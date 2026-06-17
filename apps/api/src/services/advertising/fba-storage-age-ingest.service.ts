@@ -5,7 +5,7 @@
  * covering every age bucket so the StorageAgeTile + automation triggers
  * have data to demo against without a live SP-API call.
  *
- * Live mode: calls SP-API `GET_FBA_MYI_AGED_INVENTORY_DATA` per
+ * Live mode: calls SP-API `GET_FBA_INVENTORY_PLANNING_DATA` per
  * marketplace, parses the TSV, and writes one snapshot per (sku,
  * marketplace, polledAt). Header-row validation aborts if Amazon
  * reorders columns (defensive — they've shipped backwards-incompatible
@@ -223,7 +223,7 @@ function synthesizeAgedRows(): AgedRow[] {
 
 // ── Live TSV parser (header-validated) ────────────────────────────────
 
-// Expected column header for GET_FBA_MYI_AGED_INVENTORY_DATA. Subset
+// Expected column header for GET_FBA_INVENTORY_PLANNING_DATA. Subset
 // — full report has 25+ cols. We only require these.
 const REQUIRED_COLUMNS = [
   'sku',
@@ -367,7 +367,10 @@ export async function runFbaStorageAgeIngestOnce(): Promise<IngestSummary> {
     summary.marketplaces.push(mp)
     try {
       const report = await fetchSpApiReport<string>({
-        reportType: 'GET_FBA_MYI_AGED_INVENTORY_DATA',
+        // GET_FBA_MYI_AGED_INVENTORY_DATA was deprecated (SP-API now returns
+        // "Invalid Report Type"); GET_FBA_INVENTORY_PLANNING_DATA is the
+        // replacement and carries the same inv-age-* + storage columns.
+        reportType: 'GET_FBA_INVENTORY_PLANNING_DATA',
         marketplaceId: mpId,
         dataStartTime: new Date(Date.now() - 24 * 60 * 60 * 1000),
         dataEndTime: new Date(),

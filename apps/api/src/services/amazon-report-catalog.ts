@@ -85,8 +85,8 @@ export const AMAZON_REPORT_CATALOG: ReportCatalogEntry[] = [
     cadence: 'On-demand',
   },
   {
-    reportType: 'GET_FBA_MYI_AGED_INVENTORY_DATA',
-    label: 'FBA Aged Inventory',
+    reportType: 'GET_FBA_INVENTORY_PLANNING_DATA',
+    label: 'FBA Inventory Planning (aged + storage)',
     source: 'REPORTS_API',
     marketplaceScoped: true,
     cronJob: 'fba-storage-age-ingest',
