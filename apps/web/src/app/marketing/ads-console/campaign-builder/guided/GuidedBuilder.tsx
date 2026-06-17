@@ -40,6 +40,15 @@ export function GuidedBuilder() {
   const [showNaming, setShowNaming] = useState(false)
   const [includeSB, setIncludeSB] = useState(false)
   const [includeSD, setIncludeSD] = useState(false)
+  // Step 3 (Add Keywords) state
+  const [kwTab, setKwTab] = useState<'research' | 'performance' | 'product'>('research')
+  const [kwSource, setKwSource] = useState<'suggested' | 'new' | 'mylist'>('suggested')
+  const [matchType, setMatchType] = useState<'Broad' | 'Phrase' | 'Exact'>('Broad')
+  const [suggestions, setSuggestions] = useState<string[]>([])
+  const [newKw, setNewKw] = useState('')
+  const [addedKw, setAddedKw] = useState<Array<{ text: string; match: string; bid: string }>>([])
+  const [showNegs, setShowNegs] = useState(false)
+  const [negKw, setNegKw] = useState('')
 
   useEffect(() => {
     void fetch(`${getBackendUrl()}/api/advertising/by-product`, { cache: 'no-store' })
@@ -57,6 +66,16 @@ export function GuidedBuilder() {
       .finally(() => setLoadingProducts(false))
   }, [])
 
+  // Suggested keywords for Step 3 — derive from the selected products' ASINs (best-effort).
+  useEffect(() => {
+    if (step !== 2 || suggestions.length) return
+    const asins = products.filter((p) => selected.has(p.id)).map((p) => p.asin).filter(Boolean)
+    void fetch(`${getBackendUrl()}/api/advertising/goals/suggest-targets`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ asins, brandTerms: [], limit: 40 }) })
+      .then((r) => r.json())
+      .then((d) => setSuggestions([...((d.branded as string[]) ?? []), ...((d.unbranded as string[]) ?? [])].filter(Boolean).slice(0, 40)))
+      .catch(() => {})
+  }, [step, products, selected, suggestions.length])
+
   const toggle = (id: string) => setSelected((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n })
   const exit = () => router.push('/marketing/ads-console/campaigns')
   const filtered = products.filter((p) => !search.trim() || p.name.toLowerCase().includes(search.toLowerCase()))
@@ -66,6 +85,12 @@ export function GuidedBuilder() {
   const spAdGroups = ['Auto', 'Research', 'Performance', ...(includeProductTarget ? ['Product Target'] : [])]
   const agOf = (k: string) => agCfg[k] ?? { bid: '0.45', budget: '25.00' }
   const setAg = (k: string, f: 'bid' | 'budget', v: string) => setAgCfg((m) => ({ ...m, [k]: { ...agOf(k), [f]: v } }))
+  // Step 3 keyword helpers
+  const hasKw = (text: string, match: string) => addedKw.some((x) => x.text === text && x.match === match)
+  const addKw = (text: string) => setAddedKw((a) => (hasKw(text, matchType) ? a : [...a, { text, match: matchType, bid: '0.45' }]))
+  const addAllSuggested = () => setAddedKw((a) => { const seen = new Set(a.map((x) => `${x.text}|${x.match}`)); return [...a, ...suggestions.filter((s) => !seen.has(`${s}|${matchType}`)).map((s) => ({ text: s, match: matchType, bid: '0.45' }))] })
+  const addNewKw = () => { const lines = newKw.split(/[\n,]+/).map((s) => s.trim()).filter(Boolean); setAddedKw((a) => { const seen = new Set(a.map((x) => `${x.text}|${x.match}`)); const fresh = lines.filter((l) => !seen.has(`${l}|${matchType}`)).map((l) => ({ text: l, match: matchType, bid: '0.45' })); return [...a, ...fresh] }); setNewKw('') }
+  const removeKw = (i: number) => setAddedKw((a) => a.filter((_, idx) => idx !== i))
   // a render FUNCTION (not a nested component) so the bid/budget inputs don't remount + lose focus each keystroke
   const renderSpTable = (prefix: string, ags: string[]) => (
     <div className="az-cb-tbl">
@@ -200,7 +225,68 @@ export function GuidedBuilder() {
             </div>
           </div>
         )}
-        {step > 1 && (
+        {step === 2 && (
+          <div className="az-cb-card">
+            <div className="az-cb-kwtabs">
+              {([['research', 'Research Keywords'], ['performance', 'Performance Keywords'], ['product', 'Product Targeting ASINs']] as const).map(([k, label]) => (
+                <button type="button" key={k} className={kwTab === k ? 'on' : ''} onClick={() => setKwTab(k)}>{label}</button>
+              ))}
+            </div>
+            {kwTab !== 'product' ? (
+              <div className="az-cb-kwwrap">
+                <div className="az-cb-kwleft">
+                  <div className="az-cb-h"><b>Add {kwTab === 'research' ? 'Research' : 'Performance'} Keywords</b></div>
+                  <div className="az-cb-srctabs">
+                    {([['suggested', 'Suggested Keywords'], ['new', 'Enter New Keywords'], ['mylist', 'Add from My List']] as const).map(([k, label]) => (
+                      <button type="button" key={k} className={kwSource === k ? 'on' : ''} onClick={() => setKwSource(k)}>{label}</button>
+                    ))}
+                  </div>
+                  <div className="az-cb-mt">
+                    <span className="lab">Match Type:</span>
+                    {(['Broad', 'Phrase', 'Exact'] as const).map((m) => (
+                      <label key={m}><input type="radio" name="mt" checked={matchType === m} onChange={() => setMatchType(m)} /> {m}</label>
+                    ))}
+                    <span className="grow" />
+                    {kwSource === 'suggested' && <button type="button" className="az-cb-addall" onClick={addAllSuggested}>+ Add All</button>}
+                  </div>
+                  {kwSource === 'suggested' && (
+                    <div className="az-cb-sugg">
+                      {suggestions.length ? suggestions.map((s) => (
+                        <div className="row" key={s}><span>{s}</span><button type="button" className="add" onClick={() => addKw(s)} disabled={hasKw(s, matchType)}>+ Add</button></div>
+                      )) : <div className="az-cb-empty">No suggestions yet — use &ldquo;Enter New Keywords&rdquo;.</div>}
+                    </div>
+                  )}
+                  {kwSource === 'new' && (
+                    <div className="az-cb-newkw">
+                      <textarea value={newKw} onChange={(e) => setNewKw(e.target.value)} placeholder="Enter or paste keywords (one per line or comma-separated)" />
+                      <button type="button" className="az-cb-btn dark sm" onClick={addNewKw} disabled={!newKw.trim()}>+ Add Keywords</button>
+                    </div>
+                  )}
+                  {kwSource === 'mylist' && <div className="az-cb-empty">Saved keyword lists will appear here.</div>}
+                  <button type="button" className="az-cb-link" onClick={() => setShowNegs((s) => !s)}>{showNegs ? '▴' : '▾'} Advanced Negative Keywords (Optional)</button>
+                  {showNegs && <textarea className="az-cb-negs" value={negKw} onChange={(e) => setNegKw(e.target.value)} placeholder="Negative keywords (one per line)" />}
+                </div>
+                <div className="az-cb-kwright">
+                  <div className="hd"><b>{addedKw.length} Keywords Added</b>{addedKw.length > 0 && <button type="button" onClick={() => setAddedKw([])}>Remove All</button>}</div>
+                  <div className="th"><span>Keyword</span><span>Match</span><span>SP Bid</span><span /></div>
+                  <div className="rows">
+                    {addedKw.length ? addedKw.map((k, i) => (
+                      <div className="r" key={`${k.text}|${k.match}`}><span className="kw">{k.text}</span><span className="mt">{k.match}</span><span className="bid">€{k.bid}</span><button type="button" onClick={() => removeKw(i)} aria-label="Remove">✕</button></div>
+                    )) : <div className="az-cb-empty">No data</div>}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="az-cb-newkw">
+                <div className="az-cb-h"><b>Product Targeting ASINs</b></div>
+                <div className="az-cb-sub">Target competitor or complementary product detail pages by ASIN.</div>
+                <textarea value={newKw} onChange={(e) => setNewKw(e.target.value)} placeholder="Enter ASINs (one per line)" />
+                <button type="button" className="az-cb-btn dark sm" onClick={addNewKw} disabled={!newKw.trim()}>+ Add ASINs</button>
+              </div>
+            )}
+          </div>
+        )}
+        {step > 2 && (
           <div className="az-cb-card az-cb-soon">
             <b>{STEPS[step]}</b> — building next (CB.{step + 1}). The wizard shell, stepper and navigation are live; this panel fills in as each step ships.
           </div>
