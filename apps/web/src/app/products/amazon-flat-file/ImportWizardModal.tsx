@@ -60,6 +60,8 @@ export interface ImportWizardModalProps {
   columnIds: string[]
   onApply: (result: ImportApplyResult) => void
   onClose: () => void
+  /** FX.7 — when the wizard is opened by dropping a file on the grid, parse it on open. */
+  initialFile?: File | null
 }
 
 type Step = 'upload' | 'mapping' | 'preview'
@@ -98,7 +100,7 @@ const SOURCE_BADGE: Record<MappingSource, { label: string; cls: string }> = {
 }
 
 export function ImportWizardModal({
-  open, marketplace, productType, productTypes, currentRows, columnLabels, columnIds, onApply, onClose,
+  open, marketplace, productType, productTypes, currentRows, columnLabels, columnIds, onApply, onClose, initialFile,
 }: ImportWizardModalProps) {
   const [step, setStep] = useState<Step>('upload')
   const [busy, setBusy] = useState(false)
@@ -121,6 +123,7 @@ export function ImportWizardModal({
   const [aiMapped, setAiMapped] = useState<Set<string>>(new Set()) // headers mapped by the AI tail
   const [dragOver, setDragOver] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
+  const consumedFileRef = useRef<File | null>(null)
 
   const typeParam = useMemo(
     () => (productTypes && productTypes.length > 1 ? { productTypes } : { productType }),
@@ -133,6 +136,7 @@ export function ImportWizardModal({
       setParsed(null); setSuggest(null); setMapping(new Map()); setCoerced(null)
       setMode('fill-missing'); setPlan(null); setOverrides({}); setExpanded(new Set())
       setAppliedPreset(null); setValidateBySku({}); setAiBusy(false); setAiMapped(new Set())
+      consumedFileRef.current = null
     } else {
       setPresets(loadPresets())
     }
@@ -173,6 +177,14 @@ export function ImportWizardModal({
     setFileName(file.name)
     runParse(await fileToPayload(file))
   }, [runParse])
+
+  // FX.7 — a file dropped on the grid opens the wizard pre-loaded; parse it once.
+  useEffect(() => {
+    if (open && initialFile && consumedFileRef.current !== initialFile) {
+      consumedFileRef.current = initialFile
+      void onFile(initialFile)
+    }
+  }, [open, initialFile, onFile])
 
   const onPaste = useCallback(() => {
     if (!pasteText.trim()) return

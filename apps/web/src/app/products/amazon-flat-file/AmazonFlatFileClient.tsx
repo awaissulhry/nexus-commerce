@@ -670,6 +670,7 @@ export default function AmazonFlatFileClient({
   // operator hasn't reviewed the results yet.
   const [pullDiffOpen, setPullDiffOpen] = useState(false)
   const [importOpen, setImportOpen] = useState(false) // FX.5b — smart import wizard
+  const [importInitialFile, setImportInitialFile] = useState<File | null>(null) // FX.7 — file dropped on the grid
   const [pullDiffData, setPullDiffData] = useState<{
     pulledRows: Row[]
     selectedColumns: 'all' | PullGroupId[]
@@ -2733,7 +2734,7 @@ export default function AmazonFlatFileClient({
       }
       return next
     })
-    setImportOpen(false)
+    setImportOpen(false); setImportInitialFile(null)
     toast.success(`Imported ${result.cellCount} value${result.cellCount === 1 ? '' : 's'} · ⌘Z to undo`)
   }, [pushSnapshot, productType, marketplace])
 
@@ -2850,7 +2851,18 @@ export default function AmazonFlatFileClient({
   ] : []
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col"
+      onDragOver={(e) => { if (!importOpen && e.dataTransfer.types.includes('Files')) e.preventDefault() }}
+      onDrop={(e) => {
+        // FX.7 — drop a spreadsheet on the grid to open the import wizard pre-loaded.
+        // Only reacts to FILE drags (not the grid's own cell/column mouse-drags) and
+        // only when the wizard isn't already open (its own drop zone handles that).
+        if (importOpen || !e.dataTransfer.types.includes('Files')) return
+        const f = e.dataTransfer.files?.[0]
+        if (!f || !/\.(csv|tsv|txt|xlsx|xls|json)$/i.test(f.name)) return
+        e.preventDefault()
+        setImportInitialFile(f); setImportOpen(true)
+      }}>
 
       {/* IN.2 — Cascade modal */}
       {cascadeRow && cascadeRow._productId && (
@@ -2887,7 +2899,7 @@ export default function AmazonFlatFileClient({
           {/* ── Menus — left side ── */}
           <div className="flex items-center gap-0.5 flex-shrink-0">
             <MenuDropdown label="File" items={[
-              { label: 'Smart import (CSV/Excel/JSON)…', icon: <Wand2 className="w-3.5 h-3.5" />, onClick: () => setImportOpen(true), disabled: !effectiveManifest },
+              { label: 'Smart import (CSV/Excel/JSON)…', icon: <Wand2 className="w-3.5 h-3.5" />, onClick: () => { setImportInitialFile(null); setImportOpen(true) }, disabled: !effectiveManifest },
               { label: 'Import TSV…', icon: <Upload className="w-3.5 h-3.5" />, onClick: () => fileInputRef.current?.click() },
               { separator: true },
               { label: `Export as TSV (Amazon)${selectedRows.size > 0 ? ` · ${selectedRows.size} sel` : ''}`, icon: <Download className="w-3.5 h-3.5" />, onClick: () => void exportFile('tsv'), disabled: !rows.length },
@@ -4161,8 +4173,9 @@ export default function AmazonFlatFileClient({
           currentRows={rows}
           columnLabels={columnLabelMap}
           columnIds={manifestColumns.map((c) => c.id)}
+          initialFile={importInitialFile}
           onApply={handleImportApply}
-          onClose={() => setImportOpen(false)}
+          onClose={() => { setImportOpen(false); setImportInitialFile(null) }}
         />
       )}
 
