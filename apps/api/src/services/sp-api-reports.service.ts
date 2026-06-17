@@ -20,6 +20,11 @@
 import { SellingPartner } from 'amazon-sp-api'
 import { logger } from '../utils/logger.js'
 import { instrumentSellingPartner } from './outbound-api-call-log.service.js'
+import {
+  startReportRun,
+  completeReportRun,
+  failReportRun,
+} from './amazon-report-registry.service.js'
 
 const POLL_INTERVAL_MS = 10_000 // 10 s between status checks
 const MAX_POLL_ATTEMPTS = 30 // ~5 min total
@@ -119,6 +124,38 @@ function sleep(ms: number): Promise<void> {
  * reports for a single day typically complete in 30-90 s.
  */
 export async function fetchSpApiReport<T = unknown>(
+  args: FetchReportArgs,
+): Promise<FetchReportResult<T>> {
+  // R0.2 — register this pull in the AmazonReportRun freshness registry.
+  // Best-effort: registry bookkeeping must NEVER break a real report pull,
+  // so the start swallows (runId = null) and complete/fail swallow internally.
+  const runId = await startReportRun({
+    reportType: args.reportType,
+    marketplace: args.marketplaceId,
+    source: 'REPORTS_API',
+    dataStartTime: args.dataStartTime,
+    dataEndTime: args.dataEndTime,
+    triggeredBy: 'cron',
+  }).catch(() => null)
+  try {
+    const result = await doFetchSpApiReport<T>(args)
+    if (runId)
+      await completeReportRun(runId, {
+        reportId: result.reportId,
+        reportDocumentId: result.reportDocumentId,
+        freshAsOf: args.dataEndTime ?? new Date(),
+      })
+    return result
+  } catch (err) {
+    if (runId)
+      await failReportRun(runId, {
+        errorMessage: err instanceof Error ? err.message : String(err),
+      })
+    throw err
+  }
+}
+
+async function doFetchSpApiReport<T = unknown>(
   args: FetchReportArgs,
 ): Promise<FetchReportResult<T>> {
   const startedAt = Date.now()
