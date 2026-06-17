@@ -28,7 +28,7 @@ import { coerceRowsWithAi } from '../services/amazon/flat-file-coerce-ai.js'
 import { planImportMerge, type ImportApplyMode } from '../services/amazon/flat-file-merge.js'
 import { translateEnumValues } from '../services/amazon/value-translate.service.js'
 import { getAmazonPublishMode } from '../services/amazon-publish-gate.service.js'
-import { preflightRow, buildPerTypeValidation } from '../services/listing-preflight.service.js'
+import { preflightRow, buildPerTypeValidation, validateImportRows } from '../services/listing-preflight.service.js'
 import {
   resolveComplianceForSkus,
   evaluateCompliance,
@@ -698,6 +698,43 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
     } catch (err: any) {
       request.log.error(err, 'flat-file/plan-import failed')
       return reply.code(500).send({ error: err?.message ?? 'Plan failed' })
+    }
+  })
+
+  // ── POST /api/amazon/flat-file/validate-rows ────────────────────────
+  // FX.6 — pre-flight import rows before apply: per-row missing-required +
+  // invalid GTIN + missing-image, checked against each row's OWN product type.
+  // Reuses A5 preflightRow + MT.2 buildPerTypeValidation. Returns rows w/ issues.
+  fastify.post<{
+    Body: { rows: Record<string, any>[]; marketplace?: string; productType?: string; productTypes?: string[] }
+  }>('/amazon/flat-file/validate-rows', async (request, reply) => {
+    const { rows, marketplace = 'IT', productType, productTypes } = request.body
+    if (!Array.isArray(rows)) {
+      return reply.code(400).send({ error: 'rows (array) required' })
+    }
+    const reqTypes = (productTypes ?? []).map((t) => String(t).toUpperCase()).filter(Boolean)
+    const pt = String(productType ?? '').toUpperCase()
+    if (!pt && reqTypes.length === 0) {
+      return reply.code(400).send({ error: 'productType or productTypes required' })
+    }
+    try {
+      // Cover every product type present in the rows (+ the requested one) so each
+      // row validates against its own type's required set (MT.2).
+      const rowTypes = rows.map((r) => String(r.product_type ?? '').toUpperCase()).filter(Boolean)
+      const allTypes = [...new Set([...reqTypes, ...(pt ? [pt] : []), ...rowTypes])]
+      const manifest = allTypes.length > 1
+        ? await flatFileService.generateUnionManifest(marketplace, allTypes)
+        : await flatFileService.generateManifest(marketplace, allTypes[0] ?? pt)
+      const { requiredByType } = buildPerTypeValidation(manifest)
+      const fallbackRequired = manifest.groups
+        .flatMap((g) => g.columns)
+        .filter((c) => c.required)
+        .map((c) => ({ id: c.id, label: c.labelEn }))
+      const results = validateImportRows(rows, requiredByType, fallbackRequired)
+      return reply.send({ results, rowsWithIssues: results.length, total: rows.length })
+    } catch (err: any) {
+      request.log.error(err, 'flat-file/validate-rows failed')
+      return reply.code(500).send({ error: err?.message ?? 'Validation failed' })
     }
   })
 

@@ -3,7 +3,7 @@
  * schema-required + GTIN + image checks are fully unit-testable.
  */
 import { describe, it, expect } from 'vitest'
-import { validateGtin, findMissingRequired, preflightRow, buildPerTypeValidation } from './listing-preflight.service.js'
+import { validateGtin, findMissingRequired, preflightRow, buildPerTypeValidation, validateImportRows } from './listing-preflight.service.js'
 
 describe('validateGtin (mod-10 check digit)', () => {
   it('valid EAN-13', () => expect(validateGtin('4006381333931').valid).toBe(true))
@@ -73,5 +73,30 @@ describe('MT.2 — buildPerTypeValidation (per-row validation for mixed sheets)'
   it('a column with no applicableProductTypes applies to every type (legacy)', () => {
     const u = { productTypes: ['JACKET'], groups: [{ columns: [{ id: 'legacy', labelEn: 'L' }] }] }
     expect(buildPerTypeValidation(u).applicableByType.get('JACKET')!.has('legacy')).toBe(true)
+  })
+})
+
+describe('FX.6 — validateImportRows (per-type pre-flight of import rows)', () => {
+  const requiredByType = new Map([
+    ['JACKET', [{ id: 'item_name', label: 'Title' }, { id: 'brand', label: 'Brand' }]],
+    ['PANTS', [{ id: 'item_name', label: 'Title' }, { id: 'inseam', label: 'Inseam' }]],
+  ])
+  const fallback = [{ id: 'item_name', label: 'Title' }]
+  const img = 'http://x/img.jpg'
+
+  it('checks each row against its OWN product type', () => {
+    const rows = [
+      { item_sku: 'A1', product_type: 'JACKET', item_name: 'X', brand: '', main_product_image_locator: img }, // missing brand
+      { item_sku: 'A2', product_type: 'PANTS', item_name: 'Y', inseam: '32', main_product_image_locator: img }, // ok
+    ]
+    const r = validateImportRows(rows, requiredByType, fallback)
+    expect(r).toHaveLength(1)
+    expect(r[0]).toMatchObject({ rowIndex: 0, sku: 'A1' })
+    expect(r[0].issues.some((i) => i.field === 'brand' && i.severity === 'error')).toBe(true)
+  })
+  it('falls back to the shared required set for an unknown/blank type', () => {
+    const rows = [{ item_sku: 'A3', product_type: '', item_name: '', main_product_image_locator: img }]
+    const r = validateImportRows(rows, requiredByType, fallback)
+    expect(r[0].issues.some((i) => i.field === 'item_name' && i.severity === 'error')).toBe(true)
   })
 })

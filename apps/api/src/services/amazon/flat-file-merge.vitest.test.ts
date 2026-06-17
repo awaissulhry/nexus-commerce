@@ -4,7 +4,7 @@
  * accounting are fully unit-testable.
  */
 import { describe, it, expect } from 'vitest'
-import { planImportMerge } from './flat-file-merge.js'
+import { planImportMerge, dedupeBySku } from './flat-file-merge.js'
 
 const existing = [
   { _rowId: 'r1', item_sku: 'A1', item_name: 'Jacket', standard_price: '100', color_name: '' },
@@ -72,5 +72,26 @@ describe('FX.5 — addNewRows=false + blank-sku', () => {
     const incoming = [{ item_sku: '  ', item_name: 'No SKU' }, { item_sku: 'A1', color_name: 'Black' }]
     const plan = planImportMerge(existing, incoming, { mode: 'fill-missing' })
     expect(plan.skippedNoSku).toBe(1)
+  })
+})
+
+describe('FX.6 — dedupeBySku + duplicate handling', () => {
+  it('collapses repeated SKUs (later non-blank wins) and counts them', () => {
+    const { rows, duplicates } = dedupeBySku([
+      { item_sku: 'A1', item_name: 'First', color_name: 'Red' },
+      { item_sku: 'A1', item_name: 'Second', color_name: '' }, // name overrides; blank color ignored
+      { item_sku: 'A2', item_name: 'Solo' },
+    ])
+    expect(duplicates).toBe(1)
+    expect(rows).toHaveLength(2)
+    expect(rows.find((r) => r.item_sku === 'A1')).toMatchObject({ item_name: 'Second', color_name: 'Red' })
+  })
+  it('planImportMerge dedups incoming → one merged new row + duplicateSkus count', () => {
+    const plan = planImportMerge([], [
+      { item_sku: 'NEW', item_name: 'A' },
+      { item_sku: 'NEW', standard_price: '10' },
+    ], { mode: 'overwrite' })
+    expect(plan.duplicateSkus).toBe(1)
+    expect(plan.newRows).toHaveLength(1)
   })
 })

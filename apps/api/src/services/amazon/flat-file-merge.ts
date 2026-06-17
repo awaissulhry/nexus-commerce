@@ -45,6 +45,8 @@ export interface ImportMergePlan {
   updates: PlanUpdate[]
   /** Incoming rows with a blank match key — can't match or create. */
   skippedNoSku: number
+  /** Incoming rows collapsed because they repeated an earlier SKU (later non-blank cell wins). */
+  duplicateSkus: number
   /** When addNewRows=false: incoming SKUs absent from the grid (ignored). */
   unmatchedSkipped: string[]
   stats: { newRows: number; updatedRows: number; cellsToApply: number; cellsToSkip: number }
@@ -65,12 +67,37 @@ const META_KEYS = new Set(['_rowId', '_isNew', '_dirty', '_status', '_feedMessag
 const str = (v: unknown): string => (v == null ? '' : String(v))
 const isBlank = (v: unknown): boolean => str(v).trim() === ''
 
+/**
+ * Collapse incoming rows that repeat a SKU into one (later non-blank cell wins),
+ * so a supplier file listing the same SKU twice doesn't create two new rows or
+ * fight itself on update. Blank-SKU rows are kept (counted as no-SKU downstream).
+ */
+export function dedupeBySku(
+  rows: Record<string, unknown>[],
+  matchKey = 'item_sku',
+): { rows: Record<string, unknown>[]; duplicates: number } {
+  const bySku = new Map<string, Record<string, unknown>>()
+  const order: string[] = []
+  const noSku: Record<string, unknown>[] = []
+  let duplicates = 0
+  for (const r of rows) {
+    const sku = str(r[matchKey]).trim()
+    if (!sku) { noSku.push(r); continue }
+    const existing = bySku.get(sku)
+    if (!existing) { bySku.set(sku, { ...r }); order.push(sku); continue }
+    duplicates++
+    for (const [k, v] of Object.entries(r)) if (!isBlank(v)) existing[k] = v
+  }
+  return { rows: [...order.map((s) => bySku.get(s)!), ...noSku], duplicates }
+}
+
 export function planImportMerge(
   existing: Record<string, unknown>[],
-  incoming: Record<string, unknown>[],
+  incomingRaw: Record<string, unknown>[],
   options: PlanOptions,
 ): ImportMergePlan {
   const matchKey = options.matchKey ?? 'item_sku'
+  const { rows: incoming, duplicates: duplicateSkus } = dedupeBySku(incomingRaw, matchKey)
   const addNew = options.addNewRows !== false
   const allow = options.columns && options.columns.length ? new Set(options.columns) : null
 
@@ -128,6 +155,7 @@ export function planImportMerge(
     newRows,
     updates,
     skippedNoSku,
+    duplicateSkus,
     unmatchedSkipped,
     stats: { newRows: newRows.length, updatedRows: updates.length, cellsToApply, cellsToSkip },
   }

@@ -118,3 +118,26 @@ export function buildPerTypeValidation(union: UnionManifestLike): PerTypeValidat
   }
   return { requiredByType, applicableByType }
 }
+
+/**
+ * FX.6 — pre-flight a batch of import rows before they're applied to the grid.
+ * Each row is validated against the required set for ITS OWN product_type (MT.2
+ * requiredByType), falling back to a shared set for a single-type sheet / a row
+ * with no/unknown type. Returns only rows that have issues (missing required,
+ * invalid GTIN, missing image). Pure + testable.
+ */
+export function validateImportRows(
+  rows: Record<string, any>[],
+  requiredByType: Map<string, RequiredColumn[]>,
+  fallbackRequired: RequiredColumn[],
+  matchKey = 'item_sku',
+): Array<{ rowIndex: number; sku: string; issues: PreflightIssue[] }> {
+  const out: Array<{ rowIndex: number; sku: string; issues: PreflightIssue[] }> = []
+  rows.forEach((row, rowIndex) => {
+    const type = String(row.product_type ?? '').toUpperCase()
+    const required = requiredByType.get(type) ?? fallbackRequired
+    const issues = preflightRow(row, required)
+    if (issues.length) out.push({ rowIndex, sku: String(row[matchKey] ?? ''), issues })
+  })
+  return out
+}

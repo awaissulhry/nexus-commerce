@@ -77,7 +77,9 @@ export function parseCsv(text: string, delimiter: string = ','): ParsedFile {
   // non-empty as headers, and zip. `delimiter` defaults to comma so
   // every existing caller is unchanged; pass '\t' for tab-separated
   // (external TSV) files.
-  const records = parseCsvSync(text, {
+  // Strip a leading UTF-8 BOM so the first header isn't a BOM-prefixed id.
+  const cleaned = text.charCodeAt(0) === 0xfeff ? text.slice(1) : text
+  const records = parseCsvSync(cleaned, {
     skip_empty_lines: true,
     relax_column_count: true,
     delimiter,
@@ -135,9 +137,10 @@ export async function parseXlsx(bytes: Uint8Array): Promise<ParsedFile> {
 }
 
 export function parseJson(text: string): ParsedFile {
+  const cleaned = text.charCodeAt(0) === 0xfeff ? text.slice(1) : text
   let parsed: unknown
   try {
-    parsed = JSON.parse(text)
+    parsed = JSON.parse(cleaned)
   } catch (err) {
     throw new Error(
       `JSON parse error: ${err instanceof Error ? err.message : String(err)}`,
