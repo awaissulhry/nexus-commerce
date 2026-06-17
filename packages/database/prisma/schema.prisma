@@ -13043,3 +13043,35 @@ model AdsAutomationState {
   lastCheckedAt DateTime?
   updatedAt     DateTime @updatedAt
 }
+
+// R0.1 — Amazon Data & Reports strategy (docs/AMAZON_DATA_STRATEGY.md).
+// The generic "every report pull, stamped with its freshness" registry:
+// one row per report request (Reports API / Data Kiosk / data-API pull),
+// regardless of where the parsed rows land (SettlementReport, etc. stay).
+// The freshness + audit spine the Reports hub + reconciliation cockpit
+// read from. Additive + empty on deploy; non-destructive.
+model AmazonReportRun {
+  id               String    @id @default(cuid())
+  reportType       String // SP-API report type (GET_*) / Data Kiosk query / data-API label
+  marketplace      String? // marketplace id or short code; null = account-wide
+  source           String    @default("REPORTS_API") // REPORTS_API | DATA_KIOSK | DATA_API
+  status           String    @default("REQUESTED") // REQUESTED | IN_PROGRESS | DONE | FATAL | CANCELLED | SKIPPED
+  reportId         String?   @unique // Amazon report id (null while pending/failed)
+  reportDocumentId String?
+  dataStartTime    DateTime? // window covered by this report
+  dataEndTime      DateTime?
+  rowCount         Int? // parsed rows, when known
+  rawStored        Boolean   @default(false) // did we keep the raw file?
+  rawRef           String? // pointer to raw storage (e.g. SettlementReport.id, S3 key)
+  freshAsOf        DateTime? // "Amazon data current as of …" (drives the freshness surface)
+  errorMessage     String?
+  triggeredBy      String? // 'cron' | 'manual' | userId
+  requestedAt      DateTime  @default(now())
+  completedAt      DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@index([reportType, requestedAt(sort: Desc)])
+  @@index([marketplace, reportType])
+  @@index([status, requestedAt(sort: Desc)])
+}
