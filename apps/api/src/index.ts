@@ -206,6 +206,7 @@ import { startLeadTimeStatsCron } from "./jobs/lead-time-stats.job.js";
 import { startStockoutDetectorCron } from "./jobs/stockout-detector.job.js";
 import { startAbcClassificationCron } from "./jobs/abc-classification.job.js";
 import { startListingQualityKeeperCron } from "./jobs/listing-quality-keeper.job.js";
+import { startPricingWatchdogCron } from "./jobs/pricing-watchdog.job.js";
 import { startCycleCountSchedulerCron } from "./jobs/cycle-count-scheduler.job.js";
 import { startYearEndSnapshotCron } from "./jobs/year-end-snapshot.job.js";
 import { startLotExpiryAlertCron } from "./jobs/lot-expiry-alert.job.js";
@@ -1102,6 +1103,15 @@ async function start() {
     // NEXUS_ENABLE_LISTING_QUALITY_KEEPER=0.
     if (process.env.NEXUS_ENABLE_LISTING_QUALITY_KEEPER !== '0') {
       startListingQualityKeeperCron();
+    }
+
+    // ACP.4b — Pricing Watchdog. Daily 07:00 UTC. Autonomous agent that
+    // scans products priced below floor/cost and QUEUES set-price
+    // proposals (always-ask) that RAISE them to a sane margin — never
+    // auto-applies, never proposes a cut. Default-on; opt out via
+    // NEXUS_ENABLE_PRICING_WATCHDOG=0.
+    if (process.env.NEXUS_ENABLE_PRICING_WATCHDOG !== '0') {
+      startPricingWatchdogCron();
     }
 
     // W4.6 — automation rule evaluator. Every 15 minutes, walks

@@ -18,6 +18,7 @@ import prisma from '../../db.js'
 import { isAiKillSwitchOn } from '../ai/providers/index.js'
 import { logger } from '../../utils/logger.js'
 import { listingQualityKeeper } from './autonomous/listing-quality-keeper.js'
+import { pricingWatchdog } from './autonomous/pricing-watchdog.js'
 
 export interface AutonomousAgentResult {
   scanned: number
@@ -29,7 +30,7 @@ export interface AutonomousAgentResult {
     productId: string
     sku: string
     approvalId: string
-    fields: string[]
+    summary: string
   }[]
 }
 
@@ -44,6 +45,7 @@ const DEFAULT_MAX_ITEMS = 5
 
 const AGENTS: Record<string, AutonomousAgent> = {
   [listingQualityKeeper.key]: listingQualityKeeper,
+  [pricingWatchdog.key]: pricingWatchdog,
 }
 
 export function getAutonomousAgent(key: string): AutonomousAgent | undefined {

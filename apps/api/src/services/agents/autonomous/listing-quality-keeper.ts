@@ -207,7 +207,9 @@ export const listingQualityKeeper: AutonomousAgent = {
             productId: p.id,
             sku: p.sku,
             approvalId: out.approvalId,
-            fields: Object.keys(applyArgs).filter((k) => k !== 'productId'),
+            summary: `content: ${Object.keys(applyArgs)
+              .filter((k) => k !== 'productId')
+              .join('+')}`,
           })
         } else {
           result.errors++
