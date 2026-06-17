@@ -1,7 +1,7 @@
 'use client'
 
 import {
-  useCallback, useEffect, useRef, useState, useMemo,
+  useCallback, useEffect, useRef, useState, useMemo, memo,
   type KeyboardEvent,
 } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
@@ -4907,7 +4907,7 @@ function wordBoundsAt(text: string, pos: number): [number, number] {
   return start === end ? [p, p] : [start, end]
 }
 
-function SpreadsheetCell({ col, value, isActive, cellBg, width, cellHeight, ri, ci,
+function SpreadsheetCellImpl({ col, value, isActive, cellBg, width, cellHeight, ri, ci,
   isSelected, selEdges, isCorner, isFillTarget, fillTargetEdges,
   isEditing, editInitialChar, isClipboard, clipboardEdges,
   validIssue, stickyLeft, isMatch, toneCls,
@@ -5226,6 +5226,47 @@ function SpreadsheetCell({ col, value, isActive, cellBg, width, cellHeight, ri, 
     </td>
   )
 }
+
+// GX.4 — memoize the cell so a re-render of the parent/row (navigation, a commit,
+// autosave) only re-renders the cells whose VISUAL props actually changed, not all
+// ~62k. The callbacks are intentionally NOT compared: their behaviour is stable for
+// a given (ri, ci, col) — which ARE compared — so a stale closure can't act on the
+// wrong cell. Edge objects are new literals each render, so compare their fields.
+type CellEdges = { top: boolean; right: boolean; bottom: boolean; left: boolean } | null | undefined
+function edgesEqual(a: CellEdges, b: CellEdges): boolean {
+  if (a === b) return true
+  if (!a || !b) return false
+  return a.top === b.top && a.right === b.right && a.bottom === b.bottom && a.left === b.left
+}
+function areCellPropsEqual(a: CellProps, b: CellProps): boolean {
+  return (
+    a.col === b.col &&
+    a.value === b.value &&
+    a.isActive === b.isActive &&
+    a.isEditing === b.isEditing &&
+    a.editInitialChar === b.editInitialChar &&
+    a.cellBg === b.cellBg &&
+    a.grayed === b.grayed &&
+    a.width === b.width &&
+    a.cellHeight === b.cellHeight &&
+    a.isSelected === b.isSelected &&
+    a.isCorner === b.isCorner &&
+    a.isFillTarget === b.isFillTarget &&
+    a.isClipboard === b.isClipboard &&
+    a.isMatch === b.isMatch &&
+    a.toneCls === b.toneCls &&
+    a.guidanceLevel === b.guidanceLevel &&
+    a.ri === b.ri &&
+    a.ci === b.ci &&
+    a.stickyLeft === b.stickyLeft &&
+    edgesEqual(a.selEdges, b.selEdges) &&
+    edgesEqual(a.fillTargetEdges, b.fillTargetEdges) &&
+    edgesEqual(a.clipboardEdges, b.clipboardEdges) &&
+    (a.validIssue === b.validIssue ||
+      (!!a.validIssue && !!b.validIssue && a.validIssue.level === b.validIssue.level && a.validIssue.msg === b.validIssue.msg))
+  )
+}
+const SpreadsheetCell = memo(SpreadsheetCellImpl, areCellPropsEqual)
 
 // ── EnumDropdown ────────────────────────────────────────────────────────
 // Floating dropdown panel that appears below the active enum cell.
