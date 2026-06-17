@@ -19,7 +19,9 @@ import { AmazonService } from '../services/marketplaces/amazon.service.js'
 import {
   AmazonFlatFileService,
   MARKETPLACE_ID_MAP,
+  flatFileExportColumns,
 } from '../services/amazon/flat-file.service.js'
+import { renderExport } from '../services/export/renderers.js'
 import { translateEnumValues } from '../services/amazon/value-translate.service.js'
 import { getAmazonPublishMode } from '../services/amazon-publish-gate.service.js'
 import { preflightRow, buildPerTypeValidation } from '../services/listing-preflight.service.js'
@@ -634,23 +636,44 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
     }
   })
 
-  // ── POST /api/amazon/flat-file/export-tsv ───────────────────────────
-  // Server-side TSV generation (client can also do this locally).
+  // ── POST /api/amazon/flat-file/export ───────────────────────────────
+  // FX.1 — export the current grid to a downloadable file. Three formats:
+  //   • tsv  → Amazon flat-file template (metadata + 4 header rows) for
+  //            Seller Central manual upload + a lossless self round-trip.
+  //   • csv  → clean single-header CSV (English labels) for external tools.
+  //   • xlsx → clean single-header Excel workbook.
+  // The caller sends the (possibly union/multi-category) manifest + the rows it
+  // wants to export (all, or a selected subset), so partial export is just a
+  // smaller `rows`.
   fastify.post<{
-    Body: { manifest: any; rows: any[] }
-  }>('/amazon/flat-file/export-tsv', async (request, reply) => {
-    const { manifest, rows } = request.body
+    Body: { manifest: any; rows: any[]; format?: 'tsv' | 'csv' | 'xlsx' }
+  }>('/amazon/flat-file/export', async (request, reply) => {
+    const { manifest, rows, format = 'tsv' } = request.body
     if (!manifest || !rows) {
       return reply.code(400).send({ error: 'manifest and rows required' })
     }
+    const pt = String(manifest.productType ?? 'flat_file')
+    const mp = String(manifest.marketplace ?? '')
+    const stamp = Date.now()
     try {
-      const tsv = flatFileService.buildTsvExport(manifest, rows)
-      reply.header('Content-Type', 'text/tab-separated-values; charset=utf-8')
-      reply.header(
-        'Content-Disposition',
-        `attachment; filename="amazon_flat_file_${manifest.productType}_${manifest.marketplace}_${Date.now()}.txt"`,
-      )
-      return reply.send(tsv)
+      if (format === 'tsv') {
+        const tsv = flatFileService.buildTsvExport(manifest, rows)
+        reply.header('Content-Type', 'text/tab-separated-values; charset=utf-8')
+        reply.header('Content-Disposition', `attachment; filename="amazon_${pt}_${mp}_${stamp}.txt"`)
+        return reply.send(tsv)
+      }
+      if (format !== 'csv' && format !== 'xlsx') {
+        return reply.code(400).send({ error: `Unsupported export format "${format}"` })
+      }
+      const { bytes, contentType } = await renderExport({
+        format,
+        columns: flatFileExportColumns(manifest),
+        rows,
+        filename: `amazon_${pt}_${mp}`,
+      })
+      reply.header('Content-Type', format === 'csv' ? 'text/csv; charset=utf-8' : contentType)
+      reply.header('Content-Disposition', `attachment; filename="amazon_${pt}_${mp}_${stamp}.${format}"`)
+      return reply.send(Buffer.from(bytes))
     } catch (err: any) {
       return reply.code(500).send({ error: err?.message ?? 'Export failed' })
     }

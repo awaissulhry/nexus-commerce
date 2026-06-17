@@ -2708,19 +2708,34 @@ export default function AmazonFlatFileClient({
     }).catch(() => { /* best-effort */ })
   }, [pullDiffData, pushSnapshot, marketplace, productType])
 
-  const exportTsv = useCallback(async () => {
-    if (!manifest) return
-    const res = await fetch(`${getBackendUrl()}/api/amazon/flat-file/export-tsv`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ manifest, rows }),
-    })
-    if (!res.ok) return
-    const blob = await res.blob()
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url; a.download = `amazon_${productType}_${marketplace}.txt`; a.click()
-    URL.revokeObjectURL(url)
-  }, [manifest, rows, productType, marketplace])
+  // FX.1 — export the grid to TSV (Amazon template), CSV, or XLSX. Uses
+  // effectiveManifest so a multi-category (MT) union sheet exports every column;
+  // honors the current row selection so "export selected" is partial export.
+  const exportFile = useCallback(async (format: 'tsv' | 'csv' | 'xlsx') => {
+    const mf = effectiveManifest ?? manifest
+    if (!mf) return
+    const selectedOnly = selectedRows.size > 0
+    const outRows = selectedOnly ? rows.filter((r) => selectedRows.has(r._rowId as string)) : rows
+    if (!outRows.length) { toast.warning('No rows to export'); return }
+    try {
+      const res = await fetch(`${getBackendUrl()}/api/amazon/flat-file/export`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ manifest: mf, rows: outRows, format }),
+      })
+      if (!res.ok) { toast.error('Export failed'); return }
+      const blob = await res.blob()
+      const ext = format === 'tsv' ? 'txt' : format
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `amazon_${productType}_${marketplace}${selectedOnly ? `_${outRows.length}sel` : ''}.${ext}`
+      a.click()
+      URL.revokeObjectURL(url)
+      toast.success(`Exported ${outRows.length} row${outRows.length === 1 ? '' : 's'} as ${ext.toUpperCase()}`)
+    } catch {
+      toast.error('Export failed')
+    }
+  }, [manifest, effectiveManifest, rows, selectedRows, productType, marketplace])
 
   // ── Save / Discard ────────────────────────────────────────────────
   const [saveFlash, setSaveFlash] = useState(false)
@@ -2844,7 +2859,10 @@ export default function AmazonFlatFileClient({
           <div className="flex items-center gap-0.5 flex-shrink-0">
             <MenuDropdown label="File" items={[
               { label: 'Import TSV…', icon: <Upload className="w-3.5 h-3.5" />, onClick: () => fileInputRef.current?.click() },
-              { label: 'Export TSV', icon: <Download className="w-3.5 h-3.5" />, onClick: exportTsv, disabled: !rows.length },
+              { separator: true },
+              { label: `Export as TSV (Amazon)${selectedRows.size > 0 ? ` · ${selectedRows.size} sel` : ''}`, icon: <Download className="w-3.5 h-3.5" />, onClick: () => void exportFile('tsv'), disabled: !rows.length },
+              { label: `Export as CSV${selectedRows.size > 0 ? ` · ${selectedRows.size} sel` : ''}`, icon: <Download className="w-3.5 h-3.5" />, onClick: () => void exportFile('csv'), disabled: !rows.length },
+              { label: `Export as Excel (.xlsx)${selectedRows.size > 0 ? ` · ${selectedRows.size} sel` : ''}`, icon: <Download className="w-3.5 h-3.5" />, onClick: () => void exportFile('xlsx'), disabled: !rows.length },
               { separator: true },
               { label: 'Reload rows from server', icon: <RefreshCw className="w-3.5 h-3.5" />, disabled: !productType || !rows.length,
                 onClick: () => {

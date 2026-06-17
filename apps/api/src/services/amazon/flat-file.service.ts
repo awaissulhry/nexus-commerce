@@ -779,6 +779,23 @@ export function mergeManifestsIntoUnion(manifests: FlatFileManifest[], types: st
   }
 }
 
+/**
+ * FX.1 — flatten a (single-type OR union) manifest into the column spec the
+ * generic export renderer wants ({ id, label }). The English label is the
+ * human-readable header; the column id is what the FX.3 smart-import maps back
+ * to, so an export → edit → re-import round-trip stays lossless. Pure +
+ * order-preserving (group order, then column order) so the file's columns match
+ * the on-screen grid. Carries `product_type` like any other column, so a
+ * multi-category (MT) union sheet exports every row's type.
+ */
+export function flatFileExportColumns(
+  manifest: Pick<FlatFileManifest, 'groups'>,
+): Array<{ id: string; label: string }> {
+  return manifest.groups
+    .flatMap((g) => g.columns)
+    .map((c) => ({ id: c.id, label: c.labelEn || c.id }))
+}
+
 export class AmazonFlatFileService {
   constructor(
     private readonly prisma: PrismaClient,
