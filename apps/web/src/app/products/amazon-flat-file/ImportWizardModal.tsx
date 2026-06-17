@@ -39,7 +39,7 @@ interface PlanCell { columnId: string; from: string; to: string; willApply: bool
 interface PlanNewRow { sku: string; cells: PlanCell[] }
 interface PlanUpdate { sku: string; rowId: string; cells: PlanCell[] }
 interface ImportPlan {
-  newRows: PlanNewRow[]; updates: PlanUpdate[]; skippedNoSku: number; unmatchedSkipped: string[]
+  newRows: PlanNewRow[]; updates: PlanUpdate[]; skippedNoSku: number; duplicateSkus: number; unmatchedSkipped: string[]
   stats: { newRows: number; updatedRows: number; cellsToApply: number; cellsToSkip: number }
 }
 
@@ -77,6 +77,17 @@ async function fileToPayload(file: File): Promise<{ filename: string; text?: str
   return { filename: file.name, text: await file.text() }
 }
 
+// FX.6b — per-source mapping presets (localStorage). A preset captures the
+// operator's header→column mapping + AI toggle for a recurring supplier file,
+// keyed by its header set, so a re-import auto-applies last time's choices.
+interface ImportPreset { name: string; headers: string[]; mapping: Record<string, string | null>; useAi: boolean; createdAt: number }
+const PRESETS_KEY = 'ff-import-presets'
+const headerKey = (h: string[]) => [...h].map((s) => s.toLowerCase().trim()).sort().join('|')
+function loadPresets(): ImportPreset[] {
+  try { const v = JSON.parse(localStorage.getItem(PRESETS_KEY) ?? '[]'); return Array.isArray(v) ? v : [] } catch { return [] }
+}
+function persistPresets(p: ImportPreset[]) { try { localStorage.setItem(PRESETS_KEY, JSON.stringify(p)) } catch { /* quota */ } }
+
 const SOURCE_BADGE: Record<MappingSource, { label: string; cls: string }> = {
   'exact-id': { label: 'exact', cls: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300' },
   'exact-label': { label: 'label', cls: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300' },
@@ -103,6 +114,9 @@ export function ImportWizardModal({
   const [plan, setPlan] = useState<ImportPlan | null>(null)
   const [overrides, setOverrides] = useState<Record<string, boolean>>({}) // `${rowKey}::${columnId}` → willApply
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
+  const [presets, setPresets] = useState<ImportPreset[]>([])
+  const [appliedPreset, setAppliedPreset] = useState<string | null>(null)
+  const [validateBySku, setValidateBySku] = useState<Record<string, { errors: number; warnings: number }>>({})
   const fileRef = useRef<HTMLInputElement>(null)
 
   const typeParam = useMemo(
@@ -115,6 +129,9 @@ export function ImportWizardModal({
       setStep('upload'); setBusy(false); setError(null); setFileName(''); setPasteText('')
       setParsed(null); setSuggest(null); setMapping(new Map()); setCoerced(null)
       setMode('fill-missing'); setPlan(null); setOverrides({}); setExpanded(new Set())
+      setAppliedPreset(null); setValidateBySku({})
+    } else {
+      setPresets(loadPresets())
     }
   }, [open])
 
@@ -137,6 +154,10 @@ export function ImportWizardModal({
       const sug = await post('suggest-mapping', { headers: res.headers, marketplace, ...typeParam }) as SuggestResponse
       setSuggest(sug)
       setMapping(new Map(sug.mappings.map((m) => [m.header, m.columnId])))
+      // FX.6b — a saved preset for this exact header set overrides the auto-map.
+      const preset = loadPresets().find((p) => headerKey(p.headers) === headerKey(res.headers))
+      if (preset) { setMapping(new Map(Object.entries(preset.mapping))); setUseAi(preset.useAi); setAppliedPreset(preset.name) }
+      else setAppliedPreset(null)
       setStep('mapping')
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Parse failed')
@@ -155,6 +176,22 @@ export function ImportWizardModal({
     setFileName('pasted data')
     runParse({ filename: 'pasted.tsv', text: pasteText })
   }, [pasteText, runParse])
+
+  const savePreset = useCallback(() => {
+    if (!parsed) return
+    const suggestedName = fileName.replace(/\.[^.]+$/, '') || 'Supplier'
+    const name = (typeof window !== 'undefined' ? window.prompt('Save this mapping as a preset (re-used when a file with the same columns is imported):', suggestedName) : '')?.trim()
+    if (!name) return
+    const preset: ImportPreset = { name, headers: parsed.headers, mapping: Object.fromEntries(mapping), useAi, createdAt: Date.now() }
+    const next = [...presets.filter((p) => p.name !== name), preset]
+    setPresets(next); persistPresets(next); setAppliedPreset(name)
+  }, [parsed, fileName, mapping, useAi, presets])
+
+  const applyPreset = useCallback((name: string) => {
+    const p = presets.find((x) => x.name === name)
+    if (!p) return
+    setMapping(new Map(Object.entries(p.mapping))); setUseAi(p.useAi); setAppliedPreset(p.name)
+  }, [presets])
 
   // ── Step 2 → coerce + plan ────────────────────────────────────────
   const mappedRows = useMemo(() => {
@@ -180,6 +217,18 @@ export function ImportWizardModal({
     try {
       const co = await post('coerce', { rows: mappedRows, marketplace, ...typeParam, ai: useAi }) as CoerceResponse
       setCoerced(co)
+      // FX.6b — pre-flight the coerced rows (best-effort; never blocks the preview).
+      const vmap: Record<string, { errors: number; warnings: number }> = {}
+      try {
+        const val = await post('validate-rows', { rows: co.rows, marketplace, ...typeParam }) as { results: Array<{ sku: string; issues: Array<{ severity: 'error' | 'warning' }> }> }
+        for (const r of val.results ?? []) {
+          vmap[r.sku] = {
+            errors: r.issues.filter((i) => i.severity === 'error').length,
+            warnings: r.issues.filter((i) => i.severity === 'warning').length,
+          }
+        }
+      } catch { /* validation is advisory */ }
+      setValidateBySku(vmap)
       const p = await buildPlan(co.rows, mode)
       setPlan(p); setOverrides({}); setExpanded(new Set())
       setStep('preview')
@@ -236,6 +285,7 @@ export function ImportWizardModal({
 
   const label = (col: string) => columnLabels.get(col) ?? col
   const flaggedCount = coerced?.counts.flagged ?? 0
+  const needsRequired = plan ? plan.newRows.filter((n) => (validateBySku[n.sku]?.errors ?? 0) > 0).length : 0
 
   return (
     <div className="fixed inset-0 z-[70] flex items-start justify-center bg-black/40 pt-10 px-4"
@@ -308,6 +358,24 @@ export function ImportWizardModal({
                 <span className="text-emerald-600 dark:text-emerald-400 font-medium">{mappedCount} mapped</span>.
                 Set a column to <em>Skip</em> to leave it out.
               </div>
+              <div className="flex items-center gap-2 text-xs flex-wrap">
+                {appliedPreset && (
+                  <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
+                    <CheckCircle2 className="w-3.5 h-3.5" /> Preset “{appliedPreset}”
+                  </span>
+                )}
+                {presets.length > 0 && (
+                  <select value="" onChange={(e) => { if (e.target.value) applyPreset(e.target.value) }}
+                    className="text-xs rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-1.5 py-1 focus:outline-none focus:border-violet-400">
+                    <option value="">Load preset…</option>
+                    {presets.map((p) => <option key={p.name} value={p.name}>{p.name}</option>)}
+                  </select>
+                )}
+                <button type="button" onClick={savePreset}
+                  className="px-2 py-1 rounded border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800">
+                  Save as preset
+                </button>
+              </div>
               <div className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
                 <table className="w-full text-xs">
                   <thead className="bg-slate-50 dark:bg-slate-800/50 text-[10px] uppercase tracking-wide text-slate-400">
@@ -368,6 +436,8 @@ export function ImportWizardModal({
                   <span className="font-semibold text-emerald-600 dark:text-emerald-400">{plan.stats.newRows}</span> new ·{' '}
                   <span className="font-semibold text-sky-600 dark:text-sky-400">{plan.stats.updatedRows}</span> updated
                   {flaggedCount > 0 && <> · <span className="text-amber-600 dark:text-amber-400">{flaggedCount} value{flaggedCount !== 1 ? 's' : ''} flagged</span></>}
+                  {needsRequired > 0 && <> · <span className="text-rose-600 dark:text-rose-400">{needsRequired} missing required</span></>}
+                  {plan.duplicateSkus > 0 && <> · {plan.duplicateSkus} duplicate{plan.duplicateSkus !== 1 ? 's' : ''} merged</>}
                   {plan.skippedNoSku > 0 && <> · {plan.skippedNoSku} skipped (no SKU)</>}
                 </div>
                 {busy && <Loader2 className="w-3.5 h-3.5 animate-spin text-slate-400" />}
@@ -398,6 +468,12 @@ export function ImportWizardModal({
                               group.kind === 'new' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300' : 'bg-sky-100 text-sky-700 dark:bg-sky-950/40 dark:text-sky-300')}>
                               {group.kind === 'new' ? 'new' : 'update'}
                             </span>
+                            {group.kind === 'new' && (validateBySku[it.sku]?.errors ?? 0) > 0 && (
+                              <span className="text-[10px] px-1.5 py-0.5 rounded bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300"
+                                title="This new row is still missing Amazon-required fields">
+                                ⚠ {validateBySku[it.sku]?.errors} required
+                              </span>
+                            )}
                             <span className="ml-auto text-[10px] text-slate-500">{onCount}/{it.cells.length} cell{it.cells.length !== 1 ? 's' : ''}</span>
                           </div>
                           {isOpen && (
