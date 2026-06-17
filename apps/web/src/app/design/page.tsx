@@ -16,7 +16,7 @@
  */
 
 import { useState } from 'react'
-import { Search, Trash2, Plus, Package, Pencil } from 'lucide-react'
+import { Search, Trash2, Plus, Package, Pencil, ExternalLink } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { IconButton } from '@/components/ui/IconButton'
 import { Card } from '@/components/ui/Card'
@@ -25,6 +25,15 @@ import { StatusBadge } from '@/components/ui/StatusBadge'
 import { Input } from '@/components/ui/Input'
 import { Tabs } from '@/components/ui/Tabs'
 import { EmptyState } from '@/components/ui/EmptyState'
+import { Modal, ModalBody, ModalFooter } from '@/components/ui/Modal'
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
+import { Tooltip } from '@/components/ui/Tooltip'
+import { Spinner } from '@/components/ui/Spinner'
+import { ProgressBar } from '@/components/ui/ProgressBar'
+import { Skeleton, SkeletonRow } from '@/components/ui/Skeleton'
+import { PageHeader } from '@/components/ui/PageHeader'
+import { DataTable } from '@/components/ui/DataTable'
+import { useToast } from '@/components/ui/Toast'
 
 const COMFORTABLE = [
   { token: 'text-4xl', cls: 'text-4xl', px: '32 / 38', sample: 'Display' },
@@ -104,6 +113,16 @@ function AaPill({ pass }: { pass: boolean }) {
 export default function DesignSystemPage() {
   const [dark, setDark] = useState(false)
   const [tab, setTab] = useState('all')
+  const [modalOpen, setModalOpen] = useState(false)
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  const { toast } = useToast()
+
+  const tableRows = [
+    { id: '1', sku: 'XAV-J100-BK-M', name: 'Giacca Tponis Pro', stock: 142, status: 'ACTIVE' },
+    { id: '2', sku: 'XAV-G220-RD-L', name: 'Guanti Corsa GP', stock: 38, status: 'ACTIVE' },
+    { id: '3', sku: 'XAV-H050-WT-XL', name: 'Casco Veloce X', stock: 7, status: 'DRAFT' },
+    { id: '4', sku: 'XAV-B330-BK-S', name: 'Stivali Adventure', stock: 0, status: 'INACTIVE' },
+  ]
 
   return (
     <div className={dark ? 'dark' : ''}>
@@ -409,6 +428,121 @@ export default function DesignSystemPage() {
               </div>
             </div>
           </Section>
+
+          {/* Structural primitives (P1) */}
+          <Section
+            title="Structural"
+            desc="New primitives that give every page a consistent header, sections, and a proper data-table shell."
+          >
+            <div className="space-y-6">
+              <div className="rounded-xl border border-default bg-card p-5">
+                <PageHeader
+                  title="Products"
+                  description="265 SKUs across Amazon, eBay and Shopify."
+                  actions={
+                    <>
+                      <Button variant="secondary" size="sm">Export</Button>
+                      <Button variant="primary" size="sm" icon={<Plus className="h-3.5 w-3.5" />}>Add product</Button>
+                    </>
+                  }
+                />
+                <p className="text-sm text-tertiary">↑ PageHeader — title, description, action cluster, divider.</p>
+              </div>
+              <div>
+                <p className="mb-3 text-sm font-label uppercase tracking-wide text-tertiary">DataTable (solid, hover, status cells)</p>
+                <DataTable
+                  rows={tableRows}
+                  rowKey={(r) => r.id}
+                  onRowClick={() => {}}
+                  columns={[
+                    { key: 'sku', header: 'SKU', render: (r) => <span className="font-mono text-secondary">{r.sku}</span> },
+                    { key: 'name', header: 'Product', render: (r) => r.name },
+                    { key: 'stock', header: 'Stock', align: 'right', render: (r) => <span className="font-mono tabular-nums">{r.stock}</span> },
+                    { key: 'status', header: 'Status', render: (r) => <StatusBadge status={r.status} /> },
+                  ]}
+                />
+              </div>
+            </div>
+          </Section>
+
+          {/* Overlays & feedback (P1) */}
+          <Section
+            title="Overlays & feedback"
+            desc="Modals, toasts, tooltips, and loading states — solid surfaces, real shadows, AA text."
+          >
+            <div className="space-y-6">
+              <div>
+                <p className="mb-3 text-sm font-label uppercase tracking-wide text-tertiary">Triggers</p>
+                <div className="flex flex-wrap items-center gap-3">
+                  <Button variant="secondary" onClick={() => setModalOpen(true)}>Open modal</Button>
+                  <Button variant="danger" onClick={() => setConfirmOpen(true)}>Delete… (confirm)</Button>
+                  <Button variant="secondary" onClick={() => toast.success('Saved to all channels')}>Success toast</Button>
+                  <Button variant="secondary" onClick={() => toast.error('Publish failed: rate limited')}>Error toast</Button>
+                  <Tooltip content="Opens in a new tab">
+                    <Button variant="ghost" icon={<ExternalLink className="h-3.5 w-3.5" />}>Hover me</Button>
+                  </Tooltip>
+                </div>
+              </div>
+              <div>
+                <p className="mb-3 text-sm font-label uppercase tracking-wide text-tertiary">Spinner</p>
+                <div className="flex flex-wrap items-center gap-5">
+                  <Spinner size="xs" />
+                  <Spinner size="sm" />
+                  <Spinner size="md" />
+                  <Spinner size="lg" tone="primary" />
+                  <Spinner label="Saving…" />
+                </div>
+              </div>
+              <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+                <div>
+                  <p className="mb-3 text-sm font-label uppercase tracking-wide text-tertiary">Progress</p>
+                  <div className="space-y-3">
+                    <ProgressBar value={64} label="Bulk publish" showPercent />
+                    <ProgressBar value={128} max={200} label="Importing" />
+                    <ProgressBar indeterminate label="Polling Amazon…" />
+                  </div>
+                </div>
+                <div>
+                  <p className="mb-3 text-sm font-label uppercase tracking-wide text-tertiary">Skeleton</p>
+                  <div className="space-y-3 rounded-lg border border-default bg-card p-4">
+                    <Skeleton lines={3} />
+                    <SkeletonRow columns={5} />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </Section>
+
+          {/* Controlled overlays */}
+          <Modal
+            open={modalOpen}
+            onClose={() => setModalOpen(false)}
+            title="Example modal"
+            description="Solid raised surface, AA text, real shadow."
+          >
+            <ModalBody>
+              <p className="text-md text-secondary">
+                Modal bodies sit on the raised surface with a visible border and proper elevation.
+                Press Escape or click the backdrop to dismiss.
+              </p>
+            </ModalBody>
+            <ModalFooter>
+              <Button variant="secondary" onClick={() => setModalOpen(false)}>Cancel</Button>
+              <Button variant="primary" onClick={() => setModalOpen(false)}>Save</Button>
+            </ModalFooter>
+          </Modal>
+          <ConfirmDialog
+            open={confirmOpen}
+            title="Delete product?"
+            description="This permanently removes the SKU and its channel listings."
+            confirmLabel="Delete"
+            tone="danger"
+            onConfirm={() => {
+              toast.success('Deleted')
+              setConfirmOpen(false)
+            }}
+            onClose={() => setConfirmOpen(false)}
+          />
 
           <footer className="py-10">
             <p className="text-sm text-tertiary">

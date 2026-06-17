@@ -61,9 +61,9 @@ const TONE_ICON: Record<Tone, typeof AlertTriangle> = {
 }
 
 const TONE_ICON_COLOR: Record<Tone, string> = {
-  danger:  'text-danger-600 bg-danger-50 border-danger-200',
-  warning: 'text-warning-700 bg-warning-50 border-warning-200',
-  info:    'text-info-600 bg-info-50 border-info-200',
+  danger:  'text-danger-strong bg-danger-soft border-danger-line',
+  warning: 'text-warning-strong bg-warning-soft border-warning-line',
+  info:    'text-info-strong bg-info-soft border-info-line',
 }
 
 const TONE_BUTTON: Record<Tone, 'danger' | 'primary' | 'secondary'> = {
@@ -122,7 +122,7 @@ export function ConfirmDialog({
           >
             <Icon className="w-5 h-5" />
           </span>
-          <div className="text-md text-slate-700">
+          <div className="text-md text-secondary">
             {description ?? 'Are you sure?'}
           </div>
         </div>

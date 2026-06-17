@@ -23,9 +23,9 @@ const SIZE: Record<Size, string> = {
 }
 
 const TONE: Record<Tone, string> = {
-  default: 'text-slate-500',
-  primary: 'text-blue-600',
-  subtle: 'text-slate-300',
+  default: 'text-tertiary',
+  primary: 'text-info-600',
+  subtle: 'text-disabled',
   inherit: '',
 }
 

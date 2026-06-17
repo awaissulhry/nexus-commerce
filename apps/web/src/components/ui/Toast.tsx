@@ -192,30 +192,32 @@ function ToastViewport({
   )
 }
 
+// P1 — solid raised surface + semantic accent border/icon; all
+// auto-flip in dark via the tokens.
 const TONE_STYLE: Record<ToastTone, { bg: string; border: string; text: string; iconCls: string }> = {
   success: {
-    bg: 'bg-white',
-    border: 'border-green-200',
-    text: 'text-slate-900',
-    iconCls: 'text-green-600',
+    bg: 'bg-raised',
+    border: 'border-success-line',
+    text: 'text-primary',
+    iconCls: 'text-success-strong',
   },
   error: {
-    bg: 'bg-white',
-    border: 'border-red-200',
-    text: 'text-slate-900',
-    iconCls: 'text-red-600',
+    bg: 'bg-raised',
+    border: 'border-danger-line',
+    text: 'text-primary',
+    iconCls: 'text-danger-strong',
   },
   warning: {
-    bg: 'bg-white',
-    border: 'border-amber-200',
-    text: 'text-slate-900',
-    iconCls: 'text-amber-600',
+    bg: 'bg-raised',
+    border: 'border-warning-line',
+    text: 'text-primary',
+    iconCls: 'text-warning-strong',
   },
   info: {
-    bg: 'bg-white',
-    border: 'border-slate-200',
-    text: 'text-slate-900',
-    iconCls: 'text-blue-600',
+    bg: 'bg-raised',
+    border: 'border-default',
+    text: 'text-primary',
+    iconCls: 'text-info-strong',
   },
 }
 
@@ -266,7 +268,7 @@ function ToastItem({
           </div>
         )}
         {toast.description && (
-          <div className="text-base text-slate-700 leading-snug break-words">
+          <div className="text-base text-secondary leading-snug break-words">
             {toast.description}
           </div>
         )}
@@ -279,7 +281,7 @@ function ToastItem({
               toast.action?.onClick()
               onDismiss()
             }}
-            className="text-sm font-medium text-blue-700 hover:text-blue-900 px-1.5 py-0.5 rounded hover:bg-blue-50"
+            className="text-sm font-label text-info-strong hover:bg-info-soft px-1.5 py-0.5 rounded"
           >
             {toast.action.label}
           </button>
@@ -288,7 +290,7 @@ function ToastItem({
           type="button"
           onClick={onDismiss}
           aria-label="Dismiss"
-          className="text-slate-400 hover:text-slate-700 mt-0.5"
+          className="text-tertiary hover:text-primary mt-0.5"
         >
           <X className="w-3.5 h-3.5" />
         </button>

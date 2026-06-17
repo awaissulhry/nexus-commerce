@@ -237,8 +237,10 @@ export function Tooltip({
               pointerEvents: 'none',
             }}
             className={cn(
-              'z-popover px-2 py-1 rounded-md text-sm font-medium',
-              'bg-slate-900 text-white shadow-modal',
+              'z-popover px-2 py-1 rounded-md text-sm font-label',
+              // Inverted chip: dark on light, lighter slate on dark so
+              // it stays distinct from the dark canvas.
+              'bg-slate-900 text-white dark:bg-slate-700 shadow-modal',
               'transition-opacity duration-fast',
               'max-w-xs',
               className,

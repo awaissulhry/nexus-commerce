@@ -225,8 +225,8 @@ export function Modal({
   //     at sm and above. The mobile sheet still keeps the right-side
   //     border for visual continuity but it sits flush.
   const panelBase = isDrawer
-    ? 'h-full w-full sm:max-w-[640px] bg-white dark:bg-slate-900 shadow-2xl sm:border-l border-slate-200 dark:border-slate-800 flex flex-col'
-    : `w-full ${SIZE_CLASS[size]} bg-white dark:bg-slate-900 rounded-lg shadow-xl border border-slate-200 dark:border-slate-800 flex flex-col max-h-[85dvh] sm:max-h-[90vh]`
+    ? 'h-full w-full sm:max-w-[640px] bg-raised shadow-drawer sm:border-l border-default flex flex-col'
+    : `w-full ${SIZE_CLASS[size]} bg-raised rounded-lg shadow-modal border border-default flex flex-col max-h-[85dvh] sm:max-h-[90vh]`
 
   return (
     <div
@@ -270,16 +270,16 @@ function renderDefaultHeader(
 ): ReactNode {
   if (!title) return null
   return (
-    <div className="px-5 py-3 border-b border-slate-200 dark:border-slate-800 flex items-start justify-between gap-3 flex-shrink-0">
+    <div className="px-5 py-3 border-b border-default flex items-start justify-between gap-3 flex-shrink-0">
       <div className="min-w-0">
         <div
           id="modal-title"
-          className="text-lg font-semibold text-slate-900 dark:text-slate-100 truncate"
+          className="text-lg font-heading text-primary truncate"
         >
           {title}
         </div>
         {description && (
-          <div className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+          <div className="text-sm text-secondary mt-0.5">
             {description}
           </div>
         )}
@@ -290,7 +290,7 @@ function renderDefaultHeader(
         aria-label="Close"
         // C.13 — mobile parity: 44×44 tap area on coarse pointers
         // (min-h-11 min-w-11), reverts to desktop density at sm.
-        className="inline-flex items-center justify-center min-h-11 min-w-11 sm:min-h-0 sm:min-w-0 sm:p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded flex-shrink-0"
+        className="inline-flex items-center justify-center min-h-11 min-w-11 sm:min-h-0 sm:min-w-0 sm:p-1 text-tertiary hover:text-primary rounded flex-shrink-0"
       >
         <X className="w-4 h-4" />
       </button>
@@ -331,7 +331,7 @@ export function ModalFooter({
   return (
     <div
       className={cn(
-        'px-5 py-3 border-t border-slate-100 flex items-center justify-end gap-2 flex-shrink-0',
+        'px-5 py-3 border-t border-subtle flex items-center justify-end gap-2 flex-shrink-0',
         className,
       )}
     >

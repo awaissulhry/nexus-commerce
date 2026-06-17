@@ -86,8 +86,8 @@ export function ProgressBar({
   return (
     <div className={cn('w-full', className)}>
       {(label || showPercent || showCountResolved) && (
-        <div className="flex items-center justify-between text-sm text-slate-600 mb-1">
-          {label && <span className="font-medium">{label}</span>}
+        <div className="flex items-center justify-between text-sm text-secondary mb-1">
+          {label && <span className="font-label">{label}</span>}
           {!label && <span />}
           <span className="tabular-nums">
             {showCountResolved && !isIndeterminate && (
@@ -108,7 +108,7 @@ export function ProgressBar({
         aria-valuemax={100}
         aria-label={label}
         className={cn(
-          'w-full bg-slate-100 rounded-full overflow-hidden',
+          'w-full bg-sunken rounded-full overflow-hidden',
           TRACK[size],
         )}
       >

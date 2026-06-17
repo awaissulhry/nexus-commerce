@@ -18,7 +18,7 @@ import { cn } from '@/lib/utils'
 type Variant = 'text' | 'card' | 'avatar' | 'thumbnail' | 'pill' | 'block'
 
 const SHIMMER =
-  'animate-pulse bg-gradient-to-r from-slate-100 via-slate-200 to-slate-100 bg-[length:200%_100%]'
+  'animate-pulse bg-gradient-to-r from-slate-100 via-slate-200 to-slate-100 dark:from-slate-800 dark:via-slate-700 dark:to-slate-800 bg-[length:200%_100%]'
 
 export function Skeleton({
   variant = 'text',
@@ -64,7 +64,7 @@ export function Skeleton({
     return (
       <div
         className={cn(
-          'border border-slate-200 rounded-md p-3 space-y-2',
+          'border border-default rounded-md p-3 space-y-2',
           className,
         )}
       >
@@ -133,7 +133,7 @@ export function SkeletonRow({
   return (
     <div
       className={cn(
-        'flex items-center gap-3 py-2.5 border-b border-slate-100',
+        'flex items-center gap-3 py-2.5 border-b border-subtle',
         className,
       )}
     >
