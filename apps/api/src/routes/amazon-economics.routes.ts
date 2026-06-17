@@ -14,6 +14,8 @@ import {
   getFeeImpact,
   getRealReferralRateResolver,
 } from '../services/amazon-real-fees.service.js'
+import { runTrueProfitRollupOnce } from '../services/advertising/true-profit-rollup.service.js'
+import { logger } from '../utils/logger.js'
 
 const clampDays = (raw?: string) =>
   raw ? Math.min(Math.max(parseInt(raw, 10) || 90, 1), 365) : 90
@@ -58,6 +60,38 @@ const amazonEconomicsRoutes: FastifyPluginAsync = async (fastify) => {
         overallPct: r.overallPct,
         byMarketplace: r.byMarketplace,
         sampleSkus: r.sampleSkus,
+      }
+    },
+  )
+
+  // R1.4b-backfill — re-roll historical ProductProfitDaily so PAST profit
+  // numbers pick up the real fees (the daily cron only does yesterday).
+  // Fire-and-forget: a wide range takes a while; returns immediately.
+  fastify.post<{ Querystring: { days?: string } }>(
+    '/amazon/economics/profit-backfill',
+    async (request) => {
+      const days = clampDays(request.query?.days)
+      const today = new Date()
+      today.setUTCHours(0, 0, 0, 0)
+      const fromDate = new Date(today.getTime() - days * 86_400_000)
+      const toDate = new Date(today.getTime() - 1)
+      void runTrueProfitRollupOnce({ fromDate, toDate })
+        .then((s) =>
+          logger.info('profit-backfill done', {
+            rows: s.rowsUpserted,
+            dates: s.datesProcessed.length,
+          }),
+        )
+        .catch((err) =>
+          logger.error('profit-backfill failed', {
+            err: err instanceof Error ? err.message : String(err),
+          }),
+        )
+      return {
+        started: true,
+        days,
+        fromDate: fromDate.toISOString().slice(0, 10),
+        toDate: toDate.toISOString().slice(0, 10),
       }
     },
   )
