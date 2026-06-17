@@ -402,9 +402,10 @@ export default function AmazonFlatFileClient({
   // using `manifest`, so single-type mode can't regress.
   const effectiveManifest = useMemo(() => unionManifest ?? manifest, [unionManifest, manifest])
 
-  // MT.3 — changing the primary product type (the single-type dropdown) resets
-  // the sheet to that one category.
-  useEffect(() => { setSheetTypes([productType]) }, [productType])
+  // MT.3 — changing the primary product type (the single-type dropdown) OR the
+  // marketplace resets the sheet to that one category. Resetting on a market
+  // switch avoids racing loadData's row replacement against the union row-append.
+  useEffect(() => { setSheetTypes([productType]) }, [productType, marketplace])
 
   // MT.3 — fetch the UNION manifest whenever the sheet holds >1 product type.
   // Single type ⇒ clear it (effectiveManifest falls back to the single manifest).
@@ -1575,12 +1576,64 @@ export default function AmazonFlatFileClient({
     } catch { return null }
   }
 
-  // Debounced autosave — fires 1 s after last edit
+  // MT.4 — the localStorage key suffix for the CURRENT grid. A union (mixed-
+  // category) sheet persists under a composite "A+B" key derived from the rows'
+  // ACTUAL product types, so a union sheet can NEVER overwrite a per-type sheet's
+  // draft (and removing a category can't corrupt one either). Single-type rows →
+  // that one type's key (identical to before).
+  const storageType = useMemo(() => {
+    const types = [...new Set(rows.map((r) => String(r.product_type ?? '').toUpperCase()).filter(Boolean))].sort()
+    return types.length > 1 ? types.join('+') : (types[0] || productType)
+  }, [rows, productType])
+  // Always-fresh handle for the save sites that live in callbacks / unmount
+  // cleanup (so they never persist under a stale key).
+  const storageTypeRef = useRef(storageType)
+  useEffect(() => { storageTypeRef.current = storageType }, [storageType])
+
+  // Debounced autosave — fires 1 s after last edit. Persists under storageType
+  // (composite for a union sheet) so it never clobbers a per-type draft.
   useEffect(() => {
     if (!productType || !rows.length) return
-    const t = setTimeout(() => saveRows(marketplace, productType, rows), 1000)
+    const t = setTimeout(() => saveRows(marketplace, storageType, rows), 1000)
     return () => clearTimeout(t)
-  }, [rows, marketplace, productType])
+  }, [rows, marketplace, storageType, productType])
+
+  // MT.4 — load each ADDED category's rows into the union grid, so a mixed sheet
+  // holds rows of every category (a Jacket row AND a Pants row). The primary
+  // type's rows come from loadData; this appends server rows for the extras as
+  // they're added (dedup by SKU). The rows-based storageType keeps the combined
+  // sheet under its own "A+B" key — no per-type draft is ever corrupted.
+  const loadedExtraTypesRef = useRef<Set<string>>(new Set())
+  useEffect(() => { loadedExtraTypesRef.current = new Set([productType.toUpperCase()]) }, [productType, marketplace])
+  useEffect(() => {
+    if (sheetTypes.length <= 1) return
+    const toLoad = sheetTypes.map((t) => t.toUpperCase()).filter((t) => !loadedExtraTypesRef.current.has(t))
+    if (toLoad.length === 0) return
+    let alive = true
+    ;(async () => {
+      for (const t of toLoad) {
+        loadedExtraTypesRef.current.add(t) // mark before await → no double-fetch
+        try {
+          const q = new URLSearchParams({ marketplace, productType: t })
+          if (familyId) q.set('productId', familyId)
+          const res = await fetch(`${getBackendUrl()}/api/amazon/flat-file/rows?${q}`)
+          if (!alive || !res.ok) continue
+          const d = await res.json()
+          const incoming = mergeAsinCache(
+            (d.rows ?? []).map((r: any) => ({ ...r, product_type: String(r.product_type || t).toUpperCase() })),
+            marketplace,
+          )
+          if (!alive || incoming.length === 0) continue
+          setRows((prev) => {
+            const seen = new Set(prev.map((r) => String(r.item_sku ?? '')))
+            const append = incoming.filter((r: Row) => r.item_sku && !seen.has(String(r.item_sku)))
+            return append.length ? [...prev, ...append] : prev
+          })
+        } catch { /* skip this category */ }
+      }
+    })()
+    return () => { alive = false }
+  }, [sheetTypes, marketplace, familyId])
 
   // Live sync: reload rows from DB when the Matrix or another tab updates
   // channel prices. Skip if the user has unsaved edits — their work takes
@@ -1812,7 +1865,7 @@ export default function AmazonFlatFileClient({
     // unwritten; this catches them so the draft restore banner has the full
     // picture when the user returns.
     if (productType && rowsRef.current.some((r) => r._dirty || r._isNew)) {
-      saveRows(marketplace, productType, rowsRef.current)
+      saveRows(marketplace, storageTypeRef.current, rowsRef.current)
     }
     // FF-MS.9 — Start the switch-latency timer. loadData() reads this back
     // to compute click→ready ms and tags it with source (cache vs fetch).
@@ -2097,7 +2150,7 @@ export default function AmazonFlatFileClient({
     // the operator just clicked Save first — idempotent.
     try {
       createVersion('Auto-save before submit')
-      saveRows(marketplace, productType, rows)
+      saveRows(marketplace, storageTypeRef.current, rows)
     } catch {
       // Persisting locally is best-effort; never block the submit
       // because the operator already committed to firing it.
@@ -2635,7 +2688,7 @@ export default function AmazonFlatFileClient({
 
   const handleSave = useCallback(() => {
     createVersion('Manual save')
-    saveRows(marketplace, productType, rows)
+    saveRows(marketplace, storageTypeRef.current, rows)
     setSaveFlash(true)
     setTimeout(() => setSaveFlash(false), 2000)
     void syncToPlatform(rows, false)
@@ -3388,7 +3441,7 @@ export default function AmazonFlatFileClient({
               <button
                 type="button"
                 onClick={() => {
-                  saveRows(marketplace, productType, rows)
+                  saveRows(marketplace, storageTypeRef.current, rows)
                   setDraftBanner(null)
                 }}
                 className="text-xs text-amber-600 dark:text-amber-400 hover:text-amber-800 dark:hover:text-amber-200"
