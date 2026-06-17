@@ -177,6 +177,61 @@ function CustomizeModal({ order, visible, onApply, onClose }: { order: string[];
   )
 }
 
+// ── Bulk Actions modal (CBN.2c.3) — stages edits onto the selected set, then the
+// edit-mode footer + diff-confirm handle the gated Apply (one safe write path). ──
+function BulkActionsModal({ campaigns, onStage, onClose }: { campaigns: Camp[]; onStage: (e: Record<string, { biddingStrategy?: string; dailyBudget?: string }>) => void; onClose: () => void }) {
+  const [action, setAction] = useState<'strategy' | 'budget'>('strategy')
+  const [strat, setStrat] = useState('AUTO_FOR_SALES')
+  const [budgetMode, setBudgetMode] = useState<'set' | 'incPct' | 'decPct'>('incPct')
+  const [budgetVal, setBudgetVal] = useState('10')
+  const stage = () => {
+    const out: Record<string, { biddingStrategy?: string; dailyBudget?: string }> = {}
+    for (const c of campaigns) {
+      if (action === 'strategy') { out[c.id] = { biddingStrategy: strat }; continue }
+      const cur = num(c.dailyBudget); const v = Number(budgetVal) || 0
+      let next = budgetMode === 'set' ? v : budgetMode === 'incPct' ? cur * (1 + v / 100) : cur * (1 - v / 100)
+      next = Math.max(1, Math.round(next))
+      out[c.id] = { dailyBudget: String(next) }
+    }
+    onStage(out)
+  }
+  return (
+    <div className="h10-modal-backdrop" onClick={onClose}>
+      <div className="h10-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Bulk Actions">
+        <div className="h10-modal-h"><b>Bulk Actions</b><button type="button" className="h10-modal-x" onClick={onClose} aria-label="Close"><X size={16} /></button></div>
+        <div className="h10-modal-sub">Apply to {campaigns.length} selected campaign{campaigns.length > 1 ? 's' : ''} · staged for review before write</div>
+        <div className="h10-modal-b">
+          <div className="h10-bulk-actions">
+            <button type="button" className={action === 'strategy' ? 'on' : ''} onClick={() => setAction('strategy')}>Set Bidding Strategy</button>
+            <button type="button" className={action === 'budget' ? 'on' : ''} onClick={() => setAction('budget')}>Adjust Daily Budget</button>
+          </div>
+          {action === 'strategy' ? (
+            <label className="h10-bulk-field"><span>Bidding Strategy</span>
+              <select value={strat} onChange={(e) => setStrat(e.target.value)}>{STRAT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</select>
+            </label>
+          ) : (
+            <div className="h10-bulk-field"><span>Daily Budget</span>
+              <div className="row">
+                <select value={budgetMode} onChange={(e) => setBudgetMode(e.target.value as typeof budgetMode)}>
+                  <option value="set">Set to (€)</option>
+                  <option value="incPct">Increase by (%)</option>
+                  <option value="decPct">Decrease by (%)</option>
+                </select>
+                <input type="number" min="0" step="1" value={budgetVal} onChange={(e) => setBudgetVal(e.target.value)} aria-label="Budget value" />
+              </div>
+            </div>
+          )}
+        </div>
+        <div className="h10-modal-f">
+          <span className="grow" />
+          <button type="button" className="h10-am-btn" onClick={onClose}>Cancel</button>
+          <button type="button" className="h10-am-btn primary" onClick={stage}>Stage to {campaigns.length} campaign{campaigns.length > 1 ? 's' : ''}</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export function CampaignsGrid() {
   const [rows, setRows] = useState<Camp[]>([])
   const [loading, setLoading] = useState(true)
@@ -194,6 +249,7 @@ export function CampaignsGrid() {
   const [showApply, setShowApply] = useState(false)
   const [applying, setApplying] = useState(false)
   const [applyMsg, setApplyMsg] = useState('')
+  const [showBulk, setShowBulk] = useState(false)
 
   useEffect(() => {
     void fetch(`${getBackendUrl()}/api/advertising/campaigns?limit=500`, { cache: 'no-store' })
@@ -225,6 +281,10 @@ export function CampaignsGrid() {
 
   const setEdit = (id: string, patch: { biddingStrategy?: string; dailyBudget?: string }) =>
     setEdits((m) => ({ ...m, [id]: { ...m[id], ...patch } }))
+  const stageBulk = (add: Record<string, { biddingStrategy?: string; dailyBudget?: string }>) => {
+    setEdits((m) => { const n = { ...m }; for (const [id, e] of Object.entries(add)) n[id] = { ...n[id], ...e }; return n })
+    setMode('edit'); setShowBulk(false)
+  }
   const effStrat = (c: Camp) => edits[c.id]?.biddingStrategy ?? c.biddingStrategy ?? 'LEGACY_FOR_SALES'
   const effBudget = (c: Camp) => edits[c.id]?.dailyBudget ?? (c.dailyBudget != null && c.dailyBudget !== '' ? String(num(c.dailyBudget)) : '')
 
@@ -360,10 +420,8 @@ export function CampaignsGrid() {
           <button type="button" className={!isMetrics ? 'on' : ''} onClick={() => setMode('edit')}>Edit Campaigns</button>
         </div>
         {sel.size > 0 && <>
-          <button type="button" className="h10-am-btn">Bulk Actions</button>
-          <button type="button" className="h10-am-btn">Edit Campaigns</button>
-          <button type="button" className="h10-am-btn">Enable</button>
-          <button type="button" className="h10-am-btn">Pause</button>
+          <button type="button" className="h10-am-btn" onClick={() => setShowBulk(true)}>Bulk Actions</button>
+          <button type="button" className="h10-am-btn" onClick={() => setMode('edit')}>Edit Campaigns</button>
         </>}
         <span className="grow" />
         <button type="button" className="h10-am-btn" onClick={() => setShowCustomize(true)}><Settings2 size={13} /> Customize</button>
@@ -441,6 +499,7 @@ export function CampaignsGrid() {
       {applyMsg && <div className="h10-am-toast">{applyMsg}</div>}
 
       {showCustomize && <CustomizeModal order={colOrder} visible={colVisible} onApply={applyColumns} onClose={() => setShowCustomize(false)} />}
+      {showBulk && <BulkActionsModal campaigns={rows.filter((c) => sel.has(c.id))} onStage={stageBulk} onClose={() => setShowBulk(false)} />}
     </div>
   )
 }
