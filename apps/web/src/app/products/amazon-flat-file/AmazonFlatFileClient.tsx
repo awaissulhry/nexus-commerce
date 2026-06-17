@@ -1372,10 +1372,11 @@ export default function AmazonFlatFileClient({
   useEffect(() => {
     function handle(e: globalThis.KeyboardEvent) {
       const mod = e.metaKey || e.ctrlKey
-      // Undo/redo always work
-      if (mod && e.key === 'z' && !e.shiftKey) { e.preventDefault(); undo(); return }
-      if (mod && e.key === 'z' && e.shiftKey)  { e.preventDefault(); redo(); return }
-      if (mod && e.key === 'y')                 { e.preventDefault(); redo(); return }
+      // Undo/redo — but NOT while editing a cell, so ⌘Z does a native text-undo
+      // inside the input instead of reverting the whole grid.
+      if (mod && e.key === 'z' && !e.shiftKey && !isEditingRef.current) { e.preventDefault(); undo(); return }
+      if (mod && e.key === 'z' && e.shiftKey && !isEditingRef.current)  { e.preventDefault(); redo(); return }
+      if (mod && e.key === 'y' && !isEditingRef.current)                { e.preventDefault(); redo(); return }
       // BF.1 — Find & Replace
       if (mod && e.key === 'f') { e.preventDefault(); setFindReplaceOpen(true); return }
       // PE: '?' opens the shortcuts modal (no modifier — ignore when typing in an input)
@@ -1405,7 +1406,22 @@ export default function AmazonFlatFileClient({
       // Select all
       if (mod && e.key === 'a') { e.preventDefault(); handleSelectAll(); return }
 
-      if (!selAnchorRef.current) return
+      // Nothing selected yet (fresh load, or after Escape / a row delete): a nav or
+      // edit keystroke wakes the grid at A1 instead of being swallowed — the root of
+      // "shortcuts often don't work". Clipboard/fill need a real selection → no-op.
+      if (!selAnchorRef.current) {
+        if (mod && (e.key === 'c' || e.key === 'x' || e.key === 'v' || e.key === 'd')) return
+        const row0 = displayRowsRef.current[0]; const col0 = allColumnsRef.current[0]
+        if (!row0 || !col0) return
+        setSelAnchor({ ri: 0, ci: 0 }); setSelEnd({ ri: 0, ci: 0 })
+        setActiveCell({ rowId: row0._rowId as string, colId: col0.id })
+        selAnchorRef.current = { ri: 0, ci: 0 }; selEndRef.current = { ri: 0, ci: 0 }
+        // Plain nav just focuses A1; modified nav (⌘Home/End/Arrow) + edit/delete keys
+        // fall through to their own handlers now that an anchor exists.
+        if (!mod && (e.key === 'Tab' || e.key === 'Enter' || e.key.startsWith('Arrow'))) {
+          e.preventDefault(); return
+        }
+      }
 
       // Clipboard ops
       if (mod && e.key === 'c') {
@@ -1482,10 +1498,13 @@ export default function AmazonFlatFileClient({
       // Delete/Backspace: clear cells
       if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); handleDeleteCells(); return }
 
-      // Escape: clear selection and clipboard marker
+      // Escape: drop the clipboard marquee + context menu and collapse a range back
+      // to the active cell, but KEEP the anchor so the keyboard stays alive (Sheets
+      // behaviour). Nulling it here was the main reason shortcuts went dead.
       if (e.key === 'Escape') {
-        setSelAnchor(null); setSelEnd(null)
         setClipboardRange(null)
+        setContextMenu(null)
+        if (selAnchorRef.current) setSelEnd(selAnchorRef.current)
         return
       }
 
