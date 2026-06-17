@@ -99,3 +99,28 @@
 .h10-colck { display: flex; align-items: center; gap: 9px; flex: 1; font-size: 13px; color: #2b3440; cursor: pointer; }
 .h10-colck input { width: 15px; height: 15px; accent-color: #1f6fde; }
 .h10-colrow .grp { font-size: 10px; font-weight: 600; color: #aeb6c2; text-transform: uppercase; letter-spacing: 0.03em; }
+
+/* CBN.2c.2 — edit-mode inline controls + Discard/Apply footer + confirm */
+.h10-stratsel { font: inherit; font-size: 12px; font-weight: 600; color: #2b3440; border: 1px solid #d8dde4; border-radius: 7px; padding: 5px 8px; background: #fff; cursor: pointer; }
+.h10-stratsel.dirty { border-color: #1f6fde; background: #f3f8ff; box-shadow: 0 0 0 2px rgba(31, 111, 222, 0.12); }
+.h10-bud { display: inline-flex; align-items: center; gap: 2px; border: 1px solid #d8dde4; border-radius: 7px; padding: 2px 8px; background: #fff; }
+.h10-bud.dirty { border-color: #1f6fde; background: #f3f8ff; box-shadow: 0 0 0 2px rgba(31, 111, 222, 0.12); }
+.h10-bud .cur { color: #8a93a1; font-size: 12px; }
+.h10-bud input { border: none; outline: none; font: inherit; font-size: 12px; font-weight: 600; color: #2b3440; width: 64px; text-align: right; background: transparent; }
+.h10-am-grid td.num .h10-stratsel, .h10-am-grid td.num .h10-bud { float: right; }
+.h10-am-editbar { position: sticky; bottom: 0; display: flex; align-items: center; gap: 10px; background: #fff; border: 1px solid #d8dde4; border-radius: 10px; padding: 11px 16px; box-shadow: 0 -4px 18px rgba(20, 28, 38, 0.10); }
+.h10-am-editbar .lbl { font-size: 13px; color: #3a4452; }
+.h10-am-editbar .lbl b { color: #1c2530; }
+.h10-am-editbar .grow { flex: 1; }
+.h10-modal.wide { width: 560px; }
+.h10-diffrow { padding: 9px 6px; border-bottom: 1px solid #eef1f5; }
+.h10-diffrow:last-child { border-bottom: none; }
+.h10-diffrow .dr-nm { display: flex; align-items: center; gap: 8px; font-size: 12.5px; font-weight: 600; color: #1c2530; margin-bottom: 4px; }
+.h10-diffrow .dr-nm .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 360px; }
+.h10-diffrow .dr-nm .mk { font-size: 10px; font-weight: 600; color: #8a93a1; border: 1px solid #e6e9ee; border-radius: 4px; padding: 1px 5px; }
+.h10-diffrow .dr-ch { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #5b6573; padding: 1px 0 1px 4px; }
+.h10-diffrow .dr-ch .f { min-width: 110px; color: #8a93a1; }
+.h10-diffrow .dr-ch .from { color: #9aa3af; text-decoration: line-through; }
+.h10-diffrow .dr-ch .arr { color: #c2c9d3; }
+.h10-diffrow .dr-ch .to { color: #1f6fde; font-weight: 600; }
+.h10-am-toast { position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%); background: #1c2530; color: #fff; font-size: 13px; font-weight: 600; padding: 11px 18px; border-radius: 10px; box-shadow: 0 8px 24px rgba(20, 28, 38, 0.3); z-index: 70; }

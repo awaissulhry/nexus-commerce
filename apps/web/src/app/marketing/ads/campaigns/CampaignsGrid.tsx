@@ -35,6 +35,11 @@ const fmtDate = (iso?: string | null) => { if (!iso) return '—'; const d = new
 
 const EDIT_COLS = ['Target ACoS', 'Bid Automation', 'Min/Max Budget', 'Rules', 'Bidding Strategy', 'Start Date'] as const
 const STRAT_LABEL: Record<string, string> = { LEGACY_FOR_SALES: 'Down only', AUTO_FOR_SALES: 'Up and Down', MANUAL: 'Fixed' }
+const STRAT_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: 'LEGACY_FOR_SALES', label: 'Down only' },
+  { value: 'AUTO_FOR_SALES', label: 'Up and Down' },
+  { value: 'MANUAL', label: 'Fixed' },
+]
 const TYPE_LABEL: Record<string, string> = { SPONSORED_PRODUCTS: 'Sponsored Products', SPONSORED_BRANDS: 'Sponsored Brands', SPONSORED_DISPLAY: 'Sponsored Display', SP: 'Sponsored Products', SB: 'Sponsored Brands', SD: 'Sponsored Display' }
 
 // ── column catalog (Customize Columns) ──────────────────────────────────────
@@ -184,6 +189,11 @@ export function CampaignsGrid() {
   const [colOrder, setColOrder] = useState<string[]>(ALL_KEYS)
   const [colVisible, setColVisible] = useState<string[]>(DEFAULT_VISIBLE)
   const [showCustomize, setShowCustomize] = useState(false)
+  // CBN.2c.2 — Edit-mode inline batch (staged → diff → gated Apply)
+  const [edits, setEdits] = useState<Record<string, { biddingStrategy?: string; dailyBudget?: string }>>({})
+  const [showApply, setShowApply] = useState(false)
+  const [applying, setApplying] = useState(false)
+  const [applyMsg, setApplyMsg] = useState('')
 
   useEffect(() => {
     void fetch(`${getBackendUrl()}/api/advertising/campaigns?limit=500`, { cache: 'no-store' })
@@ -213,6 +223,51 @@ export function CampaignsGrid() {
     try { localStorage.setItem(COLS_KEY, JSON.stringify({ order, visible })) } catch { /* ignore */ }
   }
 
+  const setEdit = (id: string, patch: { biddingStrategy?: string; dailyBudget?: string }) =>
+    setEdits((m) => ({ ...m, [id]: { ...m[id], ...patch } }))
+  const effStrat = (c: Camp) => edits[c.id]?.biddingStrategy ?? c.biddingStrategy ?? 'LEGACY_FOR_SALES'
+  const effBudget = (c: Camp) => edits[c.id]?.dailyBudget ?? (c.dailyBudget != null && c.dailyBudget !== '' ? String(num(c.dailyBudget)) : '')
+
+  // per-campaign diff vs original (drives the footer + Apply confirmation)
+  const diffs = useMemo(() => {
+    const out: Array<{ c: Camp; changes: Array<{ field: string; from: string; to: string }> }> = []
+    for (const c of rows) {
+      const e = edits[c.id]; if (!e) continue
+      const ch: Array<{ field: string; from: string; to: string }> = []
+      const origStrat = c.biddingStrategy ?? 'LEGACY_FOR_SALES'
+      if (e.biddingStrategy && e.biddingStrategy !== origStrat) ch.push({ field: 'Bidding Strategy', from: STRAT_LABEL[origStrat] ?? '—', to: STRAT_LABEL[e.biddingStrategy] ?? e.biddingStrategy })
+      if (e.dailyBudget != null && e.dailyBudget !== '' && Number(e.dailyBudget) > 0 && Number(e.dailyBudget) !== num(c.dailyBudget)) ch.push({ field: 'Daily Budget', from: c.dailyBudget != null && c.dailyBudget !== '' ? eur(num(c.dailyBudget)) : '—', to: eur(Number(e.dailyBudget)) })
+      if (ch.length) out.push({ c, changes: ch })
+    }
+    return out
+  }, [rows, edits])
+
+  const applyAll = async () => {
+    setApplying(true)
+    let ok = 0; let fail = 0
+    const applied: Record<string, { biddingStrategy?: string; dailyBudget?: string }> = {}
+    for (const d of diffs) {
+      const e = edits[d.c.id]
+      const body: Record<string, unknown> = { applyImmediately: true, reason: 'Ad Manager inline edit' }
+      const origStrat = d.c.biddingStrategy ?? 'LEGACY_FOR_SALES'
+      if (e.biddingStrategy && e.biddingStrategy !== origStrat) body.biddingStrategy = e.biddingStrategy
+      if (e.dailyBudget != null && e.dailyBudget !== '' && Number(e.dailyBudget) > 0 && Number(e.dailyBudget) !== num(d.c.dailyBudget)) body.dailyBudget = Number(e.dailyBudget)
+      try {
+        const r = await fetch(`${getBackendUrl()}/api/advertising/campaigns/${d.c.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+        const j = await r.json().catch(() => ({}))
+        if (r.ok && j?.ok !== false) { ok++; applied[d.c.id] = e } else fail++
+      } catch { fail++ }
+    }
+    // optimistic local update for the rows that succeeded
+    setRows((rs) => rs.map((x) => {
+      const a = applied[x.id]; if (!a) return x
+      return { ...x, biddingStrategy: a.biddingStrategy ?? x.biddingStrategy, dailyBudget: a.dailyBudget != null && a.dailyBudget !== '' ? a.dailyBudget : x.dailyBudget }
+    }))
+    setApplying(false); setEdits({}); setShowApply(false)
+    setApplyMsg(`Applied ${ok} change${ok !== 1 ? 's' : ''}${fail ? ` · ${fail} failed (write-gate or non-live market)` : ''}`)
+    setTimeout(() => setApplyMsg(''), 5000)
+  }
+
   const visKeySet = useMemo(() => new Set(colVisible), [colVisible])
   const metricCols = useMemo(() => colOrder.filter((k) => visKeySet.has(k)), [colOrder, visKeySet])
 
@@ -237,14 +292,31 @@ export function CampaignsGrid() {
   const toggleAll = () => setSel(allSel ? new Set() : new Set(filtered.map((c) => c.id)))
   const toggle = (id: string) => setSel((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n })
 
-  // edit-mode cells (label-keyed; inline editing arrives in CBN.2c.2)
+  // edit-mode cells (label-keyed). Bidding Strategy + Daily Budget are inline-
+  // editable; edits stage into `edits` and surface in the Discard/Apply footer.
   const editCell = (c: Camp, col: string): ReactNode => {
+    const e = edits[c.id]
     switch (col) {
       case 'Target ACoS': return '30.00%'
       case 'Bid Automation': return <span className="h10-toggle off" aria-hidden />
-      case 'Min/Max Budget': return c.dailyBudget ? eur(num(c.dailyBudget)) : 'None - None'
+      case 'Min/Max Budget': {
+        const dirty = e?.dailyBudget != null && e.dailyBudget !== '' && Number(e.dailyBudget) !== num(c.dailyBudget)
+        return (
+          <span className={`h10-bud ${dirty ? 'dirty' : ''}`}>
+            <span className="cur">€</span>
+            <input type="number" min="1" step="1" value={effBudget(c)} onChange={(ev) => setEdit(c.id, { dailyBudget: ev.target.value })} aria-label={`Daily budget for ${c.name}`} />
+          </span>
+        )
+      }
       case 'Rules': return <span className="h10-rulecount">0 ⚙</span>
-      case 'Bidding Strategy': return STRAT_LABEL[c.biddingStrategy ?? ''] ?? 'Down only'
+      case 'Bidding Strategy': {
+        const dirty = !!e?.biddingStrategy && e.biddingStrategy !== (c.biddingStrategy ?? 'LEGACY_FOR_SALES')
+        return (
+          <select className={`h10-stratsel ${dirty ? 'dirty' : ''}`} value={effStrat(c)} onChange={(ev) => setEdit(c.id, { biddingStrategy: ev.target.value })} aria-label={`Bidding strategy for ${c.name}`}>
+            {STRAT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+        )
+      }
       case 'Start Date': return fmtDate(c.startDate)
       default: return '—'
     }
@@ -330,6 +402,43 @@ export function CampaignsGrid() {
           </tbody>
         </table>
       </div>
+
+      {/* CBN.2c.2 — edit-mode Discard/Apply footer */}
+      {mode === 'edit' && diffs.length > 0 && (
+        <div className="h10-am-editbar">
+          <span className="lbl"><b>{diffs.length}</b> campaign{diffs.length > 1 ? 's' : ''} edited · {diffs.reduce((n, d) => n + d.changes.length, 0)} change{diffs.reduce((n, d) => n + d.changes.length, 0) > 1 ? 's' : ''}</span>
+          <span className="grow" />
+          <button type="button" className="h10-am-btn" onClick={() => setEdits({})} disabled={applying}>Discard</button>
+          <button type="button" className="h10-am-btn primary" onClick={() => setShowApply(true)} disabled={applying}>Review &amp; Apply</button>
+        </div>
+      )}
+
+      {/* Apply confirmation — diff-then-apply (gated writes) */}
+      {showApply && (
+        <div className="h10-modal-backdrop" onClick={() => !applying && setShowApply(false)}>
+          <div className="h10-modal wide" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Apply changes">
+            <div className="h10-modal-h"><b>Apply changes to {diffs.length} campaign{diffs.length > 1 ? 's' : ''}</b><button type="button" className="h10-modal-x" onClick={() => !applying && setShowApply(false)} aria-label="Close"><X size={16} /></button></div>
+            <div className="h10-modal-sub">Live markets push to Amazon (write-gate enforced); non-live markets update locally only.</div>
+            <div className="h10-modal-b">
+              {diffs.map((d) => (
+                <div className="h10-diffrow" key={d.c.id}>
+                  <div className="dr-nm"><span className="t" title={d.c.name}>{d.c.name}</span>{d.c.marketplace && <span className="mk">{d.c.marketplace}</span>}</div>
+                  {d.changes.map((ch, i) => (
+                    <div className="dr-ch" key={i}><span className="f">{ch.field}</span><span className="from">{ch.from}</span><span className="arr">→</span><span className="to">{ch.to}</span></div>
+                  ))}
+                </div>
+              ))}
+            </div>
+            <div className="h10-modal-f">
+              <span className="grow" />
+              <button type="button" className="h10-am-btn" onClick={() => setShowApply(false)} disabled={applying}>Cancel</button>
+              <button type="button" className="h10-am-btn primary" onClick={applyAll} disabled={applying}>{applying ? 'Applying…' : `Apply ${diffs.length} campaign${diffs.length > 1 ? 's' : ''}`}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {applyMsg && <div className="h10-am-toast">{applyMsg}</div>}
 
       {showCustomize && <CustomizeModal order={colOrder} visible={colVisible} onApply={applyColumns} onClose={() => setShowCustomize(false)} />}
     </div>
