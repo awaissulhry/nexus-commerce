@@ -1994,6 +1994,15 @@ export default function AmazonFlatFileClient({
     setSelectedRows(new Set())
   }, [selectedRows])
 
+  // MT.5 — bulk-set the category for the selected rows (build a mixed sheet fast).
+  const bulkSetProductType = useCallback((t: string) => {
+    const T = t.toUpperCase()
+    pushSnapshot()
+    setRows((prev) => prev.map((r) =>
+      selectedRows.has(r._rowId as string) ? { ...r, product_type: T, _dirty: true } : r,
+    ))
+  }, [selectedRows, pushSnapshot])
+
   const handleAddRows = useCallback((params: {
     type: 'row' | 'parent' | 'variant'
     count: number
@@ -3808,6 +3817,17 @@ export default function AmazonFlatFileClient({
                       onClick={() => setAddRowsPanel({ type: 'variant', position: normSel ? 'below' : 'end' })}>
                       <Plus className="w-3.5 h-3.5 mr-1" />Add variant
                     </Button>
+                    {selectedRows.size > 0 && isUnionMode && (
+                      <select
+                        value=""
+                        onChange={(e) => { if (e.target.value) { bulkSetProductType(e.target.value); e.currentTarget.value = '' } }}
+                        className="ml-2 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-xs text-slate-700 dark:text-slate-200"
+                        title={`Set the category for the ${selectedRows.size} selected row(s)`}
+                      >
+                        <option value="">Set type…</option>
+                        {sheetTypes.map((t) => t.toUpperCase()).map((t) => <option key={t} value={t}>{t}</option>)}
+                      </select>
+                    )}
                     {selectedRows.size > 0 && (
                       <Button size="sm" variant="ghost" onClick={deleteSelected}
                         className="text-red-500 hover:text-red-700 ml-2">
