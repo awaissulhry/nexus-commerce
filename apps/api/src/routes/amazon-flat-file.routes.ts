@@ -25,6 +25,7 @@ import { renderExport } from '../services/export/renderers.js'
 import { parseCsv, parseXlsx, parseJson, detectFileKind, sniffDelimiter } from '../services/import/parsers.js'
 import { suggestFlatFileMapping } from '../services/amazon/flat-file-mapping.js'
 import { coerceRowsWithAi } from '../services/amazon/flat-file-coerce-ai.js'
+import { planImportMerge, type ImportApplyMode } from '../services/amazon/flat-file-merge.js'
 import { translateEnumValues } from '../services/amazon/value-translate.service.js'
 import { getAmazonPublishMode } from '../services/amazon-publish-gate.service.js'
 import { preflightRow, buildPerTypeValidation } from '../services/listing-preflight.service.js'
@@ -665,6 +666,38 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
     } catch (err: any) {
       request.log.error(err, 'flat-file/coerce failed')
       return reply.code(500).send({ error: err?.message ?? 'Coercion failed' })
+    }
+  })
+
+  // ── POST /api/amazon/flat-file/plan-import ──────────────────────────
+  // FX.5 — plan how mapped+coerced import rows would merge into the current grid
+  // rows (matched by item_sku): which become new rows, which update existing,
+  // and per cell from→to + willApply under the chosen mode (fill-missing |
+  // overwrite) + column allowlist. Pure diff; the client renders it, toggles
+  // cells locally, and applies the willApply cells. No DB.
+  fastify.post<{
+    Body: {
+      existing: Record<string, unknown>[]
+      incoming: Record<string, unknown>[]
+      mode?: ImportApplyMode
+      columns?: string[] | null
+      matchKey?: string
+      addNewRows?: boolean
+    }
+  }>('/amazon/flat-file/plan-import', async (request, reply) => {
+    const { existing, incoming, mode = 'fill-missing', columns, matchKey, addNewRows } = request.body
+    if (!Array.isArray(existing) || !Array.isArray(incoming)) {
+      return reply.code(400).send({ error: 'existing and incoming (arrays) required' })
+    }
+    if (mode !== 'fill-missing' && mode !== 'overwrite') {
+      return reply.code(400).send({ error: `Unsupported mode "${mode}"` })
+    }
+    try {
+      const plan = planImportMerge(existing, incoming, { mode, columns, matchKey, addNewRows })
+      return reply.send(plan)
+    } catch (err: any) {
+      request.log.error(err, 'flat-file/plan-import failed')
+      return reply.code(500).send({ error: err?.message ?? 'Plan failed' })
     }
   })
 
