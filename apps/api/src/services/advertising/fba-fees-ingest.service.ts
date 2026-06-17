@@ -23,6 +23,7 @@
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import { fetchSpApiReport } from '../sp-api-reports.service.js'
+import { getRealFbaPerUnitResolver } from '../amazon-real-fees.service.js'
 
 // SP-API marketplace ID for Amazon IT (Xavia primary). For a multi-
 // marketplace setup, loop over all active ChannelConnection marketplaceIds.
@@ -194,6 +195,10 @@ export async function runFbaFeesIngest(opts: {
   since.setUTCDate(since.getUTCDate() - rollupWindowDays)
   since.setUTCHours(0, 0, 0, 0)
 
+  // R1.4d — prefer the REAL per-unit FBA fee from financial events; the
+  // weekly report estimate (feePerUnitCents) stays as the fallback.
+  const fbaResolver = await getRealFbaPerUnitResolver(90).catch(() => null)
+
   for (const [sku, feePerUnitCents] of feeMap) {
     const productId = skuToProductId.get(sku)
     if (!productId) continue
@@ -218,7 +223,12 @@ export async function runFbaFeesIngest(opts: {
     })
 
     for (const row of rows) {
-      const fbaFulfillmentFeesCents = feePerUnitCents * row.unitsSold
+      const realPerUnitCents = fbaResolver?.resolve(
+        productId,
+        marketplaceCode,
+      ).perUnitCents
+      const effectivePerUnitCents = realPerUnitCents ?? feePerUnitCents
+      const fbaFulfillmentFeesCents = effectivePerUnitCents * row.unitsSold
       const trueProfit =
         row.grossRevenueCents
         - row.cogsCents

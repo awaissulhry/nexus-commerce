@@ -14,6 +14,7 @@ import {
   getFeeImpact,
   getRealReferralRateResolver,
   getRealCombinedRateByMarketplace,
+  getRealFbaPerUnitResolver,
 } from '../services/amazon-real-fees.service.js'
 import { runTrueProfitRollupOnce } from '../services/advertising/true-profit-rollup.service.js'
 import { logger } from '../utils/logger.js'
@@ -73,6 +74,23 @@ const amazonEconomicsRoutes: FastifyPluginAsync = async (fastify) => {
         clampDays(request.query?.days),
       )
       return { blendedPct: r.blendedPct, byMarketplace: r.byMarketplace }
+    },
+  )
+
+  // R1.4d — the real per-unit FBA fee the profit calc now uses.
+  fastify.get<{ Querystring: { days?: string } }>(
+    '/amazon/economics/fba-rates',
+    async (request) => {
+      const r = await getRealFbaPerUnitResolver(clampDays(request.query?.days))
+      return {
+        overallPerUnitEur:
+          r.overallPerUnitCents != null ? r.overallPerUnitCents / 100 : null,
+        byMarketplace: r.byMarketplace.map((m) => ({
+          marketplace: m.marketplace,
+          perUnitEur: m.perUnitCents != null ? m.perUnitCents / 100 : null,
+          units: m.units,
+        })),
+      }
     },
   )
 

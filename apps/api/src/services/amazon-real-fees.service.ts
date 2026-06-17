@@ -466,6 +466,104 @@ export interface CombinedRateByMarketplace {
   blended: number | null
 }
 
+// ── R1.4d — real FBA fee PER UNIT (FBA is charged per unit, not per €) ──
+// fbaFee from financial events, allocated to items by UNITS, → per-SKU /
+// marketplace / overall per-unit cents. Replaces the weekly estimate in
+// fba-fees-ingest (estimate kept as fallback).
+
+export interface FbaPerUnitResolver {
+  byMarketplace: { marketplace: string; perUnitCents: number | null; units: number }[]
+  overallPerUnitCents: number | null
+  resolve(
+    productId: string | null,
+    marketplace: string,
+  ): { perUnitCents: number | null; source: 'sku' | 'marketplace' | 'overall' | 'none' }
+}
+
+const MIN_FBA_UNITS = 3 // trust the per-SKU per-unit fee once ≥3 units seen
+
+export async function getRealFbaPerUnitResolver(
+  days = 90,
+): Promise<FbaPerUnitResolver> {
+  const since = new Date(Date.now() - days * DAY)
+  const fts = await prisma.financialTransaction.findMany({
+    where: {
+      transactionType: 'Order',
+      order: { channel: 'AMAZON', purchaseDate: { gte: since } },
+    },
+    select: { orderId: true, fbaFee: true, order: { select: { marketplace: true } } },
+  })
+  const fbaByOrder = new Map<string, number>()
+  const mktByOrder = new Map<string, string>()
+  for (const ft of fts) {
+    fbaByOrder.set(ft.orderId, (fbaByOrder.get(ft.orderId) ?? 0) + Math.abs(num(ft.fbaFee)))
+    if (ft.order?.marketplace) mktByOrder.set(ft.orderId, ft.order.marketplace)
+  }
+  const orderIds = [...fbaByOrder.keys()]
+  const items = orderIds.length
+    ? await prisma.orderItem.findMany({
+        where: { orderId: { in: orderIds } },
+        select: { orderId: true, productId: true, quantity: true },
+      })
+    : []
+  const orderUnits = new Map<string, number>()
+  for (const it of items)
+    orderUnits.set(it.orderId, (orderUnits.get(it.orderId) ?? 0) + it.quantity)
+
+  type FU = { units: number; fba: number } // fba in EUR
+  const perProduct = new Map<string, FU>()
+  const perMarket = new Map<string, FU>()
+  const overall: FU = { units: 0, fba: 0 }
+  for (const it of items) {
+    const base = orderUnits.get(it.orderId) ?? 0
+    const orderFba = fbaByOrder.get(it.orderId) ?? 0
+    const attributed = base > 0 ? orderFba * (it.quantity / base) : 0
+    if (it.productId) {
+      const a = perProduct.get(it.productId) ?? { units: 0, fba: 0 }
+      a.units += it.quantity
+      a.fba += attributed
+      perProduct.set(it.productId, a)
+    }
+    const mkt = mktByOrder.get(it.orderId) ?? 'UNKNOWN'
+    const m = perMarket.get(mkt) ?? { units: 0, fba: 0 }
+    m.units += it.quantity
+    m.fba += attributed
+    perMarket.set(mkt, m)
+    overall.units += it.quantity
+    overall.fba += attributed
+  }
+  const perUnitCents = (a: FU): number | null =>
+    a.units > 0 ? Math.round((a.fba / a.units) * 100) : null
+  const overallC = perUnitCents(overall)
+
+  return {
+    byMarketplace: [...perMarket.entries()]
+      .map(([marketplace, a]) => ({
+        marketplace,
+        perUnitCents: perUnitCents(a),
+        units: a.units,
+      }))
+      .sort((x, y) => y.units - x.units),
+    overallPerUnitCents: overallC,
+    resolve: (productId, marketplace) => {
+      if (productId) {
+        const p = perProduct.get(productId)
+        if (p && p.units >= MIN_FBA_UNITS) {
+          const c = perUnitCents(p)
+          if (c != null) return { perUnitCents: c, source: 'sku' as const }
+        }
+      }
+      const m = perMarket.get(marketplace)
+      if (m && m.units >= MIN_FBA_UNITS) {
+        const c = perUnitCents(m)
+        if (c != null) return { perUnitCents: c, source: 'marketplace' as const }
+      }
+      if (overallC != null) return { perUnitCents: overallC, source: 'overall' as const }
+      return { perUnitCents: null, source: 'none' as const }
+    },
+  }
+}
+
 export async function getRealCombinedRateByMarketplace(
   days = 90,
 ): Promise<CombinedRateByMarketplace> {
