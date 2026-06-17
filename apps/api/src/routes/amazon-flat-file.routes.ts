@@ -24,6 +24,7 @@ import {
 import { renderExport } from '../services/export/renderers.js'
 import { parseCsv, parseXlsx, parseJson, detectFileKind, sniffDelimiter } from '../services/import/parsers.js'
 import { suggestFlatFileMapping } from '../services/amazon/flat-file-mapping.js'
+import { coerceRowsWithAi } from '../services/amazon/flat-file-coerce-ai.js'
 import { translateEnumValues } from '../services/amazon/value-translate.service.js'
 import { getAmazonPublishMode } from '../services/amazon-publish-gate.service.js'
 import { preflightRow, buildPerTypeValidation } from '../services/listing-preflight.service.js'
@@ -631,6 +632,39 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
     } catch (err: any) {
       request.log.error(err, 'flat-file/suggest-mapping failed')
       return reply.code(500).send({ error: err?.message ?? 'Mapping failed' })
+    }
+  })
+
+  // ── POST /api/amazon/flat-file/coerce ───────────────────────────────
+  // FX.4 — coerce already-mapped import rows ({ columnId: value }) to each
+  // column's type/enum/limits: enum exact→normalized→(ai) semantic match, EU
+  // locale numbers, booleans, max-length flagging. Returns the coerced rows +
+  // per-cell issues (coerced / flagged) for the FX.5 preview. ai=true rescues
+  // unmatched enum values via a constrained AI pass.
+  fastify.post<{
+    Body: { rows: Record<string, unknown>[]; marketplace?: string; productType?: string; productTypes?: string[]; ai?: boolean }
+  }>('/amazon/flat-file/coerce', async (request, reply) => {
+    const { rows, marketplace = 'IT', productType, productTypes, ai = false } = request.body
+    if (!Array.isArray(rows)) {
+      return reply.code(400).send({ error: 'rows (array) required' })
+    }
+    const types = (productTypes ?? []).map((t) => String(t).toUpperCase()).filter(Boolean)
+    const pt = String(productType ?? '').toUpperCase()
+    if (!pt && types.length === 0) {
+      return reply.code(400).send({ error: 'productType or productTypes required' })
+    }
+    try {
+      const manifest = types.length > 1
+        ? await flatFileService.generateUnionManifest(marketplace, types)
+        : await flatFileService.generateManifest(marketplace, pt || types[0])
+      const cols = manifest.groups.flatMap((g) => g.columns)
+      const columns = cols.map((c) => ({ id: c.id, kind: c.kind, options: c.options, maxLength: c.maxLength }))
+      const colLabels = new Map(cols.map((c) => [c.id, c.labelEn]))
+      const result = await coerceRowsWithAi(rows, columns, { ai: !!ai, colLabels })
+      return reply.send(result)
+    } catch (err: any) {
+      request.log.error(err, 'flat-file/coerce failed')
+      return reply.code(500).send({ error: err?.message ?? 'Coercion failed' })
     }
   })
 
