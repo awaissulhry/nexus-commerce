@@ -4960,6 +4960,12 @@ function SpreadsheetCell({ col, value, isActive, cellBg, width, cellHeight, ri, 
   // Reset counter to committed value length each time cell becomes editing
   useEffect(() => { if (isEditing) setLiveLen(displayValue.length) }, [isEditing])
 
+  // GX.2b — typing on an active enum cell (or F2) opens its dropdown, pre-filled
+  // with the typed character, so Color/Size/Brand support type-to-replace too.
+  useEffect(() => {
+    if (isEditing && col.kind === 'enum') setDropdownOpen(true)
+  }, [isEditing, col.kind])
+
   const isEmpty = !displayValue
   const cellStyle: React.CSSProperties = { minWidth: width, width, ...(stickyLeft !== undefined ? { position: 'sticky' as const, left: stickyLeft, zIndex: 4 } : {}) }
   const hStyle = { height: cellHeight }
@@ -5113,7 +5119,8 @@ function SpreadsheetCell({ col, value, isActive, cellBg, width, cellHeight, ri, 
             options={col.options}
             current={displayValue}
             selectionOnly={col.selectionOnly}
-            onSelect={(v) => { onChange(v); setDropdownOpen(false) }}
+            initialQuery={editInitialChar ?? ''}
+            onSelect={(v, dir) => { onChange(v); setDropdownOpen(false); if (dir) onNavigate(dir); else onDeactivate() }}
             onClose={() => { setDropdownOpen(false); onDeactivate() }}
           />
         )}
@@ -5231,12 +5238,15 @@ interface EnumDropdownProps {
   current: string
   /** When true the user must pick from the list; typed custom values are not allowed */
   selectionOnly?: boolean
-  onSelect: (val: string) => void
+  /** GX.2b — pre-fill the search (e.g. the char typed to open the dropdown). */
+  initialQuery?: string
+  /** navDir set when committed via Tab/Enter, so the parent can move to the next cell. */
+  onSelect: (val: string, navDir?: 'right' | 'left' | 'down' | 'up') => void
   onClose: () => void
 }
 
-function EnumDropdown({ options, current, selectionOnly = false, onSelect, onClose }: EnumDropdownProps) {
-  const [query, setQuery] = useState('')
+function EnumDropdown({ options, current, selectionOnly = false, initialQuery = '', onSelect, onClose }: EnumDropdownProps) {
+  const [query, setQuery] = useState(initialQuery)
   const [highlighted, setHighlighted] = useState(0)
   const listRef = useRef<HTMLDivElement>(null)
   const searchRef = useRef<HTMLInputElement>(null)
@@ -5251,7 +5261,10 @@ function EnumDropdown({ options, current, selectionOnly = false, onSelect, onClo
   const hasCustom = query.trim() !== '' && !options.includes(query.trim())
   const totalItems = filtered.length + (hasCustom ? 1 : 0)
 
-  useEffect(() => { searchRef.current?.focus() }, [])
+  useEffect(() => {
+    const el = searchRef.current
+    if (el) { el.focus(); const n = el.value.length; el.setSelectionRange(n, n) }
+  }, [])
   useEffect(() => { setHighlighted(0) }, [filtered])
 
   useEffect(() => {
@@ -5267,17 +5280,17 @@ function EnumDropdown({ options, current, selectionOnly = false, onSelect, onClo
     return () => document.removeEventListener('mousedown', handle, true)
   }, [onClose])
 
-  function commit(idx: number) {
-    if (idx === filtered.length && hasCustom) { onSelect(query.trim()); return }
-    if (filtered[idx] != null) onSelect(filtered[idx])
+  function commit(idx: number, navDir?: 'right' | 'left' | 'down' | 'up') {
+    if (idx === filtered.length && hasCustom) { onSelect(query.trim(), navDir); return }
+    if (filtered[idx] != null) onSelect(filtered[idx], navDir)
   }
 
   function handleKeyDown(e: React.KeyboardEvent) {
     if (e.key === 'ArrowDown') { e.preventDefault(); setHighlighted((h) => Math.min(h + 1, totalItems - 1)) }
     else if (e.key === 'ArrowUp') { e.preventDefault(); setHighlighted((h) => Math.max(h - 1, 0)) }
-    else if (e.key === 'Enter') { e.preventDefault(); commit(highlighted) }
+    else if (e.key === 'Enter') { e.preventDefault(); commit(highlighted, e.shiftKey ? 'up' : 'down') }
     else if (e.key === 'Escape') { e.preventDefault(); onClose() }
-    else if (e.key === 'Tab') { e.preventDefault(); commit(highlighted) }
+    else if (e.key === 'Tab') { e.preventDefault(); commit(highlighted, e.shiftKey ? 'left' : 'right') }
   }
 
   return (
