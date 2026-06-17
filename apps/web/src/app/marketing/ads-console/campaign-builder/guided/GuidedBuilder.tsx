@@ -8,19 +8,20 @@
  */
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { TrendingUp, BarChart3, Droplets, SlidersHorizontal, type LucideIcon } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 
 const STEPS = ['Product Selection', 'Campaign Setup', 'Add Keywords', 'Review and Launch'] as const
 
 type BidStrategy = 'maxImpressions' | 'targetAcos' | 'maxOrders' | 'custom' | 'none'
-const STRATEGIES: { key: BidStrategy; kicker: string; title: string; desc: string; recommended?: boolean }[] = [
-  { key: 'maxImpressions', kicker: 'Bid Algorithm', title: 'Max Impressions', desc: 'A bid algorithm for products in a launch stage that need to get as many impressions as possible.' },
-  { key: 'targetAcos', kicker: 'Bid Algorithm', title: 'Target ACoS', desc: 'A bid algorithm for products in a performance stage should target an ACoS for scalable advertising.', recommended: true },
-  { key: 'maxOrders', kicker: 'Bid Algorithm', title: 'Max Orders', desc: 'A bid algorithm for products in a liquidate stage should bid for maximum orders to clear out inventory.' },
-  { key: 'custom', kicker: 'Custom Rule', title: 'Custom', desc: "Create a custom rule that adjusts a target's bid based on your set performance criteria." },
+const STRATEGIES: { key: BidStrategy; kicker: string; title: string; desc: string; recommended?: boolean; Icon: LucideIcon }[] = [
+  { key: 'maxImpressions', kicker: 'Bid Algorithm', title: 'Max Impressions', desc: 'A bid algorithm for products in a launch stage that need to get as many impressions as possible.', Icon: TrendingUp },
+  { key: 'targetAcos', kicker: 'Bid Algorithm', title: 'Target ACoS', desc: 'A bid algorithm for products in a performance stage should target an ACoS for scalable advertising.', recommended: true, Icon: BarChart3 },
+  { key: 'maxOrders', kicker: 'Bid Algorithm', title: 'Max Orders', desc: 'A bid algorithm for products in a liquidate stage should bid for maximum orders to clear out inventory.', Icon: Droplets },
+  { key: 'custom', kicker: 'Custom Rule', title: 'Custom', desc: "Create a custom rule that adjusts a target's bid based on your set performance criteria.", Icon: SlidersHorizontal },
 ]
 
-interface Prod { id: string; name: string; asin: string | null }
+interface Prod { id: string; name: string; asin: string | null; photoUrl: string | null }
 
 export function GuidedBuilder() {
   const router = useRouter()
@@ -30,6 +31,7 @@ export function GuidedBuilder() {
   const [bidStrategy, setBidStrategy] = useState<BidStrategy>('targetAcos')
   const [targetAcos, setTargetAcos] = useState('30')
   const [products, setProducts] = useState<Prod[]>([])
+  const [loadingProducts, setLoadingProducts] = useState(true)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [search, setSearch] = useState('')
 
@@ -37,14 +39,16 @@ export function GuidedBuilder() {
     void fetch(`${getBackendUrl()}/api/advertising/by-product`, { cache: 'no-store' })
       .then((r) => r.json())
       .then((d) => {
-        const rows = (d.items ?? d.products ?? []) as Array<Record<string, unknown>>
+        const rows = (d.rows ?? d.items ?? d.products ?? []) as Array<Record<string, unknown>>
         setProducts(rows.map((p) => ({
           id: String(p.id ?? p.productId ?? p.asin ?? ''),
           name: String(p.name ?? p.title ?? p.asin ?? 'Untitled'),
           asin: (p.asin as string) ?? (Array.isArray(p.asins) ? (p.asins[0] as string) : null) ?? null,
+          photoUrl: (p.photoUrl as string) ?? (p.imageUrl as string) ?? null,
         })).filter((p) => p.id))
       })
       .catch(() => {})
+      .finally(() => setLoadingProducts(false))
   }, [])
 
   const toggle = (id: string) => setSelected((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n })
@@ -87,6 +91,7 @@ export function GuidedBuilder() {
                 {STRATEGIES.map((s) => (
                   <button type="button" key={s.key} className={`az-cb-bid ${bidStrategy === s.key ? 'sel' : ''} ${s.recommended ? 'hasrec' : ''}`} onClick={() => setBidStrategy(s.key)}>
                     {s.recommended && <span className="rec">Recommended</span>}
+                    <span className="ic"><s.Icon size={17} /></span>
                     <span className="kick">{s.kicker}</span>
                     <span className="ti">{s.title}</span>
                     <span className="de">{s.desc}</span>
@@ -114,11 +119,13 @@ export function GuidedBuilder() {
                 {filtered.slice(0, 100).map((p) => (
                   <label key={p.id} className={`az-cb-prod ${selected.has(p.id) ? 'on' : ''}`}>
                     <input type="checkbox" checked={selected.has(p.id)} onChange={() => toggle(p.id)} />
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    {p.photoUrl ? <img className="thumb" src={p.photoUrl} alt="" /> : <span className="thumb ph" />}
                     <span className="nm">{p.name}</span>
                     {p.asin && <span className="asin">{p.asin}</span>}
                   </label>
                 ))}
-                {filtered.length === 0 && <div className="az-cb-empty">{products.length ? 'No products match your search.' : 'Loading products…'}</div>}
+                {filtered.length === 0 && <div className="az-cb-empty">{loadingProducts ? 'Loading products…' : products.length ? 'No products match your search.' : 'No products found.'}</div>}
               </div>
             </div>
           </div>
