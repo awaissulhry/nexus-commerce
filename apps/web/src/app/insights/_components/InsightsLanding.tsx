@@ -10,6 +10,7 @@ import {
   BarChart3,
   Bookmark,
   Calculator,
+  Coins,
   Database,
   Download,
   LineChart,
@@ -160,6 +161,13 @@ const HUB_LINKS: Array<{
     blurb: 'Every Amazon feed mirrored in Nexus — source + freshness',
     icon: Database,
     phase: 'R0.3',
+  },
+  {
+    href: '/products/costs',
+    title: 'Product costs (COGS)',
+    blurb: 'Load per-SKU cost → true margin (real Amazon fees applied)',
+    icon: Coins,
+    phase: 'R4.1',
   },
 ]
 
