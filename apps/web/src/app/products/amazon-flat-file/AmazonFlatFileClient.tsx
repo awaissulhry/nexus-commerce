@@ -5020,9 +5020,25 @@ function SpreadsheetCell({ col, value, isActive, cellBg, width, cellHeight, ri, 
     onCellPointerDown(e.shiftKey)
   }
 
+  // GX.2 — commit the input's CURRENT value before leaving the cell. A single
+  // typed char arrives as the input's defaultValue and fires NO onInput, so
+  // without this it was silently dropped on Tab/Enter/blur ("type 5, Enter → gone").
+  const commitInput = () => {
+    const inp = inputRef.current
+    if (!inp) return
+    const val = inp.value
+    if (val === displayValue) return
+    if (!snapshotPushedRef.current) {
+      originalValueRef.current = displayValue
+      onPushSnapshot()
+      snapshotPushedRef.current = true
+    }
+    onLiveChange(val)
+  }
+
   function handleKeyDown(e: KeyboardEvent) {
-    if (e.key === 'Tab') { e.preventDefault(); onNavigate(e.shiftKey ? 'left' : 'right') }
-    else if (e.key === 'Enter' && col.kind !== 'longtext') { e.preventDefault(); onNavigate(e.shiftKey ? 'up' : 'down') }
+    if (e.key === 'Tab') { e.preventDefault(); commitInput(); onNavigate(e.shiftKey ? 'left' : 'right') }
+    else if (e.key === 'Enter' && col.kind !== 'longtext') { e.preventDefault(); commitInput(); onNavigate(e.shiftKey ? 'up' : 'down') }
     else if (e.key === 'Escape') {
       if (snapshotPushedRef.current) {
         onLiveChange(originalValueRef.current) // revert to pre-edit value
@@ -5161,7 +5177,7 @@ function SpreadsheetCell({ col, value, isActive, cellBg, width, cellHeight, ri, 
     return (
       <td {...tdShared} className={baseCls} style={{ ...cellStyle, ...selStyle }}>
         {fillHandle}
-        <input ref={inputRef as any} type={col.kind === 'number' ? 'number' : 'text'}
+        <input ref={inputRef as any} type="text" inputMode={col.kind === 'number' ? 'decimal' : undefined}
           defaultValue={editInitialChar !== null ? editInitialChar : displayValue} maxLength={col.maxLength}
           onInput={(e) => {
             const val = (e.target as HTMLInputElement).value
@@ -5174,6 +5190,7 @@ function SpreadsheetCell({ col, value, isActive, cellBg, width, cellHeight, ri, 
             onLiveChange(val)
           }}
           onBlur={() => {
+            if (!cancelledRef.current) commitInput()
             cancelledRef.current = false
             onDeactivate()
           }}
