@@ -1,10 +1,7 @@
-export default function Page() {
-  return (
-    <div className="h10-stub">
-      <div className="crumb">Helium 10 Ads</div>
-      <h1>Ad Manager</h1>
-      <p>This screen is being rebuilt to match Adtomic — filled in as we work through each page.</p>
-      <div className="panel">Ad Manager — pixel-match in progress.</div>
-    </div>
-  )
+/** Ad Manager (campaigns grid) — new console, CBN.2. */
+import { CampaignsGrid } from './CampaignsGrid'
+
+export const dynamic = 'force-dynamic'
+export default function AdManagerPage() {
+  return <CampaignsGrid />
 }

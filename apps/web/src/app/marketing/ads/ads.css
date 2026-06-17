@@ -27,3 +27,40 @@
 .h10-stub p { font-size: 13.5px; color: #5b6573; margin: 0 0 16px; }
 .h10-stub .crumb { font-size: 12px; color: #8a93a1; margin-bottom: 4px; }
 .h10-stub .panel { background: #fff; border: 1px solid #e6e9ee; border-radius: 12px; padding: 40px; text-align: center; color: #8a93a1; font-size: 13px; }
+
+/* CBN.2 — Ad Manager (campaigns grid) */
+.h10-am { display: flex; flex-direction: column; gap: 12px; }
+.h10-am-filters { display: flex; align-items: center; gap: 12px; background: #fff; border: 1px solid #e6e9ee; border-radius: 10px; padding: 10px 12px; }
+.h10-am-search { display: inline-flex; align-items: center; gap: 7px; border: 1px solid #d8dde4; border-radius: 8px; padding: 7px 11px; min-width: 280px; color: #8a93a1; }
+.h10-am-search input { border: none; outline: none; font: inherit; font-size: 13px; width: 100%; background: transparent; color: #1c2530; }
+.h10-am-filters .seg { display: inline-flex; border: 1px solid #d8dde4; border-radius: 8px; overflow: hidden; }
+.h10-am-filters .seg button { border: none; background: #fff; padding: 7px 14px; font: inherit; font-size: 12.5px; font-weight: 600; color: #5b6573; cursor: pointer; }
+.h10-am-filters .seg button.on { background: #1f6fde; color: #fff; }
+.h10-am-filters .grow { flex: 1; }
+.h10-am-presethint { font-size: 11px; color: #aeb6c2; }
+.h10-am-toolbar { display: flex; align-items: center; gap: 8px; }
+.h10-am-toolbar .cnt { font-size: 12.5px; color: #5b6573; }
+.h10-am-toolbar .cnt b { color: #1c2530; }
+.h10-am-toolbar .grow { flex: 1; }
+.h10-am-btn { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 600; color: #3a4452; background: #fff; border: 1px solid #d8dde4; border-radius: 8px; padding: 7px 13px; cursor: pointer; text-decoration: none; }
+.h10-am-btn:hover { background: #f1f4f8; }
+.h10-am-btn.primary { background: #1f6fde; border-color: #1f6fde; color: #fff; }
+.h10-am-btn.primary:hover { background: #1a60c4; }
+.h10-am-grid { background: #fff; border: 1px solid #e6e9ee; border-radius: 12px; overflow: auto; }
+.h10-am-grid table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.h10-am-grid thead th { position: sticky; top: 0; background: #f7f9fb; border-bottom: 1px solid #e6e9ee; font-size: 11px; font-weight: 700; color: #6b7480; text-align: left; padding: 10px 14px; white-space: nowrap; }
+.h10-am-grid th.num, .h10-am-grid td.num { text-align: right; }
+.h10-am-grid th.ck, .h10-am-grid td.ck { width: 40px; text-align: center; }
+.h10-am-grid tbody td { border-bottom: 1px solid #eef1f5; padding: 11px 14px; color: #2b3440; white-space: nowrap; }
+.h10-am-grid tbody tr:hover { background: #f7faff; }
+.h10-am-grid tbody tr.on { background: #eef5ff; }
+.h10-am-grid td.nm { display: flex; align-items: center; gap: 8px; max-width: 360px; }
+.h10-am-grid td.nm .dot { width: 7px; height: 7px; border-radius: 999px; background: #cbd2db; flex-shrink: 0; }
+.h10-am-grid td.nm .dot.live { background: #1e9e62; }
+.h10-am-grid td.nm .badge { font-size: 9px; font-weight: 800; color: #6d28d9; background: #f3e8ff; border-radius: 4px; padding: 2px 5px; }
+.h10-am-grid td.nm .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.h10-am-grid td.nm .mk { font-size: 10px; color: #8a93a1; border: 1px solid #e6e9ee; border-radius: 4px; padding: 1px 5px; }
+.h10-am-grid td.empty { text-align: center; color: #8a93a1; padding: 28px; }
+.h10-toggle { display: inline-block; width: 30px; height: 17px; border-radius: 999px; background: #cbd2db; position: relative; vertical-align: middle; }
+.h10-toggle::after { content: ''; position: absolute; top: 2px; left: 2px; width: 13px; height: 13px; border-radius: 999px; background: #fff; }
+.h10-rulecount { color: #8a93a1; }
